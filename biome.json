@@ -1,30 +1,43 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.4.10/schema.json",
-  "vcs": {
-    "enabled": true,
-    "clientKind": "git",
-    "useIgnoreFile": true
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on",
+        "useSortedKeys": "on",
+        "useSortedProperties": "on"
+      }
+    },
+    "enabled": true
+  },
+  "css": {
+    "formatter": {
+      "enabled": true,
+      "indentStyle": "space",
+      "indentWidth": 2
+    },
+    "linter": {
+      "enabled": true
+    },
+    "parser": {
+      "cssModules": false,
+      "tailwindDirectives": true
+    }
   },
   "files": {
     "ignoreUnknown": false,
     "includes": ["**", "!node_modules", "!.next", "!dist", "!yarn.lock"]
   },
-  "overrides": [
-    {
-      "includes": ["package.json"],
-      "assist": {
-        "actions": {
-          "source": {
-            "useSortedKeys": "off"
-          }
-        }
-      }
-    }
-  ],
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
     "indentWidth": 2
+  },
+  "javascript": {
+    "formatter": {
+      "arrowParentheses": "asNeeded",
+      "quoteStyle": "single"
+    }
   },
   "linter": {
     "enabled": true,
@@ -35,34 +48,21 @@
       }
     }
   },
-  "css": {
-    "parser": {
-      "cssModules": false,
-      "tailwindDirectives": true
-    },
-    "formatter": {
-      "enabled": true,
-      "indentStyle": "space",
-      "indentWidth": 2
-    },
-    "linter": {
-      "enabled": true
+  "overrides": [
+    {
+      "assist": {
+        "actions": {
+          "source": {
+            "useSortedKeys": "off"
+          }
+        }
+      },
+      "includes": ["package.json"]
     }
-  },
-  "javascript": {
-    "formatter": {
-      "quoteStyle": "single",
-      "arrowParentheses": "asNeeded"
-    }
-  },
-  "assist": {
+  ],
+  "vcs": {
+    "clientKind": "git",
     "enabled": true,
-    "actions": {
-      "source": {
-        "organizeImports": "on",
-        "useSortedKeys": "on",
-        "useSortedProperties": "on"
-      }
-    }
+    "useIgnoreFile": true
   }
 }
