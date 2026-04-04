@@ -1,10 +1,10 @@
-import type { Metadata } from "next";
-import "./globals.css";
+import type { Metadata } from 'next';
+import './globals.css';
 
 export const metadata: Metadata = {
-  title: "Issue Tracker",
   description:
-    "A Next.js 16 app with TypeScript, Yarn v4, Biome, TailwindCSS v4, and shadcn/ui",
+    'A Next.js 16 app with TypeScript, Yarn v4, Biome, TailwindCSS v4, and shadcn/ui',
+  title: 'Issue Tracker',
 };
 
 export default function RootLayout({
