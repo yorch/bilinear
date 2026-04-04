@@ -12,7 +12,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@biomejs/biome@npm:^2.4.10":
+"@biomejs/biome@npm:2.4.10":
   version: 2.4.10
   resolution: "@biomejs/biome@npm:2.4.10"
   dependencies:
@@ -490,7 +490,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@radix-ui/react-slot@npm:latest":
+"@radix-ui/react-slot@npm:1.2.4":
   version: 1.2.4
   resolution: "@radix-ui/react-slot@npm:1.2.4"
   dependencies:
@@ -665,7 +665,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tailwindcss/postcss@npm:^4":
+"@tailwindcss/postcss@npm:4.2.2":
   version: 4.2.2
   resolution: "@tailwindcss/postcss@npm:4.2.2"
   dependencies:
@@ -687,16 +687,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:^20":
-  version: 20.19.39
-  resolution: "@types/node@npm:20.19.39"
+"@types/node@npm:24.12.2":
+  version: 24.12.2
+  resolution: "@types/node@npm:24.12.2"
   dependencies:
-    undici-types: "npm:~6.21.0"
-  checksum: 10c0/1d16da7b5f47a7415b827fcf3b94d279febf4c14671afec74a03e47856b5270023d9beb1b9aeab4d3b622fd97d61a60206cfc2cca588663181331bc592468289
+    undici-types: "npm:~7.16.0"
+  checksum: 10c0/710050c42f89075c4479e4e1e4c2532486b0c41b1e2a8a13ad88641c88b88cdaea87414e19224f30028719737bd70e327edcaa184d50e86b9418941edd7eb02b
   languageName: node
   linkType: hard
 
-"@types/react-dom@npm:^19":
+"@types/react-dom@npm:19.2.3":
   version: 19.2.3
   resolution: "@types/react-dom@npm:19.2.3"
   peerDependencies:
@@ -705,7 +705,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react@npm:^19":
+"@types/react@npm:19.2.14":
   version: 19.2.14
   resolution: "@types/react@npm:19.2.14"
   dependencies:
@@ -730,7 +730,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"class-variance-authority@npm:^0.7.1":
+"class-variance-authority@npm:0.7.1":
   version: 0.7.1
   resolution: "class-variance-authority@npm:0.7.1"
   dependencies:
@@ -746,7 +746,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"clsx@npm:^2.1.1":
+"clsx@npm:2.1.1, clsx@npm:^2.1.1":
   version: 2.1.1
   resolution: "clsx@npm:2.1.1"
   checksum: 10c0/c4c8eb865f8c82baab07e71bfa8897c73454881c4f99d6bc81585aecd7c441746c1399d08363dc096c550cceaf97bd4ce1e8854e1771e9998d9f94c4fe075839
@@ -788,22 +788,22 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "issue-tracker@workspace:."
   dependencies:
-    "@biomejs/biome": "npm:^2.4.10"
-    "@radix-ui/react-slot": "npm:latest"
-    "@tailwindcss/postcss": "npm:^4"
-    "@types/node": "npm:^20"
-    "@types/react": "npm:^19"
-    "@types/react-dom": "npm:^19"
-    class-variance-authority: "npm:^0.7.1"
-    clsx: "npm:^2.1.1"
-    lucide-react: "npm:^1.7.0"
+    "@biomejs/biome": "npm:2.4.10"
+    "@radix-ui/react-slot": "npm:1.2.4"
+    "@tailwindcss/postcss": "npm:4.2.2"
+    "@types/node": "npm:24.12.2"
+    "@types/react": "npm:19.2.14"
+    "@types/react-dom": "npm:19.2.3"
+    class-variance-authority: "npm:0.7.1"
+    clsx: "npm:2.1.1"
+    lucide-react: "npm:1.7.0"
     next: "npm:16.2.2"
-    next-themes: "npm:^0.4.6"
+    next-themes: "npm:0.4.6"
     react: "npm:19.2.4"
     react-dom: "npm:19.2.4"
-    tailwind-merge: "npm:^3.5.0"
-    tailwindcss: "npm:^4"
-    typescript: "npm:^5"
+    tailwind-merge: "npm:3.5.0"
+    tailwindcss: "npm:4.2.2"
+    typescript: "npm:5.9.3"
   languageName: unknown
   linkType: soft
 
@@ -936,7 +936,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"lucide-react@npm:^1.7.0":
+"lucide-react@npm:1.7.0":
   version: 1.7.0
   resolution: "lucide-react@npm:1.7.0"
   peerDependencies:
@@ -963,7 +963,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"next-themes@npm:^0.4.6":
+"next-themes@npm:0.4.6":
   version: 0.4.6
   resolution: "next-themes@npm:0.4.6"
   peerDependencies:
@@ -1203,14 +1203,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tailwind-merge@npm:^3.5.0":
+"tailwind-merge@npm:3.5.0":
   version: 3.5.0
   resolution: "tailwind-merge@npm:3.5.0"
   checksum: 10c0/4dc588f5b5296ba3f38e1ebb41f02b6d24a8c5bb45e44b33748c118fb4b5767dd0efc464431ca3e75404056b618b5f67bec3708158baa65fed8a2fc9201e0c53
   languageName: node
   linkType: hard
 
-"tailwindcss@npm:4.2.2, tailwindcss@npm:^4":
+"tailwindcss@npm:4.2.2":
   version: 4.2.2
   resolution: "tailwindcss@npm:4.2.2"
   checksum: 10c0/6eae8a125c35d504ba6c518d26ec64fba694ff4a9ab9b9cd9883050128e0b7afdf491388c472d9bed2624664c1c7d4a133d19b653151a6b52e6ce6953168a857
@@ -1231,7 +1231,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@npm:^5":
+"typescript@npm:5.9.3":
   version: 5.9.3
   resolution: "typescript@npm:5.9.3"
   bin:
@@ -1241,7 +1241,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@patch:typescript@npm%3A^5#optional!builtin<compat/typescript>":
+"typescript@patch:typescript@npm%3A5.9.3#optional!builtin<compat/typescript>":
   version: 5.9.3
   resolution: "typescript@patch:typescript@npm%3A5.9.3#optional!builtin<compat/typescript>::version=5.9.3&hash=5786d5"
   bin:
@@ -1251,9 +1251,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"undici-types@npm:~6.21.0":
-  version: 6.21.0
-  resolution: "undici-types@npm:6.21.0"
-  checksum: 10c0/c01ed51829b10aa72fc3ce64b747f8e74ae9b60eafa19a7b46ef624403508a54c526ffab06a14a26b3120d055e1104d7abe7c9017e83ced038ea5cf52f8d5e04
+"undici-types@npm:~7.16.0":
+  version: 7.16.0
+  resolution: "undici-types@npm:7.16.0"
+  checksum: 10c0/3033e2f2b5c9f1504bdc5934646cb54e37ecaca0f9249c983f7b1fc2e87c6d18399ebb05dc7fd5419e02b2e915f734d872a65da2e3eeed1813951c427d33cc9a
   languageName: node
   linkType: hard
