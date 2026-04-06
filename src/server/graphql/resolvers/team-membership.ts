@@ -1,8 +1,8 @@
 import { GraphQLError } from 'graphql';
 import {
   requireAuth,
-  requireOrgRole,
   requireTeamMember,
+  requireTeamOwner,
 } from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
 
@@ -16,11 +16,17 @@ export const teamMembershipResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, [
-        'owner',
-        'admin',
-        'member',
-      ]);
+
+      // Verify the team belongs to the caller's org
+      const team = await ctx.services.team.findById(input.teamId);
+      if (!team || team.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Team not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+
+      // Only team owners (or org owners/admins who are also team owners) can add members
+      await requireTeamOwner(ctx.prisma, input.teamId, ctx.userId);
 
       try {
         const teamMembership = await ctx.services.team.addMember(
@@ -50,16 +56,21 @@ export const teamMembershipResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      // Look up the membership to find its team, then verify caller is a member
       const membership = await ctx.prisma.teamMembership.findUnique({
+        include: { team: true },
         where: { id },
       });
-      if (!membership) {
+      if (!membership || membership.team.organizationId !== ctx.orgId) {
         throw new GraphQLError('Membership not found', {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, membership.teamId, ctx.userId);
+
+      // Allow: team owner removing anyone, or a user removing themselves
+      const isSelf = membership.userId === ctx.userId;
+      if (!isSelf) {
+        await requireTeamOwner(ctx.prisma, membership.teamId, ctx.userId);
+      }
 
       await ctx.services.team.removeMember(id);
       return { lastSyncId: 0, success: true };
@@ -74,16 +85,23 @@ export const teamMembershipResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      // Look up the membership to find its team, then verify caller is a member
       const membership = await ctx.prisma.teamMembership.findUnique({
+        include: { team: true },
         where: { id },
       });
-      if (!membership) {
+      if (!membership || membership.team.organizationId !== ctx.orgId) {
         throw new GraphQLError('Membership not found', {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, membership.teamId, ctx.userId);
+
+      // Changing isOwner is a privilege change — require team owner
+      if (input.isOwner !== undefined) {
+        await requireTeamOwner(ctx.prisma, membership.teamId, ctx.userId);
+      } else {
+        // Updating sortOrder only requires being a member
+        await requireTeamMember(ctx.prisma, membership.teamId, ctx.userId);
+      }
 
       const teamMembership = await ctx.services.team.updateMembership(
         id,

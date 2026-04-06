@@ -29,7 +29,7 @@ export async function extractAuthContext(
 export function requireAuth(
   ctx: AuthContext,
 ): asserts ctx is { userId: string; orgId: string } {
-  if (!ctx.userId) {
+  if (!ctx.userId || !ctx.orgId) {
     throw new GraphQLError('Not authenticated', {
       extensions: { code: 'UNAUTHENTICATED' },
     });

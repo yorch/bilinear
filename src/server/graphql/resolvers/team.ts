@@ -32,11 +32,17 @@ export const teamResolvers = {
         );
         return { lastSyncId: 0, success: true, team };
       } catch (err) {
-        const error = err as Error;
+        const error = err as Error & { code?: string };
         if (error.name === 'TeamKeyInvalidError') {
           throw new GraphQLError(error.message, {
             extensions: { code: 'BAD_USER_INPUT' },
           });
+        }
+        if (error.code === 'P2002') {
+          throw new GraphQLError(
+            'A team with this key already exists in the organization',
+            { extensions: { code: 'BAD_USER_INPUT' } },
+          );
         }
         throw err;
       }
@@ -72,6 +78,15 @@ export const teamResolvers = {
     ) => {
       requireAuth(ctx);
       await requireTeamMember(ctx.prisma, id, ctx.userId);
+
+      // Verify team belongs to user's org
+      const existing = await ctx.services.team.findById(id);
+      if (!existing || existing.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Team not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+
       const team = await ctx.services.team.update(id, input);
       return { lastSyncId: 0, success: true, team };
     },
@@ -85,7 +100,8 @@ export const teamResolvers = {
     ) => {
       requireAuth(ctx);
       const team = await ctx.services.team.findById(id);
-      if (!team) {
+      // Scope to caller's org to prevent cross-org data leaks
+      if (!team || team.organizationId !== ctx.orgId) {
         throw new GraphQLError('Team not found', {
           extensions: { code: 'NOT_FOUND' },
         });

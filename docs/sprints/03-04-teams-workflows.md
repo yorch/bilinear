@@ -408,7 +408,7 @@ yarn add @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities  # Drag-and-drop for
 
 - [x] `teamCreate` mutation creates a team with auto-seeded default workflow states (5 states; 6 if triageEnabled)
 - [x] `teamCreate` validates key uniqueness and format (1-10 uppercase chars)
-- [x] `teams` query returns paginated teams for the organization
+- [x] `teams` query returns teams for the organization (pagination deferred to Sprint 5-6 with issue list)
 - [x] `team` query returns a single team with its states and members
 - [x] `teamUpdate` mutation updates team settings
 - [x] `teamDelete` mutation soft-deletes a team (requires owner/admin role)

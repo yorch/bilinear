@@ -41,6 +41,25 @@ describe('teamResolvers', () => {
       ).rejects.toThrow(GraphQLError);
     });
 
+    it('throws NOT_FOUND when team belongs to a different org', async () => {
+      ctx.prisma.team.findUnique.mockResolvedValue({
+        ...TEST_TEAM,
+        organizationId: 'other-org-id',
+      });
+
+      try {
+        await teamResolvers.Query.team(
+          null,
+          { id: TEST_TEAM.id },
+          ctx as never,
+        );
+        expect.unreachable('Should have thrown');
+      } catch (e) {
+        expect(e).toBeInstanceOf(GraphQLError);
+        expect((e as GraphQLError).extensions?.code).toBe('NOT_FOUND');
+      }
+    });
+
     it('throws UNAUTHENTICATED when not logged in', async () => {
       ctx = createMockContext({ userId: null });
 
@@ -177,6 +196,8 @@ describe('teamResolvers', () => {
       ctx.prisma.teamMembership.findUnique.mockResolvedValue(
         TEST_TEAM_MEMBERSHIP,
       );
+      // org-scope check via findById
+      ctx.prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
       const updated = { ...TEST_TEAM, name: 'New Name' };
       ctx.prisma.team.update.mockResolvedValue(updated);
 
@@ -188,6 +209,28 @@ describe('teamResolvers', () => {
 
       expect(result.success).toBe(true);
       expect(result.team.name).toBe('New Name');
+    });
+
+    it('throws NOT_FOUND when team belongs to different org', async () => {
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue(
+        TEST_TEAM_MEMBERSHIP,
+      );
+      ctx.prisma.team.findUnique.mockResolvedValue({
+        ...TEST_TEAM,
+        organizationId: 'different-org-id',
+      });
+
+      try {
+        await teamResolvers.Mutation.teamUpdate(
+          null,
+          { id: TEST_TEAM.id, input: { name: 'X' } },
+          ctx as never,
+        );
+        expect.unreachable('Should have thrown');
+      } catch (e) {
+        expect(e).toBeInstanceOf(GraphQLError);
+        expect((e as GraphQLError).extensions?.code).toBe('NOT_FOUND');
+      }
     });
   });
 

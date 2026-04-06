@@ -9,7 +9,7 @@ import {
 } from './auth';
 
 describe('requireAuth', () => {
-  it('throws UNAUTHENTICATED when userId is null', () => {
+  it('throws UNAUTHENTICATED when both userId and orgId are null', () => {
     const ctx = { orgId: null, userId: null };
     expect(() => requireAuth(ctx)).toThrow(GraphQLError);
     try {
@@ -19,7 +19,17 @@ describe('requireAuth', () => {
     }
   });
 
-  it('does not throw when userId is present', () => {
+  it('throws UNAUTHENTICATED when userId is null but orgId is present', () => {
+    const ctx = { orgId: 'org-1', userId: null };
+    expect(() => requireAuth(ctx)).toThrow(GraphQLError);
+  });
+
+  it('throws UNAUTHENTICATED when userId is present but orgId is null', () => {
+    const ctx = { orgId: null, userId: 'user-1' };
+    expect(() => requireAuth(ctx)).toThrow(GraphQLError);
+  });
+
+  it('does not throw when both userId and orgId are present', () => {
     const ctx = { orgId: 'org-1', userId: 'user-1' };
     expect(() => requireAuth(ctx)).not.toThrow();
   });
