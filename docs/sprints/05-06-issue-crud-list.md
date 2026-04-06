@@ -106,11 +106,21 @@ model Issue {
   assigneeId      String?   @map("assignee_id") @db.Uuid
   creatorId       String?   @map("creator_id") @db.Uuid
   parentId        String?   @map("parent_id") @db.Uuid
+  // NOTE: FK constraints for projectId and cycleId are deferred — added via migration
+  // in Sprint 13-14 (Projects) and Sprint 15-16 (Cycles) when those tables are created.
+  // For now these are nullable UUIDs without foreign key constraints.
   projectId       String?   @map("project_id") @db.Uuid
   cycleId         String?   @map("cycle_id") @db.Uuid
 
   // Git
   branchName      String?   @map("branch_name") @db.VarChar(500)
+
+  // SLA (tracked from creation, fully used in Phase 5 Sprint 51-52)
+  slaBreachesAt   DateTime? @map("sla_breaches_at") @db.Timestamptz
+  slaHighRiskAt   DateTime? @map("sla_high_risk_at") @db.Timestamptz
+  slaMediumRiskAt DateTime? @map("sla_medium_risk_at") @db.Timestamptz
+  slaStartedAt    DateTime? @map("sla_started_at") @db.Timestamptz
+  slaType         String?   @map("sla_type") @db.VarChar(50)
 
   // Lifecycle timestamps
   startedAt       DateTime? @map("started_at") @db.Timestamptz
@@ -118,9 +128,15 @@ model Issue {
   canceledAt      DateTime? @map("canceled_at") @db.Timestamptz
   autoArchivedAt  DateTime? @map("auto_archived_at") @db.Timestamptz
   autoClosedAt    DateTime? @map("auto_closed_at") @db.Timestamptz
+  startedTriageAt DateTime? @map("started_triage_at") @db.Timestamptz
+  triagedAt       DateTime? @map("triaged_at") @db.Timestamptz
+  addedToCycleAt  DateTime? @map("added_to_cycle_at") @db.Timestamptz
+  addedToProjectAt DateTime? @map("added_to_project_at") @db.Timestamptz
 
-  // Soft delete
+  // Soft delete / snooze
   trashed         Boolean   @default(false)
+  snoozedById     String?   @map("snoozed_by_id") @db.Uuid
+  snoozedUntilAt  DateTime? @map("snoozed_until_at") @db.Timestamptz
 
   // Metadata
   reactionData    Json      @default("{}") @map("reaction_data")
@@ -136,6 +152,7 @@ model Issue {
   state           WorkflowState @relation(fields: [stateId], references: [id])
   assignee        User?      @relation("AssignedIssues", fields: [assigneeId], references: [id])
   creator         User?      @relation("CreatedIssues", fields: [creatorId], references: [id])
+  snoozedBy       User?      @relation("SnoozedIssues", fields: [snoozedById], references: [id])
   parent          Issue?     @relation("SubIssues", fields: [parentId], references: [id], onDelete: SetNull)
   children        Issue[]    @relation("SubIssues")
   labelAssignments IssueLabelAssignment[]
@@ -212,6 +229,7 @@ labels IssueLabel[]
 // Add to User model
 assignedIssues Issue[] @relation("AssignedIssues")
 createdIssues  Issue[] @relation("CreatedIssues")
+snoozedIssues  Issue[] @relation("SnoozedIssues")
 
 // Add to WorkflowState model
 issues Issue[]

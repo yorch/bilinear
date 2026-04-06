@@ -106,23 +106,34 @@ interface SyncAction {
 
 ## 3. Database Schema (Prisma)
 
-**Ref:** `docs/DATABASE_SCHEMA.md` section 3 (Sync Actions)
+**Ref:** `docs/DATABASE_SCHEMA.md` section 2.22 (Sync Actions)
 
 ### Models to add to `prisma/schema.prisma`
 
 ```prisma
 model SyncAction {
-  id        BigInt   @id @default(autoincrement())
-  action    String   @db.VarChar(1) // I, U, D, A
-  modelName String   @map("model_name") @db.VarChar(50)
-  modelId   String   @map("model_id") @db.Uuid
-  data      Json?
+  id              BigInt   @id @default(autoincrement())
+  organizationId  String   @map("organization_id") @db.Uuid
+  action          String   @db.VarChar(1) // I, U, D, A
+  modelName       String   @map("model_name") @db.VarChar(50)
+  modelId         String   @map("model_id") @db.Uuid
+  data            Json?
 
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
 
+  organization    Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, id])
   @@index([createdAt])
   @@map("sync_actions")
 }
+```
+
+Also add to existing `Organization` model:
+
+```prisma
+// Add to Organization model relations
+syncActions SyncAction[]
 ```
 
 ---
@@ -137,13 +148,14 @@ Wrap every mutation to generate a SyncAction after the database write:
 // src/server/services/sync.service.ts
 export class SyncService {
   async createSyncAction(
+    orgId: string,
     action: 'I' | 'U' | 'D' | 'A',
     modelName: string,
     modelId: string,
     data: object | null,
   ): Promise<SyncAction> {
     const syncAction = await this.prisma.syncAction.create({
-      data: { action, modelName, modelId, data },
+      data: { organizationId: orgId, action, modelName, modelId, data },
     });
     // Broadcast via Redis PubSub
     await this.redis.publish(`sync:${orgId}`, JSON.stringify(syncAction));
@@ -163,7 +175,7 @@ Every mutation resolver from Sprints 1-6 must now:
 // Example: issueCreate resolver modification
 issueCreate: async (_parent, { input }, ctx) => {
   const issue = await ctx.services.issue.create(ctx.orgId, input);
-  const syncAction = await ctx.services.sync.createSyncAction('I', 'Issue', issue.id, issue);
+  const syncAction = await ctx.services.sync.createSyncAction(ctx.orgId, 'I', 'Issue', issue.id, issue);
   return { success: true, issue, lastSyncId: Number(syncAction.id) };
 },
 ```
