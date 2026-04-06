@@ -23,7 +23,9 @@ function createPrismaClient(): PrismaClient {
 }
 
 function getLazyClient(): PrismaClient {
-  if (globalForPrisma.prisma) return globalForPrisma.prisma;
+  if (globalForPrisma.prisma) {
+    return globalForPrisma.prisma;
+  }
   const client = createPrismaClient();
   if (process.env.NODE_ENV !== 'production') {
     globalForPrisma.prisma = client;
