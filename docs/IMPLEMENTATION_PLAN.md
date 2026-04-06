@@ -12,7 +12,7 @@
 **Goal:** Working app shell with authentication
 
 - [ ] Initialize Next.js project structure (already bootstrapped)
-- [ ] Set up PostgreSQL database with Drizzle ORM
+- [ ] Set up PostgreSQL database with Prisma 7
 - [ ] Create migration for: organizations, users, organization_members, auth_tokens
 - [ ] Implement email magic link authentication
   - POST /auth/email → send magic link code

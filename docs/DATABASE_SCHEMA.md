@@ -3,7 +3,7 @@
 
 **Version:** 1.0  
 **Date:** April 2026  
-**Database:** PostgreSQL 16
+**Database:** PostgreSQL 18
 
 ---
 
@@ -1008,34 +1008,36 @@ users 1──* auth_tokens
 
 ## 4. Migration Strategy
 
-Use Drizzle ORM migrations for schema management:
+Use Prisma migrations for schema management:
 
 ```
-drizzle/
-├── 0001_create_organizations.sql
-├── 0002_create_users.sql
-├── 0003_create_teams.sql
-├── 0004_create_workflow_states.sql
-├── 0005_create_issues.sql
-├── 0006_create_labels.sql
-├── 0007_create_comments.sql
-├── 0008_create_relations.sql
-├── 0009_create_history.sql
-├── 0010_create_projects.sql
-├── 0011_create_milestones.sql
-├── 0012_create_project_updates.sql
-├── 0013_create_cycles.sql
-├── 0014_create_initiatives.sql
-├── 0015_create_attachments.sql
-├── 0016_create_reactions.sql
-├── 0017_create_notifications.sql
-├── 0018_create_custom_views.sql
-├── 0019_create_favorites.sql
-├── 0020_create_documents.sql
-├── 0021_create_templates.sql
-├── 0022_create_webhooks.sql
-├── 0023_create_sync_actions.sql
-├── 0024_create_auth_tokens.sql
-├── 0025_create_audit_entries.sql
-└── 0026_add_foreign_keys.sql
+prisma/
+├── schema.prisma
+└── migrations/
+    ├── 0001_create_organizations/migration.sql
+    ├── 0002_create_users/migration.sql
+    ├── 0003_create_teams/migration.sql
+    ├── 0004_create_workflow_states/migration.sql
+    ├── 0005_create_issues/migration.sql
+    ├── 0006_create_labels/migration.sql
+    ├── 0007_create_comments/migration.sql
+    ├── 0008_create_relations/migration.sql
+    ├── 0009_create_history/migration.sql
+    ├── 0010_create_projects/migration.sql
+    ├── 0011_create_milestones/migration.sql
+    ├── 0012_create_project_updates/migration.sql
+    ├── 0013_create_cycles/migration.sql
+    ├── 0014_create_initiatives/migration.sql
+    ├── 0015_create_attachments/migration.sql
+    ├── 0016_create_reactions/migration.sql
+    ├── 0017_create_notifications/migration.sql
+    ├── 0018_create_custom_views/migration.sql
+    ├── 0019_create_favorites/migration.sql
+    ├── 0020_create_documents/migration.sql
+    ├── 0021_create_templates/migration.sql
+    ├── 0022_create_webhooks/migration.sql
+    ├── 0023_create_sync_actions/migration.sql
+    ├── 0024_create_auth_tokens/migration.sql
+    ├── 0025_create_audit_entries/migration.sql
+    └── 0026_add_foreign_keys/migration.sql
 ```

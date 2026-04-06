@@ -94,8 +94,8 @@
 |-------|-----------|-----------|
 | Runtime | **Node.js** | TypeScript everywhere, shared types |
 | API | **GraphQL** (Apollo Server or Yoga) | Matches Linear's approach, flexible queries |
-| ORM | **Drizzle ORM** | Type-safe, lightweight, PostgreSQL-native |
-| Database | **PostgreSQL 16** | Relational, JSONB, full-text search, mature |
+| ORM | **Prisma 7** | Type-safe, Rust-free client, built-in Studio, excellent DX |
+| Database | **PostgreSQL 18** | Relational, JSONB, full-text search, new I/O subsystem (up to 3× perf), uuidv7() |
 | Cache/PubSub | **Redis 7** | Pub/sub for sync broadcast, session cache, rate limiting |
 | Search | **MeiliSearch** or **PostgreSQL FTS** | Full-text search with fuzzy matching |
 | File Storage | **S3-compatible** (AWS S3 / Cloudflare R2) | Attachment storage |
@@ -401,7 +401,7 @@ type Mutation {
                         │
 ┌───────────────────────┴──────────────────────────┐
 │               Data Access Layer                   │
-│  (Drizzle ORM: type-safe queries, migrations)    │
+│  (Prisma 7: type-safe queries, migrations)        │
 └──────────────────────────────────────────────────┘
 ```
 
@@ -505,7 +505,7 @@ Permission checks in resolvers:
 - **Webhook secrets:** HMAC-SHA256 signatures
 - **Rate limiting:** Per-user, per-IP, per-endpoint
 - **Input validation:** GraphQL input types + Zod schemas
-- **SQL injection:** Prevented by Drizzle ORM parameterized queries
+- **SQL injection:** Prevented by Prisma parameterized queries
 - **XSS:** React auto-escaping + CSP headers + sanitized markdown
 
 ---
@@ -556,7 +556,7 @@ Permission checks in resolvers:
 | Backend DB | PostgreSQL | MongoDB, CockroachDB | Relational integrity, JSONB flexibility, mature |
 | Real-time | WebSocket | SSE, polling, WebTransport | Bidirectional, low latency, proven |
 | Sync | Custom delta sync | CRDTs, OT, Replicache | Linear's proven approach, simpler than CRDTs |
-| ORM | Drizzle | Prisma, TypeORM, Knex | Lightweight, type-safe, SQL-close |
+| ORM | Prisma 7 | Drizzle, TypeORM, Knex | Rust-free client, type-safe, built-in Studio, excellent migration tooling |
 | Editor | TipTap | Slate, Lexical, Quill | ProseMirror-based, collaborative editing support |
 | Auth | Custom JWT | NextAuth, Clerk, Auth0 | Full control over token lifecycle, sync engine integration |
 | Queue | BullMQ | RabbitMQ, SQS, Inngest | Redis-backed, simple, good DX |
