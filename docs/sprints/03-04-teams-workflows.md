@@ -424,7 +424,43 @@ yarn add @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities  # Drag-and-drop for
 
 ---
 
-## 9. Cross-References
+## 9. Implementation Notes
+
+### Backend (Complete)
+
+Additional files created beyond the original plan:
+
+| File | Purpose |
+|------|---------|
+| `src/server/middleware/auth.ts` | Extended with `requireOrgRole`, `requireTeamMember`, `requireTeamOwner` |
+| `src/server/graphql/context.ts` | Updated with `prisma`, `TeamService`, `WorkflowStateService` |
+| `src/server/graphql/schema.ts` | Extended with Team, WorkflowState, TeamMembership types + mutations |
+| `src/server/graphql/resolvers/index.ts` | Updated to include new resolvers |
+| `vitest.config.ts` | Vitest test runner configuration |
+| `src/test/setup.ts` | Test environment setup |
+| `src/test/prisma-mock.ts` | Prisma client mock factory |
+| `src/test/context-mock.ts` | GraphQL context mock factory |
+| `src/test/fixtures.ts` | Shared test data |
+| `.github/workflows/ci.yml` | Added test job |
+
+### Dependencies Added
+
+| Package | Type | Purpose |
+|---------|------|---------|
+| `vitest` | dev | Test runner |
+| `@vitest/coverage-v8` | dev | Coverage reporting |
+
+### Test Coverage (new code)
+
+| File | Statement Coverage |
+|------|-------------------|
+| `team.service.ts` | 96% |
+| `workflow-state.service.ts` | 96% |
+| `auth.ts` (middleware) | 50% (new guards fully covered; Sprint 1-2 code not yet) |
+
+---
+
+## 10. Cross-References
 
 | Topic | Document | Section |
 |-------|----------|---------|

@@ -139,10 +139,14 @@ Context is built per-request from the incoming headers/cookies:
 
 ```typescript
 // src/server/graphql/context.ts
-export interface GraphQLContext {
-  userId: string | null;
-  orgId: string | null;
-  services: { auth: AuthService; user: UserService };
+export interface GraphQLContext extends AuthContext {
+  prisma: PrismaClient;
+  services: {
+    auth: AuthService;
+    team: TeamService;
+    user: UserService;
+    workflowState: WorkflowStateService;
+  };
 }
 
 export async function createContext(req: NextRequest): Promise<GraphQLContext> {
@@ -151,9 +155,22 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
     req.cookies.get('access_token')?.value ?? null,
   );
   const userService = new UserService(prisma);
-  return { ...auth, services: { auth: new AuthService(prisma, userService), user: userService } };
+  const teamService = new TeamService(prisma);
+  const workflowStateService = new WorkflowStateService(prisma);
+  return {
+    ...auth,
+    prisma,
+    services: {
+      auth: new AuthService(prisma, userService),
+      team: teamService,
+      user: userService,
+      workflowState: workflowStateService,
+    },
+  };
 }
 ```
+
+The `prisma` instance is exposed on context so authorization guards can perform queries without going through a service (e.g., `requireOrgRole` checks `organizationMember` directly).
 
 ---
 

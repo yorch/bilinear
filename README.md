@@ -82,6 +82,9 @@ In development, magic link codes are printed to the server console instead of be
 | `yarn dev` | Start the development server |
 | `yarn build` | Build for production |
 | `yarn start` | Start the production server |
+| `yarn test` | Run all tests |
+| `yarn test:watch` | Run tests in watch mode |
+| `yarn test:coverage` | Run tests with coverage report |
 | `yarn lint` | Run Biome checks |
 | `yarn format` | Format code with Biome |
 | `yarn prisma generate` | Regenerate Prisma client after schema changes |
@@ -102,9 +105,9 @@ src/
 │   └── api/auth/session/     # POST/DELETE httpOnly cookie management
 ├── server/                   # Backend-only code (never imported by client)
 │   ├── graphql/              # schema.ts, context.ts, resolvers/, types/
-│   ├── services/             # AuthService, UserService (business logic)
+│   ├── services/             # AuthService, UserService, TeamService, WorkflowStateService
 │   ├── lib/                  # prisma.ts, redis.ts, jwt.ts, email.ts
-│   └── middleware/           # JWT extraction + requireAuth guard
+│   └── middleware/           # JWT extraction, requireAuth, requireOrgRole, requireTeamMember
 ├── components/
 │   ├── auth/                 # LoginForm, VerifyCodeForm
 │   ├── layouts/              # AppShell, Sidebar
