@@ -10,7 +10,10 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "biome check .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@apollo/server": "5.5.0",
@@ -43,9 +46,11 @@
     "@types/pg": "8.20.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
+    "@vitest/coverage-v8": "4.1.2",
     "prisma": "7.6.0",
     "tailwindcss": "4.2.2",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vitest": "4.1.2"
   },
   "packageManager": "yarn@4.13.0"
 }

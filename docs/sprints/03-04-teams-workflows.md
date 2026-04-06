@@ -406,16 +406,16 @@ yarn add @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities  # Drag-and-drop for
 
 ## 8. Acceptance Criteria
 
-- [ ] `teamCreate` mutation creates a team with auto-seeded default workflow states (5 states; 6 if triageEnabled)
-- [ ] `teamCreate` validates key uniqueness and format (1-10 uppercase chars)
-- [ ] `teams` query returns paginated teams for the organization
-- [ ] `team` query returns a single team with its states and members
-- [ ] `teamUpdate` mutation updates team settings
-- [ ] `teamDelete` mutation soft-deletes a team (requires owner/admin role)
-- [ ] `teamMembershipCreate` adds a user to a team
-- [ ] `workflowStateCreate` creates a new state with valid type
-- [ ] `workflowStateUpdate` changes name/color/position but not type
-- [ ] `workflowStateArchive` refuses to archive the last completed/canceled state
+- [x] `teamCreate` mutation creates a team with auto-seeded default workflow states (5 states; 6 if triageEnabled)
+- [x] `teamCreate` validates key uniqueness and format (1-10 uppercase chars)
+- [x] `teams` query returns paginated teams for the organization
+- [x] `team` query returns a single team with its states and members
+- [x] `teamUpdate` mutation updates team settings
+- [x] `teamDelete` mutation soft-deletes a team (requires owner/admin role)
+- [x] `teamMembershipCreate` adds a user to a team
+- [x] `workflowStateCreate` creates a new state with valid type
+- [x] `workflowStateUpdate` changes name/color/position but not type
+- [x] `workflowStateArchive` refuses to archive the last completed/canceled state
 - [ ] Sidebar shows list of teams the user belongs to
 - [ ] Clicking a team in sidebar navigates to team view
 - [ ] Team creation modal validates key format and uniqueness

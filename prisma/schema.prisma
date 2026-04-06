@@ -59,6 +59,7 @@ model User {
 
   orgMemberships  OrganizationMember[]
   authTokens      AuthToken[]
+  teamMemberships TeamMembership[]
 
   @@map("users")
 }
@@ -108,20 +109,106 @@ model AuthToken {
   @@map("auth_tokens")
 }
 
-// Placeholder for Sprint 3-4 (referenced by Organization relation)
 model Team {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @map("organization_id") @db.Uuid
-  name           String       @db.VarChar(255)
-  key            String       @db.VarChar(12)
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  name            String    @db.VarChar(255)
+  key             String    @db.VarChar(10)
+  displayName     String    @map("display_name") @db.VarChar(255)
+  description     String?
+  icon            String?   @db.VarChar(255)
+  color           String?   @db.VarChar(7)
+  private         Boolean   @default(false)
 
-  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz
-  archivedAt     DateTime?    @map("archived_at") @db.Timestamptz
+  // Hierarchy
+  parentId        String?   @map("parent_id") @db.Uuid
 
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // Timezone
+  timezone        String    @default("UTC") @db.VarChar(63)
+
+  // Cycle configuration (used in Sprint 15-16)
+  cyclesEnabled           Boolean @default(false) @map("cycles_enabled")
+  cycleDuration           Int?    @default(2) @map("cycle_duration")
+  cycleCooldownTime       Int?    @default(0) @map("cycle_cooldown_time")
+  cycleStartDay           Int?    @default(1) @map("cycle_start_day")
+  cycleLockToActive       Boolean @default(false) @map("cycle_lock_to_active")
+  cycleAutoAssignStarted  Boolean @default(false) @map("cycle_auto_assign_started")
+  cycleAutoAssignCompleted Boolean @default(false) @map("cycle_auto_assign_completed")
+
+  // Auto-close/archive
+  autoClosePeriod         Int?    @map("auto_close_period")
+  autoCloseStateId        String? @map("auto_close_state_id") @db.Uuid
+  autoArchivePeriod       Int?    @map("auto_archive_period")
+  autoCloseChildIssues    Boolean @default(false) @map("auto_close_child_issues")
+  autoCloseParentIssues   Boolean @default(false) @map("auto_close_parent_issues")
+
+  // Estimation
+  issueEstimationType     String  @default("notUsed") @map("issue_estimation_type") @db.VarChar(20)
+  issueEstimationExtended Boolean @default(false) @map("issue_estimation_extended")
+  issueEstimationAllowZero Boolean @default(false) @map("issue_estimation_allow_zero")
+  defaultIssueEstimate    Float?  @map("default_issue_estimate")
+
+  // Defaults
+  defaultIssueStateId     String? @map("default_issue_state_id") @db.Uuid
+  triageEnabled           Boolean @default(false) @map("triage_enabled")
+
+  // Counter
+  issueCount              Int     @default(0) @map("issue_count")
+
+  // Lifecycle
+  joinByDefault           Boolean @default(false) @map("join_by_default")
+  retiredAt               DateTime? @map("retired_at") @db.Timestamptz
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt              DateTime? @map("archived_at") @db.Timestamptz
+
+  organization            Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent                  Team?    @relation("TeamHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children                Team[]   @relation("TeamHierarchy")
+  memberships             TeamMembership[]
+  workflowStates          WorkflowState[]
 
   @@unique([organizationId, key])
   @@index([organizationId])
+  @@index([parentId])
   @@map("teams")
+}
+
+model TeamMembership {
+  id        String   @id @default(uuid()) @db.Uuid
+  teamId    String   @map("team_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  isOwner   Boolean  @default(false) @map("is_owner")
+  sortOrder Float    @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+  @@map("team_memberships")
+}
+
+model WorkflowState {
+  id          String    @id @default(uuid()) @db.Uuid
+  teamId      String    @map("team_id") @db.Uuid
+  name        String    @db.VarChar(255)
+  color       String    @db.VarChar(7)
+  description String?
+  type        String    @db.VarChar(20)
+  position    Float     @default(0)
+
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt  DateTime? @map("archived_at") @db.Timestamptz
+
+  team        Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+  @@index([teamId, type])
+  @@map("workflow_states")
 }
