@@ -1,48 +1,27 @@
-import Image from 'next/image';
-import { Button } from '@/components/ui/button';
+import { jwtVerify } from 'jose';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 
-export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            Issue Tracker
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            A Next.js 16 app with TypeScript, Yarn v4, Biome, TailwindCSS v4,
-            and shadcn/ui.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <Button asChild>
-            <a
-              href="https://nextjs.org/docs"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Documentation
-            </a>
-          </Button>
-          <Button variant="outline" asChild>
-            <a
-              href="https://ui.shadcn.com"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              shadcn/ui
-            </a>
-          </Button>
-        </div>
-      </main>
-    </div>
-  );
+export default async function RootPage() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('access_token')?.value;
+
+  if (!token) {
+    redirect('/login');
+  }
+
+  try {
+    const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? '');
+    const { payload } = await jwtVerify(token, secret);
+    const orgId = payload.orgId as string | undefined;
+
+    if (orgId) {
+      // In a future sprint the orgId will map to a urlKey; for now redirect to workspace
+      redirect(`/${orgId}`);
+    }
+  } catch {
+    // Token invalid — middleware will handle redirect, but redirect here as fallback
+  }
+
+  redirect('/login');
 }
