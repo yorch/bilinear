@@ -1,5 +1,9 @@
 import { GraphQLError } from 'graphql';
-import { requireAuth, requireOrgRole } from '../../middleware/auth';
+import {
+  requireAuth,
+  requireOrgRole,
+  requireTeamMember,
+} from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
 
 export const teamMembershipResolvers = {
@@ -26,8 +30,12 @@ export const teamMembershipResolvers = {
         );
         return { lastSyncId: 0, success: true, teamMembership };
       } catch (err) {
-        const error = err as Error;
-        if (error.message?.includes('Unique constraint')) {
+        if (
+          typeof err === 'object' &&
+          err !== null &&
+          'code' in err &&
+          (err as { code: string }).code === 'P2002'
+        ) {
           throw new GraphQLError('User is already a member of this team', {
             extensions: { code: 'BAD_USER_INPUT' },
           });
@@ -42,6 +50,17 @@ export const teamMembershipResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+      // Look up the membership to find its team, then verify caller is a member
+      const membership = await ctx.prisma.teamMembership.findUnique({
+        where: { id },
+      });
+      if (!membership) {
+        throw new GraphQLError('Membership not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+      await requireTeamMember(ctx.prisma, membership.teamId, ctx.userId);
+
       await ctx.services.team.removeMember(id);
       return { lastSyncId: 0, success: true };
     },
@@ -55,6 +74,17 @@ export const teamMembershipResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+      // Look up the membership to find its team, then verify caller is a member
+      const membership = await ctx.prisma.teamMembership.findUnique({
+        where: { id },
+      });
+      if (!membership) {
+        throw new GraphQLError('Membership not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+      await requireTeamMember(ctx.prisma, membership.teamId, ctx.userId);
+
       const teamMembership = await ctx.services.team.updateMembership(
         id,
         input,

@@ -1,6 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { WorkflowState } from '../../../generated/prisma';
-import { requireAuth } from '../../middleware/auth';
+import { requireAuth, requireTeamMember } from '../../middleware/auth';
 import type {
   WorkflowStateCreateInput,
   WorkflowStateUpdateInput,
@@ -16,16 +16,20 @@ export const workflowStateResolvers = {
     ) => {
       requireAuth(ctx);
 
+      // Look up state to find its team for auth check
+      const existing = await ctx.services.workflowState.findById(id);
+      if (!existing) {
+        throw new GraphQLError('Workflow state not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
+
       try {
         const workflowState = await ctx.services.workflowState.archive(id);
         return { lastSyncId: 0, success: true, workflowState };
       } catch (err) {
         const error = err as Error;
-        if (error.name === 'WorkflowStateNotFoundError') {
-          throw new GraphQLError(error.message, {
-            extensions: { code: 'NOT_FOUND' },
-          });
-        }
         if (error.name === 'LastRequiredStateError') {
           throw new GraphQLError(error.message, {
             extensions: { code: 'BAD_USER_INPUT' },
@@ -41,6 +45,7 @@ export const workflowStateResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+      await requireTeamMember(ctx.prisma, input.teamId, ctx.userId);
 
       try {
         const workflowState = await ctx.services.workflowState.create(input);
@@ -62,6 +67,16 @@ export const workflowStateResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+
+      // Look up state to find its team for auth check
+      const existing = await ctx.services.workflowState.findById(id);
+      if (!existing) {
+        throw new GraphQLError('Workflow state not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
+
       const workflowState = await ctx.services.workflowState.update(id, input);
       return { lastSyncId: 0, success: true, workflowState };
     },

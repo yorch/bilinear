@@ -1,6 +1,10 @@
 import { GraphQLError } from 'graphql';
 import type { Team, TeamMembership } from '../../../generated/prisma';
-import { requireAuth, requireOrgRole } from '../../middleware/auth';
+import {
+  requireAuth,
+  requireOrgRole,
+  requireTeamMember,
+} from '../../middleware/auth';
 import type {
   TeamCreateInput,
   TeamUpdateInput,
@@ -49,6 +53,14 @@ export const teamResolvers = {
         'admin',
       ]);
 
+      // Verify team belongs to user's org
+      const team = await ctx.services.team.findById(id);
+      if (!team || team.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Team not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+
       await ctx.services.team.delete(id);
       return { lastSyncId: 0, success: true };
     },
@@ -59,6 +71,7 @@ export const teamResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+      await requireTeamMember(ctx.prisma, id, ctx.userId);
       const team = await ctx.services.team.update(id, input);
       return { lastSyncId: 0, success: true, team };
     },

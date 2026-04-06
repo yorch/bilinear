@@ -122,13 +122,15 @@ describe('teamResolvers', () => {
   });
 
   describe('Mutation.teamDelete', () => {
-    it('soft-deletes a team when user is admin', async () => {
+    it('soft-deletes a team when user is admin and team belongs to org', async () => {
       ctx.prisma.organizationMember.findUnique.mockResolvedValue({
         id: 'mem-1',
         organizationId: TEST_ORG.id,
         role: 'admin',
         userId: TEST_USER.id,
       });
+      // findById to verify org ownership
+      ctx.prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
       ctx.prisma.team.update.mockResolvedValue({
         ...TEST_TEAM,
         archivedAt: new Date(),
@@ -142,10 +144,39 @@ describe('teamResolvers', () => {
 
       expect(result.success).toBe(true);
     });
+
+    it('throws NOT_FOUND when team belongs to different org', async () => {
+      ctx.prisma.organizationMember.findUnique.mockResolvedValue({
+        id: 'mem-1',
+        organizationId: TEST_ORG.id,
+        role: 'admin',
+        userId: TEST_USER.id,
+      });
+      ctx.prisma.team.findUnique.mockResolvedValue({
+        ...TEST_TEAM,
+        organizationId: 'different-org-id',
+      });
+
+      try {
+        await teamResolvers.Mutation.teamDelete(
+          null,
+          { id: TEST_TEAM.id },
+          ctx as never,
+        );
+        expect.unreachable('Should have thrown');
+      } catch (e) {
+        expect(e).toBeInstanceOf(GraphQLError);
+        expect((e as GraphQLError).extensions?.code).toBe('NOT_FOUND');
+      }
+    });
   });
 
   describe('Mutation.teamUpdate', () => {
-    it('updates a team', async () => {
+    it('updates a team when user is a team member', async () => {
+      // requireTeamMember check
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue(
+        TEST_TEAM_MEMBERSHIP,
+      );
       const updated = { ...TEST_TEAM, name: 'New Name' };
       ctx.prisma.team.update.mockResolvedValue(updated);
 

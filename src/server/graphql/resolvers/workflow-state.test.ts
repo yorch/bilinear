@@ -4,7 +4,11 @@ import {
   createMockContext,
   type MockGraphQLContext,
 } from '../../../test/context-mock';
-import { DEFAULT_WORKFLOW_STATES, TEST_TEAM } from '../../../test/fixtures';
+import {
+  DEFAULT_WORKFLOW_STATES,
+  TEST_TEAM,
+  TEST_TEAM_MEMBERSHIP,
+} from '../../../test/fixtures';
 import { workflowStateResolvers } from './workflow-state';
 
 describe('workflowStateResolvers', () => {
@@ -12,10 +16,14 @@ describe('workflowStateResolvers', () => {
 
   beforeEach(() => {
     ctx = createMockContext();
+    // Default: user is a team member (for auth checks)
+    ctx.prisma.teamMembership.findUnique.mockResolvedValue(
+      TEST_TEAM_MEMBERSHIP,
+    );
   });
 
   describe('Mutation.workflowStateCreate', () => {
-    it('creates a workflow state', async () => {
+    it('creates a workflow state when user is team member', async () => {
       const newState = DEFAULT_WORKFLOW_STATES[0];
       ctx.prisma.workflowState.create.mockResolvedValue(newState);
 
@@ -75,17 +83,42 @@ describe('workflowStateResolvers', () => {
         ),
       ).rejects.toThrow(GraphQLError);
     });
+
+    it('throws FORBIDDEN when user is not a team member', async () => {
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue(null);
+
+      try {
+        await workflowStateResolvers.Mutation.workflowStateCreate(
+          null,
+          {
+            input: {
+              color: '#000',
+              name: 'Test',
+              teamId: TEST_TEAM.id,
+              type: 'backlog',
+            },
+          },
+          ctx as never,
+        );
+        expect.unreachable('Should have thrown');
+      } catch (e) {
+        expect(e).toBeInstanceOf(GraphQLError);
+        expect((e as GraphQLError).extensions?.code).toBe('FORBIDDEN');
+      }
+    });
   });
 
   describe('Mutation.workflowStateUpdate', () => {
-    it('updates a workflow state', async () => {
-      const updated = { ...DEFAULT_WORKFLOW_STATES[0], name: 'Updated' };
+    it('updates a workflow state when user is team member', async () => {
+      const existing = DEFAULT_WORKFLOW_STATES[0];
+      const updated = { ...existing, name: 'Updated' };
+      ctx.prisma.workflowState.findUnique.mockResolvedValue(existing);
       ctx.prisma.workflowState.update.mockResolvedValue(updated);
 
       const result = await workflowStateResolvers.Mutation.workflowStateUpdate(
         null,
         {
-          id: DEFAULT_WORKFLOW_STATES[0].id,
+          id: existing.id,
           input: { name: 'Updated' },
         },
         ctx as never,
@@ -94,10 +127,26 @@ describe('workflowStateResolvers', () => {
       expect(result.success).toBe(true);
       expect(result.workflowState.name).toBe('Updated');
     });
+
+    it('throws NOT_FOUND when state does not exist', async () => {
+      ctx.prisma.workflowState.findUnique.mockResolvedValue(null);
+
+      try {
+        await workflowStateResolvers.Mutation.workflowStateUpdate(
+          null,
+          { id: 'nonexistent', input: { name: 'Updated' } },
+          ctx as never,
+        );
+        expect.unreachable('Should have thrown');
+      } catch (e) {
+        expect(e).toBeInstanceOf(GraphQLError);
+        expect((e as GraphQLError).extensions?.code).toBe('NOT_FOUND');
+      }
+    });
   });
 
   describe('Mutation.workflowStateArchive', () => {
-    it('archives a workflow state', async () => {
+    it('archives a workflow state when user is team member', async () => {
       const backlogState = DEFAULT_WORKFLOW_STATES[0];
       ctx.prisma.workflowState.findUnique.mockResolvedValue(backlogState);
       ctx.prisma.workflowState.update.mockResolvedValue({
@@ -133,6 +182,7 @@ describe('workflowStateResolvers', () => {
 
     it('throws BAD_USER_INPUT when archiving last completed state', async () => {
       const completedState = DEFAULT_WORKFLOW_STATES[3]; // type: completed
+      // First findUnique for auth check, second for archive logic
       ctx.prisma.workflowState.findUnique.mockResolvedValue(completedState);
       ctx.prisma.workflowState.count.mockResolvedValue(0);
 
