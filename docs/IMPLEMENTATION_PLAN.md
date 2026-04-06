@@ -1,8 +1,27 @@
 # Implementation Plan
 ## Issue Tracker — Linear Rebuild
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Date:** April 2026
+
+---
+
+## How to Use This Document
+
+This is the **high-level roadmap**. For Phase 1, each sprint has a detailed implementation doc in `docs/sprints/` with file paths, schema definitions, API contracts, acceptance criteria, and cross-references:
+
+| Sprint | Detail Doc |
+|--------|-----------|
+| Sprint 1-2: Project Setup & Auth | [`docs/sprints/01-02-project-setup-auth.md`](sprints/01-02-project-setup-auth.md) |
+| Sprint 3-4: Teams & Workflows | [`docs/sprints/03-04-teams-workflows.md`](sprints/03-04-teams-workflows.md) |
+| Sprint 5-6: Issue CRUD & List View | [`docs/sprints/05-06-issue-crud-list.md`](sprints/05-06-issue-crud-list.md) |
+| Sprint 7-8: Sync Engine | [`docs/sprints/07-08-sync-engine.md`](sprints/07-08-sync-engine.md) |
+| Sprint 9-10: Search & Command Palette | [`docs/sprints/09-10-search-command-palette.md`](sprints/09-10-search-command-palette.md) |
+| Sprint 11-12: Polish & Performance | [`docs/sprints/11-12-polish-performance.md`](sprints/11-12-polish-performance.md) |
+
+> **Pattern Documentation:** Phase 1 establishes all foundational patterns (project structure, Prisma conventions, GraphQL resolver pattern, service layer, MobX stores, component patterns, keyboard shortcuts, testing, and sync integration). Sprint 11-12 produces a `docs/PATTERNS.md` that documents these patterns as the onboarding guide for Phase 2+ development. All subsequent sprints should follow the patterns in that document.
+
+> **Phase 2+ sprints** will be broken into detailed docs following the same format once Phase 1 patterns are established and documented.
 
 ---
 
