@@ -22,12 +22,11 @@ function createTransport() {
   });
 }
 
-const transport = createTransport();
-
 export async function sendMagicLinkEmail(
   email: string,
   code: string,
 ): Promise<void> {
+  const transport = createTransport();
   const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
   const verifyUrl = `${appUrl}/verify?email=${encodeURIComponent(email)}&code=${code}`;
 
