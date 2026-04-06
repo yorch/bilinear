@@ -2,7 +2,7 @@
 ## Issue Tracker — Linear Rebuild
 
 **Phase:** 1 (Foundation)  
-**Weeks:** 9-12  
+**Weeks:** 5-6  
 **Goal:** Create, view, and edit issues in a virtualized list view
 
 **Prerequisites:** Sprint 3-4 (teams, workflow states)

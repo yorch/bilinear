@@ -2,7 +2,7 @@
 ## Issue Tracker — Linear Rebuild
 
 **Phase:** 1 (Foundation)  
-**Weeks:** 17-20  
+**Weeks:** 9-10  
 **Goal:** Fast search and keyboard-first navigation via command palette
 
 **Prerequisites:** Sprint 7-8 (sync engine, MobX stores — search reads from local stores where possible)
@@ -104,20 +104,34 @@ type Query {
 
 ```typescript
 // src/server/services/search.service.ts
-async searchIssues(orgId: string, query: string, first: number = 20): Promise<Issue[]> {
+async searchIssues(
+  orgId: string,
+  query: string,
+  first: number = 20,
+  includeArchived: boolean = false,
+): Promise<Issue[]> {
   // 1. Check for issue ID pattern (e.g., "ENG-123")
   const idMatch = query.match(/^([A-Z]+-\d+)$/);
   if (idMatch) {
     const issue = await this.prisma.issue.findFirst({
-      where: { organizationId: orgId, identifier: idMatch[1] },
+      where: {
+        organizationId: orgId,
+        identifier: idMatch[1],
+        ...(includeArchived ? {} : { archivedAt: null, trashed: false }),
+      },
     });
     return issue ? [issue] : [];
   }
 
-  // 2. Full-text search
+  // 2. Full-text search (filter out archived/trashed unless includeArchived)
+  const archiveFilter = includeArchived
+    ? Prisma.sql``
+    : Prisma.sql`AND archived_at IS NULL AND trashed = false`;
+
   return this.prisma.$queryRaw`
     SELECT * FROM issues
     WHERE organization_id = ${orgId}::uuid
+      ${archiveFilter}
       AND to_tsvector('english', title || ' ' || COALESCE(description, ''))
           @@ plainto_tsquery('english', ${query})
     ORDER BY ts_rank(

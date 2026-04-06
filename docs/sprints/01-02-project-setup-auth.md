@@ -2,7 +2,7 @@
 ## Issue Tracker — Linear Rebuild
 
 **Phase:** 1 (Foundation)  
-**Weeks:** 1-4  
+**Weeks:** 1-2  
 **Goal:** Working app shell with authentication
 
 **Prerequisites:** None (first sprint)
@@ -143,7 +143,7 @@ export class AuthService {
 
 ### 2.5 Error Handling Pattern
 
-Use GraphQL errors with extension codes, not HTTP status codes:
+Use GraphQL errors with `extensions.code` as the primary error discriminator. Clients should always check `extensions.code` rather than HTTP status. Note: HTTP status may still vary (e.g., rate limiting returns HTTP 400 per API_DESIGN.md §12), but `extensions.code` is the canonical error type.
 
 ```typescript
 import { GraphQLError } from 'graphql';
@@ -157,7 +157,7 @@ throw new GraphQLError('Not found', {
 });
 
 throw new GraphQLError('Rate limited', {
-  extensions: { code: 'RATELIMITED' },
+  extensions: { code: 'RATELIMITED' },  // HTTP 400, see API_DESIGN.md §12
 });
 ```
 

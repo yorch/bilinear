@@ -2,7 +2,7 @@
 ## Issue Tracker — Linear Rebuild
 
 **Phase:** 1 (Foundation)  
-**Weeks:** 21-24  
+**Weeks:** 11-12  
 **Goal:** Production-ready Alpha release with polish, theming, performance, testing, and observability
 
 **Prerequisites:** Sprints 1-10 (all foundation features complete)
@@ -371,7 +371,7 @@ npx shadcn@latest add sonner
 
 ## 13. Alpha Release Checklist
 
-Upon completion of this sprint, the following should be true for the **Alpha milestone (Week 12/24)**:
+Upon completion of this sprint, the following should be true for the **Alpha milestone (Week 12)**:
 
 - [ ] Auth: email magic link + Google OAuth fully working
 - [ ] Teams: create, configure, manage members

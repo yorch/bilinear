@@ -2,7 +2,7 @@
 ## Issue Tracker — Linear Rebuild
 
 **Phase:** 1 (Foundation)  
-**Weeks:** 13-16  
+**Weeks:** 7-8  
 **Goal:** Local-first architecture with optimistic updates and real-time sync
 
 **Prerequisites:** Sprint 5-6 (issue CRUD, list view — sync wraps around existing mutations)
@@ -94,12 +94,18 @@ Every mutation on the server generates a SyncAction (the atomic unit of sync):
 
 ```typescript
 interface SyncAction {
-  id: number;          // Monotonically increasing BIGSERIAL
+  id: bigint;          // Monotonically increasing BIGSERIAL (use bigint end-to-end)
   action: 'I' | 'U' | 'D' | 'A';  // Insert, Update, Delete, Archive
   modelName: string;   // "Issue", "Team", "User", etc.
   modelId: string;     // UUID of affected entity
   data: object | null; // Full or partial entity (null for deletes)
 }
+
+// NOTE: SyncAction IDs are PostgreSQL BIGSERIAL (int8). GraphQL's Int type is
+// 32-bit (max ~2.1B) which will overflow on long-lived systems. Use a custom
+// BigInt scalar or serialize lastSyncId as String in GraphQL payloads.
+// In TypeScript, use bigint (not number) to avoid JS safe integer limits.
+```
 ```
 
 ---
@@ -176,7 +182,7 @@ Every mutation resolver from Sprints 1-6 must now:
 issueCreate: async (_parent, { input }, ctx) => {
   const issue = await ctx.services.issue.create(ctx.orgId, input);
   const syncAction = await ctx.services.sync.createSyncAction(ctx.orgId, 'I', 'Issue', issue.id, issue);
-  return { success: true, issue, lastSyncId: Number(syncAction.id) };
+  return { success: true, issue, lastSyncId: syncAction.id.toString() };
 },
 ```
 

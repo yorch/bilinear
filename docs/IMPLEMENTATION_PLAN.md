@@ -52,7 +52,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Create migrations: teams, team_memberships, workflow_states
 - [ ] Implement team CRUD (GraphQL mutations + queries)
 - [ ] Implement workflow state CRUD with category constraints
-- [ ] Seed default workflow states per team (Backlog, Todo, In Progress, Done, Canceled)
+- [ ] Seed default workflow states per team (Backlog, Todo, In Progress, Done, Canceled; Triage only when enabled)
 - [ ] Team settings page: name, key, timezone, estimation
 - [ ] Sidebar: team navigation, team switcher
 - [ ] Team creation modal

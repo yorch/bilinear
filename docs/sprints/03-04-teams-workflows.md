@@ -2,7 +2,7 @@
 ## Issue Tracker — Linear Rebuild
 
 **Phase:** 1 (Foundation)  
-**Weeks:** 5-8  
+**Weeks:** 3-4  
 **Goal:** Teams with customizable workflow states
 
 **Prerequisites:** Sprint 1-2 (auth, database, GraphQL server, app shell)
@@ -34,7 +34,9 @@ teamCreate: async (_parent, { input }, ctx) => {
   requireAuth(ctx);
   requireOrgRole(ctx, ['owner', 'admin']);
   const team = await ctx.services.team.create(ctx.orgId, input);
-  return { success: true, team, lastSyncId: team.syncId };
+  // NOTE: lastSyncId is a placeholder (0) until Sprint 7-8 introduces the sync engine.
+  // After Sprint 7-8, this becomes: ctx.services.sync.createSyncAction(...)
+  return { success: true, team, lastSyncId: 0 };
 },
 ```
 
@@ -52,16 +54,17 @@ async create(orgId: string, input: TeamCreateInput): Promise<Team> {
 
 ### 2.2 Seeding Pattern
 
-When a team is created, default workflow states must be automatically seeded:
+When a team is created, seed these 5 default workflow states:
 
 | Name | Type | Color | Position |
 |------|------|-------|----------|
-| Triage | triage | `#8b8c91` | 0 |
-| Backlog | backlog | `#bec2c8` | 1 |
-| Todo | unstarted | `#e2e2e2` | 2 |
-| In Progress | started | `#f2c94c` | 3 |
-| Done | completed | `#5e6ad2` | 4 |
-| Canceled | canceled | `#95a2b3` | 5 |
+| Backlog | backlog | `#bec2c8` | 0 |
+| Todo | unstarted | `#e2e2e2` | 1 |
+| In Progress | started | `#f2c94c` | 2 |
+| Done | completed | `#5e6ad2` | 3 |
+| Canceled | canceled | `#95a2b3` | 4 |
+
+> **Triage state** is only seeded when `triageEnabled` is set to `true` on the team (added as position 0, shifting others). Triage is disabled by default. See Phase 3 Sprint 35-36 for the full triage workflow.
 
 ### 2.3 Authorization Pattern
 
@@ -287,13 +290,13 @@ input WorkflowStateUpdateInput {
 type TeamPayload {
   success: Boolean!
   team: Team
-  lastSyncId: Int!
+  lastSyncId: String!  # BigInt serialized as string (see Sprint 7-8 sync engine notes)
 }
 
 type WorkflowStatePayload {
   success: Boolean!
   workflowState: WorkflowState
-  lastSyncId: Int!
+  lastSyncId: String!  # BigInt serialized as string (see Sprint 7-8 sync engine notes)
 }
 ```
 
@@ -403,7 +406,7 @@ yarn add @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities  # Drag-and-drop for
 
 ## 8. Acceptance Criteria
 
-- [ ] `teamCreate` mutation creates a team with auto-seeded default workflow states (6 states)
+- [ ] `teamCreate` mutation creates a team with auto-seeded default workflow states (5 states; 6 if triageEnabled)
 - [ ] `teamCreate` validates key uniqueness and format (1-10 uppercase chars)
 - [ ] `teams` query returns paginated teams for the organization
 - [ ] `team` query returns a single team with its states and members
