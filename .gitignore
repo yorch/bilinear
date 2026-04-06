@@ -78,6 +78,12 @@ web_modules/
 .next
 out
 
+# Next.js generated type file (regenerated on every build)
+next-env.d.ts
+
+# Prisma generated client (run `prisma generate` after checkout)
+src/generated/
+
 # Nuxt.js build / generate output
 .nuxt
 dist

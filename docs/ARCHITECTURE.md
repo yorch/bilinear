@@ -77,7 +77,7 @@
 ### 2.1 Frontend
 | Layer | Technology | Rationale |
 |-------|-----------|-----------|
-| Framework | **Next.js 15 (App Router)** | SSR, routing, API routes, existing in repo |
+| Framework | **Next.js 16 (App Router)** | SSR, routing, API routes, existing in repo |
 | Language | **TypeScript** | Type safety, shared types with backend |
 | State | **MobX** | Observable-based reactivity (matches Linear's approach) |
 | Local DB | **IndexedDB** (via Dexie.js) | Offline-first local cache |
@@ -93,8 +93,8 @@
 | Layer | Technology | Rationale |
 |-------|-----------|-----------|
 | Runtime | **Node.js** | TypeScript everywhere, shared types |
-| API | **GraphQL** (Apollo Server or Yoga) | Matches Linear's approach, flexible queries |
-| ORM | **Prisma 7** | Type-safe, Rust-free client, built-in Studio, excellent DX |
+| API | **GraphQL** (Apollo Server + @as-integrations/next) | Matches Linear's approach, flexible queries |
+| ORM | **Prisma 7** + `@prisma/adapter-pg` | Type-safe, Rust-free; Prisma 7 requires a driver adapter — datasource URL lives in `prisma.config.ts`, not `schema.prisma` |
 | Database | **PostgreSQL 18** | Relational, JSONB, full-text search, new I/O subsystem (up to 3× perf), uuidv7() |
 | Cache/PubSub | **Redis 7** | Pub/sub for sync broadcast, session cache, rate limiting |
 | Search | **MeiliSearch** or **PostgreSQL FTS** | Full-text search with fuzzy matching |
@@ -460,25 +460,33 @@ BullMQ Queues:
 
 ```
 Email Magic Link:
-  1. User enters email → POST /auth/email
-  2. Server generates 6-digit code + JWT token (15min expiry)
-  3. Email sent with code
-  4. User enters code → POST /auth/verify
-  5. Server returns access token (24h) + refresh token (30d)
-  6. Client stores tokens in httpOnly cookies
+  1. User enters email → emailLogin GraphQL mutation (POST /api/graphql)
+  2. Server generates cryptographically random 6-digit code (crypto.randomInt)
+  3. Code is hashed (SHA-256) before storage — raw code only in the email
+  4. Email sent with code (dev: logged to console)
+  5. User enters code → emailVerify GraphQL mutation
+  6. Server looks up by tokenHash; returns access token (24h) + refresh token (30d)
+  7. Client POSTs tokens to /api/auth/session → server sets httpOnly cookies
 
 Google OAuth:
-  1. Client redirects to Google OAuth consent
-  2. Google redirects back with authorization code
-  3. Server exchanges code for Google tokens
-  4. Server creates/links user account
-  5. Returns access + refresh tokens
+  1. Client redirects to Google OAuth consent screen
+  2. Google redirects to /auth/google/callback with authorization code
+  3. googleAuthExchange GraphQL mutation — server exchanges code for Google tokens
+  4. Server creates or links user account
+  5. Returns access + refresh tokens (same cookie flow as above)
 
 Token Refresh:
   1. Client detects 401 or token expiry approaching
-  2. POST /auth/refresh with refresh token
+  2. tokenRefresh GraphQL mutation with refresh token
   3. Server issues new access + refresh tokens
-  4. 30-minute grace period on old refresh token
+  4. 30-minute grace period on old refresh token (handles concurrent requests)
+
+Token Security:
+  - Refresh tokens stored as SHA-256 hashes only (never plaintext)
+  - Pre-generated UUID ensures DB record and JWT are written atomically
+  - Access tokens: HS256 JWT, 24h, payload {userId, orgId, type:'access'}
+  - Refresh tokens: HS256 JWT, 30d, payload {userId, tokenId, type:'refresh'}
+  - httpOnly cookies prevent XSS access; separate JWT_SECRET / JWT_REFRESH_SECRET
 ```
 
 ### 6.2 Authorization Model

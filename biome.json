@@ -26,7 +26,15 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["**", "!node_modules", "!.next", "!dist", "!yarn.lock"]
+    "includes": [
+      "**",
+      "!node_modules",
+      "!.next",
+      "!dist",
+      "!yarn.lock",
+      "!src/generated",
+      "!next-env.d.ts"
+    ]
   },
   "formatter": {
     "enabled": true,

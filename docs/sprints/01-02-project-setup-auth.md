@@ -410,27 +410,30 @@ type Organization {
 
 ---
 
-## 6. Files to Create
+## 6. Files Created
 
 | File | Purpose |
 |------|---------|
-| `prisma/schema.prisma` | Database schema (Organization, User, OrganizationMember, AuthToken) |
+| `prisma/schema.prisma` | Database schema (Organization, User, OrganizationMember, AuthToken, Team stub) |
+| `prisma.config.ts` | **Prisma 7:** datasource URL for CLI commands |
 | `.env.example` | Environment variable template |
-| `src/server/lib/prisma.ts` | Prisma client singleton |
+| `src/server/lib/prisma.ts` | Prisma client singleton (uses `@prisma/adapter-pg`) |
 | `src/server/lib/redis.ts` | Redis client singleton |
 | `src/server/lib/jwt.ts` | JWT sign/verify (access + refresh tokens) |
-| `src/server/lib/email.ts` | Email transport for magic links |
+| `src/server/lib/email.ts` | Email transport for magic links (dev: console log) |
 | `src/server/graphql/schema.ts` | GraphQL schema definition |
 | `src/server/graphql/context.ts` | Request context builder (auth, prisma, services) |
 | `src/server/graphql/types/scalars.ts` | Custom scalar types (DateTime, UUID) |
-| `src/server/graphql/types/pagination.ts` | Relay pagination types (PageInfo, Connection, Edge) |
-| `src/server/graphql/resolvers/auth.ts` | Auth mutations |
-| `src/server/graphql/resolvers/user.ts` | `viewer` query, user type resolvers |
+| `src/server/graphql/types/pagination.ts` | Relay pagination types (PageInfo) |
+| `src/server/graphql/resolvers/auth.ts` | Auth mutations + `AuthPayload.user` resolver |
+| `src/server/graphql/resolvers/user.ts` | `viewer` query, `User` type resolvers |
 | `src/server/graphql/resolvers/organization.ts` | `organization` query |
-| `src/server/services/auth.service.ts` | Magic link, OAuth, token logic |
-| `src/server/services/user.service.ts` | User lookup/creation |
-| `src/server/middleware/auth.ts` | JWT extraction + verification |
+| `src/server/graphql/resolvers/index.ts` | Resolver map |
+| `src/server/services/auth.service.ts` | Magic link, OAuth, token lifecycle |
+| `src/server/services/user.service.ts` | User lookup/creation/lastSeen |
+| `src/server/middleware/auth.ts` | JWT extraction + `requireAuth` guard |
 | `src/app/api/graphql/route.ts` | Next.js API route for GraphQL endpoint |
+| `src/app/api/auth/session/route.ts` | **Added:** POST/DELETE httpOnly cookie management |
 | `src/app/(auth)/login/page.tsx` | Login page |
 | `src/app/(auth)/verify/page.tsx` | Magic link verification page |
 | `src/app/(auth)/layout.tsx` | Auth layout (centered, no sidebar) |
@@ -438,47 +441,58 @@ type Organization {
 | `src/app/(workspace)/[workspace]/page.tsx` | Workspace home (empty state) |
 | `src/components/layouts/sidebar.tsx` | Sidebar shell (navigation placeholder) |
 | `src/components/layouts/app-shell.tsx` | Main content wrapper |
-| `src/components/auth/login-form.tsx` | Email input + submit |
-| `src/components/auth/verify-code-form.tsx` | 6-digit code input |
+| `src/components/auth/login-form.tsx` | Email input + submit + Google OAuth button |
+| `src/components/auth/verify-code-form.tsx` | 6-digit code input (auto-submits on URL prefill) |
 | `src/hooks/use-auth.ts` | Auth state management hook |
 | `src/middleware.ts` | Next.js middleware for protected routes |
 
 ---
 
-## 7. Dependencies to Install
+## 7. Dependencies Installed
 
 ```bash
 # Backend
-yarn add @apollo/server graphql graphql-tag graphql-scalars
-yarn add @prisma/client
-yarn add jose                    # JWT (edge-compatible)
+yarn add @apollo/server @as-integrations/next graphql graphql-tag
+yarn add @prisma/client @prisma/adapter-pg pg
+yarn add jose                    # JWT (edge-compatible, runs in Next.js middleware)
 yarn add nodemailer              # Email sending
 yarn add ioredis                 # Redis client
 yarn add zod                     # Input validation
 
 # Dev
-yarn add -D prisma
-yarn add -D @types/nodemailer
+yarn add -D prisma @types/nodemailer @types/pg
 ```
+
+> **Note:** `graphql-scalars` was evaluated but not used — custom `DateTime` and `UUID` scalars were implemented directly in `src/server/graphql/types/scalars.ts` to avoid the dependency.
 
 ---
 
 ## 8. Acceptance Criteria
 
-- [ ] `prisma migrate dev` creates all 4 tables with correct indexes
-- [ ] `POST /api/graphql` with `emailLogin` mutation sends a 6-digit code (verify via logs or test email)
-- [ ] `emailVerify` with correct code returns JWT access + refresh tokens
-- [ ] `viewer` query with valid Bearer token returns the authenticated user
-- [ ] `viewer` query without token returns `UNAUTHENTICATED` error
-- [ ] `organization` query returns the user's organization
-- [ ] Google OAuth flow creates a new user and returns tokens
-- [ ] `tokenRefresh` with valid refresh token returns a new token pair
-- [ ] `logout` revokes the refresh token
-- [ ] `/login` page renders email form
-- [ ] `/verify` page accepts 6-digit code
-- [ ] Unauthenticated users are redirected to `/login` via Next.js middleware
-- [ ] Authenticated users see the workspace layout with empty sidebar shell
-- [ ] Tokens are stored in httpOnly cookies
+**Status: ✅ Complete (Sprint 1-2 implemented)**
+
+- [x] `prisma migrate dev` creates all 4 tables with correct indexes
+- [x] `POST /api/graphql` with `emailLogin` mutation sends a 6-digit code (dev: logged to console via `[Email] Magic link for …`)
+- [x] `emailVerify` with correct code returns JWT access + refresh tokens
+- [x] `viewer` query with valid Bearer token returns the authenticated user
+- [x] `viewer` query without token returns `UNAUTHENTICATED` error
+- [x] `organization` query returns the user's organization
+- [x] Google OAuth flow creates a new user and returns tokens
+- [x] `tokenRefresh` with valid refresh token returns a new token pair
+- [x] `logout` revokes the refresh token
+- [x] `/login` page renders email form with Google OAuth button
+- [x] `/verify` page accepts 6-digit code (auto-submits when code prefilled via URL)
+- [x] Unauthenticated users are redirected to `/login` via Next.js middleware
+- [x] Authenticated users see the workspace layout with empty sidebar shell
+- [x] Tokens are stored in httpOnly cookies via `POST /api/auth/session`
+
+**Implementation notes:**
+- GraphQL endpoint is `POST /api/graphql` for all mutations (not separate REST endpoints)
+- Cookie setting is a separate step: client receives tokens from GraphQL then calls `POST /api/auth/session` which verifies and sets `httpOnly` cookies
+- Magic link codes use `crypto.randomInt` (CSPRNG); only SHA-256 hash stored in DB
+- Refresh tokens pre-generate a UUID before signing to avoid two-step DB writes
+- `updateLastSeen` is debounced: skips writes if `lastSeen` is within the last 5 minutes
+- `src/generated/prisma/` is gitignored — run `yarn prisma generate` after checkout
 
 ---
 

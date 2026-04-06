@@ -919,24 +919,29 @@ CREATE INDEX idx_sync_actions_model ON sync_actions(model_name, model_id);
 
 ```sql
 CREATE TABLE auth_tokens (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id              UUID PRIMARY KEY,  -- client-generated UUID (pre-generated before JWT signing)
     user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    type            VARCHAR(20) NOT NULL,  -- 'access', 'refresh', 'api_key', 'magic_link'
-    token_hash      TEXT NOT NULL,  -- bcrypt hash for api_keys, SHA-256 for others
-    label           VARCHAR(255),  -- for API keys
+    type            VARCHAR(20) NOT NULL,  -- 'refresh', 'api_key', 'magic_link'
+    token_hash      TEXT NOT NULL,  -- SHA-256 of the raw token; never store plaintext
+    -- For magic_link: hash of the 6-digit code sent in email
+    -- For refresh: hash of the signed JWT
+    -- For api_key: hash of the key string
+    label           VARCHAR(255),  -- for API keys (user-visible name)
 
-    expires_at      TIMESTAMPTZ,
+    ip_address      VARCHAR(45),   -- IPv4 or IPv6
+    user_agent      TEXT,
+
+    expires_at      TIMESTAMPTZ NOT NULL,
     last_used_at    TIMESTAMPTZ,
     revoked_at      TIMESTAMPTZ,
-
-    -- Magic link specific
-    magic_link_code VARCHAR(6),
 
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_auth_tokens_user ON auth_tokens(user_id);
 CREATE INDEX idx_auth_tokens_hash ON auth_tokens(token_hash);
 ```
+
+> **Implementation note:** Raw codes and tokens are never stored in the database. All lookups use SHA-256 hashes (`token_hash`). For magic links, the 6-digit code is generated with `crypto.randomInt`, hashed, stored, and the raw code is only ever in the email. The `id` is pre-generated as a UUID so the JWT can be signed and the record created in a single write (no two-step update).
 
 ### 2.24 Audit Log
 
@@ -1007,6 +1012,24 @@ users 1──* auth_tokens
 ---
 
 ## 4. Migration Strategy
+
+### Prisma 7 Configuration
+
+Prisma 7 no longer accepts a `url` property in the `datasource` block of `schema.prisma`. The database URL is configured in two places:
+
+- **`prisma.config.ts`** (project root) — provides `DATABASE_URL` for CLI commands (`migrate`, `generate`, `studio`)
+- **`src/server/lib/prisma.ts`** — instantiates `PrismaClient` with `new PrismaPg({ connectionString })` driver adapter
+
+After any schema change, regenerate the client:
+
+```bash
+yarn prisma generate     # rebuilds src/generated/prisma/ (gitignored)
+yarn prisma migrate dev  # applies new migration
+```
+
+> **Note:** The `Team` model in `prisma/schema.prisma` is a minimal stub (Sprint 1-2) with only `id`, `organizationId`, `name`, `key`, and lifecycle fields. The full `teams` table definition in section 2.2 above represents the Sprint 3-4 target. Additional columns will be added via Prisma migrations in Sprint 3-4.
+
+### Migration Files
 
 Use Prisma migrations for schema management:
 

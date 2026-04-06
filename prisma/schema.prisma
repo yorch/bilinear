@@ -1,0 +1,127 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Organization {
+  id                   String    @id @default(uuid()) @db.Uuid
+  name                 String    @db.VarChar(255)
+  urlKey               String    @unique @map("url_key") @db.VarChar(63)
+  logoUrl              String?   @map("logo_url")
+  dataRegion           String    @default("US") @map("data_region") @db.VarChar(2)
+
+  roadmapEnabled       Boolean   @default(false) @map("roadmap_enabled")
+  customersEnabled     Boolean   @default(false) @map("customers_enabled")
+  initiativesEnabled   Boolean   @default(false) @map("initiatives_enabled")
+
+  securitySettings     Json      @default("{}") @map("security_settings")
+  authSettings         Json      @default("{}") @map("auth_settings")
+  themeSettings        Json?     @map("theme_settings")
+
+  fiscalYearStartMonth Int       @default(1) @map("fiscal_year_start_month")
+
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt           DateTime? @map("archived_at") @db.Timestamptz
+
+  members              OrganizationMember[]
+  teams                Team[]
+
+  @@map("organizations")
+}
+
+model User {
+  id              String    @id @default(uuid()) @db.Uuid
+  name            String    @db.VarChar(255)
+  displayName     String    @map("display_name") @db.VarChar(255)
+  email           String    @unique @db.VarChar(255)
+  initials        String    @db.VarChar(4)
+  avatarUrl       String?   @map("avatar_url")
+  avatarBgColor   String    @default("#6366f1") @map("avatar_bg_color") @db.VarChar(7)
+
+  active          Boolean   @default(true)
+  lastSeen        DateTime? @map("last_seen") @db.Timestamptz
+  timezone        String?   @db.VarChar(63)
+
+  statusEmoji     String?   @map("status_emoji") @db.VarChar(32)
+  statusLabel     String?   @map("status_label") @db.VarChar(255)
+  statusUntilAt   DateTime? @map("status_until_at") @db.Timestamptz
+
+  passwordHash    String?   @map("password_hash")
+  googleId        String?   @map("google_id") @db.VarChar(255)
+
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  orgMemberships  OrganizationMember[]
+  authTokens      AuthToken[]
+
+  @@map("users")
+}
+
+model OrganizationMember {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  // owner, admin, member, guest
+  role           String   @default("member") @db.VarChar(20)
+
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+  @@map("organization_members")
+}
+
+model AuthToken {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  // magic_link, refresh, api_key
+  type        String    @db.VarChar(20)
+  tokenHash   String    @map("token_hash")
+  // 6-digit code for magic link
+  code        String?   @db.VarChar(6)
+
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz
+  lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz
+
+  label       String?   @db.VarChar(255)
+  ipAddress   String?   @map("ip_address") @db.VarChar(45)
+  userAgent   String?   @map("user_agent")
+
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("auth_tokens")
+}
+
+// Placeholder for Sprint 3-4 (referenced by Organization relation)
+model Team {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  name           String       @db.VarChar(255)
+  key            String       @db.VarChar(12)
+
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt     DateTime?    @map("archived_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, key])
+  @@index([organizationId])
+  @@map("teams")
+}

@@ -1,0 +1,156 @@
+'use client';
+
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+
+const EMAIL_VERIFY_MUTATION = `
+  mutation EmailVerify($input: EmailVerifyInput!) {
+    emailVerify(input: $input) {
+      success
+      accessToken
+      refreshToken
+      expiresIn
+      user {
+        id
+        displayName
+        email
+      }
+    }
+  }
+`;
+
+export function VerifyCodeForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const email = searchParams.get('email') ?? '';
+  const prefillCode = searchParams.get('code') ?? '';
+
+  const [code, setCode] = useState(prefillCode);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  // Auto-submit if code prefilled via URL (intentionally only runs once on mount)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional mount-only effect
+  useEffect(() => {
+    if (prefillCode.length === 6) {
+      handleVerify(prefillCode);
+    }
+  }, []);
+
+  async function handleVerify(verifyCode: string) {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/graphql', {
+        body: JSON.stringify({
+          query: EMAIL_VERIFY_MUTATION,
+          variables: { input: { code: verifyCode, email } },
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      });
+
+      const data = await res.json();
+
+      if (data.errors?.length) {
+        setError(
+          data.errors[0].extensions?.code === 'INVALID_CODE'
+            ? 'Invalid or expired code. Please try again.'
+            : data.errors[0].message,
+        );
+        return;
+      }
+
+      const { accessToken, refreshToken } = data.data.emailVerify;
+
+      // Store tokens in cookies via server action / API
+      await fetch('/api/auth/session', {
+        body: JSON.stringify({ accessToken, refreshToken }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      });
+
+      router.push('/');
+    } catch {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (code.length === 6) {
+      handleVerify(code);
+    }
+  }
+
+  function handleCodeChange(value: string) {
+    const cleaned = value.replace(/\D/g, '').slice(0, 6);
+    setCode(cleaned);
+    if (cleaned.length === 6) {
+      handleVerify(cleaned);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      {email && (
+        <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
+          We sent a code to{' '}
+          <span className="font-medium text-zinc-900 dark:text-zinc-100">
+            {email}
+          </span>
+        </p>
+      )}
+
+      <div className="flex flex-col gap-1.5">
+        <label
+          htmlFor="code"
+          className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+        >
+          Verification code
+        </label>
+        <input
+          ref={inputRef}
+          id="code"
+          type="text"
+          inputMode="numeric"
+          pattern="\d{6}"
+          maxLength={6}
+          value={code}
+          onChange={e => handleCodeChange(e.target.value)}
+          placeholder="000000"
+          className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-center text-2xl font-mono tracking-[0.5em] text-zinc-900 placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-700 dark:focus:ring-zinc-100"
+        />
+      </div>
+
+      {error && (
+        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+      )}
+
+      <Button
+        type="submit"
+        disabled={loading || code.length < 6}
+        className="w-full"
+      >
+        {loading ? 'Verifying…' : 'Verify code'}
+      </Button>
+
+      <button
+        type="button"
+        className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+        onClick={() => router.push(`/login`)}
+      >
+        Use a different email
+      </button>
+    </form>
+  );
+}
