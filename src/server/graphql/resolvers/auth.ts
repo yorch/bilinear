@@ -1,7 +1,25 @@
 import { GraphQLError } from 'graphql';
 import type { GraphQLContext } from '../context';
 
+// The AuthPayload service return includes `userId`; this resolver hydrates it
+// into the `user: User!` field declared in the GraphQL schema.
 export const authResolvers = {
+  AuthPayload: {
+    user: async (
+      parent: { userId: string },
+      _args: unknown,
+      ctx: GraphQLContext,
+    ) => {
+      const user = await ctx.services.user.findById(parent.userId);
+      if (!user) {
+        throw new GraphQLError('User not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+      return user;
+    },
+  },
+
   Mutation: {
     emailLogin: async (
       _parent: unknown,

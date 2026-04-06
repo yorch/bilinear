@@ -11,6 +11,7 @@ import type { UserService } from './user.service';
 
 const MAGIC_LINK_EXPIRY_MINUTES = 15;
 const REFRESH_GRACE_PERIOD_MINUTES = 30;
+const REFRESH_TOKEN_DAYS = 30;
 
 export interface EmailLoginPayload {
   success: boolean;
@@ -31,8 +32,9 @@ export class AuthService {
   ) {}
 
   async sendMagicLink(email: string): Promise<EmailLoginPayload> {
-    // Generate a 6-digit code
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    // Use a cryptographically secure RNG — Math.random() is not a CSPRNG.
+    const code = String(crypto.randomInt(100000, 1000000));
+    // Store a hash of the code so a DB compromise doesn't yield valid codes.
     const tokenHash = hashToken(code);
     const expiresAt = new Date(
       Date.now() + MAGIC_LINK_EXPIRY_MINUTES * 60 * 1000,
@@ -53,8 +55,9 @@ export class AuthService {
 
       await this.prisma.authToken.create({
         data: {
-          code,
           expiresAt,
+          // Store tokenHash only — raw code is only in the email.
+          // verifyMagicLink hashes the submitted code and compares.
           tokenHash,
           type: 'magic_link',
           userId: user.id,
@@ -62,7 +65,6 @@ export class AuthService {
       });
     } else {
       // We still send the email so as not to leak whether the account exists.
-      // The token is stored against the email but we need a user record first.
       // Create a placeholder user record if needed.
       const newUser = await this.userService.findOrCreate({
         email,
@@ -71,7 +73,6 @@ export class AuthService {
 
       await this.prisma.authToken.create({
         data: {
-          code,
           expiresAt,
           tokenHash,
           type: 'magic_link',
@@ -91,11 +92,13 @@ export class AuthService {
       throw new InvalidCodeError();
     }
 
+    // Compare by hash — never query by raw code to avoid timing side-channels.
+    const tokenHash = hashToken(code);
     const token = await this.prisma.authToken.findFirst({
       where: {
-        code,
         expiresAt: { gt: new Date() },
         revokedAt: null,
+        tokenHash,
         type: 'magic_link',
         userId: user.id,
       },
@@ -154,7 +157,7 @@ export class AuthService {
       throw new InvalidTokenError();
     }
 
-    // Revoke old refresh token (with grace period)
+    // Revoke old refresh token (with grace period to handle concurrent requests)
     const graceEnd = new Date(
       Date.now() + REFRESH_GRACE_PERIOD_MINUTES * 60 * 1000,
     );
@@ -174,7 +177,7 @@ export class AuthService {
         where: { revokedAt: null, tokenHash, type: 'refresh', userId },
       });
     } else {
-      // Revoke all refresh tokens for the user
+      // Revoke all refresh tokens for the user (full sign-out)
       await this.prisma.authToken.updateMany({
         data: { revokedAt: new Date() },
         where: { revokedAt: null, type: 'refresh', userId },
@@ -186,24 +189,28 @@ export class AuthService {
     const org = await this.userService.getOrganizationForUser(userId);
     const orgId = org?.id ?? '';
 
-    const refreshTokenRecord = await this.prisma.authToken.create({
-      data: {
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        tokenHash: 'pending',
-        type: 'refresh',
-        userId,
-      },
-    });
+    // Pre-generate a UUID so we can sign the refresh JWT before inserting the
+    // DB record. This avoids a two-step create → update with a 'pending' hash
+    // placeholder that could be left dangling on server crash.
+    const tokenId = crypto.randomUUID();
+    const expiresAt = new Date(
+      Date.now() + REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000,
+    );
 
     const [accessToken, refreshToken] = await Promise.all([
       signAccessToken({ orgId, userId }),
-      signRefreshToken({ tokenId: refreshTokenRecord.id, userId }),
+      signRefreshToken({ tokenId, userId }),
     ]);
 
-    // Store actual hash now that we have the signed token
-    await this.prisma.authToken.update({
-      data: { tokenHash: hashToken(refreshToken) },
-      where: { id: refreshTokenRecord.id },
+    // Insert with real hash in a single write — no intermediate 'pending' state.
+    await this.prisma.authToken.create({
+      data: {
+        expiresAt,
+        id: tokenId,
+        tokenHash: hashToken(refreshToken),
+        type: 'refresh',
+        userId,
+      },
     });
 
     return {

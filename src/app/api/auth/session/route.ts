@@ -1,3 +1,4 @@
+import { jwtVerify } from 'jose';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
@@ -13,6 +14,25 @@ export async function POST(req: NextRequest) {
 
   if (!accessToken || !refreshToken) {
     return NextResponse.json({ error: 'Missing tokens' }, { status: 400 });
+  }
+
+  // Verify the access token signature before trusting it into a cookie.
+  // Rejects tokens that weren't signed by this server's JWT_SECRET.
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    return NextResponse.json(
+      { error: 'Server misconfigured' },
+      { status: 500 },
+    );
+  }
+
+  try {
+    await jwtVerify(accessToken, new TextEncoder().encode(jwtSecret));
+  } catch {
+    return NextResponse.json(
+      { error: 'Invalid access token' },
+      { status: 400 },
+    );
   }
 
   const res = NextResponse.json({ success: true });

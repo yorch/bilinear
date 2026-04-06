@@ -4,6 +4,10 @@ import { organizationResolvers } from './organization';
 import { userResolvers } from './user';
 
 export const resolvers = {
+  AuthPayload: {
+    ...authResolvers.AuthPayload,
+  },
+
   DateTime: DateTimeScalar,
 
   Mutation: {

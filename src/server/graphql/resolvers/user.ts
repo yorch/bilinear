@@ -10,7 +10,7 @@ export const userResolvers = {
       if (!user) {
         throw new Error('User not found');
       }
-      await ctx.services.user.updateLastSeen(ctx.userId);
+      await ctx.services.user.updateLastSeen(ctx.userId, user.lastSeen);
       return user;
     },
   },

@@ -59,7 +59,16 @@ export class UserService {
     return membership?.organization ?? null;
   }
 
-  async updateLastSeen(userId: string): Promise<void> {
+  // Only write to the DB if lastSeen is stale (>5 min ago or null),
+  // avoiding a write on every viewer query.
+  async updateLastSeen(
+    userId: string,
+    currentLastSeen: Date | null,
+  ): Promise<void> {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    if (currentLastSeen && currentLastSeen > fiveMinutesAgo) {
+      return;
+    }
     await this.prisma.user.update({
       data: { lastSeen: new Date() },
       where: { id: userId },

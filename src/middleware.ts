@@ -33,9 +33,16 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // Guard against missing JWT_SECRET — do not fall back to empty string
+  // as that would silently accept tokens signed with ''.
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    console.error('[middleware] JWT_SECRET is not set — redirecting to login');
+    return NextResponse.redirect(new URL('/login', req.url));
+  }
+
   try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? '');
-    await jwtVerify(token, secret);
+    await jwtVerify(token, new TextEncoder().encode(jwtSecret));
     return NextResponse.next();
   } catch {
     const loginUrl = new URL('/login', req.url);
