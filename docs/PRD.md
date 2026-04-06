@@ -1,0 +1,356 @@
+# Product Requirements Document (PRD)
+## Issue Tracker — Linear Rebuild
+
+**Version:** 1.0  
+**Date:** April 2026  
+**Status:** Draft
+
+---
+
+## 1. Product Overview
+
+### 1.1 Vision
+Build a modern, high-performance issue tracking and project management platform that matches Linear's feature set, speed, and UX quality. The product targets engineering teams who need fast, keyboard-driven workflows with real-time collaboration.
+
+### 1.2 Target Users
+- **Primary:** Software engineering teams (5-500 people)
+- **Secondary:** Product managers, designers, and cross-functional stakeholders
+- **Tertiary:** Support/operations teams using triage workflows
+
+### 1.3 Core Value Propositions
+1. **Speed:** Sub-100ms interactions via local-first architecture
+2. **Keyboard-first:** Every action reachable without a mouse
+3. **Opinionated workflows:** Sensible defaults that reduce configuration overhead
+4. **Real-time collaboration:** Instant sync across all connected clients
+5. **Beautiful design:** Dark-mode-forward, minimal chrome, high information density
+
+---
+
+## 2. Feature Requirements
+
+### 2.1 Issue Management (P0 — Must Have)
+
+#### 2.1.1 Issue CRUD
+- Create issues with title (required) and status (required, defaults to team's default)
+- Rich markdown description with collaborative editing
+- Unique identifier per issue: `TEAM_KEY-NUMBER` (e.g., ENG-123)
+- Soft delete (trash) with 30-day recovery, then permanent deletion
+- Archive with `includeArchived` query parameter support
+
+#### 2.1.2 Issue Properties
+| Property | Type | Required | Notes |
+|----------|------|----------|-------|
+| Title | String | Yes | Plain text |
+| Description | Markdown | No | Rich text with mentions, embeds, attachments |
+| Status | WorkflowState | Yes | From team's configured workflow |
+| Priority | Enum(0-4) | No | No Priority, Urgent, High, Medium, Low |
+| Assignee | User | No | Single user |
+| Labels | Label[] | No | Multiple; single-select within label groups |
+| Estimate | Number | No | Per-team scale (Linear/Fibonacci/Exponential/T-shirt) |
+| Due Date | Date | No | Color-coded: red (overdue), orange (within week), gray |
+| Project | Project | No | Cross-team deliverable |
+| Milestone | ProjectMilestone | No | Stage within project |
+| Cycle | Cycle | No | Time-boxed sprint |
+| Parent | Issue | No | Makes this a sub-issue |
+
+#### 2.1.3 Sub-Issues
+- Multiple nesting levels supported
+- Inherit project and cycle from parent automatically
+- Auto-close parent when all children completed (configurable per team)
+- Auto-close children when parent completed (configurable per team)
+- Convert between standalone issue and sub-issue
+- Batch sub-issue creation
+
+#### 2.1.4 Issue Relations
+- **Related** — general association
+- **Blocks / Blocked by** — dependency tracking with visual indicators (red/orange flags)
+- **Duplicate** — marks as duplicate, auto-sets status to Canceled
+- Auto-create "Related" when referencing issue ID in description/comments
+
+#### 2.1.5 Bulk Operations
+- Multi-select via X key, Shift+click, Cmd+A
+- Bulk change: status, priority, assignee, labels, project, cycle
+- Bulk archive/delete
+- Action toolbar appears at bottom on multi-select
+
+#### 2.1.6 Issue Templates
+- Standard templates: pre-fill properties + description with placeholders
+- Form templates: structured fields (text, dropdown, checkbox, date)
+- Workspace-level and team-level scoping
+- Default templates: different for team members vs external users
+- Accessible via Alt+C, modal dropdown, integrations
+
+### 2.2 Workflow States (P0)
+
+#### 2.2.1 State Categories (Fixed)
+| Category | Default Status | Behavior |
+|----------|---------------|----------|
+| Triage | (optional) | Pre-acceptance inbox |
+| Backlog | Backlog | Acknowledged but not prioritized |
+| Unstarted | Todo | Prioritized, not in progress |
+| Started | In Progress | Active work |
+| Completed | Done | Finished |
+| Canceled | Canceled | Rejected/invalid |
+
+#### 2.2.2 Customization
+- Add custom statuses within each category
+- Each status: name, color, description
+- Reorder within category via drag-and-drop
+- Configure default status for new issues
+- Per-team workflow configuration
+
+#### 2.2.3 Automations
+- Auto-close issues after configurable inactivity period
+- Auto-archive stale completed/canceled issues
+- Git-linked automations (branch created → In Progress, PR merged → Done)
+
+### 2.3 Labels & Categorization (P0)
+
+- Workspace-level labels (global) and team-level labels
+- Label groups: one nesting level, single-select per group, max 250 per group
+- Properties: name, color, description
+- Archive (preserves on existing issues) vs delete (removes from all)
+- Reserved names: assignee, cycle, effort, estimate, hours, priority, project, state, status
+
+### 2.4 Priority System (P0)
+
+- Fixed 5 levels: No Priority (0), Urgent (1), High (2), Medium (3), Low (4)
+- Urgent triggers immediate email notification to assignee
+- Manual drag-to-reorder within priority-sorted views (workspace-wide ordering)
+- No custom priority levels (by design)
+
+### 2.5 Estimates (P1)
+
+- Per-team configuration
+- Scales: Linear (1-7), Fibonacci (1-21), Exponential (1-64), T-Shirt (XS-XXXL)
+- T-shirt maps to Fibonacci for analytics (XS=1, S=2, M=3, L=5, XL=8)
+- Optional extended scales, optional zero estimates
+- Unestimated default to 1 point (configurable)
+
+### 2.6 Projects (P0)
+
+#### 2.6.1 Core
+- Cross-team deliverables with target dates
+- Properties: name, description, icon, color, lead, start/target dates, status, health
+- Status categories: Backlog, Planned, In Progress, Completed, Canceled (custom sub-statuses)
+- Health indicator: On Track (green), At Risk (yellow), Off Track (red)
+- Progress tracking with live completion predictions from historical velocity
+
+#### 2.6.2 Project Milestones
+- Stages within a project with optional target dates
+- Completion percentage per milestone
+- Diamond icons with status coloring
+- Assignable issues, filterable and groupable
+
+#### 2.6.3 Project Updates
+- Health indicator + rich text description
+- Automatic progress summaries (delays, target changes, milestone advancement)
+- Configurable reminder cadence (daily/weekly/biweekly)
+- Staleness tracking with visual indicators
+
+### 2.7 Cycles / Sprints (P1)
+
+- Time-boxed periods: 1-8 weeks, consistent per team
+- Auto-create up to 15 upcoming cycles
+- Auto-rollover of unfinished work to next cycle
+- Optional cooldown periods between cycles
+- Capacity estimation based on 3-cycle velocity history
+- Calendar integration (Google Calendar, .ics, feed URL)
+
+### 2.8 Initiatives (P2)
+
+- Highest-level planning: group projects by company objective
+- Status: Planned, Active, Completed
+- Owner, target date, health indicator
+- Sub-initiatives: nest up to 5 levels, multiple parents allowed
+- Project inheritance from sub-initiatives
+
+### 2.9 Triage (P1)
+
+- Optional per-team inbox for incoming issues
+- Actions: Accept, Mark Duplicate, Decline, Snooze
+- Triage responsibility with rotating schedules
+- Intelligence (P2): AI-powered assignee/label/duplicate suggestions
+- Rules-based automation (P2)
+
+### 2.10 Views & Filtering (P0)
+
+#### 2.10.1 View Types
+- **List view:** Dense table with configurable columns, groupable
+- **Board view:** Kanban with status columns, drag-drop, optional swimlanes
+- **Timeline view (P2):** Gantt-style with draggable bars
+
+#### 2.10.2 Filters
+- Fields: status, assignee, creator, label, priority, project, cycle, estimate, due date, created/updated date, subscriber, relations, has: attachments/comments/sub-issues
+- Operators: is, is not, is any of, is none of, contains, before, after, between, overdue
+- AND/OR composition with nested groups
+- Save as custom view (personal or shared)
+
+#### 2.10.3 Custom Views
+- Workspace-level or team-specific
+- Configurable: layout, columns, grouping, sorting, filters
+- Favoritable, shareable via URL
+- Set as default home view
+- Notification subscriptions (in-app, Slack)
+
+### 2.11 Teams & Workspace (P0)
+
+#### 2.11.1 Workspace
+- Top-level container for organization
+- Data region selection (US/EU) at creation
+- Multi-workspace support for users
+
+#### 2.11.2 Teams
+- Team key/identifier (e.g., ENG) for issue IDs
+- Per-team: workflow states, labels, templates, cycles, estimation config
+- Private teams (P2): hidden from non-members
+- Sub-teams (P2): hierarchical, inherit parent config
+
+#### 2.11.3 Roles
+- **Admin:** Full workspace management
+- **Member:** Standard access, no admin
+- **Guest (P2):** Team-specific access only
+
+### 2.12 Notifications (P1)
+
+- Inbox with up to 500 notifications
+- Auto-subscribe on: create, assign, @mention
+- Manual subscribe/unsubscribe
+- Snooze (hide until time) and reminders
+- Channels: in-app, desktop push, mobile push, email digest, Slack
+
+### 2.13 Search (P0)
+
+- Global search across issues, projects, documents, comments
+- Issue ID instant jump (e.g., ENG-123)
+- Fuzzy matching on titles
+- <100ms perceived latency
+- Keyboard-navigable results
+
+### 2.14 Rich Text Editor (P0)
+
+- Full Markdown: bold, italic, strikethrough, links, lists, code blocks, tables
+- Advanced: blockquotes, collapsible sections, Mermaid diagrams, inline dates
+- Mentions: @user, @ISSUE-ID, @project
+- Embeds: YouTube, Loom auto-embed
+- File attachments: drag-drop, up to 25MB
+- Collaborative editing with live cursors
+
+### 2.15 Comments & Activity (P0)
+
+- Threaded comments with full markdown
+- @mentions, emoji reactions
+- Convert comments to sub-issues
+- Activity history: all property changes tracked
+- Activity collapsing for dense histories
+
+### 2.16 Authentication (P0)
+
+- Email magic link
+- Google OAuth
+- Passkeys (P1)
+- SAML SSO (P2, Enterprise)
+- SCIM provisioning (P2, Enterprise)
+
+### 2.17 Integrations (P1-P2)
+
+#### P1 Integrations
+- **GitHub:** PR/branch linking via issue ID, auto-status, CI visibility
+- **Slack:** Issue creation, notifications, bidirectional thread sync
+
+#### P2 Integrations
+- GitLab, Figma, Sentry, Zendesk, Intercom
+- Webhooks (14 resource types, HMAC-SHA256, retry logic)
+- OAuth2 provider for third-party apps
+- Import/export (Jira, Asana, GitHub Issues, CSV)
+
+### 2.18 API (P0)
+
+- GraphQL API (primary interface)
+- Relay-style cursor pagination
+- Typed filtering with AND/OR composition
+- Rate limiting: 5,000 requests/hr + complexity points
+- TypeScript SDK auto-generated from schema
+
+### 2.19 Documents / Docs (P2)
+
+- Standalone documents associated with projects, initiatives, teams
+- Collaborative editing (YJS)
+- Templates and AI summaries
+- Comments on documents
+
+### 2.20 SLAs (P2)
+
+- Auto-apply deadlines based on rules
+- Risk progression: Low → Medium → High → Breached → Achieved/Failed
+- Business day configuration
+- Notifications 24h before breach
+
+---
+
+## 3. Non-Functional Requirements
+
+### 3.1 Performance
+- View switching: <50ms (local cache)
+- Issue creation UI update: <16ms (one frame)
+- Search results: <100ms
+- Initial load (cached): <1s
+- Initial load (fresh): <4s
+- List scrolling: 60fps with 10,000+ issues
+
+### 3.2 Reliability
+- 99.9% uptime SLA
+- Offline support: full functionality with queued sync
+- Optimistic updates with rollback on failure
+- Data loss prevention via local IndexedDB persistence
+
+### 3.3 Security
+- SOC 2 Type II compliance target
+- GDPR compliant (EU data region option)
+- All data encrypted at rest and in transit
+- Webhook signature verification (HMAC-SHA256)
+- IP restriction support (Enterprise)
+- Audit logging (Enterprise)
+
+### 3.4 Scalability
+- Support workspaces with 500+ users
+- Support teams with 100,000+ issues
+- Incremental sync (only deltas after initial load)
+- Virtualized rendering for large lists
+
+---
+
+## 4. Out of Scope (V1)
+
+- Mobile native apps (web responsive first)
+- Desktop Electron app
+- AI/ML features (triage intelligence, auto-assign)
+- Customer tracking (Linear Asks)
+- Advanced analytics/insights dashboards
+- Public-facing roadmaps
+- Custom fields (use labels + templates)
+
+---
+
+## 5. Success Metrics
+
+| Metric | Target |
+|--------|--------|
+| P50 interaction latency | <50ms |
+| P99 API response time | <500ms |
+| Time to create issue | <3s (keyboard) |
+| Sync delta size | <10KB per update |
+| User onboarding completion | >80% |
+| Daily active usage | >60% of workspace members |
+
+---
+
+## 6. Milestones
+
+| Phase | Duration | Deliverable |
+|-------|----------|-------------|
+| Phase 1: Foundation | Months 1-3 | Auth, issues, teams, list view, real-time sync |
+| Phase 2: Essential | Months 4-6 | Projects, cycles, board view, filters, notifications |
+| Phase 3: Organization | Months 7-9 | Sub-teams, roles, SAML, audit logs, templates |
+| Phase 4: Integrations | Months 10-12 | GitHub, Slack, webhooks, import/export |
+| Phase 5: Advanced | Months 13+ | Initiatives, SLAs, docs, AI, analytics |
