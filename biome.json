@@ -32,7 +32,8 @@
       "!.next",
       "!dist",
       "!yarn.lock",
-      "!src/generated"
+      "!src/generated",
+      "!next-env.d.ts"
     ]
   },
   "formatter": {
