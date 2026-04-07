@@ -5,6 +5,7 @@ type MockModel = {
   aggregate: ReturnType<typeof vi.fn>;
   count: ReturnType<typeof vi.fn>;
   create: ReturnType<typeof vi.fn>;
+  createMany: ReturnType<typeof vi.fn>;
   delete: ReturnType<typeof vi.fn>;
   deleteMany: ReturnType<typeof vi.fn>;
   findFirst: ReturnType<typeof vi.fn>;
@@ -20,6 +21,7 @@ function createMockModel(): MockModel {
     aggregate: vi.fn(),
     count: vi.fn(),
     create: vi.fn(),
+    createMany: vi.fn(),
     delete: vi.fn(),
     deleteMany: vi.fn(),
     findFirst: vi.fn(),
@@ -34,6 +36,9 @@ function createMockModel(): MockModel {
 export type MockPrismaClient = {
   [K in keyof PrismaClient]: K extends
     | 'authToken'
+    | 'issue'
+    | 'issueLabel'
+    | 'issueLabelAssignment'
     | 'organization'
     | 'organizationMember'
     | 'team'
@@ -55,6 +60,9 @@ export function createMockPrisma(): MockPrismaClient {
       },
     ),
     authToken: createMockModel(),
+    issue: createMockModel(),
+    issueLabel: createMockModel(),
+    issueLabelAssignment: createMockModel(),
     organization: createMockModel(),
     organizationMember: createMockModel(),
     team: createMockModel(),

@@ -1,0 +1,303 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import {
+  DEFAULT_WORKFLOW_STATES,
+  TEST_ISSUE,
+  TEST_ORG,
+  TEST_TEAM,
+  TEST_USER,
+} from '../../test/fixtures';
+import {
+  createMockPrisma,
+  type MockPrismaClient,
+} from '../../test/prisma-mock';
+import { IssueService, IssueStateRequiredError } from './issue.service';
+
+describe('IssueService', () => {
+  let prisma: MockPrismaClient;
+  let service: IssueService;
+
+  beforeEach(() => {
+    prisma = createMockPrisma();
+    service = new IssueService(prisma as never);
+  });
+
+  describe('create', () => {
+    it('atomically increments team.issueCount and generates identifier', async () => {
+      const teamWithCount = { ...TEST_TEAM, issueCount: 1, key: 'ENG' };
+      prisma.team.update.mockResolvedValue(teamWithCount);
+      prisma.issue.create.mockResolvedValue(TEST_ISSUE);
+      prisma.issueLabelAssignment.deleteMany.mockResolvedValue({ count: 0 });
+
+      const result = await service.create(TEST_ORG.id, TEST_USER.id, {
+        stateId: DEFAULT_WORKFLOW_STATES[0].id,
+        teamId: TEST_TEAM.id,
+        title: 'Test issue',
+      });
+
+      expect(prisma.team.update).toHaveBeenCalledWith({
+        data: { issueCount: { increment: 1 } },
+        where: { id: TEST_TEAM.id },
+      });
+      expect(prisma.issue.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            identifier: 'ENG-1',
+            number: 1,
+            title: 'Test issue',
+          }),
+        }),
+      );
+      expect(result).toEqual(TEST_ISSUE);
+    });
+
+    it('uses client-provided UUID when id is given', async () => {
+      const customId = '12345678-1234-1234-1234-123456789abc';
+      prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1 });
+      prisma.issue.create.mockResolvedValue({ ...TEST_ISSUE, id: customId });
+      prisma.issueLabelAssignment.deleteMany.mockResolvedValue({ count: 0 });
+
+      await service.create(TEST_ORG.id, TEST_USER.id, {
+        id: customId,
+        stateId: DEFAULT_WORKFLOW_STATES[0].id,
+        teamId: TEST_TEAM.id,
+        title: 'Test',
+      });
+
+      expect(prisma.issue.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ id: customId }),
+        }),
+      );
+    });
+
+    it('falls back to team.defaultIssueStateId when no stateId provided', async () => {
+      const stateId = DEFAULT_WORKFLOW_STATES[0].id;
+      prisma.team.update.mockResolvedValue({
+        ...TEST_TEAM,
+        defaultIssueStateId: stateId,
+        issueCount: 1,
+      });
+      prisma.issue.create.mockResolvedValue(TEST_ISSUE);
+      prisma.issueLabelAssignment.deleteMany.mockResolvedValue({ count: 0 });
+
+      await service.create(TEST_ORG.id, TEST_USER.id, {
+        teamId: TEST_TEAM.id,
+        title: 'Test',
+      });
+
+      expect(prisma.issue.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ stateId }),
+        }),
+      );
+    });
+
+    it('throws IssueStateRequiredError when no state available', async () => {
+      prisma.team.update.mockResolvedValue({
+        ...TEST_TEAM,
+        defaultIssueStateId: null,
+        issueCount: 1,
+      });
+
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, {
+          teamId: TEST_TEAM.id,
+          title: 'Test',
+        }),
+      ).rejects.toThrow(IssueStateRequiredError);
+    });
+
+    it('creates label assignments when labelIds provided', async () => {
+      const labelId = '00000000-0000-0000-0000-000000000500';
+      prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1 });
+      prisma.issue.create.mockResolvedValue(TEST_ISSUE);
+      prisma.issueLabelAssignment.deleteMany.mockResolvedValue({ count: 0 });
+      prisma.issueLabelAssignment.createMany.mockResolvedValue({ count: 1 });
+
+      await service.create(TEST_ORG.id, TEST_USER.id, {
+        labelIds: [labelId],
+        stateId: DEFAULT_WORKFLOW_STATES[0].id,
+        teamId: TEST_TEAM.id,
+        title: 'Test',
+      });
+
+      expect(prisma.issueLabelAssignment.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: [{ issueId: TEST_ISSUE.id, labelId }],
+        }),
+      );
+    });
+  });
+
+  describe('findById', () => {
+    it('returns issue with label assignments when found', async () => {
+      prisma.issue.findUnique.mockResolvedValue(TEST_ISSUE);
+      const result = await service.findById(TEST_ISSUE.id);
+      expect(result).toEqual(TEST_ISSUE);
+      expect(prisma.issue.findUnique).toHaveBeenCalledWith({
+        include: { labelAssignments: { include: { label: true } } },
+        where: { id: TEST_ISSUE.id },
+      });
+    });
+
+    it('returns null when not found', async () => {
+      prisma.issue.findUnique.mockResolvedValue(null);
+      const result = await service.findById('nonexistent');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('update', () => {
+    it('updates individual fields', async () => {
+      const updated = { ...TEST_ISSUE, priority: 2, title: 'Updated title' };
+      prisma.issue.update.mockResolvedValue(updated);
+
+      const result = await service.update(TEST_ISSUE.id, {
+        priority: 2,
+        title: 'Updated title',
+      });
+
+      expect(result).toEqual(updated);
+      expect(prisma.issue.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            priority: 2,
+            title: 'Updated title',
+          }),
+          where: { id: TEST_ISSUE.id },
+        }),
+      );
+    });
+
+    it('syncs labels when labelIds provided', async () => {
+      const labelId = '00000000-0000-0000-0000-000000000500';
+      prisma.issue.update.mockResolvedValue(TEST_ISSUE);
+      prisma.issueLabelAssignment.deleteMany.mockResolvedValue({ count: 0 });
+      prisma.issueLabelAssignment.createMany.mockResolvedValue({ count: 1 });
+
+      await service.update(TEST_ISSUE.id, { labelIds: [labelId] });
+
+      expect(prisma.issueLabelAssignment.deleteMany).toHaveBeenCalledWith({
+        where: { issueId: TEST_ISSUE.id },
+      });
+      expect(prisma.issueLabelAssignment.createMany).toHaveBeenCalled();
+    });
+
+    it('clears labels when labelIds is empty array', async () => {
+      prisma.issue.update.mockResolvedValue(TEST_ISSUE);
+      prisma.issueLabelAssignment.deleteMany.mockResolvedValue({ count: 2 });
+
+      await service.update(TEST_ISSUE.id, { labelIds: [] });
+
+      expect(prisma.issueLabelAssignment.deleteMany).toHaveBeenCalled();
+      expect(prisma.issueLabelAssignment.createMany).not.toHaveBeenCalled();
+    });
+
+    it('clears assignee when null is passed', async () => {
+      prisma.issue.update.mockResolvedValue({
+        ...TEST_ISSUE,
+        assigneeId: null,
+      });
+
+      await service.update(TEST_ISSUE.id, { assigneeId: null });
+
+      expect(prisma.issue.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ assigneeId: null }),
+        }),
+      );
+    });
+  });
+
+  describe('archive / unarchive', () => {
+    it('sets archivedAt on archive', async () => {
+      const now = new Date();
+      prisma.issue.update.mockResolvedValue({ ...TEST_ISSUE, archivedAt: now });
+
+      const result = await service.archive(TEST_ISSUE.id);
+      expect(result.archivedAt).not.toBeNull();
+      expect(prisma.issue.update).toHaveBeenCalledWith({
+        data: { archivedAt: expect.any(Date) },
+        where: { id: TEST_ISSUE.id },
+      });
+    });
+
+    it('clears archivedAt on unarchive', async () => {
+      prisma.issue.update.mockResolvedValue({
+        ...TEST_ISSUE,
+        archivedAt: null,
+      });
+
+      const result = await service.unarchive(TEST_ISSUE.id);
+      expect(result.archivedAt).toBeNull();
+      expect(prisma.issue.update).toHaveBeenCalledWith({
+        data: { archivedAt: null },
+        where: { id: TEST_ISSUE.id },
+      });
+    });
+  });
+
+  describe('delete', () => {
+    it('hard-deletes the issue', async () => {
+      prisma.issue.delete.mockResolvedValue(TEST_ISSUE);
+
+      await service.delete(TEST_ISSUE.id);
+      expect(prisma.issue.delete).toHaveBeenCalledWith({
+        where: { id: TEST_ISSUE.id },
+      });
+    });
+  });
+
+  describe('findMany', () => {
+    it('returns paginated issues with totalCount', async () => {
+      prisma.issue.findMany.mockResolvedValue([TEST_ISSUE]);
+      prisma.issue.count.mockResolvedValue(1);
+
+      const result = await service.findMany(TEST_ORG.id, {}, { first: 50 });
+
+      expect(result.nodes).toHaveLength(1);
+      expect(result.totalCount).toBe(1);
+      expect(result.pageInfo.hasNextPage).toBe(false);
+    });
+
+    it('filters by teamId', async () => {
+      prisma.issue.findMany.mockResolvedValue([]);
+      prisma.issue.count.mockResolvedValue(0);
+
+      await service.findMany(
+        TEST_ORG.id,
+        { teamId: TEST_TEAM.id },
+        { first: 50 },
+      );
+
+      expect(prisma.issue.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ teamId: TEST_TEAM.id }),
+        }),
+      );
+    });
+
+    it('excludes archived issues by default', async () => {
+      prisma.issue.findMany.mockResolvedValue([]);
+      prisma.issue.count.mockResolvedValue(0);
+
+      await service.findMany(TEST_ORG.id, {}, { first: 50 });
+
+      expect(prisma.issue.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ archivedAt: null }),
+        }),
+      );
+    });
+
+    it('includes archived issues when includeArchived=true', async () => {
+      prisma.issue.findMany.mockResolvedValue([]);
+      prisma.issue.count.mockResolvedValue(0);
+
+      await service.findMany(TEST_ORG.id, {}, { first: 50 }, true);
+
+      const call = prisma.issue.findMany.mock.calls[0][0];
+      expect(call.where.archivedAt).toBeUndefined();
+    });
+  });
+});
