@@ -170,6 +170,7 @@ export const issueResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
       return issue;
     },
 
@@ -195,6 +196,17 @@ export const issueResolvers = {
         before,
         includeArchived = false,
       } = args;
+
+      // Enforce team membership — callers must scope queries to a specific
+      // team they belong to. Org-wide issue enumeration is not permitted.
+      if (!filter.teamId) {
+        throw new GraphQLError(
+          'filter.teamId is required — queries must be scoped to a specific team',
+          { extensions: { code: 'BAD_USER_INPUT' } },
+        );
+      }
+      await requireTeamMember(ctx.prisma, filter.teamId, ctx.userId);
+
       const page = await ctx.services.issue.findMany(
         ctx.orgId,
         filter,

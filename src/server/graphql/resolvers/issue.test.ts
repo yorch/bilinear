@@ -183,6 +183,11 @@ describe('issueResolvers', () => {
   describe('Query.issue', () => {
     it('returns an issue by id', async () => {
       ctx.prisma.issue.findUnique.mockResolvedValue(TEST_ISSUE);
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        isOwner: false,
+        teamId: TEST_ISSUE.teamId,
+        userId: TEST_USER.id,
+      });
 
       const result = await issueResolvers.Query.issue(
         null,
@@ -219,10 +224,15 @@ describe('issueResolvers', () => {
     it('returns a connection with edges, nodes, and totalCount', async () => {
       ctx.prisma.issue.findMany.mockResolvedValue([TEST_ISSUE]);
       ctx.prisma.issue.count.mockResolvedValue(1);
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        isOwner: false,
+        teamId: TEST_TEAM.id,
+        userId: TEST_USER.id,
+      });
 
       const result = await issueResolvers.Query.issues(
         null,
-        { first: 50 },
+        { filter: { teamId: TEST_TEAM.id }, first: 50 },
         ctx as never,
       );
 
@@ -232,9 +242,20 @@ describe('issueResolvers', () => {
       expect(result.edges[0].cursor).toBe(TEST_ISSUE.id);
     });
 
+    it('throws BAD_USER_INPUT when teamId filter is missing', async () => {
+      await expect(
+        issueResolvers.Query.issues(null, { first: 50 }, ctx as never),
+      ).rejects.toMatchObject({ extensions: { code: 'BAD_USER_INPUT' } });
+    });
+
     it('filters by teamId when provided in filter', async () => {
       ctx.prisma.issue.findMany.mockResolvedValue([]);
       ctx.prisma.issue.count.mockResolvedValue(0);
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        isOwner: false,
+        teamId: TEST_TEAM.id,
+        userId: TEST_USER.id,
+      });
 
       await issueResolvers.Query.issues(
         null,

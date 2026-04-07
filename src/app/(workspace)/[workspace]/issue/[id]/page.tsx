@@ -58,13 +58,17 @@ export default function IssueDetailPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    gql(ISSUE_QUERY, { id }).then(data => {
-      if (data.data?.issue) {
-        setIssue(data.data.issue as IssueWithTeam);
-        setLabels((data.data.labels as { nodes: IssueLabel[] })?.nodes ?? []);
-      }
-      setLoading(false);
-    });
+    gql(ISSUE_QUERY, { id })
+      .then(data => {
+        if (data.data?.issue) {
+          setIssue(data.data.issue as IssueWithTeam);
+          setLabels((data.data.labels as { nodes: IssueLabel[] })?.nodes ?? []);
+        }
+      })
+      .catch(() => {
+        // Network or server error — leave issue null so "not found" is shown
+      })
+      .finally(() => setLoading(false));
   }, [id]);
 
   const handleUpdate = async (

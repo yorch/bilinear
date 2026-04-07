@@ -343,7 +343,7 @@ export const typeDefs = `
       before: String
       includeArchived: Boolean
     ): IssueConnection!
-    labels(teamId: String, first: Int, after: String): IssueLabelConnection!
+    labels(teamId: String): IssueLabelConnection!
   }
 
   type Mutation {

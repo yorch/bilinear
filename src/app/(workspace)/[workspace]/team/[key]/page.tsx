@@ -23,7 +23,7 @@ import type {
  * server-side using the team's UUID — no need to pass teamId separately.
  */
 const TEAM_ISSUES_QUERY = `
-  query TeamIssues($teamKey: String!) {
+  query TeamIssues {
     teams {
       id
       key
@@ -116,7 +116,7 @@ export default function TeamIssuesPage() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const data = await gql(TEAM_ISSUES_QUERY, { teamKey });
+      const data = await gql(TEAM_ISSUES_QUERY);
       if (data.errors?.length) {
         setError('Failed to load issues.');
         setLoading(false);

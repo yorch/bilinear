@@ -19,7 +19,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 | Sprint 9-10: Search & Command Palette | [`docs/sprints/09-10-search-command-palette.md`](sprints/09-10-search-command-palette.md) |
 | Sprint 11-12: Polish & Performance | [`docs/sprints/11-12-polish-performance.md`](sprints/11-12-polish-performance.md) |
 
-> **Pattern Documentation:** Phase 1 establishes all foundational patterns (project structure, Prisma conventions, GraphQL resolver pattern, service layer, MobX stores, component patterns, keyboard shortcuts, testing, and sync integration). Sprint 11-12 produces a `docs/PATTERNS.md` that documents these patterns as the onboarding guide for Phase 2+ development. All subsequent sprints should follow the patterns in that document.
+> **Pattern Documentation:** `docs/PATTERNS.md` is the living onboarding document for all contributors. It is updated each sprint as new patterns are established. All subsequent sprints should follow the patterns in that document.
 
 > **Phase 2+ sprints** will be broken into detailed docs following the same format once Phase 1 patterns are established and documented.
 
@@ -27,57 +27,58 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 
 ## Phase 1: Foundation (Weeks 1-12)
 
-### Sprint 1-2: Project Setup & Auth
+### Sprint 1-2: Project Setup & Auth ✅ COMPLETE
 **Goal:** Working app shell with authentication
 
-- [ ] Initialize Next.js project structure (already bootstrapped)
-- [ ] Set up PostgreSQL database with Prisma 7
-- [ ] Create migration for: organizations, users, organization_members, auth_tokens
-- [ ] Implement email magic link authentication
+- [x] Initialize Next.js project structure (already bootstrapped)
+- [x] Set up PostgreSQL database with Prisma 7
+- [x] Create migration for: organizations, users, organization_members, auth_tokens
+- [x] Implement email magic link authentication
   - POST /auth/email → send magic link code
   - POST /auth/verify → exchange code for JWT
   - JWT access tokens (24h) + refresh tokens (30d)
-- [ ] Implement Google OAuth flow
-- [ ] Set up GraphQL API server (Apollo Server or Yoga)
-- [ ] Implement `viewer` query and `organization` query
-- [ ] Create basic app layout: sidebar shell, main content area
-- [ ] Auth pages: login, magic link verification
-- [ ] Protected routes middleware
+- [x] Implement Google OAuth flow
+- [x] Set up GraphQL API server (Apollo Server — server only; frontend uses raw `fetch`)
+- [x] Implement `viewer` query and `organization` query
+- [x] Create basic app layout: sidebar shell, main content area
+- [x] Auth pages: login, magic link verification
+- [x] Protected routes middleware
 
-**Deliverable:** Users can sign up, log in, and see empty workspace
+**Deliverable:** Users can sign up, log in, and see empty workspace ✅
 
-### Sprint 3-4: Teams & Workflow States
+### Sprint 3-4: Teams & Workflow States ✅ COMPLETE
 **Goal:** Teams with customizable workflows
 
-- [ ] Create migrations: teams, team_memberships, workflow_states
-- [ ] Implement team CRUD (GraphQL mutations + queries)
-- [ ] Implement workflow state CRUD with category constraints
-- [ ] Seed default workflow states per team (Backlog, Todo, In Progress, Done, Canceled; Triage only when enabled)
-- [ ] Team settings page: name, key, timezone, estimation
-- [ ] Sidebar: team navigation, team switcher
-- [ ] Team creation modal
-- [ ] Team members management UI
+- [x] Create migrations: teams, team_memberships, workflow_states
+- [x] Implement team CRUD (GraphQL mutations + queries)
+- [x] Implement workflow state CRUD with category constraints
+- [x] Seed default workflow states per team (Backlog, Todo, In Progress, Done, Canceled; Triage only when enabled)
+- [ ] Team settings page: name, key, timezone, estimation _(deferred — backend done, UI pending)_
+- [ ] Sidebar: team navigation, team switcher _(partial — basic sidebar exists)_
+- [ ] Team creation modal _(deferred)_
+- [ ] Team members management UI _(deferred)_
 
-**Deliverable:** Users can create teams with customizable workflow states
+**Deliverable:** Team + workflow state backend with GraphQL API ✅; settings UI deferred
 
-### Sprint 5-6: Issue CRUD & List View
+### Sprint 5-6: Issue CRUD & List View ✅ COMPLETE
 **Goal:** Create, view, edit issues in list view
 
-- [ ] Create migrations: issues, issue_labels, issue_label_assignments
-- [ ] Issue CRUD mutations (create, update, archive, delete)
-- [ ] Issue query with Relay cursor pagination
-- [ ] Issue identifier generation (TEAM-123)
-- [ ] List view component with virtualization (TanStack Virtual)
-- [ ] Configurable columns: status, priority, assignee, labels, estimate, due date
-- [ ] Grouping by status (collapsible groups)
-- [ ] Issue creation modal (C shortcut)
-- [ ] Issue detail panel (right side slide-in)
-- [ ] Inline field editing in list view (click to change status, assignee, etc.)
-- [ ] Priority system (5 levels, icons, colors)
-- [ ] Label CRUD and assignment
-- [ ] Due date picker with color coding
+- [x] Create migrations: issues, issue_labels, issue_label_assignments
+- [x] Issue CRUD mutations (create, update, archive, delete)
+- [x] Issue query with Relay cursor pagination
+- [x] Issue identifier generation (TEAM-123)
+- [x] List view component with issues grouped by workflow state (collapsible groups)
+- [x] Configurable properties: status, priority, assignee, labels, due date
+- [x] Issue creation modal (C shortcut)
+- [x] Issue detail panel (right side slide-in, Escape to close)
+- [x] Inline field editing in list view (click to change status, assignee, etc.)
+- [x] Priority system (5 levels, icons, colors)
+- [x] Label CRUD and assignment
+- [x] Due date picker with color coding
+- [x] Shared frontend types (`src/types/issues.ts`), shared gql helper (`src/lib/graphql.ts`)
+- [ ] TanStack Virtual list virtualization _(removed — per-group virtualizer was broken; plain rendering used; page-level virtualization deferred to Sprint 7-8)_
 
-**Deliverable:** Full issue list view with create/edit/archive functionality
+**Deliverable:** Full issue list view with create/edit/archive functionality ✅
 
 ### Sprint 7-8: Real-Time Sync Engine
 **Goal:** Local-first architecture with optimistic updates

@@ -1,6 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { IssueLabel } from '../../../generated/prisma';
-import { requireAuth } from '../../middleware/auth';
+import { requireAuth, requireTeamMember } from '../../middleware/auth';
 import type {
   LabelCreateInput,
   LabelUpdateInput,
@@ -40,6 +40,10 @@ export const labelResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
+      // Team-scoped labels require team membership
+      if (existing.teamId) {
+        await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
+      }
 
       const label = await ctx.services.label.archive(id);
       return { issueLabel: label, lastSyncId: 0, success: true };
@@ -50,6 +54,11 @@ export const labelResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+
+      // Team-scoped labels require team membership
+      if (input.teamId) {
+        await requireTeamMember(ctx.prisma, input.teamId, ctx.userId);
+      }
 
       const label = await ctx.services.label.create(
         ctx.orgId,
@@ -72,6 +81,10 @@ export const labelResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
+      // Team-scoped labels require team membership
+      if (existing.teamId) {
+        await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
+      }
 
       const label = await ctx.services.label.update(id, input);
       return { issueLabel: label, lastSyncId: 0, success: true };
@@ -81,7 +94,7 @@ export const labelResolvers = {
   Query: {
     labels: async (
       _parent: unknown,
-      args: { teamId?: string; first?: number; after?: string },
+      args: { teamId?: string },
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);

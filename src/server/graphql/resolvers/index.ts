@@ -8,11 +8,33 @@ import { teamMembershipResolvers } from './team-membership';
 import { userResolvers } from './user';
 import { workflowStateResolvers } from './workflow-state';
 
-// Passthrough scalar for date strings (YYYY-MM-DD)
+// Scalar for date-only strings (YYYY-MM-DD). Validates format on input.
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function coerceDate(value: unknown): string {
+  if (typeof value !== 'string' || !DATE_RE.test(value)) {
+    throw new Error(
+      `Date must be a YYYY-MM-DD string, got: ${JSON.stringify(value)}`,
+    );
+  }
+  return value;
+}
+
 const DateScalar = {
-  parseLiteral: (ast: { value: string }) => ast.value,
-  parseValue: (value: unknown) => value,
-  serialize: (value: unknown) => value,
+  parseLiteral: (ast: { kind: string; value?: string }) => {
+    if (ast.kind !== 'StringValue' || !ast.value) {
+      throw new Error('Date literal must be a string');
+    }
+    return coerceDate(ast.value);
+  },
+  parseValue: coerceDate,
+  serialize: (value: unknown) => {
+    // Dates stored as Date objects in Postgres — serialize to YYYY-MM-DD
+    if (value instanceof Date) {
+      return value.toISOString().split('T')[0];
+    }
+    return coerceDate(value);
+  },
 };
 
 export const resolvers = {

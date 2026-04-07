@@ -119,6 +119,8 @@ export const teamResolvers = {
     },
 
     issues: async (team: Team, _args: unknown, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+      await requireTeamMember(ctx.prisma, team.id, ctx.userId);
       return ctx.services.issue.findByTeamId(team.id);
     },
 

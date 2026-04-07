@@ -3,7 +3,8 @@
 
 **Phase:** 1 (Foundation)  
 **Weeks:** 5-6  
-**Goal:** Create, view, and edit issues in a virtualized list view
+**Goal:** Create, view, and edit issues in a list view  
+**Status:** ✅ Complete
 
 **Prerequisites:** Sprint 3-4 (teams, workflow states)
 
@@ -17,25 +18,18 @@ Issues are the core entity of the application. This sprint implements full issue
 
 ## 2. Patterns to Establish
 
-### 2.1 Virtualized List Pattern
+### 2.1 List Rendering Pattern
 
-All large lists (issues, notifications, activity) will use TanStack Virtual:
+Issues are rendered as a flat list within each state group using plain `Array.map`. Each `IssueRow` is a fixed-height (36px) div.
 
 ```typescript
-// Pattern: virtualized list with dynamic row heights
-import { useVirtualizer } from '@tanstack/react-virtual';
-
-function IssueList({ issues }: { issues: Issue[] }) {
-  const parentRef = useRef<HTMLDivElement>(null);
-  const virtualizer = useVirtualizer({
-    count: issues.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 36,  // ~36px per row
-    overscan: 20,
-  });
-  // render virtualizer.getVirtualItems()
-}
+// Pattern: grouped flat list — simple, correct, no scroll container mismatch
+{groupIssues.map(issue => (
+  <IssueRow key={issue.id} issue={issue} ... />
+))}
 ```
+
+> **Virtualization note:** TanStack Virtual (`@tanstack/react-virtual`) was originally planned for per-group virtualization but removed because the virtualizer requires its `getScrollElement` to point to the **scrolling** container, and per-group containers are `overflow:hidden`. A page-level virtualizer spanning all groups (flattening state headers + rows into a single indexed list) is the correct approach and is deferred to Sprint 7-8 along with the broader state management overhaul.
 
 ### 2.2 Inline Editing Pattern
 

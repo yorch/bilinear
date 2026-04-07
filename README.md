@@ -5,10 +5,10 @@ A Linear-style issue tracker built with Next.js 16, GraphQL, and PostgreSQL. See
 ## Tech Stack
 
 - **Next.js 16** (App Router) — framework, routing, API routes
-- **Apollo Server** + GraphQL — API layer (`/api/graphql`)
+- **Apollo Server** + GraphQL — server-only API layer (`/api/graphql`); frontend uses raw `fetch` — no Apollo Client
 - **Prisma 7** + `@prisma/adapter-pg` — type-safe ORM (PostgreSQL driver adapter)
 - **jose** — edge-compatible JWT (access tokens 24h, refresh tokens 30d)
-- **ioredis** — Redis client (pub/sub, caching)
+- **ioredis** — Redis client (reserved for Sprint 7-8 sync engine; not required in Sprint 1-6)
 - **TailwindCSS v4** + shadcn/ui — styling
 - **Biome** — linting and formatting (replaces ESLint + Prettier)
 - **Yarn v4** — package manager
@@ -16,7 +16,7 @@ A Linear-style issue tracker built with Next.js 16, GraphQL, and PostgreSQL. See
 ## Prerequisites
 
 - Node.js 24+
-- Docker & Docker Compose (for local infrastructure)
+- Docker & Docker Compose (for local infrastructure via `yarn db:infra:up`; Redis optional until Sprint 7-8)
 
 ## Getting Started
 
@@ -111,18 +111,26 @@ src/
 ├── app/                      # Next.js App Router pages
 │   ├── (auth)/               # Login + verify pages (centered, no sidebar)
 │   ├── (workspace)/          # Authenticated pages (sidebar layout)
+│   │   └── [workspace]/
+│   │       ├── team/[key]/   # Team issues list view
+│   │       └── issue/[id]/   # Standalone issue detail page
 │   ├── api/graphql/          # GraphQL endpoint — Apollo Server
 │   └── api/auth/session/     # POST/DELETE httpOnly cookie management
 ├── server/                   # Backend-only code (never imported by client)
 │   ├── graphql/              # schema.ts, context.ts, resolvers/, types/
-│   ├── services/             # AuthService, UserService, TeamService, WorkflowStateService
+│   ├── services/             # AuthService, UserService, TeamService,
+│   │                         # WorkflowStateService, IssueService, LabelService
 │   ├── lib/                  # prisma.ts, redis.ts, jwt.ts, email.ts
 │   └── middleware/           # JWT extraction, requireAuth, requireOrgRole, requireTeamMember
 ├── components/
 │   ├── auth/                 # LoginForm, VerifyCodeForm
+│   ├── issues/               # IssueListView, IssueRow, IssueDetailPanel, CreateIssueModal, GroupSection
 │   ├── layouts/              # AppShell, Sidebar
+│   ├── properties/           # StatusSelect, PrioritySelect, AssigneeSelect, LabelSelect, DueDatePicker
 │   └── ui/                   # shadcn/ui primitives
-└── hooks/                    # useAuth
+├── hooks/                    # useAuth, useHotkeys
+├── lib/                      # graphql.ts (shared fetch helper), utils.ts, issue-utils.ts
+└── types/                    # issues.ts (shared frontend types: WorkflowState, IssueUser, etc.)
 ```
 
 See `docs/PATTERNS.md` for conventions used throughout the codebase.

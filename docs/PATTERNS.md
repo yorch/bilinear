@@ -24,8 +24,10 @@ src/
 ├── components/                 # React components (client-safe)
 │   ├── ui/                     # shadcn/ui primitives
 │   ├── layouts/                # App shell, sidebar
-│   └── <feature>/              # Feature-grouped components
-└── hooks/                      # React hooks
+│   └── <feature>/              # Feature-grouped components (auth/, issues/, properties/)
+├── hooks/                      # React hooks (useAuth, useHotkeys)
+├── lib/                        # Shared client utilities (graphql.ts, issue-utils.ts, utils.ts)
+└── types/                      # Shared frontend type definitions (issues.ts)
 ```
 
 **Rule:** Nothing under `src/server/` may be imported by client components. Server-only code uses Node.js APIs and database access that cannot run in the browser.
@@ -132,7 +134,7 @@ export class AuthService {
 - Error classes are defined in the service file that throws them (see §6)
 - **Don't create a service just to wrap a single `findUnique` call.** Create a service when there is real business logic to encapsulate (validation, transactions, constraints, seeding). A bare pass-through adds indirection with no value.
 
-> **Known exception (Sprint 1-4):** `Team.organization` in `resolvers/team.ts` calls `ctx.prisma.organization.findUnique` directly because `OrganizationService` does not yet exist. Once org-level business logic is added (Sprint 5+: member invitations, settings, billing), create `OrganizationService`, move this call into it, and add the service to `GraphQLContext`.
+> **Known exception:** `Team.organization` in `resolvers/team.ts` calls `ctx.prisma.organization.findUnique` directly because `OrganizationService` does not yet exist. Once org-level business logic is added (Sprint 13+: member invitations, settings, billing), create `OrganizationService`, move this call into it, and add the service to `GraphQLContext`.
 
 ---
 
@@ -146,6 +148,8 @@ export interface GraphQLContext extends AuthContext {
   prisma: PrismaClient;
   services: {
     auth: AuthService;
+    issue: IssueService;
+    label: LabelService;
     team: TeamService;
     user: UserService;
     workflowState: WorkflowStateService;
@@ -165,6 +169,8 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
     prisma,
     services: {
       auth: new AuthService(prisma, userService),
+      issue: new IssueService(prisma),
+      label: new LabelService(prisma),
       team: teamService,
       user: userService,
       workflowState: workflowStateService,
@@ -332,7 +338,27 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
 ---
 
-## 12. Authorization Pattern (Sprint 3-4)
+## 12. Frontend Data Fetching Pattern (Sprint 5-6)
+
+The frontend does **not** use Apollo Client. All GraphQL queries and mutations go through a minimal `fetch` wrapper:
+
+```typescript
+// src/lib/graphql.ts — use this in all client components
+import { gql } from '@/lib/graphql';
+
+const data = await gql(QUERY, { variables });
+// data.data.issues.nodes, data.errors, etc.
+```
+
+**Rules:**
+- Write queries as plain template literal strings in the page file (or a dedicated `queries.ts` co-located file for complex pages)
+- Perform optimistic updates by patching local `useState` immediately, then reconcile from the server response
+- When a patch contains `labelIds: string[]`, convert it to `labels: IssueLabel[]` before merging into local state (the UI displays label objects, not IDs)
+- Shared frontend types (`WorkflowState`, `IssueUser`, `IssueLabel`, `IssueBase`, `IssueDetail`) live in `src/types/issues.ts` — import from there, never redefine locally
+
+---
+
+## 14. Authorization Pattern (Sprint 3-4)
 
 Role-based guards are standalone async functions that take the Prisma client and throw `GraphQLError` with `FORBIDDEN` code:
 
@@ -356,7 +382,7 @@ teamCreate: async (_parent, { input }, ctx) => {
 
 ---
 
-## 13. Entity CRUD Pattern (Sprint 3-4)
+## 15. Entity CRUD Pattern (Sprint 3-4)
 
 Every entity follows the same file structure and flow:
 
@@ -403,7 +429,7 @@ return { success: true, team, lastSyncId: 0 };
 
 ---
 
-## 14. Testing Pattern (Sprint 3-4)
+## 16. Testing Pattern (Sprint 3-4)
 
 Tests use **Vitest** with mock Prisma clients. No real database is needed.
 
@@ -412,7 +438,7 @@ src/test/
 ├── setup.ts          # Environment vars + global mocks
 ├── prisma-mock.ts    # createMockPrisma() — mock models with vi.fn()
 ├── context-mock.ts   # createMockContext() — builds GraphQL context with mocks
-└── fixtures.ts       # Shared test data (TEST_ORG, TEST_USER, TEST_TEAM, etc.)
+└── fixtures.ts       # Shared test data (TEST_ORG, TEST_USER, TEST_TEAM, TEST_ISSUE, TEST_LABEL, etc.)
 ```
 
 **Service tests** mock the Prisma client directly:
@@ -437,6 +463,6 @@ expect(result.success).toBe(true);
 ```
 
 **Scripts:**
-- `yarn test` — run all tests
+- `yarn vitest run` (or `yarn test`) — run all tests once
 - `yarn test:coverage` — run with coverage report
 - `yarn test:watch` — watch mode for development
