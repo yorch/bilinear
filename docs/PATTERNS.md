@@ -139,10 +139,14 @@ Context is built per-request from the incoming headers/cookies:
 
 ```typescript
 // src/server/graphql/context.ts
-export interface GraphQLContext {
-  userId: string | null;
-  orgId: string | null;
-  services: { auth: AuthService; user: UserService };
+export interface GraphQLContext extends AuthContext {
+  prisma: PrismaClient;
+  services: {
+    auth: AuthService;
+    team: TeamService;
+    user: UserService;
+    workflowState: WorkflowStateService;
+  };
 }
 
 export async function createContext(req: NextRequest): Promise<GraphQLContext> {
@@ -151,9 +155,22 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
     req.cookies.get('access_token')?.value ?? null,
   );
   const userService = new UserService(prisma);
-  return { ...auth, services: { auth: new AuthService(prisma, userService), user: userService } };
+  const teamService = new TeamService(prisma);
+  const workflowStateService = new WorkflowStateService(prisma);
+  return {
+    ...auth,
+    prisma,
+    services: {
+      auth: new AuthService(prisma, userService),
+      team: teamService,
+      user: userService,
+      workflowState: workflowStateService,
+    },
+  };
 }
 ```
+
+The `prisma` instance is exposed on context so authorization guards can perform queries without going through a service (e.g., `requireOrgRole` checks `organizationMember` directly).
 
 ---
 
@@ -309,3 +326,114 @@ const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefi
 export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 ```
+
+---
+
+## 12. Authorization Pattern (Sprint 3-4)
+
+Role-based guards are standalone async functions that take the Prisma client and throw `GraphQLError` with `FORBIDDEN` code:
+
+```typescript
+// src/server/middleware/auth.ts — role-based guards
+export async function requireOrgRole(prisma, orgId, userId, roles: string[]): Promise<void>
+export async function requireTeamMember(prisma, teamId, userId): Promise<void>
+export async function requireTeamOwner(prisma, teamId, userId): Promise<void>
+```
+
+Usage in resolvers:
+
+```typescript
+teamCreate: async (_parent, { input }, ctx) => {
+  requireAuth(ctx);                                         // sync — throws UNAUTHENTICATED
+  await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);  // async — throws FORBIDDEN
+  const team = await ctx.services.team.create(ctx.orgId, ctx.userId, input);
+  return { success: true, team, lastSyncId: 0 };
+},
+```
+
+---
+
+## 13. Entity CRUD Pattern (Sprint 3-4)
+
+Every entity follows the same file structure and flow:
+
+```
+src/server/
+├── services/<entity>.service.ts     # Business logic + Prisma queries
+└── graphql/resolvers/<entity>.ts    # Thin resolver: auth → service → return
+```
+
+**Service layer** owns all business rules (validation, constraints, seeding):
+
+```typescript
+export class TeamService {
+  constructor(private prisma: PrismaClient) {}
+
+  async create(orgId: string, userId: string, input: TeamCreateInput): Promise<Team> {
+    this.validateKey(input.key);           // Throws TeamKeyInvalidError
+    return this.prisma.$transaction(async tx => {
+      const team = await tx.team.create({ data: { ... } });
+      await this.seedDefaultStates(tx, team.id, input.triageEnabled ?? false);
+      await tx.teamMembership.create({ data: { isOwner: true, teamId: team.id, userId } });
+      return team;
+    });
+  }
+}
+```
+
+**Resolvers** catch service errors and remap to `GraphQLError`:
+
+```typescript
+} catch (err) {
+  if ((err as Error).name === 'TeamKeyInvalidError') {
+    throw new GraphQLError(err.message, { extensions: { code: 'BAD_USER_INPUT' } });
+  }
+  throw err;
+}
+```
+
+**Mutation return types** always include `lastSyncId: 0` (placeholder until Sprint 7-8):
+
+```typescript
+return { success: true, team, lastSyncId: 0 };
+```
+
+---
+
+## 14. Testing Pattern (Sprint 3-4)
+
+Tests use **Vitest** with mock Prisma clients. No real database is needed.
+
+```
+src/test/
+├── setup.ts          # Environment vars + global mocks
+├── prisma-mock.ts    # createMockPrisma() — mock models with vi.fn()
+├── context-mock.ts   # createMockContext() — builds GraphQL context with mocks
+└── fixtures.ts       # Shared test data (TEST_ORG, TEST_USER, TEST_TEAM, etc.)
+```
+
+**Service tests** mock the Prisma client directly:
+
+```typescript
+const prisma = createMockPrisma();
+const service = new TeamService(prisma as never);
+
+prisma.team.create.mockResolvedValue(TEST_TEAM);
+const result = await service.create(orgId, userId, input);
+expect(prisma.workflowState.create).toHaveBeenCalledTimes(5);
+```
+
+**Resolver tests** use `createMockContext()` to test the full resolver → service flow:
+
+```typescript
+const ctx = createMockContext();
+ctx.prisma.organizationMember.findUnique.mockResolvedValue({ role: 'admin', ... });
+ctx.prisma.team.create.mockResolvedValue(TEST_TEAM);
+const result = await teamResolvers.Mutation.teamCreate(null, { input }, ctx as never);
+expect(result.success).toBe(true);
+```
+
+**Scripts:**
+- `yarn test` — run all tests
+- `yarn test:coverage` — run with coverage report
+- `yarn test:watch` — watch mode for development

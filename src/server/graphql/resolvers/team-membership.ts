@@ -1,0 +1,113 @@
+import { GraphQLError } from 'graphql';
+import {
+  requireAuth,
+  requireTeamMember,
+  requireTeamOwner,
+} from '../../middleware/auth';
+import type { GraphQLContext } from '../context';
+
+export const teamMembershipResolvers = {
+  Mutation: {
+    teamMembershipCreate: async (
+      _parent: unknown,
+      {
+        input,
+      }: { input: { isOwner?: boolean; teamId: string; userId: string } },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+
+      // Verify the team belongs to the caller's org
+      const team = await ctx.services.team.findById(input.teamId);
+      if (!team || team.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Team not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+
+      // Only team owners (or org owners/admins who are also team owners) can add members
+      await requireTeamOwner(ctx.prisma, input.teamId, ctx.userId);
+
+      try {
+        const teamMembership = await ctx.services.team.addMember(
+          input.teamId,
+          input.userId,
+          input.isOwner ?? false,
+        );
+        return { lastSyncId: 0, success: true, teamMembership };
+      } catch (err) {
+        if (
+          typeof err === 'object' &&
+          err !== null &&
+          'code' in err &&
+          (err as { code: string }).code === 'P2002'
+        ) {
+          throw new GraphQLError('User is already a member of this team', {
+            extensions: { code: 'BAD_USER_INPUT' },
+          });
+        }
+        throw err;
+      }
+    },
+
+    teamMembershipDelete: async (
+      _parent: unknown,
+      { id }: { id: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      const membership = await ctx.prisma.teamMembership.findUnique({
+        include: { team: true },
+        where: { id },
+      });
+      if (!membership || membership.team.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Membership not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+
+      // Allow: team owner removing anyone, or a user removing themselves
+      const isSelf = membership.userId === ctx.userId;
+      if (!isSelf) {
+        await requireTeamOwner(ctx.prisma, membership.teamId, ctx.userId);
+      }
+
+      await ctx.services.team.removeMember(id);
+      return { lastSyncId: 0, success: true };
+    },
+
+    teamMembershipUpdate: async (
+      _parent: unknown,
+      {
+        id,
+        input,
+      }: { id: string; input: { isOwner?: boolean; sortOrder?: number } },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      const membership = await ctx.prisma.teamMembership.findUnique({
+        include: { team: true },
+        where: { id },
+      });
+      if (!membership || membership.team.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Membership not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+
+      // Changing isOwner is a privilege change — require team owner
+      if (input.isOwner !== undefined) {
+        await requireTeamOwner(ctx.prisma, membership.teamId, ctx.userId);
+      } else {
+        // Updating sortOrder only requires being a member
+        await requireTeamMember(ctx.prisma, membership.teamId, ctx.userId);
+      }
+
+      const teamMembership = await ctx.services.team.updateMembership(
+        id,
+        input,
+      );
+      return { lastSyncId: 0, success: true, teamMembership };
+    },
+  },
+};

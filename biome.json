@@ -66,6 +66,9 @@
         }
       },
       "includes": ["package.json"]
+    },
+    {
+      "includes": ["vitest.config.ts"]
     }
   ],
   "vcs": {
