@@ -1,0 +1,246 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { cn } from '@/lib/utils';
+
+interface CreateTeamInput {
+  name: string;
+  key: string;
+  description?: string;
+  private: boolean;
+}
+
+interface CreateTeamModalProps {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (input: CreateTeamInput) => Promise<void>;
+}
+
+/** Derive a team key from the team name (e.g. "Engineering" → "ENG"). */
+function deriveKey(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '';
+  if (words.length === 1) {
+    return words[0].slice(0, 5).toUpperCase().replace(/[^A-Z]/g, '');
+  }
+  return words
+    .map(w => w[0])
+    .join('')
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '')
+    .slice(0, 10);
+}
+
+const KEY_PATTERN = /^[A-Z]{1,10}$/;
+
+export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProps) {
+  const nameRef = useRef<HTMLInputElement>(null);
+  const [name, setName] = useState('');
+  const [key, setKey] = useState('');
+  const [keyTouched, setKeyTouched] = useState(false);
+  const [description, setDescription] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [keyError, setKeyError] = useState('');
+
+  // Reset form on open
+  useEffect(() => {
+    if (open) {
+      setName('');
+      setKey('');
+      setKeyTouched(false);
+      setDescription('');
+      setIsPrivate(false);
+      setSubmitting(false);
+      setKeyError('');
+      setTimeout(() => nameRef.current?.focus(), 50);
+    }
+  }, [open]);
+
+  // Auto-derive key from name unless user has manually edited it
+  useEffect(() => {
+    if (!keyTouched) {
+      setKey(deriveKey(name));
+    }
+  }, [name, keyTouched]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (open) window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  const handleKeyChange = (value: string) => {
+    const upper = value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 10);
+    setKey(upper);
+    setKeyTouched(true);
+    if (upper && !KEY_PATTERN.test(upper)) {
+      setKeyError('Key must be 1–10 uppercase letters only');
+    } else {
+      setKeyError('');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !key || !KEY_PATTERN.test(key) || submitting) return;
+
+    setSubmitting(true);
+    try {
+      await onSubmit({
+        description: description.trim() || undefined,
+        key,
+        name: name.trim(),
+        private: isPrivate,
+      });
+      onClose();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to create team';
+      setKeyError(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!open) return null;
+
+  const canSubmit = name.trim().length > 0 && KEY_PATTERN.test(key) && !submitting;
+
+  return (
+    <dialog
+      open
+      aria-label="Create team"
+      className="fixed inset-0 z-50 flex h-screen w-screen items-center justify-center bg-black/40 p-0 m-0 border-none max-w-none max-h-none"
+      onClick={e => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      onKeyDown={e => {
+        if (e.key === 'Escape') onClose();
+      }}
+    >
+      <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+        <form onSubmit={handleSubmit} className="flex flex-col">
+          {/* Header */}
+          <div className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              Create team
+            </h2>
+          </div>
+
+          {/* Fields */}
+          <div className="flex flex-col gap-4 px-5 py-4">
+            {/* Name */}
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="team-name"
+                className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+              >
+                Name
+              </label>
+              <input
+                id="team-name"
+                ref={nameRef}
+                type="text"
+                placeholder="e.g. Engineering"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+                required
+              />
+            </div>
+
+            {/* Key */}
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="team-key"
+                className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+              >
+                Identifier
+                <span className="ml-1 font-normal text-zinc-400">
+                  (used in issue IDs like ENG-123)
+                </span>
+              </label>
+              <input
+                id="team-key"
+                type="text"
+                placeholder="ENG"
+                value={key}
+                onChange={e => handleKeyChange(e.target.value)}
+                className={cn(
+                  'rounded-md border bg-transparent px-3 py-1.5 font-mono text-sm text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100',
+                  keyError
+                    ? 'border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-500'
+                    : 'border-zinc-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700',
+                )}
+                required
+              />
+              {keyError && (
+                <p className="text-xs text-red-500">{keyError}</p>
+              )}
+            </div>
+
+            {/* Description */}
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="team-description"
+                className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+              >
+                Description
+                <span className="ml-1 font-normal text-zinc-400">(optional)</span>
+              </label>
+              <textarea
+                id="team-description"
+                placeholder="What does this team work on?"
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                rows={2}
+                className="resize-none rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-600 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-400"
+              />
+            </div>
+
+            {/* Private toggle */}
+            <label className="flex cursor-pointer items-center gap-3">
+              <input
+                type="checkbox"
+                checked={isPrivate}
+                onChange={e => setIsPrivate(e.target.checked)}
+                className="h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 dark:border-zinc-600"
+              />
+              <div>
+                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Private team
+                </p>
+                <p className="text-xs text-zinc-400">
+                  Only members can see this team and its issues
+                </p>
+              </div>
+            </label>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className={cn(
+                'rounded-md px-4 py-1.5 text-sm font-medium text-white transition-colors',
+                'bg-indigo-600 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50',
+              )}
+            >
+              {submitting ? 'Creating…' : 'Create team'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+  );
+}
