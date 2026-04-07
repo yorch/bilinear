@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RecentItem } from '@/hooks/use-recent-items';
 import type { DBIssue } from '@/lib/db';
+import { getPriorityConfig } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -13,7 +14,7 @@ import { useStore } from '@/providers/store-provider';
 // ---------------------------------------------------------------------------
 
 type ResultItem =
-  | { kind: 'issue'; issue: DBIssue; teamKey: string }
+  | { kind: 'issue'; issue: DBIssue; teamKey: string; stateColor?: string }
   | {
       kind: 'action';
       id: string;
@@ -31,23 +32,15 @@ type SubMenuMode =
   | { type: 'setLabel'; issueId: string };
 
 // ---------------------------------------------------------------------------
-// Priority labels & sub-menu placeholder labels
+// Sub-menu placeholder labels (type-checked against SubMenuMode)
 // ---------------------------------------------------------------------------
 
-const PRIORITY_LABELS: Record<number, string> = {
-  0: 'No priority',
-  1: 'Urgent',
-  2: 'High',
-  3: 'Medium',
-  4: 'Low',
-};
-
-const SUBMENU_PLACEHOLDERS: Record<string, string> = {
+const SUBMENU_PLACEHOLDERS = {
   setAssignee: 'Set assignee…',
   setLabel: 'Set label…',
   setPriority: 'Set priority…',
   setStatus: 'Set status…',
-};
+} satisfies Record<Exclude<SubMenuMode['type'], 'none'>, string>;
 
 // ---------------------------------------------------------------------------
 // CommandPalette
@@ -117,15 +110,13 @@ export const CommandPalette = observer(function CommandPalette({
 
     const issues = query ? matched : recent;
 
-    return issues.map(issue => {
-      const team = teamStore.findById(issue.teamId);
-      return {
-        issue,
-        kind: 'issue' as const,
-        teamKey: team?.key ?? '',
-      };
-    });
-  }, [query, issueStore, recentItems, teamStore]);
+    return issues.map(issue => ({
+      issue,
+      kind: 'issue' as const,
+      stateColor: workflowStateStore.findById(issue.stateId)?.color,
+      teamKey: teamStore.findById(issue.teamId)?.key ?? '',
+    }));
+  }, [query, issueStore, recentItems, teamStore, workflowStateStore]);
 
   const buildActionItems = useCallback((): ResultItem[] => {
     const actions: ResultItem[] = [
@@ -183,8 +174,6 @@ export const CommandPalette = observer(function CommandPalette({
       return states.map(s => ({
         label: s.name,
         onSelect: () => {
-          // The team page's onUpdate handles the actual mutation;
-          // here we just update the store optimistically and close.
           issueStore.optimisticUpdate(subMenu.issueId, { stateId: s.id });
           uiStore.closeCommandPalette();
         },
@@ -212,7 +201,7 @@ export const CommandPalette = observer(function CommandPalette({
     }
     if (subMenu.type === 'setPriority') {
       return ([0, 1, 2, 3, 4] as const).map(p => ({
-        label: PRIORITY_LABELS[p],
+        label: getPriorityConfig(p).label,
         onSelect: () => {
           issueStore.optimisticUpdate(subMenu.issueId, { priority: p });
           uiStore.closeCommandPalette();
@@ -247,7 +236,6 @@ export const CommandPalette = observer(function CommandPalette({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     const items = inSubMenu ? subItems : allItems;
-    const _count = items.length;
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -416,10 +404,6 @@ export const CommandPalette = observer(function CommandPalette({
                       return null;
                     }
                     const globalIdx = i;
-                    const team = teamStore.findById(item.issue.teamId);
-                    const state = workflowStateStore.findById(
-                      item.issue.stateId,
-                    );
                     return (
                       <button
                         key={item.issue.id}
@@ -435,10 +419,10 @@ export const CommandPalette = observer(function CommandPalette({
                             : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
                         )}
                       >
-                        {state && (
+                        {item.stateColor && (
                           <span
                             className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
-                            style={{ backgroundColor: state.color }}
+                            style={{ backgroundColor: item.stateColor }}
                           />
                         )}
                         <span className="w-16 flex-shrink-0 font-mono text-xs text-zinc-400">
@@ -447,9 +431,9 @@ export const CommandPalette = observer(function CommandPalette({
                         <span className="flex-1 truncate text-zinc-900 dark:text-zinc-100">
                           {item.issue.title}
                         </span>
-                        {team && (
+                        {item.teamKey && (
                           <span className="flex-shrink-0 text-xs text-zinc-400">
-                            {team.key}
+                            {item.teamKey}
                           </span>
                         )}
                       </button>
