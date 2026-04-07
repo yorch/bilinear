@@ -120,7 +120,8 @@ export const Sidebar = observer(function Sidebar({
               ) : (
                 teams.map(team => {
                   const href = `${base}/team/${team.key}`;
-                  const isActive = pathname.startsWith(href);
+                  const isActive =
+                    pathname === href || pathname.startsWith(`${href}/`);
                   return (
                     <li key={team.id}>
                       <Link

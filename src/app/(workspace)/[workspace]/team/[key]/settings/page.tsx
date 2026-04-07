@@ -194,13 +194,18 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
           return;
         }
 
+        if (membersResult.errors?.length) {
+          toast.error(gqlError(membersResult, 'Failed to load members'));
+          return;
+        }
+
         const rawMembers =
           (membersResult.data?.team as { members?: RawMembership[] })
             ?.members ?? [];
 
         setMembers(rawMembers.map(rawToMember));
       } catch {
-        // Members will just be empty; page is still usable
+        toast.error('Failed to load members');
       } finally {
         if (!cancelled) {
           setLoadingMembers(false);

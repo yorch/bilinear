@@ -75,18 +75,6 @@ export function CreateTeamModal({
     }
   }, [name, keyTouched]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    if (open) {
-      window.addEventListener('keydown', onKey);
-    }
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
   const handleKeyChange = (value: string) => {
     const upper = value
       .toUpperCase()

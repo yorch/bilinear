@@ -95,6 +95,10 @@ export function TeamMemberManagement({
     () => new Set(members.map(m => m.userId)),
     [members],
   );
+  const canManageMembers = useMemo(
+    () => members.some(m => m.userId === currentUserId && m.isOwner),
+    [members, currentUserId],
+  );
   const availableUsers = useMemo(
     () =>
       orgUsers.filter(
@@ -208,37 +212,41 @@ export function TeamMemberManagement({
                   </>
                 ) : (
                   <>
-                    <button
-                      type="button"
-                      title={
-                        member.isOwner ? 'Remove owner role' : 'Make owner'
-                      }
-                      disabled={isLoading}
-                      onClick={() =>
-                        handleToggleOwner(member.membershipId, member.isOwner)
-                      }
-                      className={cn(
-                        'flex h-7 w-7 items-center justify-center rounded text-xs transition-colors disabled:opacity-50',
-                        member.isOwner
-                          ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
-                          : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300',
-                      )}
-                    >
-                      <Crown className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      title={isSelf ? 'Leave team' : 'Remove member'}
-                      disabled={isLoading}
-                      onClick={() => setPendingRemoveId(member.membershipId)}
-                      className="flex h-7 w-7 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-                    >
-                      {isSelf ? (
-                        <X className="h-3.5 w-3.5" />
-                      ) : (
-                        <UserMinus className="h-3.5 w-3.5" />
-                      )}
-                    </button>
+                    {canManageMembers && (
+                      <button
+                        type="button"
+                        title={
+                          member.isOwner ? 'Remove owner role' : 'Make owner'
+                        }
+                        disabled={isLoading}
+                        onClick={() =>
+                          handleToggleOwner(member.membershipId, member.isOwner)
+                        }
+                        className={cn(
+                          'flex h-7 w-7 items-center justify-center rounded text-xs transition-colors disabled:opacity-50',
+                          member.isOwner
+                            ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                            : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300',
+                        )}
+                      >
+                        <Crown className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {(canManageMembers || isSelf) && (
+                      <button
+                        type="button"
+                        title={isSelf ? 'Leave team' : 'Remove member'}
+                        disabled={isLoading}
+                        onClick={() => setPendingRemoveId(member.membershipId)}
+                        className="flex h-7 w-7 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                      >
+                        {isSelf ? (
+                          <X className="h-3.5 w-3.5" />
+                        ) : (
+                          <UserMinus className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    )}
                   </>
                 )}
               </div>
