@@ -49,7 +49,9 @@ export function LabelSelect({
   const selected = labels.filter(l => value.includes(l.id));
 
   useEffect(() => {
-    if (forceOpen) setOpen(true);
+    if (forceOpen) {
+      setOpen(true);
+    }
   }, [forceOpen]);
 
   useEffect(() => {

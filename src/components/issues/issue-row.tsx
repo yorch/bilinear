@@ -60,6 +60,7 @@ export function IssueRow({
   style,
 }: IssueRowProps) {
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: presentational row container; interactive children (checkbox, button, selects) provide all a11y. onContextMenu is the only handler.
     <div
       style={style}
       className={cn(

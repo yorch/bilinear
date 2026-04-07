@@ -10,14 +10,23 @@ export interface RecentItem {
   visitedAt: number; // ms timestamp
 }
 
-const STORAGE_KEY = 'issue-tracker:recent-issues';
 const MAX_RECENT = 5;
 
-function loadFromStorage(): RecentItem[] {
-  if (typeof window === 'undefined') return [];
+function storageKey(workspaceKey?: string): string {
+  return workspaceKey
+    ? `issue-tracker:${workspaceKey}:recent-issues`
+    : 'issue-tracker:recent-issues';
+}
+
+function loadFromStorage(key: string): RecentItem[] {
+  if (typeof window === 'undefined') {
+    return [];
+  }
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
+    const raw = localStorage.getItem(key);
+    if (!raw) {
+      return [];
+    }
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -25,9 +34,9 @@ function loadFromStorage(): RecentItem[] {
   }
 }
 
-function saveToStorage(items: RecentItem[]): void {
+function saveToStorage(key: string, items: RecentItem[]): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    localStorage.setItem(key, JSON.stringify(items));
   } catch {
     // Ignore storage errors (private browsing, quota exceeded)
   }
@@ -35,15 +44,18 @@ function saveToStorage(items: RecentItem[]): void {
 
 /**
  * Tracks the last MAX_RECENT visited issues in localStorage.
+ * Scoped by `workspaceKey` so multiple workspaces on the same origin
+ * maintain independent recent-item lists.
  * Returns the recent list and a function to record a new visit.
  */
-export function useRecentItems() {
-  const [items, setItems] = useState<RecentItem[]>(() => loadFromStorage());
+export function useRecentItems(workspaceKey?: string) {
+  const key = storageKey(workspaceKey);
+  const [items, setItems] = useState<RecentItem[]>(() => loadFromStorage(key));
 
   // Sync to localStorage whenever items change
   useEffect(() => {
-    saveToStorage(items);
-  }, [items]);
+    saveToStorage(key, items);
+  }, [key, items]);
 
   const addRecent = useCallback((item: Omit<RecentItem, 'visitedAt'>) => {
     setItems(prev => {

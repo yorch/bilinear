@@ -50,7 +50,9 @@ export function StatusSelect({
   const current = states.find(s => s.id === value);
 
   useEffect(() => {
-    if (forceOpen) setOpen(true);
+    if (forceOpen) {
+      setOpen(true);
+    }
   }, [forceOpen]);
 
   useEffect(() => {

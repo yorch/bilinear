@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
-import { SearchService } from './search.service';
+import { describe, expect, it } from 'vitest';
 import { TEST_ISSUE, TEST_ORG } from '../../test/fixtures';
 import { createMockPrisma } from '../../test/prisma-mock';
+import { SearchService } from './search.service';
 
 describe('SearchService', () => {
   describe('searchIssues', () => {
@@ -24,9 +24,9 @@ describe('SearchService', () => {
 
       expect(prisma.issue.findFirst).toHaveBeenCalledWith({
         where: {
+          archivedAt: null,
           identifier: 'ENG-1',
           organizationId: TEST_ORG.id,
-          archivedAt: null,
           trashed: false,
         },
       });
@@ -41,7 +41,9 @@ describe('SearchService', () => {
       await service.searchIssues(TEST_ORG.id, 'eng-1');
 
       expect(prisma.issue.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.objectContaining({ identifier: 'ENG-1' }) }),
+        expect.objectContaining({
+          where: expect.objectContaining({ identifier: 'ENG-1' }),
+        }),
       );
     });
 
@@ -111,6 +113,51 @@ describe('SearchService', () => {
 
       expect(result[0].id).toBe('id-1');
       expect(result[1].id).toBe('id-2');
+    });
+
+    it('returns empty array when query exceeds 500 characters', async () => {
+      const prisma = createMockPrisma();
+      const service = new SearchService(prisma as never);
+
+      const longQuery = 'a'.repeat(501);
+      const result = await service.searchIssues(TEST_ORG.id, longQuery);
+
+      expect(result).toEqual([]);
+      expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    });
+
+    it('free-text query excludes archived issues by default', async () => {
+      const prisma = createMockPrisma();
+      prisma.$queryRaw.mockResolvedValue([{ id: TEST_ISSUE.id }]);
+      prisma.issue.findMany.mockResolvedValue([TEST_ISSUE]);
+      const service = new SearchService(prisma as never);
+
+      await service.searchIssues(TEST_ORG.id, 'broken login');
+
+      // The raw SQL is passed as a tagged template — we can assert it was called
+      // and that a subsequent findMany was invoked (indicating the archive filter
+      // was embedded in the Prisma.sql fragment, not a separate argument).
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+      expect(prisma.issue.findMany).toHaveBeenCalledWith({
+        where: { id: { in: [TEST_ISSUE.id] } },
+      });
+    });
+
+    it('free-text query still calls $queryRaw when includeArchived=true', async () => {
+      const prisma = createMockPrisma();
+      prisma.$queryRaw.mockResolvedValue([{ id: TEST_ISSUE.id }]);
+      prisma.issue.findMany.mockResolvedValue([TEST_ISSUE]);
+      const service = new SearchService(prisma as never);
+
+      const result = await service.searchIssues(
+        TEST_ORG.id,
+        'broken login',
+        20,
+        true,
+      );
+
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+      expect(result).toEqual([TEST_ISSUE]);
     });
   });
 });

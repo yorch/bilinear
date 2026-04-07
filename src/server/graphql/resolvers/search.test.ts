@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { TEST_ISSUE, TEST_ORG, TEST_USER } from '../../../test/fixtures';
 import { createMockContext } from '../../../test/context-mock';
+import { TEST_ISSUE, TEST_ORG } from '../../../test/fixtures';
 import { searchResolvers } from './search';
 
 describe('searchResolvers', () => {
@@ -24,7 +24,7 @@ describe('searchResolvers', () => {
 
       const result = await searchResolvers.Query.searchIssues(
         null,
-        { query: 'test issue', first: 10 },
+        { first: 10, query: 'test issue' },
         ctx as never,
       );
 
@@ -56,7 +56,7 @@ describe('searchResolvers', () => {
 
       await searchResolvers.Query.searchIssues(
         null,
-        { query: 'ENG-1', includeArchived: true },
+        { includeArchived: true, query: 'ENG-1' },
         ctx as never,
       );
 

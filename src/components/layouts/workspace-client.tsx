@@ -1,6 +1,7 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
+import { useParams } from 'next/navigation';
 import { CommandPalette } from '@/components/command-palette/command-palette';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useRecentItems } from '@/hooks/use-recent-items';
@@ -17,7 +18,9 @@ export const WorkspaceClient = observer(function WorkspaceClient({
   children: React.ReactNode;
 }) {
   const { uiStore } = useStore();
-  const { items: recentItems } = useRecentItems();
+  const params = useParams<{ workspace?: string }>();
+  const workspaceKey = params.workspace;
+  const { items: recentItems } = useRecentItems(workspaceKey);
 
   // Cmd+K / Ctrl+K — open command palette from anywhere (including inputs)
   useHotkeys(

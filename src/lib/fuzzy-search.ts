@@ -11,15 +11,21 @@
  * match. A score of exactly 0 means the candidate should be excluded.
  */
 export function fuzzyScore(target: string, query: string): number {
-  if (!query) return 1;
+  if (!query) {
+    return 1;
+  }
 
   const t = target.toLowerCase();
   const q = query.toLowerCase();
 
   // Exact match is highest
-  if (t === q) return 1;
+  if (t === q) {
+    return 1;
+  }
   // Prefix match is second highest
-  if (t.startsWith(q)) return 0.9 + 0.1 * (q.length / t.length);
+  if (t.startsWith(q)) {
+    return 0.9 + 0.1 * (q.length / t.length);
+  }
 
   // Subsequence matching with run-length scoring
   let ti = 0;
@@ -39,7 +45,9 @@ export function fuzzyScore(target: string, query: string): number {
   }
 
   // All query chars must appear in order
-  if (qi < q.length) return 0;
+  if (qi < q.length) {
+    return 0;
+  }
 
   // Normalize: max possible score is sum(1..q.length) = q.length*(q.length+1)/2
   const maxScore = (q.length * (q.length + 1)) / 2;
@@ -65,7 +73,9 @@ export function fuzzySearch<T>(
   query: string,
   getText: (item: T) => string,
 ): FuzzyMatch<T>[] {
-  if (!query.trim()) return items.map(item => ({ item, score: 1 }));
+  if (!query.trim()) {
+    return items.map(item => ({ item, score: 1 }));
+  }
 
   return items
     .map(item => ({ item, score: fuzzyScore(getText(item), query) }))

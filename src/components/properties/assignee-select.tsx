@@ -68,7 +68,9 @@ export function AssigneeSelect({
   const current = users.find(u => u.id === value);
 
   useEffect(() => {
-    if (forceOpen) setOpen(true);
+    if (forceOpen) {
+      setOpen(true);
+    }
   }, [forceOpen]);
 
   useEffect(() => {

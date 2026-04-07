@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
-import { IssueContextMenu } from './issue-context-menu';
 import { GroupSection } from './group-section';
+import { IssueContextMenu } from './issue-context-menu';
 import type { IssueRowData, OpenProperty } from './issue-row';
 import { IssueRow } from './issue-row';
 
@@ -60,7 +60,7 @@ export function IssueListView({
     }))
     .filter(g => g.issues.length > 0);
 
-  if (issues.length === 0) {
+  if (issues.length === 0 || groups.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center py-20 text-sm text-zinc-400">
         No issues found. Press{' '}

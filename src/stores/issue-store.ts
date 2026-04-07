@@ -35,9 +35,16 @@ export class IssueStore {
    * Local fuzzy search across issue titles and identifiers.
    * Returns up to `limit` issues ranked by match quality.
    * Falls back to server full-text search for description matching.
+   *
+   * Note: `search` is intentionally omitted from `makeObservable`. It is a pure
+   * read-only method (no side effects, no observable writes) so MobX tracking is
+   * not needed. Callers that want reactivity should observe `pool` directly and
+   * call `search` inside an `observer` component or a `computed` expression.
    */
   search(query: string, limit = 20): DBIssue[] {
-    if (!query.trim()) return [];
+    if (!query.trim()) {
+      return [];
+    }
 
     const trimmed = query.trim();
     const active = Array.from(this.pool.values()).filter(
@@ -60,8 +67,8 @@ export class IssueStore {
     return Array.from(scoreMap.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, limit)
-      .map(([id]) => this.pool.get(id)!)
-      .filter(Boolean);
+      .map(([id]) => this.pool.get(id))
+      .filter((issue): issue is DBIssue => issue !== undefined);
   }
 
   findByStateId(stateId: string): DBIssue[] {

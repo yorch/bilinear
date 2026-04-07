@@ -53,7 +53,9 @@ export function IssueContextMenu({
       }
     };
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onClose();
+      }
     };
     document.addEventListener('mousedown', handleMouseDown);
     document.addEventListener('keydown', handleKeyDown);
@@ -72,7 +74,10 @@ export function IssueContextMenu({
   const items: MenuEntry[] = [
     {
       label: 'Open issue',
-      onClick: () => { onOpen(); onClose(); },
+      onClick: () => {
+        onOpen();
+        onClose();
+      },
     },
     {
       label: 'Open in new tab',
@@ -100,12 +105,18 @@ export function IssueContextMenu({
     {
       danger: false,
       label: 'Archive',
-      onClick: () => { onArchive(); onClose(); },
+      onClick: () => {
+        onArchive();
+        onClose();
+      },
     },
     {
       danger: true,
       label: 'Delete',
-      onClick: () => { onDelete(); onClose(); },
+      onClick: () => {
+        onDelete();
+        onClose();
+      },
     },
   ];
 
@@ -135,8 +146,7 @@ export function IssueContextMenu({
         const item = entry as MenuItem;
         return (
           <button
-            // biome-ignore lint/suspicious/noArrayIndexKey: menu items are static
-            key={i}
+            key={item.label}
             type="button"
             role="menuitem"
             onClick={item.onClick}
@@ -147,7 +157,9 @@ export function IssueContextMenu({
           >
             <span>{item.label}</span>
             {item.shortcut && (
-              <kbd className="ml-4 text-[10px] text-zinc-400">{item.shortcut}</kbd>
+              <kbd className="ml-4 text-[10px] text-zinc-400">
+                {item.shortcut}
+              </kbd>
             )}
           </button>
         );

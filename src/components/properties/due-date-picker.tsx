@@ -23,7 +23,9 @@ export function DueDatePicker({
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (forceOpen) setOpen(true);
+    if (forceOpen) {
+      setOpen(true);
+    }
   }, [forceOpen]);
 
   useEffect(() => {

@@ -96,8 +96,8 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   // Which property popover to force-open on the selected row (keyboard shortcut)
   const [openProperty, setOpenProperty] = useState<OpenProperty>(null);
 
-  // Recent items tracking (for command palette)
-  const { addRecent } = useRecentItems();
+  // Recent items tracking (for command palette) — scoped to this workspace
+  const { addRecent } = useRecentItems(workspace);
 
   // ── Store-derived values ─────────────────────────────────────────────────
 
@@ -138,9 +138,13 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   const hasError = syncStore.status === 'error';
 
   const detailIssue: IssueDetail | null = (() => {
-    if (!detailIssueId) return null;
+    if (!detailIssueId) {
+      return null;
+    }
     const raw = issueStore.findById(detailIssueId);
-    if (!raw) return null;
+    if (!raw) {
+      return null;
+    }
     const issueLabels = (raw.labelIds ?? [])
       .map(id => labelStore.findById(id))
       .filter((l): l is DBIssueLabel => l !== null)
@@ -160,12 +164,16 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         { id, input: patch },
         {
           onError: () => {
-            if (snapshot) issueStore.optimisticUpdate(id, snapshot);
+            if (snapshot) {
+              issueStore.optimisticUpdate(id, snapshot);
+            }
           },
           onSuccess: data => {
             const updated = (data as { issueUpdate?: { issue?: DBIssue } })
               ?.issueUpdate?.issue;
-            if (updated) issueStore.applySyncAction('U', id, updated);
+            if (updated) {
+              issueStore.applySyncAction('U', id, updated);
+            }
           },
         },
       );
@@ -183,7 +191,9 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
       labelIds: string[];
       dueDate?: string | null;
     }) => {
-      if (!teamId) return;
+      if (!teamId) {
+        return;
+      }
       txQueue.enqueue(
         ISSUE_CREATE_MUTATION,
         { input: { ...input, teamId } },
@@ -219,24 +229,32 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
           },
         },
       );
-      if (selectedId === id) setSelectedId(null);
+      if (selectedId === id) {
+        setSelectedId(null);
+      }
     },
     [issueStore, txQueue, selectedId],
   );
 
   const handleDelete = useCallback(
     (id: string) => {
+      const snapshot = issueStore.findById(id);
       issueStore.pool.delete(id);
       txQueue.enqueue(
         ISSUE_DELETE_MUTATION,
         { id },
         {
           onError: () => {
-            // Rollback not possible without snapshot — next delta sync restores
+            // Restore the issue optimistically if the server rejects the delete
+            if (snapshot) {
+              issueStore.applySyncAction('I', id, snapshot);
+            }
           },
         },
       );
-      if (selectedId === id) setSelectedId(null);
+      if (selectedId === id) {
+        setSelectedId(null);
+      }
     },
     [issueStore, txQueue, selectedId],
   );
@@ -273,7 +291,9 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   useHotkeys(
     'enter',
     () => {
-      if (selectedId) setDetailIssueId(selectedId);
+      if (selectedId) {
+        setDetailIssueId(selectedId);
+      }
     },
     {},
     [selectedId],
@@ -307,22 +327,46 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   );
 
   // Issue context shortcuts — only active when an issue is selected
-  useHotkeys('s', () => setOpenProperty('status'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('a', () => setOpenProperty('assignee'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('p', () => setOpenProperty('priority'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('l', () => setOpenProperty('label'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('d', () => setOpenProperty('dueDate'), { enabled: hasSelection }, [hasSelection]);
+  useHotkeys('s', () => setOpenProperty('status'), { enabled: hasSelection }, [
+    hasSelection,
+  ]);
+  useHotkeys(
+    'a',
+    () => setOpenProperty('assignee'),
+    { enabled: hasSelection },
+    [hasSelection],
+  );
+  useHotkeys(
+    'p',
+    () => setOpenProperty('priority'),
+    { enabled: hasSelection },
+    [hasSelection],
+  );
+  useHotkeys('l', () => setOpenProperty('label'), { enabled: hasSelection }, [
+    hasSelection,
+  ]);
+  useHotkeys('d', () => setOpenProperty('dueDate'), { enabled: hasSelection }, [
+    hasSelection,
+  ]);
 
   // Backspace / Delete — archive selected issue
   useHotkeys(
     'backspace',
-    () => { if (selectedId) handleArchive(selectedId); },
+    () => {
+      if (selectedId) {
+        handleArchive(selectedId);
+      }
+    },
     { enabled: hasSelection },
     [selectedId, handleArchive, hasSelection],
   );
   useHotkeys(
     'delete',
-    () => { if (selectedId) handleArchive(selectedId); },
+    () => {
+      if (selectedId) {
+        handleArchive(selectedId);
+      }
+    },
     { enabled: hasSelection },
     [selectedId, handleArchive, hasSelection],
   );

@@ -39,7 +39,9 @@ export function useHotkeys(
   const { allowInInput = false, enabled = true } = options;
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      return;
+    }
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (!allowInInput) {
@@ -81,6 +83,12 @@ export function useHotkeys(
  * The first key starts a 1-second window during which the second key must
  * be pressed. Both keys are single characters (no modifiers). The chord is
  * suppressed when focus is inside an input.
+ *
+ * Caveat: if a separate `useHotkeys` is registered for the same first key (e.g.
+ * another `useHotkeys('g', ...)`) both handlers will fire when that key is
+ * pressed alone. Currently no standalone 'g' shortcut exists in the codebase, so
+ * this is safe. If one is added in future, give the chord priority by checking a
+ * shared "awaiting chord" ref before running the standalone handler.
  */
 export function useChord(
   firstKey: string,
@@ -100,12 +108,16 @@ export function useChord(
         target.isContentEditable
       ) {
         awaitingSecond = false;
-        if (timer) clearTimeout(timer);
+        if (timer) {
+          clearTimeout(timer);
+        }
         return;
       }
 
       // Ignore events with modifier keys for chord sequences
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) {
+        return;
+      }
 
       const key = e.key.toLowerCase();
 
@@ -119,7 +131,9 @@ export function useChord(
       }
 
       if (awaitingSecond) {
-        if (timer) clearTimeout(timer);
+        if (timer) {
+          clearTimeout(timer);
+        }
         awaitingSecond = false;
         if (key === secondKey.toLowerCase()) {
           e.preventDefault();
@@ -131,7 +145,9 @@ export function useChord(
     window.addEventListener('keydown', onKeyDown);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
-      if (timer) clearTimeout(timer);
+      if (timer) {
+        clearTimeout(timer);
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firstKey, secondKey, handler, ...deps]);
