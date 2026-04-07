@@ -1,7 +1,15 @@
+import 'dotenv/config';
 import crypto from 'node:crypto';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma';
 
-const prisma = new PrismaClient();
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error('DATABASE_URL is not set');
+}
+
+const adapter = new PrismaPg({ connectionString });
+const prisma = new PrismaClient({ adapter });
 
 const DEMO_EMAIL = 'demo@example.com';
 const DEMO_CODE = '123456';
@@ -57,7 +65,12 @@ async function main() {
   console.log(`  Email : ${DEMO_EMAIL}`);
   console.log(`  Code  : ${DEMO_CODE}`);
   console.log(`  Org   : ${org.urlKey}`);
-  console.log('\nGo to /login, enter the email, then use the code above.');
+  console.log(
+    `\nSkip the login form — go directly to:\n  http://localhost:3000/verify?email=${encodeURIComponent(DEMO_EMAIL)}&code=${DEMO_CODE}`,
+  );
+  console.log(
+    '(Going through /login will revoke the seeded token by sending a new code.)',
+  );
 }
 
 main()

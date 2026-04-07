@@ -2399,6 +2399,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"dotenv@npm:17.4.1":
+  version: 17.4.1
+  resolution: "dotenv@npm:17.4.1"
+  checksum: 10c0/eb6ae592ee1e8f6b7f62e0f0c2827c4f27bbe9e00abe9d7910e06456e63dccd42f011de94da9450a63c07ccc52c318f527c1b56ad8e2c81a1a16314b53d4fd99
+  languageName: node
+  linkType: hard
+
 "dotenv@npm:^16.6.1":
   version: 16.6.1
   resolution: "dotenv@npm:16.6.1"
@@ -3086,6 +3093,7 @@ __metadata:
     clsx: "npm:2.1.1"
     date-fns: "npm:4.1.0"
     dexie: "npm:4.4.2"
+    dotenv: "npm:17.4.1"
     graphql: "npm:16.13.2"
     graphql-scalars: "npm:1.25.0"
     graphql-tag: "npm:2.12.6"
