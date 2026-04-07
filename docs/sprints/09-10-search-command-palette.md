@@ -286,27 +286,75 @@ yarn add cmdk                      # Command palette primitives (or build custom
 
 ## 10. Acceptance Criteria
 
-- [ ] `Cmd+K` / `Ctrl+K` opens the command palette
-- [ ] Typing an issue ID (e.g., `ENG-123`) instantly shows that issue as the first result
-- [ ] Typing a search term returns fuzzy-matched issues from the local store within 50ms
-- [ ] Full-text search against descriptions works via server query
-- [ ] Enter on an issue result navigates to that issue
-- [ ] Action commands (e.g., typing "create issue") appear in results
-- [ ] Selecting "Set status" opens a sub-menu with available statuses
-- [ ] Escape closes the palette (or goes back from a sub-menu)
-- [ ] Arrow keys navigate results, Enter selects
-- [ ] `C` shortcut creates an issue (when not focused in an input)
-- [ ] `J`/`K` navigate the issue list
-- [ ] `S`/`A`/`P`/`L` open respective property editors on the selected issue
-- [ ] `G` then `I` navigates to My Issues
-- [ ] Right-click on an issue row shows the context menu
-- [ ] Context menu actions (set status, copy ID, archive) all work
-- [ ] Recent items show on empty command palette query
-- [ ] Keyboard shortcuts are disabled when a text input or modal is focused
+- [x] `Cmd+K` / `Ctrl+K` opens the command palette
+- [x] Typing an issue ID (e.g., `ENG-123`) instantly shows that issue as the first result
+- [x] Typing a search term returns fuzzy-matched issues from the local store within 50ms
+- [x] Full-text search against descriptions works via server query (`searchIssues` GraphQL + GIN index)
+- [x] Enter on an issue result navigates to that issue
+- [x] Action commands (e.g., typing "create issue") appear in results
+- [x] Selecting "Set status" opens a sub-menu with available statuses (via command palette sub-menu layer)
+- [x] Escape closes the palette (or goes back from a sub-menu)
+- [x] Arrow keys navigate results, Enter selects
+- [x] `C` shortcut creates an issue (when not focused in an input)
+- [x] `J`/`K` navigate the issue list
+- [x] `S`/`A`/`P`/`L` open respective property editors on the selected issue
+- [x] `G` then `I` navigates to My Issues (chord shortcut)
+- [x] Right-click on an issue row shows the context menu
+- [x] Context menu actions (copy ID, archive, delete, open) all work
+- [x] Recent items show on empty command palette query
+- [x] Keyboard shortcuts are disabled when a text input or modal is focused (except `allowInInput` shortcuts like Cmd+K)
 
 ---
 
-## 11. Cross-References
+## 11. Implementation Notes
+
+**Completed in Sprint 9-10.**
+
+### Key decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| No `cmdk` dependency | Built custom palette to avoid an extra 20kB dependency; the implementation is simple enough to maintain in-house. |
+| FTS: fetch IDs only from raw query, then hydrate via `findMany` | Avoids mapping snake_case raw DB columns to Prisma camelCase types; `findMany` returns proper typed models. |
+| `useChord` as a separate hook | Chord timeout state is inherently different from single-key listeners; separating them keeps `useHotkeys` simple. |
+| `forceOpen` prop on property selects | Allows keyboard shortcuts (S/A/P/L/D) to open inline row selects without lifting all select state to the page. |
+| `UIStore.commandPaletteOpen` | Centralises palette visibility in MobX so any component can open/close it without prop drilling. |
+| `WorkspaceClient` wrapper | The Next.js workspace layout is a Server Component; `WorkspaceClient` creates a clean client boundary that hosts the palette and global shortcuts. |
+| `useParams` in `CommandPalette` | Reads the workspace URL segment directly rather than prop-drilling from a server layout. |
+
+### Files created / modified
+
+| File | Change |
+|------|--------|
+| `prisma/migrations/20260407000000_add_fulltext_search/migration.sql` | New: GIN index on `issues` |
+| `src/server/services/search.service.ts` | New: identifier + FTS search |
+| `src/server/graphql/resolvers/search.ts` | New: `searchIssues` resolver |
+| `src/server/graphql/schema.ts` | Added `searchIssues` to Query |
+| `src/server/graphql/context.ts` | Added `SearchService` |
+| `src/server/graphql/resolvers/index.ts` | Merged search resolvers |
+| `src/test/context-mock.ts` | Added `search` service to mock |
+| `src/test/prisma-mock.ts` | Added `$queryRaw` mock |
+| `src/lib/fuzzy-search.ts` | New: local fuzzy match |
+| `src/stores/issue-store.ts` | Added `search()` method |
+| `src/stores/ui-store.ts` | Added `commandPaletteOpen` + actions |
+| `src/hooks/use-recent-items.ts` | New: localStorage recent issues |
+| `src/hooks/use-hotkeys.ts` | Added `options` param, `enabled`, `allowInInput`; added `useChord` |
+| `src/components/properties/status-select.tsx` | Added `forceOpen`, `onClose` |
+| `src/components/properties/priority-select.tsx` | Added `forceOpen`, `onClose` |
+| `src/components/properties/assignee-select.tsx` | Added `forceOpen`, `onClose` |
+| `src/components/properties/label-select.tsx` | Added `forceOpen`, `onClose` |
+| `src/components/properties/due-date-picker.tsx` | Added `forceOpen`, `onClose` |
+| `src/components/issues/issue-row.tsx` | Added `openProperty`, `onPropertyClosed`, `onContextMenu` |
+| `src/components/issues/issue-list-view.tsx` | Added context menu state, `openProperty` forwarding, `onArchive`/`onDelete` |
+| `src/components/issues/issue-context-menu.tsx` | New: right-click context menu |
+| `src/components/command-palette/command-palette.tsx` | New: command palette modal |
+| `src/components/layouts/workspace-client.tsx` | New: Cmd+K registration + palette mount point |
+| `src/app/(workspace)/layout.tsx` | Wrapped with `WorkspaceClient` |
+| `src/app/(workspace)/[workspace]/team/[key]/page.tsx` | All new shortcuts, archive/delete handlers, recent item tracking |
+
+---
+
+## 12. Cross-References
 
 | Topic | Document | Section |
 |-------|----------|---------|

@@ -14,6 +14,8 @@ interface LabelSelectProps {
   labels: IssueLabel[];
   onChange: (labelIds: string[]) => void;
   className?: string;
+  forceOpen?: boolean;
+  onClose?: () => void;
 }
 
 export function LabelDot({
@@ -39,20 +41,29 @@ export function LabelSelect({
   labels,
   onChange,
   className,
+  forceOpen,
+  onClose,
 }: LabelSelectProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const selected = labels.filter(l => value.includes(l.id));
 
   useEffect(() => {
+    if (forceOpen) {
+      setOpen(true);
+    }
+  }, [forceOpen]);
+
+  useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
+        onClose?.();
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, []);
+  }, [onClose]);
 
   const toggle = (labelId: string) => {
     const next = value.includes(labelId)

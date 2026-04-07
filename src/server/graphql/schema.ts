@@ -343,6 +343,11 @@ export const typeDefs = `
       before: String
       includeArchived: Boolean
     ): IssueConnection!
+    searchIssues(
+      query: String!
+      first: Int
+      includeArchived: Boolean
+    ): IssueConnection!
     labels(teamId: String): IssueLabelConnection!
   }
 

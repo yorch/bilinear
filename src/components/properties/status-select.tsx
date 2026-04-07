@@ -15,6 +15,8 @@ interface StatusSelectProps {
   states: WorkflowState[];
   onChange: (stateId: string) => void;
   className?: string;
+  forceOpen?: boolean;
+  onClose?: () => void;
 }
 
 export function StatusDot({
@@ -40,20 +42,29 @@ export function StatusSelect({
   states,
   onChange,
   className,
+  forceOpen,
+  onClose,
 }: StatusSelectProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const current = states.find(s => s.id === value);
 
   useEffect(() => {
+    if (forceOpen) {
+      setOpen(true);
+    }
+  }, [forceOpen]);
+
+  useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
+        onClose?.();
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, []);
+  }, [onClose]);
 
   return (
     <div ref={ref} className={cn('relative', className)}>
@@ -82,6 +93,7 @@ export function StatusSelect({
                 e.stopPropagation();
                 onChange(state.id);
                 setOpen(false);
+                onClose?.();
               }}
               className={cn(
                 'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800',

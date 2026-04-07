@@ -2,7 +2,7 @@
 ## Issue Tracker — Linear Rebuild
 
 **Established:** Sprint 1-2  
-**Last updated:** Sprint 7-8  
+**Last updated:** Sprint 9-10  
 **Status:** Living document — updated each sprint
 
 > This is the primary onboarding document for new contributors. All patterns here are the mandated conventions for the codebase. If you deviate from a pattern, document why.
@@ -27,11 +27,13 @@ src/
 ├── providers/                  # React context wrappers (StoreProvider, SyncProvider)
 ├── components/                 # React components (client-safe)
 │   ├── ui/                     # shadcn/ui primitives
-│   ├── layouts/                # App shell, sidebar
+│   ├── layouts/                # App shell, sidebar, WorkspaceClient
+│   ├── command-palette/        # CommandPalette modal (Sprint 9-10+)
 │   └── <feature>/              # Feature-grouped components (auth/, issues/, properties/)
-├── hooks/                      # React hooks (useAuth, useHotkeys)
+├── hooks/                      # React hooks (useAuth, useHotkeys, useChord, useRecentItems)
 ├── lib/                        # Shared client utilities
 │   ├── db.ts                   # Dexie.js IndexedDB schema (Sprint 7-8+)
+│   ├── fuzzy-search.ts         # Local fuzzy match for store search (Sprint 9-10+)
 │   ├── sync-manager.ts         # Sync lifecycle orchestrator (Sprint 7-8+)
 │   ├── transaction-queue.ts    # Serial mutation queue (Sprint 7-8+)
 │   ├── ws-client.ts            # WebSocket client (Sprint 7-8+)
@@ -156,6 +158,7 @@ Context is built per-request from the incoming headers/cookies:
 // src/server/graphql/context.ts
 export interface GraphQLContext extends AuthContext {
   prisma: PrismaClient;
+  search: SearchService;     // Added Sprint 9-10: PostgreSQL full-text search
   services: {
     auth: AuthService;
     issue: IssueService;
@@ -178,6 +181,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   return {
     ...auth,
     prisma,
+    search: new SearchService(prisma),
     services: {
       auth: new AuthService(prisma, userService),
       issue: new IssueService(prisma),
@@ -602,3 +606,108 @@ return { issue: entity, lastSyncId: sync.id.toString(), success: true };
 `createSyncAction` writes to the `sync_actions` table then publishes to Redis `sync:<orgId>`. The WebSocket server subscribes to this channel and broadcasts to all connected org clients.
 
 **Note:** The `data` column stores the full Prisma return value, which may include relation fields (e.g., `labelAssignments` on Issue). The client's `applySyncAction` must handle this gracefully — `IssueStore` extracts `labelIds` from `labelAssignments` if present.
+
+---
+
+## 20. Search Pattern (Sprint 9-10)
+
+### Server: SearchService
+
+`SearchService` is the single place for all text search. It lives at `src/server/services/search.service.ts` and is exposed via the `searchIssues` GraphQL query.
+
+Strategy:
+1. **Identifier pattern** (`ENG-123`): instant lookup via the `identifier` index — no FTS needed.
+2. **Free-text**: raw SQL using PostgreSQL's GIN full-text index. Only IDs are fetched from raw SQL (to avoid snake_case mapping); a follow-up `findMany` retrieves typed `Issue` rows. Rank order from the raw query is restored after `findMany`.
+
+```typescript
+// Identifier lookup — hits the index directly
+const issue = await prisma.issue.findFirst({ where: { identifier: 'ENG-1', ... } });
+
+// Full-text: get ranked IDs, then hydrate
+const rows = await prisma.$queryRaw<Array<{ id: string }>>(
+  Prisma.sql`SELECT id FROM issues WHERE ... @@ plainto_tsquery(...) ORDER BY ts_rank(...) LIMIT ${first}`
+);
+const ids = rows.map(r => r.id);
+const issues = await prisma.issue.findMany({ where: { id: { in: ids } } });
+// Re-sort by rank order
+```
+
+The GIN index is added via `prisma/migrations/20260407000000_add_fulltext_search/migration.sql` (raw SQL, not manageable by Prisma schema).
+
+### Client: Local fuzzy search
+
+For instant local search (titles and identifiers), use `IssueStore.search(query)` which delegates to `fuzzySearch()` in `src/lib/fuzzy-search.ts`. This runs synchronously against the MobX pool — no network round-trip.
+
+```typescript
+// In a component
+const results = issueStore.search(query, 20);
+```
+
+The fuzzy algorithm scores based on subsequence matching with run-length bonuses. Scores are in [0, 1]; items scoring 0 are excluded. Results are sorted by descending score.
+
+---
+
+## 21. Command Palette Pattern (Sprint 9-10)
+
+The command palette is controlled by `UIStore.commandPaletteOpen`. The `WorkspaceClient` component renders it at the workspace layout level and registers the `Cmd+K` / `Ctrl+K` global shortcut.
+
+```
+<StoreProvider>
+  <SyncProvider>
+    <WorkspaceClient>          ← registers Cmd+K, renders CommandPalette
+      <AppShell />
+    </WorkspaceClient>
+  </SyncProvider>
+</StoreProvider>
+```
+
+**Opening:** `uiStore.openCommandPalette()` / `uiStore.toggleCommandPalette()`
+
+**Layers:**
+- Layer 0: Search across recent issues (empty query) or fuzzy-matched issues + actions (non-empty query)
+- Layer 1 (sub-menu): Set status / assignee / priority / label for a selected issue
+
+**Navigation:** Arrow keys + Enter within the palette; Escape goes back one layer or closes.
+
+---
+
+## 22. Keyboard Shortcut Pattern (Sprint 9-10)
+
+Two hook variants in `src/hooks/use-hotkeys.ts`:
+
+### `useHotkeys(key, handler, options?, deps?)`
+
+Standard single-key or modifier+key shortcut:
+
+```typescript
+// Global — fires even from inputs (e.g., Cmd+K for command palette)
+useHotkeys('meta+k', () => uiStore.toggleCommandPalette(), { allowInInput: true });
+
+// Conditional — only active when an issue is selected
+useHotkeys('s', () => setOpenProperty('status'), { enabled: !!selectedId });
+```
+
+Options:
+- `allowInInput` (default: `false`) — set `true` for system-level shortcuts
+- `enabled` (default: `true`) — set to a boolean condition to gate the shortcut
+
+### `useChord(firstKey, secondKey, handler, deps?)`
+
+Two-key sequential chords (e.g., `G` then `I`). The second key must be pressed within 1 second. Both keys are single characters; modifier keys during the chord cancel it.
+
+```typescript
+useChord('g', 'i', () => router.push(`/${workspace}/my-issues`));
+useChord('g', 'n', () => router.push(`/${workspace}/inbox`));
+```
+
+### Property popover shortcuts
+
+Pressing `S`/`A`/`P`/`L`/`D` when an issue is selected opens the corresponding inline property selector on that row. This is implemented via the `openProperty: OpenProperty` prop on `IssueRow`. Each property select accepts `forceOpen?: boolean` / `onClose?: () => void` to support external open control.
+
+```typescript
+// In the team page
+useHotkeys('s', () => setOpenProperty('status'), { enabled: !!selectedId });
+
+// Passed to IssueListView → IssueRow → StatusSelect
+<StatusSelect forceOpen={openProperty === 'status'} onClose={() => setOpenProperty(null)} />
+```

@@ -19,6 +19,15 @@ export interface IssueRowData {
   labels: IssueLabel[];
 }
 
+/** Which property popover to open programmatically (e.g., via keyboard shortcut). */
+export type OpenProperty =
+  | 'status'
+  | 'assignee'
+  | 'priority'
+  | 'label'
+  | 'dueDate'
+  | null;
+
 interface IssueRowProps {
   issue: IssueRowData;
   states: WorkflowState[];
@@ -28,6 +37,11 @@ interface IssueRowProps {
   onSelect: () => void;
   onOpen: () => void;
   onUpdate: (id: string, patch: Record<string, unknown>) => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
+  /** Open a specific property popover immediately (keyboard shortcut support). */
+  openProperty?: OpenProperty;
+  /** Called when the forced-open property popover closes. */
+  onPropertyClosed?: () => void;
   style?: React.CSSProperties;
 }
 
@@ -40,15 +54,20 @@ export function IssueRow({
   onSelect,
   onOpen,
   onUpdate,
+  onContextMenu,
+  openProperty,
+  onPropertyClosed,
   style,
 }: IssueRowProps) {
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: presentational row container; interactive children (checkbox, button, selects) provide all a11y. onContextMenu is the only handler.
     <div
       style={style}
       className={cn(
         'group flex items-center gap-2 border-b border-zinc-100 px-4 py-0 h-9 select-none hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900',
         selected && 'bg-zinc-100 dark:bg-zinc-800',
       )}
+      onContextMenu={onContextMenu}
     >
       {/* Checkbox */}
       <input
@@ -63,6 +82,8 @@ export function IssueRow({
       <PrioritySelect
         value={issue.priority}
         onChange={priority => onUpdate(issue.id, { priority })}
+        forceOpen={openProperty === 'priority'}
+        onClose={onPropertyClosed}
       />
 
       {/* Identifier */}
@@ -84,12 +105,16 @@ export function IssueRow({
         value={issue.labels.map(l => l.id)}
         labels={allLabels}
         onChange={labelIds => onUpdate(issue.id, { labelIds })}
+        forceOpen={openProperty === 'label'}
+        onClose={onPropertyClosed}
       />
 
       {/* Due date */}
       <DueDatePicker
         value={issue.dueDate}
         onChange={dueDate => onUpdate(issue.id, { dueDate })}
+        forceOpen={openProperty === 'dueDate'}
+        onClose={onPropertyClosed}
       />
 
       {/* Assignee */}
@@ -97,6 +122,8 @@ export function IssueRow({
         value={issue.assigneeId}
         users={users}
         onChange={assigneeId => onUpdate(issue.id, { assigneeId })}
+        forceOpen={openProperty === 'assignee'}
+        onClose={onPropertyClosed}
       />
 
       {/* Status */}
@@ -104,6 +131,8 @@ export function IssueRow({
         value={issue.stateId}
         states={states}
         onChange={stateId => onUpdate(issue.id, { stateId })}
+        forceOpen={openProperty === 'status'}
+        onClose={onPropertyClosed}
       />
     </div>
   );

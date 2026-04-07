@@ -1,5 +1,6 @@
 import { action, computed, makeObservable, observable } from 'mobx';
 import type { DBIssue } from '@/lib/db';
+import { fuzzyScore } from '@/lib/fuzzy-search';
 
 export class IssueStore {
   pool = new Map<string, DBIssue>();
@@ -28,6 +29,38 @@ export class IssueStore {
     return Array.from(this.pool.values()).filter(
       i => i.teamId === teamId && !i.trashed && !i.archivedAt,
     );
+  }
+
+  /**
+   * Local fuzzy search across issue titles and identifiers.
+   * Returns up to `limit` issues ranked by match quality.
+   * Falls back to server full-text search for description matching.
+   *
+   * Note: `search` is intentionally omitted from `makeObservable`. It is a pure
+   * read-only method (no side effects, no observable writes) so MobX tracking is
+   * not needed. Callers that want reactivity should observe `pool` directly and
+   * call `search` inside an `observer` component or a `computed` expression.
+   */
+  search(query: string, limit = 20): DBIssue[] {
+    if (!query.trim()) {
+      return [];
+    }
+
+    const trimmed = query.trim();
+
+    // Single pass: score each issue against identifier (1.2× boost) and title simultaneously
+    return Array.from(this.pool.values())
+      .filter(i => !i.trashed && !i.archivedAt)
+      .map(issue => ({
+        issue,
+        score:
+          fuzzyScore(issue.identifier, trimmed) * 1.2 +
+          fuzzyScore(issue.title, trimmed),
+      }))
+      .filter(m => m.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map(m => m.issue);
   }
 
   findByStateId(stateId: string): DBIssue[] {
