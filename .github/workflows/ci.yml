@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     name: Lint
@@ -19,9 +23,6 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: yarn
-
-      - name: Enable Corepack
-        run: corepack enable
 
       - name: Install dependencies
         run: yarn install --immutable
@@ -42,9 +43,6 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: yarn
-
-      - name: Enable Corepack
-        run: corepack enable
 
       - name: Install dependencies
         run: yarn install --immutable
@@ -68,9 +66,6 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: yarn
-
-      - name: Enable Corepack
-        run: corepack enable
 
       - name: Install dependencies
         run: yarn install --immutable
