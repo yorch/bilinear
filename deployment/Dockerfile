@@ -52,3 +52,27 @@ ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 CMD ["node", "server.js"]
+
+# ---- ws-runner stage ----
+FROM node:24-alpine AS ws
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nodejs
+
+# Include devDeps (tsx) needed to run TypeScript directly
+COPY --from=deps /app/node_modules ./node_modules
+# Source files the ws server imports
+COPY --from=builder /app/src/server/ws ./src/server/ws
+COPY --from=builder /app/src/server/lib/jwt.ts ./src/server/lib/jwt.ts
+# tsx needs tsconfig.json for @/ path alias resolution
+COPY package.json tsconfig.json ./
+
+USER nodejs
+
+EXPOSE 3001
+ENV WS_PORT=3001
+
+CMD ["node_modules/.bin/tsx", "src/server/ws/index.ts"]

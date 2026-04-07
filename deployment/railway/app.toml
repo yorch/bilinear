@@ -1,0 +1,21 @@
+## Railway service config for the Next.js application
+## https://docs.railway.com/reference/config-as-code
+##
+## Usage:
+##   1. In Railway Dashboard, create a new service from this repo
+##   2. Under Service Settings → Config file path → set to: deployment/railway/app.toml
+##   3. Add env vars (DATABASE_URL, REDIS_URL, JWT_SECRET, etc.) in Railway's Variables tab
+##   4. Attach Railway Postgres and Redis plugins (or use external providers)
+##   5. After deploying the ws service, set NEXT_PUBLIC_WS_URL to its public domain
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "deployment/Dockerfile"
+# No buildTarget needed — Dockerfile defaults to the runner stage
+
+[deploy]
+startCommand = "node server.js"
+healthcheckPath = "/"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 5

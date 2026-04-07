@@ -1,0 +1,34 @@
+## Fly.io config for the standalone WebSocket server
+## https://fly.io/docs/reference/configuration/
+##
+## Usage:
+##   1. Create the app: fly apps create issue-tracker-ws
+##   2. Set secrets (share JWT_SECRET with the app service):
+##        fly secrets set \
+##          JWT_SECRET="<same value as app service>" \
+##          REDIS_URL="<same Upstash URL as app service>" \
+##          --app issue-tracker-ws
+##   3. Deploy: fly deploy -c deployment/fly/ws.toml
+##   4. Then set NEXT_PUBLIC_WS_URL=wss://issue-tracker-ws.fly.dev on the app service:
+##        fly secrets set NEXT_PUBLIC_WS_URL="wss://issue-tracker-ws.fly.dev" \
+##          --app issue-tracker-app
+
+app = "issue-tracker-ws"
+primary_region = "iad"
+
+[build]
+  dockerfile = "deployment/Dockerfile"
+  target = "ws"
+
+# Expose port 3001 as a plain TCP/WebSocket service (Fly handles TLS termination)
+[http_service]
+  internal_port = 3001
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1

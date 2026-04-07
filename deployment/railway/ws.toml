@@ -1,0 +1,20 @@
+## Railway service config for the standalone WebSocket server
+## https://docs.railway.com/reference/config-as-code
+##
+## Usage:
+##   1. In Railway Dashboard, create a second service from the same repo
+##   2. Under Service Settings → Config file path → set to: deployment/railway/ws.toml
+##   3. Add env vars: REDIS_URL, JWT_SECRET, WS_PORT=3001
+##   4. Railway exposes the service on a public domain (e.g. your-ws.up.railway.app)
+##   5. Set NEXT_PUBLIC_WS_URL=wss://your-ws.up.railway.app on the app service
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "deployment/Dockerfile"
+buildTarget = "ws"
+
+[deploy]
+startCommand = "node_modules/.bin/tsx src/server/ws/index.ts"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 5

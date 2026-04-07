@@ -1,0 +1,85 @@
+## Render.com deployment blueprint
+## https://render.com/docs/blueprint-spec
+##
+## Usage:
+##   1. Push this file to your GitHub/GitLab repo
+##   2. In Render Dashboard → New → Blueprint → select repo
+##   3. Fill in the secret env vars (JWT_SECRET, JWT_REFRESH_SECRET, SMTP_*, Google OAuth)
+##   4. After first deploy, copy the ws service's public URL into the app's NEXT_PUBLIC_WS_URL
+##
+## Notes:
+##   - PostgreSQL is included (free 90-day trial, then paid)
+##   - Redis is NOT included — provision an external Redis (Upstash free tier works well)
+##     and set REDIS_URL in both services manually
+
+services:
+  # ── Next.js application ──────────────────────────────────────────────────────
+  - type: web
+    name: issue-tracker-app
+    runtime: docker
+    dockerfilePath: ./deployment/Dockerfile
+    dockerContext: .
+    # The standalone Next.js output entrypoint
+    dockerCommand: node server.js
+    plan: starter
+    healthCheckPath: /
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: issue-tracker-db
+          property: connectionString
+      - key: REDIS_URL
+        sync: false   # Set manually — use Upstash or other external Redis
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: APP_URL
+        sync: false   # Set to your Render app URL, e.g. https://issue-tracker-app.onrender.com
+      # After deploying the ws service below, set this to its public URL:
+      # e.g. wss://issue-tracker-ws.onrender.com
+      - key: NEXT_PUBLIC_WS_URL
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_SECURE
+        value: "false"
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+
+  # ── WebSocket server ─────────────────────────────────────────────────────────
+  - type: web
+    name: issue-tracker-ws
+    runtime: docker
+    dockerfilePath: ./deployment/Dockerfile
+    dockerContext: .
+    dockerTarget: ws
+    plan: starter
+    # Render proxies port 3001 through their HTTPS/WSS edge — clients connect
+    # without a port number (wss://issue-tracker-ws.onrender.com)
+    envVars:
+      - key: REDIS_URL
+        sync: false   # Same Redis as the app
+      - key: JWT_SECRET
+        fromService:
+          name: issue-tracker-app
+          type: web
+          envVarKey: JWT_SECRET
+      - key: WS_PORT
+        value: "3001"
+
+databases:
+  - name: issue-tracker-db
+    databaseName: issue_tracker
+    user: issue_tracker
+    plan: free

@@ -66,6 +66,11 @@ export class WsClient {
     if (typeof window === 'undefined') {
       return '';
     }
+    // Full URL override for multi-domain deployments (Railway, Render, Fly.io, etc.)
+    // where the ws server lives on a different hostname than the app.
+    if (process.env.NEXT_PUBLIC_WS_URL) {
+      return process.env.NEXT_PUBLIC_WS_URL;
+    }
     const wsPort = process.env.NEXT_PUBLIC_WS_PORT ?? '3001';
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${proto}//${window.location.hostname}:${wsPort}`;
