@@ -1,36 +1,14 @@
 'use client';
 
-import { useVirtualizer } from '@tanstack/react-virtual';
-import { useRef } from 'react';
+import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 import { GroupSection } from './group-section';
 import type { IssueRowData } from './issue-row';
 import { IssueRow } from './issue-row';
 
-interface WorkflowState {
-  id: string;
-  name: string;
-  color: string;
-  type: string;
-}
-
-interface User {
-  id: string;
-  displayName: string;
-  initials: string;
-  avatarUrl?: string | null;
-  avatarBackgroundColor: string;
-}
-
-interface IssueLabel {
-  id: string;
-  name: string;
-  color: string;
-}
-
 interface IssueListViewProps {
   issues: IssueRowData[];
   states: WorkflowState[];
-  users: User[];
+  users: IssueUser[];
   labels: IssueLabel[];
   selectedId: string | null;
   onSelect: (id: string) => void;
@@ -41,61 +19,6 @@ interface IssueListViewProps {
 interface Group {
   state: WorkflowState;
   issues: IssueRowData[];
-}
-
-function VirtualIssueList({
-  issues,
-  states,
-  users,
-  labels,
-  selectedId,
-  onSelect,
-  onOpen,
-  onUpdate,
-}: Omit<IssueListViewProps, 'issues'> & { issues: IssueRowData[] }) {
-  const parentRef = useRef<HTMLDivElement>(null);
-
-  const virtualizer = useVirtualizer({
-    count: issues.length,
-    estimateSize: () => 36,
-    getScrollElement: () => parentRef.current,
-    overscan: 20,
-  });
-
-  return (
-    <div ref={parentRef} className="overflow-hidden">
-      <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
-        {virtualizer.getVirtualItems().map(vItem => {
-          const issue = issues[vItem.index];
-          return (
-            <div
-              key={vItem.key}
-              data-index={vItem.index}
-              ref={virtualizer.measureElement}
-              style={{
-                left: 0,
-                position: 'absolute',
-                top: 0,
-                transform: `translateY(${vItem.start}px)`,
-                width: '100%',
-              }}
-            >
-              <IssueRow
-                issue={issue}
-                states={states}
-                users={users}
-                allLabels={labels}
-                selected={issue.id === selectedId}
-                onSelect={() => onSelect(issue.id)}
-                onOpen={() => onOpen(issue.id)}
-                onUpdate={onUpdate}
-              />
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
 }
 
 export function IssueListView({
@@ -135,16 +58,19 @@ export function IssueListView({
           color={state.color}
           count={groupIssues.length}
         >
-          <VirtualIssueList
-            issues={groupIssues}
-            states={states}
-            users={users}
-            labels={labels}
-            selectedId={selectedId}
-            onSelect={onSelect}
-            onOpen={onOpen}
-            onUpdate={onUpdate}
-          />
+          {groupIssues.map(issue => (
+            <IssueRow
+              key={issue.id}
+              issue={issue}
+              states={states}
+              users={users}
+              allLabels={labels}
+              selected={issue.id === selectedId}
+              onSelect={() => onSelect(issue.id)}
+              onOpen={() => onOpen(issue.id)}
+              onUpdate={onUpdate}
+            />
+          ))}
         </GroupSection>
       ))}
     </div>

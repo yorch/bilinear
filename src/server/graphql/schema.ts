@@ -57,6 +57,7 @@ export const typeDefs = `
     children: [Team!]!
     states: [WorkflowState!]!
     members: [TeamMembership!]!
+    issues: [Issue!]!
     createdAt: DateTime!
     updatedAt: DateTime!
     archivedAt: DateTime

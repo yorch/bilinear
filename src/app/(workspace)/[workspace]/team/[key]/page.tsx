@@ -5,15 +5,25 @@ import { useCallback, useEffect, useState } from 'react';
 import { CreateIssueModal } from '@/components/issues/create-issue-modal';
 import { IssueDetailPanel } from '@/components/issues/issue-detail-panel';
 import { IssueListView } from '@/components/issues/issue-list-view';
-import type { IssueRowData } from '@/components/issues/issue-row';
 import { useHotkeys } from '@/hooks/use-hotkeys';
+import { gql } from '@/lib/graphql';
+import type {
+  IssueDetail,
+  IssueLabel,
+  IssueUser,
+  WorkflowState,
+} from '@/types/issues';
 
 // ---------------------------------------------------------------------------
 // GraphQL queries / mutations
 // ---------------------------------------------------------------------------
 
+/**
+ * Issues are loaded as a nested field of the team so the filter is resolved
+ * server-side using the team's UUID — no need to pass teamId separately.
+ */
 const TEAM_ISSUES_QUERY = `
-  query TeamIssues($teamKey: String!, $workspace: String!) {
+  query TeamIssues($teamKey: String!) {
     teams {
       id
       key
@@ -31,12 +41,10 @@ const TEAM_ISSUES_QUERY = `
           displayName
           initials
           avatarUrl
-          avatarBackgroundColor: avatarBackgroundColor
+          avatarBackgroundColor
         }
       }
-    }
-    issues(filter: { teamId: $teamKey }) {
-      nodes {
+      issues {
         id
         identifier
         title
@@ -80,44 +88,6 @@ const ISSUE_UPDATE_MUTATION = `
   }
 `;
 
-async function gql(query: string, variables: Record<string, unknown> = {}) {
-  const res = await fetch('/api/graphql', {
-    body: JSON.stringify({ query, variables }),
-    headers: { 'Content-Type': 'application/json' },
-    method: 'POST',
-  });
-  return res.json();
-}
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface WorkflowState {
-  id: string;
-  name: string;
-  color: string;
-  type: string;
-}
-interface User {
-  id: string;
-  displayName: string;
-  initials: string;
-  avatarUrl?: string | null;
-  avatarBackgroundColor: string;
-}
-interface IssueLabel {
-  id: string;
-  name: string;
-  color: string;
-}
-
-interface FullIssue extends IssueRowData {
-  description?: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
 // ---------------------------------------------------------------------------
 // Page component
 // ---------------------------------------------------------------------------
@@ -129,47 +99,60 @@ export default function TeamIssuesPage() {
   }>();
   const router = useRouter();
 
-  const [issues, setIssues] = useState<FullIssue[]>([]);
+  const [issues, setIssues] = useState<IssueDetail[]>([]);
   const [states, setStates] = useState<WorkflowState[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<IssueUser[]>([]);
   const [labels, setLabels] = useState<IssueLabel[]>([]);
   const [teamId, setTeamId] = useState<string | null>(null);
   const [teamName, setTeamName] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detailIssue, setDetailIssue] = useState<FullIssue | null>(null);
+  const [detailIssue, setDetailIssue] = useState<IssueDetail | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
   // Load initial data
   const load = useCallback(async () => {
-    const data = await gql(TEAM_ISSUES_QUERY, { teamKey, workspace });
-    if (data.errors) {
-      return;
-    }
+    setError(null);
+    try {
+      const data = await gql(TEAM_ISSUES_QUERY, { teamKey });
+      if (data.errors?.length) {
+        setError('Failed to load issues.');
+        setLoading(false);
+        return;
+      }
 
-    const team = (
-      data.data.teams as Array<{
-        id: string;
-        key: string;
-        name: string;
-        displayName: string;
-        states: WorkflowState[];
-        members: Array<{ user: User }>;
-      }>
-    ).find(t => t.key === teamKey);
-    if (!team) {
-      return;
-    }
+      const team = (
+        data.data?.teams as Array<{
+          id: string;
+          key: string;
+          name: string;
+          displayName: string;
+          states: WorkflowState[];
+          members: Array<{ user: IssueUser }>;
+          issues: IssueDetail[];
+        }>
+      )?.find(t => t.key === teamKey);
 
-    setTeamId(team.id);
-    setTeamName(team.displayName ?? team.name);
-    setStates(team.states);
-    setUsers(team.members.map(m => m.user));
-    setIssues(data.data.issues.nodes ?? []);
-    setLabels(data.data.labels?.nodes ?? []);
-    setLoading(false);
-  }, [teamKey, workspace]);
+      if (!team) {
+        setError('Team not found.');
+        setLoading(false);
+        return;
+      }
+
+      setTeamId(team.id);
+      setTeamName(team.displayName ?? team.name);
+      setStates(team.states);
+      setUsers(team.members.map(m => m.user));
+      setIssues(team.issues ?? []);
+      setLabels((data.data?.labels as { nodes: IssueLabel[] })?.nodes ?? []);
+    } catch {
+      setError('An unexpected error occurred.');
+    } finally {
+      setLoading(false);
+    }
+  }, [teamKey]);
 
   useEffect(() => {
     load();
@@ -199,18 +182,40 @@ export default function TeamIssuesPage() {
     }
   }, [selectedId, issues]);
 
-  // Update an issue optimistically then refresh
+  // Update an issue optimistically then reconcile from server response
   const handleUpdate = useCallback(
     async (id: string, patch: Record<string, unknown>) => {
-      // Optimistic update
-      setIssues(prev => prev.map(i => (i.id === id ? { ...i, ...patch } : i)));
-      if (detailIssue?.id === id) {
-        setDetailIssue(d => (d ? { ...d, ...patch } : d));
+      // When labelIds are patched, resolve them to label objects for display
+      let optimisticPatch: Record<string, unknown> = patch;
+      if (Array.isArray(patch.labelIds)) {
+        const { labelIds, ...rest } = patch;
+        optimisticPatch = {
+          ...rest,
+          labels: labels.filter(l => (labelIds as string[]).includes(l.id)),
+        };
       }
 
-      await gql(ISSUE_UPDATE_MUTATION, { id, input: patch });
+      setIssues(prev =>
+        prev.map(i => (i.id === id ? { ...i, ...optimisticPatch } : i)),
+      );
+      if (detailIssue?.id === id) {
+        setDetailIssue(d => (d ? { ...d, ...optimisticPatch } : d));
+      }
+
+      const data = await gql(ISSUE_UPDATE_MUTATION, { id, input: patch });
+      // Reconcile with server response to catch any server-side normalization
+      const updated = (data.data?.issueUpdate as { issue?: IssueDetail })
+        ?.issue;
+      if (updated) {
+        setIssues(prev =>
+          prev.map(i => (i.id === id ? { ...i, ...updated } : i)),
+        );
+        if (detailIssue?.id === id) {
+          setDetailIssue(d => (d ? { ...d, ...updated } : d));
+        }
+      }
     },
-    [detailIssue],
+    [detailIssue, labels],
   );
 
   // Create issue
@@ -230,8 +235,10 @@ export default function TeamIssuesPage() {
       const data = await gql(ISSUE_CREATE_MUTATION, {
         input: { ...input, teamId },
       });
-      if (data.data?.issueCreate?.success) {
-        const created = data.data.issueCreate.issue as FullIssue;
+      const created = (
+        data.data?.issueCreate as { success?: boolean; issue?: IssueDetail }
+      )?.issue;
+      if (created) {
         setIssues(prev => [created, ...prev]);
       }
     },
@@ -242,6 +249,14 @@ export default function TeamIssuesPage() {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
         Loading…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-1 items-center justify-center text-sm text-red-500">
+        {error}
       </div>
     );
   }

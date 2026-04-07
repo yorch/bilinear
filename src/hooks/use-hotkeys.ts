@@ -43,7 +43,6 @@ export function useHotkeys(
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-    // biome-ignore lint/correctness/useExhaustiveDependencies: deps array is intentionally spread
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, handler, ...deps]);
 }

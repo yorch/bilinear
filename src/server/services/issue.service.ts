@@ -211,17 +211,15 @@ export class IssueService {
       data.trashed = input.trashed;
     }
 
-    const issue = await this.prisma.issue.update({ data, where: { id } });
+    return this.prisma.$transaction(async tx => {
+      const issue = await tx.issue.update({ data, where: { id } });
 
-    if (input.labelIds !== undefined) {
-      await this.syncLabels(
-        this.prisma as unknown as PrismaLike,
-        id,
-        input.labelIds,
-      );
-    }
+      if (input.labelIds !== undefined) {
+        await this.syncLabels(tx, id, input.labelIds);
+      }
 
-    return issue;
+      return issue;
+    });
   }
 
   async archive(id: string): Promise<Issue> {

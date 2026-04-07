@@ -118,6 +118,10 @@ export const teamResolvers = {
       return ctx.services.team.findChildren(team.id);
     },
 
+    issues: async (team: Team, _args: unknown, ctx: GraphQLContext) => {
+      return ctx.services.issue.findByTeamId(team.id);
+    },
+
     members: async (team: Team, _args: unknown, ctx: GraphQLContext) => {
       return ctx.services.team.getMembers(team.id);
     },

@@ -3,43 +3,20 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { IssueDetailPanel } from '@/components/issues/issue-detail-panel';
+import { gql } from '@/lib/graphql';
+import type {
+  IssueDetail,
+  IssueLabel,
+  IssueUser,
+  WorkflowState,
+} from '@/types/issues';
 
-interface WorkflowState {
-  id: string;
-  name: string;
-  color: string;
-  type: string;
-}
-interface User {
-  id: string;
-  displayName: string;
-  initials: string;
-  avatarUrl?: string | null;
-  avatarBackgroundColor: string;
-}
-interface IssueLabel {
-  id: string;
-  name: string;
-  color: string;
-}
-
-interface IssueDetail {
-  id: string;
-  identifier: string;
-  title: string;
-  description?: string | null;
-  priority: number;
-  stateId: string;
-  assigneeId?: string | null;
-  dueDate?: string | null;
-  labels: IssueLabel[];
-  createdAt: string;
-  updatedAt: string;
+interface IssueWithTeam extends IssueDetail {
   team: {
     id: string;
     key: string;
     states: WorkflowState[];
-    members: Array<{ user: User }>;
+    members: Array<{ user: IssueUser }>;
   };
 }
 
@@ -72,28 +49,19 @@ const ISSUE_UPDATE_MUTATION = `
   }
 `;
 
-async function gql(query: string, variables: Record<string, unknown> = {}) {
-  const res = await fetch('/api/graphql', {
-    body: JSON.stringify({ query, variables }),
-    headers: { 'Content-Type': 'application/json' },
-    method: 'POST',
-  });
-  return res.json();
-}
-
 export default function IssueDetailPage() {
   const { workspace, id } = useParams<{ workspace: string; id: string }>();
   const router = useRouter();
 
-  const [issue, setIssue] = useState<IssueDetail | null>(null);
+  const [issue, setIssue] = useState<IssueWithTeam | null>(null);
   const [labels, setLabels] = useState<IssueLabel[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     gql(ISSUE_QUERY, { id }).then(data => {
       if (data.data?.issue) {
-        setIssue(data.data.issue);
-        setLabels(data.data.labels?.nodes ?? []);
+        setIssue(data.data.issue as IssueWithTeam);
+        setLabels((data.data.labels as { nodes: IssueLabel[] })?.nodes ?? []);
       }
       setLoading(false);
     });
@@ -103,15 +71,25 @@ export default function IssueDetailPage() {
     issueId: string,
     patch: Record<string, unknown>,
   ) => {
-    setIssue(prev => (prev ? { ...prev, ...patch } : prev));
+    // Convert labelIds to label objects for optimistic display
+    let optimisticPatch: Record<string, unknown> = patch;
+    if (Array.isArray(patch.labelIds)) {
+      const { labelIds, ...rest } = patch;
+      optimisticPatch = {
+        ...rest,
+        labels: labels.filter(l => (labelIds as string[]).includes(l.id)),
+      };
+    }
+
+    setIssue(prev => (prev ? { ...prev, ...optimisticPatch } : prev));
+
     const data = await gql(ISSUE_UPDATE_MUTATION, {
       id: issueId,
       input: patch,
     });
-    if (data.data?.issueUpdate?.issue) {
-      setIssue(prev =>
-        prev ? { ...prev, ...data.data.issueUpdate.issue } : prev,
-      );
+    const updated = (data.data?.issueUpdate as { issue?: IssueDetail })?.issue;
+    if (updated) {
+      setIssue(prev => (prev ? { ...prev, ...updated } : prev));
     }
   };
 

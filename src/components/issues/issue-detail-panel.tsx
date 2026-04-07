@@ -7,32 +7,12 @@ import {
   getPriorityConfig,
 } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
+import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 import { AssigneeSelect } from '../properties/assignee-select';
 import { DueDatePicker } from '../properties/due-date-picker';
 import { LabelDot, LabelSelect } from '../properties/label-select';
 import { PrioritySelect } from '../properties/priority-select';
 import { StatusSelect } from '../properties/status-select';
-
-interface WorkflowState {
-  id: string;
-  name: string;
-  color: string;
-  type: string;
-}
-
-interface User {
-  id: string;
-  displayName: string;
-  initials: string;
-  avatarUrl?: string | null;
-  avatarBackgroundColor: string;
-}
-
-interface IssueLabel {
-  id: string;
-  name: string;
-  color: string;
-}
 
 interface IssueDetail {
   id: string;
@@ -51,7 +31,7 @@ interface IssueDetail {
 interface IssueDetailPanelProps {
   issue: IssueDetail | null;
   states: WorkflowState[];
-  users: User[];
+  users: IssueUser[];
   labels: IssueLabel[];
   onClose: () => void;
   onUpdate: (id: string, patch: Record<string, unknown>) => void;

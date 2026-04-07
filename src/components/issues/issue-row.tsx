@@ -1,32 +1,12 @@
 'use client';
 
 import { cn } from '@/lib/utils';
+import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 import { AssigneeSelect } from '../properties/assignee-select';
 import { DueDatePicker } from '../properties/due-date-picker';
 import { LabelSelect } from '../properties/label-select';
 import { PrioritySelect } from '../properties/priority-select';
 import { StatusSelect } from '../properties/status-select';
-
-interface WorkflowState {
-  id: string;
-  name: string;
-  color: string;
-  type: string;
-}
-
-interface User {
-  id: string;
-  displayName: string;
-  initials: string;
-  avatarUrl?: string | null;
-  avatarBackgroundColor: string;
-}
-
-interface IssueLabel {
-  id: string;
-  name: string;
-  color: string;
-}
 
 export interface IssueRowData {
   id: string;
@@ -42,7 +22,7 @@ export interface IssueRowData {
 interface IssueRowProps {
   issue: IssueRowData;
   states: WorkflowState[];
-  users: User[];
+  users: IssueUser[];
   allLabels: IssueLabel[];
   selected: boolean;
   onSelect: () => void;
