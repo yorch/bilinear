@@ -40,6 +40,7 @@ export const typeDefs = `
 
   type Team {
     id: ID!
+    organizationId: ID!
     name: String!
     key: String!
     displayName: String!
@@ -52,6 +53,7 @@ export const typeDefs = `
     issueEstimationType: String!
     triageEnabled: Boolean!
     issueCount: Int!
+    parentId: ID
     organization: Organization!
     parent: Team
     children: [Team!]!

@@ -34,7 +34,7 @@ export function UserAvatar({
     size === 'xs' ? 'h-4 w-4 text-[8px]' : 'h-5 w-5 text-[10px]';
   if (user.avatarUrl) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
+      // biome-ignore lint/performance/noImgElement: avatar URL is external, size unknown at build time
       <img
         src={user.avatarUrl}
         alt={user.displayName}

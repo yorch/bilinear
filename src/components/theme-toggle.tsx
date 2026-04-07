@@ -10,16 +10,43 @@ const OPTIONS = [
   { icon: Monitor, label: 'System', value: 'system' as const },
 ];
 
+const CYCLE: Record<string, 'light' | 'dark' | 'system'> = {
+  dark: 'system',
+  light: 'dark',
+  system: 'light',
+};
+
 interface ThemeToggleProps {
   className?: string;
+  /** Render a single icon button that cycles through themes. For compact spaces (e.g. collapsed sidebar). */
+  compact?: boolean;
 }
 
 /**
  * Three-way toggle: Light / Dark / System.
- * Rendered inside the sidebar footer.
+ * Pass `compact` to render a single cycling icon button instead.
  */
-export function ThemeToggle({ className }: ThemeToggleProps) {
+export function ThemeToggle({ className, compact = false }: ThemeToggleProps) {
   const { setTheme, theme } = useTheme();
+
+  if (compact) {
+    const current = OPTIONS.find(o => o.value === theme) ?? OPTIONS[2];
+    const Icon = current.icon;
+    return (
+      <button
+        type="button"
+        onClick={() => setTheme(CYCLE[theme])}
+        title={`Theme: ${current.label} (click to cycle)`}
+        aria-label={`Current theme: ${current.label}. Click to cycle.`}
+        className={cn(
+          'flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
+          className,
+        )}
+      >
+        <Icon className="h-4 w-4" />
+      </button>
+    );
+  }
 
   return (
     <fieldset

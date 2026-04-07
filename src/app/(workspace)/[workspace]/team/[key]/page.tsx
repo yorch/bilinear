@@ -1,6 +1,8 @@
 'use client';
 
+import { Settings } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import { CreateIssueModal } from '@/components/issues/create-issue-modal';
@@ -432,13 +434,22 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
           {team.displayName ?? team.name} — Issues
         </h1>
-        <button
-          type="button"
-          onClick={() => setCreateOpen(true)}
-          className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
-        >
-          New issue
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/${workspace}/team/${teamKey}/settings`}
+            title="Team settings"
+            className="flex items-center justify-center rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          >
+            <Settings className="h-4 w-4" />
+          </Link>
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+          >
+            New issue
+          </button>
+        </div>
       </div>
 
       {/* Issue list */}
