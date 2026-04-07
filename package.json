@@ -21,6 +21,7 @@
     "docker:infra:down": "run docker:infra down",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
+    "db:reset": "prisma migrate reset",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
     "ws:server": "tsx src/server/ws/index.ts"
