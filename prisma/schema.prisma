@@ -30,6 +30,8 @@ model Organization {
 
   members              OrganizationMember[]
   teams                Team[]
+  issues               Issue[]
+  labels               IssueLabel[]
 
   @@map("organizations")
 }
@@ -60,6 +62,10 @@ model User {
   orgMemberships  OrganizationMember[]
   authTokens      AuthToken[]
   teamMemberships TeamMembership[]
+  assignedIssues  Issue[]    @relation("AssignedIssues")
+  createdIssues   Issue[]    @relation("CreatedIssues")
+  snoozedIssues   Issue[]    @relation("SnoozedIssues")
+  createdLabels   IssueLabel[] @relation("CreatedLabels")
 
   @@map("users")
 }
@@ -167,6 +173,8 @@ model Team {
   children                Team[]   @relation("TeamHierarchy")
   memberships             TeamMembership[]
   workflowStates          WorkflowState[]
+  issues                  Issue[]
+  labels                  IssueLabel[]
 
   @@unique([organizationId, key])
   @@index([organizationId])
@@ -207,8 +215,144 @@ model WorkflowState {
   archivedAt  DateTime? @map("archived_at") @db.Timestamptz
 
   team        Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  issues      Issue[]
 
   @@index([teamId])
   @@index([teamId, type])
   @@map("workflow_states")
+}
+
+model Issue {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  teamId          String    @map("team_id") @db.Uuid
+  number          Int
+  identifier      String    @db.VarChar(20)
+  previousIdentifiers String[] @default([]) @map("previous_identifiers")
+
+  // Content
+  title           String    @db.VarChar(1000)
+  description     String?
+  descriptionState Bytes?   @map("description_state")
+
+  // Properties
+  priority        Int       @default(0) @db.SmallInt
+  estimate        Float?
+  dueDate         DateTime? @map("due_date") @db.Date
+  sortOrder       Float     @default(0) @map("sort_order")
+  prioritySortOrder Float   @default(0) @map("priority_sort_order")
+  subIssueSortOrder Float?  @map("sub_issue_sort_order")
+
+  // Relationships
+  stateId         String    @map("state_id") @db.Uuid
+  assigneeId      String?   @map("assignee_id") @db.Uuid
+  creatorId       String?   @map("creator_id") @db.Uuid
+  parentId        String?   @map("parent_id") @db.Uuid
+  // projectId and cycleId are nullable without FK constraints (tables added in Sprint 13-16)
+  projectId       String?   @map("project_id") @db.Uuid
+  cycleId         String?   @map("cycle_id") @db.Uuid
+
+  // Git
+  branchName      String?   @map("branch_name") @db.VarChar(500)
+
+  // SLA
+  slaBreachesAt   DateTime? @map("sla_breaches_at") @db.Timestamptz
+  slaHighRiskAt   DateTime? @map("sla_high_risk_at") @db.Timestamptz
+  slaMediumRiskAt DateTime? @map("sla_medium_risk_at") @db.Timestamptz
+  slaStartedAt    DateTime? @map("sla_started_at") @db.Timestamptz
+  slaType         String?   @map("sla_type") @db.VarChar(50)
+
+  // Lifecycle timestamps
+  startedAt       DateTime? @map("started_at") @db.Timestamptz
+  completedAt     DateTime? @map("completed_at") @db.Timestamptz
+  canceledAt      DateTime? @map("canceled_at") @db.Timestamptz
+  autoArchivedAt  DateTime? @map("auto_archived_at") @db.Timestamptz
+  autoClosedAt    DateTime? @map("auto_closed_at") @db.Timestamptz
+  startedTriageAt DateTime? @map("started_triage_at") @db.Timestamptz
+  triagedAt       DateTime? @map("triaged_at") @db.Timestamptz
+  addedToCycleAt  DateTime? @map("added_to_cycle_at") @db.Timestamptz
+  addedToProjectAt DateTime? @map("added_to_project_at") @db.Timestamptz
+
+  // Soft delete / snooze
+  trashed         Boolean   @default(false)
+  snoozedById     String?   @map("snoozed_by_id") @db.Uuid
+  snoozedUntilAt  DateTime? @map("snoozed_until_at") @db.Timestamptz
+
+  // Metadata
+  reactionData    Json      @default("{}") @map("reaction_data")
+  customerTicketCount Int   @default(0) @map("customer_ticket_count")
+
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt      DateTime? @map("archived_at") @db.Timestamptz
+
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  team            Team         @relation(fields: [teamId], references: [id])
+  state           WorkflowState @relation(fields: [stateId], references: [id])
+  assignee        User?        @relation("AssignedIssues", fields: [assigneeId], references: [id])
+  creator         User?        @relation("CreatedIssues", fields: [creatorId], references: [id])
+  snoozedBy       User?        @relation("SnoozedIssues", fields: [snoozedById], references: [id])
+  parent          Issue?       @relation("SubIssues", fields: [parentId], references: [id], onDelete: SetNull)
+  children        Issue[]      @relation("SubIssues")
+  labelAssignments IssueLabelAssignment[]
+
+  @@unique([teamId, number])
+  @@index([organizationId])
+  @@index([teamId])
+  @@index([stateId])
+  @@index([assigneeId])
+  @@index([projectId])
+  @@index([cycleId])
+  @@index([parentId])
+  @@index([identifier])
+  @@index([teamId, priority])
+  @@index([teamId, createdAt])
+  @@index([updatedAt])
+  @@map("issues")
+}
+
+model IssueLabel {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  teamId          String?   @map("team_id") @db.Uuid
+  name            String    @db.VarChar(255)
+  color           String    @db.VarChar(7)
+  description     String?
+
+  isGroup         Boolean   @default(false) @map("is_group")
+  parentId        String?   @map("parent_id") @db.Uuid
+
+  creatorId       String?   @map("creator_id") @db.Uuid
+  lastAppliedAt   DateTime? @map("last_applied_at") @db.Timestamptz
+
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt      DateTime? @map("archived_at") @db.Timestamptz
+
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  team            Team?      @relation(fields: [teamId], references: [id])
+  parent          IssueLabel? @relation("LabelHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children        IssueLabel[] @relation("LabelHierarchy")
+  creator         User?      @relation("CreatedLabels", fields: [creatorId], references: [id])
+  assignments     IssueLabelAssignment[]
+
+  @@index([organizationId])
+  @@index([teamId])
+  @@index([parentId])
+  @@map("issue_labels")
+}
+
+model IssueLabelAssignment {
+  id        String   @id @default(uuid()) @db.Uuid
+  issueId   String   @map("issue_id") @db.Uuid
+  labelId   String   @map("label_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  label     IssueLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@unique([issueId, labelId])
+  @@index([issueId])
+  @@index([labelId])
+  @@map("issue_label_assignments")
 }

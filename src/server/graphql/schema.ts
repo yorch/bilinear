@@ -3,6 +3,7 @@ import { paginationTypeDefs } from './types/pagination';
 export const typeDefs = `
   scalar DateTime
   scalar UUID
+  scalar Date
 
   ${paginationTypeDefs}
 
@@ -56,6 +57,7 @@ export const typeDefs = `
     children: [Team!]!
     states: [WorkflowState!]!
     members: [TeamMembership!]!
+    issues: [Issue!]!
     createdAt: DateTime!
     updatedAt: DateTime!
     archivedAt: DateTime
@@ -82,6 +84,146 @@ export const typeDefs = `
     createdAt: DateTime!
     updatedAt: DateTime!
     archivedAt: DateTime
+  }
+
+  type IssueLabel {
+    id: ID!
+    name: String!
+    color: String!
+    description: String
+    isGroup: Boolean!
+    organizationId: ID!
+    teamId: ID
+    parentId: ID
+    parent: IssueLabel
+    children: [IssueLabel!]!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    archivedAt: DateTime
+  }
+
+  type Issue {
+    id: ID!
+    number: Int!
+    identifier: String!
+    title: String!
+    description: String
+    priority: Int!
+    estimate: Float
+    dueDate: Date
+    sortOrder: Float!
+    trashed: Boolean!
+    teamId: ID!
+    stateId: ID!
+    assigneeId: ID
+    creatorId: ID
+    parentId: ID
+    organizationId: ID!
+    branchName: String
+    startedAt: DateTime
+    completedAt: DateTime
+    canceledAt: DateTime
+    archivedAt: DateTime
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    team: Team!
+    state: WorkflowState!
+    assignee: User
+    creator: User
+    parent: Issue
+    children: [Issue!]!
+    labels: [IssueLabel!]!
+  }
+
+  type IssueEdge {
+    node: Issue!
+    cursor: String!
+  }
+
+  type IssueConnection {
+    edges: [IssueEdge!]!
+    nodes: [Issue!]!
+    pageInfo: PageInfo!
+    totalCount: Int!
+  }
+
+  type IssueLabelEdge {
+    node: IssueLabel!
+    cursor: String!
+  }
+
+  type IssueLabelConnection {
+    edges: [IssueLabelEdge!]!
+    nodes: [IssueLabel!]!
+    pageInfo: PageInfo!
+    totalCount: Int!
+  }
+
+  type IssuePayload {
+    success: Boolean!
+    issue: Issue
+    lastSyncId: Int!
+  }
+
+  type IssueLabelPayload {
+    success: Boolean!
+    issueLabel: IssueLabel
+    lastSyncId: Int!
+  }
+
+  input IssueCreateInput {
+    id: String
+    title: String!
+    description: String
+    teamId: String!
+    stateId: String
+    assigneeId: String
+    priority: Int
+    estimate: Float
+    dueDate: Date
+    labelIds: [String!]
+    parentId: String
+    sortOrder: Float
+  }
+
+  input IssueUpdateInput {
+    title: String
+    description: String
+    stateId: String
+    assigneeId: String
+    priority: Int
+    estimate: Float
+    dueDate: Date
+    labelIds: [String!]
+    parentId: String
+    sortOrder: Float
+    prioritySortOrder: Float
+    trashed: Boolean
+  }
+
+  input IssueFilter {
+    teamId: String
+    stateId: String
+    assigneeId: String
+    priority: Int
+    trashed: Boolean
+  }
+
+  input IssueLabelCreateInput {
+    id: String
+    name: String!
+    color: String!
+    description: String
+    teamId: String
+    parentId: String
+    isGroup: Boolean
+  }
+
+  input IssueLabelUpdateInput {
+    name: String
+    color: String
+    description: String
+    parentId: String
   }
 
   type TeamPayload {
@@ -192,6 +334,16 @@ export const typeDefs = `
     organization: Organization!
     team(id: ID!): Team!
     teams: [Team!]!
+    issue(id: ID!): Issue!
+    issues(
+      filter: IssueFilter
+      first: Int
+      after: String
+      last: Int
+      before: String
+      includeArchived: Boolean
+    ): IssueConnection!
+    labels(teamId: String): IssueLabelConnection!
   }
 
   type Mutation {
@@ -212,5 +364,15 @@ export const typeDefs = `
     workflowStateCreate(input: WorkflowStateCreateInput!): WorkflowStatePayload!
     workflowStateUpdate(id: ID!, input: WorkflowStateUpdateInput!): WorkflowStatePayload!
     workflowStateArchive(id: ID!): WorkflowStatePayload!
+
+    issueCreate(input: IssueCreateInput!): IssuePayload!
+    issueUpdate(id: ID!, input: IssueUpdateInput!): IssuePayload!
+    issueArchive(id: ID!): IssuePayload!
+    issueUnarchive(id: ID!): IssuePayload!
+    issueDelete(id: ID!): DeletePayload!
+
+    issueLabelCreate(input: IssueLabelCreateInput!): IssueLabelPayload!
+    issueLabelUpdate(id: ID!, input: IssueLabelUpdateInput!): IssueLabelPayload!
+    issueLabelArchive(id: ID!): IssueLabelPayload!
   }
 `;

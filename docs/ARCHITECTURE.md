@@ -1,8 +1,33 @@
 # Architecture Design Document
 ## Issue Tracker — Linear Rebuild
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Date:** April 2026
+
+> **Implementation Status (as of Sprint 5-6)**
+>
+> This document describes the **target architecture** for the full system. The table below tracks what is actually built:
+>
+> | Component | Status | Notes |
+> |-----------|--------|-------|
+> | Next.js 16 App Router + TypeScript | ✅ Built | Sprint 1-2 |
+> | GraphQL API (Apollo Server, server-only) | ✅ Built | Sprint 1-2; frontend uses raw `fetch`, NO Apollo Client |
+> | Prisma 7 + PostgreSQL | ✅ Built | Sprint 1-2 |
+> | Auth — magic link email + JWT | ✅ Built | Sprint 1-2 |
+> | Teams, TeamMembership, WorkflowState | ✅ Built | Sprint 3-4 |
+> | Issues, IssueLabels, property selectors, list/detail/create UI | ✅ Built | Sprint 5-6 |
+> | React `useState` + `fetch` (not MobX) | ✅ Current | MobX is the target; see Sprint 7-8 |
+> | TailwindCSS v4 + shadcn/ui | ✅ Built | Sprint 1-2 |
+> | MobX stores + IndexedDB (Dexie) | 🔲 Planned | Sprint 7-8 |
+> | WebSocket real-time sync | 🔲 Planned | Sprint 7-8 |
+> | Redis pub/sub | 🔲 Planned | Sprint 7-8 (Redis client installed but unused) |
+> | Full-text search + command palette | 🔲 Planned | Sprint 9-10 |
+> | TipTap rich text editor | 🔲 Planned | Sprint 25-26 |
+> | Dark mode toggle | 🔲 Planned | Sprint 11-12 |
+> | BullMQ background queues | 🔲 Planned | Sprint 41+ |
+> | E2E tests (Playwright) | 🔲 Planned | Sprint 11-12 |
+>
+> Everything below describes the **intended final architecture**. Sections referencing unbuilt components are design specs, not current reality.
 
 ---
 

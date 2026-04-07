@@ -1,4 +1,6 @@
 import { AuthService } from '../server/services/auth.service';
+import { IssueService } from '../server/services/issue.service';
+import { LabelService } from '../server/services/label.service';
 import { TeamService } from '../server/services/team.service';
 import { UserService } from '../server/services/user.service';
 import { WorkflowStateService } from '../server/services/workflow-state.service';
@@ -10,6 +12,8 @@ export interface MockGraphQLContext {
   prisma: MockPrismaClient;
   services: {
     auth: AuthService;
+    issue: IssueService;
+    label: LabelService;
     team: TeamService;
     user: UserService;
     workflowState: WorkflowStateService;
@@ -28,6 +32,8 @@ export function createMockContext(
     prisma,
     services: {
       auth: new AuthService(prisma as never, userService),
+      issue: new IssueService(prisma as never),
+      label: new LabelService(prisma as never),
       team: new TeamService(prisma as never),
       user: userService,
       workflowState: new WorkflowStateService(prisma as never),
