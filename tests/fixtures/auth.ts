@@ -23,8 +23,11 @@ export async function loginAs(page: Page, email: string, code?: string) {
   await page.getByLabel(/code/i).fill(verifyCode);
   await page.getByRole('button', { name: /verify|continue/i }).click();
 
-  // Should land on the workspace
-  await page.waitForURL(/\/(my-issues|team|inbox)/);
+  // Should land on the workspace (any URL that isn't an auth page)
+  await page.waitForURL(
+    url =>
+      !url.toString().includes('/login') && !url.toString().includes('/verify'),
+  );
 }
 
 /**

@@ -1,6 +1,7 @@
 import { jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { prisma } from '../server/lib/prisma';
 
 export default async function RootPage() {
   const cookieStore = await cookies();
@@ -20,11 +21,21 @@ export default async function RootPage() {
     const orgId = payload.orgId as string | undefined;
 
     if (orgId) {
-      // In a future sprint the orgId will map to a urlKey; for now redirect to workspace
+      // Look up the org's human-readable URL key so the workspace URL is stable.
+      const org = await prisma.organization.findUnique({
+        select: { urlKey: true },
+        where: { id: orgId },
+      });
+
+      if (org?.urlKey) {
+        redirect(`/${org.urlKey}`);
+      }
+
+      // Fallback to raw UUID if urlKey lookup fails
       redirect(`/${orgId}`);
     }
   } catch {
-    // Token invalid — middleware will handle redirect, but redirect here as fallback
+    // Token invalid — redirect to login
   }
 
   redirect('/login');
