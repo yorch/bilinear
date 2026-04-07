@@ -6,10 +6,10 @@ import { lazy, Suspense, useCallback } from 'react';
 import { CreateTeamModal } from '@/components/teams/create-team-modal';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useRecentItems } from '@/hooks/use-recent-items';
-import { gql } from '@/lib/graphql';
-import { useStore } from '@/providers/store-provider';
-import { gqlError } from '@/lib/utils';
 import type { DBTeam } from '@/lib/db';
+import { gql } from '@/lib/graphql';
+import { gqlError } from '@/lib/utils';
+import { useStore } from '@/providers/store-provider';
 
 const CommandPalette = lazy(() =>
   import('@/components/command-palette/command-palette').then(m => ({

@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
 import { Crown, UserMinus, UserPlus, X } from 'lucide-react';
+import Image from 'next/image';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '@/lib/toast';
 import { cn, getErrorMessage } from '@/lib/utils';
 
@@ -38,18 +39,24 @@ function Avatar({
   user,
   size = 'md',
 }: {
-  user: { initials: string; avatarUrl?: string | null; avatarBackgroundColor: string; displayName: string };
+  user: {
+    initials: string;
+    avatarUrl?: string | null;
+    avatarBackgroundColor: string;
+    displayName: string;
+  };
   size?: 'sm' | 'md';
 }) {
   const dim = size === 'sm' ? 'h-6 w-6 text-xs' : 'h-8 w-8 text-sm';
   const px = size === 'sm' ? 24 : 32;
   if (user.avatarUrl) {
     return (
-      <img
+      <Image
         src={user.avatarUrl}
         alt={user.displayName}
         width={px}
         height={px}
+        unoptimized
         className={cn('rounded-full object-cover', dim)}
       />
     );
@@ -78,15 +85,23 @@ export function TeamMemberManagement({
   const [addOpen, setAddOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [adding, setAdding] = useState(false);
-  const [loadingMembershipId, setLoadingMembershipId] = useState<string | null>(null);
+  const [loadingMembershipId, setLoadingMembershipId] = useState<string | null>(
+    null,
+  );
   const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const memberUserIds = useMemo(() => new Set(members.map(m => m.userId)), [members]);
+  const memberUserIds = useMemo(
+    () => new Set(members.map(m => m.userId)),
+    [members],
+  );
   const availableUsers = useMemo(
-    () => orgUsers.filter(
-      u => !memberUserIds.has(u.id) && u.displayName.toLowerCase().includes(search.toLowerCase()),
-    ),
+    () =>
+      orgUsers.filter(
+        u =>
+          !memberUserIds.has(u.id) &&
+          u.displayName.toLowerCase().includes(search.toLowerCase()),
+      ),
     [orgUsers, memberUserIds, search],
   );
 
@@ -121,7 +136,10 @@ export function TeamMemberManagement({
     }
   };
 
-  const handleToggleOwner = async (membershipId: string, currentIsOwner: boolean) => {
+  const handleToggleOwner = async (
+    membershipId: string,
+    currentIsOwner: boolean,
+  ) => {
     setLoadingMembershipId(membershipId);
     try {
       await onToggleOwner(membershipId, !currentIsOwner);
@@ -159,7 +177,9 @@ export function TeamMemberManagement({
                     </span>
                   )}
                 </div>
-                <span className="text-xs text-zinc-400 truncate">{member.email}</span>
+                <span className="text-xs text-zinc-400 truncate">
+                  {member.email}
+                </span>
               </div>
               <div className="flex items-center gap-1">
                 {pendingRemoveId === member.membershipId ? (
@@ -190,9 +210,13 @@ export function TeamMemberManagement({
                   <>
                     <button
                       type="button"
-                      title={member.isOwner ? 'Remove owner role' : 'Make owner'}
+                      title={
+                        member.isOwner ? 'Remove owner role' : 'Make owner'
+                      }
                       disabled={isLoading}
-                      onClick={() => handleToggleOwner(member.membershipId, member.isOwner)}
+                      onClick={() =>
+                        handleToggleOwner(member.membershipId, member.isOwner)
+                      }
                       className={cn(
                         'flex h-7 w-7 items-center justify-center rounded text-xs transition-colors disabled:opacity-50',
                         member.isOwner
@@ -209,7 +233,11 @@ export function TeamMemberManagement({
                       onClick={() => setPendingRemoveId(member.membershipId)}
                       className="flex h-7 w-7 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                     >
-                      {isSelf ? <X className="h-3.5 w-3.5" /> : <UserMinus className="h-3.5 w-3.5" />}
+                      {isSelf ? (
+                        <X className="h-3.5 w-3.5" />
+                      ) : (
+                        <UserMinus className="h-3.5 w-3.5" />
+                      )}
                     </button>
                   </>
                 )}
@@ -232,7 +260,9 @@ export function TeamMemberManagement({
           <ul className="mt-1 max-h-48 overflow-y-auto">
             {availableUsers.length === 0 ? (
               <li className="px-2 py-1.5 text-sm text-zinc-400">
-                {search ? 'No matches' : 'All org members are already in this team'}
+                {search
+                  ? 'No matches'
+                  : 'All org members are already in this team'}
               </li>
             ) : (
               availableUsers.map(user => (
@@ -248,7 +278,9 @@ export function TeamMemberManagement({
                       <p className="truncate font-medium text-zinc-900 dark:text-zinc-100">
                         {user.displayName}
                       </p>
-                      <p className="truncate text-xs text-zinc-400">{user.email}</p>
+                      <p className="truncate text-xs text-zinc-400">
+                        {user.email}
+                      </p>
                     </div>
                   </button>
                 </li>

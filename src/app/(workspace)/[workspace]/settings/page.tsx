@@ -1,6 +1,7 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -50,13 +51,21 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
     let cancelled = false;
     gql(ORGANIZATION_QUERY)
       .then(result => {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
         const data = result.data?.organization as OrgInfo | undefined;
-        if (data) setOrg(data);
+        if (data) {
+          setOrg(data);
+        }
       })
-      .catch(() => {/* keep org null; page degrades gracefully */})
+      .catch(() => {
+        /* keep org null; page degrades gracefully */
+      })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -160,7 +169,9 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                           {team.displayName || team.name}
                         </p>
                         {team.description && (
-                          <p className="text-xs text-zinc-400 truncate">{team.description}</p>
+                          <p className="text-xs text-zinc-400 truncate">
+                            {team.description}
+                          </p>
                         )}
                       </div>
                       <span className="shrink-0 font-mono text-xs text-zinc-400 dark:text-zinc-500">
@@ -194,13 +205,17 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
             ) : (
               <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {members.map(user => (
-                  <li key={user.id} className="flex items-center gap-3 px-5 py-3">
+                  <li
+                    key={user.id}
+                    className="flex items-center gap-3 px-5 py-3"
+                  >
                     {user.avatarUrl ? (
-                      <img
+                      <Image
                         src={user.avatarUrl}
                         alt={user.displayName}
                         width={28}
                         height={28}
+                        unoptimized
                         className="h-7 w-7 rounded-full object-cover shrink-0"
                       />
                     ) : (
@@ -215,7 +230,9 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                       <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
                         {user.displayName}
                       </p>
-                      <p className="text-xs text-zinc-400 truncate">{user.email}</p>
+                      <p className="text-xs text-zinc-400 truncate">
+                        {user.email}
+                      </p>
                     </div>
                     {!user.active && (
                       <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-400 dark:bg-zinc-800">

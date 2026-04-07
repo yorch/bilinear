@@ -19,9 +19,14 @@ interface CreateTeamModalProps {
 /** Derive a team key from the team name (e.g. "Engineering" → "ENG"). */
 function deriveKey(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return '';
+  if (words.length === 0) {
+    return '';
+  }
   if (words.length === 1) {
-    return words[0].slice(0, 3).toUpperCase().replace(/[^A-Z]/g, '');
+    return words[0]
+      .slice(0, 3)
+      .toUpperCase()
+      .replace(/[^A-Z]/g, '');
   }
   return words
     .map(w => w[0])
@@ -33,7 +38,11 @@ function deriveKey(name: string): string {
 
 const KEY_PATTERN = /^[A-Z]{1,10}$/;
 
-export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProps) {
+export function CreateTeamModal({
+  open,
+  onClose,
+  onSubmit,
+}: CreateTeamModalProps) {
   const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState('');
   const [key, setKey] = useState('');
@@ -68,14 +77,21 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onClose();
+      }
     };
-    if (open) window.addEventListener('keydown', onKey);
+    if (open) {
+      window.addEventListener('keydown', onKey);
+    }
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
   const handleKeyChange = (value: string) => {
-    const upper = value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 10);
+    const upper = value
+      .toUpperCase()
+      .replace(/[^A-Z]/g, '')
+      .slice(0, 10);
     setKey(upper);
     setKeyTouched(true);
     setKeyError('');
@@ -84,7 +100,9 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !key || !KEY_PATTERN.test(key) || submitting) return;
+    if (!name.trim() || !key || !KEY_PATTERN.test(key) || submitting) {
+      return;
+    }
 
     setSubmitting(true);
     setSubmitError('');
@@ -109,9 +127,12 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
     }
   };
 
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
-  const canSubmit = name.trim().length > 0 && KEY_PATTERN.test(key) && !submitting;
+  const canSubmit =
+    name.trim().length > 0 && KEY_PATTERN.test(key) && !submitting;
 
   return (
     <dialog
@@ -119,10 +140,14 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
       aria-label="Create team"
       className="fixed inset-0 z-50 flex h-screen w-screen items-center justify-center bg-black/40 p-0 m-0 border-none max-w-none max-h-none"
       onClick={e => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
       }}
       onKeyDown={e => {
-        if (e.key === 'Escape') onClose();
+        if (e.key === 'Escape') {
+          onClose();
+        }
       }}
     >
       <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
@@ -177,9 +202,7 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
                 )}
                 required
               />
-              {keyError && (
-                <p className="text-xs text-red-500">{keyError}</p>
-              )}
+              {keyError && <p className="text-xs text-red-500">{keyError}</p>}
             </div>
 
             <div className="flex flex-col gap-1">
@@ -188,7 +211,9 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
                 className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
               >
                 Description
-                <span className="ml-1 font-normal text-zinc-400">(optional)</span>
+                <span className="ml-1 font-normal text-zinc-400">
+                  (optional)
+                </span>
               </label>
               <textarea
                 id="team-description"

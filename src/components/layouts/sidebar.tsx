@@ -1,7 +1,7 @@
 'use client';
 
-import { observer } from 'mobx-react-lite';
 import { Inbox, PanelLeft, Plus, Settings, User, Users } from 'lucide-react';
+import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -24,8 +24,16 @@ export const Sidebar = observer(function Sidebar({
   const base = workspaceKey ? `/${workspaceKey}` : '';
 
   const globalNavItems = [
-    { href: `${base}/my-issues`, icon: <User className="h-4 w-4" />, label: 'My Issues' },
-    { href: `${base}/inbox`, icon: <Inbox className="h-4 w-4" />, label: 'Inbox' },
+    {
+      href: `${base}/my-issues`,
+      icon: <User className="h-4 w-4" />,
+      label: 'My Issues',
+    },
+    {
+      href: `${base}/inbox`,
+      icon: <Inbox className="h-4 w-4" />,
+      label: 'Inbox',
+    },
   ];
 
   const teams = teamStore.all;
@@ -132,7 +140,9 @@ export const Sidebar = observer(function Sidebar({
                             <Users className="h-3.5 w-3.5" />
                           )}
                         </span>
-                        <span className="truncate">{team.displayName || team.name}</span>
+                        <span className="truncate">
+                          {team.displayName || team.name}
+                        </span>
                       </Link>
                     </li>
                   );
@@ -182,7 +192,8 @@ export const Sidebar = observer(function Sidebar({
               title="Settings"
               className={cn(
                 'flex items-center justify-center rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
-                pathname.startsWith(`${base}/settings`) && 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50',
+                pathname.startsWith(`${base}/settings`) &&
+                  'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50',
               )}
             >
               <Settings className="h-4 w-4" />
@@ -196,7 +207,8 @@ export const Sidebar = observer(function Sidebar({
               title="Workspace settings"
               className={cn(
                 'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
-                pathname.startsWith(`${base}/settings`) && 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50',
+                pathname.startsWith(`${base}/settings`) &&
+                  'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50',
               )}
             >
               <Settings className="h-4 w-4" />

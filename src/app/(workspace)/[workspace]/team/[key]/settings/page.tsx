@@ -1,18 +1,18 @@
 'use client';
 
-import { observer } from 'mobx-react-lite';
 import { ArrowLeft, Trash2 } from 'lucide-react';
+import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  TeamMemberManagement,
   type TeamMember,
+  TeamMemberManagement,
 } from '@/components/teams/team-member-management';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { useStore } from '@/providers/store-provider';
 import { cn, gqlError } from '@/lib/utils';
+import { useStore } from '@/providers/store-provider';
 
 // ---------------------------------------------------------------------------
 // GraphQL
@@ -141,7 +141,9 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
   // ── Local form state ──────────────────────────────────────────────────────
   const [name, setName] = useState(team?.name ?? '');
   const [description, setDescription] = useState(team?.description ?? '');
-  const [triageEnabled, setTriageEnabled] = useState(team?.triageEnabled ?? false);
+  const [triageEnabled, setTriageEnabled] = useState(
+    team?.triageEnabled ?? false,
+  );
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
@@ -150,14 +152,15 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
   const [loadingMembers, setLoadingMembers] = useState(true);
   const currentUserId = userStore.currentUser?.id ?? '';
   const orgUsers = useMemo(
-    () => userStore.all.map(u => ({
-      avatarBackgroundColor: u.avatarBgColor,
-      avatarUrl: u.avatarUrl ?? null,
-      displayName: u.displayName,
-      email: u.email,
-      id: u.id,
-      initials: u.initials,
-    })),
+    () =>
+      userStore.all.map(u => ({
+        avatarBackgroundColor: u.avatarBgColor,
+        avatarUrl: u.avatarUrl ?? null,
+        displayName: u.displayName,
+        email: u.email,
+        id: u.id,
+        initials: u.initials,
+      })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [userStore.all],
   );
@@ -173,11 +176,13 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
       setDescription(team.description ?? '');
       setTriageEnabled(team.triageEnabled);
     }
-  }, [team?.id]);
+  }, [team]);
 
   // Load team members
   useEffect(() => {
-    if (!team?.id) return;
+    if (!team?.id) {
+      return;
+    }
 
     let cancelled = false;
 
@@ -185,17 +190,21 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
       try {
         const membersResult = await gql(TEAM_MEMBERS_QUERY, { id: team.id });
 
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
 
-        const rawMembers = (
-          membersResult.data?.team as { members?: RawMembership[] }
-        )?.members ?? [];
+        const rawMembers =
+          (membersResult.data?.team as { members?: RawMembership[] })
+            ?.members ?? [];
 
         setMembers(rawMembers.map(rawToMember));
       } catch {
         // Members will just be empty; page is still usable
       } finally {
-        if (!cancelled) setLoadingMembers(false);
+        if (!cancelled) {
+          setLoadingMembers(false);
+        }
       }
     };
 
@@ -208,7 +217,9 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handleSave = useCallback(async () => {
-    if (!team || saving) return;
+    if (!team || saving) {
+      return;
+    }
     setSaving(true);
     setSaveError('');
     try {
@@ -238,7 +249,9 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
 
   const handleAddMember = useCallback(
     async (userId: string) => {
-      if (!team) return;
+      if (!team) {
+        return;
+      }
       const result = await gql(MEMBERSHIP_CREATE_MUTATION, {
         input: { isOwner: false, teamId: team.id, userId },
       });
@@ -253,13 +266,15 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         toast.success(`${raw.user.displayName} added to team`);
       }
     },
-    [team, userStore],
+    [team],
   );
 
   const handleRemoveMember = useCallback(
     async (membershipId: string) => {
       const member = members.find(m => m.membershipId === membershipId);
-      const result = await gql(MEMBERSHIP_DELETE_MUTATION, { id: membershipId });
+      const result = await gql(MEMBERSHIP_DELETE_MUTATION, {
+        id: membershipId,
+      });
       if (result.errors?.length) {
         throw new Error(gqlError(result, 'Failed to remove member'));
       }
@@ -294,7 +309,9 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
   );
 
   const handleDelete = useCallback(async () => {
-    if (!team || deleting) return;
+    if (!team || deleting) {
+      return;
+    }
     setDeleting(true);
     try {
       const result = await gql(TEAM_DELETE_MUTATION, { id: team.id });
@@ -375,9 +392,9 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
                 Identifier
-              </label>
+              </p>
               <div className="flex items-center gap-2">
                 <span className="font-mono text-sm text-zinc-700 dark:text-zinc-300 rounded-md border border-zinc-200 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 dark:border-zinc-700">
                   {team.key}
@@ -401,7 +418,8 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                   Triage
                 </p>
                 <p className="text-xs text-zinc-400">
-                  New issues start in Triage and must be reviewed before entering the backlog
+                  New issues start in Triage and must be reviewed before
+                  entering the backlog
                 </p>
               </div>
               <button
@@ -411,7 +429,9 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                 onClick={() => setTriageEnabled(v => !v)}
                 className={cn(
                   'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
-                  triageEnabled ? 'bg-indigo-600' : 'bg-zinc-200 dark:bg-zinc-700',
+                  triageEnabled
+                    ? 'bg-indigo-600'
+                    : 'bg-zinc-200 dark:bg-zinc-700',
                 )}
               >
                 <span
@@ -437,9 +457,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
           >
             {saving ? 'Saving…' : 'Save changes'}
           </button>
-          {saveError && (
-            <p className="text-sm text-red-500">{saveError}</p>
-          )}
+          {saveError && <p className="text-sm text-red-500">{saveError}</p>}
         </div>
 
         <section>
@@ -475,7 +493,8 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                   Delete team
                 </p>
                 <p className="text-xs text-zinc-400">
-                  Permanently deletes the team and all its issues. This cannot be undone.
+                  Permanently deletes the team and all its issues. This cannot
+                  be undone.
                 </p>
               </div>
               {deleteConfirm ? (

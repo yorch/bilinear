@@ -1,7 +1,7 @@
 'use client';
 
-import { observer } from 'mobx-react-lite';
 import { Settings } from 'lucide-react';
+import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
