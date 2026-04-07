@@ -1,6 +1,8 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { gql } from '@/lib/graphql';
 import { useStore } from '@/providers/store-provider';
@@ -38,6 +40,7 @@ interface OrgInfo {
 // ---------------------------------------------------------------------------
 
 const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
+  const { workspace } = useParams<{ workspace: string }>();
   const { userStore, teamStore } = useStore();
 
   const [org, setOrg] = useState<OrgInfo | null>(null);
@@ -147,26 +150,31 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
             ) : (
               <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {teams.map(team => (
-                  <li key={team.id} className="flex items-center gap-3 px-5 py-3">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-sm dark:bg-zinc-800">
-                      {team.icon ?? team.key.slice(0, 2)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
-                        {team.displayName || team.name}
-                      </p>
-                      {team.description && (
-                        <p className="text-xs text-zinc-400 truncate">{team.description}</p>
-                      )}
-                    </div>
-                    <span className="shrink-0 font-mono text-xs text-zinc-400 dark:text-zinc-500">
-                      {team.key}
-                    </span>
-                    {team.private && (
-                      <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                        Private
+                  <li key={team.id}>
+                    <Link
+                      href={`/${workspace}/team/${team.key}/settings`}
+                      className="flex items-center gap-3 px-5 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
+                    >
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-sm dark:bg-zinc-800">
+                        {team.icon ?? team.key.slice(0, 2)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                          {team.displayName || team.name}
+                        </p>
+                        {team.description && (
+                          <p className="text-xs text-zinc-400 truncate">{team.description}</p>
+                        )}
+                      </div>
+                      <span className="shrink-0 font-mono text-xs text-zinc-400 dark:text-zinc-500">
+                        {team.key}
                       </span>
-                    )}
+                      {team.private && (
+                        <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                          Private
+                        </span>
+                      )}
+                    </Link>
                   </li>
                 ))}
               </ul>

@@ -90,14 +90,6 @@ const MEMBERSHIP_UPDATE_MUTATION = `
   }
 `;
 
-const VIEWER_QUERY = `
-  query Viewer {
-    viewer {
-      id
-    }
-  }
-`;
-
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -139,7 +131,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
   // ── Members state ─────────────────────────────────────────────────────────
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
-  const [currentUserId, setCurrentUserId] = useState('');
+  const currentUserId = userStore.currentUser?.id ?? '';
 
   // ── Danger zone ───────────────────────────────────────────────────────────
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -154,7 +146,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
     }
   }, [team?.id]);
 
-  // Load viewer + team members
+  // Load team members
   useEffect(() => {
     if (!team?.id) return;
 
@@ -162,10 +154,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
 
     const load = async () => {
       try {
-        const [membersResult, viewerResult] = await Promise.all([
-          gql(TEAM_MEMBERS_QUERY, { id: team.id }),
-          gql(VIEWER_QUERY),
-        ]);
+        const membersResult = await gql(TEAM_MEMBERS_QUERY, { id: team.id });
 
         if (cancelled) return;
 
@@ -185,9 +174,6 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
             userId: m.user.id,
           })),
         );
-
-        const viewerId = (viewerResult.data?.viewer as { id?: string })?.id ?? '';
-        setCurrentUserId(viewerId);
       } catch {
         // Members will just be empty; page is still usable
       } finally {

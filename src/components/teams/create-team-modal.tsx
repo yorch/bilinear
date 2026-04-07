@@ -21,7 +21,7 @@ function deriveKey(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return '';
   if (words.length === 1) {
-    return words[0].slice(0, 5).toUpperCase().replace(/[^A-Z]/g, '');
+    return words[0].slice(0, 3).toUpperCase().replace(/[^A-Z]/g, '');
   }
   return words
     .map(w => w[0])
@@ -42,6 +42,7 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
   const [isPrivate, setIsPrivate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [keyError, setKeyError] = useState('');
+  const [submitError, setSubmitError] = useState('');
 
   // Reset form on open
   useEffect(() => {
@@ -53,6 +54,7 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
       setIsPrivate(false);
       setSubmitting(false);
       setKeyError('');
+      setSubmitError('');
       setTimeout(() => nameRef.current?.focus(), 50);
     }
   }, [open]);
@@ -76,11 +78,8 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
     const upper = value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 10);
     setKey(upper);
     setKeyTouched(true);
-    if (upper && !KEY_PATTERN.test(upper)) {
-      setKeyError('Key must be 1–10 uppercase letters only');
-    } else {
-      setKeyError('');
-    }
+    setKeyError('');
+    setSubmitError('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -88,6 +87,7 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
     if (!name.trim() || !key || !KEY_PATTERN.test(key) || submitting) return;
 
     setSubmitting(true);
+    setSubmitError('');
     try {
       await onSubmit({
         description: description.trim() || undefined,
@@ -98,7 +98,12 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
       onClose();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to create team';
-      setKeyError(msg);
+      // Duplicate key errors are shown inline on the key field; all others go to a general error
+      if (msg.toLowerCase().includes('key')) {
+        setKeyError(msg);
+      } else {
+        setSubmitError(msg);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -221,6 +226,9 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
 
           {/* Actions */}
           <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
+            {submitError && (
+              <p className="flex-1 text-xs text-red-500">{submitError}</p>
+            )}
             <button
               type="button"
               onClick={onClose}
