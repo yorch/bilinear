@@ -16,8 +16,7 @@ A Linear-style issue tracker built with Next.js 16, GraphQL, and PostgreSQL. See
 ## Prerequisites
 
 - Node.js 24+
-- PostgreSQL instance (local or remote)
-- Redis instance (local or remote)
+- Docker & Docker Compose (for local infrastructure)
 
 ## Getting Started
 
@@ -27,7 +26,15 @@ A Linear-style issue tracker built with Next.js 16, GraphQL, and PostgreSQL. See
 yarn install
 ```
 
-### 2. Configure environment
+### 2. Start local infrastructure (PostgreSQL + Redis)
+
+```bash
+yarn db:infra:up
+```
+
+This starts PostgreSQL on port `5432` and Redis on port `6379` using `docker-compose.infra.yaml`.
+
+### 3. Configure environment
 
 ```bash
 cp .env.example .env
@@ -87,6 +94,9 @@ In development, magic link codes are printed to the server console instead of be
 | `yarn test:coverage` | Run tests with coverage report |
 | `yarn lint` | Run Biome checks |
 | `yarn format` | Format code with Biome |
+| `yarn db:infra` | Start local infra (foreground) |
+| `yarn db:infra:up` | Start local infra in background |
+| `yarn db:infra:down` | Stop local infra |
 | `yarn prisma generate` | Regenerate Prisma client after schema changes |
 | `yarn prisma migrate dev` | Apply pending migrations (dev) |
 | `yarn prisma migrate deploy` | Apply pending migrations (production) |
@@ -116,6 +126,22 @@ src/
 ```
 
 See `docs/PATTERNS.md` for conventions used throughout the codebase.
+
+---
+
+## Deployment
+
+The `deployment/` directory contains a production Docker Compose setup that builds and runs the full stack (app, PostgreSQL, Redis).
+
+```bash
+cd deployment
+# Copy and fill in environment variables
+cp ../.env.example .env
+# Build and start all services (runs migrations automatically)
+docker compose up -d
+```
+
+Required environment variables (in addition to defaults): `JWT_SECRET`, `JWT_REFRESH_SECRET`, `APP_URL`, and optionally `POSTGRES_PASSWORD`, SMTP / Google OAuth settings.
 
 ---
 
