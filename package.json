@@ -15,9 +15,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "db:infra": "docker compose -f docker-compose.infra.yaml up",
-    "db:infra:up": "docker compose -f docker-compose.infra.yaml up -d",
-    "db:infra:down": "docker compose -f docker-compose.infra.yaml down",
+    "docker:infra": "docker compose -f docker-compose.infra.yaml up",
+    "docker:infra:up": "docker compose -f docker-compose.infra.yaml up -d",
+    "docker:infra:down": "docker compose -f docker-compose.infra.yaml down",
     "db:seed": "prisma db seed"
   },
   "dependencies": {

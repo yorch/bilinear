@@ -16,7 +16,7 @@ A Linear-style issue tracker built with Next.js 16, GraphQL, and PostgreSQL. See
 ## Prerequisites
 
 - Node.js 24+
-- Docker & Docker Compose (for local infrastructure via `yarn db:infra:up`; Redis optional until Sprint 7-8)
+- Docker & Docker Compose (for local infrastructure via `yarn docker:infra:up`; Redis optional until Sprint 7-8)
 
 ## Getting Started
 
@@ -29,7 +29,7 @@ yarn install
 ### 2. Start local infrastructure (PostgreSQL + Redis)
 
 ```bash
-yarn db:infra:up
+yarn docker:infra:up
 ```
 
 This starts PostgreSQL on port `5432` and Redis on port `6379` using `docker-compose.infra.yaml`.
@@ -42,7 +42,7 @@ cp .env.example .env
 
 Edit `.env` and set at minimum:
 
-```
+```text
 DATABASE_URL=postgresql://user:pass@localhost:5432/issue_tracker
 REDIS_URL=redis://localhost:6379
 JWT_SECRET=<random 256-bit hex>
@@ -84,23 +84,23 @@ In development, magic link codes are printed to the server console instead of be
 
 ## Scripts
 
-| Command | Description |
-|---------|-------------|
-| `yarn dev` | Start the development server |
-| `yarn build` | Build for production |
-| `yarn start` | Start the production server |
-| `yarn test` | Run all tests |
-| `yarn test:watch` | Run tests in watch mode |
-| `yarn test:coverage` | Run tests with coverage report |
-| `yarn lint` | Run Biome checks |
-| `yarn format` | Format code with Biome |
-| `yarn db:infra` | Start local infra (foreground) |
-| `yarn db:infra:up` | Start local infra in background |
-| `yarn db:infra:down` | Stop local infra |
-| `yarn prisma generate` | Regenerate Prisma client after schema changes |
-| `yarn prisma migrate dev` | Apply pending migrations (dev) |
-| `yarn prisma migrate deploy` | Apply pending migrations (production) |
-| `yarn prisma studio` | Open Prisma Studio (database browser) |
+| Command                      | Description                                   |
+| ---------------------------- | --------------------------------------------- |
+| `yarn dev`                   | Start the development server                  |
+| `yarn build`                 | Build for production                          |
+| `yarn start`                 | Start the production server                   |
+| `yarn test`                  | Run all tests                                 |
+| `yarn test:watch`            | Run tests in watch mode                       |
+| `yarn test:coverage`         | Run tests with coverage report                |
+| `yarn lint`                  | Run Biome checks                              |
+| `yarn format`                | Format code with Biome                        |
+| `yarn docker:infra`          | Start local infra (foreground)                |
+| `yarn docker:infra:up`       | Start local infra in background               |
+| `yarn docker:infra:down`     | Stop local infra                              |
+| `yarn prisma generate`       | Regenerate Prisma client after schema changes |
+| `yarn prisma migrate dev`    | Apply pending migrations (dev)                |
+| `yarn prisma migrate deploy` | Apply pending migrations (production)         |
+| `yarn prisma studio`         | Open Prisma Studio (database browser)         |
 
 ---
 
@@ -163,12 +163,12 @@ npx shadcn@latest add <component>
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| `docs/PRD.md` | Product requirements |
-| `docs/IMPLEMENTATION_PLAN.md` | Phase-by-phase roadmap |
-| `docs/ARCHITECTURE.md` | System architecture |
-| `docs/DATABASE_SCHEMA.md` | Full PostgreSQL schema |
-| `docs/API_DESIGN.md` | GraphQL API contracts |
-| `docs/PATTERNS.md` | Code patterns and conventions (read this first) |
-| `docs/sprints/` | Per-sprint implementation specs |
+| Document                      | Description                                     |
+| ----------------------------- | ----------------------------------------------- |
+| `docs/PRD.md`                 | Product requirements                            |
+| `docs/IMPLEMENTATION_PLAN.md` | Phase-by-phase roadmap                          |
+| `docs/ARCHITECTURE.md`        | System architecture                             |
+| `docs/DATABASE_SCHEMA.md`     | Full PostgreSQL schema                          |
+| `docs/API_DESIGN.md`          | GraphQL API contracts                           |
+| `docs/PATTERNS.md`            | Code patterns and conventions (read this first) |
+| `docs/sprints/`               | Per-sprint implementation specs                 |
