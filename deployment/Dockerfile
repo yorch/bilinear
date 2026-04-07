@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn .yarn
 
-RUN corepack enable && yarn install --immutable
+RUN yarn install --immutable
 
 # ---- builder stage ----
 FROM node:24-alpine AS builder
@@ -19,7 +19,17 @@ COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN corepack enable && yarn build
+RUN yarn build
+
+# ---- migrate stage ----
+FROM node:24-alpine AS migrate
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY prisma ./prisma
+COPY prisma.config.ts package.json ./
+
+CMD ["node_modules/.bin/prisma", "migrate", "deploy"]
 
 # ---- runner stage ----
 FROM node:24-alpine AS runner
