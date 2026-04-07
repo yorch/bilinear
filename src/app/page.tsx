@@ -11,7 +11,11 @@ export default async function RootPage() {
   }
 
   try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? '');
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      throw new Error('JWT_SECRET is not set');
+    }
+    const secret = new TextEncoder().encode(jwtSecret);
     const { payload } = await jwtVerify(token, secret);
     const orgId = payload.orgId as string | undefined;
 

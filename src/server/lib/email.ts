@@ -15,10 +15,17 @@ function createTransport() {
   }
 
   // Support unauthenticated SMTP (e.g. Mailpit in local dev)
+  // SMTP_SECURE overrides the default; falls back to true only for port 465
+  const secureEnv = process.env.SMTP_SECURE;
+  const secure =
+    secureEnv !== undefined && secureEnv !== ''
+      ? secureEnv === 'true'
+      : port === 465;
+
   return nodemailer.createTransport({
     host,
     port,
-    secure: port === 465,
+    secure,
     ...(user && pass ? { auth: { pass, user } } : {}),
   });
 }
