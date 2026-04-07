@@ -41,7 +41,9 @@ export class TransactionQueue {
   }
 
   private async processNext() {
-    if (this.processing || this.queue.length === 0) return;
+    if (this.processing || this.queue.length === 0) {
+      return;
+    }
     this.processing = true;
 
     const tx = this.queue[0];
@@ -57,9 +59,7 @@ export class TransactionQueue {
       tx.onSuccess?.(result.data);
     } catch (err) {
       const error = err as Error & { permanent?: boolean };
-      const isPermanent =
-        error.permanent ||
-        tx.retryCount >= tx.maxRetries;
+      const isPermanent = error.permanent || tx.retryCount >= tx.maxRetries;
 
       if (isPermanent) {
         this.queue.shift();

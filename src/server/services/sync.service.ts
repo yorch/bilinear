@@ -1,6 +1,5 @@
-import type { SyncAction } from '../../generated/prisma';
-import type { PrismaClient } from '../../generated/prisma';
 import type { Redis } from 'ioredis';
+import type { PrismaClient, SyncAction } from '../../generated/prisma';
 
 export type SyncActionType = 'I' | 'U' | 'D' | 'A';
 
@@ -39,23 +38,43 @@ export class SyncService {
   }
 
   async getBootstrapData(orgId: string) {
-    const [organizations, teams, users, issues, workflowStates, issueLabels, labelAssignments, lastSyncAction] =
-      await Promise.all([
-        this.prisma.organization.findUnique({ where: { id: orgId } }),
-        this.prisma.team.findMany({ where: { archivedAt: null, organizationId: orgId } }),
-        this.prisma.user.findMany({ where: { orgMemberships: { some: { organizationId: orgId } } } }),
-        this.prisma.issue.findMany({ where: { archivedAt: null, organizationId: orgId, trashed: false } }),
-        this.prisma.workflowState.findMany({ where: { archivedAt: null, team: { organizationId: orgId } } }),
-        this.prisma.issueLabel.findMany({ where: { archivedAt: null, organizationId: orgId } }),
-        this.prisma.issueLabelAssignment.findMany({
-          where: { issue: { organizationId: orgId, archivedAt: null, trashed: false } },
-        }),
-        this.prisma.syncAction.findFirst({
-          orderBy: { id: 'desc' },
-          select: { id: true },
-          where: { organizationId: orgId },
-        }),
-      ]);
+    const [
+      organizations,
+      teams,
+      users,
+      issues,
+      workflowStates,
+      issueLabels,
+      labelAssignments,
+      lastSyncAction,
+    ] = await Promise.all([
+      this.prisma.organization.findUnique({ where: { id: orgId } }),
+      this.prisma.team.findMany({
+        where: { archivedAt: null, organizationId: orgId },
+      }),
+      this.prisma.user.findMany({
+        where: { orgMemberships: { some: { organizationId: orgId } } },
+      }),
+      this.prisma.issue.findMany({
+        where: { archivedAt: null, organizationId: orgId, trashed: false },
+      }),
+      this.prisma.workflowState.findMany({
+        where: { archivedAt: null, team: { organizationId: orgId } },
+      }),
+      this.prisma.issueLabel.findMany({
+        where: { archivedAt: null, organizationId: orgId },
+      }),
+      this.prisma.issueLabelAssignment.findMany({
+        where: {
+          issue: { archivedAt: null, organizationId: orgId, trashed: false },
+        },
+      }),
+      this.prisma.syncAction.findFirst({
+        orderBy: { id: 'desc' },
+        select: { id: true },
+        where: { organizationId: orgId },
+      }),
+    ]);
 
     // Denormalize label IDs onto each issue
     const labelIdsByIssue = new Map<string, string[]>();
@@ -67,7 +86,10 @@ export class SyncService {
 
     return {
       issueLabels,
-      issues: issues.map(i => ({ ...i, labelIds: labelIdsByIssue.get(i.id) ?? [] })),
+      issues: issues.map(i => ({
+        ...i,
+        labelIds: labelIdsByIssue.get(i.id) ?? [],
+      })),
       lastSyncId: (lastSyncAction?.id ?? BigInt(0)).toString(),
       organizations: organizations ? [organizations] : [],
       teams,

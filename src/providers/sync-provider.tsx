@@ -26,10 +26,14 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         credentials: 'include',
         method: 'GET',
       });
-      if (!res.ok || cancelled) return;
+      if (!res.ok || cancelled) {
+        return;
+      }
 
       const data = (await res.json()) as { token?: string };
-      if (!data.token || cancelled) return;
+      if (!data.token || cancelled) {
+        return;
+      }
 
       const wsClient = new WsClient();
       const syncManager = new SyncManager(store, wsClient);

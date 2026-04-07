@@ -3,7 +3,10 @@ import { NextResponse } from 'next/server';
 import { verifyAccessToken } from '@/server/lib/jwt';
 import { prisma } from '@/server/lib/prisma';
 import { redis } from '@/server/lib/redis';
-import { SyncService, serializeSyncAction } from '@/server/services/sync.service';
+import {
+  SyncService,
+  serializeSyncAction,
+} from '@/server/services/sync.service';
 
 /**
  * GET /api/sync/delta?lastSyncId=<N>&toSyncId=<N>
@@ -54,12 +57,19 @@ export async function GET(req: NextRequest) {
   const syncService = new SyncService(prisma, redis);
 
   try {
-    const actions = await syncService.getDeltaSyncActions(orgId, lastSyncId, toSyncId);
+    const actions = await syncService.getDeltaSyncActions(
+      orgId,
+      lastSyncId,
+      toSyncId,
+    );
     return NextResponse.json(actions.map(serializeSyncAction), {
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (err) {
     console.error('[sync/delta] Error:', err);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 },
+    );
   }
 }

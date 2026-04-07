@@ -23,7 +23,9 @@ export class TeamStore {
 
   findByKey(key: string): DBTeam | null {
     for (const team of this.pool.values()) {
-      if (team.key === key) return team;
+      if (team.key === key) {
+        return team;
+      }
     }
     return null;
   }
@@ -36,7 +38,9 @@ export class TeamStore {
 
   applySyncAction(action: string, id: string, data: DBTeam | null) {
     if (action === 'I' || action === 'U') {
-      if (data) this.pool.set(id, data);
+      if (data) {
+        this.pool.set(id, data);
+      }
     } else if (action === 'D' || action === 'A') {
       this.pool.delete(id);
     }

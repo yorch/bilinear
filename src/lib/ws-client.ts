@@ -42,7 +42,9 @@ export class WsClient {
   }
 
   private resolveWsUrl(): string {
-    if (typeof window === 'undefined') return '';
+    if (typeof window === 'undefined') {
+      return '';
+    }
     const wsPort = process.env.NEXT_PUBLIC_WS_PORT ?? '3001';
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${proto}//${window.location.hostname}:${wsPort}`;
@@ -75,7 +77,9 @@ export class WsClient {
   }
 
   private openSocket() {
-    if (this.destroyed || !this.token || !this.wsUrl) return;
+    if (this.destroyed || !this.token || !this.wsUrl) {
+      return;
+    }
 
     const url = `${this.wsUrl}?token=${encodeURIComponent(this.token)}`;
     const ws = new WebSocket(url);
@@ -112,7 +116,9 @@ export class WsClient {
   }
 
   private scheduleReconnect() {
-    if (this.destroyed) return;
+    if (this.destroyed) {
+      return;
+    }
     this.reconnectTimer = setTimeout(() => {
       this.reconnectDelay = Math.min(
         this.reconnectDelay * 2,

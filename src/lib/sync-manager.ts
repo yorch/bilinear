@@ -1,7 +1,6 @@
-import { db } from './db';
-import type { WsClient } from './ws-client';
-import type { SerializedSyncAction } from './ws-client';
 import type { RootStore } from '@/stores/root-store';
+import { db } from './db';
+import type { SerializedSyncAction, WsClient } from './ws-client';
 
 /**
  * SyncManager orchestrates the full sync lifecycle:
@@ -50,7 +49,9 @@ export class SyncManager {
   }
 
   stop() {
-    for (const unsub of this.wsUnsubscribers) unsub();
+    for (const unsub of this.wsUnsubscribers) {
+      unsub();
+    }
     this.wsUnsubscribers = [];
     this.wsClient.disconnect();
     window.removeEventListener('online', this.handleOnline);
@@ -71,10 +72,18 @@ export class SyncManager {
         db.syncMetadata.get('lastSyncId'),
       ]);
 
-    if (!meta?.value) return false;
+    if (!meta?.value) {
+      return false;
+    }
 
-    const { teamStore, userStore, workflowStateStore, labelStore, issueStore, syncStore } =
-      this.stores;
+    const {
+      teamStore,
+      userStore,
+      workflowStateStore,
+      labelStore,
+      issueStore,
+      syncStore,
+    } = this.stores;
 
     if (orgs.length > 0 || teams.length > 0) {
       teamStore.upsertMany(teams);
@@ -89,11 +98,19 @@ export class SyncManager {
   }
 
   private async fullBootstrap() {
-    if (this.isBootstrapping) return;
+    if (this.isBootstrapping) {
+      return;
+    }
     this.isBootstrapping = true;
 
-    const { syncStore, teamStore, userStore, workflowStateStore, labelStore, issueStore } =
-      this.stores;
+    const {
+      syncStore,
+      teamStore,
+      userStore,
+      workflowStateStore,
+      labelStore,
+      issueStore,
+    } = this.stores;
 
     try {
       const res = await fetch('/api/sync/bootstrap', {
@@ -123,7 +140,9 @@ export class SyncManager {
 
       for (const line of lines) {
         const eqIdx = line.indexOf('=');
-        if (eqIdx === -1) continue;
+        if (eqIdx === -1) {
+          continue;
+        }
         const modelName = line.slice(0, eqIdx);
         const jsonStr = line.slice(eqIdx + 1);
         const data = JSON.parse(jsonStr);
@@ -133,7 +152,7 @@ export class SyncManager {
           continue;
         }
 
-        const key = modelName.charAt(0).toLowerCase() + modelName.slice(1) + 's';
+        const key = `${modelName.charAt(0).toLowerCase() + modelName.slice(1)}s`;
         if (key in batches) {
           (batches as Record<string, object[]>)[key].push(data);
         }
@@ -142,7 +161,15 @@ export class SyncManager {
       // Clear and write in a single Dexie transaction to prevent data loss if a write fails
       await db.transaction(
         'rw',
-        [db.organizations, db.teams, db.users, db.workflowStates, db.issueLabels, db.issues, db.syncMetadata],
+        [
+          db.organizations,
+          db.teams,
+          db.users,
+          db.workflowStates,
+          db.issueLabels,
+          db.issues,
+          db.syncMetadata,
+        ],
         async () => {
           await Promise.all([
             db.organizations.clear(),
@@ -153,23 +180,53 @@ export class SyncManager {
             db.issues.clear(),
           ]);
           await Promise.all([
-            db.organizations.bulkPut(batches.organizations as Parameters<typeof db.organizations.bulkPut>[0]),
-            db.teams.bulkPut(batches.teams as Parameters<typeof db.teams.bulkPut>[0]),
-            db.users.bulkPut(batches.users as Parameters<typeof db.users.bulkPut>[0]),
-            db.workflowStates.bulkPut(batches.workflowStates as Parameters<typeof db.workflowStates.bulkPut>[0]),
-            db.issueLabels.bulkPut(batches.issueLabels as Parameters<typeof db.issueLabels.bulkPut>[0]),
-            db.issues.bulkPut(batches.issues as Parameters<typeof db.issues.bulkPut>[0]),
+            db.organizations.bulkPut(
+              batches.organizations as Parameters<
+                typeof db.organizations.bulkPut
+              >[0],
+            ),
+            db.teams.bulkPut(
+              batches.teams as Parameters<typeof db.teams.bulkPut>[0],
+            ),
+            db.users.bulkPut(
+              batches.users as Parameters<typeof db.users.bulkPut>[0],
+            ),
+            db.workflowStates.bulkPut(
+              batches.workflowStates as Parameters<
+                typeof db.workflowStates.bulkPut
+              >[0],
+            ),
+            db.issueLabels.bulkPut(
+              batches.issueLabels as Parameters<
+                typeof db.issueLabels.bulkPut
+              >[0],
+            ),
+            db.issues.bulkPut(
+              batches.issues as Parameters<typeof db.issues.bulkPut>[0],
+            ),
             db.syncMetadata.put({ key: 'lastSyncId', value: lastSyncId }),
           ]);
         },
       );
 
       // Populate MobX stores
-      teamStore.upsertMany(batches.teams as Parameters<typeof teamStore.upsertMany>[0]);
-      userStore.upsertMany(batches.users as Parameters<typeof userStore.upsertMany>[0]);
-      workflowStateStore.upsertMany(batches.workflowStates as Parameters<typeof workflowStateStore.upsertMany>[0]);
-      labelStore.upsertMany(batches.issueLabels as Parameters<typeof labelStore.upsertMany>[0]);
-      issueStore.upsertMany(batches.issues as Parameters<typeof issueStore.upsertMany>[0]);
+      teamStore.upsertMany(
+        batches.teams as Parameters<typeof teamStore.upsertMany>[0],
+      );
+      userStore.upsertMany(
+        batches.users as Parameters<typeof userStore.upsertMany>[0],
+      );
+      workflowStateStore.upsertMany(
+        batches.workflowStates as Parameters<
+          typeof workflowStateStore.upsertMany
+        >[0],
+      );
+      labelStore.upsertMany(
+        batches.issueLabels as Parameters<typeof labelStore.upsertMany>[0],
+      );
+      issueStore.upsertMany(
+        batches.issues as Parameters<typeof issueStore.upsertMany>[0],
+      );
       syncStore.setLastSyncId(lastSyncId);
       syncStore.setStatus('connected');
     } catch (err) {
@@ -182,7 +239,9 @@ export class SyncManager {
   }
 
   private async deltaSync() {
-    if (this.isDeltaSyncing) return;
+    if (this.isDeltaSyncing) {
+      return;
+    }
     this.isDeltaSyncing = true;
 
     const { syncStore } = this.stores;
@@ -214,10 +273,18 @@ export class SyncManager {
   }
 
   private async applyActions(actions: SerializedSyncAction[]) {
-    if (actions.length === 0) return;
+    if (actions.length === 0) {
+      return;
+    }
 
-    const { teamStore, userStore, workflowStateStore, labelStore, issueStore, syncStore } =
-      this.stores;
+    const {
+      teamStore,
+      userStore,
+      workflowStateStore,
+      labelStore,
+      issueStore,
+      syncStore,
+    } = this.stores;
 
     let maxId = syncStore.lastSyncId;
 
@@ -229,37 +296,82 @@ export class SyncManager {
       issueLabels: object[];
       issues: object[];
       organizations: object[];
-    } = { issueLabels: [], issues: [], organizations: [], teams: [], users: [], workflowStates: [] };
-    const dexieDeletes: { table: 'teams' | 'users' | 'workflowStates' | 'issueLabels' | 'issues'; id: string }[] = [];
+    } = {
+      issueLabels: [],
+      issues: [],
+      organizations: [],
+      teams: [],
+      users: [],
+      workflowStates: [],
+    };
+    const dexieDeletes: {
+      table: 'teams' | 'users' | 'workflowStates' | 'issueLabels' | 'issues';
+      id: string;
+    }[] = [];
 
     for (const action of actions) {
       const { action: act, modelName, modelId, data } = action;
 
       switch (modelName) {
         case 'Team':
-          teamStore.applySyncAction(act, modelId, data as Parameters<typeof teamStore.applySyncAction>[2]);
-          if (act === 'D') dexieDeletes.push({ id: modelId, table: 'teams' });
-          else if (data) dexieUpserts.teams.push(data);
+          teamStore.applySyncAction(
+            act,
+            modelId,
+            data as Parameters<typeof teamStore.applySyncAction>[2],
+          );
+          if (act === 'D') {
+            dexieDeletes.push({ id: modelId, table: 'teams' });
+          } else if (data) {
+            dexieUpserts.teams.push(data);
+          }
           break;
         case 'User':
-          userStore.applySyncAction(act, modelId, data as Parameters<typeof userStore.applySyncAction>[2]);
-          if (act === 'D') dexieDeletes.push({ id: modelId, table: 'users' });
-          else if (data) dexieUpserts.users.push(data);
+          userStore.applySyncAction(
+            act,
+            modelId,
+            data as Parameters<typeof userStore.applySyncAction>[2],
+          );
+          if (act === 'D') {
+            dexieDeletes.push({ id: modelId, table: 'users' });
+          } else if (data) {
+            dexieUpserts.users.push(data);
+          }
           break;
         case 'WorkflowState':
-          workflowStateStore.applySyncAction(act, modelId, data as Parameters<typeof workflowStateStore.applySyncAction>[2]);
-          if (act === 'D') dexieDeletes.push({ id: modelId, table: 'workflowStates' });
-          else if (data) dexieUpserts.workflowStates.push(data);
+          workflowStateStore.applySyncAction(
+            act,
+            modelId,
+            data as Parameters<typeof workflowStateStore.applySyncAction>[2],
+          );
+          if (act === 'D') {
+            dexieDeletes.push({ id: modelId, table: 'workflowStates' });
+          } else if (data) {
+            dexieUpserts.workflowStates.push(data);
+          }
           break;
         case 'IssueLabel':
-          labelStore.applySyncAction(act, modelId, data as Parameters<typeof labelStore.applySyncAction>[2]);
-          if (act === 'D') dexieDeletes.push({ id: modelId, table: 'issueLabels' });
-          else if (data) dexieUpserts.issueLabels.push(data);
+          labelStore.applySyncAction(
+            act,
+            modelId,
+            data as Parameters<typeof labelStore.applySyncAction>[2],
+          );
+          if (act === 'D') {
+            dexieDeletes.push({ id: modelId, table: 'issueLabels' });
+          } else if (data) {
+            dexieUpserts.issueLabels.push(data);
+          }
           break;
         case 'Issue':
-          issueStore.applySyncAction(act, modelId, data as Parameters<typeof issueStore.applySyncAction>[2]);
-          if (act === 'D') dexieDeletes.push({ id: modelId, table: 'issues' });
-          else if (data) dexieUpserts.issues.push(data);
+          issueStore.applySyncAction(
+            act,
+            modelId,
+            data as Parameters<typeof issueStore.applySyncAction>[2],
+          );
+          if (act === 'D') {
+            dexieDeletes.push({ id: modelId, table: 'issues' });
+          } else if (data) {
+            dexieUpserts.issues.push(data);
+          }
           break;
       }
 
@@ -274,14 +386,40 @@ export class SyncManager {
     // Persist to IndexedDB so real-time updates survive a page refresh
     await db.transaction(
       'rw',
-      [db.teams, db.users, db.workflowStates, db.issueLabels, db.issues, db.syncMetadata],
+      [
+        db.teams,
+        db.users,
+        db.workflowStates,
+        db.issueLabels,
+        db.issues,
+        db.syncMetadata,
+      ],
       async () => {
         await Promise.all([
-          dexieUpserts.teams.length > 0 && db.teams.bulkPut(dexieUpserts.teams as Parameters<typeof db.teams.bulkPut>[0]),
-          dexieUpserts.users.length > 0 && db.users.bulkPut(dexieUpserts.users as Parameters<typeof db.users.bulkPut>[0]),
-          dexieUpserts.workflowStates.length > 0 && db.workflowStates.bulkPut(dexieUpserts.workflowStates as Parameters<typeof db.workflowStates.bulkPut>[0]),
-          dexieUpserts.issueLabels.length > 0 && db.issueLabels.bulkPut(dexieUpserts.issueLabels as Parameters<typeof db.issueLabels.bulkPut>[0]),
-          dexieUpserts.issues.length > 0 && db.issues.bulkPut(dexieUpserts.issues as Parameters<typeof db.issues.bulkPut>[0]),
+          dexieUpserts.teams.length > 0 &&
+            db.teams.bulkPut(
+              dexieUpserts.teams as Parameters<typeof db.teams.bulkPut>[0],
+            ),
+          dexieUpserts.users.length > 0 &&
+            db.users.bulkPut(
+              dexieUpserts.users as Parameters<typeof db.users.bulkPut>[0],
+            ),
+          dexieUpserts.workflowStates.length > 0 &&
+            db.workflowStates.bulkPut(
+              dexieUpserts.workflowStates as Parameters<
+                typeof db.workflowStates.bulkPut
+              >[0],
+            ),
+          dexieUpserts.issueLabels.length > 0 &&
+            db.issueLabels.bulkPut(
+              dexieUpserts.issueLabels as Parameters<
+                typeof db.issueLabels.bulkPut
+              >[0],
+            ),
+          dexieUpserts.issues.length > 0 &&
+            db.issues.bulkPut(
+              dexieUpserts.issues as Parameters<typeof db.issues.bulkPut>[0],
+            ),
           db.syncMetadata.put({ key: 'lastSyncId', value: maxId }),
         ]);
         await Promise.all(

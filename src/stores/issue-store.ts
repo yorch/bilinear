@@ -58,9 +58,13 @@ export class IssueStore {
       if (data) {
         // Sync action data from the server may include `labelAssignments` (full Prisma relation).
         // Bootstrap data includes `labelIds` directly. Handle both.
-        const raw = data as DBIssue & { labelAssignments?: Array<{ labelId: string }> };
+        const raw = data as DBIssue & {
+          labelAssignments?: Array<{ labelId: string }>;
+        };
         const { labelAssignments, ...issueData } = raw;
-        const labelIds = labelAssignments ? labelAssignments.map(a => a.labelId) : (issueData.labelIds ?? []);
+        const labelIds = labelAssignments
+          ? labelAssignments.map(a => a.labelId)
+          : (issueData.labelIds ?? []);
         this.pool.set(id, { ...issueData, labelIds });
       }
     } else if (action === 'D') {

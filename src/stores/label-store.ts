@@ -37,7 +37,9 @@ export class LabelStore {
     if (action === 'I' || action === 'U' || action === 'A') {
       // Archive: keep in pool with archivedAt set so issues referencing this
       // label still resolve; filtered from active lists via archivedAt check
-      if (data) this.pool.set(id, data);
+      if (data) {
+        this.pool.set(id, data);
+      }
     } else if (action === 'D') {
       this.pool.delete(id);
     }

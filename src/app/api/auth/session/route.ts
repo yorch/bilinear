@@ -18,9 +18,12 @@ export async function GET(req: NextRequest) {
 
   try {
     await verifyAccessToken(token);
-    return NextResponse.json({ token }, {
-      headers: { 'Cache-Control': 'no-store' },
-    });
+    return NextResponse.json(
+      { token },
+      {
+        headers: { 'Cache-Control': 'no-store' },
+      },
+    );
   } catch {
     return NextResponse.json({ token: null }, { status: 200 });
   }

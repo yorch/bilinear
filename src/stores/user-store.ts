@@ -8,12 +8,12 @@ export class UserStore {
   constructor() {
     makeObservable(this, {
       all: computed,
+      applySyncAction: action,
       currentUser: computed,
       currentUserId: observable,
       pool: observable,
       setCurrentUserId: action,
       upsertMany: action,
-      applySyncAction: action,
     });
   }
 
@@ -22,7 +22,9 @@ export class UserStore {
   }
 
   get currentUser(): DBUser | null {
-    return this.currentUserId ? (this.pool.get(this.currentUserId) ?? null) : null;
+    return this.currentUserId
+      ? (this.pool.get(this.currentUserId) ?? null)
+      : null;
   }
 
   findById(id: string): DBUser | null {
@@ -41,7 +43,9 @@ export class UserStore {
 
   applySyncAction(action: string, id: string, data: DBUser | null) {
     if (action === 'I' || action === 'U') {
-      if (data) this.pool.set(id, data);
+      if (data) {
+        this.pool.set(id, data);
+      }
     } else if (action === 'D' || action === 'A') {
       this.pool.delete(id);
     }

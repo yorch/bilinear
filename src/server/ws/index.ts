@@ -12,7 +12,7 @@
 
 import { createServer } from 'node:http';
 import Redis from 'ioredis';
-import { WebSocketServer, type WebSocket } from 'ws';
+import { type WebSocket, WebSocketServer } from 'ws';
 import { verifyAccessToken } from '@/server/lib/jwt';
 import { ConnectionManager } from './connection-manager';
 
@@ -35,7 +35,9 @@ const connectionManager = new ConnectionManager();
 const subscribedOrgs = new Set<string>();
 
 async function ensureOrgSubscription(orgId: string) {
-  if (subscribedOrgs.has(orgId)) return;
+  if (subscribedOrgs.has(orgId)) {
+    return;
+  }
   // Add to set only after a successful subscribe to avoid masking future retries
   await redisSubscriber.subscribe(`sync:${orgId}`);
   subscribedOrgs.add(orgId);
@@ -77,7 +79,9 @@ wss.on('connection', async (ws: WebSocket, req) => {
 
   try {
     ({ orgId, userId } = await verifyAccessToken(token));
-    if (!orgId || !userId) throw new Error('Invalid token payload');
+    if (!orgId || !userId) {
+      throw new Error('Invalid token payload');
+    }
   } catch {
     ws.close(4001, 'Invalid token');
     return;
@@ -121,7 +125,10 @@ wss.on('connection', async (ws: WebSocket, req) => {
     if (orgEmpty) {
       subscribedOrgs.delete(orgId);
       redisSubscriber.unsubscribe(`sync:${orgId}`).catch((err: Error) => {
-        console.error(`[ws] Failed to unsubscribe from sync:${orgId}:`, err.message);
+        console.error(
+          `[ws] Failed to unsubscribe from sync:${orgId}:`,
+          err.message,
+        );
       });
     }
   });

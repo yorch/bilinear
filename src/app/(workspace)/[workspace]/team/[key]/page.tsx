@@ -7,10 +7,9 @@ import { CreateIssueModal } from '@/components/issues/create-issue-modal';
 import { IssueDetailPanel } from '@/components/issues/issue-detail-panel';
 import { IssueListView } from '@/components/issues/issue-list-view';
 import { useHotkeys } from '@/hooks/use-hotkeys';
-import { gql } from '@/lib/graphql';
+import type { DBIssue, DBIssueLabel } from '@/lib/db';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
-import type { DBIssue, DBIssueLabel } from '@/lib/db';
 import type {
   IssueDetail,
   IssueLabel,
@@ -58,8 +57,14 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     key: string;
   }>();
   const router = useRouter();
-  const { issueStore, teamStore, userStore, workflowStateStore, labelStore, syncStore } =
-    useStore();
+  const {
+    issueStore,
+    teamStore,
+    userStore,
+    workflowStateStore,
+    labelStore,
+    syncStore,
+  } = useStore();
 
   // One queue per component mount — unmounting the page cleans up the reference
   const txQueue = useMemo(() => new TransactionQueue(), []);
@@ -106,13 +111,18 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     name: l.name,
   }));
 
-  const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
+  const isLoading =
+    syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
   const hasError = syncStore.status === 'error';
 
   const detailIssue: IssueDetail | null = (() => {
-    if (!detailIssueId) return null;
+    if (!detailIssueId) {
+      return null;
+    }
     const raw = issueStore.findById(detailIssueId);
-    if (!raw) return null;
+    if (!raw) {
+      return null;
+    }
     const issueLabels = (raw.labelIds ?? [])
       .map(id => labelStore.findById(id))
       .filter((l): l is DBIssueLabel => l !== null)
@@ -136,7 +146,9 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   }, [selectedIndex, issues]);
 
   useHotkeys('enter', () => {
-    if (selectedId) setDetailIssueId(selectedId);
+    if (selectedId) {
+      setDetailIssueId(selectedId);
+    }
   }, [selectedId]);
 
   // Update an issue — optimistic via MobX, confirmed/rolled-back via server
@@ -157,7 +169,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
               issueStore.optimisticUpdate(id, snapshot);
             }
           },
-          onSuccess: (data) => {
+          onSuccess: data => {
             const updated = (data as { issueUpdate?: { issue?: DBIssue } })
               ?.issueUpdate?.issue;
             if (updated) {
@@ -181,18 +193,19 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
       labelIds: string[];
       dueDate?: string | null;
     }) => {
-      if (!teamId) return;
+      if (!teamId) {
+        return;
+      }
       txQueue.enqueue(
         ISSUE_CREATE_MUTATION,
         { input: { ...input, teamId } },
         {
-          onError: (err) => {
+          onError: err => {
             console.error('[TeamPage] issueCreate failed:', err);
           },
-          onSuccess: (data) => {
-            const created = (
-              data as { issueCreate?: { issue?: DBIssue } }
-            )?.issueCreate?.issue;
+          onSuccess: data => {
+            const created = (data as { issueCreate?: { issue?: DBIssue } })
+              ?.issueCreate?.issue;
             if (created) {
               issueStore.applySyncAction('I', created.id, created);
             }

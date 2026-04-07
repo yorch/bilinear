@@ -52,7 +52,11 @@ export const labelResolvers = {
         id,
         label,
       );
-      return { issueLabel: label, lastSyncId: sync.id.toString(), success: true };
+      return {
+        issueLabel: label,
+        lastSyncId: sync.id.toString(),
+        success: true,
+      };
     },
     issueLabelCreate: async (
       _parent: unknown,
@@ -77,7 +81,11 @@ export const labelResolvers = {
         label.id,
         label,
       );
-      return { issueLabel: label, lastSyncId: sync.id.toString(), success: true };
+      return {
+        issueLabel: label,
+        lastSyncId: sync.id.toString(),
+        success: true,
+      };
     },
 
     issueLabelUpdate: async (
@@ -105,7 +113,11 @@ export const labelResolvers = {
         id,
         label,
       );
-      return { issueLabel: label, lastSyncId: sync.id.toString(), success: true };
+      return {
+        issueLabel: label,
+        lastSyncId: sync.id.toString(),
+        success: true,
+      };
     },
   },
 

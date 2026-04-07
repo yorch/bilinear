@@ -18,14 +18,16 @@ export class ConnectionManager {
       this.clients.set(orgId, new Set());
     }
     const info: ClientInfo = { orgId, userId, ws };
-    this.clients.get(orgId)!.add(info);
+    this.clients.get(orgId)?.add(info);
     return info;
   }
 
   /** Returns true if the org now has no remaining clients. */
   remove(info: ClientInfo): boolean {
     const set = this.clients.get(info.orgId);
-    if (!set) return true;
+    if (!set) {
+      return true;
+    }
     set.delete(info);
     if (set.size === 0) {
       this.clients.delete(info.orgId);
@@ -39,7 +41,9 @@ export class ConnectionManager {
    */
   broadcastToOrgAll(orgId: string, message: string) {
     const set = this.clients.get(orgId);
-    if (!set) return;
+    if (!set) {
+      return;
+    }
     for (const info of set) {
       if (info.ws.readyState === 1 /* OPEN */) {
         info.ws.send(message);

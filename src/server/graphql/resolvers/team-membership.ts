@@ -39,7 +39,11 @@ export const teamMembershipResolvers = {
           teamMembership.id,
           teamMembership,
         );
-        return { lastSyncId: sync.id.toString(), success: true, teamMembership };
+        return {
+          lastSyncId: sync.id.toString(),
+          success: true,
+          teamMembership,
+        };
       } catch (err) {
         const error = err as Error & { code?: string };
         if (error.code === 'P2002') {
