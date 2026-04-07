@@ -42,11 +42,14 @@ function Avatar({
   size?: 'sm' | 'md';
 }) {
   const dim = size === 'sm' ? 'h-6 w-6 text-xs' : 'h-8 w-8 text-sm';
+  const px = size === 'sm' ? 24 : 32;
   if (user.avatarUrl) {
     return (
       <img
         src={user.avatarUrl}
         alt={user.displayName}
+        width={px}
+        height={px}
         className={cn('rounded-full object-cover', dim)}
       />
     );
@@ -76,6 +79,7 @@ export function TeamMemberManagement({
   const [search, setSearch] = useState('');
   const [adding, setAdding] = useState(false);
   const [loadingMembershipId, setLoadingMembershipId] = useState<string | null>(null);
+  const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const memberUserIds = new Set(members.map(m => m.userId));
@@ -86,6 +90,7 @@ export function TeamMemberManagement({
   useEffect(() => {
     if (addOpen) {
       setSearch('');
+      setPendingRemoveId(null);
       setTimeout(() => searchRef.current?.focus(), 50);
     }
   }, [addOpen]);
@@ -155,29 +160,58 @@ export function TeamMemberManagement({
                 <span className="text-xs text-zinc-400 truncate">{member.email}</span>
               </div>
               <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  title={member.isOwner ? 'Remove owner role' : 'Make owner'}
-                  disabled={isLoading}
-                  onClick={() => handleToggleOwner(member.membershipId, member.isOwner)}
-                  className={cn(
-                    'flex h-7 w-7 items-center justify-center rounded text-xs transition-colors disabled:opacity-50',
-                    member.isOwner
-                      ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
-                      : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300',
-                  )}
-                >
-                  <Crown className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  title={isSelf ? 'Leave team' : 'Remove member'}
-                  disabled={isLoading}
-                  onClick={() => handleRemove(member.membershipId)}
-                  className="flex h-7 w-7 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-                >
-                  {isSelf ? <X className="h-3.5 w-3.5" /> : <UserMinus className="h-3.5 w-3.5" />}
-                </button>
+                {pendingRemoveId === member.membershipId ? (
+                  /* Inline confirmation */
+                  <>
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                      {isSelf ? 'Leave?' : 'Remove?'}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={isLoading}
+                      onClick={() => {
+                        setPendingRemoveId(null);
+                        handleRemove(member.membershipId);
+                      }}
+                      className="rounded bg-red-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {isLoading ? '…' : 'Yes'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingRemoveId(null)}
+                      className="rounded px-2 py-0.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      title={member.isOwner ? 'Remove owner role' : 'Make owner'}
+                      disabled={isLoading}
+                      onClick={() => handleToggleOwner(member.membershipId, member.isOwner)}
+                      className={cn(
+                        'flex h-7 w-7 items-center justify-center rounded text-xs transition-colors disabled:opacity-50',
+                        member.isOwner
+                          ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                          : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300',
+                      )}
+                    >
+                      <Crown className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      title={isSelf ? 'Leave team' : 'Remove member'}
+                      disabled={isLoading}
+                      onClick={() => setPendingRemoveId(member.membershipId)}
+                      className="flex h-7 w-7 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                    >
+                      {isSelf ? <X className="h-3.5 w-3.5" /> : <UserMinus className="h-3.5 w-3.5" />}
+                    </button>
+                  </>
+                )}
               </div>
             </li>
           );

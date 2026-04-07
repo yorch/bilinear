@@ -176,16 +176,19 @@ export const Sidebar = observer(function Sidebar({
       {/* Footer */}
       <div className="border-t border-zinc-200 dark:border-zinc-800 p-1.5">
         {collapsed ? (
-          <Link
-            href={`${base}/settings`}
-            title="Settings"
-            className={cn(
-              'flex items-center justify-center rounded-md py-1.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
-              pathname.startsWith(`${base}/settings`) && 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50',
-            )}
-          >
-            <Settings className="h-4 w-4" />
-          </Link>
+          <div className="flex flex-col items-center gap-1">
+            <Link
+              href={`${base}/settings`}
+              title="Settings"
+              className={cn(
+                'flex items-center justify-center rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
+                pathname.startsWith(`${base}/settings`) && 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50',
+              )}
+            >
+              <Settings className="h-4 w-4" />
+            </Link>
+            <ThemeToggle compact />
+          </div>
         ) : (
           <div className="flex items-center justify-between">
             <Link
