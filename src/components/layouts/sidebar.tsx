@@ -36,6 +36,7 @@ export function Sidebar({
 
   return (
     <aside
+      data-collapsed={collapsed ? 'true' : 'false'}
       className={cn(
         'flex h-full flex-shrink-0 flex-col border-r border-zinc-200 bg-zinc-50 transition-[width] duration-200 dark:border-zinc-800 dark:bg-zinc-950',
         collapsed ? 'w-12' : 'w-56',
@@ -46,6 +47,7 @@ export function Sidebar({
         <button
           type="button"
           onClick={onToggle}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           title={collapsed ? 'Expand sidebar (⌘B)' : 'Collapse sidebar (⌘B)'}
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
         >

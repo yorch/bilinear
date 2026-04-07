@@ -15,13 +15,13 @@ test.describe('Authentication', () => {
   test('login page renders email input and submit button', async ({ page }) => {
     await page.goto('/login');
     await expect(page.getByLabel(/email/i)).toBeVisible();
-    await expect(page.getByRole('button', { name: /send/i })).toBeVisible();
+    await expect(page.getByTestId('email-submit')).toBeVisible();
   });
 
   test('submitting email navigates to verify page', async ({ page }) => {
     await page.goto('/login');
     await page.getByLabel(/email/i).fill('e2e@test.local');
-    await page.getByRole('button', { name: /send/i }).click();
+    await page.getByTestId('email-submit').click();
     await expect(page).toHaveURL(/\/verify/);
   });
 
@@ -33,7 +33,7 @@ test.describe('Authentication', () => {
   test('invalid code shows error', async ({ page }) => {
     await page.goto('/login');
     await page.getByLabel(/email/i).fill('e2e@test.local');
-    await page.getByRole('button', { name: /send/i }).click();
+    await page.getByTestId('email-submit').click();
     await page.waitForURL(/\/verify/);
     await page.getByLabel(/code/i).fill('000000');
     await page.getByRole('button', { name: /verify|continue/i }).click();

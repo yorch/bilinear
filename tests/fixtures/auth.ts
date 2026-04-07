@@ -16,7 +16,7 @@ export async function loginAs(page: Page, email: string, code?: string) {
 
   await page.goto('/login');
   await page.getByLabel('Email').fill(email);
-  await page.getByRole('button', { name: /send/i }).click();
+  await page.getByTestId('email-submit').click();
 
   // Wait for the verify page
   await page.waitForURL('**/verify**');
@@ -24,7 +24,7 @@ export async function loginAs(page: Page, email: string, code?: string) {
   await page.getByRole('button', { name: /verify|continue/i }).click();
 
   // Should land on the workspace
-  await page.waitForURL('**/(my-issues|team|inbox)**');
+  await page.waitForURL(/\/(my-issues|team|inbox)/);
 }
 
 /**

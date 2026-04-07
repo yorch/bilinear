@@ -17,21 +17,15 @@ test.describe('Keyboard Shortcuts', () => {
 
   test('Cmd+B toggles sidebar collapse', async ({ page }) => {
     const sidebar = page.locator('aside');
-    const initialWidth = await sidebar.evaluate(
-      el => el.getBoundingClientRect().width,
-    );
+
+    // Initial state: expanded
+    await expect(sidebar).toHaveAttribute('data-collapsed', 'false');
 
     await page.keyboard.press('Meta+b');
-    const collapsedWidth = await sidebar.evaluate(
-      el => el.getBoundingClientRect().width,
-    );
-    expect(collapsedWidth).toBeLessThan(initialWidth);
+    await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
 
     await page.keyboard.press('Meta+b');
-    const expandedWidth = await sidebar.evaluate(
-      el => el.getBoundingClientRect().width,
-    );
-    expect(expandedWidth).toBeGreaterThan(collapsedWidth);
+    await expect(sidebar).toHaveAttribute('data-collapsed', 'false');
   });
 
   test('S opens status selector when issue is selected', async ({ page }) => {

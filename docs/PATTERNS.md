@@ -847,7 +847,7 @@ For the `IssueDetailPanel`, use the `LazyIssueDetailPanel` wrapper from `src/com
 
 ## 28. Rate Limiting Pattern (Sprint 11-12)
 
-All GraphQL mutations from authenticated users are rate-limited via Redis fixed-window counters. The logic lives in `src/server/middleware/rate-limit.ts` and is applied in `src/app/api/graphql/route.ts`.
+All authenticated GraphQL requests (queries and mutations) are rate-limited via Redis fixed-window counters. The logic lives in `src/server/middleware/rate-limit.ts` and is applied in `src/app/api/graphql/route.ts`.
 
 **Limits:** 5,000 requests / hour, 250,000 complexity points / hour per user.
 
@@ -915,7 +915,7 @@ const AppShell = observer(function AppShell({ children }) {
 });
 ```
 
-The `Sidebar` component uses `transition-[width]` for smooth animation: `w-56` (expanded) → `w-12` (collapsed). In collapsed mode, nav items show only the first letter; the theme toggle is hidden.
+The `Sidebar` component uses `transition-[width]` for smooth animation: `w-56` (expanded) → `w-12` (collapsed). In collapsed mode, nav items show icons only and hide their text labels; the theme toggle is hidden. The `<aside>` element carries `data-collapsed="true|false"` for deterministic E2E assertions.
 
 ---
 

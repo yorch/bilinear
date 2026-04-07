@@ -12,7 +12,7 @@ test.describe('Offline Support', () => {
     await loginAs(page, 'e2e@test.local');
 
     // Wait for initial bootstrap
-    await page.waitForTimeout(2000);
+    await page.waitForSelector('[data-testid="issue-list-view"]');
 
     const title = `Offline issue ${Date.now()}`;
 

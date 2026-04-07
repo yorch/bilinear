@@ -3,8 +3,9 @@ import pino from 'pino';
 /**
  * Structured JSON logger for server-side use.
  *
- * In development, logs are pretty-printed via pino-pretty when the
- * LOG_PRETTY env var is set. In production (default), output is
+ * In development (NODE_ENV !== 'production'), logs are pretty-printed via
+ * pino-pretty automatically. Set LOG_PRETTY=1 to enable it in production too.
+ * In production (default), output is
  * newline-delimited JSON suitable for log aggregators (Datadog, CloudWatch, etc.).
  *
  * Usage:

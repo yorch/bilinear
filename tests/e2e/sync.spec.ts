@@ -17,8 +17,8 @@ test.describe('Real-time Sync', () => {
     await loginAs(pageB, 'e2e@test.local');
 
     // Wait for sync bootstrap to complete in both tabs
-    await pageA.waitForTimeout(2000);
-    await pageB.waitForTimeout(2000);
+    await pageA.waitForSelector('[data-testid="issue-list-view"]');
+    await pageB.waitForSelector('[data-testid="issue-list-view"]');
 
     const title = `Sync test ${Date.now()}`;
 
