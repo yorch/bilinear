@@ -162,13 +162,13 @@ export const typeDefs = `
   type IssuePayload {
     success: Boolean!
     issue: Issue
-    lastSyncId: Int!
+    lastSyncId: String!
   }
 
   type IssueLabelPayload {
     success: Boolean!
     issueLabel: IssueLabel
-    lastSyncId: Int!
+    lastSyncId: String!
   }
 
   input IssueCreateInput {
@@ -229,24 +229,24 @@ export const typeDefs = `
   type TeamPayload {
     success: Boolean!
     team: Team
-    lastSyncId: Int!
+    lastSyncId: String!
   }
 
   type TeamMembershipPayload {
     success: Boolean!
     teamMembership: TeamMembership
-    lastSyncId: Int!
+    lastSyncId: String!
   }
 
   type WorkflowStatePayload {
     success: Boolean!
     workflowState: WorkflowState
-    lastSyncId: Int!
+    lastSyncId: String!
   }
 
   type DeletePayload {
     success: Boolean!
-    lastSyncId: Int!
+    lastSyncId: String!
   }
 
   type EmailLoginPayload {

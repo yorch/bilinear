@@ -110,7 +110,7 @@ describe('teamResolvers', () => {
 
       expect(result.success).toBe(true);
       expect(result.team).toEqual(TEST_TEAM);
-      expect(result.lastSyncId).toBe(0);
+      expect(result.lastSyncId).toBe('1');
     });
 
     it('throws FORBIDDEN when user is not admin', async () => {

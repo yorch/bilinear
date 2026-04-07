@@ -1,0 +1,105 @@
+import type { SyncAction } from '../../generated/prisma';
+import type { PrismaClient } from '../../generated/prisma';
+import type { Redis } from 'ioredis';
+
+export type SyncActionType = 'I' | 'U' | 'D' | 'A';
+
+export class SyncService {
+  constructor(
+    private prisma: PrismaClient,
+    private redis: Redis,
+  ) {}
+
+  async createSyncAction(
+    orgId: string,
+    action: SyncActionType,
+    modelName: string,
+    modelId: string,
+    data: object | null,
+  ): Promise<SyncAction> {
+    const syncAction = await this.prisma.syncAction.create({
+      data: {
+        action,
+        data: data ?? undefined,
+        modelId,
+        modelName,
+        organizationId: orgId,
+      },
+    });
+
+    // Publish to Redis so WebSocket server can broadcast to connected clients
+    await this.redis
+      .publish(`sync:${orgId}`, JSON.stringify(serializeSyncAction(syncAction)))
+      .catch(err => {
+        // Non-fatal: Redis publish failure should not break the mutation
+        console.error('[SyncService] Redis publish error:', err);
+      });
+
+    return syncAction;
+  }
+
+  async getBootstrapData(orgId: string) {
+    const [organizations, teams, users, issues, workflowStates, issueLabels] =
+      await Promise.all([
+        this.prisma.organization.findUnique({ where: { id: orgId } }),
+        this.prisma.team.findMany({
+          where: { archivedAt: null, organizationId: orgId },
+        }),
+        this.prisma.user.findMany({
+          where: { orgMemberships: { some: { organizationId: orgId } } },
+        }),
+        this.prisma.issue.findMany({
+          where: { archivedAt: null, organizationId: orgId, trashed: false },
+        }),
+        this.prisma.workflowState.findMany({
+          include: { issues: false },
+          where: {
+            archivedAt: null,
+            team: { organizationId: orgId },
+          },
+        }),
+        this.prisma.issueLabel.findMany({
+          where: { archivedAt: null, organizationId: orgId },
+        }),
+      ]);
+
+    return { issueLabels, issues, organizations: organizations ? [organizations] : [], teams, users, workflowStates };
+  }
+
+  async getDeltaSyncActions(
+    orgId: string,
+    lastSyncId: bigint,
+    toSyncId?: bigint,
+  ): Promise<SyncAction[]> {
+    return this.prisma.syncAction.findMany({
+      orderBy: { id: 'asc' },
+      where: {
+        id: {
+          gt: lastSyncId,
+          ...(toSyncId ? { lte: toSyncId } : {}),
+        },
+        organizationId: orgId,
+      },
+    });
+  }
+
+  async getLastSyncId(orgId: string): Promise<bigint> {
+    const last = await this.prisma.syncAction.findFirst({
+      orderBy: { id: 'desc' },
+      select: { id: true },
+      where: { organizationId: orgId },
+    });
+    return last?.id ?? BigInt(0);
+  }
+}
+
+/**
+ * Serialize a SyncAction for JSON transport — BigInt id becomes a string.
+ */
+export function serializeSyncAction(action: SyncAction) {
+  return {
+    ...action,
+    createdAt: action.createdAt.toISOString(),
+    id: action.id.toString(),
+  };
+}
