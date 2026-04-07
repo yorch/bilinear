@@ -2,6 +2,7 @@
 ## Issue Tracker — Linear Rebuild
 
 **Established:** Sprint 1-2  
+**Last updated:** Sprint 7-8  
 **Status:** Living document — updated each sprint
 
 > This is the primary onboarding document for new contributors. All patterns here are the mandated conventions for the codebase. If you deviate from a pattern, document why.
@@ -15,18 +16,27 @@ src/
 ├── app/                        # Next.js App Router (pages + API routes)
 │   ├── (auth)/                 # Route group: no sidebar, centered layout
 │   ├── (workspace)/            # Route group: authenticated, sidebar layout
-│   └── api/                    # API routes (GraphQL, session)
+│   └── api/                    # API routes (GraphQL, session, sync)
 ├── server/                     # Backend-only code — never import from client
 │   ├── graphql/                # schema.ts, context.ts, resolvers/, types/
 │   ├── services/               # Business logic (one class per domain)
 │   ├── lib/                    # Singletons: prisma, redis, jwt, email
-│   └── middleware/             # Auth extraction + guards
+│   ├── middleware/             # Auth extraction + guards
+│   └── ws/                     # Standalone WebSocket server (separate process)
+├── stores/                     # MobX observable entity pools (Sprint 7-8+)
+├── providers/                  # React context wrappers (StoreProvider, SyncProvider)
 ├── components/                 # React components (client-safe)
 │   ├── ui/                     # shadcn/ui primitives
 │   ├── layouts/                # App shell, sidebar
 │   └── <feature>/              # Feature-grouped components (auth/, issues/, properties/)
 ├── hooks/                      # React hooks (useAuth, useHotkeys)
-├── lib/                        # Shared client utilities (graphql.ts, issue-utils.ts, utils.ts)
+├── lib/                        # Shared client utilities
+│   ├── db.ts                   # Dexie.js IndexedDB schema (Sprint 7-8+)
+│   ├── sync-manager.ts         # Sync lifecycle orchestrator (Sprint 7-8+)
+│   ├── transaction-queue.ts    # Serial mutation queue (Sprint 7-8+)
+│   ├── ws-client.ts            # WebSocket client (Sprint 7-8+)
+│   ├── graphql.ts              # Shared fetch helper
+│   └── utils.ts / issue-utils.ts
 └── types/                      # Shared frontend type definitions (issues.ts)
 ```
 
@@ -150,6 +160,7 @@ export interface GraphQLContext extends AuthContext {
     auth: AuthService;
     issue: IssueService;
     label: LabelService;
+    sync: SyncService;       // Added Sprint 7-8: creates SyncActions + Redis broadcast
     team: TeamService;
     user: UserService;
     workflowState: WorkflowStateService;
@@ -338,23 +349,45 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
 ---
 
-## 12. Frontend Data Fetching Pattern (Sprint 5-6)
+## 12. Frontend Data Pattern (Sprint 7-8+)
 
-The frontend does **not** use Apollo Client. All GraphQL queries and mutations go through a minimal `fetch` wrapper:
+From Sprint 7-8 onward, the team page and all new workspace pages read from **MobX stores** instead of issuing GraphQL queries directly. Writes go through the `TransactionQueue`.
 
 ```typescript
-// src/lib/graphql.ts — use this in all client components
-import { gql } from '@/lib/graphql';
+// Reading — use observer() + useMemo from stores
+const TeamPage = observer(function TeamPage() {
+  const { issueStore, labelStore } = useStore();  // from StoreProvider context
 
-const data = await gql(QUERY, { variables });
-// data.data.issues.nodes, data.errors, etc.
+  const issues = useMemo(() => {
+    return issueStore.findByTeamId(teamId).map(i => ({
+      ...i,
+      labels: (i.labelIds ?? [])
+        .map(id => labelStore.findById(id))
+        .filter(Boolean),
+    }));
+  }, [teamId, issueStore.pool.size, labelStore.pool.size]);  // observe pool.size, not the Map
+});
+
+// Writing — optimistic first, then enqueue mutation
+const txQueue = useMemo(() => new TransactionQueue(), []);  // one per component mount
+
+const handleUpdate = useCallback((id, patch) => {
+  issueStore.optimisticUpdate(id, patch);  // instant UI update
+  txQueue.enqueue(ISSUE_UPDATE_MUTATION, { id, input: patch }, {
+    onSuccess: (data) => issueStore.applySyncAction('U', id, data.issueUpdate.issue),
+    onError: () => console.error('rollback via next delta sync'),
+  });
+}, [issueStore, txQueue]);
 ```
 
 **Rules:**
-- Write queries as plain template literal strings in the page file (or a dedicated `queries.ts` co-located file for complex pages)
-- Perform optimistic updates by patching local `useState` immediately, then reconcile from the server response
-- When a patch contains `labelIds: string[]`, convert it to `labels: IssueLabel[]` before merging into local state (the UI displays label objects, not IDs)
-- Shared frontend types (`WorkflowState`, `IssueUser`, `IssueLabel`, `IssueBase`, `IssueDetail`) live in `src/types/issues.ts` — import from there, never redefine locally
+- Wrap page components with `observer()` from `mobx-react-lite` so they re-render on store changes
+- Use `useMemo` with `store.pool.size` as a dependency — the Map itself is stable; `pool.size` changes when entries are added/removed
+- Use `useStore()` to access the `RootStore` from context — never import `getRootStore()` directly in components
+- `TransactionQueue` must be created per component mount with `useMemo(() => new TransactionQueue(), [])` — not at module level
+- The frontend still does **not** use Apollo Client — mutations are plain template strings passed to `txQueue.enqueue()`
+- Shared frontend types (`WorkflowState`, `IssueUser`, `IssueLabel`, `IssueBase`, `IssueDetail`) live in `src/types/issues.ts`
+- DB entity types (`DBIssue`, `DBTeam`, etc.) live in `src/lib/db.ts` — these are the types stored in IndexedDB and MobX pools
 
 ---
 
@@ -421,10 +454,11 @@ export class TeamService {
 }
 ```
 
-**Mutation return types** always include `lastSyncId: 0` (placeholder until Sprint 7-8):
+**Mutation return types** include the real `lastSyncId` as a serialized string (BIGSERIAL → String to avoid 32-bit Int overflow):
 
 ```typescript
-return { success: true, team, lastSyncId: 0 };
+const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'I', 'Team', team.id, team);
+return { success: true, team, lastSyncId: sync.id.toString() };
 ```
 
 ---
@@ -466,3 +500,105 @@ expect(result.success).toBe(true);
 - `yarn vitest run` (or `yarn test`) — run all tests once
 - `yarn test:coverage` — run with coverage report
 - `yarn test:watch` — watch mode for development
+
+**Mocking `SyncService` in tests:** The `MockSyncService` in `src/test/context-mock.ts` returns `{ id: BigInt(1) }`. Resolver tests should assert `lastSyncId === '1'` (string), not `0` (number).
+
+---
+
+## 17. MobX Store Pattern (Sprint 7-8)
+
+Every entity store follows a uniform pattern with an object pool, computed getters, and sync integration:
+
+```typescript
+import { action, computed, makeObservable, observable } from 'mobx';
+import type { DBTeam } from '@/lib/db';
+
+export class TeamStore {
+  pool = new Map<string, DBTeam>();  // Observable Map — entity pool
+
+  constructor() {
+    makeObservable(this, {
+      all: computed,
+      applySyncAction: action,
+      optimisticUpdate: action,  // if applicable
+      pool: observable,
+      upsertMany: action,
+    });
+  }
+
+  // Computed getters apply filters (archived, trashed)
+  get all(): DBTeam[] {
+    return Array.from(this.pool.values()).filter(t => !t.archivedAt);
+  }
+
+  // Initial bulk load from IndexedDB or bootstrap
+  upsertMany(entities: DBTeam[]) {
+    for (const e of entities) this.pool.set(e.id, e);
+  }
+
+  // Applied for both live WebSocket actions and delta sync catch-up
+  applySyncAction(action: string, id: string, data: DBTeam | null) {
+    if (action === 'I' || action === 'U' || action === 'A') {
+      if (data) this.pool.set(id, data);
+    } else if (action === 'D') {
+      this.pool.delete(id);
+    }
+  }
+}
+```
+
+**Rules:**
+- All stores are created in `RootStore` constructor and accessed via `useStore()` in components
+- `pool` is the single source of truth — never duplicate entity state elsewhere
+- `applySyncAction` handles all four action types: I (Insert), U (Update), D (Delete), A (Archive)
+- Archive (A) stores the entity with `archivedAt` set — the computed getters filter it out
+- `IssueStore.applySyncAction` also extracts `labelIds` from the incoming data, which may include a `labelAssignments` array (full Prisma object from sync actions) or a `labelIds` array (from bootstrap data)
+
+---
+
+## 18. Sync Provider Pattern (Sprint 7-8)
+
+The sync lifecycle is managed by two providers wrapping the workspace layout:
+
+```
+<StoreProvider>          ← creates RootStore singleton, provides via React context
+  <SyncProvider>         ← bootstraps data, starts WsClient, teardown on unmount
+    <AppShell />
+  </SyncProvider>
+</StoreProvider>
+```
+
+`SyncProvider` on mount:
+1. Fetches JWT token from `GET /api/auth/session` (reads httpOnly cookie server-side)
+2. Creates `SyncManager` and `WsClient`
+3. Calls `syncManager.start(token)` which runs:
+   - Load from IndexedDB → if cached, delta sync; otherwise full bootstrap
+   - Connect WebSocket (`ws://host:3001?token=<jwt>`)
+   - Register `online`/`offline` event listeners
+
+On unmount, `syncManager.stop()` disconnects WebSocket and removes event listeners.
+
+**WebSocket auth:** Browsers cannot set custom headers on WebSocket connections. The JWT is passed as a query parameter (`?token=<jwt>`). The WS server verifies it and maps the connection to an org.
+
+---
+
+## 19. SyncAction Generation Pattern (Sprint 7-8)
+
+Every GraphQL mutation must create a SyncAction after the DB write and return its ID as `lastSyncId`:
+
+```typescript
+// In any resolver mutation
+const entity = await ctx.services.issue.create(ctx.orgId, ctx.userId, input);
+const sync = await ctx.services.sync.createSyncAction(
+  ctx.orgId,
+  'I',          // I=Insert, U=Update, D=Delete, A=Archive
+  'Issue',      // modelName — matches what SyncManager routes in applyActions
+  entity.id,
+  entity,       // full entity snapshot — may include Prisma relations (labelAssignments etc.)
+);
+return { issue: entity, lastSyncId: sync.id.toString(), success: true };
+```
+
+`createSyncAction` writes to the `sync_actions` table then publishes to Redis `sync:<orgId>`. The WebSocket server subscribes to this channel and broadcasts to all connected org clients.
+
+**Note:** The `data` column stores the full Prisma return value, which may include relation fields (e.g., `labelAssignments` on Issue). The client's `applySyncAction` must handle this gracefully — `IssueStore` extracts `labelIds` from `labelAssignments` if present.

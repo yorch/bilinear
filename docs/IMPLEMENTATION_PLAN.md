@@ -80,23 +80,25 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 
 **Deliverable:** Full issue list view with create/edit/archive functionality ✅
 
-### Sprint 7-8: Real-Time Sync Engine
+### Sprint 7-8: Real-Time Sync Engine ✅ COMPLETE
 **Goal:** Local-first architecture with optimistic updates
 
-- [ ] Create sync_actions table (BIGSERIAL monotonic IDs)
-- [ ] Implement sync action generation on every mutation
-- [ ] Bootstrap endpoint: /sync/bootstrap (full + partial)
-- [ ] Delta endpoint: /sync/delta?lastSyncId=X
-- [ ] WebSocket server for real-time sync broadcast
-- [ ] Redis pub/sub for cross-instance sync broadcasting
-- [ ] Client-side: IndexedDB store (Dexie.js)
-- [ ] Client-side: MobX stores with observable entities
-- [ ] Client-side: SyncManager (bootstrap → WebSocket → delta catch-up)
-- [ ] Client-side: TransactionQueue for optimistic mutations
-- [ ] Optimistic update pipeline: local → queue → server → confirm/rollback
-- [ ] Offline detection and reconnection with delta catch-up
+- [x] Create sync_actions table (BIGSERIAL monotonic IDs, serialized as String in GraphQL)
+- [x] Implement sync action generation on every mutation (Issue, Team, TeamMembership, WorkflowState, IssueLabel)
+- [x] Bootstrap endpoint: GET /api/sync/bootstrap (line-delimited stream with lastSyncId in metadata)
+- [x] Delta endpoint: GET /api/sync/delta?lastSyncId=X
+- [x] Standalone WebSocket server (port 3001, `yarn ws:server`) with JWT query-param auth
+- [x] Redis pub/sub for real-time broadcast (channel: `sync:<orgId>`; auto-unsubscribe when org has no clients)
+- [x] Client-side: Dexie.js AppDatabase (IndexedDB schema + 7 tables)
+- [x] Client-side: MobX stores (IssueStore, TeamStore, UserStore, LabelStore, WorkflowStateStore, SyncStore, UIStore)
+- [x] Client-side: SyncManager with concurrent-call guards and Dexie transaction for atomic bootstrap
+- [x] Client-side: TransactionQueue — serial mutations, 3 retries with exponential backoff (1s/3s/10s)
+- [x] Optimistic update pipeline: MobX → TransactionQueue → server confirm/rollback via delta sync
+- [x] Offline detection (`online`/`offline` events) and reconnection with delta catch-up
+- [x] Issue label IDs denormalized onto issues (from IssueLabelAssignment join table) for client-side resolution
+- [x] Team issues page migrated to local-first: `observer()`, `useMemo` from stores, `txQueue` per mount
 
-**Deliverable:** Real-time sync across multiple browser tabs/users, offline support
+**Deliverable:** Real-time sync across multiple browser tabs/users, offline support ✅
 
 ### Sprint 9-10: Search & Command Palette
 **Goal:** Fast search and keyboard-first navigation
