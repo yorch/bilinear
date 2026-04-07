@@ -158,6 +158,7 @@ Context is built per-request from the incoming headers/cookies:
 // src/server/graphql/context.ts
 export interface GraphQLContext extends AuthContext {
   prisma: PrismaClient;
+  search: SearchService;     // Added Sprint 9-10: PostgreSQL full-text search
   services: {
     auth: AuthService;
     issue: IssueService;
@@ -180,6 +181,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   return {
     ...auth,
     prisma,
+    search: new SearchService(prisma),
     services: {
       auth: new AuthService(prisma, userService),
       issue: new IssueService(prisma),

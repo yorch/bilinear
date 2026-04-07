@@ -103,20 +103,20 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 ### Sprint 9-10: Search & Command Palette
 **Goal:** Fast search and keyboard-first navigation
 
-- [ ] PostgreSQL full-text search with GIN indexes
-- [ ] searchIssues query with fuzzy matching
-- [ ] Issue ID instant jump (type ENG-123 → navigate)
-- [ ] Command palette component (Cmd+K)
+- [x] PostgreSQL full-text search with GIN indexes
+- [x] searchIssues query with fuzzy matching
+- [x] Issue ID instant jump (type ENG-123 → navigate)
+- [x] Command palette component (Cmd+K)
   - Recent items on open
   - Fuzzy search across issues, projects, views
   - Action commands (create issue, set status, etc.)
   - Nested command flows (e.g., "Set status" → show options)
   - Keyboard navigation (arrows, Enter, Escape)
-- [ ] Global keyboard shortcuts system
+- [x] Global keyboard shortcuts system
   - C: create issue, J/K: navigate, X: select, Enter: open
   - S: status, A: assignee, P: priority, L: label
   - I: inbox, G+I: my issues
-- [ ] Right-click context menu on issues
+- [x] Right-click context menu on issues
 
 **Deliverable:** Full keyboard-driven navigation matching Linear's shortcut system
 

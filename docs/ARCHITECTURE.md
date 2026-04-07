@@ -4,7 +4,7 @@
 **Version:** 1.2  
 **Date:** April 2026
 
-> **Implementation Status (as of Sprint 7-8)**
+> **Implementation Status (as of Sprint 9-10)**
 >
 > This document describes the **target architecture** for the full system. The table below tracks what is actually built:
 >
@@ -26,7 +26,15 @@
 > | SyncManager (bootstrap → IndexedDB → MobX → WebSocket delta catch-up) | ✅ Built | Sprint 7-8 |
 > | TransactionQueue (serial mutation queue with retry/rollback) | ✅ Built | Sprint 7-8 |
 > | Team page migrated to local-first (MobX + optimistic updates) | ✅ Built | Sprint 7-8 |
-> | Full-text search + command palette | 🔲 Planned | Sprint 9-10 |
+> | PostgreSQL full-text search (GIN index, `searchIssues` resolver) | ✅ Built | Sprint 9-10 |
+> | Fuzzy search (`fuzzyScore`, `fuzzySearch`) for local MobX store | ✅ Built | Sprint 9-10 |
+> | `IssueStore.search()` — local fuzzy search over titles + identifiers | ✅ Built | Sprint 9-10 |
+> | Command palette (`Cmd+K`) with recent items, fuzzy search, action commands, sub-menus | ✅ Built | Sprint 9-10 |
+> | `IssueContextMenu` — right-click menu for status/assignee/priority/label | ✅ Built | Sprint 9-10 |
+> | Global keyboard shortcuts (`C`, `S`, `A`, `P`, `L`, `D`, `G+I`, etc.) | ✅ Built | Sprint 9-10 |
+> | `useChord` hook for two-key sequential shortcuts | ✅ Built | Sprint 9-10 |
+> | `useRecentItems` hook — workspace-scoped localStorage MRU list | ✅ Built | Sprint 9-10 |
+> | `WorkspaceClient` boundary — registers `Cmd+K`, renders `CommandPalette` | ✅ Built | Sprint 9-10 |
 > | TipTap rich text editor | 🔲 Planned | Sprint 25-26 |
 > | Dark mode toggle | 🔲 Planned | Sprint 11-12 |
 > | BullMQ background queues | 🔲 Planned | Sprint 41+ |

@@ -1143,25 +1143,25 @@ input LabelFilter {
 type IssuePayload {
   success: Boolean!
   issue: Issue
-  lastSyncId: Int!  # For sync engine
+  lastSyncId: String!  # For sync engine; String to avoid 32-bit int overflow
 }
 
 type DeletePayload {
   success: Boolean!
-  lastSyncId: Int!
+  lastSyncId: String!
 }
 
 # Pattern repeated for all entities:
-type CommentPayload { success: Boolean!, comment: Comment, lastSyncId: Int! }
-type ProjectPayload { success: Boolean!, project: Project, lastSyncId: Int! }
-type CyclePayload { success: Boolean!, cycle: Cycle, lastSyncId: Int! }
-type TeamPayload { success: Boolean!, team: Team, lastSyncId: Int! }
-type WorkflowStatePayload { success: Boolean!, workflowState: WorkflowState, lastSyncId: Int! }
-type IssueLabelPayload { success: Boolean!, issueLabel: IssueLabel, lastSyncId: Int! }
-type FavoritePayload { success: Boolean!, favorite: Favorite, lastSyncId: Int! }
-type NotificationPayload { success: Boolean!, notification: Notification, lastSyncId: Int! }
-type NotificationBatchPayload { success: Boolean!, lastSyncId: Int! }
-type CustomViewPayload { success: Boolean!, customView: CustomView, lastSyncId: Int! }
+type CommentPayload { success: Boolean!, comment: Comment, lastSyncId: String! }
+type ProjectPayload { success: Boolean!, project: Project, lastSyncId: String! }
+type CyclePayload { success: Boolean!, cycle: Cycle, lastSyncId: String! }
+type TeamPayload { success: Boolean!, team: Team, lastSyncId: String! }
+type WorkflowStatePayload { success: Boolean!, workflowState: WorkflowState, lastSyncId: String! }
+type IssueLabelPayload { success: Boolean!, issueLabel: IssueLabel, lastSyncId: String! }
+type FavoritePayload { success: Boolean!, favorite: Favorite, lastSyncId: String! }
+type NotificationPayload { success: Boolean!, notification: Notification, lastSyncId: String! }
+type NotificationBatchPayload { success: Boolean!, lastSyncId: String! }
+type CustomViewPayload { success: Boolean!, customView: CustomView, lastSyncId: String! }
 # ... etc.
 ```
 
