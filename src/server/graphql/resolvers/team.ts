@@ -122,6 +122,7 @@ export const teamResolvers = {
       return ctx.services.team.getMembers(team.id);
     },
 
+    // TODO(Sprint 5+): move to OrganizationService once org business logic exists
     organization: async (team: Team, _args: unknown, ctx: GraphQLContext) => {
       return ctx.prisma.organization.findUnique({
         where: { id: team.organizationId },
