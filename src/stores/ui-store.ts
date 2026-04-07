@@ -25,11 +25,16 @@ export class UIStore {
       setSidebarCollapsed: action,
       sidebarCollapsed: observable,
       toggleCommandPalette: action,
+      toggleSidebarCollapsed: action,
     });
   }
 
   setSidebarCollapsed(collapsed: boolean) {
     this.sidebarCollapsed = collapsed;
+  }
+
+  toggleSidebarCollapsed() {
+    this.sidebarCollapsed = !this.sidebarCollapsed;
   }
 
   setActiveTeamId(id: string | null) {

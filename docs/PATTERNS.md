@@ -2,7 +2,7 @@
 ## Issue Tracker — Linear Rebuild
 
 **Established:** Sprint 1-2  
-**Last updated:** Sprint 9-10  
+**Last updated:** Sprint 11-12  
 **Status:** Living document — updated each sprint
 
 > This is the primary onboarding document for new contributors. All patterns here are the mandated conventions for the codebase. If you deviate from a pattern, document why.
@@ -711,3 +711,234 @@ useHotkeys('s', () => setOpenProperty('status'), { enabled: !!selectedId });
 // Passed to IssueListView → IssueRow → StatusSelect
 <StatusSelect forceOpen={openProperty === 'status'} onClose={() => setOpenProperty(null)} />
 ```
+
+---
+
+## 23. Theme System Pattern (Sprint 11-12)
+
+Theme is managed by `next-themes` (`ThemeProvider` wraps the root layout) with three modes: `light`, `dark`, and `system`.
+
+```typescript
+// src/hooks/use-theme.ts — typed wrapper around next-themes
+import { useTheme } from '@/hooks/use-theme';
+
+const { theme, setTheme, resolvedTheme } = useTheme();
+// theme: 'light' | 'dark' | 'system'
+// resolvedTheme: 'light' | 'dark' (the actual applied theme)
+setTheme('dark');
+```
+
+`ThemeProvider` lives in `src/app/layout.tsx` with `attribute="class"` so `next-themes` toggles the `.dark` class on `<html>`. All shadcn/Tailwind dark-mode utilities (`dark:bg-*`, `dark:text-*`) work automatically.
+
+**Rules:**
+- Never hardcode colours as hex strings in components — always use Tailwind semantic tokens (`bg-zinc-50`, `dark:bg-zinc-950`, etc.) or CSS custom properties from `globals.css`
+- The `ThemeToggle` component (three-way Light / Dark / System) is rendered in the sidebar footer
+- Add `suppressHydrationWarning` to `<html>` to suppress the inevitable SSR mismatch from the theme class injection
+
+---
+
+## 24. Toast Notification Pattern (Sprint 11-12)
+
+Use the helpers in `src/lib/toast.ts` — never import `sonner` directly in components. This keeps the call-site clean and gives us a single place to change options (duration, position, etc.) app-wide.
+
+```typescript
+import { toast } from '@/lib/toast';
+
+toast.success('Issue created');
+toast.error('Failed to update issue. Retrying…');
+toast.info('You are offline. Changes will sync when reconnected.');
+toast.warning('Due date is in the past.');
+```
+
+`Toaster` is registered once in `src/app/layout.tsx` with `richColors`, `closeButton`, and `position="bottom-right"`.
+
+**Standard messages:**
+| Event | Call |
+|---|---|
+| Issue created | `toast.success('Issue created')` |
+| Issue updated | `toast.success('Issue updated')` |
+| Issue archived | `toast.info('Issue archived')` |
+| Mutation failed | `toast.error('Failed to save. Retrying…')` |
+| Offline detected | `toast.info('Offline — changes will sync on reconnect')` |
+| Back online | `toast.success('Back online')` |
+
+---
+
+## 25. Skeleton / Loading State Pattern (Sprint 11-12)
+
+Show skeleton shimmer components during the initial bootstrap sync (before IndexedDB + MobX stores are populated). Never show a blank screen or a spinner.
+
+```typescript
+// src/components/ui/skeleton.tsx — available exports
+import { IssueListSkeleton, IssueSkeleton, SidebarSkeleton, DetailPanelSkeleton } from '@/components/ui/skeleton';
+
+// In SyncProvider or page components:
+if (!bootstrapComplete) return <IssueListSkeleton count={10} />;
+```
+
+**Entity → Skeleton mapping:**
+| Context | Component |
+|---|---|
+| Issue list (bootstrapping) | `<IssueListSkeleton count={8} />` |
+| Single issue row placeholder | `<IssueSkeleton />` |
+| Sidebar during hydration | `<SidebarSkeleton />` |
+| Detail panel (lazy loading) | `<DetailPanelSkeleton />` |
+
+The `Skeleton` base component uses `animate-pulse bg-zinc-200 dark:bg-zinc-800` — no external library needed.
+
+---
+
+## 26. Error Boundary Pattern (Sprint 11-12)
+
+Wrap each major UI section in an `ErrorBoundary` so one failure doesn't blank the whole page.
+
+```typescript
+import { ErrorBoundary, SectionError } from '@/components/error-boundary';
+
+// Default fallback (retry button + generic message)
+<ErrorBoundary>
+  <IssueListView />
+</ErrorBoundary>
+
+// Custom fallback
+<ErrorBoundary fallback={<SectionError message="Could not load issues." onRetry={refetch} />}>
+  <IssueListView />
+</ErrorBoundary>
+```
+
+`ErrorBoundary` is a class component (required by React's error boundary API). It logs to `console.error` in development; in production this is where `Sentry.captureException` would be called.
+
+**Placement rules:**
+- Wrap `IssueListView` on every team/my-issues page
+- Wrap `IssueDetailPanel` separately (so panel crash doesn't take down the list)
+- Do NOT wrap individual rows — too granular
+
+---
+
+## 27. Code Splitting Pattern (Sprint 11-12)
+
+Large components that are not needed on initial render should be lazy-loaded with `React.lazy` + `Suspense`.
+
+```typescript
+// Pattern used for CommandPalette in WorkspaceClient:
+const CommandPalette = lazy(() =>
+  import('@/components/command-palette/command-palette').then(m => ({
+    default: m.CommandPalette,
+  })),
+);
+
+// Only mount when open — avoids loading the chunk until first Cmd+K
+{uiStore.commandPaletteOpen && (
+  <Suspense>
+    <CommandPalette recentItems={recentItems} />
+  </Suspense>
+)}
+```
+
+For the `IssueDetailPanel`, use the `LazyIssueDetailPanel` wrapper from `src/components/issues/lazy-issue-detail-panel.tsx` instead of importing `IssueDetailPanel` directly. It handles the `Suspense` boundary with `<DetailPanelSkeleton />` as the fallback.
+
+**Lazy-loaded chunks (as of Sprint 11-12):**
+| Chunk | Trigger |
+|---|---|
+| `command-palette` | First `Cmd+K` press |
+| `issue-detail-panel` | First issue opened |
+
+---
+
+## 28. Rate Limiting Pattern (Sprint 11-12)
+
+All GraphQL mutations from authenticated users are rate-limited via Redis fixed-window counters. The logic lives in `src/server/middleware/rate-limit.ts` and is applied in `src/app/api/graphql/route.ts`.
+
+**Limits:** 5,000 requests / hour, 250,000 complexity points / hour per user.
+
+**Response headers** (present on every authenticated GraphQL response):
+```
+X-RateLimit-Requests-Limit: 5000
+X-RateLimit-Requests-Remaining: 4999
+X-RateLimit-Requests-Reset: 1712534400   ← unix timestamp
+X-Complexity: 12
+X-RateLimit-Complexity-Limit: 250000
+X-RateLimit-Complexity-Remaining: 249988
+```
+
+**Exceeded response:** HTTP 400, `extensions.code = 'RATELIMITED'`.
+
+The bucket key is `rl:<userId>:<window>` where `<window>` is `floor(unixSeconds / 3600)` — changes every hour, auto-expiring via Redis TTL.
+
+---
+
+## 29. Structured Logging Pattern (Sprint 11-12)
+
+All server-side logging uses the `logger` singleton from `src/server/lib/logger.ts` (backed by `pino`). Never use `console.log` in server code.
+
+```typescript
+import { childLogger, logger } from '@/server/lib/logger';
+
+// Module-level log
+logger.info({ userId, orgId }, 'User authenticated');
+logger.error({ err, query: req.url }, 'GraphQL handler failed');
+
+// Request-scoped child (pre-bind userId/orgId once, then use throughout)
+const reqLog = childLogger({ orgId: ctx.orgId, userId: ctx.userId });
+reqLog.info({ issueId }, 'Issue created');
+```
+
+**Log levels:**
+- `trace` — fine-grained debugging (disabled in production)
+- `debug` — dev-useful info (disabled in production)
+- `info` — normal operations (auth events, mutations, sync actions)
+- `warn` — rate limit exceeded, retries, degraded states
+- `error` — unhandled errors, service failures
+
+Override with `LOG_LEVEL` env var. Pretty-print in dev with `LOG_PRETTY=1`.
+
+---
+
+## 30. Sidebar Collapse Pattern (Sprint 11-12)
+
+`UIStore.sidebarCollapsed` is the single source of truth for sidebar state. Toggle via `uiStore.toggleSidebarCollapsed()`.
+
+```typescript
+// Keyboard shortcut registered in WorkspaceClient
+useHotkeys('meta+b', () => uiStore.toggleSidebarCollapsed());
+useHotkeys('ctrl+b', () => uiStore.toggleSidebarCollapsed());
+
+// AppShell reads collapsed state (observer pattern)
+const AppShell = observer(function AppShell({ children }) {
+  const { uiStore } = useStore();
+  return (
+    <div className="flex h-screen">
+      <Sidebar collapsed={uiStore.sidebarCollapsed} onToggle={() => uiStore.toggleSidebarCollapsed()} />
+      <main>{children}</main>
+    </div>
+  );
+});
+```
+
+The `Sidebar` component uses `transition-[width]` for smooth animation: `w-56` (expanded) → `w-12` (collapsed). In collapsed mode, nav items show only the first letter; the theme toggle is hidden.
+
+---
+
+## 31. E2E Testing Pattern (Sprint 11-12)
+
+E2E tests use **Playwright** and live in `tests/e2e/`. Run with `yarn test:e2e`.
+
+```
+tests/
+├── e2e/
+│   ├── auth.spec.ts           # Login → verify → workspace
+│   ├── command-palette.spec.ts
+│   ├── issue-crud.spec.ts     # Create → edit → archive
+│   ├── issue-list.spec.ts     # Group, collapse, J/K navigation
+│   ├── keyboard.spec.ts       # Global shortcuts
+│   ├── offline.spec.ts        # Optimistic offline + sync-on-reconnect
+│   ├── sync.spec.ts           # Cross-tab real-time sync
+│   └── team-crud.spec.ts
+└── fixtures/
+    ├── auth.ts                # loginAs(page, email) helper
+    └── seed.ts                # Shared test data constants
+```
+
+**Auth in tests:** Use `loginAs(page, email)` from `tests/fixtures/auth.ts`. It drives the email → verify flow. Set `TEST_AUTH_CODE` env var to a known bypass code when running against a test seed.
+
+**Configuration:** `playwright.config.ts` at project root. Starts `yarn dev` automatically before running tests (`webServer`). In CI, runs only Chromium to save time (`workers: 1`).

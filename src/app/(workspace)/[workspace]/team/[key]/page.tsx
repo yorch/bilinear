@@ -4,7 +4,7 @@ import { observer } from 'mobx-react-lite';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import { CreateIssueModal } from '@/components/issues/create-issue-modal';
-import { IssueDetailPanel } from '@/components/issues/issue-detail-panel';
+import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
 import { IssueListView } from '@/components/issues/issue-list-view';
 import type { OpenProperty } from '@/components/issues/issue-row';
 import { useChord, useHotkeys } from '@/hooks/use-hotkeys';
@@ -459,20 +459,18 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         />
       </div>
 
-      {/* Detail panel */}
-      {detailIssue && (
-        <IssueDetailPanel
-          issue={detailIssue}
-          states={states}
-          users={users}
-          labels={labels}
-          onClose={() => {
-            setDetailIssueId(null);
-            router.replace(`/${workspace}/team/${teamKey}`, { scroll: false });
-          }}
-          onUpdate={handleUpdate}
-        />
-      )}
+      {/* Detail panel (lazy-loaded) */}
+      <LazyIssueDetailPanel
+        issue={detailIssue}
+        states={states}
+        users={users}
+        labels={labels}
+        onClose={() => {
+          setDetailIssueId(null);
+          router.replace(`/${workspace}/team/${teamKey}`, { scroll: false });
+        }}
+        onUpdate={handleUpdate}
+      />
 
       {/* Create modal */}
       <CreateIssueModal

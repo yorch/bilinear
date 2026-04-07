@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { IssueDetailPanel } from '@/components/issues/issue-detail-panel';
+import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
 import { gql } from '@/lib/graphql';
 import type {
   IssueDetail,
@@ -123,7 +123,7 @@ export default function IssueDetailPage() {
 
   return (
     <div className="flex flex-1">
-      <IssueDetailPanel
+      <LazyIssueDetailPanel
         issue={issue}
         states={issue.team.states}
         users={issue.team.members.map(m => m.user)}

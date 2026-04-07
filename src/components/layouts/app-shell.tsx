@@ -1,15 +1,23 @@
+'use client';
+
+import { observer } from 'mobx-react-lite';
+import { useStore } from '@/providers/store-provider';
 import { Sidebar } from './sidebar';
 
 interface AppShellProps {
   children: React.ReactNode;
-  workspaceKey?: string;
 }
 
-export function AppShell({ children, workspaceKey }: AppShellProps) {
+export const AppShell = observer(function AppShell({ children }: AppShellProps) {
+  const { uiStore } = useStore();
+
   return (
     <div className="flex h-screen overflow-hidden bg-white dark:bg-zinc-900">
-      <Sidebar workspaceKey={workspaceKey} />
+      <Sidebar
+        collapsed={uiStore.sidebarCollapsed}
+        onToggle={() => uiStore.toggleSidebarCollapsed()}
+      />
       <main className="flex flex-1 flex-col overflow-y-auto">{children}</main>
     </div>
   );
-}
+});

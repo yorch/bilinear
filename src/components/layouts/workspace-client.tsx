@@ -2,14 +2,21 @@
 
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
-import { CommandPalette } from '@/components/command-palette/command-palette';
+import { lazy, Suspense } from 'react';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useRecentItems } from '@/hooks/use-recent-items';
 import { useStore } from '@/providers/store-provider';
 
+const CommandPalette = lazy(() =>
+  import('@/components/command-palette/command-palette').then(m => ({
+    default: m.CommandPalette,
+  })),
+);
+
 /**
  * Client-only wrapper for the workspace layout.
- * Registers the global Cmd+K / Ctrl+K shortcut and renders the CommandPalette.
+ * Registers global shortcuts (Cmd+K command palette, Cmd+B sidebar toggle)
+ * and renders the lazy-loaded CommandPalette.
  * Must be inside StoreProvider and SyncProvider to access stores.
  */
 export const WorkspaceClient = observer(function WorkspaceClient({
@@ -22,7 +29,7 @@ export const WorkspaceClient = observer(function WorkspaceClient({
   const workspaceKey = params.workspace;
   const { items: recentItems } = useRecentItems(workspaceKey);
 
-  // Cmd+K / Ctrl+K — open command palette from anywhere (including inputs)
+  // Cmd+K / Ctrl+K — open command palette (fires even from inputs)
   useHotkeys(
     'meta+k',
     () => uiStore.toggleCommandPalette(),
@@ -36,10 +43,28 @@ export const WorkspaceClient = observer(function WorkspaceClient({
     [uiStore],
   );
 
+  // Cmd+B / Ctrl+B — toggle sidebar
+  useHotkeys(
+    'meta+b',
+    () => uiStore.toggleSidebarCollapsed(),
+    { allowInInput: false },
+    [uiStore],
+  );
+  useHotkeys(
+    'ctrl+b',
+    () => uiStore.toggleSidebarCollapsed(),
+    { allowInInput: false },
+    [uiStore],
+  );
+
   return (
     <>
       {children}
-      <CommandPalette recentItems={recentItems} />
+      {uiStore.commandPaletteOpen && (
+        <Suspense>
+          <CommandPalette recentItems={recentItems} />
+        </Suspense>
+      )}
     </>
   );
 });
