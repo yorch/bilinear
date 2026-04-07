@@ -68,8 +68,8 @@ describe('workflowStateResolvers', () => {
     it('throws UNAUTHENTICATED when not logged in', async () => {
       ctx = createMockContext({ userId: null });
 
-      await expect(
-        workflowStateResolvers.Mutation.workflowStateCreate(
+      try {
+        await workflowStateResolvers.Mutation.workflowStateCreate(
           null,
           {
             input: {
@@ -80,8 +80,12 @@ describe('workflowStateResolvers', () => {
             },
           },
           ctx as never,
-        ),
-      ).rejects.toThrow(GraphQLError);
+        );
+        expect.unreachable('Should have thrown');
+      } catch (e) {
+        expect(e).toBeInstanceOf(GraphQLError);
+        expect((e as GraphQLError).extensions?.code).toBe('UNAUTHENTICATED');
+      }
     });
 
     it('throws FORBIDDEN when user is not a team member', async () => {

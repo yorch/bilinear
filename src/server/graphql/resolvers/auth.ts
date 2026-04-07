@@ -1,4 +1,5 @@
 import { GraphQLError } from 'graphql';
+import { OAuthError } from '../../services/auth.service';
 import type { GraphQLContext } from '../context';
 
 // The AuthPayload service return includes `userId`; this resolver hydrates it
@@ -56,9 +57,12 @@ export const authResolvers = {
         return await ctx.services.auth.exchangeGoogleCode(code, redirectUri);
       } catch (err) {
         const error = err as Error;
-        throw new GraphQLError(error.message, {
-          extensions: { code: 'OAUTH_ERROR' },
-        });
+        if (err instanceof OAuthError) {
+          throw new GraphQLError(error.message, {
+            extensions: { code: 'OAUTH_ERROR' },
+          });
+        }
+        throw err;
       }
     },
 

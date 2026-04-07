@@ -93,13 +93,17 @@ describe('teamMembershipResolvers', () => {
     it('throws UNAUTHENTICATED when not logged in', async () => {
       ctx = createMockContext({ userId: null });
 
-      await expect(
-        teamMembershipResolvers.Mutation.teamMembershipCreate(
+      try {
+        await teamMembershipResolvers.Mutation.teamMembershipCreate(
           null,
           { input: { teamId: TEST_TEAM.id, userId: TEST_USER_2.id } },
           ctx as never,
-        ),
-      ).rejects.toThrow(GraphQLError);
+        );
+        expect.unreachable('Should have thrown');
+      } catch (e) {
+        expect(e).toBeInstanceOf(GraphQLError);
+        expect((e as GraphQLError).extensions?.code).toBe('UNAUTHENTICATED');
+      }
     });
 
     it('throws BAD_USER_INPUT on duplicate membership (P2002)', async () => {

@@ -36,12 +36,8 @@ export const teamMembershipResolvers = {
         );
         return { lastSyncId: 0, success: true, teamMembership };
       } catch (err) {
-        if (
-          typeof err === 'object' &&
-          err !== null &&
-          'code' in err &&
-          (err as { code: string }).code === 'P2002'
-        ) {
+        const error = err as Error & { code?: string };
+        if (error.code === 'P2002') {
           throw new GraphQLError('User is already a member of this team', {
             extensions: { code: 'BAD_USER_INPUT' },
           });
@@ -56,10 +52,8 @@ export const teamMembershipResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      const membership = await ctx.prisma.teamMembership.findUnique({
-        include: { team: true },
-        where: { id },
-      });
+
+      const membership = await ctx.services.team.findMembershipWithTeam(id);
       if (!membership || membership.team.organizationId !== ctx.orgId) {
         throw new GraphQLError('Membership not found', {
           extensions: { code: 'NOT_FOUND' },
@@ -85,10 +79,8 @@ export const teamMembershipResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      const membership = await ctx.prisma.teamMembership.findUnique({
-        include: { team: true },
-        where: { id },
-      });
+
+      const membership = await ctx.services.team.findMembershipWithTeam(id);
       if (!membership || membership.team.organizationId !== ctx.orgId) {
         throw new GraphQLError('Membership not found', {
           extensions: { code: 'NOT_FOUND' },

@@ -1,3 +1,4 @@
+import { GraphQLError } from 'graphql';
 import type { User } from '../../../generated/prisma';
 import { requireAuth } from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
@@ -8,7 +9,9 @@ export const userResolvers = {
       requireAuth(ctx);
       const user = await ctx.services.user.findById(ctx.userId);
       if (!user) {
-        throw new Error('User not found');
+        throw new GraphQLError('User not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
       }
       await ctx.services.user.updateLastSeen(ctx.userId, user.lastSeen);
       return user;

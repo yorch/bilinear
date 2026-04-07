@@ -21,12 +21,24 @@ describe('requireAuth', () => {
 
   it('throws UNAUTHENTICATED when userId is null but orgId is present', () => {
     const ctx = { orgId: 'org-1', userId: null };
-    expect(() => requireAuth(ctx)).toThrow(GraphQLError);
+    try {
+      requireAuth(ctx);
+      expect.unreachable('Should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(GraphQLError);
+      expect((e as GraphQLError).extensions?.code).toBe('UNAUTHENTICATED');
+    }
   });
 
   it('throws UNAUTHENTICATED when userId is present but orgId is null', () => {
     const ctx = { orgId: null, userId: 'user-1' };
-    expect(() => requireAuth(ctx)).toThrow(GraphQLError);
+    try {
+      requireAuth(ctx);
+      expect.unreachable('Should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(GraphQLError);
+      expect((e as GraphQLError).extensions?.code).toBe('UNAUTHENTICATED');
+    }
   });
 
   it('does not throw when both userId and orgId are present', () => {
@@ -63,17 +75,31 @@ describe('requireOrgRole', () => {
       userId: 'user-1',
     });
 
-    await expect(
-      requireOrgRole(prisma as never, 'org-1', 'user-1', ['owner', 'admin']),
-    ).rejects.toThrow(GraphQLError);
+    try {
+      await requireOrgRole(prisma as never, 'org-1', 'user-1', [
+        'owner',
+        'admin',
+      ]);
+      expect.unreachable('Should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(GraphQLError);
+      expect((e as GraphQLError).extensions?.code).toBe('FORBIDDEN');
+    }
   });
 
   it('throws FORBIDDEN when membership does not exist', async () => {
     prisma.organizationMember.findUnique.mockResolvedValue(null);
 
-    await expect(
-      requireOrgRole(prisma as never, 'org-1', 'user-1', ['owner', 'admin']),
-    ).rejects.toThrow(GraphQLError);
+    try {
+      await requireOrgRole(prisma as never, 'org-1', 'user-1', [
+        'owner',
+        'admin',
+      ]);
+      expect.unreachable('Should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(GraphQLError);
+      expect((e as GraphQLError).extensions?.code).toBe('FORBIDDEN');
+    }
   });
 });
 
@@ -100,9 +126,13 @@ describe('requireTeamMember', () => {
   it('throws FORBIDDEN when user is not a member', async () => {
     prisma.teamMembership.findUnique.mockResolvedValue(null);
 
-    await expect(
-      requireTeamMember(prisma as never, 'team-1', 'user-1'),
-    ).rejects.toThrow(GraphQLError);
+    try {
+      await requireTeamMember(prisma as never, 'team-1', 'user-1');
+      expect.unreachable('Should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(GraphQLError);
+      expect((e as GraphQLError).extensions?.code).toBe('FORBIDDEN');
+    }
   });
 });
 
@@ -134,16 +164,24 @@ describe('requireTeamOwner', () => {
       userId: 'user-1',
     });
 
-    await expect(
-      requireTeamOwner(prisma as never, 'team-1', 'user-1'),
-    ).rejects.toThrow(GraphQLError);
+    try {
+      await requireTeamOwner(prisma as never, 'team-1', 'user-1');
+      expect.unreachable('Should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(GraphQLError);
+      expect((e as GraphQLError).extensions?.code).toBe('FORBIDDEN');
+    }
   });
 
   it('throws FORBIDDEN when user has no membership', async () => {
     prisma.teamMembership.findUnique.mockResolvedValue(null);
 
-    await expect(
-      requireTeamOwner(prisma as never, 'team-1', 'user-1'),
-    ).rejects.toThrow(GraphQLError);
+    try {
+      await requireTeamOwner(prisma as never, 'team-1', 'user-1');
+      expect.unreachable('Should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(GraphQLError);
+      expect((e as GraphQLError).extensions?.code).toBe('FORBIDDEN');
+    }
   });
 });

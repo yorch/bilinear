@@ -130,6 +130,9 @@ export class AuthService {
 - Services only import from `src/generated/prisma`, `src/server/lib/`, and other services
 - Services return plain objects / Prisma model types — never GraphQL response types
 - Error classes are defined in the service file that throws them (see §6)
+- **Don't create a service just to wrap a single `findUnique` call.** Create a service when there is real business logic to encapsulate (validation, transactions, constraints, seeding). A bare pass-through adds indirection with no value.
+
+> **Known exception (Sprint 1-4):** `Team.organization` in `resolvers/team.ts` calls `ctx.prisma.organization.findUnique` directly because `OrganizationService` does not yet exist. Once org-level business logic is added (Sprint 5+: member invitations, settings, billing), create `OrganizationService`, move this call into it, and add the service to `GraphQLContext`.
 
 ---
 

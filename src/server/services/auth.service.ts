@@ -227,17 +227,24 @@ function hashToken(value: string): string {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
-class InvalidCodeError extends Error {
+export class InvalidCodeError extends Error {
   constructor() {
     super('Invalid or expired verification code');
     this.name = 'InvalidCodeError';
   }
 }
 
-class InvalidTokenError extends Error {
+export class InvalidTokenError extends Error {
   constructor() {
     super('Invalid or expired token');
     this.name = 'InvalidTokenError';
+  }
+}
+
+export class OAuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'OAuthError';
   }
 }
 
@@ -255,7 +262,7 @@ async function fetchGoogleProfile(code: string, redirectUri: string) {
   });
 
   if (!tokenRes.ok) {
-    throw new Error('Failed to exchange Google authorization code');
+    throw new OAuthError('Failed to exchange Google authorization code');
   }
 
   const tokenData = (await tokenRes.json()) as { access_token: string };
@@ -268,7 +275,7 @@ async function fetchGoogleProfile(code: string, redirectUri: string) {
   );
 
   if (!profileRes.ok) {
-    throw new Error('Failed to fetch Google user profile');
+    throw new OAuthError('Failed to fetch Google user profile');
   }
 
   return profileRes.json() as Promise<{
