@@ -1,6 +1,6 @@
-import { jwtVerify } from 'jose';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { verifyAccessToken } from '@/server/lib/jwt';
 import { prisma } from '@/server/lib/prisma';
 import { redis } from '@/server/lib/redis';
 import { SyncService } from '@/server/services/sync.service';
@@ -11,10 +11,6 @@ import { SyncService } from '@/server/services/sync.service';
  * Returns all data for the authenticated user's organization as a
  * line-delimited stream: each line is `ModelName=<JSON>`, terminated by
  * `_metadata_={"lastSyncId":"<N>"}`.
- *
- * Query params:
- *   type=full (default) | partial
- *   onlyModels=Issue,Team,...  (comma-separated, optional)
  */
 export async function GET(req: NextRequest) {
   const token =
@@ -26,16 +22,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const jwtSecret = process.env.JWT_SECRET;
-  if (!jwtSecret) {
-    return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
-  }
-
   let orgId: string;
   try {
-    const { payload } = await jwtVerify(token, new TextEncoder().encode(jwtSecret));
-    orgId = payload.orgId as string;
-    if (!orgId) throw new Error('missing orgId');
+    ({ orgId } = await verifyAccessToken(token));
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -69,7 +58,10 @@ export async function GET(req: NextRequest) {
     lines.push(`_metadata_=${JSON.stringify({ lastSyncId: data.lastSyncId })}`);
 
     return new NextResponse(lines.join('\n'), {
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'no-store',
+        'Content-Type': 'text/plain; charset=utf-8',
+      },
       status: 200,
     });
   } catch (err) {

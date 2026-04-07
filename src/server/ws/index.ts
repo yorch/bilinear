@@ -4,24 +4,24 @@
  * Run with:  yarn ws:server
  *
  * It:
- *  1. Authenticates clients via JWT (passed as a query param or first message)
+ *  1. Authenticates clients via JWT passed as a `token` query param
  *  2. Subscribes to Redis PubSub channel `sync:<orgId>`
  *  3. Broadcasts incoming SyncActions to all connected org clients
  *  4. Sends periodic pings and handles pong / reconnection
  */
 
 import { createServer } from 'node:http';
-import { jwtVerify } from 'jose';
 import Redis from 'ioredis';
 import { WebSocketServer, type WebSocket } from 'ws';
+import { verifyAccessToken } from '@/server/lib/jwt';
 import { ConnectionManager } from './connection-manager';
 
 const PORT = Number(process.env.WS_PORT ?? 3001);
-const JWT_SECRET = process.env.JWT_SECRET ?? '';
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
 const PING_INTERVAL_MS = 30_000;
 
-if (!JWT_SECRET) {
+// verifyAccessToken() reads JWT_SECRET via getSecret() and throws if unset
+if (!process.env.JWT_SECRET) {
   console.error('[ws] JWT_SECRET is not set — cannot verify tokens');
   process.exit(1);
 }
@@ -36,8 +36,9 @@ const subscribedOrgs = new Set<string>();
 
 async function ensureOrgSubscription(orgId: string) {
   if (subscribedOrgs.has(orgId)) return;
-  subscribedOrgs.add(orgId);
+  // Add to set only after a successful subscribe to avoid masking future retries
   await redisSubscriber.subscribe(`sync:${orgId}`);
+  subscribedOrgs.add(orgId);
   console.log(`[ws] Subscribed to Redis channel sync:${orgId}`);
 }
 
@@ -62,7 +63,7 @@ const httpServer = createServer((_req, res) => {
 const wss = new WebSocketServer({ server: httpServer });
 
 wss.on('connection', async (ws: WebSocket, req) => {
-  // Extract token from query string: ws://host:3001/ws?token=<jwt>
+  // Extract token from query string: ws://host:3001/?token=<jwt>
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
   const token = url.searchParams.get('token');
 
@@ -75,12 +76,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
   let userId: string;
 
   try {
-    const { payload } = await jwtVerify(
-      token,
-      new TextEncoder().encode(JWT_SECRET),
-    );
-    orgId = payload.orgId as string;
-    userId = payload.userId as string;
+    ({ orgId, userId } = await verifyAccessToken(token));
     if (!orgId || !userId) throw new Error('Invalid token payload');
   } catch {
     ws.close(4001, 'Invalid token');

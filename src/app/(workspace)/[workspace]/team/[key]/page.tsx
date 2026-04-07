@@ -2,7 +2,7 @@
 
 import { observer } from 'mobx-react-lite';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { CreateIssueModal } from '@/components/issues/create-issue-modal';
 import { IssueDetailPanel } from '@/components/issues/issue-detail-panel';
 import { IssueListView } from '@/components/issues/issue-list-view';
@@ -10,7 +10,7 @@ import { useHotkeys } from '@/hooks/use-hotkeys';
 import { gql } from '@/lib/graphql';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
-import type { DBIssueLabel } from '@/lib/db';
+import type { DBIssue, DBIssueLabel } from '@/lib/db';
 import type {
   IssueDetail,
   IssueLabel,
@@ -69,69 +69,56 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   const [detailIssueId, setDetailIssueId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
-  // Derive team from store
-  const team = useMemo(
-    () => teamStore.findByKey(teamKey),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [teamKey, teamStore.pool.size],
-  );
+  // ── Store-derived values ─────────────────────────────────────────────────
+  // No useMemo here — inside observer() MobX tracks every observable access
+  // during render and re-renders whenever they change (including in-place Map
+  // updates that don't alter pool.size, e.g. optimisticUpdate).
 
+  const team = teamStore.findByKey(teamKey);
   const teamId = team?.id ?? null;
 
-  // Derive issues, states, users, labels from stores
-  const issues = useMemo<IssueDetail[]>(() => {
-    if (!teamId) return [];
-    return issueStore.findByTeamId(teamId).map(i => ({
-      ...i,
-      dueDate: i.dueDate ?? null,
-      labels: (i.labelIds ?? [])
-        .map(id => labelStore.findById(id))
-        .filter((l): l is DBIssueLabel => l !== null)
-        .map(l => ({ color: l.color, id: l.id, name: l.name })),
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamId, issueStore.pool.size, labelStore.pool.size]);
+  const issues: IssueDetail[] = teamId
+    ? issueStore.findByTeamId(teamId).map(i => ({
+        ...i,
+        dueDate: i.dueDate ?? null,
+        labels: (i.labelIds ?? [])
+          .map(id => labelStore.findById(id))
+          .filter((l): l is DBIssueLabel => l !== null)
+          .map(l => ({ color: l.color, id: l.id, name: l.name })),
+      }))
+    : [];
 
-  const states = useMemo<WorkflowState[]>(() => {
-    if (!teamId) return [];
-    return workflowStateStore.findByTeamId(teamId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamId, workflowStateStore.pool.size]);
+  const states: WorkflowState[] = teamId
+    ? workflowStateStore.findByTeamId(teamId)
+    : [];
 
-  const users = useMemo<IssueUser[]>(() => {
-    return userStore.all.map(u => ({
-      avatarBackgroundColor: u.avatarBgColor,
-      avatarUrl: u.avatarUrl ?? null,
-      displayName: u.displayName,
-      id: u.id,
-      initials: u.initials,
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userStore.pool.size]);
+  const users: IssueUser[] = userStore.all.map(u => ({
+    avatarBackgroundColor: u.avatarBgColor,
+    avatarUrl: u.avatarUrl ?? null,
+    displayName: u.displayName,
+    id: u.id,
+    initials: u.initials,
+  }));
 
-  const labels = useMemo<IssueLabel[]>(() => {
-    return labelStore.all.map(l => ({
-      color: l.color,
-      id: l.id,
-      name: l.name,
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [labelStore.pool.size]);
+  const labels: IssueLabel[] = labelStore.all.map(l => ({
+    color: l.color,
+    id: l.id,
+    name: l.name,
+  }));
 
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
   const hasError = syncStore.status === 'error';
 
-  const detailIssue = useMemo<IssueDetail | null>(() => {
+  const detailIssue: IssueDetail | null = (() => {
     if (!detailIssueId) return null;
     const raw = issueStore.findById(detailIssueId);
     if (!raw) return null;
-    const labels = (raw.labelIds ?? [])
+    const issueLabels = (raw.labelIds ?? [])
       .map(id => labelStore.findById(id))
       .filter((l): l is DBIssueLabel => l !== null)
       .map(l => ({ color: l.color, id: l.id, name: l.name }));
-    return { ...raw, dueDate: raw.dueDate ?? null, labels };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detailIssueId, issueStore.pool.size, labelStore.pool.size]);
+    return { ...raw, dueDate: raw.dueDate ?? null, labels: issueLabels };
+  })();
 
   // Keyboard shortcuts
   useHotkeys('c', () => setCreateOpen(true), []);
@@ -155,19 +142,23 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   // Update an issue — optimistic via MobX, confirmed/rolled-back via server
   const handleUpdate = useCallback(
     (id: string, patch: Record<string, unknown>) => {
-      // Optimistic update in MobX store — labelIds is a DBIssue field, passes through directly
-      issueStore.optimisticUpdate(id, patch as Partial<import('@/lib/db').DBIssue>);
+      // Capture snapshot for rollback in case of permanent failure
+      const snapshot = issueStore.findById(id);
+
+      issueStore.optimisticUpdate(id, patch as Partial<DBIssue>);
 
       txQueue.enqueue(
         ISSUE_UPDATE_MUTATION,
         { id, input: patch },
         {
           onError: () => {
-            // Roll back by re-fetching (delta sync will reconcile)
-            console.error('[TeamPage] issueUpdate failed for', id);
+            // Restore pre-patch state on permanent failure
+            if (snapshot) {
+              issueStore.optimisticUpdate(id, snapshot);
+            }
           },
           onSuccess: (data) => {
-            const updated = (data as { issueUpdate?: { issue?: import('@/lib/db').DBIssue } })
+            const updated = (data as { issueUpdate?: { issue?: DBIssue } })
               ?.issueUpdate?.issue;
             if (updated) {
               issueStore.applySyncAction('U', id, updated);
@@ -200,7 +191,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
           },
           onSuccess: (data) => {
             const created = (
-              data as { issueCreate?: { issue?: import('@/lib/db').DBIssue } }
+              data as { issueCreate?: { issue?: DBIssue } }
             )?.issueCreate?.issue;
             if (created) {
               issueStore.applySyncAction('I', created.id, created);
@@ -209,7 +200,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         },
       );
     },
-    [teamId, issueStore],
+    [teamId, issueStore, txQueue],
   );
 
   if (isLoading) {

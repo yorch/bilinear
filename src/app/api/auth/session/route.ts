@@ -1,6 +1,6 @@
-import { jwtVerify } from 'jose';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { verifyAccessToken } from '@/server/lib/jwt';
 
 const ACCESS_TOKEN_MAX_AGE = 60 * 60 * 24; // 24h in seconds
 const REFRESH_TOKEN_MAX_AGE = 60 * 60 * 24 * 30; // 30d in seconds
@@ -16,14 +16,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ token: null }, { status: 200 });
   }
 
-  const jwtSecret = process.env.JWT_SECRET;
-  if (!jwtSecret) {
-    return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
-  }
-
   try {
-    await jwtVerify(token, new TextEncoder().encode(jwtSecret));
-    return NextResponse.json({ token });
+    await verifyAccessToken(token);
+    return NextResponse.json({ token }, {
+      headers: { 'Cache-Control': 'no-store' },
+    });
   } catch {
     return NextResponse.json({ token: null }, { status: 200 });
   }
@@ -42,16 +39,8 @@ export async function POST(req: NextRequest) {
 
   // Verify the access token signature before trusting it into a cookie.
   // Rejects tokens that weren't signed by this server's JWT_SECRET.
-  const jwtSecret = process.env.JWT_SECRET;
-  if (!jwtSecret) {
-    return NextResponse.json(
-      { error: 'Server misconfigured' },
-      { status: 500 },
-    );
-  }
-
   try {
-    await jwtVerify(accessToken, new TextEncoder().encode(jwtSecret));
+    await verifyAccessToken(accessToken);
   } catch {
     return NextResponse.json(
       { error: 'Invalid access token' },

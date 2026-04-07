@@ -34,9 +34,11 @@ export class LabelStore {
   }
 
   applySyncAction(action: string, id: string, data: DBIssueLabel | null) {
-    if (action === 'I' || action === 'U') {
+    if (action === 'I' || action === 'U' || action === 'A') {
+      // Archive: keep in pool with archivedAt set so issues referencing this
+      // label still resolve; filtered from active lists via archivedAt check
       if (data) this.pool.set(id, data);
-    } else if (action === 'D' || action === 'A') {
+    } else if (action === 'D') {
       this.pool.delete(id);
     }
   }

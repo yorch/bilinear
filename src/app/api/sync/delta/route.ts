@@ -1,6 +1,6 @@
-import { jwtVerify } from 'jose';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { verifyAccessToken } from '@/server/lib/jwt';
 import { prisma } from '@/server/lib/prisma';
 import { redis } from '@/server/lib/redis';
 import { SyncService, serializeSyncAction } from '@/server/services/sync.service';
@@ -21,16 +21,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const jwtSecret = process.env.JWT_SECRET;
-  if (!jwtSecret) {
-    return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
-  }
-
   let orgId: string;
   try {
-    const { payload } = await jwtVerify(token, new TextEncoder().encode(jwtSecret));
-    orgId = payload.orgId as string;
-    if (!orgId) throw new Error('missing orgId');
+    ({ orgId } = await verifyAccessToken(token));
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -62,7 +55,9 @@ export async function GET(req: NextRequest) {
 
   try {
     const actions = await syncService.getDeltaSyncActions(orgId, lastSyncId, toSyncId);
-    return NextResponse.json(actions.map(serializeSyncAction));
+    return NextResponse.json(actions.map(serializeSyncAction), {
+      headers: { 'Cache-Control': 'no-store' },
+    });
   } catch (err) {
     console.error('[sync/delta] Error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

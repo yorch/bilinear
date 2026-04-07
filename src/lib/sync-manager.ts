@@ -221,24 +221,45 @@ export class SyncManager {
 
     let maxId = syncStore.lastSyncId;
 
+    // Collect Dexie writes so we can flush them in one transaction at the end
+    const dexieUpserts: {
+      teams: object[];
+      users: object[];
+      workflowStates: object[];
+      issueLabels: object[];
+      issues: object[];
+      organizations: object[];
+    } = { issueLabels: [], issues: [], organizations: [], teams: [], users: [], workflowStates: [] };
+    const dexieDeletes: { table: 'teams' | 'users' | 'workflowStates' | 'issueLabels' | 'issues'; id: string }[] = [];
+
     for (const action of actions) {
       const { action: act, modelName, modelId, data } = action;
 
       switch (modelName) {
         case 'Team':
           teamStore.applySyncAction(act, modelId, data as Parameters<typeof teamStore.applySyncAction>[2]);
+          if (act === 'D') dexieDeletes.push({ id: modelId, table: 'teams' });
+          else if (data) dexieUpserts.teams.push(data);
           break;
         case 'User':
           userStore.applySyncAction(act, modelId, data as Parameters<typeof userStore.applySyncAction>[2]);
+          if (act === 'D') dexieDeletes.push({ id: modelId, table: 'users' });
+          else if (data) dexieUpserts.users.push(data);
           break;
         case 'WorkflowState':
           workflowStateStore.applySyncAction(act, modelId, data as Parameters<typeof workflowStateStore.applySyncAction>[2]);
+          if (act === 'D') dexieDeletes.push({ id: modelId, table: 'workflowStates' });
+          else if (data) dexieUpserts.workflowStates.push(data);
           break;
         case 'IssueLabel':
           labelStore.applySyncAction(act, modelId, data as Parameters<typeof labelStore.applySyncAction>[2]);
+          if (act === 'D') dexieDeletes.push({ id: modelId, table: 'issueLabels' });
+          else if (data) dexieUpserts.issueLabels.push(data);
           break;
         case 'Issue':
           issueStore.applySyncAction(act, modelId, data as Parameters<typeof issueStore.applySyncAction>[2]);
+          if (act === 'D') dexieDeletes.push({ id: modelId, table: 'issues' });
+          else if (data) dexieUpserts.issues.push(data);
           break;
       }
 
@@ -249,7 +270,25 @@ export class SyncManager {
     }
 
     syncStore.setLastSyncId(maxId);
-    await db.syncMetadata.put({ key: 'lastSyncId', value: maxId });
+
+    // Persist to IndexedDB so real-time updates survive a page refresh
+    await db.transaction(
+      'rw',
+      [db.teams, db.users, db.workflowStates, db.issueLabels, db.issues, db.syncMetadata],
+      async () => {
+        await Promise.all([
+          dexieUpserts.teams.length > 0 && db.teams.bulkPut(dexieUpserts.teams as Parameters<typeof db.teams.bulkPut>[0]),
+          dexieUpserts.users.length > 0 && db.users.bulkPut(dexieUpserts.users as Parameters<typeof db.users.bulkPut>[0]),
+          dexieUpserts.workflowStates.length > 0 && db.workflowStates.bulkPut(dexieUpserts.workflowStates as Parameters<typeof db.workflowStates.bulkPut>[0]),
+          dexieUpserts.issueLabels.length > 0 && db.issueLabels.bulkPut(dexieUpserts.issueLabels as Parameters<typeof db.issueLabels.bulkPut>[0]),
+          dexieUpserts.issues.length > 0 && db.issues.bulkPut(dexieUpserts.issues as Parameters<typeof db.issues.bulkPut>[0]),
+          db.syncMetadata.put({ key: 'lastSyncId', value: maxId }),
+        ]);
+        await Promise.all(
+          dexieDeletes.map(({ table, id }) => db[table].delete(id)),
+        );
+      },
+    );
   }
 
   private setupWebSocket(token: string) {
