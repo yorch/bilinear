@@ -87,6 +87,7 @@ export interface DBIssue {
   cycleId?: string | null;
   branchName?: string | null;
   trashed: boolean;
+  labelIds: string[];
   startedAt?: string | null;
   completedAt?: string | null;
   canceledAt?: string | null;

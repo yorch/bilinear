@@ -22,27 +22,16 @@ export class ConnectionManager {
     return info;
   }
 
-  remove(info: ClientInfo) {
+  /** Returns true if the org now has no remaining clients. */
+  remove(info: ClientInfo): boolean {
     const set = this.clients.get(info.orgId);
-    if (set) {
-      set.delete(info);
-      if (set.size === 0) {
-        this.clients.delete(info.orgId);
-      }
+    if (!set) return true;
+    set.delete(info);
+    if (set.size === 0) {
+      this.clients.delete(info.orgId);
+      return true;
     }
-  }
-
-  /**
-   * Broadcast a message to all clients in an organization except the sender.
-   */
-  broadcastToOrg(orgId: string, message: string, exclude?: WebSocket) {
-    const set = this.clients.get(orgId);
-    if (!set) return;
-    for (const info of set) {
-      if (info.ws !== exclude && info.ws.readyState === 1 /* OPEN */) {
-        info.ws.send(message);
-      }
-    }
+    return false;
   }
 
   /**

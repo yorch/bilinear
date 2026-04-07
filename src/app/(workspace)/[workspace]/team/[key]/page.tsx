@@ -10,6 +10,7 @@ import { useHotkeys } from '@/hooks/use-hotkeys';
 import { gql } from '@/lib/graphql';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
+import type { DBIssueLabel } from '@/lib/db';
 import type {
   IssueDetail,
   IssueLabel,
@@ -47,9 +48,6 @@ const ISSUE_UPDATE_MUTATION = `
   }
 `;
 
-// One shared queue per page mount — mutations serialize here
-const txQueue = new TransactionQueue();
-
 // ---------------------------------------------------------------------------
 // Page component (observer so it re-renders on MobX store changes)
 // ---------------------------------------------------------------------------
@@ -62,6 +60,9 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   const router = useRouter();
   const { issueStore, teamStore, userStore, workflowStateStore, labelStore, syncStore } =
     useStore();
+
+  // One queue per component mount — unmounting the page cleans up the reference
+  const txQueue = useMemo(() => new TransactionQueue(), []);
 
   // UI state (not in MobX — local to this page)
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -83,10 +84,13 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     return issueStore.findByTeamId(teamId).map(i => ({
       ...i,
       dueDate: i.dueDate ?? null,
-      labels: [],          // label assignments fetched separately below
+      labels: (i.labelIds ?? [])
+        .map(id => labelStore.findById(id))
+        .filter((l): l is DBIssueLabel => l !== null)
+        .map(l => ({ color: l.color, id: l.id, name: l.name })),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamId, issueStore.pool.size]);
+  }, [teamId, issueStore.pool.size, labelStore.pool.size]);
 
   const states = useMemo<WorkflowState[]>(() => {
     if (!teamId) return [];
@@ -121,9 +125,13 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     if (!detailIssueId) return null;
     const raw = issueStore.findById(detailIssueId);
     if (!raw) return null;
-    return { ...raw, dueDate: raw.dueDate ?? null, labels: [] };
+    const labels = (raw.labelIds ?? [])
+      .map(id => labelStore.findById(id))
+      .filter((l): l is DBIssueLabel => l !== null)
+      .map(l => ({ color: l.color, id: l.id, name: l.name }));
+    return { ...raw, dueDate: raw.dueDate ?? null, labels };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detailIssueId, issueStore.pool.size]);
+  }, [detailIssueId, issueStore.pool.size, labelStore.pool.size]);
 
   // Keyboard shortcuts
   useHotkeys('c', () => setCreateOpen(true), []);
@@ -147,18 +155,8 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   // Update an issue — optimistic via MobX, confirmed/rolled-back via server
   const handleUpdate = useCallback(
     (id: string, patch: Record<string, unknown>) => {
-      // Resolve labelIds → labels for optimistic display
-      let optimisticPatch: Record<string, unknown> = patch;
-      if (Array.isArray(patch.labelIds)) {
-        const { labelIds, ...rest } = patch;
-        optimisticPatch = {
-          ...rest,
-          labels: labels.filter(l => (labelIds as string[]).includes(l.id)),
-        };
-      }
-
-      // Optimistic update in MobX store
-      issueStore.optimisticUpdate(id, optimisticPatch as Partial<import('@/lib/db').DBIssue>);
+      // Optimistic update in MobX store — labelIds is a DBIssue field, passes through directly
+      issueStore.optimisticUpdate(id, patch as Partial<import('@/lib/db').DBIssue>);
 
       txQueue.enqueue(
         ISSUE_UPDATE_MUTATION,
@@ -178,7 +176,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         },
       );
     },
-    [issueStore, labels],
+    [issueStore, txQueue],
   );
 
   // Create issue

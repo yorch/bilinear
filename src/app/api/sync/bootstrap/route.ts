@@ -44,7 +44,6 @@ export async function GET(req: NextRequest) {
 
   try {
     const data = await syncService.getBootstrapData(orgId);
-    const lastSyncId = await syncService.getLastSyncId(orgId);
 
     const lines: string[] = [];
 
@@ -67,7 +66,7 @@ export async function GET(req: NextRequest) {
       lines.push(`Issue=${JSON.stringify(issue)}`);
     }
 
-    lines.push(`_metadata_=${JSON.stringify({ lastSyncId: lastSyncId.toString() })}`);
+    lines.push(`_metadata_=${JSON.stringify({ lastSyncId: data.lastSyncId })}`);
 
     return new NextResponse(lines.join('\n'), {
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },

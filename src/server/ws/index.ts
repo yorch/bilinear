@@ -118,10 +118,16 @@ wss.on('connection', async (ws: WebSocket, req) => {
 
   ws.on('close', () => {
     clearInterval(pingTimer);
-    connectionManager.remove(clientInfo);
+    const orgEmpty = connectionManager.remove(clientInfo);
     console.log(
       `[ws] Client disconnected — org:${orgId} user:${userId} total:${connectionManager.clientCount()}`,
     );
+    if (orgEmpty) {
+      subscribedOrgs.delete(orgId);
+      redisSubscriber.unsubscribe(`sync:${orgId}`).catch((err: Error) => {
+        console.error(`[ws] Failed to unsubscribe from sync:${orgId}:`, err.message);
+      });
+    }
   });
 
   ws.on('error', (err: Error) => {

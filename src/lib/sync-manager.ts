@@ -17,6 +17,8 @@ export class SyncManager {
   private wsClient: WsClient;
   private stores: RootStore;
   private wsUnsubscribers: Array<() => void> = [];
+  private isBootstrapping = false;
+  private isDeltaSyncing = false;
 
   constructor(stores: RootStore, wsClient: WsClient) {
     this.stores = stores;
@@ -87,6 +89,9 @@ export class SyncManager {
   }
 
   private async fullBootstrap() {
+    if (this.isBootstrapping) return;
+    this.isBootstrapping = true;
+
     const { syncStore, teamStore, userStore, workflowStateStore, labelStore, issueStore } =
       this.stores;
 
@@ -98,21 +103,12 @@ export class SyncManager {
       if (!res.ok) {
         syncStore.setStatus('error');
         syncStore.setError('Bootstrap failed');
+        this.isBootstrapping = false;
         return;
       }
 
       const text = await res.text();
       const lines = text.split('\n').filter(Boolean);
-
-      // Clear existing IndexedDB data before writing fresh bootstrap
-      await Promise.all([
-        db.organizations.clear(),
-        db.teams.clear(),
-        db.users.clear(),
-        db.workflowStates.clear(),
-        db.issueLabels.clear(),
-        db.issues.clear(),
-      ]);
 
       const batches = {
         issueLabels: [] as object[],
@@ -143,16 +139,30 @@ export class SyncManager {
         }
       }
 
-      // Write to IndexedDB
-      await Promise.all([
-        db.organizations.bulkPut(batches.organizations as Parameters<typeof db.organizations.bulkPut>[0]),
-        db.teams.bulkPut(batches.teams as Parameters<typeof db.teams.bulkPut>[0]),
-        db.users.bulkPut(batches.users as Parameters<typeof db.users.bulkPut>[0]),
-        db.workflowStates.bulkPut(batches.workflowStates as Parameters<typeof db.workflowStates.bulkPut>[0]),
-        db.issueLabels.bulkPut(batches.issueLabels as Parameters<typeof db.issueLabels.bulkPut>[0]),
-        db.issues.bulkPut(batches.issues as Parameters<typeof db.issues.bulkPut>[0]),
-        db.syncMetadata.put({ key: 'lastSyncId', value: lastSyncId }),
-      ]);
+      // Clear and write in a single Dexie transaction to prevent data loss if a write fails
+      await db.transaction(
+        'rw',
+        [db.organizations, db.teams, db.users, db.workflowStates, db.issueLabels, db.issues, db.syncMetadata],
+        async () => {
+          await Promise.all([
+            db.organizations.clear(),
+            db.teams.clear(),
+            db.users.clear(),
+            db.workflowStates.clear(),
+            db.issueLabels.clear(),
+            db.issues.clear(),
+          ]);
+          await Promise.all([
+            db.organizations.bulkPut(batches.organizations as Parameters<typeof db.organizations.bulkPut>[0]),
+            db.teams.bulkPut(batches.teams as Parameters<typeof db.teams.bulkPut>[0]),
+            db.users.bulkPut(batches.users as Parameters<typeof db.users.bulkPut>[0]),
+            db.workflowStates.bulkPut(batches.workflowStates as Parameters<typeof db.workflowStates.bulkPut>[0]),
+            db.issueLabels.bulkPut(batches.issueLabels as Parameters<typeof db.issueLabels.bulkPut>[0]),
+            db.issues.bulkPut(batches.issues as Parameters<typeof db.issues.bulkPut>[0]),
+            db.syncMetadata.put({ key: 'lastSyncId', value: lastSyncId }),
+          ]);
+        },
+      );
 
       // Populate MobX stores
       teamStore.upsertMany(batches.teams as Parameters<typeof teamStore.upsertMany>[0]);
@@ -166,10 +176,15 @@ export class SyncManager {
       console.error('[SyncManager] Bootstrap error:', err);
       syncStore.setStatus('error');
       syncStore.setError('Bootstrap failed');
+    } finally {
+      this.isBootstrapping = false;
     }
   }
 
   private async deltaSync() {
+    if (this.isDeltaSyncing) return;
+    this.isDeltaSyncing = true;
+
     const { syncStore } = this.stores;
     const lastSyncId = syncStore.lastSyncId;
 
@@ -181,6 +196,7 @@ export class SyncManager {
 
       if (!res.ok) {
         // Delta failed — fall back to full bootstrap
+        this.isDeltaSyncing = false;
         await this.fullBootstrap();
         return;
       }
@@ -192,6 +208,8 @@ export class SyncManager {
       console.error('[SyncManager] Delta sync error:', err);
       // Non-fatal — we'll catch up via WebSocket
       syncStore.setStatus('connected');
+    } finally {
+      this.isDeltaSyncing = false;
     }
   }
 

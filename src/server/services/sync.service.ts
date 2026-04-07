@@ -39,31 +39,41 @@ export class SyncService {
   }
 
   async getBootstrapData(orgId: string) {
-    const [organizations, teams, users, issues, workflowStates, issueLabels] =
+    const [organizations, teams, users, issues, workflowStates, issueLabels, labelAssignments, lastSyncAction] =
       await Promise.all([
         this.prisma.organization.findUnique({ where: { id: orgId } }),
-        this.prisma.team.findMany({
-          where: { archivedAt: null, organizationId: orgId },
+        this.prisma.team.findMany({ where: { archivedAt: null, organizationId: orgId } }),
+        this.prisma.user.findMany({ where: { orgMemberships: { some: { organizationId: orgId } } } }),
+        this.prisma.issue.findMany({ where: { archivedAt: null, organizationId: orgId, trashed: false } }),
+        this.prisma.workflowState.findMany({ where: { archivedAt: null, team: { organizationId: orgId } } }),
+        this.prisma.issueLabel.findMany({ where: { archivedAt: null, organizationId: orgId } }),
+        this.prisma.issueLabelAssignment.findMany({
+          where: { issue: { organizationId: orgId, archivedAt: null, trashed: false } },
         }),
-        this.prisma.user.findMany({
-          where: { orgMemberships: { some: { organizationId: orgId } } },
-        }),
-        this.prisma.issue.findMany({
-          where: { archivedAt: null, organizationId: orgId, trashed: false },
-        }),
-        this.prisma.workflowState.findMany({
-          include: { issues: false },
-          where: {
-            archivedAt: null,
-            team: { organizationId: orgId },
-          },
-        }),
-        this.prisma.issueLabel.findMany({
-          where: { archivedAt: null, organizationId: orgId },
+        this.prisma.syncAction.findFirst({
+          orderBy: { id: 'desc' },
+          select: { id: true },
+          where: { organizationId: orgId },
         }),
       ]);
 
-    return { issueLabels, issues, organizations: organizations ? [organizations] : [], teams, users, workflowStates };
+    // Denormalize label IDs onto each issue
+    const labelIdsByIssue = new Map<string, string[]>();
+    for (const a of labelAssignments) {
+      const ids = labelIdsByIssue.get(a.issueId) ?? [];
+      ids.push(a.labelId);
+      labelIdsByIssue.set(a.issueId, ids);
+    }
+
+    return {
+      issueLabels,
+      issues: issues.map(i => ({ ...i, labelIds: labelIdsByIssue.get(i.id) ?? [] })),
+      lastSyncId: (lastSyncAction?.id ?? BigInt(0)).toString(),
+      organizations: organizations ? [organizations] : [],
+      teams,
+      users,
+      workflowStates,
+    };
   }
 
   async getDeltaSyncActions(

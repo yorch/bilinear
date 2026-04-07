@@ -8,6 +8,7 @@ export class IssueStore {
     makeObservable(this, {
       all: computed,
       applySyncAction: action,
+      optimisticUpdate: action,
       pool: observable,
       upsertMany: action,
     });
@@ -53,13 +54,17 @@ export class IssueStore {
   }
 
   applySyncAction(action: string, id: string, data: DBIssue | null) {
-    if (action === 'I' || action === 'U') {
-      if (data) this.pool.set(id, data);
+    if (action === 'I' || action === 'U' || action === 'A') {
+      if (data) {
+        // Sync action data from the server may include `labelAssignments` (full Prisma relation).
+        // Bootstrap data includes `labelIds` directly. Handle both.
+        const raw = data as DBIssue & { labelAssignments?: Array<{ labelId: string }> };
+        const { labelAssignments, ...issueData } = raw;
+        const labelIds = labelAssignments ? labelAssignments.map(a => a.labelId) : (issueData.labelIds ?? []);
+        this.pool.set(id, { ...issueData, labelIds });
+      }
     } else if (action === 'D') {
       this.pool.delete(id);
-    } else if (action === 'A') {
-      // Archive: keep in pool but mark archivedAt so it's filtered from .all
-      if (data) this.pool.set(id, data);
     }
   }
 }
