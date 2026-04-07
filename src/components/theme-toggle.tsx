@@ -22,14 +22,13 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
   const { setTheme, theme } = useTheme();
 
   return (
-    <div
+    <fieldset
       className={cn(
-        'flex items-center gap-0.5 rounded-md bg-zinc-100 p-0.5 dark:bg-zinc-800',
+        'flex items-center gap-0.5 rounded-md bg-zinc-100 p-0.5 dark:bg-zinc-800 border-0 m-0',
         className,
       )}
-      role="group"
-      aria-label="Color theme"
     >
+      <legend className="sr-only">Color theme</legend>
       {OPTIONS.map(({ icon: Icon, label, value }) => (
         <button
           key={value}
@@ -47,6 +46,6 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
           <Icon className="h-3.5 w-3.5" />
         </button>
       ))}
-    </div>
+    </fieldset>
   );
 }

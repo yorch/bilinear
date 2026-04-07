@@ -19,6 +19,10 @@ test.describe('Team Management', () => {
     const teamLink = page.locator('aside nav a').first();
     await teamLink.click();
     // Should show the issue list view
-    await expect(page.locator('[data-testid="issue-list-view"], [data-testid="empty-state"]')).toBeVisible();
+    await expect(
+      page.locator(
+        '[data-testid="issue-list-view"], [data-testid="empty-state"]',
+      ),
+    ).toBeVisible();
   });
 });

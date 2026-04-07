@@ -7,11 +7,19 @@ import { resolvers } from '../../../server/graphql/resolvers';
 import { typeDefs } from '../../../server/graphql/schema';
 import { logger } from '../../../server/lib/logger';
 import {
-  applyRateLimitHeaders,
   buildRateLimitedResponse,
   checkRateLimit,
   estimateComplexity,
+  withRateLimitHeaders,
 } from '../../../server/middleware/rate-limit';
+
+/**
+ * Cache the GraphQL context per request so we only call createContext once.
+ * Apollo's context callback and the rate-limit check both need the context,
+ * but createContext does JWT verification + service instantiation on every
+ * call — we want exactly one invocation per HTTP request.
+ */
+const requestContextCache = new WeakMap<Request, GraphQLContext>();
 
 const server = new ApolloServer<GraphQLContext>({
   resolvers,
@@ -21,20 +29,26 @@ const server = new ApolloServer<GraphQLContext>({
 const handler = startServerAndCreateNextHandler<NextRequest, GraphQLContext>(
   server,
   {
-    context: async req => createContext(req),
+    context: async req => {
+      // Return the already-built context from the WeakMap if present;
+      // fall back to creating one (handles edge cases like Apollo playground).
+      return requestContextCache.get(req) ?? createContext(req);
+    },
   },
 );
 
 async function handleRequest(req: NextRequest): Promise<Response> {
+  // Build context once and cache it so Apollo doesn't rebuild it.
   const ctx = await createContext(req);
+  requestContextCache.set(req, ctx);
 
-  // Only rate-limit authenticated requests
+  // Rate-limit authenticated requests only.
   if (ctx.userId) {
     let body: { query?: string; variables?: Record<string, unknown> } = {};
     try {
       body = (await req.clone().json()) as typeof body;
     } catch {
-      // body parse failed — proceed without complexity estimate
+      // Non-JSON or empty body — proceed without complexity estimate.
     }
 
     const complexity = estimateComplexity(body);
@@ -46,12 +60,12 @@ async function handleRequest(req: NextRequest): Promise<Response> {
     }
 
     const response = await handler(req);
-    applyRateLimitHeaders(response, headers);
     logger.info(
       { complexity, method: req.method, userId: ctx.userId },
       'GraphQL request',
     );
-    return response;
+    // Return a cloned response with rate-limit headers (Response is immutable).
+    return withRateLimitHeaders(response, headers);
   }
 
   return handler(req);

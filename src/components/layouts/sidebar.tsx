@@ -1,6 +1,6 @@
 'use client';
 
-import { PanelLeft } from 'lucide-react';
+import { Inbox, PanelLeft, User } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -9,12 +9,16 @@ import { cn } from '@/lib/utils';
 interface NavItem {
   label: string;
   href: string;
-  icon?: React.ReactNode;
+  icon: React.ReactNode;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: '/my-issues', label: 'My Issues' },
-  { href: '/inbox', label: 'Inbox' },
+  {
+    href: '/my-issues',
+    icon: <User className="h-4 w-4" />,
+    label: 'My Issues',
+  },
+  { href: '/inbox', icon: <Inbox className="h-4 w-4" />, label: 'Inbox' },
 ];
 
 interface SidebarProps {
@@ -23,7 +27,11 @@ interface SidebarProps {
   workspaceKey?: string;
 }
 
-export function Sidebar({ collapsed = false, onToggle, workspaceKey }: SidebarProps) {
+export function Sidebar({
+  collapsed = false,
+  onToggle,
+  workspaceKey,
+}: SidebarProps) {
   const pathname = usePathname();
 
   return (
@@ -57,7 +65,7 @@ export function Sidebar({ collapsed = false, onToggle, workspaceKey }: SidebarPr
             <li key={item.href}>
               <Link
                 href={item.href}
-                title={collapsed ? item.label : undefined}
+                title={item.label}
                 className={cn(
                   'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
                   collapsed && 'justify-center px-0',
@@ -66,7 +74,8 @@ export function Sidebar({ collapsed = false, onToggle, workspaceKey }: SidebarPr
                     : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
                 )}
               >
-                {collapsed ? item.label.charAt(0) : item.label}
+                {item.icon}
+                {!collapsed && item.label}
               </Link>
             </li>
           ))}

@@ -3,10 +3,16 @@ import { cn } from '@/lib/utils';
 /**
  * Base shimmer element. Compose into entity-specific skeletons below.
  */
-function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+function Skeleton({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('animate-pulse rounded-md bg-zinc-200 dark:bg-zinc-800', className)}
+      className={cn(
+        'animate-pulse rounded-md bg-zinc-200 dark:bg-zinc-800',
+        className,
+      )}
       {...props}
     />
   );
@@ -72,8 +78,8 @@ function DetailPanelSkeleton() {
       <Skeleton className="h-4 w-1/3" />
       <div className="flex flex-col gap-2 mt-2">
         {Array.from({ length: 5 }).map((_, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton list
           <div key={i} className="flex items-center gap-3">
-            {/* biome-ignore lint/suspicious/noArrayIndexKey: static skeleton list */}
             <Skeleton className="h-4 w-24 shrink-0" />
             <Skeleton className="h-4 w-32" />
           </div>
@@ -88,4 +94,10 @@ function DetailPanelSkeleton() {
   );
 }
 
-export { DetailPanelSkeleton, IssueListSkeleton, IssueSkeleton, Skeleton, SidebarSkeleton };
+export {
+  DetailPanelSkeleton,
+  IssueListSkeleton,
+  IssueSkeleton,
+  SidebarSkeleton,
+  Skeleton,
+};

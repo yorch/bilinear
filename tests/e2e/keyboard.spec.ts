@@ -17,14 +17,20 @@ test.describe('Keyboard Shortcuts', () => {
 
   test('Cmd+B toggles sidebar collapse', async ({ page }) => {
     const sidebar = page.locator('aside');
-    const initialWidth = await sidebar.evaluate(el => el.getBoundingClientRect().width);
+    const initialWidth = await sidebar.evaluate(
+      el => el.getBoundingClientRect().width,
+    );
 
     await page.keyboard.press('Meta+b');
-    const collapsedWidth = await sidebar.evaluate(el => el.getBoundingClientRect().width);
+    const collapsedWidth = await sidebar.evaluate(
+      el => el.getBoundingClientRect().width,
+    );
     expect(collapsedWidth).toBeLessThan(initialWidth);
 
     await page.keyboard.press('Meta+b');
-    const expandedWidth = await sidebar.evaluate(el => el.getBoundingClientRect().width);
+    const expandedWidth = await sidebar.evaluate(
+      el => el.getBoundingClientRect().width,
+    );
     expect(expandedWidth).toBeGreaterThan(collapsedWidth);
   });
 
@@ -33,12 +39,16 @@ test.describe('Keyboard Shortcuts', () => {
     await page.keyboard.press('j');
     // Press S to open status selector
     await page.keyboard.press('s');
-    await expect(page.locator('[data-testid="status-select-popover"]')).toBeVisible();
+    await expect(
+      page.locator('[data-testid="status-select-popover"]'),
+    ).toBeVisible();
   });
 
   test('P opens priority selector when issue is selected', async ({ page }) => {
     await page.keyboard.press('j');
     await page.keyboard.press('p');
-    await expect(page.locator('[data-testid="priority-select-popover"]')).toBeVisible();
+    await expect(
+      page.locator('[data-testid="priority-select-popover"]'),
+    ).toBeVisible();
   });
 });

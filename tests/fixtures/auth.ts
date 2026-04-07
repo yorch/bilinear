@@ -3,13 +3,16 @@ import type { Page } from '@playwright/test';
 /**
  * Log in as the test user via the magic-link email flow.
  *
- * In test mode the server should be configured to emit the verification code
- * to stdout (SMTP_DISABLE=1 or similar), and the fixture reads it.
- * For now we use a well-known test account + bypass code set via TEST_AUTH_CODE
- * environment variable (set in the test seed script).
+ * Requires the dev server to be started with:
+ *   NODE_ENV=test TEST_AUTH_CODE=e2e-test-code
+ *
+ * When NODE_ENV=test and TEST_AUTH_CODE is set, AuthService.verifyMagicLink
+ * accepts that code for any email without checking the database, making E2E
+ * auth deterministic. The playwright.config.ts webServer sets these env vars
+ * automatically.
  */
 export async function loginAs(page: Page, email: string, code?: string) {
-  const verifyCode = code ?? process.env.TEST_AUTH_CODE ?? '123456';
+  const verifyCode = code ?? process.env.TEST_AUTH_CODE ?? 'e2e-test-code';
 
   await page.goto('/login');
   await page.getByLabel('Email').fill(email);

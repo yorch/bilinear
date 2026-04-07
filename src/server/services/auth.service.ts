@@ -87,6 +87,20 @@ export class AuthService {
   }
 
   async verifyMagicLink(email: string, code: string): Promise<AuthPayload> {
+    // Test mode bypass: accept TEST_AUTH_CODE without a real DB token.
+    // Only active when NODE_ENV=test and the env var is set.
+    if (
+      process.env.NODE_ENV === 'test' &&
+      process.env.TEST_AUTH_CODE &&
+      code === process.env.TEST_AUTH_CODE
+    ) {
+      const user = await this.userService.findOrCreate({
+        email,
+        name: email.split('@')[0],
+      });
+      return this.issueTokenPair(user.id);
+    }
+
     const user = await this.userService.findByEmail(email);
     if (!user) {
       throw new InvalidCodeError();

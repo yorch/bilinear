@@ -1,4 +1,4 @@
-import type { NextRequest, NextResponse } from 'next/server';
+import { logger } from '../lib/logger';
 import { redis } from '../lib/redis';
 
 /**
@@ -10,12 +10,6 @@ const REQUEST_LIMIT = 5_000;
 const COMPLEXITY_LIMIT = 250_000;
 const MAX_SINGLE_COMPLEXITY = 10_000;
 
-export interface RateLimitState {
-  complexityRemaining: number;
-  requestsRemaining: number;
-  resetAt: number; // unix timestamp (seconds)
-}
-
 /**
  * Calculate GraphQL operation complexity.
  *
@@ -24,24 +18,29 @@ export interface RateLimitState {
  * - Each object: 1 point
  * - Connections: multiply child complexity by `first` argument (default 50)
  *
- * For simplicity this implementation uses a lightweight document-walker
- * that estimates complexity without a full AST parse. A proper implementation
- * would use graphql-query-complexity, but that requires full schema awareness.
- * This approximation is sufficient for the Alpha milestone.
+ * This is a lightweight regex-based estimate rather than a full AST parse.
+ * A production implementation would use graphql-query-complexity, but this
+ * approximation is sufficient for the Alpha milestone.
  */
-export function estimateComplexity(body: { query?: string; variables?: Record<string, unknown> }): number {
+export function estimateComplexity(body: {
+  query?: string;
+  variables?: Record<string, unknown>;
+}): number {
   const query = body.query ?? '';
   // Count field selections as a proxy for complexity
   const fieldMatches = query.match(/\w+\s*[{(]/g) ?? [];
   const firstArg = (body.variables?.first as number | undefined) ?? 50;
   // Rough formula: fields * first-arg multiplier, capped at max
-  const estimate = Math.min(fieldMatches.length * firstArg * 0.1, MAX_SINGLE_COMPLEXITY);
+  const estimate = Math.min(
+    fieldMatches.length * firstArg * 0.1,
+    MAX_SINGLE_COMPLEXITY,
+  );
   return Math.max(1, Math.round(estimate));
 }
 
 /**
  * Check and increment rate limit counters for a given user.
- * Returns null if within limits, or an error response if exceeded.
+ * Fails open (returns exceeded=false) if Redis is unavailable.
  */
 export async function checkRateLimit(
   userId: string,
@@ -51,15 +50,36 @@ export async function checkRateLimit(
   const reqKey = `${bucketKey}:req`;
   const cmpKey = `${bucketKey}:cmp`;
 
-  // Increment both counters atomically
-  const [reqCount, cmpCount] = await redis.multi()
-    .incr(reqKey)
-    .incrby(cmpKey, complexity)
-    .expire(reqKey, WINDOW_SECONDS)
-    .expire(cmpKey, WINDOW_SECONDS)
-    .exec() as [[null, number], [null, number], ...unknown[]];
+  let reqCount: number;
+  let cmpCount: number;
 
-  const resetAt = Math.floor(Date.now() / 1000 / WINDOW_SECONDS + 1) * WINDOW_SECONDS;
+  try {
+    const result = await redis
+      .multi()
+      .incr(reqKey)
+      .incrby(cmpKey, complexity)
+      .expire(reqKey, WINDOW_SECONDS)
+      .expire(cmpKey, WINDOW_SECONDS)
+      .exec();
+
+    if (!result) {
+      throw new Error('Redis pipeline returned null');
+    }
+
+    const [reqRes, cmpRes] = result as Array<[Error | null, number]>;
+    if (reqRes[0] || cmpRes[0]) {
+      throw reqRes[0] ?? cmpRes[0];
+    }
+
+    reqCount = reqRes[1];
+    cmpCount = cmpRes[1];
+  } catch (err) {
+    logger.error({ err }, 'Rate limit check failed — allowing request');
+    return { exceeded: false, headers: {} };
+  }
+
+  const resetAt =
+    Math.floor(Date.now() / 1000 / WINDOW_SECONDS + 1) * WINDOW_SECONDS;
   const requestsRemaining = Math.max(0, REQUEST_LIMIT - reqCount);
   const complexityRemaining = Math.max(0, COMPLEXITY_LIMIT - cmpCount);
   const exceeded = reqCount > REQUEST_LIMIT || cmpCount > COMPLEXITY_LIMIT;
@@ -79,7 +99,9 @@ export async function checkRateLimit(
 /**
  * Build a RATELIMITED GraphQL error response (HTTP 400 per spec).
  */
-export function buildRateLimitedResponse(headers: Record<string, string>): Response {
+export function buildRateLimitedResponse(
+  headers: Record<string, string>,
+): Response {
   return new Response(
     JSON.stringify({
       errors: [
@@ -97,14 +119,17 @@ export function buildRateLimitedResponse(headers: Record<string, string>): Respo
 }
 
 /**
- * Apply rate limit headers to an existing NextResponse.
- * Call this after the handler returns to annotate successful responses.
+ * Clone a Response and add rate limit headers to the clone.
+ * Returns the new Response — the original is not mutated (Response headers
+ * are immutable in the Web API).
  */
-export function applyRateLimitHeaders(
-  response: NextResponse | Response,
+export function withRateLimitHeaders(
+  response: Response,
   headers: Record<string, string>,
-): void {
+): Response {
+  const clone = new Response(response.body, response);
   for (const [key, value] of Object.entries(headers)) {
-    response.headers.set(key, value);
+    clone.headers.set(key, value);
   }
+  return clone;
 }

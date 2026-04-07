@@ -37,7 +37,9 @@ interface Props {
  * reduces the initial JS bundle for the team/issue-list pages.
  */
 export function LazyIssueDetailPanel(props: Props) {
-  if (!props.issue) return null;
+  if (!props.issue) {
+    return null;
+  }
 
   return (
     <Suspense fallback={<DetailPanelSkeleton />}>

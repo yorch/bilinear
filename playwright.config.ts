@@ -12,29 +12,11 @@ export default defineConfig({
     timeout: 10_000,
   },
 
-  /* Run tests in files in parallel */
-  fullyParallel: true,
-
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
 
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
-
-  /* Reporter */
-  reporter: process.env.CI ? 'github' : 'html',
-
-  /* Shared settings for all projects */
-  use: {
-    /* Base URL for all page.goto('/') calls */
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000',
-
-    /* Collect trace on first retry */
-    trace: 'on-first-retry',
-
-    /* Run browsers in headless mode by default */
-    headless: true,
-  },
+  /* Run tests in files in parallel */
+  fullyParallel: true,
 
   projects: [
     {
@@ -47,16 +29,40 @@ export default defineConfig({
     },
   ],
 
-  /* Start the Next.js dev server before running tests */
+  /* Reporter */
+  reporter: process.env.CI ? 'github' : 'html',
+
+  /* Retry on CI only */
+  retries: process.env.CI ? 2 : 0,
+
+  /* Directory for test files */
+  testDir: './tests/e2e',
+
+  /* Shared settings for all projects */
+  use: {
+    /* Base URL for all page.goto('/') calls */
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000',
+
+    /* Run browsers in headless mode by default */
+    headless: true,
+
+    /* Collect trace on first retry */
+    trace: 'on-first-retry',
+  },
+
+  /* Start the Next.js dev server before running tests.
+   * NODE_ENV=test activates the AUTH_CODE bypass in AuthService so the
+   * E2E auth fixture can log in with TEST_AUTH_CODE without a real email. */
   webServer: {
-    command: 'yarn dev',
+    command: 'NODE_ENV=test TEST_AUTH_CODE=e2e-test-code yarn dev',
+    env: {
+      NODE_ENV: 'test',
+      TEST_AUTH_CODE: 'e2e-test-code',
+    },
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     url: 'http://localhost:3000',
   },
-
-  /* Directory for test files */
-  testDir: './tests/e2e',
 
   /* Workers: 1 in CI to avoid resource contention */
   workers: process.env.CI ? 1 : undefined,

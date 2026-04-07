@@ -305,6 +305,7 @@ export const CommandPalette = observer(function CommandPalette({
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
+        data-testid="command-palette"
         className="fixed left-1/2 top-[20%] z-50 w-full max-w-xl -translate-x-1/2 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900"
         onKeyDown={handleKeyDown}
       >
@@ -363,6 +364,7 @@ export const CommandPalette = observer(function CommandPalette({
           ref={listRef}
           className="max-h-80 overflow-y-auto py-1"
           role="listbox"
+          data-testid="command-palette-results"
         >
           {inSubMenu ? (
             <>
@@ -416,6 +418,10 @@ export const CommandPalette = observer(function CommandPalette({
                         role="option"
                         aria-selected={globalIdx === activeIndex}
                         data-idx={globalIdx}
+                        data-testid="command-palette-item"
+                        data-highlighted={
+                          globalIdx === activeIndex ? 'true' : undefined
+                        }
                         onClick={() => selectItem(item)}
                         className={cn(
                           'flex w-full items-center gap-3 px-4 py-2 text-sm',
@@ -465,6 +471,10 @@ export const CommandPalette = observer(function CommandPalette({
                         role="option"
                         aria-selected={globalIdx === activeIndex}
                         data-idx={globalIdx}
+                        data-testid="command-palette-item"
+                        data-highlighted={
+                          globalIdx === activeIndex ? 'true' : undefined
+                        }
                         onClick={() => selectItem(item)}
                         className={cn(
                           'flex w-full items-center gap-3 px-4 py-2 text-sm',
