@@ -132,7 +132,7 @@ jobs:
         run: yarn install --immutable
 
       - name: Install Playwright browsers
-        run: yarn playwright install --with-deps chromium
+        run: yarn playwright install --with-deps chromium firefox
 
       - name: Generate Prisma client
         run: yarn prisma generate
