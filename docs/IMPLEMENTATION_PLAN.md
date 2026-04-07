@@ -123,17 +123,18 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 ### Sprint 11-12: Polish & Performance
 **Goal:** Production-ready foundation
 
-- [ ] Dark mode / light mode with system preference
-- [ ] Theme system (CSS custom properties)
-- [ ] Loading states: skeleton shimmer animations
-- [ ] Error boundaries and error states
-- [ ] Toast notification system
-- [ ] Responsive layout (sidebar collapse)
-- [ ] Performance: bundle analysis, code splitting
-- [ ] Performance: virtualized list optimization
-- [ ] E2E tests for critical paths (auth, issue CRUD, sync)
-- [ ] API rate limiting implementation
-- [ ] Logging and error tracking (Sentry)
+- [x] Dark mode / light mode with system preference (next-themes, `ThemeProvider`, `ThemeToggle`)
+- [x] Theme system (CSS variables via TailwindCSS v4 + `dark:` variants)
+- [x] Loading states: skeleton shimmer animations (`IssueListSkeleton`, `SidebarSkeleton`, etc.)
+- [x] Error boundaries and error states (`ErrorBoundary`, `SectionError`)
+- [x] Toast notification system (sonner, `src/lib/toast.ts`)
+- [x] Responsive layout (sidebar collapse — `UIStore.sidebarCollapsed`, `Cmd+B`, localStorage)
+- [x] Performance: bundle analysis (`ANALYZE=true yarn analyze`, `@next/bundle-analyzer`)
+- [x] Performance: code splitting (lazy `CommandPalette` + `LazyIssueDetailPanel` via `React.lazy`)
+- [ ] Performance: virtualized list optimization (deferred — large list perf not yet needed)
+- [x] E2E tests for critical paths (auth, issue CRUD, sync, offline, keyboard shortcuts)
+- [x] API rate limiting implementation (Redis fixed-window, 5 000 req/hr + complexity budget)
+- [x] Structured logging (pino + pino-pretty, `src/server/lib/logger.ts`; Sentry integration deferred)
 
 **Deliverable:** Polished, performant MVP with auth, issues, teams, real-time sync
 

@@ -27,17 +27,22 @@ export interface HotkeyOptions {
  * Modifiers: `meta`, `ctrl`, `shift`, `alt`
  * Examples: `'c'`, `'meta+k'`, `'ctrl+k'`, `'shift+e'`, `'escape'`
  *
+ * Pass an array to bind the same handler to multiple keys (e.g. `['meta+k', 'ctrl+k']`
+ * for cross-platform shortcuts). Each key gets one event listener.
+ *
  * By default, shortcuts are suppressed when focus is inside an input element.
  * Pass `{ allowInInput: true }` to override this for global shortcuts like Cmd+K.
  */
 export function useHotkeys(
-  key: string,
+  key: string | string[],
   handler: Handler,
   options: HotkeyOptions = {},
   deps: unknown[] = [],
 ) {
   const { allowInInput = false, enabled = true } = options;
+  const keys = Array.isArray(key) ? key : [key];
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keys tracked via join; keys.some is stable
   useEffect(() => {
     if (!enabled) {
       return;
@@ -65,7 +70,7 @@ export function useHotkeys(
         .filter(Boolean)
         .join('+');
 
-      if (pressed === key.toLowerCase()) {
+      if (keys.some(k => pressed === k.toLowerCase())) {
         e.preventDefault();
         handler(e);
       }
@@ -73,8 +78,7 @@ export function useHotkeys(
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, enabled, allowInInput, handler, ...deps]);
+  }, [keys.join(','), enabled, allowInInput, handler, ...deps]);
 }
 
 /**

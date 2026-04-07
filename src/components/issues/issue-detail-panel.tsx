@@ -101,7 +101,10 @@ export function IssueDetailPanel({
       />
 
       {/* Panel */}
-      <div className="fixed right-0 top-0 z-40 flex h-full w-[480px] flex-col border-l border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+      <div
+        data-testid="issue-detail-panel"
+        className="fixed right-0 top-0 z-40 flex h-full w-[480px] flex-col border-l border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
           <span className="font-mono text-xs text-zinc-400">

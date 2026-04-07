@@ -4,7 +4,7 @@
 **Version:** 1.2  
 **Date:** April 2026
 
-> **Implementation Status (as of Sprint 9-10)**
+> **Implementation Status (as of Sprint 11-12)**
 >
 > This document describes the **target architecture** for the full system. The table below tracks what is actually built:
 >
@@ -34,11 +34,19 @@
 > | Global keyboard shortcuts (`C`, `S`, `A`, `P`, `L`, `D`, `G+I`, etc.) | ✅ Built | Sprint 9-10 |
 > | `useChord` hook for two-key sequential shortcuts | ✅ Built | Sprint 9-10 |
 > | `useRecentItems` hook — workspace-scoped localStorage MRU list | ✅ Built | Sprint 9-10 |
-> | `WorkspaceClient` boundary — registers `Cmd+K`, renders `CommandPalette` | ✅ Built | Sprint 9-10 |
+> | `WorkspaceClient` boundary — registers `Cmd+K`/`Cmd+B`, renders `CommandPalette` | ✅ Built | Sprint 9-10 / 11-12 |
+> | Dark mode / light mode (next-themes, `ThemeProvider`, `ThemeToggle`) | ✅ Built | Sprint 11-12 |
+> | Skeleton loading states (`IssueListSkeleton`, `SidebarSkeleton`, etc.) | ✅ Built | Sprint 11-12 |
+> | Error boundary (`ErrorBoundary`, `SectionError`) | ✅ Built | Sprint 11-12 |
+> | Toast notifications (sonner, `src/lib/toast.ts`) | ✅ Built | Sprint 11-12 |
+> | Collapsible sidebar (`UIStore.sidebarCollapsed`, `Cmd+B`, localStorage) | ✅ Built | Sprint 11-12 |
+> | Code splitting — lazy `CommandPalette` + `IssueDetailPanel` via `React.lazy` | ✅ Built | Sprint 11-12 |
+> | Bundle analyzer (`ANALYZE=true yarn build` via `@next/bundle-analyzer`) | ✅ Built | Sprint 11-12 |
+> | API rate limiting — Redis fixed-window per user (5 000 req/hr + complexity) | ✅ Built | Sprint 11-12 |
+> | Structured logging — pino + pino-pretty (`src/server/lib/logger.ts`) | ✅ Built | Sprint 11-12 |
+> | E2E tests — Playwright (`tests/e2e/`, `yarn test:e2e`) | ✅ Built | Sprint 11-12 |
 > | TipTap rich text editor | 🔲 Planned | Sprint 25-26 |
-> | Dark mode toggle | 🔲 Planned | Sprint 11-12 |
 > | BullMQ background queues | 🔲 Planned | Sprint 41+ |
-> | E2E tests (Playwright) | 🔲 Planned | Sprint 11-12 |
 >
 > Everything below describes the **intended final architecture**. Sections referencing unbuilt components are design specs, not current reality.
 

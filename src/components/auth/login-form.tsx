@@ -72,7 +72,12 @@ export function LoginForm() {
         <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
       )}
 
-      <Button type="submit" disabled={loading} className="w-full">
+      <Button
+        type="submit"
+        disabled={loading}
+        className="w-full"
+        data-testid="email-submit"
+      >
         {loading ? 'Sending…' : 'Continue with email'}
       </Button>
 

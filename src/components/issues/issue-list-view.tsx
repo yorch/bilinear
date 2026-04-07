@@ -62,7 +62,10 @@ export function IssueListView({
 
   if (issues.length === 0 || groups.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center py-20 text-sm text-zinc-400">
+      <div
+        data-testid="empty-state"
+        className="flex flex-1 items-center justify-center py-20 text-sm text-zinc-400"
+      >
         No issues found. Press{' '}
         <kbd className="mx-1 rounded border px-1 font-mono text-xs">C</kbd> to
         create one.
@@ -71,7 +74,7 @@ export function IssueListView({
   }
 
   return (
-    <div className="flex flex-col">
+    <div data-testid="issue-list-view" className="flex flex-col">
       {groups.map(({ state, issues: groupIssues }) => (
         <GroupSection
           key={state.id}

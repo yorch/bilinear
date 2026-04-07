@@ -1,7 +1,16 @@
 import { action, makeObservable, observable } from 'mobx';
 
+const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed';
+
+function readSidebarCollapsed(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
+}
+
 export class UIStore {
-  sidebarCollapsed = false;
+  sidebarCollapsed = readSidebarCollapsed();
   activeTeamId: string | null = null;
   selectedIssueId: string | null = null;
   detailIssueId: string | null = null;
@@ -25,11 +34,17 @@ export class UIStore {
       setSidebarCollapsed: action,
       sidebarCollapsed: observable,
       toggleCommandPalette: action,
+      toggleSidebarCollapsed: action,
     });
   }
 
   setSidebarCollapsed(collapsed: boolean) {
     this.sidebarCollapsed = collapsed;
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
+  }
+
+  toggleSidebarCollapsed() {
+    this.setSidebarCollapsed(!this.sidebarCollapsed);
   }
 
   setActiveTeamId(id: string | null) {
