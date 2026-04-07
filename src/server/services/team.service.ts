@@ -172,6 +172,21 @@ export class TeamService {
     });
   }
 
+  async findMembershipWithTeam(
+    id: string,
+  ): Promise<(TeamMembership & { team: Team }) | null> {
+    return this.prisma.teamMembership.findUnique({
+      include: { team: true },
+      where: { id },
+    });
+  }
+
+  async findChildren(parentId: string): Promise<Team[]> {
+    return this.prisma.team.findMany({
+      where: { archivedAt: null, parentId },
+    });
+  }
+
   private validateKey(key: string): void {
     if (!TEAM_KEY_PATTERN.test(key)) {
       throw new TeamKeyInvalidError();

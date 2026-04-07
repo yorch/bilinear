@@ -27,8 +27,12 @@ export async function sendMagicLinkEmail(
   code: string,
 ): Promise<void> {
   const transport = createTransport();
-  const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
-  const verifyUrl = `${appUrl}/verify?email=${encodeURIComponent(email)}&code=${code}`;
+  // APP_URL defaults to localhost in non-production; required in production
+  const appUrl = process.env.APP_URL;
+  if (!appUrl && process.env.NODE_ENV === 'production') {
+    throw new Error('Missing environment variable: APP_URL');
+  }
+  const verifyUrl = `${appUrl ?? 'http://localhost:3000'}/verify?email=${encodeURIComponent(email)}&code=${code}`;
 
   const info = await transport.sendMail({
     from: `"Issue Tracker" <noreply@${process.env.SMTP_HOST ?? 'example.com'}>`,

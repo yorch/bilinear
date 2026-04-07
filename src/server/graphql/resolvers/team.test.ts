@@ -36,9 +36,13 @@ describe('teamResolvers', () => {
     it('throws NOT_FOUND when team does not exist', async () => {
       ctx.prisma.team.findUnique.mockResolvedValue(null);
 
-      await expect(
-        teamResolvers.Query.team(null, { id: 'bad-id' }, ctx as never),
-      ).rejects.toThrow(GraphQLError);
+      try {
+        await teamResolvers.Query.team(null, { id: 'bad-id' }, ctx as never);
+        expect.unreachable('Should have thrown');
+      } catch (e) {
+        expect(e).toBeInstanceOf(GraphQLError);
+        expect((e as GraphQLError).extensions?.code).toBe('NOT_FOUND');
+      }
     });
 
     it('throws NOT_FOUND when team belongs to a different org', async () => {
@@ -63,9 +67,13 @@ describe('teamResolvers', () => {
     it('throws UNAUTHENTICATED when not logged in', async () => {
       ctx = createMockContext({ userId: null });
 
-      await expect(
-        teamResolvers.Query.team(null, { id: TEST_TEAM.id }, ctx as never),
-      ).rejects.toThrow(GraphQLError);
+      try {
+        await teamResolvers.Query.team(null, { id: TEST_TEAM.id }, ctx as never);
+        expect.unreachable('Should have thrown');
+      } catch (e) {
+        expect(e).toBeInstanceOf(GraphQLError);
+        expect((e as GraphQLError).extensions?.code).toBe('UNAUTHENTICATED');
+      }
     });
   });
 
@@ -109,13 +117,17 @@ describe('teamResolvers', () => {
         userId: TEST_USER.id,
       });
 
-      await expect(
-        teamResolvers.Mutation.teamCreate(
+      try {
+        await teamResolvers.Mutation.teamCreate(
           null,
           { input: { key: 'ENG', name: 'Engineering' } },
           ctx as never,
-        ),
-      ).rejects.toThrow(GraphQLError);
+        );
+        expect.unreachable('Should have thrown');
+      } catch (e) {
+        expect(e).toBeInstanceOf(GraphQLError);
+        expect((e as GraphQLError).extensions?.code).toBe('FORBIDDEN');
+      }
     });
 
     it('throws BAD_USER_INPUT for invalid key', async () => {

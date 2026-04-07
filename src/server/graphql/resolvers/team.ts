@@ -115,9 +115,7 @@ export const teamResolvers = {
 
   Team: {
     children: async (team: Team, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.prisma.team.findMany({
-        where: { archivedAt: null, parentId: team.id },
-      });
+      return ctx.services.team.findChildren(team.id);
     },
 
     members: async (team: Team, _args: unknown, ctx: GraphQLContext) => {

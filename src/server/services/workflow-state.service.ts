@@ -119,10 +119,3 @@ export class LastRequiredStateError extends Error {
     this.name = 'LastRequiredStateError';
   }
 }
-
-export class WorkflowStateNotFoundError extends Error {
-  constructor() {
-    super('Workflow state not found');
-    this.name = 'WorkflowStateNotFoundError';
-  }
-}
