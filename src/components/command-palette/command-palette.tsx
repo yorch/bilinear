@@ -13,16 +13,21 @@ import { useStore } from '@/providers/store-provider';
 // Types
 // ---------------------------------------------------------------------------
 
-type ResultItem =
-  | { kind: 'issue'; issue: DBIssue; teamKey: string; stateColor?: string }
-  | {
-      kind: 'action';
-      id: string;
-      label: string;
-      keywords: string[];
-      shortcut?: string;
-      onSelect: () => void;
-    };
+type IssueItem = {
+  kind: 'issue';
+  issue: DBIssue;
+  teamKey: string;
+  stateColor?: string;
+};
+type ActionItem = {
+  kind: 'action';
+  id: string;
+  label: string;
+  keywords: string[];
+  shortcut?: string;
+  onSelect: () => void;
+};
+type ResultItem = IssueItem | ActionItem;
 
 type SubMenuMode =
   | { type: 'none' }
@@ -84,7 +89,7 @@ export const CommandPalette = observer(function CommandPalette({
 
   // Ensure active index stays in bounds
   const clampIndex = useCallback(
-    (items: ResultItem[], idx: number) =>
+    (items: unknown[], idx: number) =>
       Math.max(0, Math.min(idx, items.length - 1)),
     [],
   );
@@ -99,7 +104,7 @@ export const CommandPalette = observer(function CommandPalette({
 
   // ── Build result items ───────────────────────────────────────────────────
 
-  const buildIssueItems = useCallback((): ResultItem[] => {
+  const buildIssueItems = useCallback((): IssueItem[] => {
     const matched = issueStore.search(query || '', 10);
     const recent = query
       ? []
@@ -118,8 +123,8 @@ export const CommandPalette = observer(function CommandPalette({
     }));
   }, [query, issueStore, recentItems, teamStore, workflowStateStore]);
 
-  const buildActionItems = useCallback((): ResultItem[] => {
-    const actions: ResultItem[] = [
+  const buildActionItems = useCallback((): ActionItem[] => {
+    const actions: ActionItem[] = [
       {
         id: 'create-issue',
         keywords: ['create issue', 'new issue', 'add issue'],
