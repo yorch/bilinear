@@ -1,10 +1,10 @@
 # Architecture Design Document
 ## Issue Tracker — Linear Rebuild
 
-**Version:** 1.1  
+**Version:** 1.2  
 **Date:** April 2026
 
-> **Implementation Status (as of Sprint 5-6)**
+> **Implementation Status (as of Sprint 7-8)**
 >
 > This document describes the **target architecture** for the full system. The table below tracks what is actually built:
 >
@@ -16,11 +16,16 @@
 > | Auth — magic link email + JWT | ✅ Built | Sprint 1-2 |
 > | Teams, TeamMembership, WorkflowState | ✅ Built | Sprint 3-4 |
 > | Issues, IssueLabels, property selectors, list/detail/create UI | ✅ Built | Sprint 5-6 |
-> | React `useState` + `fetch` (not MobX) | ✅ Current | MobX is the target; see Sprint 7-8 |
 > | TailwindCSS v4 + shadcn/ui | ✅ Built | Sprint 1-2 |
-> | MobX stores + IndexedDB (Dexie) | 🔲 Planned | Sprint 7-8 |
-> | WebSocket real-time sync | 🔲 Planned | Sprint 7-8 |
-> | Redis pub/sub | 🔲 Planned | Sprint 7-8 (Redis client installed but unused) |
+> | SyncAction table + generation on every mutation | ✅ Built | Sprint 7-8 |
+> | REST sync endpoints (`/api/sync/bootstrap`, `/api/sync/delta`) | ✅ Built | Sprint 7-8 |
+> | Standalone WebSocket server (`yarn ws:server`, port 3001) | ✅ Built | Sprint 7-8 |
+> | Redis pub/sub for real-time broadcast | ✅ Built | Sprint 7-8 |
+> | MobX stores (IssueStore, TeamStore, UserStore, LabelStore, WorkflowStateStore, SyncStore, UIStore) | ✅ Built | Sprint 7-8 |
+> | IndexedDB cache via Dexie.js | ✅ Built | Sprint 7-8 |
+> | SyncManager (bootstrap → IndexedDB → MobX → WebSocket delta catch-up) | ✅ Built | Sprint 7-8 |
+> | TransactionQueue (serial mutation queue with retry/rollback) | ✅ Built | Sprint 7-8 |
+> | Team page migrated to local-first (MobX + optimistic updates) | ✅ Built | Sprint 7-8 |
 > | Full-text search + command palette | 🔲 Planned | Sprint 9-10 |
 > | TipTap rich text editor | 🔲 Planned | Sprint 25-26 |
 > | Dark mode toggle | 🔲 Planned | Sprint 11-12 |
@@ -193,11 +198,15 @@ USER ACTION
 
 ```typescript
 interface SyncAction {
-  id: number;          // Monotonically increasing (server-assigned)
+  id: bigint;          // Monotonically increasing BIGSERIAL (server-assigned)
+                       // Serialized as String in GraphQL payloads and WebSocket
+                       // messages to avoid 32-bit Int overflow on long-lived systems
+  organizationId: string;
   action: 'I' | 'U' | 'D' | 'A';  // Insert, Update, Delete, Archive
-  modelName: string;   // Entity type (e.g., "Issue", "Comment")
+  modelName: string;   // Entity type (e.g., "Issue", "Team", "WorkflowState")
   modelId: string;     // UUID of affected entity
-  data: object | null; // Full/partial state (null for deletes)
+  data: object | null; // Full entity snapshot (null for deletes)
+  createdAt: string;   // ISO 8601
 }
 ```
 
@@ -205,29 +214,36 @@ interface SyncAction {
 
 ```
 Phase 1 (Full Bootstrap):
-  GET /sync/bootstrap?type=full
-  → Returns all "instant-load" models:
-    Organization, Team, User, Issue, Project, Cycle,
-    WorkflowState, IssueLabel, Template, Favorite, CustomView
-  → Response: line-delimited ModelName=<JSON>
-  → Ends with _metadata_={lastSyncId: N}
+  GET /api/sync/bootstrap
+  → Returns all "instant-load" models (active/non-archived only):
+    Organization, Team, User, Issue (with labelIds), WorkflowState, IssueLabel
+  → Response: line-delimited ModelName=<JSON>\n
+  → Ends with _metadata_={"lastSyncId":"N"}  ← string, not number
+  → Written atomically to IndexedDB via Dexie transaction before MobX population
 
-Phase 2 (Partial Bootstrap):
-  GET /sync/bootstrap?type=partial
-  → Returns deferred models:
-    Comment, IssueHistory, Attachment
-  → Same format as Phase 1
+Phase 2 (Partial Bootstrap — future sprints):
+  GET /api/sync/bootstrap?type=partial
+  → Returns deferred models: Comment, IssueHistory, Attachment
 
 Phase 3 (Real-time):
-  WebSocket connection established
-  → Server pushes: {cmd: "sync", sync: [...SyncActions], lastSyncId: N}
-  → Client applies deltas to local store
+  WebSocket connection to ws://host:3001?token=<jwt>
+  → Server pushes: {cmd: "sync", sync: [SyncAction]}
+  → {cmd: "ping"} → client replies {cmd: "pong"}
+  → {cmd: "connected", orgId: "..."}
 
 Reconnection (Delta Sync):
-  GET /sync/delta?lastSyncId=X&toSyncId=Y
-  → Returns SyncActions in range [X, Y]
-  → Client catches up from last known position
+  GET /api/sync/delta?lastSyncId=X
+  → Returns SyncActions with id > X for the authenticated org
+  → Client applies deltas; updates lastSyncId in IndexedDB
+  → Falls back to full bootstrap if delta returns non-200
 ```
+
+**Implementation details (Sprint 7-8):**
+- Bootstrap is fetched server-side with a single DB round-trip (7 parallel Prisma queries, lastSyncId included)
+- `Issue.labelIds` is denormalized from the `IssueLabelAssignment` join table during bootstrap
+- WebSocket auth uses a JWT passed as a `?token=` query param (browsers cannot set custom WS headers)
+- The WS token is retrieved from `GET /api/auth/session` which reads the httpOnly cookie server-side
+- `SyncManager` guards against concurrent `fullBootstrap` and `deltaSync` calls via boolean flags
 
 ### 3.5 Model Load Strategies
 | Strategy | When Loaded | Examples |

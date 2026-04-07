@@ -70,7 +70,14 @@ export const issueResolvers = {
       await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
 
       const issue = await ctx.services.issue.archive(id);
-      return { issue, lastSyncId: 0, success: true };
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'A',
+        'Issue',
+        id,
+        issue,
+      );
+      return { issue, lastSyncId: sync.id.toString(), success: true };
     },
     issueCreate: async (
       _parent: unknown,
@@ -86,7 +93,14 @@ export const issueResolvers = {
           ctx.userId,
           input,
         );
-        return { issue, lastSyncId: 0, success: true };
+        const sync = await ctx.services.sync.createSyncAction(
+          ctx.orgId,
+          'I',
+          'Issue',
+          issue.id,
+          issue,
+        );
+        return { issue, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         const error = err as Error;
         if (error.name === 'IssueStateRequiredError') {
@@ -114,7 +128,14 @@ export const issueResolvers = {
       await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
 
       await ctx.services.issue.delete(id);
-      return { lastSyncId: 0, success: true };
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'D',
+        'Issue',
+        id,
+        null,
+      );
+      return { lastSyncId: sync.id.toString(), success: true };
     },
 
     issueUnarchive: async (
@@ -133,7 +154,14 @@ export const issueResolvers = {
       await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
 
       const issue = await ctx.services.issue.unarchive(id);
-      return { issue, lastSyncId: 0, success: true };
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'U',
+        'Issue',
+        id,
+        issue,
+      );
+      return { issue, lastSyncId: sync.id.toString(), success: true };
     },
 
     issueUpdate: async (
@@ -152,7 +180,14 @@ export const issueResolvers = {
       await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
 
       const issue = await ctx.services.issue.update(id, input);
-      return { issue, lastSyncId: 0, success: true };
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'U',
+        'Issue',
+        id,
+        issue,
+      );
+      return { issue, lastSyncId: sync.id.toString(), success: true };
     },
   },
 
@@ -197,8 +232,6 @@ export const issueResolvers = {
         includeArchived = false,
       } = args;
 
-      // Enforce team membership — callers must scope queries to a specific
-      // team they belong to. Org-wide issue enumeration is not permitted.
       if (!filter.teamId) {
         throw new GraphQLError(
           'filter.teamId is required — queries must be scoped to a specific team',

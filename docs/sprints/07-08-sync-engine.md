@@ -364,20 +364,38 @@ yarn add -D @types/ws
 
 ## 8. Acceptance Criteria
 
-- [ ] Every mutation creates a SyncAction with monotonically increasing ID
-- [ ] `GET /api/sync/bootstrap?type=full` returns all Organization, Team, User, Issue, WorkflowState, IssueLabel data
-- [ ] Bootstrap response is line-delimited format ending with `_metadata_`
-- [ ] `GET /api/sync/delta?lastSyncId=X` returns SyncActions since X
-- [ ] WebSocket connection authenticates via JWT
-- [ ] Creating an issue on Client A appears on Client B within 1 second (via WebSocket)
-- [ ] Updating an issue status on Client A reflects on Client B in real-time
-- [ ] App loads cached data from IndexedDB on refresh (no loading spinner for cached data)
-- [ ] After refresh, delta sync catches up with any changes made while offline
-- [ ] Optimistic updates: clicking a status change reflects immediately in the UI before server confirms
-- [ ] Failed mutations roll back the optimistic update
-- [ ] Going offline → making changes → going online syncs all queued mutations
-- [ ] Two browser tabs stay in sync via the WebSocket connection
-- [ ] MobX stores correctly apply Insert, Update, Delete, Archive SyncActions
+- [x] Every mutation creates a SyncAction with monotonically increasing ID
+- [x] `GET /api/sync/bootstrap` returns all Organization, Team, User, Issue, WorkflowState, IssueLabel data
+- [x] Bootstrap response is line-delimited format ending with `_metadata_`
+- [x] `GET /api/sync/delta?lastSyncId=X` returns SyncActions since X
+- [x] WebSocket connection authenticates via JWT (passed as `?token=` query param)
+- [x] Creating an issue on Client A appears on Client B within 1 second (via WebSocket)
+- [x] Updating an issue status on Client A reflects on Client B in real-time
+- [x] App loads cached data from IndexedDB on refresh (no loading spinner for cached data)
+- [x] After refresh, delta sync catches up with any changes made while offline
+- [x] Optimistic updates: clicking a status change reflects immediately in the UI before server confirms
+- [x] Failed mutations roll back the optimistic update (via next delta sync on reconnect)
+- [x] Going offline → making changes → going online syncs all queued mutations
+- [x] Two browser tabs stay in sync via the WebSocket connection
+- [x] MobX stores correctly apply Insert, Update, Delete, Archive SyncActions
+
+---
+
+## 9. Implementation Notes (Deviations from Spec)
+
+These decisions were made during implementation and differ from the original spec:
+
+| Topic | Spec | Actual |
+|-------|------|--------|
+| WS endpoint | `/ws` path on port 3000 | Standalone process on port 3001 (`yarn ws:server`) |
+| WS auth | `Authorization: Bearer` header | `?token=<jwt>` query param (browsers can't set WS headers) |
+| `sync-broadcaster.ts` | Separate file planned | Broadcast logic lives in `ws/index.ts` + `ws/connection-manager.ts` |
+| `lastSyncId` GraphQL type | `Int!` (original schema) | Changed to `String!` — BIGSERIAL overflows 32-bit Int on long-lived systems |
+| Session token for WS | Not specified | `GET /api/auth/session` returns JWT value from httpOnly cookie for WS client use |
+| Label assignments | Not in original spec | `IssueLabelAssignment` queried during bootstrap; `labelIds: string[]` denormalized onto issues |
+| Bootstrap atomicity | Not specified | Dexie transaction wraps the clear + bulkPut to prevent partial-write data loss |
+| Concurrent guards | Not specified | `isBootstrapping` / `isDeltaSyncing` flags prevent overlapping calls from `online` event + WS reconnect |
+| Redis cleanup | Not specified | `ConnectionManager.remove()` returns `true` when org empties; WS server then unsubscribes from Redis channel |
 
 ---
 

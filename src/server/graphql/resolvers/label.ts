@@ -40,13 +40,23 @@ export const labelResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      // Team-scoped labels require team membership
       if (existing.teamId) {
         await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
       }
 
       const label = await ctx.services.label.archive(id);
-      return { issueLabel: label, lastSyncId: 0, success: true };
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'A',
+        'IssueLabel',
+        id,
+        label,
+      );
+      return {
+        issueLabel: label,
+        lastSyncId: sync.id.toString(),
+        success: true,
+      };
     },
     issueLabelCreate: async (
       _parent: unknown,
@@ -55,7 +65,6 @@ export const labelResolvers = {
     ) => {
       requireAuth(ctx);
 
-      // Team-scoped labels require team membership
       if (input.teamId) {
         await requireTeamMember(ctx.prisma, input.teamId, ctx.userId);
       }
@@ -65,7 +74,18 @@ export const labelResolvers = {
         ctx.userId,
         input,
       );
-      return { issueLabel: label, lastSyncId: 0, success: true };
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'I',
+        'IssueLabel',
+        label.id,
+        label,
+      );
+      return {
+        issueLabel: label,
+        lastSyncId: sync.id.toString(),
+        success: true,
+      };
     },
 
     issueLabelUpdate: async (
@@ -81,13 +101,23 @@ export const labelResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      // Team-scoped labels require team membership
       if (existing.teamId) {
         await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
       }
 
       const label = await ctx.services.label.update(id, input);
-      return { issueLabel: label, lastSyncId: 0, success: true };
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'U',
+        'IssueLabel',
+        id,
+        label,
+      );
+      return {
+        issueLabel: label,
+        lastSyncId: sync.id.toString(),
+        success: true,
+      };
     },
   },
 

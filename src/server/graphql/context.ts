@@ -1,11 +1,13 @@
 import type { NextRequest } from 'next/server';
 import type { PrismaClient } from '../../generated/prisma';
 import { prisma } from '../lib/prisma';
+import { redis } from '../lib/redis';
 import type { AuthContext } from '../middleware/auth';
 import { extractAuthContext } from '../middleware/auth';
 import { AuthService } from '../services/auth.service';
 import { IssueService } from '../services/issue.service';
 import { LabelService } from '../services/label.service';
+import { SyncService } from '../services/sync.service';
 import { TeamService } from '../services/team.service';
 import { UserService } from '../services/user.service';
 import { WorkflowStateService } from '../services/workflow-state.service';
@@ -16,6 +18,7 @@ export interface GraphQLContext extends AuthContext {
     auth: AuthService;
     issue: IssueService;
     label: LabelService;
+    sync: SyncService;
     team: TeamService;
     user: UserService;
     workflowState: WorkflowStateService;
@@ -34,6 +37,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const workflowStateService = new WorkflowStateService(prisma);
   const issueService = new IssueService(prisma);
   const labelService = new LabelService(prisma);
+  const syncService = new SyncService(prisma, redis);
 
   return {
     ...auth,
@@ -42,6 +46,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
       auth: authService,
       issue: issueService,
       label: labelService,
+      sync: syncService,
       team: teamService,
       user: userService,
       workflowState: workflowStateService,

@@ -17,7 +17,6 @@ export const teamMembershipResolvers = {
     ) => {
       requireAuth(ctx);
 
-      // Verify the team belongs to the caller's org
       const team = await ctx.services.team.findById(input.teamId);
       if (!team || team.organizationId !== ctx.orgId) {
         throw new GraphQLError('Team not found', {
@@ -25,7 +24,6 @@ export const teamMembershipResolvers = {
         });
       }
 
-      // Only team owners (or org owners/admins who are also team owners) can add members
       await requireTeamOwner(ctx.prisma, input.teamId, ctx.userId);
 
       try {
@@ -34,7 +32,18 @@ export const teamMembershipResolvers = {
           input.userId,
           input.isOwner ?? false,
         );
-        return { lastSyncId: 0, success: true, teamMembership };
+        const sync = await ctx.services.sync.createSyncAction(
+          ctx.orgId,
+          'I',
+          'TeamMembership',
+          teamMembership.id,
+          teamMembership,
+        );
+        return {
+          lastSyncId: sync.id.toString(),
+          success: true,
+          teamMembership,
+        };
       } catch (err) {
         const error = err as Error & { code?: string };
         if (error.code === 'P2002') {
@@ -60,14 +69,20 @@ export const teamMembershipResolvers = {
         });
       }
 
-      // Allow: team owner removing anyone, or a user removing themselves
       const isSelf = membership.userId === ctx.userId;
       if (!isSelf) {
         await requireTeamOwner(ctx.prisma, membership.teamId, ctx.userId);
       }
 
       await ctx.services.team.removeMember(id);
-      return { lastSyncId: 0, success: true };
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'D',
+        'TeamMembership',
+        id,
+        null,
+      );
+      return { lastSyncId: sync.id.toString(), success: true };
     },
 
     teamMembershipUpdate: async (
@@ -87,11 +102,9 @@ export const teamMembershipResolvers = {
         });
       }
 
-      // Changing isOwner is a privilege change — require team owner
       if (input.isOwner !== undefined) {
         await requireTeamOwner(ctx.prisma, membership.teamId, ctx.userId);
       } else {
-        // Updating sortOrder only requires being a member
         await requireTeamMember(ctx.prisma, membership.teamId, ctx.userId);
       }
 
@@ -99,7 +112,14 @@ export const teamMembershipResolvers = {
         id,
         input,
       );
-      return { lastSyncId: 0, success: true, teamMembership };
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'U',
+        'TeamMembership',
+        id,
+        teamMembership,
+      );
+      return { lastSyncId: sync.id.toString(), success: true, teamMembership };
     },
   },
 };

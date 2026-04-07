@@ -27,7 +27,14 @@ export const workflowStateResolvers = {
       try {
         const workflowState =
           await ctx.services.workflowState.archive(existing);
-        return { lastSyncId: 0, success: true, workflowState };
+        const sync = await ctx.services.sync.createSyncAction(
+          ctx.orgId,
+          'A',
+          'WorkflowState',
+          id,
+          workflowState,
+        );
+        return { lastSyncId: sync.id.toString(), success: true, workflowState };
       } catch (err) {
         const error = err as Error;
         if (error.name === 'LastRequiredStateError') {
@@ -49,7 +56,14 @@ export const workflowStateResolvers = {
 
       try {
         const workflowState = await ctx.services.workflowState.create(input);
-        return { lastSyncId: 0, success: true, workflowState };
+        const sync = await ctx.services.sync.createSyncAction(
+          ctx.orgId,
+          'I',
+          'WorkflowState',
+          workflowState.id,
+          workflowState,
+        );
+        return { lastSyncId: sync.id.toString(), success: true, workflowState };
       } catch (err) {
         const error = err as Error;
         if (error.name === 'InvalidStateTypeError') {
@@ -77,7 +91,14 @@ export const workflowStateResolvers = {
       await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
 
       const workflowState = await ctx.services.workflowState.update(id, input);
-      return { lastSyncId: 0, success: true, workflowState };
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'U',
+        'WorkflowState',
+        id,
+        workflowState,
+      );
+      return { lastSyncId: sync.id.toString(), success: true, workflowState };
     },
   },
 

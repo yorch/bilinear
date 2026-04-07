@@ -30,7 +30,14 @@ export const teamResolvers = {
           ctx.userId,
           input,
         );
-        return { lastSyncId: 0, success: true, team };
+        const sync = await ctx.services.sync.createSyncAction(
+          ctx.orgId,
+          'I',
+          'Team',
+          team.id,
+          team,
+        );
+        return { lastSyncId: sync.id.toString(), success: true, team };
       } catch (err) {
         const error = err as Error & { code?: string };
         if (error.name === 'TeamKeyInvalidError') {
@@ -67,7 +74,14 @@ export const teamResolvers = {
       }
 
       await ctx.services.team.delete(id);
-      return { lastSyncId: 0, success: true };
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'D',
+        'Team',
+        id,
+        null,
+      );
+      return { lastSyncId: sync.id.toString(), success: true };
     },
 
     teamUpdate: async (
@@ -86,7 +100,14 @@ export const teamResolvers = {
       }
 
       const team = await ctx.services.team.update(id, input);
-      return { lastSyncId: 0, success: true, team };
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'U',
+        'Team',
+        id,
+        team,
+      );
+      return { lastSyncId: sync.id.toString(), success: true, team };
     },
   },
 
@@ -98,7 +119,6 @@ export const teamResolvers = {
     ) => {
       requireAuth(ctx);
       const team = await ctx.services.team.findById(id);
-      // Scope to caller's org to prevent cross-org data leaks
       if (!team || team.organizationId !== ctx.orgId) {
         throw new GraphQLError('Team not found', {
           extensions: { code: 'NOT_FOUND' },

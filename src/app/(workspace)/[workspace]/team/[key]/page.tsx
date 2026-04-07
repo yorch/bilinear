@@ -1,12 +1,15 @@
 'use client';
 
+import { observer } from 'mobx-react-lite';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { CreateIssueModal } from '@/components/issues/create-issue-modal';
 import { IssueDetailPanel } from '@/components/issues/issue-detail-panel';
 import { IssueListView } from '@/components/issues/issue-list-view';
 import { useHotkeys } from '@/hooks/use-hotkeys';
-import { gql } from '@/lib/graphql';
+import type { DBIssue, DBIssueLabel } from '@/lib/db';
+import { TransactionQueue } from '@/lib/transaction-queue';
+import { useStore } from '@/providers/store-provider';
 import type {
   IssueDetail,
   IssueLabel,
@@ -15,62 +18,17 @@ import type {
 } from '@/types/issues';
 
 // ---------------------------------------------------------------------------
-// GraphQL queries / mutations
+// GraphQL mutations (queries replaced by MobX store reads)
 // ---------------------------------------------------------------------------
-
-/**
- * Issues are loaded as a nested field of the team so the filter is resolved
- * server-side using the team's UUID — no need to pass teamId separately.
- */
-const TEAM_ISSUES_QUERY = `
-  query TeamIssues {
-    teams {
-      id
-      key
-      name
-      displayName
-      states {
-        id
-        name
-        color
-        type
-      }
-      members {
-        user {
-          id
-          displayName
-          initials
-          avatarUrl
-          avatarBackgroundColor
-        }
-      }
-      issues {
-        id
-        identifier
-        title
-        priority
-        stateId
-        assigneeId
-        dueDate
-        description
-        createdAt
-        updatedAt
-        labels { id name color }
-      }
-    }
-    labels {
-      nodes { id name color }
-    }
-  }
-`;
 
 const ISSUE_CREATE_MUTATION = `
   mutation IssueCreate($input: IssueCreateInput!) {
     issueCreate(input: $input) {
       success
+      lastSyncId
       issue {
-        id identifier title priority stateId assigneeId dueDate description createdAt updatedAt
-        labels { id name color }
+        id identifier title priority stateId assigneeId dueDate description
+        createdAt updatedAt labels { id name color }
       }
     }
   }
@@ -80,83 +38,97 @@ const ISSUE_UPDATE_MUTATION = `
   mutation IssueUpdate($id: ID!, $input: IssueUpdateInput!) {
     issueUpdate(id: $id, input: $input) {
       success
+      lastSyncId
       issue {
-        id identifier title priority stateId assigneeId dueDate description createdAt updatedAt
-        labels { id name color }
+        id identifier title priority stateId assigneeId dueDate description
+        createdAt updatedAt labels { id name color }
       }
     }
   }
 `;
 
 // ---------------------------------------------------------------------------
-// Page component
+// Page component (observer so it re-renders on MobX store changes)
 // ---------------------------------------------------------------------------
 
-export default function TeamIssuesPage() {
+const TeamIssuesPage = observer(function TeamIssuesPage() {
   const { workspace, key: teamKey } = useParams<{
     workspace: string;
     key: string;
   }>();
   const router = useRouter();
+  const {
+    issueStore,
+    teamStore,
+    userStore,
+    workflowStateStore,
+    labelStore,
+    syncStore,
+  } = useStore();
 
-  const [issues, setIssues] = useState<IssueDetail[]>([]);
-  const [states, setStates] = useState<WorkflowState[]>([]);
-  const [users, setUsers] = useState<IssueUser[]>([]);
-  const [labels, setLabels] = useState<IssueLabel[]>([]);
-  const [teamId, setTeamId] = useState<string | null>(null);
-  const [teamName, setTeamName] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // One queue per component mount — unmounting the page cleans up the reference
+  const txQueue = useMemo(() => new TransactionQueue(), []);
 
+  // UI state (not in MobX — local to this page)
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detailIssue, setDetailIssue] = useState<IssueDetail | null>(null);
+  const [detailIssueId, setDetailIssueId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
-  // Load initial data
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      const data = await gql(TEAM_ISSUES_QUERY);
-      if (data.errors?.length) {
-        setError('Failed to load issues.');
-        setLoading(false);
-        return;
-      }
+  // ── Store-derived values ─────────────────────────────────────────────────
+  // No useMemo here — inside observer() MobX tracks every observable access
+  // during render and re-renders whenever they change (including in-place Map
+  // updates that don't alter pool.size, e.g. optimisticUpdate).
 
-      const team = (
-        data.data?.teams as Array<{
-          id: string;
-          key: string;
-          name: string;
-          displayName: string;
-          states: WorkflowState[];
-          members: Array<{ user: IssueUser }>;
-          issues: IssueDetail[];
-        }>
-      )?.find(t => t.key === teamKey);
+  const team = teamStore.findByKey(teamKey);
+  const teamId = team?.id ?? null;
 
-      if (!team) {
-        setError('Team not found.');
-        setLoading(false);
-        return;
-      }
+  const issues: IssueDetail[] = teamId
+    ? issueStore.findByTeamId(teamId).map(i => ({
+        ...i,
+        dueDate: i.dueDate ?? null,
+        labels: (i.labelIds ?? [])
+          .map(id => labelStore.findById(id))
+          .filter((l): l is DBIssueLabel => l !== null)
+          .map(l => ({ color: l.color, id: l.id, name: l.name })),
+      }))
+    : [];
 
-      setTeamId(team.id);
-      setTeamName(team.displayName ?? team.name);
-      setStates(team.states);
-      setUsers(team.members.map(m => m.user));
-      setIssues(team.issues ?? []);
-      setLabels((data.data?.labels as { nodes: IssueLabel[] })?.nodes ?? []);
-    } catch {
-      setError('An unexpected error occurred.');
-    } finally {
-      setLoading(false);
+  const states: WorkflowState[] = teamId
+    ? workflowStateStore.findByTeamId(teamId)
+    : [];
+
+  const users: IssueUser[] = userStore.all.map(u => ({
+    avatarBackgroundColor: u.avatarBgColor,
+    avatarUrl: u.avatarUrl ?? null,
+    displayName: u.displayName,
+    id: u.id,
+    initials: u.initials,
+  }));
+
+  const labels: IssueLabel[] = labelStore.all.map(l => ({
+    color: l.color,
+    id: l.id,
+    name: l.name,
+  }));
+
+  const isLoading =
+    syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
+  const hasError = syncStore.status === 'error';
+
+  const detailIssue: IssueDetail | null = (() => {
+    if (!detailIssueId) {
+      return null;
     }
-  }, [teamKey]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+    const raw = issueStore.findById(detailIssueId);
+    if (!raw) {
+      return null;
+    }
+    const issueLabels = (raw.labelIds ?? [])
+      .map(id => labelStore.findById(id))
+      .filter((l): l is DBIssueLabel => l !== null)
+      .map(l => ({ color: l.color, id: l.id, name: l.name }));
+    return { ...raw, dueDate: raw.dueDate ?? null, labels: issueLabels };
+  })();
 
   // Keyboard shortcuts
   useHotkeys('c', () => setCreateOpen(true), []);
@@ -175,47 +147,39 @@ export default function TeamIssuesPage() {
 
   useHotkeys('enter', () => {
     if (selectedId) {
-      const issue = issues.find(i => i.id === selectedId);
-      if (issue) {
-        setDetailIssue(issue);
-      }
+      setDetailIssueId(selectedId);
     }
-  }, [selectedId, issues]);
+  }, [selectedId]);
 
-  // Update an issue optimistically then reconcile from server response
+  // Update an issue — optimistic via MobX, confirmed/rolled-back via server
   const handleUpdate = useCallback(
-    async (id: string, patch: Record<string, unknown>) => {
-      // When labelIds are patched, resolve them to label objects for display
-      let optimisticPatch: Record<string, unknown> = patch;
-      if (Array.isArray(patch.labelIds)) {
-        const { labelIds, ...rest } = patch;
-        optimisticPatch = {
-          ...rest,
-          labels: labels.filter(l => (labelIds as string[]).includes(l.id)),
-        };
-      }
+    (id: string, patch: Record<string, unknown>) => {
+      // Capture snapshot for rollback in case of permanent failure
+      const snapshot = issueStore.findById(id);
 
-      setIssues(prev =>
-        prev.map(i => (i.id === id ? { ...i, ...optimisticPatch } : i)),
+      issueStore.optimisticUpdate(id, patch as Partial<DBIssue>);
+
+      txQueue.enqueue(
+        ISSUE_UPDATE_MUTATION,
+        { id, input: patch },
+        {
+          onError: () => {
+            // Restore pre-patch state on permanent failure
+            if (snapshot) {
+              issueStore.optimisticUpdate(id, snapshot);
+            }
+          },
+          onSuccess: data => {
+            const updated = (data as { issueUpdate?: { issue?: DBIssue } })
+              ?.issueUpdate?.issue;
+            if (updated) {
+              issueStore.applySyncAction('U', id, updated);
+            }
+          },
+        },
       );
-      if (detailIssue?.id === id) {
-        setDetailIssue(d => (d ? { ...d, ...optimisticPatch } : d));
-      }
-
-      const data = await gql(ISSUE_UPDATE_MUTATION, { id, input: patch });
-      // Reconcile with server response to catch any server-side normalization
-      const updated = (data.data?.issueUpdate as { issue?: IssueDetail })
-        ?.issue;
-      if (updated) {
-        setIssues(prev =>
-          prev.map(i => (i.id === id ? { ...i, ...updated } : i)),
-        );
-        if (detailIssue?.id === id) {
-          setDetailIssue(d => (d ? { ...d, ...updated } : d));
-        }
-      }
     },
-    [detailIssue, labels],
+    [issueStore, txQueue],
   );
 
   // Create issue
@@ -232,20 +196,27 @@ export default function TeamIssuesPage() {
       if (!teamId) {
         return;
       }
-      const data = await gql(ISSUE_CREATE_MUTATION, {
-        input: { ...input, teamId },
-      });
-      const created = (
-        data.data?.issueCreate as { success?: boolean; issue?: IssueDetail }
-      )?.issue;
-      if (created) {
-        setIssues(prev => [created, ...prev]);
-      }
+      txQueue.enqueue(
+        ISSUE_CREATE_MUTATION,
+        { input: { ...input, teamId } },
+        {
+          onError: err => {
+            console.error('[TeamPage] issueCreate failed:', err);
+          },
+          onSuccess: data => {
+            const created = (data as { issueCreate?: { issue?: DBIssue } })
+              ?.issueCreate?.issue;
+            if (created) {
+              issueStore.applySyncAction('I', created.id, created);
+            }
+          },
+        },
+      );
     },
-    [teamId],
+    [teamId, issueStore, txQueue],
   );
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
         Loading…
@@ -253,10 +224,18 @@ export default function TeamIssuesPage() {
     );
   }
 
-  if (error) {
+  if (hasError) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-red-500">
-        {error}
+        Failed to load data. Please refresh.
+      </div>
+    );
+  }
+
+  if (!team) {
+    return (
+      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+        Team not found.
       </div>
     );
   }
@@ -269,7 +248,7 @@ export default function TeamIssuesPage() {
       {/* Page header */}
       <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
         <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          {teamName} — Issues
+          {team.displayName ?? team.name} — Issues
         </h1>
         <button
           type="button"
@@ -290,11 +269,8 @@ export default function TeamIssuesPage() {
           selectedId={selectedId}
           onSelect={setSelectedId}
           onOpen={id => {
-            const issue = issues.find(i => i.id === id);
-            if (issue) {
-              setDetailIssue(issue);
-              router.replace(`/${workspace}/issue/${id}`, { scroll: false });
-            }
+            setDetailIssueId(id);
+            router.replace(`/${workspace}/issue/${id}`, { scroll: false });
           }}
           onUpdate={handleUpdate}
         />
@@ -308,7 +284,7 @@ export default function TeamIssuesPage() {
           users={users}
           labels={labels}
           onClose={() => {
-            setDetailIssue(null);
+            setDetailIssueId(null);
             router.replace(`/${workspace}/team/${teamKey}`, { scroll: false });
           }}
           onUpdate={handleUpdate}
@@ -327,4 +303,6 @@ export default function TeamIssuesPage() {
       />
     </div>
   );
-}
+});
+
+export default TeamIssuesPage;

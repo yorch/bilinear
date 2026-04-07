@@ -47,7 +47,7 @@ describe('issueResolvers', () => {
 
       expect(result.success).toBe(true);
       expect(result.issue).toEqual(TEST_ISSUE);
-      expect(result.lastSyncId).toBe(0);
+      expect(result.lastSyncId).toBe('1');
     });
 
     it('throws UNAUTHENTICATED when not logged in', async () => {
