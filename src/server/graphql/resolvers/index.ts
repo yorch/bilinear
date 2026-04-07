@@ -3,6 +3,7 @@ import { authResolvers } from './auth';
 import { issueResolvers } from './issue';
 import { labelResolvers } from './label';
 import { organizationResolvers } from './organization';
+import { searchResolvers } from './search';
 import { teamResolvers } from './team';
 import { teamMembershipResolvers } from './team-membership';
 import { userResolvers } from './user';
@@ -69,6 +70,7 @@ export const resolvers = {
     ...teamResolvers.Query,
     ...issueResolvers.Query,
     ...labelResolvers.Query,
+    ...searchResolvers.Query,
   },
 
   Team: {

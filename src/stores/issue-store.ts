@@ -1,5 +1,6 @@
 import { action, computed, makeObservable, observable } from 'mobx';
 import type { DBIssue } from '@/lib/db';
+import { fuzzySearch } from '@/lib/fuzzy-search';
 
 export class IssueStore {
   pool = new Map<string, DBIssue>();
@@ -28,6 +29,39 @@ export class IssueStore {
     return Array.from(this.pool.values()).filter(
       i => i.teamId === teamId && !i.trashed && !i.archivedAt,
     );
+  }
+
+  /**
+   * Local fuzzy search across issue titles and identifiers.
+   * Returns up to `limit` issues ranked by match quality.
+   * Falls back to server full-text search for description matching.
+   */
+  search(query: string, limit = 20): DBIssue[] {
+    if (!query.trim()) return [];
+
+    const trimmed = query.trim();
+    const active = Array.from(this.pool.values()).filter(
+      i => !i.trashed && !i.archivedAt,
+    );
+
+    // Score against identifier first (exact wins), then title
+    const byIdentifier = fuzzySearch(active, trimmed, i => i.identifier);
+    const byTitle = fuzzySearch(active, trimmed, i => i.title);
+
+    // Merge: identifier matches get a 20% boost
+    const scoreMap = new Map<string, number>();
+    for (const { item, score } of byIdentifier) {
+      scoreMap.set(item.id, (scoreMap.get(item.id) ?? 0) + score * 1.2);
+    }
+    for (const { item, score } of byTitle) {
+      scoreMap.set(item.id, (scoreMap.get(item.id) ?? 0) + score);
+    }
+
+    return Array.from(scoreMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([id]) => this.pool.get(id)!)
+      .filter(Boolean);
   }
 
   findByStateId(stateId: string): DBIssue[] {

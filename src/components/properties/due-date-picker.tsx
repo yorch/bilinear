@@ -8,25 +8,34 @@ interface DueDatePickerProps {
   value: string | null | undefined;
   onChange: (date: string | null) => void;
   className?: string;
+  forceOpen?: boolean;
+  onClose?: () => void;
 }
 
 export function DueDatePicker({
   value,
   onChange,
   className,
+  forceOpen,
+  onClose,
 }: DueDatePickerProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (forceOpen) setOpen(true);
+  }, [forceOpen]);
+
+  useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
+        onClose?.();
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, []);
+  }, [onClose]);
 
   const colorClass = getDueDateColor(value);
 
@@ -56,6 +65,7 @@ export function DueDatePicker({
             onChange={e => {
               onChange(e.target.value || null);
               setOpen(false);
+              onClose?.();
             }}
           />
           {value && (
@@ -64,6 +74,7 @@ export function DueDatePicker({
               onClick={() => {
                 onChange(null);
                 setOpen(false);
+                onClose?.();
               }}
               className="mt-1 block w-full rounded px-2 py-1 text-center text-xs text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
             >

@@ -6,7 +6,9 @@ import { useCallback, useMemo, useState } from 'react';
 import { CreateIssueModal } from '@/components/issues/create-issue-modal';
 import { IssueDetailPanel } from '@/components/issues/issue-detail-panel';
 import { IssueListView } from '@/components/issues/issue-list-view';
-import { useHotkeys } from '@/hooks/use-hotkeys';
+import type { OpenProperty } from '@/components/issues/issue-row';
+import { useChord, useHotkeys } from '@/hooks/use-hotkeys';
+import { useRecentItems } from '@/hooks/use-recent-items';
 import type { DBIssue, DBIssueLabel } from '@/lib/db';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
@@ -47,6 +49,24 @@ const ISSUE_UPDATE_MUTATION = `
   }
 `;
 
+const ISSUE_ARCHIVE_MUTATION = `
+  mutation IssueArchive($id: ID!) {
+    issueArchive(id: $id) {
+      success
+      lastSyncId
+    }
+  }
+`;
+
+const ISSUE_DELETE_MUTATION = `
+  mutation IssueDelete($id: ID!) {
+    issueDelete(id: $id) {
+      success
+      lastSyncId
+    }
+  }
+`;
+
 // ---------------------------------------------------------------------------
 // Page component (observer so it re-renders on MobX store changes)
 // ---------------------------------------------------------------------------
@@ -69,15 +89,17 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   // One queue per component mount — unmounting the page cleans up the reference
   const txQueue = useMemo(() => new TransactionQueue(), []);
 
-  // UI state (not in MobX — local to this page)
+  // UI state (local to this page)
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detailIssueId, setDetailIssueId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  // Which property popover to force-open on the selected row (keyboard shortcut)
+  const [openProperty, setOpenProperty] = useState<OpenProperty>(null);
+
+  // Recent items tracking (for command palette)
+  const { addRecent } = useRecentItems();
 
   // ── Store-derived values ─────────────────────────────────────────────────
-  // No useMemo here — inside observer() MobX tracks every observable access
-  // during render and re-renders whenever they change (including in-place Map
-  // updates that don't alter pool.size, e.g. optimisticUpdate).
 
   const team = teamStore.findByKey(teamKey);
   const teamId = team?.id ?? null;
@@ -116,13 +138,9 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   const hasError = syncStore.status === 'error';
 
   const detailIssue: IssueDetail | null = (() => {
-    if (!detailIssueId) {
-      return null;
-    }
+    if (!detailIssueId) return null;
     const raw = issueStore.findById(detailIssueId);
-    if (!raw) {
-      return null;
-    }
+    if (!raw) return null;
     const issueLabels = (raw.labelIds ?? [])
       .map(id => labelStore.findById(id))
       .filter((l): l is DBIssueLabel => l !== null)
@@ -130,33 +148,11 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     return { ...raw, dueDate: raw.dueDate ?? null, labels: issueLabels };
   })();
 
-  // Keyboard shortcuts
-  useHotkeys('c', () => setCreateOpen(true), []);
+  // ── Mutations ─────────────────────────────────────────────────────────────
 
-  const selectedIndex = issues.findIndex(i => i.id === selectedId);
-
-  useHotkeys('j', () => {
-    const next = Math.min(selectedIndex + 1, issues.length - 1);
-    setSelectedId(issues[next]?.id ?? null);
-  }, [selectedIndex, issues]);
-
-  useHotkeys('k', () => {
-    const prev = Math.max(selectedIndex - 1, 0);
-    setSelectedId(issues[prev]?.id ?? null);
-  }, [selectedIndex, issues]);
-
-  useHotkeys('enter', () => {
-    if (selectedId) {
-      setDetailIssueId(selectedId);
-    }
-  }, [selectedId]);
-
-  // Update an issue — optimistic via MobX, confirmed/rolled-back via server
   const handleUpdate = useCallback(
     (id: string, patch: Record<string, unknown>) => {
-      // Capture snapshot for rollback in case of permanent failure
       const snapshot = issueStore.findById(id);
-
       issueStore.optimisticUpdate(id, patch as Partial<DBIssue>);
 
       txQueue.enqueue(
@@ -164,17 +160,12 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         { id, input: patch },
         {
           onError: () => {
-            // Restore pre-patch state on permanent failure
-            if (snapshot) {
-              issueStore.optimisticUpdate(id, snapshot);
-            }
+            if (snapshot) issueStore.optimisticUpdate(id, snapshot);
           },
           onSuccess: data => {
             const updated = (data as { issueUpdate?: { issue?: DBIssue } })
               ?.issueUpdate?.issue;
-            if (updated) {
-              issueStore.applySyncAction('U', id, updated);
-            }
+            if (updated) issueStore.applySyncAction('U', id, updated);
           },
         },
       );
@@ -182,7 +173,6 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     [issueStore, txQueue],
   );
 
-  // Create issue
   const handleCreate = useCallback(
     async (input: {
       title: string;
@@ -193,9 +183,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
       labelIds: string[];
       dueDate?: string | null;
     }) => {
-      if (!teamId) {
-        return;
-      }
+      if (!teamId) return;
       txQueue.enqueue(
         ISSUE_CREATE_MUTATION,
         { input: { ...input, teamId } },
@@ -215,6 +203,156 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     },
     [teamId, issueStore, txQueue],
   );
+
+  const handleArchive = useCallback(
+    (id: string) => {
+      issueStore.optimisticUpdate(id, { archivedAt: new Date().toISOString() });
+      txQueue.enqueue(
+        ISSUE_ARCHIVE_MUTATION,
+        { id },
+        {
+          onError: () => {
+            issueStore.optimisticUpdate(id, { archivedAt: null });
+          },
+          onSuccess: () => {
+            // Server delta sync will confirm the archive
+          },
+        },
+      );
+      if (selectedId === id) setSelectedId(null);
+    },
+    [issueStore, txQueue, selectedId],
+  );
+
+  const handleDelete = useCallback(
+    (id: string) => {
+      issueStore.pool.delete(id);
+      txQueue.enqueue(
+        ISSUE_DELETE_MUTATION,
+        { id },
+        {
+          onError: () => {
+            // Rollback not possible without snapshot — next delta sync restores
+          },
+        },
+      );
+      if (selectedId === id) setSelectedId(null);
+    },
+    [issueStore, txQueue, selectedId],
+  );
+
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
+
+  const selectedIndex = issues.findIndex(i => i.id === selectedId);
+  const hasSelection = selectedId !== null;
+
+  // C — create issue
+  useHotkeys('c', () => setCreateOpen(true), {}, []);
+
+  // J / K — navigate list
+  useHotkeys(
+    'j',
+    () => {
+      const next = Math.min(selectedIndex + 1, issues.length - 1);
+      setSelectedId(issues[next]?.id ?? null);
+    },
+    {},
+    [selectedIndex, issues],
+  );
+  useHotkeys(
+    'k',
+    () => {
+      const prev = Math.max(selectedIndex - 1, 0);
+      setSelectedId(issues[prev]?.id ?? null);
+    },
+    {},
+    [selectedIndex, issues],
+  );
+
+  // Enter — open detail
+  useHotkeys(
+    'enter',
+    () => {
+      if (selectedId) setDetailIssueId(selectedId);
+    },
+    {},
+    [selectedId],
+  );
+
+  // Escape — clear selection / close detail
+  useHotkeys(
+    'escape',
+    () => {
+      if (detailIssueId) {
+        setDetailIssueId(null);
+        router.replace(`/${workspace}/team/${teamKey}`, { scroll: false });
+      } else {
+        setSelectedId(null);
+      }
+    },
+    {},
+    [detailIssueId, workspace, teamKey],
+  );
+
+  // X — toggle selection checkbox
+  useHotkeys(
+    'x',
+    () => {
+      if (selectedId) {
+        setSelectedId(prev => (prev === selectedId ? null : selectedId));
+      }
+    },
+    {},
+    [selectedId],
+  );
+
+  // Issue context shortcuts — only active when an issue is selected
+  useHotkeys('s', () => setOpenProperty('status'), { enabled: hasSelection }, [hasSelection]);
+  useHotkeys('a', () => setOpenProperty('assignee'), { enabled: hasSelection }, [hasSelection]);
+  useHotkeys('p', () => setOpenProperty('priority'), { enabled: hasSelection }, [hasSelection]);
+  useHotkeys('l', () => setOpenProperty('label'), { enabled: hasSelection }, [hasSelection]);
+  useHotkeys('d', () => setOpenProperty('dueDate'), { enabled: hasSelection }, [hasSelection]);
+
+  // Backspace / Delete — archive selected issue
+  useHotkeys(
+    'backspace',
+    () => { if (selectedId) handleArchive(selectedId); },
+    { enabled: hasSelection },
+    [selectedId, handleArchive, hasSelection],
+  );
+  useHotkeys(
+    'delete',
+    () => { if (selectedId) handleArchive(selectedId); },
+    { enabled: hasSelection },
+    [selectedId, handleArchive, hasSelection],
+  );
+
+  // G then I — go to my issues (placeholder navigation)
+  useChord('g', 'i', () => router.push(`/${workspace}/my-issues`), [workspace]);
+  // G then N — go to inbox (placeholder navigation)
+  useChord('g', 'n', () => router.push(`/${workspace}/inbox`), [workspace]);
+
+  // ── Open issue and track as recent ────────────────────────────────────────
+
+  const handleOpen = useCallback(
+    (id: string) => {
+      setDetailIssueId(id);
+      router.replace(`/${workspace}/issue/${id}`, { scroll: false });
+      const issue = issueStore.findById(id);
+      const issueTeam = issue ? teamStore.findById(issue.teamId) : null;
+      if (issue && issueTeam) {
+        addRecent({
+          id: issue.id,
+          identifier: issue.identifier,
+          teamKey: issueTeam.key,
+          title: issue.title,
+        });
+      }
+    },
+    [workspace, issueStore, teamStore, addRecent, router],
+  );
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   if (isLoading) {
     return (
@@ -268,11 +406,12 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
           labels={labels}
           selectedId={selectedId}
           onSelect={setSelectedId}
-          onOpen={id => {
-            setDetailIssueId(id);
-            router.replace(`/${workspace}/issue/${id}`, { scroll: false });
-          }}
+          onOpen={handleOpen}
           onUpdate={handleUpdate}
+          onArchive={handleArchive}
+          onDelete={handleDelete}
+          openProperty={openProperty}
+          onPropertyClosed={() => setOpenProperty(null)}
         />
       </div>
 

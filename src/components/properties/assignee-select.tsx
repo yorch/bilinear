@@ -16,6 +16,8 @@ interface AssigneeSelectProps {
   users: User[];
   onChange: (userId: string | null) => void;
   className?: string;
+  forceOpen?: boolean;
+  onClose?: () => void;
 }
 
 export function UserAvatar({
@@ -58,20 +60,27 @@ export function AssigneeSelect({
   users,
   onChange,
   className,
+  forceOpen,
+  onClose,
 }: AssigneeSelectProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const current = users.find(u => u.id === value);
 
   useEffect(() => {
+    if (forceOpen) setOpen(true);
+  }, [forceOpen]);
+
+  useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
+        onClose?.();
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, []);
+  }, [onClose]);
 
   return (
     <div ref={ref} className={cn('relative', className)}>
@@ -99,6 +108,7 @@ export function AssigneeSelect({
               e.stopPropagation();
               onChange(null);
               setOpen(false);
+              onClose?.();
             }}
             className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
           >
@@ -112,6 +122,7 @@ export function AssigneeSelect({
                 e.stopPropagation();
                 onChange(user.id);
                 setOpen(false);
+                onClose?.();
               }}
               className={cn(
                 'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800',

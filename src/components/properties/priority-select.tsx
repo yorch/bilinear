@@ -9,6 +9,8 @@ interface PrioritySelectProps {
   value: number;
   onChange: (priority: number) => void;
   className?: string;
+  forceOpen?: boolean;
+  onClose?: () => void;
 }
 
 const PRIORITIES = [0, 1, 2, 3, 4] as const;
@@ -17,19 +19,26 @@ export function PrioritySelect({
   value,
   onChange,
   className,
+  forceOpen,
+  onClose,
 }: PrioritySelectProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (forceOpen) setOpen(true);
+  }, [forceOpen]);
+
+  useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
+        onClose?.();
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, []);
+  }, [onClose]);
 
   return (
     <div ref={ref} className={cn('relative', className)}>
@@ -57,6 +66,7 @@ export function PrioritySelect({
                   e.stopPropagation();
                   onChange(p);
                   setOpen(false);
+                  onClose?.();
                 }}
                 className={cn(
                   'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800',

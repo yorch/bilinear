@@ -7,6 +7,7 @@ import { extractAuthContext } from '../middleware/auth';
 import { AuthService } from '../services/auth.service';
 import { IssueService } from '../services/issue.service';
 import { LabelService } from '../services/label.service';
+import { SearchService } from '../services/search.service';
 import { SyncService } from '../services/sync.service';
 import { TeamService } from '../services/team.service';
 import { UserService } from '../services/user.service';
@@ -18,6 +19,7 @@ export interface GraphQLContext extends AuthContext {
     auth: AuthService;
     issue: IssueService;
     label: LabelService;
+    search: SearchService;
     sync: SyncService;
     team: TeamService;
     user: UserService;
@@ -38,6 +40,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const issueService = new IssueService(prisma);
   const labelService = new LabelService(prisma);
   const syncService = new SyncService(prisma, redis);
+  const searchService = new SearchService(prisma);
 
   return {
     ...auth,
@@ -46,6 +49,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
       auth: authService,
       issue: issueService,
       label: labelService,
+      search: searchService,
       sync: syncService,
       team: teamService,
       user: userService,

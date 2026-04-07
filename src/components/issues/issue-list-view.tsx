@@ -1,8 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
+import { IssueContextMenu } from './issue-context-menu';
 import { GroupSection } from './group-section';
-import type { IssueRowData } from './issue-row';
+import type { IssueRowData, OpenProperty } from './issue-row';
 import { IssueRow } from './issue-row';
 
 interface IssueListViewProps {
@@ -14,11 +16,24 @@ interface IssueListViewProps {
   onSelect: (id: string) => void;
   onOpen: (id: string) => void;
   onUpdate: (id: string, patch: Record<string, unknown>) => void;
+  onArchive?: (id: string) => void;
+  onDelete?: (id: string) => void;
+  /** Which property popover to force-open on the selected issue (keyboard shortcut). */
+  openProperty?: OpenProperty;
+  onPropertyClosed?: () => void;
 }
 
 interface Group {
   state: WorkflowState;
   issues: IssueRowData[];
+}
+
+interface ContextMenuState {
+  issueId: string;
+  identifier: string;
+  title: string;
+  x: number;
+  y: number;
 }
 
 export function IssueListView({
@@ -30,7 +45,13 @@ export function IssueListView({
   onSelect,
   onOpen,
   onUpdate,
+  onArchive,
+  onDelete,
+  openProperty,
+  onPropertyClosed,
 }: IssueListViewProps) {
+  const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null);
+
   // Group issues by state, preserving workflow state order
   const groups: Group[] = states
     .map(state => ({
@@ -69,10 +90,36 @@ export function IssueListView({
               onSelect={() => onSelect(issue.id)}
               onOpen={() => onOpen(issue.id)}
               onUpdate={onUpdate}
+              openProperty={issue.id === selectedId ? openProperty : null}
+              onPropertyClosed={onPropertyClosed}
+              onContextMenu={e => {
+                e.preventDefault();
+                setCtxMenu({
+                  identifier: issue.identifier,
+                  issueId: issue.id,
+                  title: issue.title,
+                  x: e.clientX,
+                  y: e.clientY,
+                });
+              }}
             />
           ))}
         </GroupSection>
       ))}
+
+      {ctxMenu && (
+        <IssueContextMenu
+          issueId={ctxMenu.issueId}
+          identifier={ctxMenu.identifier}
+          title={ctxMenu.title}
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          onClose={() => setCtxMenu(null)}
+          onOpen={() => onOpen(ctxMenu.issueId)}
+          onArchive={() => onArchive?.(ctxMenu.issueId)}
+          onDelete={() => onDelete?.(ctxMenu.issueId)}
+        />
+      )}
     </div>
   );
 }
