@@ -6,7 +6,7 @@ function createTransport() {
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
 
-  if (!host || !user || !pass) {
+  if (!host) {
     // In development, log emails to console instead of sending
     if (process.env.NODE_ENV !== 'production') {
       return nodemailer.createTransport({ jsonTransport: true });
@@ -14,11 +14,12 @@ function createTransport() {
     throw new Error('SMTP configuration is missing');
   }
 
+  // Support unauthenticated SMTP (e.g. Mailpit in local dev)
   return nodemailer.createTransport({
-    auth: { pass, user },
     host,
     port,
     secure: port === 465,
+    ...(user && pass ? { auth: { pass, user } } : {}),
   });
 }
 
