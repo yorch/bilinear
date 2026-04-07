@@ -12,11 +12,11 @@
 | Aspect | Design |
 |--------|--------|
 | Protocol | GraphQL |
-| Endpoint | `POST /graphql` |
+| Endpoint | `POST /api/graphql` |
 | Auth | Bearer token (JWT) or API key |
 | Pagination | Relay cursor-based |
 | Real-time | WebSocket (`/ws`) |
-| Sync | REST endpoints (`/sync/bootstrap`, `/sync/delta`) |
+| Sync | REST endpoints (`/api/sync/bootstrap`, `/api/sync/delta`) |
 | Rate Limit | 5,000 req/hr + 250,000 complexity points/hr |
 
 ---

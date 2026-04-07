@@ -12,7 +12,11 @@ A Linear-style issue tracker built with Next.js 16, GraphQL, and PostgreSQL. See
 - **MobX** + **mobx-react-lite** — observable state management (client-side entity pools)
 - **Dexie.js** — IndexedDB wrapper for offline-first local cache
 - **ws** — standalone WebSocket server process (port 3001) for real-time sync
+- **next-themes** — dark/light/system theme switching (`ThemeProvider`, `.dark` class on `<html>`)
+- **sonner** — toast notification library (wrapped via `src/lib/toast.ts`)
+- **pino** + **pino-pretty** — structured JSON logging (server-side, pretty-printed in dev)
 - **TailwindCSS v4** + shadcn/ui — styling
+- **Playwright** — E2E browser testing (`tests/e2e/`, `yarn test:e2e`)
 - **Biome** — linting and formatting (replaces ESLint + Prettier)
 - **Yarn v4** — package manager
 
@@ -108,6 +112,10 @@ In development, magic link codes are printed to the server console instead of be
 | `yarn prisma migrate dev`    | Apply pending migrations (dev)                            |
 | `yarn prisma migrate deploy` | Apply pending migrations (production)                     |
 | `yarn prisma studio`         | Open Prisma Studio (database browser)                     |
+| `yarn db:seed`               | Seed the database with demo data and E2E test fixtures    |
+| `yarn test:e2e`              | Run Playwright E2E tests (requires running dev server)    |
+| `yarn test:e2e:ui`           | Open Playwright UI for interactive E2E debugging          |
+| `yarn analyze`               | Build with bundle analyzer (`ANALYZE=true`)               |
 
 ---
 
@@ -150,10 +158,12 @@ src/
 ├── components/
 │   ├── auth/                 # LoginForm, VerifyCodeForm
 │   ├── issues/               # IssueListView, IssueRow, IssueDetailPanel, CreateIssueModal, GroupSection
-│   ├── layouts/              # AppShell, Sidebar
+│   ├── layouts/              # AppShell, Sidebar (collapsible), WorkspaceClient
 │   ├── properties/           # StatusSelect, PrioritySelect, AssigneeSelect, LabelSelect, DueDatePicker
-│   └── ui/                   # shadcn/ui primitives
-├── hooks/                    # useAuth, useHotkeys
+│   ├── ui/                   # shadcn/ui primitives + Skeleton components
+│   ├── error-boundary.tsx    # ErrorBoundary class component + SectionError
+│   └── theme-toggle.tsx      # Three-way light/dark/system toggle
+├── hooks/                    # useAuth, useHotkeys (supports string | string[]), useTheme
 ├── lib/
 │   ├── db.ts                 # Dexie.js AppDatabase (IndexedDB schema + DB interfaces)
 │   ├── sync-manager.ts       # Sync lifecycle: bootstrap → IndexedDB → MobX → WebSocket
