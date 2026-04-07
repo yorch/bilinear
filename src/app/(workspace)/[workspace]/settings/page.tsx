@@ -68,7 +68,6 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      {/* Page header */}
       <div className="flex items-center border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
         <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
           Workspace Settings
@@ -76,7 +75,6 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
       </div>
 
       <div className="mx-auto w-full max-w-2xl px-6 py-8 flex flex-col gap-8">
-        {/* Organization */}
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
             Organization
@@ -134,7 +132,6 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
           </div>
         </section>
 
-        {/* Teams */}
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
             Teams
@@ -182,7 +179,6 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
           </div>
         </section>
 
-        {/* Members */}
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
             Members
@@ -203,6 +199,8 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                       <img
                         src={user.avatarUrl}
                         alt={user.displayName}
+                        width={28}
+                        height={28}
                         className="h-7 w-7 rounded-full object-cover shrink-0"
                       />
                     ) : (

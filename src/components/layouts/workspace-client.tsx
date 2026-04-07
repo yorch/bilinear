@@ -8,6 +8,7 @@ import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useRecentItems } from '@/hooks/use-recent-items';
 import { gql } from '@/lib/graphql';
 import { useStore } from '@/providers/store-provider';
+import { gqlError } from '@/lib/utils';
 import type { DBTeam } from '@/lib/db';
 
 const CommandPalette = lazy(() =>
@@ -67,9 +68,7 @@ export const WorkspaceClient = observer(function WorkspaceClient({
     }) => {
       const result = await gql(TEAM_CREATE_MUTATION, { input });
       if (result.errors?.length) {
-        const msg =
-          (result.errors[0] as { message?: string })?.message ?? 'Failed to create team';
-        throw new Error(msg);
+        throw new Error(gqlError(result, 'Failed to create team'));
       }
       const team = (result.data?.teamCreate as { team?: DBTeam })?.team;
       if (team) {

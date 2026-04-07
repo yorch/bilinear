@@ -4,7 +4,7 @@ import { observer } from 'mobx-react-lite';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   TeamMemberManagement,
   type TeamMember,
@@ -12,7 +12,7 @@ import {
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { useStore } from '@/providers/store-provider';
-import { cn } from '@/lib/utils';
+import { cn, gqlError } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
 // GraphQL
@@ -108,6 +108,23 @@ interface RawMembership {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function rawToMember(m: RawMembership): TeamMember {
+  return {
+    avatarBackgroundColor: m.user.avatarBackgroundColor,
+    avatarUrl: m.user.avatarUrl,
+    displayName: m.user.displayName,
+    email: m.user.email,
+    initials: m.user.initials,
+    isOwner: m.owner,
+    membershipId: m.id,
+    userId: m.user.id,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -132,6 +149,18 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const currentUserId = userStore.currentUser?.id ?? '';
+  const orgUsers = useMemo(
+    () => userStore.all.map(u => ({
+      avatarBackgroundColor: u.avatarBgColor,
+      avatarUrl: u.avatarUrl ?? null,
+      displayName: u.displayName,
+      email: u.email,
+      id: u.id,
+      initials: u.initials,
+    })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [userStore.all],
+  );
 
   // ── Danger zone ───────────────────────────────────────────────────────────
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -162,18 +191,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
           membersResult.data?.team as { members?: RawMembership[] }
         )?.members ?? [];
 
-        setMembers(
-          rawMembers.map(m => ({
-            avatarBackgroundColor: m.user.avatarBackgroundColor,
-            avatarUrl: m.user.avatarUrl,
-            displayName: m.user.displayName,
-            email: m.user.email,
-            initials: m.user.initials,
-            isOwner: m.owner,
-            membershipId: m.id,
-            userId: m.user.id,
-          })),
-        );
+        setMembers(rawMembers.map(rawToMember));
       } catch {
         // Members will just be empty; page is still usable
       } finally {
@@ -203,9 +221,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         },
       });
       if (result.errors?.length) {
-        const msg =
-          (result.errors[0] as { message?: string })?.message ?? 'Failed to save';
-        setSaveError(msg);
+        setSaveError(gqlError(result, 'Failed to save'));
         return;
       }
       const updated = (result.data?.teamUpdate as { team?: typeof team })?.team;
@@ -227,27 +243,13 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         input: { isOwner: false, teamId: team.id, userId },
       });
       if (result.errors?.length) {
-        const msg =
-          (result.errors[0] as { message?: string })?.message ?? 'Failed to add member';
-        throw new Error(msg);
+        throw new Error(gqlError(result, 'Failed to add member'));
       }
       const raw = (
         result.data?.teamMembershipCreate as { teamMembership?: RawMembership }
       )?.teamMembership;
       if (raw) {
-        setMembers(prev => [
-          ...prev,
-          {
-            avatarBackgroundColor: raw.user.avatarBackgroundColor,
-            avatarUrl: raw.user.avatarUrl,
-            displayName: raw.user.displayName,
-            email: raw.user.email,
-            initials: raw.user.initials,
-            isOwner: raw.owner,
-            membershipId: raw.id,
-            userId: raw.user.id,
-          },
-        ]);
+        setMembers(prev => [...prev, rawToMember(raw)]);
         toast.success(`${raw.user.displayName} added to team`);
       }
     },
@@ -259,10 +261,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
       const member = members.find(m => m.membershipId === membershipId);
       const result = await gql(MEMBERSHIP_DELETE_MUTATION, { id: membershipId });
       if (result.errors?.length) {
-        const msg =
-          (result.errors[0] as { message?: string })?.message ??
-          'Failed to remove member';
-        throw new Error(msg);
+        throw new Error(gqlError(result, 'Failed to remove member'));
       }
       setMembers(prev => prev.filter(m => m.membershipId !== membershipId));
       // If current user removed themselves, go back to team page
@@ -282,9 +281,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         input: { isOwner },
       });
       if (result.errors?.length) {
-        const msg =
-          (result.errors[0] as { message?: string })?.message ?? 'Failed to update role';
-        throw new Error(msg);
+        throw new Error(gqlError(result, 'Failed to update role'));
       }
       setMembers(prev =>
         prev.map(m =>
@@ -302,9 +299,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
     try {
       const result = await gql(TEAM_DELETE_MUTATION, { id: team.id });
       if (result.errors?.length) {
-        const msg =
-          (result.errors[0] as { message?: string })?.message ?? 'Failed to delete team';
-        toast.error(msg);
+        toast.error(gqlError(result, 'Failed to delete team'));
         return;
       }
       teamStore.applySyncAction('D', team.id, null);
@@ -324,18 +319,8 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
     );
   }
 
-  const orgUsers = userStore.all.map(u => ({
-    avatarBackgroundColor: u.avatarBgColor,
-    avatarUrl: u.avatarUrl ?? null,
-    displayName: u.displayName,
-    email: u.email,
-    id: u.id,
-    initials: u.initials,
-  }));
-
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      {/* Page header */}
       <div className="flex items-center gap-3 border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
         <Link
           href={`/${workspace}/team/${teamKey}`}
@@ -351,7 +336,6 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
       </div>
 
       <div className="mx-auto w-full max-w-2xl px-6 py-8 flex flex-col gap-8">
-        {/* General */}
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
             General
@@ -406,7 +390,6 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
           </div>
         </section>
 
-        {/* Workflow */}
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
             Workflow
@@ -442,7 +425,6 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
           </div>
         </section>
 
-        {/* Save */}
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -460,7 +442,6 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
           )}
         </div>
 
-        {/* Members */}
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
             Members
@@ -483,7 +464,6 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
           </div>
         </section>
 
-        {/* Danger zone */}
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-red-400">
             Danger Zone

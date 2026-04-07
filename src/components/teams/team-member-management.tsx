@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Crown, UserMinus, UserPlus, X } from 'lucide-react';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 
 export interface TeamMember {
   membershipId: string;
@@ -82,9 +82,12 @@ export function TeamMemberManagement({
   const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const memberUserIds = new Set(members.map(m => m.userId));
-  const availableUsers = orgUsers.filter(
-    u => !memberUserIds.has(u.id) && u.displayName.toLowerCase().includes(search.toLowerCase()),
+  const memberUserIds = useMemo(() => new Set(members.map(m => m.userId)), [members]);
+  const availableUsers = useMemo(
+    () => orgUsers.filter(
+      u => !memberUserIds.has(u.id) && u.displayName.toLowerCase().includes(search.toLowerCase()),
+    ),
+    [orgUsers, memberUserIds, search],
   );
 
   useEffect(() => {
@@ -101,7 +104,7 @@ export function TeamMemberManagement({
       await onAddMember(userId);
       setAddOpen(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add member');
+      toast.error(getErrorMessage(err, 'Failed to add member'));
     } finally {
       setAdding(false);
     }
@@ -112,7 +115,7 @@ export function TeamMemberManagement({
     try {
       await onRemoveMember(membershipId);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to remove member');
+      toast.error(getErrorMessage(err, 'Failed to remove member'));
     } finally {
       setLoadingMembershipId(null);
     }
@@ -123,7 +126,7 @@ export function TeamMemberManagement({
     try {
       await onToggleOwner(membershipId, !currentIsOwner);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update role');
+      toast.error(getErrorMessage(err, 'Failed to update role'));
     } finally {
       setLoadingMembershipId(null);
     }
@@ -131,7 +134,6 @@ export function TeamMemberManagement({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Member list */}
       <ul className="flex flex-col divide-y divide-zinc-100 dark:divide-zinc-800">
         {members.map(member => {
           const isLoading = loadingMembershipId === member.membershipId;
@@ -161,7 +163,6 @@ export function TeamMemberManagement({
               </div>
               <div className="flex items-center gap-1">
                 {pendingRemoveId === member.membershipId ? (
-                  /* Inline confirmation */
                   <>
                     <span className="text-xs text-zinc-500 dark:text-zinc-400">
                       {isSelf ? 'Leave?' : 'Remove?'}
@@ -218,7 +219,6 @@ export function TeamMemberManagement({
         })}
       </ul>
 
-      {/* Add member */}
       {addOpen ? (
         <div className="rounded-md border border-zinc-200 bg-zinc-50 p-2 dark:border-zinc-700 dark:bg-zinc-900">
           <input

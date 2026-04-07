@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 
 interface CreateTeamInput {
   name: string;
@@ -97,8 +97,8 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
       });
       onClose();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to create team';
-      // Duplicate key errors are shown inline on the key field; all others go to a general error
+      const msg = getErrorMessage(err, 'Failed to create team');
+      // Duplicate key errors shown inline; others go to the action bar
       if (msg.toLowerCase().includes('key')) {
         setKeyError(msg);
       } else {
@@ -127,16 +127,13 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
     >
       <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
         <form onSubmit={handleSubmit} className="flex flex-col">
-          {/* Header */}
           <div className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               Create team
             </h2>
           </div>
 
-          {/* Fields */}
           <div className="flex flex-col gap-4 px-5 py-4">
-            {/* Name */}
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="team-name"
@@ -156,7 +153,6 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
               />
             </div>
 
-            {/* Key */}
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="team-key"
@@ -186,7 +182,6 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
               )}
             </div>
 
-            {/* Description */}
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="team-description"
@@ -205,7 +200,6 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
               />
             </div>
 
-            {/* Private toggle */}
             <label className="flex cursor-pointer items-center gap-3">
               <input
                 type="checkbox"
@@ -224,7 +218,6 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
             </label>
           </div>
 
-          {/* Actions */}
           <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
             {submitError && (
               <p className="flex-1 text-xs text-red-500">{submitError}</p>
