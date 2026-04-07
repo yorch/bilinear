@@ -30,6 +30,9 @@ jobs:
       - name: Lint
         run: yarn lint
 
+      - name: Typecheck
+        run: yarn typecheck
+
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -55,6 +58,7 @@ jobs:
 
   build:
     name: Build
+    needs: [lint, test]
     runs-on: ubuntu-latest
     permissions:
       contents: read
