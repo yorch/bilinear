@@ -16,11 +16,6 @@ interface State {
 /**
  * React error boundary that catches render-time errors in its subtree.
  * Wrap each major section independently so one failure doesn't blank the page.
- *
- * Usage:
- *   <ErrorBoundary>
- *     <IssueListView />
- *   </ErrorBoundary>
  */
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {

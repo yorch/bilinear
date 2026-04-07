@@ -29,39 +29,21 @@ export const WorkspaceClient = observer(function WorkspaceClient({
   const workspaceKey = params.workspace;
   const { items: recentItems } = useRecentItems(workspaceKey);
 
-  // Cmd+K / Ctrl+K — open command palette (fires even from inputs)
   useHotkeys(
-    'meta+k',
+    ['meta+k', 'ctrl+k'],
     () => uiStore.toggleCommandPalette(),
     { allowInInput: true },
     [uiStore],
   );
-  useHotkeys(
-    'ctrl+k',
-    () => uiStore.toggleCommandPalette(),
-    { allowInInput: true },
-    [uiStore],
-  );
-
-  // Cmd+B / Ctrl+B — toggle sidebar
-  useHotkeys(
-    'meta+b',
-    () => uiStore.toggleSidebarCollapsed(),
-    { allowInInput: false },
-    [uiStore],
-  );
-  useHotkeys(
-    'ctrl+b',
-    () => uiStore.toggleSidebarCollapsed(),
-    { allowInInput: false },
-    [uiStore],
-  );
+  useHotkeys(['meta+b', 'ctrl+b'], () => uiStore.toggleSidebarCollapsed(), {}, [
+    uiStore,
+  ]);
 
   return (
     <>
       {children}
       {uiStore.commandPaletteOpen && (
-        <Suspense>
+        <Suspense fallback={null}>
           <CommandPalette recentItems={recentItems} />
         </Suspense>
       )}
