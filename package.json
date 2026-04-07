@@ -11,6 +11,7 @@
     "start": "next start",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
+    "typecheck": "tsc --noEmit",
     "format": "biome format --write .",
     "test": "vitest run",
     "test:watch": "vitest",
