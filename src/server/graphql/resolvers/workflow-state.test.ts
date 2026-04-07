@@ -182,7 +182,6 @@ describe('workflowStateResolvers', () => {
 
     it('throws BAD_USER_INPUT when archiving last completed state', async () => {
       const completedState = DEFAULT_WORKFLOW_STATES[3]; // type: completed
-      // First findUnique for auth check, second for archive logic
       ctx.prisma.workflowState.findUnique.mockResolvedValue(completedState);
       ctx.prisma.workflowState.count.mockResolvedValue(0);
 

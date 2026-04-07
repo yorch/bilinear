@@ -59,7 +59,6 @@ export const teamResolvers = {
         'admin',
       ]);
 
-      // Verify team belongs to user's org
       const team = await ctx.services.team.findById(id);
       if (!team || team.organizationId !== ctx.orgId) {
         throw new GraphQLError('Team not found', {
@@ -79,7 +78,6 @@ export const teamResolvers = {
       requireAuth(ctx);
       await requireTeamMember(ctx.prisma, id, ctx.userId);
 
-      // Verify team belongs to user's org
       const existing = await ctx.services.team.findById(id);
       if (!existing || existing.organizationId !== ctx.orgId) {
         throw new GraphQLError('Team not found', {

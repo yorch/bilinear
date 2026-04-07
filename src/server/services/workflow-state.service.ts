@@ -73,20 +73,12 @@ export class WorkflowStateService {
     });
   }
 
-  async archive(id: string): Promise<WorkflowState> {
-    const state = await this.prisma.workflowState.findUnique({
-      where: { id },
-    });
-
-    if (!state) {
-      throw new WorkflowStateNotFoundError();
-    }
-
+  async archive(state: WorkflowState): Promise<WorkflowState> {
     if (REQUIRED_TYPES.includes(state.type)) {
       const siblingCount = await this.prisma.workflowState.count({
         where: {
           archivedAt: null,
-          id: { not: id },
+          id: { not: state.id },
           teamId: state.teamId,
           type: state.type,
         },
@@ -99,7 +91,7 @@ export class WorkflowStateService {
 
     return this.prisma.workflowState.update({
       data: { archivedAt: new Date() },
-      where: { id },
+      where: { id: state.id },
     });
   }
 

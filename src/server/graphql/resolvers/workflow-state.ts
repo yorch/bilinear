@@ -16,7 +16,6 @@ export const workflowStateResolvers = {
     ) => {
       requireAuth(ctx);
 
-      // Look up state to find its team for auth check
       const existing = await ctx.services.workflowState.findById(id);
       if (!existing) {
         throw new GraphQLError('Workflow state not found', {
@@ -26,7 +25,8 @@ export const workflowStateResolvers = {
       await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
 
       try {
-        const workflowState = await ctx.services.workflowState.archive(id);
+        const workflowState =
+          await ctx.services.workflowState.archive(existing);
         return { lastSyncId: 0, success: true, workflowState };
       } catch (err) {
         const error = err as Error;
@@ -68,7 +68,6 @@ export const workflowStateResolvers = {
     ) => {
       requireAuth(ctx);
 
-      // Look up state to find its team for auth check
       const existing = await ctx.services.workflowState.findById(id);
       if (!existing) {
         throw new GraphQLError('Workflow state not found', {

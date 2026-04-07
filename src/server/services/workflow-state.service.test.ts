@@ -7,7 +7,6 @@ import {
 import {
   InvalidStateTypeError,
   LastRequiredStateError,
-  WorkflowStateNotFoundError,
   WorkflowStateService,
 } from './workflow-state.service';
 
@@ -119,54 +118,42 @@ describe('WorkflowStateService', () => {
   describe('archive', () => {
     it('archives a non-required state type', async () => {
       const backlogState = DEFAULT_WORKFLOW_STATES[0]; // backlog type
-      prisma.workflowState.findUnique.mockResolvedValue(backlogState);
       prisma.workflowState.update.mockResolvedValue({
         ...backlogState,
         archivedAt: new Date(),
       });
 
-      const result = await service.archive(backlogState.id);
+      const result = await service.archive(backlogState);
       expect(result.archivedAt).not.toBeNull();
     });
 
     it('archives a completed state when another completed state exists', async () => {
       const completedState = DEFAULT_WORKFLOW_STATES[3]; // completed type
-      prisma.workflowState.findUnique.mockResolvedValue(completedState);
       prisma.workflowState.count.mockResolvedValue(1); // one other completed state exists
       prisma.workflowState.update.mockResolvedValue({
         ...completedState,
         archivedAt: new Date(),
       });
 
-      const result = await service.archive(completedState.id);
+      const result = await service.archive(completedState);
       expect(result.archivedAt).not.toBeNull();
     });
 
     it('throws LastRequiredStateError when archiving the only completed state', async () => {
       const completedState = DEFAULT_WORKFLOW_STATES[3];
-      prisma.workflowState.findUnique.mockResolvedValue(completedState);
       prisma.workflowState.count.mockResolvedValue(0); // no other completed states
 
-      await expect(service.archive(completedState.id)).rejects.toThrow(
+      await expect(service.archive(completedState)).rejects.toThrow(
         LastRequiredStateError,
       );
     });
 
     it('throws LastRequiredStateError when archiving the only canceled state', async () => {
       const canceledState = DEFAULT_WORKFLOW_STATES[4];
-      prisma.workflowState.findUnique.mockResolvedValue(canceledState);
       prisma.workflowState.count.mockResolvedValue(0);
 
-      await expect(service.archive(canceledState.id)).rejects.toThrow(
+      await expect(service.archive(canceledState)).rejects.toThrow(
         LastRequiredStateError,
-      );
-    });
-
-    it('throws WorkflowStateNotFoundError when state does not exist', async () => {
-      prisma.workflowState.findUnique.mockResolvedValue(null);
-
-      await expect(service.archive('nonexistent')).rejects.toThrow(
-        WorkflowStateNotFoundError,
       );
     });
   });
