@@ -9,7 +9,9 @@ export const userResolvers = {
       requireAuth(ctx);
       const user = await ctx.services.user.findById(ctx.userId);
       if (!user) {
-        throw new GraphQLError('User not found', { extensions: { code: 'NOT_FOUND' } });
+        throw new GraphQLError('User not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
       }
       await ctx.services.user.updateLastSeen(ctx.userId, user.lastSeen);
       return user;

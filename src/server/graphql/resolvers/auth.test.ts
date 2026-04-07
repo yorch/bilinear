@@ -4,7 +4,7 @@ import {
   createMockContext,
   type MockGraphQLContext,
 } from '../../../test/context-mock';
-import { TEST_ORG, TEST_USER } from '../../../test/fixtures';
+import { TEST_USER } from '../../../test/fixtures';
 import { authResolvers } from './auth';
 
 describe('authResolvers', () => {
@@ -33,7 +33,7 @@ describe('authResolvers', () => {
     it('returns success even when email is not registered (no enumeration)', async () => {
       // User doesn't exist — service should create a new one
       ctx.prisma.user.findUnique
-        .mockResolvedValueOnce(null)  // findByEmail
+        .mockResolvedValueOnce(null) // findByEmail
         .mockResolvedValueOnce(null); // findOrCreate inner lookup
       ctx.prisma.user.create.mockResolvedValue(TEST_USER);
       ctx.prisma.authToken.create.mockResolvedValue({} as never);
@@ -103,12 +103,15 @@ describe('authResolvers', () => {
   describe('Mutation.googleAuthExchange', () => {
     it('throws OAUTH_ERROR when Google token exchange fails', async () => {
       // fetchGoogleProfile throws OAuthError on failed HTTP response
-      global.fetch = async () => ({ ok: false } as Response);
+      global.fetch = async () => ({ ok: false }) as Response;
 
       try {
         await authResolvers.Mutation.googleAuthExchange(
           null,
-          { code: 'bad-code', redirectUri: 'http://localhost:3000/auth/google' },
+          {
+            code: 'bad-code',
+            redirectUri: 'http://localhost:3000/auth/google',
+          },
           ctx as never,
         );
         expect.unreachable('Should have thrown');

@@ -57,7 +57,7 @@ export const authResolvers = {
         return await ctx.services.auth.exchangeGoogleCode(code, redirectUri);
       } catch (err) {
         const error = err as Error;
-        if (error.name === 'OAuthError') {
+        if (err instanceof OAuthError) {
           throw new GraphQLError(error.message, {
             extensions: { code: 'OAUTH_ERROR' },
           });

@@ -68,7 +68,11 @@ describe('teamResolvers', () => {
       ctx = createMockContext({ userId: null });
 
       try {
-        await teamResolvers.Query.team(null, { id: TEST_TEAM.id }, ctx as never);
+        await teamResolvers.Query.team(
+          null,
+          { id: TEST_TEAM.id },
+          ctx as never,
+        );
         expect.unreachable('Should have thrown');
       } catch (e) {
         expect(e).toBeInstanceOf(GraphQLError);

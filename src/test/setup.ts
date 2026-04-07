@@ -13,7 +13,7 @@ vi.mock('nodemailer', () => {
     sendMail: vi.fn().mockResolvedValue({ messageId: 'test' }),
   });
   return {
-    default: { createTransport },
     createTransport,
+    default: { createTransport },
   };
 });

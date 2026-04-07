@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMockPrisma } from '../../test/prisma-mock';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { TEST_ORG, TEST_USER, TEST_USER_2 } from '../../test/fixtures';
+import { createMockPrisma } from '../../test/prisma-mock';
 import { UserService } from './user.service';
 
 describe('UserService', () => {

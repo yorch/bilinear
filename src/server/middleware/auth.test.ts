@@ -76,7 +76,10 @@ describe('requireOrgRole', () => {
     });
 
     try {
-      await requireOrgRole(prisma as never, 'org-1', 'user-1', ['owner', 'admin']);
+      await requireOrgRole(prisma as never, 'org-1', 'user-1', [
+        'owner',
+        'admin',
+      ]);
       expect.unreachable('Should have thrown');
     } catch (e) {
       expect(e).toBeInstanceOf(GraphQLError);
@@ -88,7 +91,10 @@ describe('requireOrgRole', () => {
     prisma.organizationMember.findUnique.mockResolvedValue(null);
 
     try {
-      await requireOrgRole(prisma as never, 'org-1', 'user-1', ['owner', 'admin']);
+      await requireOrgRole(prisma as never, 'org-1', 'user-1', [
+        'owner',
+        'admin',
+      ]);
       expect.unreachable('Should have thrown');
     } catch (e) {
       expect(e).toBeInstanceOf(GraphQLError);
