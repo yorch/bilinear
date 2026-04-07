@@ -146,3 +146,6 @@ vite.config.ts.timestamp-*
 
 # AI
 .claude/settings.local.json
+
+# Docker
+data/
