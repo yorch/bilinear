@@ -29,6 +29,14 @@ export async function loginAs(page: Page, email: string, code?: string) {
 
   // Should land on the team issues page (past all workspace redirects)
   await page.waitForURL('**/team/**', { timeout: 30_000 });
+
+  // Wait for the sync bootstrap to complete so the issue list (or empty-state)
+  // is visible before any test interaction. Without this, tests that press
+  // keyboard shortcuts or look for issue rows race against the loading state.
+  await page.waitForSelector(
+    '[data-testid="issue-list-view"], [data-testid="empty-state"]',
+    { timeout: 30_000 },
+  );
 }
 
 /**

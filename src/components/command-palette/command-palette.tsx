@@ -72,7 +72,7 @@ export const CommandPalette = observer(function CommandPalette({
   const workspaceKey = params.workspace ?? '';
 
   const [query, setQuery] = useState('');
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const [subMenu, setSubMenu] = useState<SubMenuMode>({ type: 'none' });
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -81,7 +81,7 @@ export const CommandPalette = observer(function CommandPalette({
   useEffect(() => {
     if (uiStore.commandPaletteOpen) {
       setQuery('');
-      setActiveIndex(0);
+      setActiveIndex(-1);
       setSubMenu({ type: 'none' });
       setTimeout(() => inputRef.current?.focus(), 0);
     }
@@ -284,7 +284,7 @@ export const CommandPalette = observer(function CommandPalette({
 
   // Reset activeIndex when items change
   useEffect(() => {
-    setActiveIndex(0);
+    setActiveIndex(-1);
   }, []);
 
   if (!uiStore.commandPaletteOpen) {

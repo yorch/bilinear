@@ -15,8 +15,8 @@ test.describe('Team Management', () => {
   });
 
   test('navigating to a team shows its issues', async ({ page }) => {
-    // Click first team link in sidebar
-    const teamLink = page.locator('aside nav a').first();
+    // Click the first team link in the sidebar (team links contain /team/ in href)
+    const teamLink = page.locator('aside nav a[href*="/team/"]').first();
     await teamLink.click();
     // Should show the issue list view
     await expect(
