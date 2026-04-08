@@ -12,7 +12,7 @@ import type { Page } from '@playwright/test';
  * automatically.
  */
 export async function loginAs(page: Page, email: string, code?: string) {
-  const verifyCode = code ?? process.env.TEST_AUTH_CODE ?? 'e2e-test-code';
+  const verifyCode = code ?? process.env.TEST_AUTH_CODE ?? '000000';
 
   await page.goto('/login');
   await page.getByLabel('Email').fill(email);

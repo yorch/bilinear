@@ -57,10 +57,10 @@ export default defineConfig({
    * updates across browser contexts. */
   webServer: [
     {
-      command: 'NODE_ENV=test TEST_AUTH_CODE=e2e-test-code yarn dev',
+      command: 'NODE_ENV=test TEST_AUTH_CODE=000000 yarn dev',
       env: {
         NODE_ENV: 'test',
-        TEST_AUTH_CODE: 'e2e-test-code',
+        TEST_AUTH_CODE: '000000',
       },
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
