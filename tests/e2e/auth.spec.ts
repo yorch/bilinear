@@ -35,8 +35,11 @@ test.describe('Authentication', () => {
     await page.getByLabel(/email/i).fill('e2e@test.local');
     await page.getByTestId('email-submit').click();
     await page.waitForURL(/\/verify/);
-    await page.getByLabel(/code/i).fill('000000');
-    await page.getByRole('button', { name: /verify|continue/i }).click();
+    // Use a code that is NOT the TEST_AUTH_CODE bypass ('000000') so the
+    // server actually validates it and returns an error.
+    await page.getByLabel(/code/i).fill('999999');
+    // 6-digit input auto-submits via onChange; the server rejects the code
+    // and the form renders an error alert.
     await expect(page.getByRole('alert')).toBeVisible();
   });
 });
