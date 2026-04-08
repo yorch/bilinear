@@ -1,6 +1,7 @@
 'use client';
 
 import { Settings } from 'lucide-react';
+import { runInAction } from 'mobx';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -257,12 +258,14 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
             issueStore.pool.delete(tempId);
           },
           onSuccess: data => {
-            issueStore.pool.delete(tempId);
             const created = (data as { issueCreate?: { issue?: DBIssue } })
               ?.issueCreate?.issue;
-            if (created) {
-              issueStore.applySyncAction('I', created.id, created);
-            }
+            runInAction(() => {
+              issueStore.pool.delete(tempId);
+              if (created) {
+                issueStore.applySyncAction('I', created.id, created);
+              }
+            });
           },
         },
       );
