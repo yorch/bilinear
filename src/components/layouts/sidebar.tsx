@@ -98,8 +98,8 @@ export const Sidebar = observer(function Sidebar({
               <button
                 type="button"
                 onClick={() => uiStore.openCreateTeamModal()}
-                title="Create team"
-                aria-label="Create team"
+                title="New team"
+                aria-label="New team"
                 className="flex h-5 w-5 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-zinc-200 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
               >
                 <Plus className="h-3 w-3" />

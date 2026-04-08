@@ -175,6 +175,18 @@ async function main() {
     }
   }
 
+  // Sync issueCount to the actual max issue number so new issues don't collide
+  // with the seeded ones. The create mutation increments issueCount and uses
+  // it as the next issue number, so it must be ≥ the max seeded number.
+  const maxIssue = await prisma.issue.aggregate({
+    _max: { number: true },
+    where: { teamId: team.id },
+  });
+  await prisma.team.update({
+    data: { issueCount: maxIssue._max.number ?? 0 },
+    where: { id: team.id },
+  });
+
   // ── Demo user magic-link token ─────────────────────────────────────────────
 
   // Revoke any existing magic link tokens so only the seeded one is active

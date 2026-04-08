@@ -11,6 +11,8 @@ export default async function RootPage() {
     redirect('/login');
   }
 
+  let orgId: string | undefined;
+
   try {
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) {
@@ -18,24 +20,25 @@ export default async function RootPage() {
     }
     const secret = new TextEncoder().encode(jwtSecret);
     const { payload } = await jwtVerify(token, secret);
-    const orgId = payload.orgId as string | undefined;
-
-    if (orgId) {
-      // Look up the org's human-readable URL key so the workspace URL is stable.
-      const org = await prisma.organization.findUnique({
-        select: { urlKey: true },
-        where: { id: orgId },
-      });
-
-      if (org?.urlKey) {
-        redirect(`/${org.urlKey}`);
-      }
-
-      // Fallback to raw UUID if urlKey lookup fails
-      redirect(`/${orgId}`);
-    }
+    orgId = payload.orgId as string | undefined;
   } catch {
     // Token invalid — redirect to login
+    redirect('/login');
+  }
+
+  if (orgId) {
+    // Look up the org's human-readable URL key so the workspace URL is stable.
+    const org = await prisma.organization.findUnique({
+      select: { urlKey: true },
+      where: { id: orgId },
+    });
+
+    if (org?.urlKey) {
+      redirect(`/${org.urlKey}`);
+    }
+
+    // Fallback to raw UUID if urlKey lookup fails
+    redirect(`/${orgId}`);
   }
 
   redirect('/login');

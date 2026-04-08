@@ -88,7 +88,9 @@ export class AuthService {
 
   async verifyMagicLink(email: string, code: string): Promise<AuthPayload> {
     // Test mode bypass: accept TEST_AUTH_CODE without a real DB token.
-    // Only active when NODE_ENV=test and the env var is set.
+    // Active when NODE_ENV is not 'production' and the env var is set.
+    // Note: Next.js dev server overrides NODE_ENV to 'development', so we
+    // check !== 'production' rather than === 'test'.
     if (
       process.env.NODE_ENV !== 'production' &&
       process.env.TEST_AUTH_CODE &&

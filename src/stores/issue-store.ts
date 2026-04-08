@@ -98,6 +98,24 @@ export class IssueStore {
         const labelIds = labelAssignments
           ? labelAssignments.map(a => a.labelId)
           : (issueData.labelIds ?? []);
+
+        // When a real issue arrives (non-optimistic identifier), atomically
+        // remove any optimistic placeholder for the same title/team so the
+        // list never shows both at once.
+        if (action === 'I' && issueData.identifier !== '…') {
+          for (const [existingId, existing] of this.pool) {
+            if (
+              existingId !== id &&
+              existing.identifier === '…' &&
+              existing.title === issueData.title &&
+              existing.teamId === issueData.teamId
+            ) {
+              this.pool.delete(existingId);
+              break;
+            }
+          }
+        }
+
         this.pool.set(id, { ...issueData, labelIds });
       }
     } else if (action === 'D') {
