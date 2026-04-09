@@ -6,6 +6,7 @@ const PUBLIC_PATHS = [
   '/login',
   '/verify',
   '/api/graphql',
+  '/api/auth',
   '/auth/google',
   '/_next',
   '/favicon.ico',

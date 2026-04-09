@@ -149,3 +149,10 @@ vite.config.ts.timestamp-*
 
 # Docker
 data/
+
+# Redis
+dump.rdb
+
+# Playwright
+playwright-report/
+test-results/

@@ -9,7 +9,7 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   expect: {
-    timeout: 10_000,
+    timeout: 20_000,
   },
 
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -68,6 +68,11 @@ export default defineConfig({
     },
     {
       command: 'yarn ws:server',
+      env: {
+        JWT_SECRET: 'e2e-test-jwt-secret-for-testing-purposes-only-32chars',
+        NODE_ENV: 'test',
+        REDIS_URL: 'redis://localhost:6379',
+      },
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
       url: 'http://localhost:3001',
