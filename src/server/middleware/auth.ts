@@ -36,6 +36,17 @@ export function requireAuth(
   }
 }
 
+/** Like requireAuth but only checks userId — for mutations before org exists (e.g. onboarding). */
+export function requireUserId(
+  ctx: AuthContext,
+): asserts ctx is AuthContext & { userId: string } {
+  if (!ctx.userId) {
+    throw new GraphQLError('Not authenticated', {
+      extensions: { code: 'UNAUTHENTICATED' },
+    });
+  }
+}
+
 export async function requireOrgRole(
   prisma: PrismaClient,
   orgId: string,

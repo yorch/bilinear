@@ -201,7 +201,7 @@ export class AuthService {
     }
   }
 
-  private async issueTokenPair(userId: string): Promise<AuthPayload> {
+  async issueTokenPair(userId: string): Promise<AuthPayload> {
     const org = await this.userService.getOrganizationForUser(userId);
     const orgId = org?.id ?? '';
 

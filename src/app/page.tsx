@@ -41,5 +41,6 @@ export default async function RootPage() {
     redirect(`/${orgId}`);
   }
 
-  redirect('/login');
+  // Authenticated but no org — send to onboarding
+  redirect('/onboarding');
 }

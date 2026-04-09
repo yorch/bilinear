@@ -276,6 +276,19 @@ export const typeDefs = `
     code: String!
   }
 
+  input OrganizationCreateInput {
+    name: String!
+    urlKey: String!
+  }
+
+  type OrganizationCreatePayload {
+    success: Boolean!
+    organization: Organization!
+    accessToken: String!
+    refreshToken: String!
+    expiresIn: Int!
+  }
+
   input TeamCreateInput {
     id: String
     name: String!
@@ -359,6 +372,8 @@ export const typeDefs = `
     googleAuthExchange(code: String!, redirectUri: String!): AuthPayload!
     tokenRefresh(refreshToken: String!): AuthPayload!
     logout: LogoutPayload!
+
+    organizationCreate(input: OrganizationCreateInput!): OrganizationCreatePayload!
 
     teamCreate(input: TeamCreateInput!): TeamPayload!
     teamUpdate(id: ID!, input: TeamUpdateInput!): TeamPayload!

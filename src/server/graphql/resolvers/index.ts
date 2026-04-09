@@ -57,6 +57,7 @@ export const resolvers = {
 
   Mutation: {
     ...authResolvers.Mutation,
+    ...organizationResolvers.Mutation,
     ...issueResolvers.Mutation,
     ...labelResolvers.Mutation,
     ...teamResolvers.Mutation,
