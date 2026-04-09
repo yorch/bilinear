@@ -46,7 +46,8 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--spider", "http://localhost:3001/"]
+      # The ws server's HTTP handler responds 200 on all paths (src/server/ws/index.ts)
+      test: ["CMD", "wget", "--quiet", "--spider", "http://localhost:3001/health"]
       interval: 10s
       timeout: 5s
       retries: 5

@@ -62,8 +62,37 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nodejs
 
-# Include devDeps (tsx) needed to run TypeScript directly
 COPY --from=deps /app/node_modules ./node_modules
+# Remove heavy dev-only packages not needed by the ws server.
+# The ws server only requires: ioredis, ws, jose, tsx (+ their transitive deps).
+RUN rm -rf \
+    node_modules/@biomejs \
+    node_modules/@playwright \
+    node_modules/playwright-core \
+    node_modules/@next \
+    node_modules/next \
+    node_modules/@vitest \
+    node_modules/vitest \
+    node_modules/@types \
+    node_modules/typescript \
+    node_modules/prisma \
+    node_modules/@prisma \
+    node_modules/@tailwindcss \
+    node_modules/tailwindcss \
+    node_modules/react \
+    node_modules/react-dom \
+    node_modules/@apollo \
+    node_modules/graphql \
+    node_modules/graphql-scalars \
+    node_modules/graphql-tag \
+    node_modules/@radix-ui \
+    node_modules/mobx \
+    node_modules/mobx-react-lite \
+    node_modules/dexie \
+    node_modules/sonner \
+    node_modules/nodemailer \
+    node_modules/pino \
+    node_modules/pino-pretty
 # Source files the ws server imports
 COPY --from=builder /app/src/server/ws ./src/server/ws
 COPY --from=builder /app/src/server/lib/jwt.ts ./src/server/lib/jwt.ts

@@ -69,7 +69,14 @@ export class WsClient {
     // Full URL override for multi-domain deployments (Railway, Render, Fly.io, etc.)
     // where the ws server lives on a different hostname than the app.
     if (process.env.NEXT_PUBLIC_WS_URL) {
-      return process.env.NEXT_PUBLIC_WS_URL;
+      const url = process.env.NEXT_PUBLIC_WS_URL;
+      if (!url.startsWith('ws://') && !url.startsWith('wss://')) {
+        console.error(
+          `[WsClient] NEXT_PUBLIC_WS_URL must start with ws:// or wss://, got: ${url}`,
+        );
+        return '';
+      }
+      return url;
     }
     const wsPort = process.env.NEXT_PUBLIC_WS_PORT ?? '3001';
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
