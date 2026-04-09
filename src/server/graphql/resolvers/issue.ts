@@ -46,6 +46,13 @@ export const issueResolvers = {
       return ctx.services.issue.findById(issue.parentId);
     },
 
+    project: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
+      if (!issue.projectId) {
+        return null;
+      }
+      return ctx.services.project.findById(issue.projectId);
+    },
+
     state: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
       return ctx.services.workflowState.findById(issue.stateId);
     },

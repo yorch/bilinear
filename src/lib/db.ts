@@ -111,6 +111,50 @@ export interface DBIssueLabel {
   archivedAt?: string | null;
 }
 
+export interface DBProject {
+  id: string;
+  organizationId: string;
+  name: string;
+  slugId: string;
+  description: string;
+  content?: string | null;
+  icon?: string | null;
+  color: string;
+  statusType: string;
+  statusName?: string | null;
+  health?: string | null;
+  healthUpdatedAt?: string | null;
+  priority: number;
+  prioritySortOrder: number;
+  progress: number;
+  scope: number;
+  startDate?: string | null;
+  targetDate?: string | null;
+  startDateResolution?: string | null;
+  targetDateResolution?: string | null;
+  leadId?: string | null;
+  creatorId?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  canceledAt?: string | null;
+  trashed: boolean;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string | null;
+}
+
+export interface DBProjectMilestone {
+  id: string;
+  projectId: string;
+  name: string;
+  description?: string | null;
+  targetDate?: string | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string | null;
+}
+
 export interface DBSyncMetadata {
   key: string;
   value: unknown;
@@ -125,6 +169,8 @@ export class AppDatabase extends Dexie {
   workflowStates!: Table<DBWorkflowState, string>;
   issues!: Table<DBIssue, string>;
   issueLabels!: Table<DBIssueLabel, string>;
+  projects!: Table<DBProject, string>;
+  projectMilestones!: Table<DBProjectMilestone, string>;
   syncMetadata!: Table<DBSyncMetadata, string>;
 
   constructor() {
@@ -133,6 +179,18 @@ export class AppDatabase extends Dexie {
       issueLabels: 'id, organizationId, teamId, parentId',
       issues: 'id, teamId, stateId, assigneeId, organizationId, identifier',
       organizations: 'id',
+      syncMetadata: 'key',
+      teams: 'id, organizationId, parentId',
+      users: 'id, email',
+      workflowStates: 'id, teamId',
+    });
+    this.version(2).stores({
+      issueLabels: 'id, organizationId, teamId, parentId',
+      issues:
+        'id, teamId, stateId, assigneeId, organizationId, identifier, projectId',
+      organizations: 'id',
+      projectMilestones: 'id, projectId',
+      projects: 'id, organizationId, statusType, leadId',
       syncMetadata: 'key',
       teams: 'id, organizationId, parentId',
       users: 'id, email',

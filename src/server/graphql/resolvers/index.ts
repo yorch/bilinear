@@ -1,8 +1,9 @@
-import { DateTimeScalar, UUIDScalar } from '../types/scalars';
+import { DateTimeScalar, JSONScalar, UUIDScalar } from '../types/scalars';
 import { authResolvers } from './auth';
 import { issueResolvers } from './issue';
 import { labelResolvers } from './label';
 import { organizationResolvers } from './organization';
+import { projectResolvers } from './project';
 import { searchResolvers } from './search';
 import { teamResolvers } from './team';
 import { teamMembershipResolvers } from './team-membership';
@@ -55,14 +56,29 @@ export const resolvers = {
     ...labelResolvers.IssueLabel,
   },
 
+  JSON: JSONScalar,
+
   Mutation: {
     ...authResolvers.Mutation,
     ...organizationResolvers.Mutation,
     ...issueResolvers.Mutation,
     ...labelResolvers.Mutation,
+    ...projectResolvers.Mutation,
     ...teamResolvers.Mutation,
     ...teamMembershipResolvers.Mutation,
     ...workflowStateResolvers.Mutation,
+  },
+
+  Project: {
+    ...projectResolvers.Project,
+  },
+
+  ProjectMilestone: {
+    ...projectResolvers.ProjectMilestone,
+  },
+
+  ProjectUpdate: {
+    ...projectResolvers.ProjectUpdate,
   },
 
   Query: {
@@ -72,6 +88,7 @@ export const resolvers = {
     ...issueResolvers.Query,
     ...labelResolvers.Query,
     ...searchResolvers.Query,
+    ...projectResolvers.Query,
   },
 
   Team: {

@@ -26,6 +26,47 @@ export const DateTimeScalar = new GraphQLScalarType({
   },
 });
 
+export const JSONScalar = new GraphQLScalarType({
+  description: 'Arbitrary JSON value.',
+  name: 'JSON',
+  parseLiteral(ast): unknown {
+    if (ast.kind === Kind.STRING) {
+      return JSON.parse(ast.value);
+    }
+    if (ast.kind === Kind.INT || ast.kind === Kind.FLOAT) {
+      return Number(ast.value);
+    }
+    if (ast.kind === Kind.BOOLEAN) {
+      return ast.value;
+    }
+    if (ast.kind === Kind.NULL) {
+      return null;
+    }
+    if (ast.kind === Kind.LIST) {
+      return ast.values.map((v: unknown) =>
+        JSONScalar.parseLiteral(
+          v as Parameters<typeof JSONScalar.parseLiteral>[0],
+          {},
+        ),
+      );
+    }
+    if (ast.kind === Kind.OBJECT) {
+      const obj: Record<string, unknown> = {};
+      for (const field of ast.fields) {
+        obj[field.name.value] = JSONScalar.parseLiteral(field.value, {});
+      }
+      return obj;
+    }
+    throw new Error('JSON scalar: unexpected AST kind');
+  },
+  parseValue(value: unknown): unknown {
+    return value;
+  },
+  serialize(value: unknown): unknown {
+    return value;
+  },
+});
+
 export const UUIDScalar = new GraphQLScalarType({
   description: 'A field whose value is a valid UUID.',
   name: 'UUID',

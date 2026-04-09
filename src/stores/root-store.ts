@@ -1,5 +1,6 @@
 import { IssueStore } from './issue-store';
 import { LabelStore } from './label-store';
+import { ProjectStore } from './project-store';
 import { SyncStore } from './sync-store';
 import { TeamStore } from './team-store';
 import { UIStore } from './ui-store';
@@ -9,6 +10,7 @@ import { WorkflowStateStore } from './workflow-state-store';
 export class RootStore {
   issueStore: IssueStore;
   labelStore: LabelStore;
+  projectStore: ProjectStore;
   syncStore: SyncStore;
   teamStore: TeamStore;
   uiStore: UIStore;
@@ -22,6 +24,7 @@ export class RootStore {
     this.workflowStateStore = new WorkflowStateStore();
     this.issueStore = new IssueStore();
     this.labelStore = new LabelStore();
+    this.projectStore = new ProjectStore();
     this.uiStore = new UIStore();
   }
 }

@@ -121,6 +121,8 @@ export const typeDefs = `
     assigneeId: ID
     creatorId: ID
     parentId: ID
+    projectId: ID
+    projectMilestoneId: ID
     organizationId: ID!
     branchName: String
     startedAt: DateTime
@@ -136,6 +138,7 @@ export const typeDefs = `
     parent: Issue
     children: [Issue!]!
     labels: [IssueLabel!]!
+    project: Project
   }
 
   type IssueEdge {
@@ -187,6 +190,8 @@ export const typeDefs = `
     labelIds: [String!]
     parentId: String
     sortOrder: Float
+    projectId: String
+    projectMilestoneId: String
   }
 
   input IssueUpdateInput {
@@ -202,6 +207,8 @@ export const typeDefs = `
     sortOrder: Float
     prioritySortOrder: Float
     trashed: Boolean
+    projectId: String
+    projectMilestoneId: String
   }
 
   input IssueFilter {
@@ -355,6 +362,165 @@ export const typeDefs = `
     description: String
   }
 
+  type Project {
+    id: ID!
+    name: String!
+    slugId: String!
+    description: String!
+    content: String
+    icon: String
+    color: String!
+    statusType: String!
+    statusName: String
+    health: String
+    healthUpdatedAt: DateTime
+    priority: Int!
+    progress: Float!
+    scope: Float!
+    startDate: Date
+    targetDate: Date
+    startDateResolution: String
+    targetDateResolution: String
+    lead: User
+    creator: User
+    startedAt: DateTime
+    completedAt: DateTime
+    canceledAt: DateTime
+    archivedAt: DateTime
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    issues: [Issue!]!
+    teams: [Team!]!
+    members: [User!]!
+    milestones: [ProjectMilestone!]!
+    updates: [ProjectUpdate!]!
+  }
+
+  type ProjectMilestone {
+    id: ID!
+    projectId: ID!
+    name: String!
+    description: String
+    targetDate: Date
+    sortOrder: Float!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    archivedAt: DateTime
+  }
+
+  type ProjectUpdate {
+    id: ID!
+    projectId: ID!
+    body: String!
+    bodyData: JSON!
+    health: String!
+    user: User!
+    editedAt: DateTime
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    archivedAt: DateTime
+  }
+
+  type ProjectEdge {
+    node: Project!
+    cursor: String!
+  }
+
+  type ProjectConnection {
+    edges: [ProjectEdge!]!
+    nodes: [Project!]!
+    pageInfo: PageInfo!
+    totalCount: Int!
+  }
+
+  type ProjectPayload {
+    success: Boolean!
+    project: Project
+    lastSyncId: String!
+  }
+
+  type ProjectMilestonePayload {
+    success: Boolean!
+    projectMilestone: ProjectMilestone
+    lastSyncId: String!
+  }
+
+  type ProjectUpdatePayload {
+    success: Boolean!
+    projectUpdate: ProjectUpdate
+    lastSyncId: String!
+  }
+
+  input ProjectCreateInput {
+    id: String
+    name: String!
+    description: String
+    icon: String
+    color: String
+    statusType: String
+    leadId: String
+    startDate: Date
+    targetDate: Date
+    startDateResolution: String
+    targetDateResolution: String
+    teamIds: [String!]!
+    memberIds: [String!]
+  }
+
+  input ProjectUpdateInput {
+    name: String
+    description: String
+    content: String
+    icon: String
+    color: String
+    statusType: String
+    health: String
+    leadId: String
+    startDate: Date
+    targetDate: Date
+    startDateResolution: String
+    targetDateResolution: String
+    priority: Int
+  }
+
+  input ProjectMilestoneCreateInput {
+    id: String
+    projectId: String!
+    name: String!
+    description: String
+    targetDate: Date
+    sortOrder: Float
+  }
+
+  input ProjectMilestoneUpdateInput {
+    name: String
+    description: String
+    targetDate: Date
+    sortOrder: Float
+  }
+
+  input ProjectUpdateCreateInput {
+    id: String
+    projectId: String!
+    body: String!
+    bodyData: JSON!
+    health: String!
+  }
+
+  input ProjectUpdateUpdateInput {
+    body: String
+    bodyData: JSON
+    health: String
+  }
+
+  input ProjectFilter {
+    statusType: String
+    health: String
+    leadId: String
+  }
+
+  scalar JSON
+
   type Query {
     viewer: User!
     organization: Organization!
@@ -375,6 +541,13 @@ export const typeDefs = `
       includeArchived: Boolean
     ): IssueConnection!
     labels(teamId: String): IssueLabelConnection!
+    project(id: ID!): Project!
+    projects(
+      filter: ProjectFilter
+      first: Int
+      after: String
+      includeArchived: Boolean
+    ): ProjectConnection!
   }
 
   type Mutation {
@@ -407,5 +580,23 @@ export const typeDefs = `
     issueLabelCreate(input: IssueLabelCreateInput!): IssueLabelPayload!
     issueLabelUpdate(id: ID!, input: IssueLabelUpdateInput!): IssueLabelPayload!
     issueLabelArchive(id: ID!): IssueLabelPayload!
+
+    projectCreate(input: ProjectCreateInput!): ProjectPayload!
+    projectUpdate(id: ID!, input: ProjectUpdateInput!): ProjectPayload!
+    projectArchive(id: ID!): ProjectPayload!
+    projectDelete(id: ID!): DeletePayload!
+
+    projectAddTeam(projectId: ID!, teamId: ID!): ProjectPayload!
+    projectRemoveTeam(projectId: ID!, teamId: ID!): ProjectPayload!
+    projectAddMember(projectId: ID!, userId: ID!): ProjectPayload!
+    projectRemoveMember(projectId: ID!, userId: ID!): ProjectPayload!
+
+    projectMilestoneCreate(input: ProjectMilestoneCreateInput!): ProjectMilestonePayload!
+    projectMilestoneUpdate(id: ID!, input: ProjectMilestoneUpdateInput!): ProjectMilestonePayload!
+    projectMilestoneDelete(id: ID!): DeletePayload!
+
+    projectUpdateCreate(input: ProjectUpdateCreateInput!): ProjectUpdatePayload!
+    projectUpdateUpdate(id: ID!, input: ProjectUpdateUpdateInput!): ProjectUpdatePayload!
+    projectUpdateDelete(id: ID!): DeletePayload!
   }
 `;

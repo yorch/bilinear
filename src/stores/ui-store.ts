@@ -16,6 +16,7 @@ export class UIStore {
   detailIssueId: string | null = null;
   createIssueModalOpen = false;
   createTeamModalOpen = false;
+  createProjectModalOpen = false;
   commandPaletteOpen = false;
 
   constructor() {
@@ -23,13 +24,16 @@ export class UIStore {
       activeTeamId: observable,
       closeCommandPalette: action,
       closeCreateIssueModal: action,
+      closeCreateProjectModal: action,
       closeCreateTeamModal: action,
       commandPaletteOpen: observable,
       createIssueModalOpen: observable,
+      createProjectModalOpen: observable,
       createTeamModalOpen: observable,
       detailIssueId: observable,
       openCommandPalette: action,
       openCreateIssueModal: action,
+      openCreateProjectModal: action,
       openCreateTeamModal: action,
       selectedIssueId: observable,
       setActiveTeamId: action,
@@ -69,6 +73,14 @@ export class UIStore {
 
   closeCreateIssueModal() {
     this.createIssueModalOpen = false;
+  }
+
+  openCreateProjectModal() {
+    this.createProjectModalOpen = true;
+  }
+
+  closeCreateProjectModal() {
+    this.createProjectModalOpen = false;
   }
 
   openCreateTeamModal() {

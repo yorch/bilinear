@@ -1,6 +1,14 @@
 'use client';
 
-import { Inbox, PanelLeft, Plus, Settings, User, Users } from 'lucide-react';
+import {
+  Inbox,
+  PanelLeft,
+  Plus,
+  Settings,
+  Target,
+  User,
+  Users,
+} from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -19,7 +27,7 @@ export const Sidebar = observer(function Sidebar({
   onToggle,
   workspaceKey,
 }: SidebarProps) {
-  const { teamStore, uiStore, syncStore } = useStore();
+  const { teamStore, projectStore, uiStore, syncStore } = useStore();
   const pathname = usePathname();
   const base = workspaceKey ? `/${workspaceKey}` : '';
 
@@ -33,6 +41,11 @@ export const Sidebar = observer(function Sidebar({
       href: `${base}/inbox`,
       icon: <Inbox className="h-4 w-4" />,
       label: 'Inbox',
+    },
+    {
+      href: `${base}/projects`,
+      icon: <Target className="h-4 w-4" />,
+      label: 'Projects',
     },
   ];
 
