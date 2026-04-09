@@ -2,7 +2,13 @@
 
 import { observer } from 'mobx-react-lite';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import type { RecentItem } from '@/hooks/use-recent-items';
 import type { DBIssue } from '@/lib/db';
 import { getPriorityConfig } from '@/lib/issue-utils';
@@ -237,50 +243,97 @@ export const CommandPalette = observer(function CommandPalette({
   const subItems = buildSubMenuItems();
   const inSubMenu = subMenu.type !== 'none';
 
+  const selectItem = useCallback(
+    (item: ResultItem | undefined) => {
+      if (!item) {
+        return;
+      }
+      if (item.kind === 'issue') {
+        router.push(`/${workspaceKey}/issue/${item.issue.id}`);
+        uiStore.closeCommandPalette();
+      } else {
+        item.onSelect();
+      }
+    },
+    [router, workspaceKey, uiStore],
+  );
+
   // ── Keyboard navigation ──────────────────────────────────────────────────
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    const items = inSubMenu ? subItems : allItems;
-
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setActiveIndex(i => clampIndex(items, i + 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setActiveIndex(i => clampIndex(items, i - 1));
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (inSubMenu) {
-        if (subItems.length > 0) {
-          subItems[activeIndex]?.onSelect();
-        }
-      } else {
-        if (allItems.length > 0) {
-          selectItem(allItems[activeIndex]);
-        }
-      }
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      if (inSubMenu) {
-        setSubMenu({ type: 'none' });
-        setActiveIndex(0);
-      } else {
-        uiStore.closeCommandPalette();
-      }
-    }
+  // Keep a ref with the latest handler state so the event listener registered
+  // below can always read fresh values without being re-registered on each
+  // render (which would cause a flicker gap where no listener is attached).
+  const keyStateRef = useRef({
+    activeIndex,
+    allItems,
+    clampIndex,
+    inSubMenu,
+    selectItem,
+    setActiveIndex,
+    setSubMenu,
+    subItems,
+    uiStore,
+  });
+  keyStateRef.current = {
+    activeIndex,
+    allItems,
+    clampIndex,
+    inSubMenu,
+    selectItem,
+    setActiveIndex,
+    setSubMenu,
+    subItems,
+    uiStore,
   };
 
-  const selectItem = (item: ResultItem | undefined) => {
-    if (!item) {
-      return;
-    }
-    if (item.kind === 'issue') {
-      router.push(`/${workspaceKey}/issue/${item.issue.id}`);
-      uiStore.closeCommandPalette();
-    } else {
-      item.onSelect();
-    }
-  };
+  // Use a layout effect so the listener is registered synchronously after
+  // React commits the render — before the browser paints and before the next
+  // Playwright CDP command arrives. This prevents the race where ArrowDown is
+  // dispatched before the palette's input has focus (and therefore the event
+  // never reached the dialog's onKeyDown). The listener is registered once on
+  // mount and reads fresh state from keyStateRef on every invocation.
+  useLayoutEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const {
+        activeIndex: idx,
+        allItems: all,
+        clampIndex: clamp,
+        inSubMenu: inSub,
+        selectItem: select,
+        setActiveIndex: setIdx,
+        setSubMenu: setSub,
+        subItems: sub,
+        uiStore: ui,
+      } = keyStateRef.current;
+      const items = inSub ? sub : all;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setIdx(i => clamp(items, i + 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setIdx(i => clamp(items, i - 1));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (inSub) {
+          sub[idx]?.onSelect();
+        } else {
+          select(all[idx]);
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        if (inSub) {
+          setSub({ type: 'none' });
+          setIdx(0);
+        } else {
+          ui.closeCommandPalette();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Reset activeIndex when items change
   useEffect(() => {
@@ -307,7 +360,6 @@ export const CommandPalette = observer(function CommandPalette({
         aria-label="Command palette"
         data-testid="command-palette"
         className="fixed left-1/2 top-[20%] z-50 w-full max-w-xl -translate-x-1/2 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900"
-        onKeyDown={handleKeyDown}
       >
         {/* Search input */}
         <div className="flex items-center gap-2 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
