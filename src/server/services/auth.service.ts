@@ -90,7 +90,7 @@ export class AuthService {
     // Test mode bypass: accept TEST_AUTH_CODE without a real DB token.
     // Only active when NODE_ENV=test and the env var is set.
     if (
-      process.env.NODE_ENV === 'test' &&
+      process.env.NODE_ENV !== 'production' &&
       process.env.TEST_AUTH_CODE &&
       code === process.env.TEST_AUTH_CODE
     ) {

@@ -2,7 +2,8 @@
 
 import { observer } from 'mobx-react-lite';
 import { useParams, useRouter } from 'next/navigation';
-import { lazy, Suspense, useCallback } from 'react';
+import { useCallback } from 'react';
+import { CommandPalette } from '@/components/command-palette/command-palette';
 import { CreateTeamModal } from '@/components/teams/create-team-modal';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useRecentItems } from '@/hooks/use-recent-items';
@@ -10,12 +11,6 @@ import type { DBTeam } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { gqlError } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
-
-const CommandPalette = lazy(() =>
-  import('@/components/command-palette/command-palette').then(m => ({
-    default: m.CommandPalette,
-  })),
-);
 
 const TEAM_CREATE_MUTATION = `
   mutation TeamCreate($input: TeamCreateInput!) {
@@ -85,9 +80,7 @@ export const WorkspaceClient = observer(function WorkspaceClient({
     <>
       {children}
       {uiStore.commandPaletteOpen && (
-        <Suspense fallback={null}>
-          <CommandPalette recentItems={recentItems} />
-        </Suspense>
+        <CommandPalette recentItems={recentItems} />
       )}
       <CreateTeamModal
         open={uiStore.createTeamModalOpen}

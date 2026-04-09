@@ -175,7 +175,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Swimlanes (group by assignee, priority, etc.)
 - [ ] View toggle (Alt+1 list, Alt+2 board)
 
-### Sprint 19-20: Advanced Filtering & Custom Views
+### Sprint 19-20: Advanced Filtering, Custom Views & Backlog Management
 - [ ] Filter builder UI (add filter → field → operator → value)
 - [ ] Filter pills/chips display
 - [ ] All filter fields: status, assignee, creator, label, priority, project, cycle, estimate, dates
@@ -186,6 +186,13 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Sidebar: custom views under team
 - [ ] Sort by: priority, status, assignee, created, updated, due date, manual
 - [ ] Multi-level sorting
+- [ ] Backlog view route (`/[workspace]/team/[key]/backlog`)
+- [ ] Backlog displays Backlog + Unstarted state categories; sortable by priority/estimate/age
+- [ ] Drag-to-reorder within priority bands for manual backlog ordering
+- [ ] Bulk operations from backlog: set priority, set estimate, move to cycle, archive
+- [ ] Inline estimate + priority editing directly in backlog rows (no panel open required)
+- [ ] "Move to cycle" action from backlog (add selected issues to active/upcoming cycle)
+- [ ] Visual staleness indicators (age, last-updated) on backlog items
 
 ### Sprint 21-22: Notifications & Activity
 - [ ] Create migrations: notifications, notification_subscriptions
@@ -211,7 +218,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 
 ---
 
-## Phase 3: Organization (Weeks 25-36)
+## Phase 3: Organization (Weeks 25-38)
 
 ### Sprint 25-26: Rich Text Editor
 - [ ] TipTap editor integration
@@ -243,13 +250,21 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Cross-team issue visibility rules
 - [ ] Workspace admin settings page
 
-### Sprint 31-32: Estimates & Progress Tracking
+### Sprint 31-32: Estimates, Progress Tracking & Team Analytics
 - [ ] Per-team estimation scale configuration
 - [ ] Estimate assignment (Shift+E shortcut)
-- [ ] Cycle progress charts (burndown, velocity)
+- [ ] Cycle progress charts (burndown, burnup, velocity)
 - [ ] Project progress charts (completion, scope history)
 - [ ] Live completion predictions
-- [ ] Dashboard with workspace-level metrics
+- [ ] Team analytics dashboard (`/[workspace]/team/[key]/analytics`)
+- [ ] Velocity chart: issues + points completed per cycle, rolling average (3/6/12 cycles)
+- [ ] Throughput trend chart (weekly/monthly)
+- [ ] Cycle metrics: burndown, burnup, scope creep, carryover rate
+- [ ] Flow metrics: lead time histogram, cycle time histogram, time-in-state distribution
+- [ ] Team health panel: per-member workload, overdue count, unestimated percentage
+- [ ] Date range selector: current cycle, last N cycles, last 30/90/180 days, custom
+- [ ] Export analytics data to CSV
+- [ ] Workspace-level aggregate analytics view (cross-team summary)
 
 ### Sprint 33-34: Documents (Linear Docs)
 - [ ] Create migrations: documents
@@ -267,11 +282,25 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Triage responsibility assignment
 - [ ] Require priority before leaving triage (optional)
 
+### Sprint 37-38: Automated Workflows & Rules Engine
+- [ ] Create migrations: automation_rules, automation_rule_conditions, automation_rule_actions, automation_run_log
+- [ ] Rules CRUD (GraphQL mutations + queries)
+- [ ] Trigger types: issue_created, status_changed, label_added, label_removed, assignee_changed, priority_changed, cycle_assigned, due_date_approaching, sla_risk_threshold
+- [ ] Condition types: team, priority, label, assignee, state_category, has_estimate, has_sub_issues
+- [ ] Action types: set_status, assign_user, add_label, remove_label, set_priority, add_to_cycle, post_comment, send_notification, trigger_webhook
+- [ ] Built-in automations: auto-close (inactivity), auto-archive (stale completed), cycle rollover, priority escalation on SLA risk
+- [ ] Git-linked automations (branch created → In Progress; PR merged → Done) — activated when GitHub integration is enabled
+- [ ] Rules management UI per team (list, create, edit, enable/disable, reorder)
+- [ ] Dry-run mode: preview affected issues before activating a rule
+- [ ] Rule execution log (audit trail per rule: timestamp, issue, action taken)
+- [ ] Global rules for workspace admins
+- [ ] Rule execution via BullMQ background queue (`automation-dispatch` queue)
+
 ---
 
-## Phase 4: Integrations (Weeks 37-48)
+## Phase 4: Integrations (Weeks 39-52)
 
-### Sprint 37-38: GitHub Integration
+### Sprint 39-40: GitHub Integration
 - [ ] GitHub OAuth app setup
 - [ ] Link PRs to issues via branch name / PR title / magic words
 - [ ] Auto-status mapping: branch → In Progress, PR → In Review, merge → Done
@@ -279,7 +308,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Git branch name copy (issue.branchName)
 - [ ] Commit/PR linkback messages
 
-### Sprint 39-40: Slack Integration
+### Sprint 41-42: Slack Integration
 - [ ] Slack app setup (OAuth, events API)
 - [ ] /linear slash command for issue creation
 - [ ] Message actions (create issue from message)
@@ -288,7 +317,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Rich unfurls for issue/project links
 - [ ] Bidirectional thread sync (Slack ↔ Linear comments)
 
-### Sprint 41-42: Webhooks
+### Sprint 43-44: Webhooks
 - [ ] Webhook CRUD (GraphQL + settings UI)
 - [ ] Event dispatch for 14 resource types
 - [ ] HMAC-SHA256 signature generation
@@ -296,7 +325,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Auto-disable persistently failing webhooks
 - [ ] Webhook delivery logs
 
-### Sprint 43-44: Import/Export
+### Sprint 45-46: Import/Export
 - [ ] CSV import with field mapping
 - [ ] Jira import (API-based)
 - [ ] GitHub Issues import
@@ -305,14 +334,14 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] CSV export
 - [ ] Bulk delete of imported data (rollback)
 
-### Sprint 45-46: OAuth2 Provider
+### Sprint 47-48: OAuth2 Provider
 - [ ] OAuth2 authorization server
 - [ ] App registration and management
 - [ ] Scopes: read, write, issues:create, comments:create, admin
 - [ ] Token lifecycle: 24h access, refresh tokens
 - [ ] Actor modes: user vs app
 
-### Sprint 47-48: API SDK & Developer Experience
+### Sprint 49-50: API SDK & Developer Experience
 - [ ] TypeScript SDK auto-generation from GraphQL schema
 - [ ] SDK: chained model access, pagination helpers, raw query support
 - [ ] API documentation (generated from schema)
@@ -322,9 +351,9 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 
 ---
 
-## Phase 5: Advanced (Weeks 49+)
+## Phase 5: Advanced (Weeks 53+)
 
-### Sprint 49-50: Initiatives & Roadmaps
+### Sprint 51-52: Initiatives & Roadmaps
 - [ ] Initiative CRUD (name, status, health, owner, target date)
 - [ ] Initiative ↔ project associations
 - [ ] Sub-initiatives (nest up to 5 levels)
@@ -332,7 +361,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Timeline view (Gantt-like) for projects
 - [ ] Draggable timeline bars
 
-### Sprint 51-52: SLAs
+### Sprint 53-54: SLAs
 - [ ] SLA rule configuration
 - [ ] Auto-apply SLA deadlines based on conditions
 - [ ] Risk progression tracking (Low → Medium → High → Breached)
@@ -340,7 +369,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] SLA notifications (24h before breach)
 - [ ] SLA filtering and reporting
 
-### Sprint 53+: AI Features, Mobile, Desktop
+### Sprint 55+: AI Features, Mobile, Desktop
 - [ ] Triage intelligence (AI-powered assignee/label suggestions)
 - [ ] Document summarization
 - [ ] Natural language filtering
@@ -359,10 +388,10 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 | Milestone | Target | Criteria |
 |-----------|--------|----------|
 | **Alpha** | Week 12 | Auth + Issues + Teams + List View + Sync Engine |
-| **Beta** | Week 24 | + Projects + Cycles + Board + Filters + Notifications |
-| **RC1** | Week 36 | + Rich Editor + Comments + Sub-teams + Triage + Docs |
-| **v1.0** | Week 48 | + GitHub + Slack + Webhooks + Import/Export + OAuth |
-| **v2.0** | Week 60+ | + Initiatives + SLAs + AI + Mobile + Desktop |
+| **Beta** | Week 24 | + Projects + Cycles + Board + Filters + Backlog + Notifications |
+| **RC1** | Week 38 | + Rich Editor + Comments + Sub-teams + Triage + Docs + Automations + Analytics |
+| **v1.0** | Week 50 | + GitHub + Slack + Webhooks + Import/Export + OAuth |
+| **v2.0** | Week 62+ | + Initiatives + SLAs + AI + Mobile + Desktop |
 
 ---
 

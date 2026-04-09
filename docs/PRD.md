@@ -286,6 +286,90 @@ Build a modern, high-performance issue tracking and project management platform 
 - Business day configuration
 - Notifications 24h before breach
 
+### 2.21 Backlog Management (P1)
+
+#### 2.21.1 Backlog View
+- Dedicated backlog route per team (`/[workspace]/team/[key]/backlog`)
+- Displays all issues in Backlog and Unstarted state categories
+- Sortable by priority, estimate, created date, updated date, and manual order
+- Drag-to-reorder within priority bands for manual prioritization
+
+#### 2.21.2 Grooming Operations
+- Bulk prioritization: assign or change priority on multiple backlog issues at once
+- Bulk estimation: apply estimates to groups of unestimated issues
+- Quick-add issues directly from the backlog view (no modal required)
+- Archive stale backlog issues in bulk (issues inactive for configurable period)
+- "Move to cycle" action: add selected backlog issues to the active or upcoming cycle
+- "Ready" toggle: mark issues as groomed and ready to pull into a sprint
+
+#### 2.21.3 Prioritization Workflow
+- Sort by: Priority, Estimate, Age (created date), Updated date, Manual
+- Filter to show only unestimated issues (grooming mode)
+- Inline estimate and priority editing without opening detail panel
+- Visual overdue and staleness indicators on backlog items
+
+#### 2.21.4 AI-Assisted Suggestions (P3)
+- Priority suggestions based on issue content, labels, and historical patterns
+- Duplicate detection: surface likely duplicates during backlog grooming
+- Auto-label suggestions on newly triaged issues
+- Assignee suggestions based on team workload and domain expertise
+
+### 2.22 Automated Workflows / Rules Engine (P2)
+
+#### 2.22.1 Rule Anatomy
+- **Trigger:** the event that fires the rule
+  - Issue created, status changed, label added/removed, assignee changed, priority changed, cycle assigned, due date approaching, SLA risk threshold crossed, PR merged (via GitHub integration)
+- **Conditions:** optional filters applied before executing actions
+  - Match on team, priority, label, assignee, state category, estimated/unestimated, has/lacks sub-issues
+- **Actions:** one or more effects to apply
+  - Change status, assign user, add/remove label, set priority, add to cycle, post comment, send notification, trigger webhook
+
+#### 2.22.2 Built-In Automations
+- **Auto-close:** close issues with no updates after N configurable days
+- **Auto-archive:** archive completed/canceled issues after N configurable days
+- **Git-linked:** branch created → In Progress; PR opened → In Review; PR merged → Done (requires GitHub integration)
+- **Priority escalation:** auto-upgrade to Urgent when approaching SLA breach
+- **Cycle rollover:** auto-move unfinished issues to the next cycle on cycle end
+
+#### 2.22.3 Custom Rules UI
+- Rules management page per team; workspace admins can create global rules
+- Drag-to-reorder rule priority (first matching rule wins by default; "run all" mode optional)
+- Dry-run mode: preview which existing issues would be affected before enabling a rule
+- Rule execution log: audit trail of every rule-triggered action (who/what/when)
+- Enable/disable individual rules without deleting them
+
+### 2.23 Team Analytics & Insights (P2)
+
+#### 2.23.1 Velocity & Throughput
+- Issues completed per cycle (count and estimate points)
+- Rolling velocity average over last 3, 6, and 12 cycles
+- Throughput trend chart (weekly and monthly views)
+- Cycle comparison: planned scope vs. actually completed
+
+#### 2.23.2 Cycle Metrics
+- Burndown chart: remaining scope vs. ideal burn line
+- Burnup chart: completed work vs. total scope (including scope creep)
+- Scope creep tracking: issues added after cycle start are visually flagged
+- Carryover rate: percentage of unfinished issues rolled to the next cycle
+
+#### 2.23.3 Flow Metrics
+- Lead time: issue created → issue completed (distribution histogram)
+- Cycle time: issue started → issue completed (distribution histogram)
+- Time-in-state: average time issues spend in each workflow state
+- Work-in-progress (WIP) over time per workflow state
+
+#### 2.23.4 Team Health
+- Per-member workload: assigned open issues, estimated points, overdue count
+- Unestimated issues count and percentage (team grooming health indicator)
+- Issue age distribution: how old are the oldest open issues
+- Triage backlog size over time
+
+#### 2.23.5 Scope & Access
+- Analytics dashboard per team at `/[workspace]/team/[key]/analytics`
+- Workspace-level summary view (cross-team aggregate insights)
+- Date range selector: current cycle, last N cycles, last 30/90/180 days, custom range
+- Export charts and raw data to CSV
+
 ---
 
 ## 3. Non-Functional Requirements
@@ -324,9 +408,9 @@ Build a modern, high-performance issue tracking and project management platform 
 
 - Mobile native apps (web responsive first)
 - Desktop Electron app
-- AI/ML features (triage intelligence, auto-assign)
+- AI/ML features (triage intelligence, auto-assign, AI-assisted backlog suggestions) — targeted for Phase 5
 - Customer tracking (Linear Asks)
-- Advanced analytics/insights dashboards
+- AI-powered predictive analytics and insights (basic team analytics are in Phase 3; advanced AI-driven insights are Phase 5)
 - Public-facing roadmaps
 - Custom fields (use labels + templates)
 

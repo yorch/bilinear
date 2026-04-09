@@ -1,6 +1,7 @@
 'use client';
 
 import { Settings } from 'lucide-react';
+import { runInAction } from 'mobx';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -106,8 +107,17 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   const team = teamStore.findByKey(teamKey);
   const teamId = team?.id ?? null;
 
-  const issues: IssueDetail[] = teamId
-    ? issueStore.findByTeamId(teamId).map(i => ({
+  const rawStates = teamId ? workflowStateStore.findByTeamId(teamId) : [];
+  const states: WorkflowState[] = rawStates;
+
+  const issues: IssueDetail[] = (() => {
+    if (!teamId) {
+      return [];
+    }
+    const statePositionMap = new Map(rawStates.map(s => [s.id, s.position]));
+    return issueStore
+      .findByTeamId(teamId)
+      .map(i => ({
         ...i,
         dueDate: i.dueDate ?? null,
         labels: (i.labelIds ?? [])
@@ -115,11 +125,15 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
           .filter((l): l is DBIssueLabel => l !== null)
           .map(l => ({ color: l.color, id: l.id, name: l.name })),
       }))
-    : [];
-
-  const states: WorkflowState[] = teamId
-    ? workflowStateStore.findByTeamId(teamId)
-    : [];
+      .sort((a, b) => {
+        const posA = statePositionMap.get(a.stateId) ?? 0;
+        const posB = statePositionMap.get(b.stateId) ?? 0;
+        if (posA !== posB) {
+          return posA - posB;
+        }
+        return a.sortOrder - b.sortOrder;
+      });
+  })();
 
   const users: IssueUser[] = userStore.all.map(u => ({
     avatarBackgroundColor: u.avatarBgColor,
@@ -193,27 +207,70 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
       labelIds: string[];
       dueDate?: string | null;
     }) => {
-      if (!teamId) {
+      if (!teamId || !team) {
         return;
       }
+
+      // Optimistically add the issue so it appears immediately (offline support).
+      const tempId = `temp-${crypto.randomUUID()}`;
+      const now = new Date().toISOString();
+      const effectiveStateId =
+        input.stateId ??
+        states.find(s => s.type === 'backlog')?.id ??
+        states[0]?.id ??
+        '';
+      issueStore.applySyncAction('I', tempId, {
+        archivedAt: null,
+        assigneeId: input.assigneeId ?? null,
+        branchName: null,
+        canceledAt: null,
+        completedAt: null,
+        createdAt: now,
+        creatorId: null,
+        cycleId: null,
+        description: input.description ?? null,
+        dueDate: input.dueDate ?? null,
+        estimate: null,
+        id: tempId,
+        identifier: `${team.key}-…`,
+        labelIds: input.labelIds,
+        number: 0,
+        organizationId: team.organizationId,
+        parentId: null,
+        priority: input.priority,
+        prioritySortOrder: 0,
+        projectId: null,
+        sortOrder: 0,
+        startedAt: null,
+        stateId: effectiveStateId,
+        teamId,
+        title: input.title,
+        trashed: false,
+        updatedAt: now,
+      } as DBIssue);
+
       txQueue.enqueue(
         ISSUE_CREATE_MUTATION,
         { input: { ...input, teamId } },
         {
           onError: err => {
             console.error('[TeamPage] issueCreate failed:', err);
+            issueStore.pool.delete(tempId);
           },
           onSuccess: data => {
             const created = (data as { issueCreate?: { issue?: DBIssue } })
               ?.issueCreate?.issue;
-            if (created) {
-              issueStore.applySyncAction('I', created.id, created);
-            }
+            runInAction(() => {
+              issueStore.pool.delete(tempId);
+              if (created) {
+                issueStore.applySyncAction('I', created.id, created);
+              }
+            });
           },
         },
       );
     },
-    [teamId, issueStore, txQueue],
+    [teamId, team, issueStore, txQueue, states],
   );
 
   const handleArchive = useCallback(

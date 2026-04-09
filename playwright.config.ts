@@ -50,19 +50,29 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
 
-  /* Start the Next.js dev server before running tests.
+  /* Start both servers before running tests.
    * NODE_ENV=test activates the AUTH_CODE bypass in AuthService so the
-   * E2E auth fixture can log in with TEST_AUTH_CODE without a real email. */
-  webServer: {
-    command: 'NODE_ENV=test TEST_AUTH_CODE=e2e-test-code yarn dev',
-    env: {
-      NODE_ENV: 'test',
-      TEST_AUTH_CODE: 'e2e-test-code',
+   * E2E auth fixture can log in with TEST_AUTH_CODE without a real email.
+   * The WebSocket server is required by sync.spec.ts to push real-time
+   * updates across browser contexts. */
+  webServer: [
+    {
+      command: 'NODE_ENV=test TEST_AUTH_CODE=000000 yarn dev',
+      env: {
+        NODE_ENV: 'test',
+        TEST_AUTH_CODE: '000000',
+      },
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      url: 'http://localhost:3000',
     },
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-    url: 'http://localhost:3000',
-  },
+    {
+      command: 'yarn ws:server',
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+      url: 'http://localhost:3001',
+    },
+  ],
 
   /* Workers: 1 in CI to avoid resource contention */
   workers: process.env.CI ? 1 : undefined,
