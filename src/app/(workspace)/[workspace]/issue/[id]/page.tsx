@@ -1,9 +1,11 @@
 'use client';
 
+import { observer } from 'mobx-react-lite';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
 import { gql } from '@/lib/graphql';
+import { useStore } from '@/providers/store-provider';
 import type {
   IssueDetail,
   IssueLabel,
@@ -49,27 +51,70 @@ const ISSUE_UPDATE_MUTATION = `
   }
 `;
 
-export default function IssueDetailPage() {
+const IssueDetailPage = observer(function IssueDetailPage() {
   const { workspace, id } = useParams<{ workspace: string; id: string }>();
   const router = useRouter();
+  const { issueStore, teamStore, workflowStateStore, labelStore, userStore } =
+    useStore();
 
   const [issue, setIssue] = useState<IssueWithTeam | null>(null);
   const [labels, setLabels] = useState<IssueLabel[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // If the issue is only in the local store (e.g. optimistic or temp id),
+    // build the detail view from store data instead of fetching from server.
+    const storeIssue = issueStore.findById(id);
+    if (storeIssue && id.startsWith('temp-')) {
+      const team = teamStore.findById(storeIssue.teamId);
+      const states = team
+        ? workflowStateStore.findByTeamId(team.id)
+        : [];
+      const members = userStore.all.map(u => ({
+        user: {
+          avatarBackgroundColor: u.avatarBgColor,
+          avatarUrl: u.avatarUrl ?? null,
+          displayName: u.displayName,
+          id: u.id,
+          initials: u.initials,
+        },
+      }));
+      setIssue({
+        ...storeIssue,
+        dueDate: storeIssue.dueDate ?? null,
+        labels: (storeIssue.labelIds ?? [])
+          .map(lid => labelStore.findById(lid))
+          .filter(Boolean)
+          .map(l => ({ color: l!.color, id: l!.id, name: l!.name })),
+        team: {
+          id: team?.id ?? storeIssue.teamId,
+          key: team?.key ?? '',
+          members,
+          states,
+        },
+      });
+      setLabels(labelStore.all.map(l => ({ color: l.color, id: l.id, name: l.name })));
+      setLoading(false);
+      return;
+    }
+
     gql(ISSUE_QUERY, { id })
-      .then(data => {
-        if (data.data?.issue) {
-          setIssue(data.data.issue as IssueWithTeam);
-          setLabels((data.data.labels as { nodes: IssueLabel[] })?.nodes ?? []);
+      .then(result => {
+        if (result.errors?.length) {
+          console.error('[IssueDetailPage] GraphQL errors:', result.errors);
+        }
+        if (result.data?.issue) {
+          setIssue(result.data.issue as IssueWithTeam);
+          setLabels(
+            (result.data.labels as { nodes: IssueLabel[] })?.nodes ?? [],
+          );
         }
       })
-      .catch(() => {
-        // Network or server error — leave issue null so "not found" is shown
+      .catch(err => {
+        console.error('[IssueDetailPage] Fetch error:', err);
       })
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, issueStore, teamStore, workflowStateStore, labelStore, userStore]);
 
   const handleUpdate = async (
     issueId: string,
@@ -133,4 +178,6 @@ export default function IssueDetailPage() {
       />
     </div>
   );
-}
+});
+
+export default IssueDetailPage;
