@@ -26,6 +26,7 @@ export type OpenProperty =
   | 'priority'
   | 'label'
   | 'dueDate'
+  | 'project'
   | null;
 
 interface IssueRowProps {

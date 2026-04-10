@@ -410,6 +410,12 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   useHotkeys('d', () => setOpenProperty('dueDate'), { enabled: hasSelection }, [
     hasSelection,
   ]);
+  useHotkeys(
+    'shift+p',
+    () => setOpenProperty('project'),
+    { enabled: hasSelection },
+    [hasSelection],
+  );
 
   // Backspace / Delete — archive selected issue
   useHotkeys(

@@ -54,6 +54,12 @@ export async function GET(req: NextRequest) {
     for (const issue of data.issues) {
       lines.push(`Issue=${JSON.stringify(issue)}`);
     }
+    for (const project of data.projects) {
+      lines.push(`Project=${JSON.stringify(project)}`);
+    }
+    for (const milestone of data.projectMilestones) {
+      lines.push(`ProjectMilestone=${JSON.stringify(milestone)}`);
+    }
 
     lines.push(`_metadata_=${JSON.stringify({ lastSyncId: data.lastSyncId })}`);
 

@@ -15,6 +15,8 @@ export interface IssueCreateInput {
   labelIds?: string[];
   parentId?: string;
   sortOrder?: number;
+  projectId?: string;
+  projectMilestoneId?: string;
 }
 
 export interface IssueUpdateInput {
@@ -30,6 +32,8 @@ export interface IssueUpdateInput {
   sortOrder?: number;
   prioritySortOrder?: number;
   trashed?: boolean;
+  projectId?: string | null;
+  projectMilestoneId?: string | null;
 }
 
 export interface IssueFilter {
@@ -77,6 +81,7 @@ export class IssueService {
 
       const issue = await tx.issue.create({
         data: {
+          addedToProjectAt: input.projectId ? new Date() : undefined,
           assigneeId: input.assigneeId,
           creatorId,
           description: input.description,
@@ -88,6 +93,8 @@ export class IssueService {
           organizationId: orgId,
           parentId: input.parentId,
           priority: input.priority ?? 0,
+          projectId: input.projectId,
+          projectMilestoneId: input.projectMilestoneId,
           sortOrder: input.sortOrder ?? 0,
           stateId,
           teamId: input.teamId,
@@ -209,6 +216,15 @@ export class IssueService {
     }
     if (input.trashed !== undefined) {
       data.trashed = input.trashed;
+    }
+    if ('projectId' in input) {
+      data.projectId = input.projectId;
+      if (input.projectId) {
+        data.addedToProjectAt = new Date();
+      }
+    }
+    if ('projectMilestoneId' in input) {
+      data.projectMilestoneId = input.projectMilestoneId;
     }
 
     return this.prisma.$transaction(async tx => {

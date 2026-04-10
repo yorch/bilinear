@@ -1,0 +1,274 @@
+'use client';
+
+import { observer } from 'mobx-react-lite';
+import { useEffect, useRef, useState } from 'react';
+import { cn, getErrorMessage } from '@/lib/utils';
+import { useStore } from '@/providers/store-provider';
+
+const STATUS_OPTIONS = [
+  { label: 'Backlog', value: 'backlog' },
+  { label: 'Planned', value: 'planned' },
+  { label: 'In Progress', value: 'inProgress' },
+] as const;
+
+interface CreateProjectModalProps {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (input: {
+    name: string;
+    description?: string;
+    statusType: string;
+    teamIds: string[];
+    leadId?: string;
+    startDate?: string;
+    targetDate?: string;
+  }) => Promise<void>;
+}
+
+export const CreateProjectModal = observer(function CreateProjectModal({
+  open,
+  onClose,
+  onSubmit,
+}: CreateProjectModalProps) {
+  const { teamStore } = useStore();
+  const nameRef = useRef<HTMLInputElement>(null);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [statusType, setStatusType] = useState('planned');
+  const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
+  const [startDate, setStartDate] = useState('');
+  const [targetDate, setTargetDate] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+
+  const teams = teamStore.all;
+
+  useEffect(() => {
+    if (open) {
+      setName('');
+      setDescription('');
+      setStatusType('planned');
+      setSelectedTeamIds(teams.length > 0 ? [teams[0].id] : []);
+      setStartDate('');
+      setTargetDate('');
+      setSubmitting(false);
+      setSubmitError('');
+      setTimeout(() => nameRef.current?.focus(), 50);
+    }
+  }, [open, teams]);
+
+  const toggleTeam = (teamId: string) => {
+    setSelectedTeamIds(prev =>
+      prev.includes(teamId)
+        ? prev.filter(id => id !== teamId)
+        : [...prev, teamId],
+    );
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || selectedTeamIds.length === 0 || submitting) {
+      return;
+    }
+
+    setSubmitting(true);
+    setSubmitError('');
+    try {
+      await onSubmit({
+        description: description.trim() || undefined,
+        name: name.trim(),
+        startDate: startDate || undefined,
+        statusType,
+        targetDate: targetDate || undefined,
+        teamIds: selectedTeamIds,
+      });
+      onClose();
+    } catch (err) {
+      setSubmitError(getErrorMessage(err, 'Failed to create project'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!open) {
+    return null;
+  }
+
+  const canSubmit =
+    name.trim().length > 0 && selectedTeamIds.length > 0 && !submitting;
+
+  return (
+    <dialog
+      open
+      aria-label="Create project"
+      className="fixed inset-0 z-50 flex h-screen w-screen items-center justify-center bg-black/40 p-0 m-0 border-none max-w-none max-h-none"
+      onClick={e => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+      onKeyDown={e => {
+        if (e.key === 'Escape') {
+          onClose();
+        }
+      }}
+    >
+      <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+        <form onSubmit={handleSubmit} className="flex flex-col">
+          <div className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              Create project
+            </h2>
+          </div>
+
+          <div className="flex flex-col gap-4 px-5 py-4">
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="project-name"
+                className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+              >
+                Name
+              </label>
+              <input
+                id="project-name"
+                ref={nameRef}
+                type="text"
+                placeholder="e.g. Q2 Launch"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+                required
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="project-description"
+                className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+              >
+                Description{' '}
+                <span className="font-normal text-zinc-400">(optional)</span>
+              </label>
+              <textarea
+                id="project-description"
+                placeholder="What is this project about?"
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                rows={2}
+                className="resize-none rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-600 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-400"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="project-status"
+                className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+              >
+                Status
+              </label>
+              <select
+                id="project-status"
+                value={statusType}
+                onChange={e => setStatusType(e.target.value)}
+                className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+              >
+                {STATUS_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                Teams
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {teams.map(team => (
+                  <button
+                    key={team.id}
+                    type="button"
+                    onClick={() => toggleTeam(team.id)}
+                    className={cn(
+                      'rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
+                      selectedTeamIds.includes(team.id)
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
+                        : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800',
+                    )}
+                  >
+                    {team.icon ? `${team.icon} ` : ''}
+                    {team.name}
+                  </button>
+                ))}
+              </div>
+              {teams.length === 0 && (
+                <p className="text-xs text-zinc-400">
+                  No teams available. Create a team first.
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="project-start"
+                  className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+                >
+                  Start date{' '}
+                  <span className="font-normal text-zinc-400">(optional)</span>
+                </label>
+                <input
+                  id="project-start"
+                  type="date"
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                  className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="project-target"
+                  className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+                >
+                  Target date{' '}
+                  <span className="font-normal text-zinc-400">(optional)</span>
+                </label>
+                <input
+                  id="project-target"
+                  type="date"
+                  value={targetDate}
+                  onChange={e => setTargetDate(e.target.value)}
+                  className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
+            {submitError && (
+              <p className="flex-1 text-xs text-red-500">{submitError}</p>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className={cn(
+                'rounded-md px-4 py-1.5 text-sm font-medium text-white transition-colors',
+                'bg-indigo-600 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50',
+              )}
+            >
+              {submitting ? 'Creating...' : 'Create project'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+  );
+});

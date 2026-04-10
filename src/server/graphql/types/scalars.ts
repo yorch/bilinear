@@ -1,4 +1,7 @@
 import { GraphQLScalarType, Kind } from 'graphql';
+import { GraphQLJSON } from 'graphql-scalars';
+
+export const JSONScalar = GraphQLJSON;
 
 export const DateTimeScalar = new GraphQLScalarType({
   description: 'An ISO-8601 encoded UTC date-time string.',
