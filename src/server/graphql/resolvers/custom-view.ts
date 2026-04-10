@@ -1,6 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { CustomView } from '../../../generated/prisma';
-import { requireAuth } from '../../middleware/auth';
+import { requireAuth, requireTeamMember } from '../../middleware/auth';
 import type {
   CustomViewCreateInput,
   CustomViewUpdateInput,
@@ -67,6 +67,7 @@ export const customViewResolvers = {
             extensions: { code: 'NOT_FOUND' },
           });
         }
+        await requireTeamMember(ctx.prisma, input.teamId, ctx.userId);
       }
 
       const customView = await ctx.services.customView.create(
@@ -169,6 +170,11 @@ export const customViewResolvers = {
         });
       }
 
+      // Team-scoped views require team membership
+      if (customView.teamId) {
+        await requireTeamMember(ctx.prisma, customView.teamId, ctx.userId);
+      }
+
       return customView;
     },
 
@@ -178,6 +184,10 @@ export const customViewResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+
+      if (teamId) {
+        await requireTeamMember(ctx.prisma, teamId, ctx.userId);
+      }
 
       return ctx.services.customView.findByOrgId(
         ctx.orgId,

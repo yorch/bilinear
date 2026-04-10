@@ -138,11 +138,13 @@ export const Sidebar = observer(function Sidebar({
                   const href = `${base}/team/${team.key}`;
                   const cyclesHref = `${href}/cycles`;
                   const backlogHref = `${href}/backlog`;
+                  const viewHrefPrefix = `${href}/view/`;
                   const isActive =
                     pathname === href ||
                     (pathname.startsWith(`${href}/`) &&
                       !pathname.startsWith(cyclesHref) &&
-                      !pathname.startsWith(backlogHref));
+                      !pathname.startsWith(backlogHref) &&
+                      !pathname.startsWith(viewHrefPrefix));
                   const isCyclesActive = pathname.startsWith(cyclesHref);
                   const isBacklogActive = pathname.startsWith(backlogHref);
                   return (

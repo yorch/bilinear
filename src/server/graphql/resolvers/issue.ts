@@ -35,7 +35,11 @@ export const issueResolvers = {
       if (!issue.cycleId) {
         return null;
       }
-      return ctx.services.cycle.findById(issue.cycleId);
+      const cycle = await ctx.services.cycle.findById(issue.cycleId);
+      if (cycle && cycle.organizationId !== ctx.orgId) {
+        return null;
+      }
+      return cycle;
     },
 
     dueDate: (issue: Issue) => {

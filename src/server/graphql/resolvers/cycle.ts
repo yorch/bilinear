@@ -238,6 +238,7 @@ export const cycleResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
+      await requireTeamMember(ctx.prisma, cycle.teamId, ctx.userId);
       return cycle;
     },
 

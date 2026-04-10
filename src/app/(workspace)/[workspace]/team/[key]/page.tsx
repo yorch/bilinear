@@ -569,6 +569,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
             states={states}
             users={users}
             labels={labels}
+            teamId={teamId ?? undefined}
             selectedId={selectedId}
             onSelect={setSelectedId}
             onOpen={handleOpen}

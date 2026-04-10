@@ -145,7 +145,7 @@ export class CycleService {
   async delete(id: string): Promise<Cycle> {
     // Unassign all issues from this cycle before deleting
     await this.prisma.issue.updateMany({
-      data: { cycleId: null },
+      data: { addedToCycleAt: null, cycleId: null },
       where: { cycleId: id },
     });
     return this.prisma.cycle.delete({ where: { id } });

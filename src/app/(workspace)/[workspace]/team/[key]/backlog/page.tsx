@@ -110,10 +110,11 @@ interface BacklogRowProps {
 
 function BacklogRow({ issue, selected, onSelect, onUpdate }: BacklogRowProps) {
   return (
-    <button
-      type="button"
+    // biome-ignore lint/a11y/noStaticElementInteractions: row contains interactive children; top-level click selects
+    // biome-ignore lint/a11y/useKeyWithClickEvents: keyboard nav handled at page level
+    <div
       className={cn(
-        'flex w-full items-center gap-3 border-b border-zinc-100 px-4 py-2 text-left transition-colors dark:border-zinc-800',
+        'flex items-center gap-3 border-b border-zinc-100 px-4 py-2 transition-colors dark:border-zinc-800',
         selected
           ? 'bg-indigo-50 dark:bg-indigo-950/30'
           : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/50',
@@ -177,7 +178,7 @@ function BacklogRow({ issue, selected, onSelect, onUpdate }: BacklogRowProps) {
       <div className="w-8 flex-shrink-0 text-right">
         <StalenessIndicator updatedAt={issue.updatedAt} />
       </div>
-    </button>
+    </div>
   );
 }
 

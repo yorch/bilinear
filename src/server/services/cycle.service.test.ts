@@ -153,7 +153,7 @@ describe('CycleService', () => {
       await service.delete(TEST_CYCLE.id);
 
       expect(prisma.issue.updateMany).toHaveBeenCalledWith({
-        data: { cycleId: null },
+        data: { addedToCycleAt: null, cycleId: null },
         where: { cycleId: TEST_CYCLE.id },
       });
       expect(prisma.cycle.delete).toHaveBeenCalledWith({

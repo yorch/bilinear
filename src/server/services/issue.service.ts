@@ -234,6 +234,8 @@ export class IssueService {
       data.cycleId = input.cycleId;
       if (input.cycleId) {
         data.addedToCycleAt = new Date();
+      } else {
+        data.addedToCycleAt = null;
       }
     }
 

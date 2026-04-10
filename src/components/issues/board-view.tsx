@@ -7,6 +7,7 @@ import {
   type DragStartEvent,
   MouseSensor,
   TouchSensor,
+  useDroppable,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
@@ -181,6 +182,8 @@ function BoardColumn({
   onSelect: (id: string) => void;
   onOpen: (id: string) => void;
 }) {
+  const { setNodeRef } = useDroppable({ id: column.id });
+
   return (
     <div className="flex w-72 flex-shrink-0 flex-col">
       {/* Column header */}
@@ -199,8 +202,11 @@ function BoardColumn({
         </span>
       </div>
 
-      {/* Cards */}
-      <div className="flex flex-1 flex-col gap-2 overflow-y-auto rounded-lg bg-zinc-50 p-2 dark:bg-zinc-900/50">
+      {/* Cards — column is a droppable area so empty columns accept drops */}
+      <div
+        ref={setNodeRef}
+        className="flex flex-1 flex-col gap-2 overflow-y-auto rounded-lg bg-zinc-50 p-2 dark:bg-zinc-900/50"
+      >
         <SortableContext
           items={column.issues.map(i => i.id)}
           strategy={verticalListSortingStrategy}
