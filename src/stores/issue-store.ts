@@ -63,6 +63,12 @@ export class IssueStore {
       .map(m => m.issue);
   }
 
+  findByProjectId(projectId: string): DBIssue[] {
+    return Array.from(this.pool.values()).filter(
+      i => i.projectId === projectId && !i.trashed && !i.archivedAt,
+    );
+  }
+
   findByStateId(stateId: string): DBIssue[] {
     return Array.from(this.pool.values()).filter(
       i => i.stateId === stateId && !i.trashed && !i.archivedAt,

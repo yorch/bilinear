@@ -15,6 +15,28 @@ import type {
 } from '../../services/project.service';
 import type { GraphQLContext } from '../context';
 
+// Per-request cache to avoid duplicate getProgress calls when both progress and scope are queried
+const progressCacheKey = Symbol('projectProgress');
+
+function getProgressCached(
+  ctx: GraphQLContext,
+  projectId: string,
+): Promise<{ progress: number; scope: number }> {
+  const cache = ((ctx as unknown as Record<symbol, unknown>)[
+    progressCacheKey
+  ] ??= new Map<string, Promise<{ progress: number; scope: number }>>()) as Map<
+    string,
+    Promise<{ progress: number; scope: number }>
+  >;
+
+  let promise = cache.get(projectId);
+  if (!promise) {
+    promise = ctx.services.project.getProgress(projectId);
+    cache.set(projectId, promise);
+  }
+  return promise;
+}
+
 export const projectResolvers = {
   Mutation: {
     projectAddMember: async (
@@ -422,25 +444,13 @@ export const projectResolvers = {
     },
 
     progress: async (project: Project, _args: unknown, ctx: GraphQLContext) => {
-      const { progress } = await ctx.services.project.getProgress(project.id);
-      return progress;
+      const result = await getProgressCached(ctx, project.id);
+      return result.progress;
     },
 
     scope: async (project: Project, _args: unknown, ctx: GraphQLContext) => {
-      const { scope } = await ctx.services.project.getProgress(project.id);
-      return scope;
-    },
-
-    startDate: (project: Project) => {
-      return project.startDate
-        ? project.startDate.toISOString().split('T')[0]
-        : null;
-    },
-
-    targetDate: (project: Project) => {
-      return project.targetDate
-        ? project.targetDate.toISOString().split('T')[0]
-        : null;
+      const result = await getProgressCached(ctx, project.id);
+      return result.scope;
     },
 
     teams: async (project: Project, _args: unknown, ctx: GraphQLContext) => {
@@ -452,13 +462,7 @@ export const projectResolvers = {
     },
   },
 
-  ProjectMilestone: {
-    targetDate: (milestone: ProjectMilestone) => {
-      return milestone.targetDate
-        ? milestone.targetDate.toISOString().split('T')[0]
-        : null;
-    },
-  },
+  ProjectMilestone: {},
 
   ProjectUpdate: {
     user: async (
@@ -499,28 +503,13 @@ export const projectResolvers = {
     ) => {
       requireAuth(ctx);
 
-      const projects = await ctx.services.project.findByOrgId(
+      const filtered = await ctx.services.project.findByOrgId(
         ctx.orgId,
         args.includeArchived ?? false,
+        args.filter,
       );
 
-      // Apply optional filters
-      let filtered = projects;
-      if (args.filter) {
-        if (args.filter.statusType) {
-          filtered = filtered.filter(
-            p => p.statusType === args.filter!.statusType,
-          );
-        }
-        if (args.filter.health) {
-          filtered = filtered.filter(p => p.health === args.filter!.health);
-        }
-        if (args.filter.leadId) {
-          filtered = filtered.filter(p => p.leadId === args.filter!.leadId);
-        }
-      }
-
-      // Simple cursor pagination
+      // Cursor pagination
       let start = 0;
       if (args.after) {
         const idx = filtered.findIndex(p => p.id === args.after);

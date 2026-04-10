@@ -12,24 +12,13 @@ import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useState } from 'react';
 import { gql } from '@/lib/graphql';
+import {
+  PROJECT_HEALTH_OPTIONS,
+  PROJECT_STATUS_CONFIG,
+} from '@/lib/project-constants';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
-
-const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  backlog: { color: 'text-zinc-400', label: 'Backlog' },
-  canceled: { color: 'text-zinc-400', label: 'Canceled' },
-  completed: { color: 'text-green-500', label: 'Completed' },
-  inProgress: { color: 'text-yellow-500', label: 'In Progress' },
-  paused: { color: 'text-orange-500', label: 'Paused' },
-  planned: { color: 'text-blue-500', label: 'Planned' },
-};
-
-const HEALTH_OPTIONS = [
-  { color: 'bg-green-500', label: 'On Track', value: 'onTrack' },
-  { color: 'bg-yellow-500', label: 'At Risk', value: 'atRisk' },
-  { color: 'bg-red-500', label: 'Off Track', value: 'offTrack' },
-] as const;
 
 interface ProjectDetailViewProps {
   projectSlugId: string;
@@ -52,13 +41,11 @@ export const ProjectDetailView = observer(function ProjectDetailView({
     );
   }
 
-  const status = STATUS_CONFIG[project.statusType] ?? STATUS_CONFIG.planned;
+  const status =
+    PROJECT_STATUS_CONFIG[project.statusType] ?? PROJECT_STATUS_CONFIG.planned;
   const lead = project.leadId ? userStore.findById(project.leadId) : null;
 
-  // Get project issues from the store
-  const projectIssues = Array.from(issueStore.pool.values()).filter(
-    i => i.projectId === project.id && !i.trashed && !i.archivedAt,
-  );
+  const projectIssues = issueStore.findByProjectId(project.id);
   const completedIssues = projectIssues.filter(i => i.completedAt);
   const progress =
     projectIssues.length > 0
@@ -95,7 +82,6 @@ export const ProjectDetailView = observer(function ProjectDetailView({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Header */}
       <div className="flex h-12 items-center gap-3 border-b border-zinc-200 px-4 dark:border-zinc-800">
         <Link
           href={`/${workspaceKey}/projects`}
@@ -117,12 +103,9 @@ export const ProjectDetailView = observer(function ProjectDetailView({
         </h1>
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-4xl px-6 py-6">
-          {/* Meta row */}
           <div className="flex flex-wrap items-center gap-4 text-sm">
-            {/* Status */}
             <div className="flex items-center gap-2">
               <CircleDot className={cn('h-4 w-4', status.color)} />
               <select
@@ -130,19 +113,17 @@ export const ProjectDetailView = observer(function ProjectDetailView({
                 onChange={e => handleStatusChange(e.target.value)}
                 className="bg-transparent text-sm font-medium text-zinc-900 outline-none dark:text-zinc-100"
               >
-                {Object.entries(STATUS_CONFIG).map(([val, cfg]) => (
+                {Object.entries(PROJECT_STATUS_CONFIG).map(([val, cfg]) => (
                   <option key={val} value={val}>
                     {cfg.label}
                   </option>
                 ))}
               </select>
             </div>
-
-            {/* Health */}
             <div className="flex items-center gap-2">
               <span className="text-xs text-zinc-400">Health:</span>
               <div className="flex gap-1">
-                {HEALTH_OPTIONS.map(h => (
+                {PROJECT_HEALTH_OPTIONS.map(h => (
                   <button
                     key={h.value}
                     type="button"
@@ -159,8 +140,6 @@ export const ProjectDetailView = observer(function ProjectDetailView({
                 ))}
               </div>
             </div>
-
-            {/* Lead */}
             {lead && (
               <div className="flex items-center gap-1.5">
                 <User className="h-3.5 w-3.5 text-zinc-400" />
@@ -169,8 +148,6 @@ export const ProjectDetailView = observer(function ProjectDetailView({
                 </span>
               </div>
             )}
-
-            {/* Dates */}
             {(project.startDate || project.targetDate) && (
               <div className="flex items-center gap-1.5">
                 <Calendar className="h-3.5 w-3.5 text-zinc-400" />
@@ -180,15 +157,11 @@ export const ProjectDetailView = observer(function ProjectDetailView({
               </div>
             )}
           </div>
-
-          {/* Description */}
           {project.description && (
             <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
               {project.description}
             </p>
           )}
-
-          {/* Progress */}
           <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
@@ -206,8 +179,6 @@ export const ProjectDetailView = observer(function ProjectDetailView({
               />
             </div>
           </div>
-
-          {/* Milestones */}
           {milestones.length > 0 && (
             <div className="mt-6">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
@@ -233,8 +204,6 @@ export const ProjectDetailView = observer(function ProjectDetailView({
               </div>
             </div>
           )}
-
-          {/* Issues */}
           <div className="mt-6">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">

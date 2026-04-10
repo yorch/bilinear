@@ -132,6 +132,7 @@ export class ProjectService {
   async findByOrgId(
     orgId: string,
     includeArchived = false,
+    filter?: { statusType?: string; health?: string; leadId?: string },
   ): Promise<Project[]> {
     return this.prisma.project.findMany({
       orderBy: [{ prioritySortOrder: 'desc' }, { createdAt: 'desc' }],
@@ -139,6 +140,9 @@ export class ProjectService {
         organizationId: orgId,
         trashed: false,
         ...(includeArchived ? {} : { archivedAt: null }),
+        ...(filter?.statusType ? { statusType: filter.statusType } : {}),
+        ...(filter?.health ? { health: filter.health } : {}),
+        ...(filter?.leadId ? { leadId: filter.leadId } : {}),
       },
     });
   }
@@ -387,8 +391,19 @@ export class ProjectService {
       return slug;
     }
 
-    // Append a short suffix to make it unique
-    const suffix = Date.now().toString(36).slice(-4);
-    return `${slug}-${suffix}`;
+    // Retry with random suffix to avoid concurrent collisions
+    for (let i = 0; i < 5; i++) {
+      const suffix = Math.random().toString(36).slice(2, 6);
+      const candidate = `${slug}-${suffix}`;
+      const conflict = await prisma.project.findUnique({
+        where: { slugId: candidate },
+      });
+      if (!conflict) {
+        return candidate;
+      }
+    }
+
+    // Final fallback with timestamp + random
+    return `${slug}-${Date.now().toString(36)}`;
   }
 }
