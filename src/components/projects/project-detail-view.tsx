@@ -3,6 +3,7 @@
 import { ArrowLeft, Calendar, CircleDot, Target, User } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
+import { SimpleSelect } from '@/components/ui/select';
 import { gql } from '@/lib/graphql';
 import {
   PROJECT_HEALTH_OPTIONS,
@@ -100,17 +101,14 @@ export const ProjectDetailView = observer(function ProjectDetailView({
           <div className="flex flex-wrap items-center gap-4 text-sm">
             <div className="flex items-center gap-2">
               <CircleDot className={cn('h-4 w-4', status.color)} />
-              <select
+              <SimpleSelect
+                variant="ghost"
+                options={Object.entries(PROJECT_STATUS_CONFIG).map(
+                  ([value, cfg]) => ({ label: cfg.label, value }),
+                )}
                 value={project.statusType}
-                onChange={e => handleStatusChange(e.target.value)}
-                className="bg-transparent text-sm font-medium text-zinc-900 outline-none dark:text-zinc-100"
-              >
-                {Object.entries(PROJECT_STATUS_CONFIG).map(([val, cfg]) => (
-                  <option key={val} value={val}>
-                    {cfg.label}
-                  </option>
-                ))}
-              </select>
+                onChange={handleStatusChange}
+              />
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-zinc-400">Health:</span>

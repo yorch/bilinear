@@ -9,6 +9,7 @@ import {
   type TeamMember,
   TeamMemberManagement,
 } from '@/components/teams/team-member-management';
+import { SimpleSelect } from '@/components/ui/select';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn, gqlError } from '@/lib/utils';
@@ -588,18 +589,17 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                   </label>
 
                   {issueAction === 'MOVE' && otherTeams.length > 0 && (
-                    <select
+                    <SimpleSelect
+                      className="ml-6"
+                      placement="top"
+                      options={otherTeams.map(t => ({
+                        label: `${t.displayName || t.name} (${t.key})`,
+                        value: t.id,
+                      }))}
                       value={moveToTeamId}
-                      onChange={e => setMoveToTeamId(e.target.value)}
-                      className="ml-6 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                    >
-                      <option value="">Select a team…</option>
-                      {otherTeams.map(t => (
-                        <option key={t.id} value={t.id}>
-                          {t.displayName || t.name} ({t.key})
-                        </option>
-                      ))}
-                    </select>
+                      onChange={setMoveToTeamId}
+                      placeholder="Select a team…"
+                    />
                   )}
 
                   <div className="flex items-center gap-2 pt-1">

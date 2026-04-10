@@ -2,6 +2,7 @@
 
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
+import { SimpleSelect } from '@/components/ui/select';
 import { cn, getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -166,18 +167,12 @@ export const CreateProjectModal = observer(function CreateProjectModal({
               >
                 Status
               </label>
-              <select
+              <SimpleSelect
                 id="project-status"
+                options={STATUS_OPTIONS}
                 value={statusType}
-                onChange={e => setStatusType(e.target.value)}
-                className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
-              >
-                {STATUS_OPTIONS.map(opt => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+                onChange={setStatusType}
+              />
             </div>
 
             <div className="flex flex-col gap-1">
