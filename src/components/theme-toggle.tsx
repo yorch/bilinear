@@ -1,6 +1,7 @@
 'use client';
 
 import { Monitor, Moon, Sun } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useTheme } from '@/hooks/use-theme';
 import { cn } from '@/lib/utils';
 
@@ -28,9 +29,13 @@ interface ThemeToggleProps {
  */
 export function ThemeToggle({ className, compact = false }: ThemeToggleProps) {
   const { setTheme, theme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   if (compact) {
-    const current = OPTIONS.find(o => o.value === theme) ?? OPTIONS[2];
+    const current = mounted
+      ? (OPTIONS.find(o => o.value === theme) ?? OPTIONS[2])
+      : OPTIONS[2];
     const Icon = current.icon;
     return (
       <button
@@ -62,10 +67,10 @@ export function ThemeToggle({ className, compact = false }: ThemeToggleProps) {
           type="button"
           onClick={() => setTheme(value)}
           title={label}
-          aria-pressed={theme === value}
+          aria-pressed={mounted ? theme === value : undefined}
           className={cn(
             'flex h-6 w-6 items-center justify-center rounded transition-colors',
-            theme === value
+            mounted && theme === value
               ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-50'
               : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200',
           )}
