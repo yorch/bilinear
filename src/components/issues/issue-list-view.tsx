@@ -53,6 +53,7 @@ export function IssueListView({
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null);
 
   // Group issues by state, preserving workflow state order
+  const stateIds = new Set(states.map(s => s.id));
   const groups: Group[] = states
     .map(state => ({
       issues: issues.filter(i => i.stateId === state.id),
@@ -60,7 +61,17 @@ export function IssueListView({
     }))
     .filter(g => g.issues.length > 0);
 
-  if (issues.length === 0 || groups.length === 0) {
+  // Issues whose stateId doesn't match any loaded state (e.g. stale cache)
+  const ungrouped = issues.filter(i => !stateIds.has(i.stateId));
+  if (ungrouped.length > 0 && groups.length === 0) {
+    // All issues are ungrouped — show them in a flat list rather than hiding them
+    groups.push({
+      issues: ungrouped,
+      state: { id: '__ungrouped__', name: 'Issues', color: '#94a3b8', type: 'backlog' },
+    });
+  }
+
+  if (issues.length === 0) {
     return (
       <div
         data-testid="empty-state"
