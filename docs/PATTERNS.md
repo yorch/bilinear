@@ -1,8 +1,9 @@
 # Code Patterns
+
 ## Issue Tracker — Linear Rebuild
 
-**Established:** Sprint 1-2  
-**Last updated:** Sprint 11-12  
+**Established:** Sprint 1-2
+**Last updated:** Sprint 11-12
 **Status:** Living document — updated each sprint
 
 > This is the primary onboarding document for new contributors. All patterns here are the mandated conventions for the codebase. If you deviate from a pattern, document why.
@@ -76,13 +77,13 @@ export default defineConfig({
 
 Every model must follow these conventions (see `DATABASE_SCHEMA.md` section 1):
 
-| Convention | Example |
-|------------|---------|
-| UUID primary keys | `id String @id @default(uuid()) @db.Uuid` |
-| Soft delete | `archivedAt DateTime? @map("archived_at") @db.Timestamptz` |
-| Audit timestamps | `createdAt / updatedAt` on every model |
-| snake_case DB mapping | `@map("url_key")`, `@@map("organizations")` |
-| Timezone-aware datetimes | `@db.Timestamptz` (not `@db.Timestamp`) |
+| Convention               | Example                                                    |
+| ------------------------ | ---------------------------------------------------------- |
+| UUID primary keys        | `id String @id @default(uuid()) @db.Uuid`                  |
+| Soft delete              | `archivedAt DateTime? @map("archived_at") @db.Timestamptz` |
+| Audit timestamps         | `createdAt / updatedAt` on every model                     |
+| snake_case DB mapping    | `@map("url_key")`, `@@map("organizations")`                |
+| Timezone-aware datetimes | `@db.Timestamptz` (not `@db.Timestamp`)                    |
 
 ---
 
@@ -141,6 +142,7 @@ export class AuthService {
 ```
 
 **Rules:**
+
 - Services only import from `src/generated/prisma`, `src/server/lib/`, and other services
 - Services return plain objects / Prisma model types — never GraphQL response types
 - Error classes are defined in the service file that throws them (see §6)
@@ -385,6 +387,7 @@ const handleUpdate = useCallback((id, patch) => {
 ```
 
 **Rules:**
+
 - Wrap page components with `observer()` from `mobx-react-lite` so they re-render on store changes
 - Use `useMemo` with `store.pool.size` as a dependency — the Map itself is stable; `pool.size` changes when entries are added/removed
 - Use `useStore()` to access the `RootStore` from context — never import `getRootStore()` directly in components
@@ -501,6 +504,7 @@ expect(result.success).toBe(true);
 ```
 
 **Scripts:**
+
 - `yarn vitest run` (or `yarn test`) — run all tests once
 - `yarn test:coverage` — run with coverage report
 - `yarn test:watch` — watch mode for development
@@ -552,6 +556,7 @@ export class TeamStore {
 ```
 
 **Rules:**
+
 - All stores are created in `RootStore` constructor and accessed via `useStore()` in components
 - `pool` is the single source of truth — never duplicate entity state elsewhere
 - `applySyncAction` handles all four action types: I (Insert), U (Update), D (Delete), A (Archive)
@@ -573,6 +578,7 @@ The sync lifecycle is managed by two providers wrapping the workspace layout:
 ```
 
 `SyncProvider` on mount:
+
 1. Fetches JWT token from `GET /api/auth/session` (reads httpOnly cookie server-side)
 2. Creates `SyncManager` and `WsClient`
 3. Calls `syncManager.start(token)` which runs:
@@ -616,6 +622,7 @@ return { issue: entity, lastSyncId: sync.id.toString(), success: true };
 `SearchService` is the single place for all text search. It lives at `src/server/services/search.service.ts` and is exposed via the `searchIssues` GraphQL query.
 
 Strategy:
+
 1. **Identifier pattern** (`ENG-123`): instant lookup via the `identifier` index — no FTS needed.
 2. **Free-text**: raw SQL using PostgreSQL's GIN full-text index. Only IDs are fetched from raw SQL (to avoid snake_case mapping); a follow-up `findMany` retrieves typed `Issue` rows. Rank order from the raw query is restored after `findMany`.
 
@@ -664,6 +671,7 @@ The command palette is controlled by `UIStore.commandPaletteOpen`. The `Workspac
 **Opening:** `uiStore.openCommandPalette()` / `uiStore.toggleCommandPalette()`
 
 **Layers:**
+
 - Layer 0: Search across recent issues (empty query) or fuzzy-matched issues + actions (non-empty query)
 - Layer 1 (sub-menu): Set status / assignee / priority / label for a selected issue
 
@@ -688,6 +696,7 @@ useHotkeys('s', () => setOpenProperty('status'), { enabled: !!selectedId });
 ```
 
 Options:
+
 - `allowInInput` (default: `false`) — set `true` for system-level shortcuts
 - `enabled` (default: `true`) — set to a boolean condition to gate the shortcut
 
@@ -731,6 +740,7 @@ setTheme('dark');
 `ThemeProvider` lives in `src/app/layout.tsx` with `attribute="class"` so `next-themes` toggles the `.dark` class on `<html>`. All shadcn/Tailwind dark-mode utilities (`dark:bg-*`, `dark:text-*`) work automatically.
 
 **Rules:**
+
 - Never hardcode colours as hex strings in components — always use Tailwind semantic tokens (`bg-zinc-50`, `dark:bg-zinc-950`, etc.) or CSS custom properties from `globals.css`
 - The `ThemeToggle` component (three-way Light / Dark / System) is rendered in the sidebar footer
 - Add `suppressHydrationWarning` to `<html>` to suppress the inevitable SSR mismatch from the theme class injection
@@ -753,14 +763,15 @@ toast.warning('Due date is in the past.');
 `Toaster` is registered once in `src/app/layout.tsx` with `richColors`, `closeButton`, and `position="bottom-right"`.
 
 **Standard messages:**
-| Event | Call |
-|---|---|
-| Issue created | `toast.success('Issue created')` |
-| Issue updated | `toast.success('Issue updated')` |
-| Issue archived | `toast.info('Issue archived')` |
-| Mutation failed | `toast.error('Failed to save. Retrying…')` |
+
+| Event            | Call                                                     |
+| ---------------- | -------------------------------------------------------- |
+| Issue created    | `toast.success('Issue created')`                         |
+| Issue updated    | `toast.success('Issue updated')`                         |
+| Issue archived   | `toast.info('Issue archived')`                           |
+| Mutation failed  | `toast.error('Failed to save. Retrying…')`               |
 | Offline detected | `toast.info('Offline — changes will sync on reconnect')` |
-| Back online | `toast.success('Back online')` |
+| Back online      | `toast.success('Back online')`                           |
 
 ---
 
@@ -777,12 +788,13 @@ if (!bootstrapComplete) return <IssueListSkeleton count={10} />;
 ```
 
 **Entity → Skeleton mapping:**
-| Context | Component |
-|---|---|
-| Issue list (bootstrapping) | `<IssueListSkeleton count={8} />` |
-| Single issue row placeholder | `<IssueSkeleton />` |
-| Sidebar during hydration | `<SidebarSkeleton />` |
-| Detail panel (lazy loading) | `<DetailPanelSkeleton />` |
+
+| Context                      | Component                         |
+| ---------------------------- | --------------------------------- |
+| Issue list (bootstrapping)   | `<IssueListSkeleton count={8} />` |
+| Single issue row placeholder | `<IssueSkeleton />`               |
+| Sidebar during hydration     | `<SidebarSkeleton />`             |
+| Detail panel (lazy loading)  | `<DetailPanelSkeleton />`         |
 
 The `Skeleton` base component uses `animate-pulse bg-zinc-200 dark:bg-zinc-800` — no external library needed.
 
@@ -809,6 +821,7 @@ import { ErrorBoundary, SectionError } from '@/components/error-boundary';
 `ErrorBoundary` is a class component (required by React's error boundary API). It logs to `console.error` in development; in production this is where `Sentry.captureException` would be called.
 
 **Placement rules:**
+
 - Wrap `IssueListView` on every team/my-issues page
 - Wrap `IssueDetailPanel` separately (so panel crash doesn't take down the list)
 - Do NOT wrap individual rows — too granular
@@ -838,10 +851,11 @@ const CommandPalette = lazy(() =>
 For the `IssueDetailPanel`, use the `LazyIssueDetailPanel` wrapper from `src/components/issues/lazy-issue-detail-panel.tsx` instead of importing `IssueDetailPanel` directly. It handles the `Suspense` boundary with `<DetailPanelSkeleton />` as the fallback.
 
 **Lazy-loaded chunks (as of Sprint 11-12):**
-| Chunk | Trigger |
-|---|---|
-| `command-palette` | First `Cmd+K` press |
-| `issue-detail-panel` | First issue opened |
+
+| Chunk                | Trigger             |
+| -------------------- | ------------------- |
+| `command-palette`    | First `Cmd+K` press |
+| `issue-detail-panel` | First issue opened  |
 
 ---
 
@@ -852,6 +866,7 @@ All authenticated GraphQL requests (queries and mutations) are rate-limited via 
 **Limits:** 5,000 requests / hour, 250,000 complexity points / hour per user.
 
 **Response headers** (present on every authenticated GraphQL response):
+
 ```
 X-RateLimit-Requests-Limit: 5000
 X-RateLimit-Requests-Remaining: 4999
@@ -884,6 +899,7 @@ reqLog.info({ issueId }, 'Issue created');
 ```
 
 **Log levels:**
+
 - `trace` — fine-grained debugging (disabled in production)
 - `debug` — dev-useful info (disabled in production)
 - `info` — normal operations (auth events, mutations, sync actions)

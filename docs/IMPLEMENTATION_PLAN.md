@@ -1,7 +1,8 @@
 # Implementation Plan
+
 ## Issue Tracker — Linear Rebuild
 
-**Version:** 1.1  
+**Version:** 1.1
 **Date:** April 2026
 
 ---
@@ -10,14 +11,14 @@
 
 This is the **high-level roadmap**. For Phase 1, each sprint has a detailed implementation doc in `docs/sprints/` with file paths, schema definitions, API contracts, acceptance criteria, and cross-references:
 
-| Sprint | Detail Doc |
-|--------|-----------|
-| Sprint 1-2: Project Setup & Auth | [`docs/sprints/01-02-project-setup-auth.md`](sprints/01-02-project-setup-auth.md) |
-| Sprint 3-4: Teams & Workflows | [`docs/sprints/03-04-teams-workflows.md`](sprints/03-04-teams-workflows.md) |
-| Sprint 5-6: Issue CRUD & List View | [`docs/sprints/05-06-issue-crud-list.md`](sprints/05-06-issue-crud-list.md) |
-| Sprint 7-8: Sync Engine | [`docs/sprints/07-08-sync-engine.md`](sprints/07-08-sync-engine.md) |
+| Sprint                                | Detail Doc                                                                                |
+| ------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Sprint 1-2: Project Setup & Auth      | [`docs/sprints/01-02-project-setup-auth.md`](sprints/01-02-project-setup-auth.md)         |
+| Sprint 3-4: Teams & Workflows         | [`docs/sprints/03-04-teams-workflows.md`](sprints/03-04-teams-workflows.md)               |
+| Sprint 5-6: Issue CRUD & List View    | [`docs/sprints/05-06-issue-crud-list.md`](sprints/05-06-issue-crud-list.md)               |
+| Sprint 7-8: Sync Engine               | [`docs/sprints/07-08-sync-engine.md`](sprints/07-08-sync-engine.md)                       |
 | Sprint 9-10: Search & Command Palette | [`docs/sprints/09-10-search-command-palette.md`](sprints/09-10-search-command-palette.md) |
-| Sprint 11-12: Polish & Performance | [`docs/sprints/11-12-polish-performance.md`](sprints/11-12-polish-performance.md) |
+| Sprint 11-12: Polish & Performance    | [`docs/sprints/11-12-polish-performance.md`](sprints/11-12-polish-performance.md)         |
 
 > **Pattern Documentation:** `docs/PATTERNS.md` is the living onboarding document for all contributors. It is updated each sprint as new patterns are established. All subsequent sprints should follow the patterns in that document.
 
@@ -28,6 +29,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 ## Phase 1: Foundation (Weeks 1-12)
 
 ### Sprint 1-2: Project Setup & Auth ✅ COMPLETE
+
 **Goal:** Working app shell with authentication
 
 - [x] Initialize Next.js project structure (already bootstrapped)
@@ -47,6 +49,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 **Deliverable:** Users can sign up, log in, and see empty workspace ✅
 
 ### Sprint 3-4: Teams & Workflow States ✅ COMPLETE
+
 **Goal:** Teams with customizable workflows
 
 - [x] Create migrations: teams, team_memberships, workflow_states
@@ -61,6 +64,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 **Deliverable:** Team + workflow state backend with GraphQL API ✅; settings UI deferred
 
 ### Sprint 5-6: Issue CRUD & List View ✅ COMPLETE
+
 **Goal:** Create, view, edit issues in list view
 
 - [x] Create migrations: issues, issue_labels, issue_label_assignments
@@ -81,6 +85,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 **Deliverable:** Full issue list view with create/edit/archive functionality ✅
 
 ### Sprint 7-8: Real-Time Sync Engine ✅ COMPLETE
+
 **Goal:** Local-first architecture with optimistic updates
 
 - [x] Create sync_actions table (BIGSERIAL monotonic IDs, serialized as String in GraphQL)
@@ -101,6 +106,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 **Deliverable:** Real-time sync across multiple browser tabs/users, offline support ✅
 
 ### Sprint 9-10: Search & Command Palette
+
 **Goal:** Fast search and keyboard-first navigation
 
 - [x] PostgreSQL full-text search with GIN indexes
@@ -121,6 +127,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 **Deliverable:** Full keyboard-driven navigation matching Linear's shortcut system
 
 ### Sprint 11-12: Polish & Performance
+
 **Goal:** Production-ready foundation
 
 - [x] Dark mode / light mode with system preference (next-themes, `ThemeProvider`, `ThemeToggle`)
@@ -143,6 +150,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 ## Phase 2: Essential Features (Weeks 13-24)
 
 ### Sprint 13-14: Projects
+
 - [ ] Create migrations: projects, project_teams, project_members, project_milestones, project_updates
 - [ ] Project CRUD with cross-team support
 - [ ] Project status system (Backlog/Planned/In Progress/Completed/Canceled)
@@ -156,6 +164,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Assign issues to projects (Shift+P shortcut)
 
 ### Sprint 15-16: Cycles (Sprints)
+
 - [ ] Create migrations: cycles
 - [ ] Cycle CRUD with team configuration
 - [ ] Auto-create upcoming cycles (up to 15)
@@ -167,6 +176,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Assign issues to cycles (Q shortcut)
 
 ### Sprint 17-18: Board View (Kanban)
+
 - [ ] Board view component with status columns
 - [ ] Issue cards (title, ID, priority icon, assignee avatar, label dots)
 - [ ] Drag-and-drop between columns (status change) via @dnd-kit
@@ -176,6 +186,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] View toggle (Alt+1 list, Alt+2 board)
 
 ### Sprint 19-20: Advanced Filtering, Custom Views & Backlog Management
+
 - [ ] Filter builder UI (add filter → field → operator → value)
 - [ ] Filter pills/chips display
 - [ ] All filter fields: status, assignee, creator, label, priority, project, cycle, estimate, dates
@@ -195,6 +206,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Visual staleness indicators (age, last-updated) on backlog items
 
 ### Sprint 21-22: Notifications & Activity
+
 - [ ] Create migrations: notifications, notification_subscriptions
 - [ ] Notification creation on: assign, mention, comment, status change
 - [ ] Notification inbox UI (up to 500)
@@ -206,6 +218,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Activity collapsing for dense histories
 
 ### Sprint 23-24: Sub-Issues, Relations & Templates
+
 - [ ] Sub-issue creation and management
 - [ ] Multiple nesting levels
 - [ ] Property inheritance (project, cycle)
@@ -221,6 +234,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 ## Phase 3: Organization (Weeks 25-38)
 
 ### Sprint 25-26: Rich Text Editor
+
 - [ ] TipTap editor integration
 - [ ] Full Markdown support (bold, italic, lists, code, tables, blockquotes)
 - [ ] @mentions (users, issues, projects)
@@ -233,6 +247,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Collaborative editing (YJS integration)
 
 ### Sprint 27-28: Comments & Reactions
+
 - [ ] Threaded comments on issues and projects
 - [ ] Full markdown in comments
 - [ ] @mentions in comments (with notifications)
@@ -242,6 +257,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Quote reply
 
 ### Sprint 29-30: Sub-Teams & Advanced Roles
+
 - [ ] Sub-team hierarchy (parent/child teams)
 - [ ] Inheritance: cycle schedules, estimation config
 - [ ] Private teams (hidden from non-members)
@@ -251,6 +267,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Workspace admin settings page
 
 ### Sprint 31-32: Estimates, Progress Tracking & Team Analytics
+
 - [ ] Per-team estimation scale configuration
 - [ ] Estimate assignment (Shift+E shortcut)
 - [ ] Cycle progress charts (burndown, burnup, velocity)
@@ -267,6 +284,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Workspace-level aggregate analytics view (cross-team summary)
 
 ### Sprint 33-34: Documents (Linear Docs)
+
 - [ ] Create migrations: documents
 - [ ] Document CRUD with collaborative editing
 - [ ] Associate documents with projects, initiatives, teams
@@ -275,6 +293,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Document templates
 
 ### Sprint 35-36: Triage Workflow
+
 - [ ] Enable triage per team
 - [ ] Triage inbox view
 - [ ] Accept / Decline / Mark Duplicate / Snooze actions
@@ -283,6 +302,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Require priority before leaving triage (optional)
 
 ### Sprint 37-38: Automated Workflows & Rules Engine
+
 - [ ] Create migrations: automation_rules, automation_rule_conditions, automation_rule_actions, automation_run_log
 - [ ] Rules CRUD (GraphQL mutations + queries)
 - [ ] Trigger types: issue_created, status_changed, label_added, label_removed, assignee_changed, priority_changed, cycle_assigned, due_date_approaching, sla_risk_threshold
@@ -301,6 +321,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 ## Phase 4: Integrations (Weeks 39-52)
 
 ### Sprint 39-40: GitHub Integration
+
 - [ ] GitHub OAuth app setup
 - [ ] Link PRs to issues via branch name / PR title / magic words
 - [ ] Auto-status mapping: branch → In Progress, PR → In Review, merge → Done
@@ -309,6 +330,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Commit/PR linkback messages
 
 ### Sprint 41-42: Slack Integration
+
 - [ ] Slack app setup (OAuth, events API)
 - [ ] /linear slash command for issue creation
 - [ ] Message actions (create issue from message)
@@ -318,6 +340,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Bidirectional thread sync (Slack ↔ Linear comments)
 
 ### Sprint 43-44: Webhooks
+
 - [ ] Webhook CRUD (GraphQL + settings UI)
 - [ ] Event dispatch for 14 resource types
 - [ ] HMAC-SHA256 signature generation
@@ -326,6 +349,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Webhook delivery logs
 
 ### Sprint 45-46: Import/Export
+
 - [ ] CSV import with field mapping
 - [ ] Jira import (API-based)
 - [ ] GitHub Issues import
@@ -335,6 +359,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Bulk delete of imported data (rollback)
 
 ### Sprint 47-48: OAuth2 Provider
+
 - [ ] OAuth2 authorization server
 - [ ] App registration and management
 - [ ] Scopes: read, write, issues:create, comments:create, admin
@@ -342,6 +367,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Actor modes: user vs app
 
 ### Sprint 49-50: API SDK & Developer Experience
+
 - [ ] TypeScript SDK auto-generation from GraphQL schema
 - [ ] SDK: chained model access, pagination helpers, raw query support
 - [ ] API documentation (generated from schema)
@@ -354,6 +380,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 ## Phase 5: Advanced (Weeks 53+)
 
 ### Sprint 51-52: Initiatives & Roadmaps
+
 - [ ] Initiative CRUD (name, status, health, owner, target date)
 - [ ] Initiative ↔ project associations
 - [ ] Sub-initiatives (nest up to 5 levels)
@@ -362,6 +389,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Draggable timeline bars
 
 ### Sprint 53-54: SLAs
+
 - [ ] SLA rule configuration
 - [ ] Auto-apply SLA deadlines based on conditions
 - [ ] Risk progression tracking (Low → Medium → High → Breached)
@@ -370,6 +398,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] SLA filtering and reporting
 
 ### Sprint 55+: AI Features, Mobile, Desktop
+
 - [ ] Triage intelligence (AI-powered assignee/label suggestions)
 - [ ] Document summarization
 - [ ] Natural language filtering
@@ -385,37 +414,37 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 
 ## Technical Milestones
 
-| Milestone | Target | Criteria |
-|-----------|--------|----------|
-| **Alpha** | Week 12 | Auth + Issues + Teams + List View + Sync Engine |
-| **Beta** | Week 24 | + Projects + Cycles + Board + Filters + Backlog + Notifications |
-| **RC1** | Week 38 | + Rich Editor + Comments + Sub-teams + Triage + Docs + Automations + Analytics |
-| **v1.0** | Week 50 | + GitHub + Slack + Webhooks + Import/Export + OAuth |
-| **v2.0** | Week 62+ | + Initiatives + SLAs + AI + Mobile + Desktop |
+| Milestone | Target   | Criteria                                                                       |
+| --------- | -------- | ------------------------------------------------------------------------------ |
+| **Alpha** | Week 12  | Auth + Issues + Teams + List View + Sync Engine                                |
+| **Beta**  | Week 24  | + Projects + Cycles + Board + Filters + Backlog + Notifications                |
+| **RC1**   | Week 38  | + Rich Editor + Comments + Sub-teams + Triage + Docs + Automations + Analytics |
+| **v1.0**  | Week 50  | + GitHub + Slack + Webhooks + Import/Export + OAuth                            |
+| **v2.0**  | Week 62+ | + Initiatives + SLAs + AI + Mobile + Desktop                                   |
 
 ---
 
 ## Team Structure (Recommended)
 
-| Role | Count | Focus |
-|------|-------|-------|
-| **Tech Lead** | 1 | Architecture, sync engine, code review |
-| **Frontend Engineers** | 2-3 | React, MobX, UI components, editor |
-| **Backend Engineers** | 2 | GraphQL, services, database, sync |
-| **Full-Stack** | 1-2 | Integrations, webhooks, imports |
-| **Designer** | 1 | UI/UX, component library, dark mode |
-| **QA Engineer** | 1 | E2E testing, performance testing |
-| **DevOps** | 0.5 | CI/CD, infrastructure, monitoring |
+| Role                   | Count | Focus                                  |
+| ---------------------- | ----- | -------------------------------------- |
+| **Tech Lead**          | 1     | Architecture, sync engine, code review |
+| **Frontend Engineers** | 2-3   | React, MobX, UI components, editor     |
+| **Backend Engineers**  | 2     | GraphQL, services, database, sync      |
+| **Full-Stack**         | 1-2   | Integrations, webhooks, imports        |
+| **Designer**           | 1     | UI/UX, component library, dark mode    |
+| **QA Engineer**        | 1     | E2E testing, performance testing       |
+| **DevOps**             | 0.5   | CI/CD, infrastructure, monitoring      |
 
 ---
 
 ## Risk Mitigation
 
-| Risk | Mitigation |
-|------|-----------|
-| Sync engine complexity | Start with simple polling, iterate to WebSocket+IndexedDB |
-| Performance with large datasets | Virtualization from day 1, pagination mandatory |
-| Real-time collaboration (editor) | Use battle-tested YJS, start with single-user editing |
-| Migration from Linear | Build robust import tooling early for dogfooding |
-| Feature creep | Strict phase gating, P0/P1/P2 prioritization |
-| Auth security | Use well-tested JWT libraries, regular security audits |
+| Risk                             | Mitigation                                                |
+| -------------------------------- | --------------------------------------------------------- |
+| Sync engine complexity           | Start with simple polling, iterate to WebSocket+IndexedDB |
+| Performance with large datasets  | Virtualization from day 1, pagination mandatory           |
+| Real-time collaboration (editor) | Use battle-tested YJS, start with single-user editing     |
+| Migration from Linear            | Build robust import tooling early for dogfooding          |
+| Feature creep                    | Strict phase gating, P0/P1/P2 prioritization              |
+| Auth security                    | Use well-tested JWT libraries, regular security audits    |

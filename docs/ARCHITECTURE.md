@@ -1,7 +1,8 @@
 # Architecture Design Document
+
 ## Issue Tracker — Linear Rebuild
 
-**Version:** 1.2  
+**Version:** 1.2
 **Date:** April 2026
 
 > **Implementation Status (as of Sprint 11-12)**
@@ -54,7 +55,7 @@
 
 ## 1. System Architecture Overview
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                        CLIENT LAYER                              │
 │                                                                  │
@@ -121,41 +122,44 @@
 ## 2. Technology Stack
 
 ### 2.1 Frontend
-| Layer | Technology | Rationale |
-|-------|-----------|-----------|
-| Framework | **Next.js 16 (App Router)** | SSR, routing, API routes, existing in repo |
-| Language | **TypeScript** | Type safety, shared types with backend |
-| State | **MobX** | Observable-based reactivity (matches Linear's approach) |
-| Local DB | **IndexedDB** (via Dexie.js) | Offline-first local cache |
-| Real-time | **WebSocket** (native) | Delta sync, low latency |
-| Styling | **Tailwind CSS + shadcn/ui** | Rapid UI development (already in repo) |
-| Editor | **TipTap** (ProseMirror) | Rich text with collaborative editing |
-| Virtualization | **TanStack Virtual** | 60fps scrolling for large lists |
-| DnD | **@dnd-kit** | Accessible drag-and-drop |
-| Date | **date-fns** | Lightweight date utilities |
-| Charts | **Recharts** | Progress/velocity charts |
+
+| Layer          | Technology                   | Rationale                                               |
+| -------------- | ---------------------------- | ------------------------------------------------------- |
+| Framework      | **Next.js 16 (App Router)**  | SSR, routing, API routes, existing in repo              |
+| Language       | **TypeScript**               | Type safety, shared types with backend                  |
+| State          | **MobX**                     | Observable-based reactivity (matches Linear's approach) |
+| Local DB       | **IndexedDB** (via Dexie.js) | Offline-first local cache                               |
+| Real-time      | **WebSocket** (native)       | Delta sync, low latency                                 |
+| Styling        | **Tailwind CSS + shadcn/ui** | Rapid UI development (already in repo)                  |
+| Editor         | **TipTap** (ProseMirror)     | Rich text with collaborative editing                    |
+| Virtualization | **TanStack Virtual**         | 60fps scrolling for large lists                         |
+| DnD            | **@dnd-kit**                 | Accessible drag-and-drop                                |
+| Date           | **date-fns**                 | Lightweight date utilities                              |
+| Charts         | **Recharts**                 | Progress/velocity charts                                |
 
 ### 2.2 Backend
-| Layer | Technology | Rationale |
-|-------|-----------|-----------|
-| Runtime | **Node.js** | TypeScript everywhere, shared types |
-| API | **GraphQL** (Apollo Server + @as-integrations/next) | Matches Linear's approach, flexible queries |
-| ORM | **Prisma 7** + `@prisma/adapter-pg` | Type-safe, Rust-free; Prisma 7 requires a driver adapter — datasource URL lives in `prisma.config.ts`, not `schema.prisma` |
-| Database | **PostgreSQL 18** | Relational, JSONB, full-text search, new I/O subsystem (up to 3× perf), uuidv7() |
-| Cache/PubSub | **Redis 7** | Pub/sub for sync broadcast, session cache, rate limiting |
-| Search | **MeiliSearch** or **PostgreSQL FTS** | Full-text search with fuzzy matching |
-| File Storage | **S3-compatible** (AWS S3 / Cloudflare R2) | Attachment storage |
-| Auth | **Custom JWT + OAuth2** | Magic links, Google OAuth, SAML |
-| Queue | **BullMQ** (Redis-backed) | Background jobs: webhooks, emails, imports |
-| WebSocket | **ws** library | Raw WebSocket for sync engine |
+
+| Layer        | Technology                                          | Rationale                                                                                                                  |
+| ------------ | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Runtime      | **Node.js**                                         | TypeScript everywhere, shared types                                                                                        |
+| API          | **GraphQL** (Apollo Server + @as-integrations/next) | Matches Linear's approach, flexible queries                                                                                |
+| ORM          | **Prisma 7** + `@prisma/adapter-pg`                 | Type-safe, Rust-free; Prisma 7 requires a driver adapter — datasource URL lives in `prisma.config.ts`, not `schema.prisma` |
+| Database     | **PostgreSQL 18**                                   | Relational, JSONB, full-text search, new I/O subsystem (up to 3× perf), uuidv7()                                           |
+| Cache/PubSub | **Redis 7**                                         | Pub/sub for sync broadcast, session cache, rate limiting                                                                   |
+| Search       | **MeiliSearch** or **PostgreSQL FTS**               | Full-text search with fuzzy matching                                                                                       |
+| File Storage | **S3-compatible** (AWS S3 / Cloudflare R2)          | Attachment storage                                                                                                         |
+| Auth         | **Custom JWT + OAuth2**                             | Magic links, Google OAuth, SAML                                                                                            |
+| Queue        | **BullMQ** (Redis-backed)                           | Background jobs: webhooks, emails, imports                                                                                 |
+| WebSocket    | **ws** library                                      | Raw WebSocket for sync engine                                                                                              |
 
 ### 2.3 Infrastructure
-| Layer | Technology | Rationale |
-|-------|-----------|-----------|
-| Hosting | **Vercel** (frontend) + **Railway/Fly.io** (backend) | Or self-hosted Kubernetes |
-| CI/CD | **GitHub Actions** | Automated testing, deployment |
-| Monitoring | **Sentry** (errors) + **Prometheus/Grafana** (metrics) | Observability |
-| CDN | **Cloudflare** | Static assets, edge caching |
+
+| Layer      | Technology                                             | Rationale                     |
+| ---------- | ------------------------------------------------------ | ----------------------------- |
+| Hosting    | **Vercel** (frontend) + **Railway/Fly.io** (backend)   | Or self-hosted Kubernetes     |
+| CI/CD      | **GitHub Actions**                                     | Automated testing, deployment |
+| Monitoring | **Sentry** (errors) + **Prometheus/Grafana** (metrics) | Observability                 |
+| CDN        | **Cloudflare**                                         | Static assets, edge caching   |
 
 ---
 
@@ -164,6 +168,7 @@
 The sync engine is the most critical technical component. It enables the <50ms interaction times that define the product.
 
 ### 3.1 Design Principles
+
 1. **Local-first:** All reads come from local IndexedDB; UI never waits for network
 2. **Optimistic writes:** Mutations applied locally immediately, synced async
 3. **Server-authoritative:** Server is source of truth; conflicts resolved by last-writer-wins
@@ -171,7 +176,7 @@ The sync engine is the most critical technical component. It enables the <50ms i
 
 ### 3.2 Data Flow
 
-```
+```text
 USER ACTION
     │
     ▼
@@ -228,7 +233,7 @@ interface SyncAction {
 
 ### 3.4 Bootstrap Process
 
-```
+```text
 Phase 1 (Full Bootstrap):
   GET /api/sync/bootstrap
   → Returns all "instant-load" models (active/non-archived only):
@@ -255,6 +260,7 @@ Reconnection (Delta Sync):
 ```
 
 **Implementation details (Sprint 7-8):**
+
 - Bootstrap is fetched server-side with a single DB round-trip (7 parallel Prisma queries, lastSyncId included)
 - `Issue.labelIds` is denormalized from the `IssueLabelAssignment` join table during bootstrap
 - WebSocket auth uses a JWT passed as a `?token=` query param (browsers cannot set custom WS headers)
@@ -262,14 +268,16 @@ Reconnection (Delta Sync):
 - `SyncManager` guards against concurrent `fullBootstrap` and `deltaSync` calls via boolean flags
 
 ### 3.5 Model Load Strategies
-| Strategy | When Loaded | Examples |
-|----------|-------------|---------|
-| `instant` | Full bootstrap | Issue, Team, User, Project |
-| `partial` | Partial bootstrap | Comment, IssueHistory |
-| `lazy` | On demand | Attachment content |
-| `local` | Client-only | UI state, drafts |
+
+| Strategy  | When Loaded       | Examples                   |
+| --------- | ----------------- | -------------------------- |
+| `instant` | Full bootstrap    | Issue, Team, User, Project |
+| `partial` | Partial bootstrap | Comment, IssueHistory      |
+| `lazy`    | On demand         | Attachment content         |
+| `local`   | Client-only       | UI state, drafts           |
 
 ### 3.6 Conflict Resolution
+
 - **Last-writer-wins** for scalar fields
 - **Server-authoritative:** server may produce side effects (e.g., auto-close parent when last child closes)
 - **Transaction queue:** Failed transactions retry; permanently failed transactions roll back local state
@@ -564,6 +572,7 @@ Permission checks in resolvers:
 ```
 
 ### 6.3 Data Security
+
 - **Encryption at rest:** PostgreSQL with disk encryption
 - **Encryption in transit:** TLS 1.3 everywhere
 - **API keys:** Hashed with bcrypt, prefixed with `lin_api_`
@@ -602,6 +611,7 @@ Permission checks in resolvers:
 ```
 
 ### 7.1 Scaling Strategy
+
 - **Frontend:** Vercel edge deployment, global CDN
 - **API servers:** Horizontal scaling behind load balancer
 - **WebSocket servers:** Sticky sessions per user, Redis pub/sub for cross-instance broadcast
@@ -613,15 +623,15 @@ Permission checks in resolvers:
 
 ## 8. Key Design Decisions
 
-| Decision | Choice | Alternatives Considered | Rationale |
-|----------|--------|------------------------|-----------|
-| API | GraphQL | REST, tRPC | Matches Linear, flexible queries, typed schema |
-| State | MobX | Zustand, Redux, Jotai | Observable reactivity for sync engine, fine-grained updates |
-| Local DB | IndexedDB/Dexie | OPFS, SQLite/WASM | Browser support, async, proven at scale |
-| Backend DB | PostgreSQL | MongoDB, CockroachDB | Relational integrity, JSONB flexibility, mature |
-| Real-time | WebSocket | SSE, polling, WebTransport | Bidirectional, low latency, proven |
-| Sync | Custom delta sync | CRDTs, OT, Replicache | Linear's proven approach, simpler than CRDTs |
-| ORM | Prisma 7 | Drizzle, TypeORM, Knex | Rust-free client, type-safe, built-in Studio, excellent migration tooling |
-| Editor | TipTap | Slate, Lexical, Quill | ProseMirror-based, collaborative editing support |
-| Auth | Custom JWT | NextAuth, Clerk, Auth0 | Full control over token lifecycle, sync engine integration |
-| Queue | BullMQ | RabbitMQ, SQS, Inngest | Redis-backed, simple, good DX |
+| Decision   | Choice            | Alternatives Considered    | Rationale                                                                 |
+| ---------- | ----------------- | -------------------------- | ------------------------------------------------------------------------- |
+| API        | GraphQL           | REST, tRPC                 | Matches Linear, flexible queries, typed schema                            |
+| State      | MobX              | Zustand, Redux, Jotai      | Observable reactivity for sync engine, fine-grained updates               |
+| Local DB   | IndexedDB/Dexie   | OPFS, SQLite/WASM          | Browser support, async, proven at scale                                   |
+| Backend DB | PostgreSQL        | MongoDB, CockroachDB       | Relational integrity, JSONB flexibility, mature                           |
+| Real-time  | WebSocket         | SSE, polling, WebTransport | Bidirectional, low latency, proven                                        |
+| Sync       | Custom delta sync | CRDTs, OT, Replicache      | Linear's proven approach, simpler than CRDTs                              |
+| ORM        | Prisma 7          | Drizzle, TypeORM, Knex     | Rust-free client, type-safe, built-in Studio, excellent migration tooling |
+| Editor     | TipTap            | Slate, Lexical, Quill      | ProseMirror-based, collaborative editing support                          |
+| Auth       | Custom JWT        | NextAuth, Clerk, Auth0     | Full control over token lifecycle, sync engine integration                |
+| Queue      | BullMQ            | RabbitMQ, SQS, Inngest     | Redis-backed, simple, good DX                                             |

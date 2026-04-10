@@ -94,34 +94,34 @@ In development, magic link codes are printed to the server console instead of be
 
 ## Scripts
 
-| Command                      | Description                                               |
-| ---------------------------- | --------------------------------------------------------- |
-| `yarn dev`                   | Start the Next.js development server (port 3000)          |
-| `yarn ws:server`             | Start the standalone WebSocket sync server (port 3001)    |
-| `yarn build`                 | Build for production                                      |
-| `yarn start`                 | Start the production server                               |
-| `yarn test`                  | Run all tests                                             |
-| `yarn test:watch`            | Run tests in watch mode                                   |
-| `yarn test:coverage`         | Run tests with coverage report                            |
-| `yarn lint`                  | Run Biome checks                                          |
-| `yarn format`                | Format code with Biome                                    |
-| `yarn docker:infra`          | Start local infra (foreground)                            |
-| `yarn docker:infra:up`       | Start local infra in background                           |
-| `yarn docker:infra:down`     | Stop local infra                                          |
-| `yarn prisma generate`       | Regenerate Prisma client after schema changes             |
-| `yarn prisma migrate dev`    | Apply pending migrations (dev)                            |
-| `yarn prisma migrate deploy` | Apply pending migrations (production)                     |
-| `yarn prisma studio`         | Open Prisma Studio (database browser)                     |
-| `yarn db:seed`               | Seed the database with demo data and E2E test fixtures    |
-| `yarn test:e2e`              | Run Playwright E2E tests (requires running dev server)    |
-| `yarn test:e2e:ui`           | Open Playwright UI for interactive E2E debugging          |
-| `yarn analyze`               | Build with bundle analyzer (`ANALYZE=true`)               |
+| Command                      | Description                                            |
+| ---------------------------- | ------------------------------------------------------ |
+| `yarn dev`                   | Start the Next.js development server (port 3000)       |
+| `yarn ws:server`             | Start the standalone WebSocket sync server (port 3001) |
+| `yarn build`                 | Build for production                                   |
+| `yarn start`                 | Start the production server                            |
+| `yarn test`                  | Run all tests                                          |
+| `yarn test:watch`            | Run tests in watch mode                                |
+| `yarn test:coverage`         | Run tests with coverage report                         |
+| `yarn lint`                  | Run Biome checks                                       |
+| `yarn format`                | Format code with Biome                                 |
+| `yarn docker:infra`          | Start local infra (foreground)                         |
+| `yarn docker:infra:up`       | Start local infra in background                        |
+| `yarn docker:infra:down`     | Stop local infra                                       |
+| `yarn prisma generate`       | Regenerate Prisma client after schema changes          |
+| `yarn prisma migrate dev`    | Apply pending migrations (dev)                         |
+| `yarn prisma migrate deploy` | Apply pending migrations (production)                  |
+| `yarn prisma studio`         | Open Prisma Studio (database browser)                  |
+| `yarn db:seed`               | Seed the database with demo data and E2E test fixtures |
+| `yarn test:e2e`              | Run Playwright E2E tests (requires running dev server) |
+| `yarn test:e2e:ui`           | Open Playwright UI for interactive E2E debugging       |
+| `yarn analyze`               | Build with bundle analyzer (`ANALYZE=true`)            |
 
 ---
 
 ## Project Structure
 
-```
+```text
 src/
 ├── app/                      # Next.js App Router pages
 │   ├── (auth)/               # Login + verify pages (centered, no sidebar)

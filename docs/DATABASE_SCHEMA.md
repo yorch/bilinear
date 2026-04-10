@@ -1,8 +1,9 @@
 # Database Schema Design
+
 ## Issue Tracker — Linear Rebuild
 
-**Version:** 1.0  
-**Date:** April 2026  
+**Version:** 1.0
+**Date:** April 2026
 **Database:** PostgreSQL 18
 
 ---

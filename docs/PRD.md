@@ -1,8 +1,9 @@
 # Product Requirements Document (PRD)
+
 ## Issue Tracker — Linear Rebuild
 
-**Version:** 1.0  
-**Date:** April 2026  
+**Version:** 1.0
+**Date:** April 2026
 **Status:** Draft
 
 ---
@@ -10,14 +11,17 @@
 ## 1. Product Overview
 
 ### 1.1 Vision
+
 Build a modern, high-performance issue tracking and project management platform that matches Linear's feature set, speed, and UX quality. The product targets engineering teams who need fast, keyboard-driven workflows with real-time collaboration.
 
 ### 1.2 Target Users
+
 - **Primary:** Software engineering teams (5-500 people)
 - **Secondary:** Product managers, designers, and cross-functional stakeholders
 - **Tertiary:** Support/operations teams using triage workflows
 
 ### 1.3 Core Value Propositions
+
 1. **Speed:** Sub-100ms interactions via local-first architecture
 2. **Keyboard-first:** Every action reachable without a mouse
 3. **Opinionated workflows:** Sensible defaults that reduce configuration overhead
@@ -31,6 +35,7 @@ Build a modern, high-performance issue tracking and project management platform 
 ### 2.1 Issue Management (P0 — Must Have)
 
 #### 2.1.1 Issue CRUD
+
 - Create issues with title (required) and status (required, defaults to team's default)
 - Rich markdown description with collaborative editing
 - Unique identifier per issue: `TEAM_KEY-NUMBER` (e.g., ENG-123)
@@ -38,22 +43,24 @@ Build a modern, high-performance issue tracking and project management platform 
 - Archive with `includeArchived` query parameter support
 
 #### 2.1.2 Issue Properties
-| Property | Type | Required | Notes |
-|----------|------|----------|-------|
-| Title | String | Yes | Plain text |
-| Description | Markdown | No | Rich text with mentions, embeds, attachments |
-| Status | WorkflowState | Yes | From team's configured workflow |
-| Priority | Enum(0-4) | No | No Priority, Urgent, High, Medium, Low |
-| Assignee | User | No | Single user |
-| Labels | Label[] | No | Multiple; single-select within label groups |
-| Estimate | Number | No | Per-team scale (Linear/Fibonacci/Exponential/T-shirt) |
-| Due Date | Date | No | Color-coded: red (overdue), orange (within week), gray |
-| Project | Project | No | Cross-team deliverable |
-| Milestone | ProjectMilestone | No | Stage within project |
-| Cycle | Cycle | No | Time-boxed sprint |
-| Parent | Issue | No | Makes this a sub-issue |
+
+| Property    | Type             | Required | Notes                                                  |
+| ----------- | ---------------- | -------- | ------------------------------------------------------ |
+| Title       | String           | Yes      | Plain text                                             |
+| Description | Markdown         | No       | Rich text with mentions, embeds, attachments           |
+| Status      | WorkflowState    | Yes      | From team's configured workflow                        |
+| Priority    | Enum(0-4)        | No       | No Priority, Urgent, High, Medium, Low                 |
+| Assignee    | User             | No       | Single user                                            |
+| Labels      | Label[]          | No       | Multiple; single-select within label groups            |
+| Estimate    | Number           | No       | Per-team scale (Linear/Fibonacci/Exponential/T-shirt)  |
+| Due Date    | Date             | No       | Color-coded: red (overdue), orange (within week), gray |
+| Project     | Project          | No       | Cross-team deliverable                                 |
+| Milestone   | ProjectMilestone | No       | Stage within project                                   |
+| Cycle       | Cycle            | No       | Time-boxed sprint                                      |
+| Parent      | Issue            | No       | Makes this a sub-issue                                 |
 
 #### 2.1.3 Sub-Issues
+
 - Multiple nesting levels supported
 - Inherit project and cycle from parent automatically
 - Auto-close parent when all children completed (configurable per team)
@@ -62,18 +69,21 @@ Build a modern, high-performance issue tracking and project management platform 
 - Batch sub-issue creation
 
 #### 2.1.4 Issue Relations
+
 - **Related** — general association
 - **Blocks / Blocked by** — dependency tracking with visual indicators (red/orange flags)
 - **Duplicate** — marks as duplicate, auto-sets status to Canceled
 - Auto-create "Related" when referencing issue ID in description/comments
 
 #### 2.1.5 Bulk Operations
+
 - Multi-select via X key, Shift+click, Cmd+A
 - Bulk change: status, priority, assignee, labels, project, cycle
 - Bulk archive/delete
 - Action toolbar appears at bottom on multi-select
 
 #### 2.1.6 Issue Templates
+
 - Standard templates: pre-fill properties + description with placeholders
 - Form templates: structured fields (text, dropdown, checkbox, date)
 - Workspace-level and team-level scoping
@@ -83,16 +93,18 @@ Build a modern, high-performance issue tracking and project management platform 
 ### 2.2 Workflow States (P0)
 
 #### 2.2.1 State Categories (Fixed)
-| Category | Default Status | Behavior |
-|----------|---------------|----------|
-| Triage | (optional) | Pre-acceptance inbox |
-| Backlog | Backlog | Acknowledged but not prioritized |
-| Unstarted | Todo | Prioritized, not in progress |
-| Started | In Progress | Active work |
-| Completed | Done | Finished |
-| Canceled | Canceled | Rejected/invalid |
+
+| Category  | Default Status | Behavior                         |
+| --------- | -------------- | -------------------------------- |
+| Triage    | (optional)     | Pre-acceptance inbox             |
+| Backlog   | Backlog        | Acknowledged but not prioritized |
+| Unstarted | Todo           | Prioritized, not in progress     |
+| Started   | In Progress    | Active work                      |
+| Completed | Done           | Finished                         |
+| Canceled  | Canceled       | Rejected/invalid                 |
 
 #### 2.2.2 Customization
+
 - Add custom statuses within each category
 - Each status: name, color, description
 - Reorder within category via drag-and-drop
@@ -100,6 +112,7 @@ Build a modern, high-performance issue tracking and project management platform 
 - Per-team workflow configuration
 
 #### 2.2.3 Automations
+
 - Auto-close issues after configurable inactivity period
 - Auto-archive stale completed/canceled issues
 - Git-linked automations (branch created → In Progress, PR merged → Done)
@@ -130,6 +143,7 @@ Build a modern, high-performance issue tracking and project management platform 
 ### 2.6 Projects (P0)
 
 #### 2.6.1 Core
+
 - Cross-team deliverables with target dates
 - Properties: name, description, icon, color, lead, start/target dates, status, health
 - Status categories: Backlog, Planned, In Progress, Completed, Canceled (custom sub-statuses)
@@ -137,12 +151,14 @@ Build a modern, high-performance issue tracking and project management platform 
 - Progress tracking with live completion predictions from historical velocity
 
 #### 2.6.2 Project Milestones
+
 - Stages within a project with optional target dates
 - Completion percentage per milestone
 - Diamond icons with status coloring
 - Assignable issues, filterable and groupable
 
 #### 2.6.3 Project Updates
+
 - Health indicator + rich text description
 - Automatic progress summaries (delays, target changes, milestone advancement)
 - Configurable reminder cadence (daily/weekly/biweekly)
@@ -176,17 +192,20 @@ Build a modern, high-performance issue tracking and project management platform 
 ### 2.10 Views & Filtering (P0)
 
 #### 2.10.1 View Types
+
 - **List view:** Dense table with configurable columns, groupable
 - **Board view:** Kanban with status columns, drag-drop, optional swimlanes
 - **Timeline view (P2):** Gantt-style with draggable bars
 
 #### 2.10.2 Filters
+
 - Fields: status, assignee, creator, label, priority, project, cycle, estimate, due date, created/updated date, subscriber, relations, has: attachments/comments/sub-issues
 - Operators: is, is not, is any of, is none of, contains, before, after, between, overdue
 - AND/OR composition with nested groups
 - Save as custom view (personal or shared)
 
 #### 2.10.3 Custom Views
+
 - Workspace-level or team-specific
 - Configurable: layout, columns, grouping, sorting, filters
 - Favoritable, shareable via URL
@@ -196,17 +215,20 @@ Build a modern, high-performance issue tracking and project management platform 
 ### 2.11 Teams & Workspace (P0)
 
 #### 2.11.1 Workspace
+
 - Top-level container for organization
 - Data region selection (US/EU) at creation
 - Multi-workspace support for users
 
 #### 2.11.2 Teams
+
 - Team key/identifier (e.g., ENG) for issue IDs
 - Per-team: workflow states, labels, templates, cycles, estimation config
 - Private teams (P2): hidden from non-members
 - Sub-teams (P2): hierarchical, inherit parent config
 
 #### 2.11.3 Roles
+
 - **Admin:** Full workspace management
 - **Member:** Standard access, no admin
 - **Guest (P2):** Team-specific access only
@@ -255,10 +277,12 @@ Build a modern, high-performance issue tracking and project management platform 
 ### 2.17 Integrations (P1-P2)
 
 #### P1 Integrations
+
 - **GitHub:** PR/branch linking via issue ID, auto-status, CI visibility
 - **Slack:** Issue creation, notifications, bidirectional thread sync
 
 #### P2 Integrations
+
 - GitLab, Figma, Sentry, Zendesk, Intercom
 - Webhooks (14 resource types, HMAC-SHA256, retry logic)
 - OAuth2 provider for third-party apps
@@ -289,12 +313,14 @@ Build a modern, high-performance issue tracking and project management platform 
 ### 2.21 Backlog Management (P1)
 
 #### 2.21.1 Backlog View
+
 - Dedicated backlog route per team (`/[workspace]/team/[key]/backlog`)
 - Displays all issues in Backlog and Unstarted state categories
 - Sortable by priority, estimate, created date, updated date, and manual order
 - Drag-to-reorder within priority bands for manual prioritization
 
 #### 2.21.2 Grooming Operations
+
 - Bulk prioritization: assign or change priority on multiple backlog issues at once
 - Bulk estimation: apply estimates to groups of unestimated issues
 - Quick-add issues directly from the backlog view (no modal required)
@@ -303,12 +329,14 @@ Build a modern, high-performance issue tracking and project management platform 
 - "Ready" toggle: mark issues as groomed and ready to pull into a sprint
 
 #### 2.21.3 Prioritization Workflow
+
 - Sort by: Priority, Estimate, Age (created date), Updated date, Manual
 - Filter to show only unestimated issues (grooming mode)
 - Inline estimate and priority editing without opening detail panel
 - Visual overdue and staleness indicators on backlog items
 
 #### 2.21.4 AI-Assisted Suggestions (P3)
+
 - Priority suggestions based on issue content, labels, and historical patterns
 - Duplicate detection: surface likely duplicates during backlog grooming
 - Auto-label suggestions on newly triaged issues
@@ -317,6 +345,7 @@ Build a modern, high-performance issue tracking and project management platform 
 ### 2.22 Automated Workflows / Rules Engine (P2)
 
 #### 2.22.1 Rule Anatomy
+
 - **Trigger:** the event that fires the rule
   - Issue created, status changed, label added/removed, assignee changed, priority changed, cycle assigned, due date approaching, SLA risk threshold crossed, PR merged (via GitHub integration)
 - **Conditions:** optional filters applied before executing actions
@@ -325,6 +354,7 @@ Build a modern, high-performance issue tracking and project management platform 
   - Change status, assign user, add/remove label, set priority, add to cycle, post comment, send notification, trigger webhook
 
 #### 2.22.2 Built-In Automations
+
 - **Auto-close:** close issues with no updates after N configurable days
 - **Auto-archive:** archive completed/canceled issues after N configurable days
 - **Git-linked:** branch created → In Progress; PR opened → In Review; PR merged → Done (requires GitHub integration)
@@ -332,6 +362,7 @@ Build a modern, high-performance issue tracking and project management platform 
 - **Cycle rollover:** auto-move unfinished issues to the next cycle on cycle end
 
 #### 2.22.3 Custom Rules UI
+
 - Rules management page per team; workspace admins can create global rules
 - Drag-to-reorder rule priority (first matching rule wins by default; "run all" mode optional)
 - Dry-run mode: preview which existing issues would be affected before enabling a rule
@@ -341,30 +372,35 @@ Build a modern, high-performance issue tracking and project management platform 
 ### 2.23 Team Analytics & Insights (P2)
 
 #### 2.23.1 Velocity & Throughput
+
 - Issues completed per cycle (count and estimate points)
 - Rolling velocity average over last 3, 6, and 12 cycles
 - Throughput trend chart (weekly and monthly views)
 - Cycle comparison: planned scope vs. actually completed
 
 #### 2.23.2 Cycle Metrics
+
 - Burndown chart: remaining scope vs. ideal burn line
 - Burnup chart: completed work vs. total scope (including scope creep)
 - Scope creep tracking: issues added after cycle start are visually flagged
 - Carryover rate: percentage of unfinished issues rolled to the next cycle
 
 #### 2.23.3 Flow Metrics
+
 - Lead time: issue created → issue completed (distribution histogram)
 - Cycle time: issue started → issue completed (distribution histogram)
 - Time-in-state: average time issues spend in each workflow state
 - Work-in-progress (WIP) over time per workflow state
 
 #### 2.23.4 Team Health
+
 - Per-member workload: assigned open issues, estimated points, overdue count
 - Unestimated issues count and percentage (team grooming health indicator)
 - Issue age distribution: how old are the oldest open issues
 - Triage backlog size over time
 
 #### 2.23.5 Scope & Access
+
 - Analytics dashboard per team at `/[workspace]/team/[key]/analytics`
 - Workspace-level summary view (cross-team aggregate insights)
 - Date range selector: current cycle, last N cycles, last 30/90/180 days, custom range
@@ -375,6 +411,7 @@ Build a modern, high-performance issue tracking and project management platform 
 ## 3. Non-Functional Requirements
 
 ### 3.1 Performance
+
 - View switching: <50ms (local cache)
 - Issue creation UI update: <16ms (one frame)
 - Search results: <100ms
@@ -383,12 +420,14 @@ Build a modern, high-performance issue tracking and project management platform 
 - List scrolling: 60fps with 10,000+ issues
 
 ### 3.2 Reliability
+
 - 99.9% uptime SLA
 - Offline support: full functionality with queued sync
 - Optimistic updates with rollback on failure
 - Data loss prevention via local IndexedDB persistence
 
 ### 3.3 Security
+
 - SOC 2 Type II compliance target
 - GDPR compliant (EU data region option)
 - All data encrypted at rest and in transit
@@ -397,6 +436,7 @@ Build a modern, high-performance issue tracking and project management platform 
 - Audit logging (Enterprise)
 
 ### 3.4 Scalability
+
 - Support workspaces with 500+ users
 - Support teams with 100,000+ issues
 - Incremental sync (only deltas after initial load)
@@ -418,23 +458,23 @@ Build a modern, high-performance issue tracking and project management platform 
 
 ## 5. Success Metrics
 
-| Metric | Target |
-|--------|--------|
-| P50 interaction latency | <50ms |
-| P99 API response time | <500ms |
-| Time to create issue | <3s (keyboard) |
-| Sync delta size | <10KB per update |
-| User onboarding completion | >80% |
-| Daily active usage | >60% of workspace members |
+| Metric                     | Target                    |
+| -------------------------- | ------------------------- |
+| P50 interaction latency    | <50ms                     |
+| P99 API response time      | <500ms                    |
+| Time to create issue       | <3s (keyboard)            |
+| Sync delta size            | <10KB per update          |
+| User onboarding completion | >80%                      |
+| Daily active usage         | >60% of workspace members |
 
 ---
 
 ## 6. Milestones
 
-| Phase | Duration | Deliverable |
-|-------|----------|-------------|
-| Phase 1: Foundation | Months 1-3 | Auth, issues, teams, list view, real-time sync |
-| Phase 2: Essential | Months 4-6 | Projects, cycles, board view, filters, notifications |
-| Phase 3: Organization | Months 7-9 | Sub-teams, roles, SAML, audit logs, templates |
-| Phase 4: Integrations | Months 10-12 | GitHub, Slack, webhooks, import/export |
-| Phase 5: Advanced | Months 13+ | Initiatives, SLAs, docs, AI, analytics |
+| Phase                 | Duration     | Deliverable                                          |
+| --------------------- | ------------ | ---------------------------------------------------- |
+| Phase 1: Foundation   | Months 1-3   | Auth, issues, teams, list view, real-time sync       |
+| Phase 2: Essential    | Months 4-6   | Projects, cycles, board view, filters, notifications |
+| Phase 3: Organization | Months 7-9   | Sub-teams, roles, SAML, audit logs, templates        |
+| Phase 4: Integrations | Months 10-12 | GitHub, Slack, webhooks, import/export               |
+| Phase 5: Advanced     | Months 13+   | Initiatives, SLAs, docs, AI, analytics               |

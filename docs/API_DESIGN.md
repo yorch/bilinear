@@ -1,30 +1,32 @@
 # API Design Document
+
 ## Issue Tracker — Linear Rebuild
 
-**Version:** 1.0  
-**Date:** April 2026  
+**Version:** 1.0
+**Date:** April 2026
 **Protocol:** GraphQL over HTTP + WebSocket
 
 ---
 
 ## 1. API Overview
 
-| Aspect | Design |
-|--------|--------|
-| Protocol | GraphQL |
-| Endpoint | `POST /api/graphql` |
-| Auth | Bearer token (JWT) or API key |
-| Pagination | Relay cursor-based |
-| Real-time | WebSocket (`/ws`) |
-| Sync | REST endpoints (`/api/sync/bootstrap`, `/api/sync/delta`) |
-| Rate Limit | 5,000 req/hr + 250,000 complexity points/hr |
+| Aspect     | Design                                                    |
+| ---------- | --------------------------------------------------------- |
+| Protocol   | GraphQL                                                   |
+| Endpoint   | `POST /api/graphql`                                       |
+| Auth       | Bearer token (JWT) or API key                             |
+| Pagination | Relay cursor-based                                        |
+| Real-time  | WebSocket (`/ws`)                                         |
+| Sync       | REST endpoints (`/api/sync/bootstrap`, `/api/sync/delta`) |
+| Rate Limit | 5,000 req/hr + 250,000 complexity points/hr               |
 
 ---
 
 ## 2. Authentication
 
 ### Headers
-```
+
+```text
 Authorization: Bearer <jwt_token>
 Authorization: lin_api_<api_key>
 ```
@@ -1206,7 +1208,7 @@ Client → Server messages:
 
 ## 12. Rate Limiting
 
-```
+```text
 Response headers:
   X-RateLimit-Requests-Limit: 5000
   X-RateLimit-Requests-Remaining: 4999
@@ -1248,6 +1250,7 @@ Rate limit exceeded → HTTP 400 with:
 ```
 
 **Headers:**
+
 ```
 Linear-Delivery: <uuid>
 Linear-Event: Issue
