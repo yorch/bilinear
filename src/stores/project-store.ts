@@ -83,10 +83,7 @@ export class ProjectStore {
   getUpdates(projectId: string): DBProjectUpdate[] {
     return Array.from(this.updatePool.values())
       .filter(u => u.projectId === projectId)
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   applySyncAction(actionType: string, id: string, data: DBProject | null) {
