@@ -89,15 +89,20 @@ export class IssueStore {
   applySyncAction(action: string, id: string, data: DBIssue | null) {
     if (action === 'I' || action === 'U' || action === 'A') {
       if (data) {
-        // Sync action data from the server may include `labelAssignments` (full Prisma relation).
-        // Bootstrap data includes `labelIds` directly. Handle both.
+        // Server data may include labels in different shapes:
+        // - `labelAssignments` from sync actions (Prisma relation)
+        // - `labels` from GraphQL mutation responses
+        // - `labelIds` from bootstrap data
         const raw = data as DBIssue & {
           labelAssignments?: Array<{ labelId: string }>;
+          labels?: Array<{ id: string }>;
         };
-        const { labelAssignments, ...issueData } = raw;
+        const { labelAssignments, labels, ...issueData } = raw;
         const labelIds = labelAssignments
           ? labelAssignments.map(a => a.labelId)
-          : (issueData.labelIds ?? []);
+          : labels
+            ? labels.map(l => l.id)
+            : (issueData.labelIds ?? []);
 
         // When a real issue arrives (non-optimistic identifier), atomically
         // remove any optimistic placeholder for the same title/team so the

@@ -26,15 +26,21 @@ import type {
 // GraphQL mutations (queries replaced by MobX store reads)
 // ---------------------------------------------------------------------------
 
+const ISSUE_FIELDS = `
+  id identifier number title description priority estimate dueDate
+  sortOrder prioritySortOrder trashed
+  teamId organizationId stateId assigneeId creatorId parentId
+  projectId cycleId branchName
+  startedAt completedAt canceledAt archivedAt createdAt updatedAt
+  labels { id name color }
+`;
+
 const ISSUE_CREATE_MUTATION = `
   mutation IssueCreate($input: IssueCreateInput!) {
     issueCreate(input: $input) {
       success
       lastSyncId
-      issue {
-        id identifier title priority stateId assigneeId dueDate description
-        createdAt updatedAt labels { id name color }
-      }
+      issue { ${ISSUE_FIELDS} }
     }
   }
 `;
@@ -44,10 +50,7 @@ const ISSUE_UPDATE_MUTATION = `
     issueUpdate(id: $id, input: $input) {
       success
       lastSyncId
-      issue {
-        id identifier title priority stateId assigneeId dueDate description
-        createdAt updatedAt labels { id name color }
-      }
+      issue { ${ISSUE_FIELDS} }
     }
   }
 `;
