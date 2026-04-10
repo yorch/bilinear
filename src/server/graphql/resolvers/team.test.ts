@@ -157,6 +157,8 @@ describe('teamResolvers', () => {
   });
 
   describe('Mutation.teamDelete', () => {
+    const deleteInput = { issueAction: 'DELETE' as const };
+
     it('soft-deletes a team when user is admin and team belongs to org', async () => {
       ctx.prisma.organizationMember.findUnique.mockResolvedValue({
         id: 'mem-1',
@@ -166,6 +168,8 @@ describe('teamResolvers', () => {
       });
       // findById to verify org ownership
       ctx.prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
+      // delete transaction: archive issues, then archive team
+      ctx.prisma.issue.updateMany.mockResolvedValue({ count: 0 });
       ctx.prisma.team.update.mockResolvedValue({
         ...TEST_TEAM,
         archivedAt: new Date(),
@@ -173,7 +177,7 @@ describe('teamResolvers', () => {
 
       const result = await teamResolvers.Mutation.teamDelete(
         null,
-        { id: TEST_TEAM.id },
+        { id: TEST_TEAM.id, input: deleteInput },
         ctx as never,
       );
 
@@ -195,7 +199,7 @@ describe('teamResolvers', () => {
       try {
         await teamResolvers.Mutation.teamDelete(
           null,
-          { id: TEST_TEAM.id },
+          { id: TEST_TEAM.id, input: deleteInput },
           ctx as never,
         );
         expect.unreachable('Should have thrown');

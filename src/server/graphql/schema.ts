@@ -316,6 +316,16 @@ export const typeDefs = `
     autoArchivePeriod: Int
   }
 
+  enum TeamDeleteIssueAction {
+    DELETE
+    MOVE
+  }
+
+  input TeamDeleteInput {
+    issueAction: TeamDeleteIssueAction!
+    moveToTeamId: String
+  }
+
   input TeamMembershipCreateInput {
     teamId: String!
     userId: String!
@@ -377,7 +387,7 @@ export const typeDefs = `
 
     teamCreate(input: TeamCreateInput!): TeamPayload!
     teamUpdate(id: ID!, input: TeamUpdateInput!): TeamPayload!
-    teamDelete(id: ID!): DeletePayload!
+    teamDelete(id: ID!, input: TeamDeleteInput!): DeletePayload!
 
     teamMembershipCreate(input: TeamMembershipCreateInput!): TeamMembershipPayload!
     teamMembershipUpdate(id: ID!, input: TeamMembershipUpdateInput!): TeamMembershipPayload!

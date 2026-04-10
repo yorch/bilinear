@@ -7,6 +7,7 @@ import {
 } from '../../middleware/auth';
 import type {
   TeamCreateInput,
+  TeamDeleteInput,
   TeamUpdateInput,
 } from '../../services/team.service';
 import type { GraphQLContext } from '../context';
@@ -57,7 +58,7 @@ export const teamResolvers = {
 
     teamDelete: async (
       _parent: unknown,
-      { id }: { id: string },
+      { id, input }: { id: string; input: TeamDeleteInput },
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
@@ -73,15 +74,52 @@ export const teamResolvers = {
         });
       }
 
-      await ctx.services.team.delete(id);
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'D',
-        'Team',
-        id,
-        null,
-      );
-      return { lastSyncId: sync.id.toString(), success: true };
+      // Validate target team belongs to the same org
+      if (input.moveToTeamId) {
+        const targetTeam = await ctx.services.team.findById(input.moveToTeamId);
+        if (!targetTeam || targetTeam.organizationId !== ctx.orgId) {
+          throw new GraphQLError('Target team not found', {
+            extensions: { code: 'BAD_USER_INPUT' },
+          });
+        }
+      }
+
+      try {
+        const result = await ctx.services.team.delete(id, input);
+
+        // Create sync actions for moved issues
+        for (const issue of result.movedIssues) {
+          await ctx.services.sync.createSyncAction(
+            ctx.orgId,
+            'U',
+            'Issue',
+            issue.id,
+            issue,
+          );
+        }
+
+        const sync = await ctx.services.sync.createSyncAction(
+          ctx.orgId,
+          'D',
+          'Team',
+          id,
+          null,
+        );
+        return { lastSyncId: sync.id.toString(), success: true };
+      } catch (err) {
+        const error = err as Error;
+        if (
+          error.name === 'TeamDeleteMoveTargetRequiredError' ||
+          error.name === 'TeamDeleteMoveToSelfError' ||
+          error.name === 'TeamDeleteMoveNoStatesError' ||
+          error.name === 'TeamNotFoundError'
+        ) {
+          throw new GraphQLError(error.message, {
+            extensions: { code: 'BAD_USER_INPUT' },
+          });
+        }
+        throw err;
+      }
     },
 
     teamUpdate: async (

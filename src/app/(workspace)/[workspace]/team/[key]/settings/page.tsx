@@ -48,8 +48,8 @@ const TEAM_UPDATE_MUTATION = `
 `;
 
 const TEAM_DELETE_MUTATION = `
-  mutation TeamDelete($id: ID!) {
-    teamDelete(id: $id) {
+  mutation TeamDelete($id: ID!, $input: TeamDeleteInput!) {
+    teamDelete(id: $id, input: $input) {
       success
       lastSyncId
     }
@@ -168,6 +168,12 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
   // ── Danger zone ───────────────────────────────────────────────────────────
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [issueAction, setIssueAction] = useState<'DELETE' | 'MOVE'>('DELETE');
+  const [moveToTeamId, setMoveToTeamId] = useState('');
+
+  const otherTeams = teamStore.all.filter(
+    t => t.id !== team?.id && !t.archivedAt,
+  );
 
   // Sync form when team loads from store
   useEffect(() => {
@@ -317,9 +323,22 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
     if (!team || deleting) {
       return;
     }
+    if (issueAction === 'MOVE' && !moveToTeamId) {
+      toast.error('Please select a team to move issues to');
+      return;
+    }
     setDeleting(true);
     try {
-      const result = await gql(TEAM_DELETE_MUTATION, { id: team.id });
+      const input: { issueAction: string; moveToTeamId?: string } = {
+        issueAction,
+      };
+      if (issueAction === 'MOVE') {
+        input.moveToTeamId = moveToTeamId;
+      }
+      const result = await gql(TEAM_DELETE_MUTATION, {
+        id: team.id,
+        input,
+      });
       if (result.errors?.length) {
         toast.error(gqlError(result, 'Failed to delete team'));
         return;
@@ -329,7 +348,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
     } finally {
       setDeleting(false);
     }
-  }, [team, deleting, teamStore, router, workspace]);
+  }, [team, deleting, issueAction, moveToTeamId, teamStore, router, workspace]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -492,44 +511,115 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
             Danger Zone
           </h2>
           <div className="rounded-lg border border-red-200 bg-white p-5 dark:border-red-900/50 dark:bg-zinc-900">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Delete team
-                </p>
-                <p className="text-xs text-zinc-400">
-                  Permanently deletes the team and all its issues. This cannot
-                  be undone.
-                </p>
-              </div>
-              {deleteConfirm ? (
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs text-zinc-500">Are you sure?</span>
-                  <button
-                    type="button"
-                    onClick={() => setDeleteConfirm(false)}
-                    className="rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={deleting}
-                    onClick={handleDelete}
-                    className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                  >
-                    {deleting ? 'Deleting…' : 'Delete'}
-                  </button>
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Delete team
+                  </p>
+                  <p className="text-xs text-zinc-400">
+                    This will archive the team. Choose what happens to its
+                    {team.issueCount > 0 ? ` ${team.issueCount} ` : ' '}
+                    issue{team.issueCount === 1 ? '' : 's'}.
+                  </p>
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setDeleteConfirm(true)}
-                  className="flex shrink-0 items-center gap-1.5 rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete team
-                </button>
+                {!deleteConfirm && (
+                  <button
+                    type="button"
+                    onClick={() => setDeleteConfirm(true)}
+                    className="flex shrink-0 items-center gap-1.5 rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete team
+                  </button>
+                )}
+              </div>
+
+              {deleteConfirm && (
+                <div className="flex flex-col gap-3 rounded-md border border-red-100 bg-red-50/50 p-4 dark:border-red-900/30 dark:bg-red-900/10">
+                  <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                    What should happen to this team&apos;s issues?
+                  </p>
+
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="issueAction"
+                      value="DELETE"
+                      checked={issueAction === 'DELETE'}
+                      onChange={() => setIssueAction('DELETE')}
+                      className="mt-0.5 accent-red-600"
+                    />
+                    <div>
+                      <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                        Delete all issues
+                      </p>
+                      <p className="text-xs text-zinc-400">
+                        Issues will be archived along with the team
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className={cn(
+                    'flex items-start gap-2',
+                    otherTeams.length > 0 ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed',
+                  )}>
+                    <input
+                      type="radio"
+                      name="issueAction"
+                      value="MOVE"
+                      checked={issueAction === 'MOVE'}
+                      onChange={() => setIssueAction('MOVE')}
+                      disabled={otherTeams.length === 0}
+                      className="mt-0.5 accent-red-600"
+                    />
+                    <div className="flex-1">
+                      <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                        Move issues to another team
+                      </p>
+                      <p className="text-xs text-zinc-400">
+                        Issues will be reassigned with new identifiers
+                      </p>
+                    </div>
+                  </label>
+
+                  {issueAction === 'MOVE' && otherTeams.length > 0 && (
+                    <select
+                      value={moveToTeamId}
+                      onChange={e => setMoveToTeamId(e.target.value)}
+                      className="ml-6 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    >
+                      <option value="">Select a team…</option>
+                      {otherTeams.map(t => (
+                        <option key={t.id} value={t.id}>
+                          {t.displayName || t.name} ({t.key})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeleteConfirm(false);
+                        setIssueAction('DELETE');
+                        setMoveToTeamId('');
+                      }}
+                      className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={deleting || (issueAction === 'MOVE' && !moveToTeamId)}
+                      onClick={handleDelete}
+                      className="rounded bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {deleting ? 'Deleting…' : 'Delete team'}
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>

@@ -172,16 +172,34 @@ describe('TeamService', () => {
   });
 
   describe('delete', () => {
-    it('soft-deletes a team by setting archivedAt', async () => {
+    it('soft-deletes a team and archives its issues when issueAction is DELETE', async () => {
       const archived = { ...TEST_TEAM, archivedAt: new Date() };
+      prisma.issue.updateMany.mockResolvedValue({ count: 3 });
       prisma.team.update.mockResolvedValue(archived);
 
-      const result = await service.delete(TEST_TEAM.id);
-      expect(result.archivedAt).not.toBeNull();
-      expect(prisma.team.update).toHaveBeenCalledWith({
-        data: { archivedAt: expect.any(Date) },
-        where: { id: TEST_TEAM.id },
+      const result = await service.delete(TEST_TEAM.id, {
+        issueAction: 'DELETE',
       });
+      expect(result.team.archivedAt).not.toBeNull();
+      expect(prisma.issue.updateMany).toHaveBeenCalledWith({
+        data: { archivedAt: expect.any(Date) },
+        where: { teamId: TEST_TEAM.id, archivedAt: null },
+      });
+    });
+
+    it('throws when issueAction is MOVE but moveToTeamId is missing', async () => {
+      await expect(
+        service.delete(TEST_TEAM.id, { issueAction: 'MOVE' }),
+      ).rejects.toThrow('moveToTeamId is required');
+    });
+
+    it('throws when moveToTeamId is the same as the team being deleted', async () => {
+      await expect(
+        service.delete(TEST_TEAM.id, {
+          issueAction: 'MOVE',
+          moveToTeamId: TEST_TEAM.id,
+        }),
+      ).rejects.toThrow('Cannot move issues to the same team');
     });
   });
 

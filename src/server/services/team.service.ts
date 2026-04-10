@@ -1,4 +1,5 @@
 import type {
+  Issue,
   PrismaClient,
   Team,
   TeamMembership,
@@ -8,7 +9,7 @@ import type {
 // This type alias works with both PrismaClient and the transaction client.
 type PrismaLike = Pick<
   PrismaClient,
-  'team' | 'teamMembership' | 'workflowState'
+  'issue' | 'team' | 'teamMembership' | 'workflowState'
 >;
 
 const TEAM_KEY_PATTERN = /^[A-Z]{1,10}$/;
@@ -53,6 +54,11 @@ export interface TeamUpdateInput {
   private?: boolean;
   timezone?: string;
   triageEnabled?: boolean;
+}
+
+export interface TeamDeleteInput {
+  issueAction: 'DELETE' | 'MOVE';
+  moveToTeamId?: string;
 }
 
 export class TeamService {
@@ -130,11 +136,105 @@ export class TeamService {
     });
   }
 
-  async delete(id: string): Promise<Team> {
-    return this.prisma.team.update({
-      data: { archivedAt: new Date() },
-      where: { id },
+  async delete(id: string, input: TeamDeleteInput): Promise<{ movedIssues: Issue[]; team: Team }> {
+    if (input.issueAction === 'MOVE' && !input.moveToTeamId) {
+      throw new TeamDeleteMoveTargetRequiredError();
+    }
+    if (input.moveToTeamId === id) {
+      throw new TeamDeleteMoveToSelfError();
+    }
+
+    return this.prisma.$transaction(async tx => {
+      let movedIssues: Issue[] = [];
+
+      if (input.issueAction === 'MOVE' && input.moveToTeamId) {
+        movedIssues = await this.moveIssuesToTeam(tx, id, input.moveToTeamId);
+      } else {
+        // Soft-delete all issues belonging to this team
+        await tx.issue.updateMany({
+          data: { archivedAt: new Date() },
+          where: { teamId: id, archivedAt: null },
+        });
+      }
+
+      const team = await tx.team.update({
+        data: { archivedAt: new Date() },
+        where: { id },
+      });
+
+      return { movedIssues, team };
     });
+  }
+
+  private async moveIssuesToTeam(
+    tx: PrismaLike,
+    sourceTeamId: string,
+    targetTeamId: string,
+  ): Promise<Issue[]> {
+    const targetTeam = await tx.team.findUnique({
+      where: { id: targetTeamId },
+    });
+    if (!targetTeam) {
+      throw new TeamNotFoundError();
+    }
+
+    // Build state type mapping: source state id → target state id
+    const [sourceStates, targetStates] = await Promise.all([
+      tx.workflowState.findMany({ where: { teamId: sourceTeamId, archivedAt: null } }),
+      tx.workflowState.findMany({ where: { teamId: targetTeamId, archivedAt: null } }),
+    ]);
+
+    const stateMap = new Map<string, string>();
+    for (const src of sourceStates) {
+      const match = targetStates.find(t => t.type === src.type);
+      if (match) {
+        stateMap.set(src.id, match.id);
+      }
+    }
+    // Fallback: if no match by type, map to the target team's default or first backlog state
+    const fallbackStateId =
+      targetTeam.defaultIssueStateId ??
+      targetStates.find(s => s.type === 'backlog')?.id ??
+      targetStates[0]?.id;
+
+    if (!fallbackStateId) {
+      throw new TeamDeleteMoveNoStatesError();
+    }
+
+    // Get all active issues from the source team
+    const issues = await tx.issue.findMany({
+      where: { teamId: sourceTeamId, archivedAt: null },
+    });
+
+    // Assign new numbers in the target team
+    const updatedTeam = await tx.team.update({
+      data: { issueCount: { increment: issues.length } },
+      where: { id: targetTeamId },
+    });
+    const startNumber = updatedTeam.issueCount - issues.length + 1;
+
+    // Move each issue
+    const movedIssues: Issue[] = [];
+    for (let i = 0; i < issues.length; i++) {
+      const issue = issues[i];
+      const newNumber = startNumber + i;
+      const newIdentifier = `${targetTeam.key}-${newNumber}`;
+      const newStateId = stateMap.get(issue.stateId) ?? fallbackStateId;
+
+      const updated = await tx.issue.update({
+        data: {
+          identifier: newIdentifier,
+          number: newNumber,
+          previousIdentifiers: { push: issue.identifier },
+          stateId: newStateId,
+          teamId: targetTeamId,
+        },
+        where: { id: issue.id },
+      });
+      movedIssues.push(updated);
+    }
+
+    return movedIssues;
   }
 
   async addMember(
@@ -231,5 +331,33 @@ export class TeamKeyInvalidError extends Error {
   constructor() {
     super('Team key must be 1-10 uppercase characters');
     this.name = 'TeamKeyInvalidError';
+  }
+}
+
+export class TeamNotFoundError extends Error {
+  constructor() {
+    super('Target team not found');
+    this.name = 'TeamNotFoundError';
+  }
+}
+
+export class TeamDeleteMoveTargetRequiredError extends Error {
+  constructor() {
+    super('moveToTeamId is required when issueAction is MOVE');
+    this.name = 'TeamDeleteMoveTargetRequiredError';
+  }
+}
+
+export class TeamDeleteMoveToSelfError extends Error {
+  constructor() {
+    super('Cannot move issues to the same team being deleted');
+    this.name = 'TeamDeleteMoveToSelfError';
+  }
+}
+
+export class TeamDeleteMoveNoStatesError extends Error {
+  constructor() {
+    super('Target team has no workflow states to assign issues to');
+    this.name = 'TeamDeleteMoveNoStatesError';
   }
 }
