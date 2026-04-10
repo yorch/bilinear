@@ -67,9 +67,7 @@ const IssueDetailPage = observer(function IssueDetailPage() {
     const storeIssue = issueStore.findById(id);
     if (storeIssue && id.startsWith('temp-')) {
       const team = teamStore.findById(storeIssue.teamId);
-      const states = team
-        ? workflowStateStore.findByTeamId(team.id)
-        : [];
+      const states = team ? workflowStateStore.findByTeamId(team.id) : [];
       const members = userStore.all.map(u => ({
         user: {
           avatarBackgroundColor: u.avatarBgColor,
@@ -84,8 +82,8 @@ const IssueDetailPage = observer(function IssueDetailPage() {
         dueDate: storeIssue.dueDate ?? null,
         labels: (storeIssue.labelIds ?? [])
           .map(lid => labelStore.findById(lid))
-          .filter(Boolean)
-          .map(l => ({ color: l!.color, id: l!.id, name: l!.name })),
+          .filter((l): l is NonNullable<typeof l> => l !== null)
+          .map(l => ({ color: l.color, id: l.id, name: l.name })),
         team: {
           id: team?.id ?? storeIssue.teamId,
           key: team?.key ?? '',
@@ -93,7 +91,9 @@ const IssueDetailPage = observer(function IssueDetailPage() {
           states,
         },
       });
-      setLabels(labelStore.all.map(l => ({ color: l.color, id: l.id, name: l.name })));
+      setLabels(
+        labelStore.all.map(l => ({ color: l.color, id: l.id, name: l.name })),
+      );
       setLoading(false);
       return;
     }

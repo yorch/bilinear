@@ -213,7 +213,9 @@ export class SyncManager {
       );
 
       // Populate MobX stores
-      const firstOrg = batches.organizations[0] as { name?: string } | undefined;
+      const firstOrg = batches.organizations[0] as
+        | { name?: string }
+        | undefined;
       if (firstOrg?.name) {
         syncStore.setOrganizationName(firstOrg.name);
       }

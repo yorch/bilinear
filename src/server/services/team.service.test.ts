@@ -186,7 +186,7 @@ describe('TeamService', () => {
       expect(result.team.archivedAt).not.toBeNull();
       expect(prisma.issue.updateMany).toHaveBeenCalledWith({
         data: { archivedAt: expect.any(Date) },
-        where: { teamId: TEST_TEAM.id, archivedAt: null },
+        where: { archivedAt: null, teamId: TEST_TEAM.id },
       });
     });
 

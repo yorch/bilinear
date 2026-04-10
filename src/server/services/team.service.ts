@@ -89,7 +89,11 @@ export class TeamService {
         },
       });
 
-      const states = await this.seedDefaultStates(tx, team.id, input.triageEnabled ?? false);
+      const states = await this.seedDefaultStates(
+        tx,
+        team.id,
+        input.triageEnabled ?? false,
+      );
 
       // Add creator as team owner
       await tx.teamMembership.create({
@@ -139,7 +143,10 @@ export class TeamService {
     });
   }
 
-  async delete(id: string, input: TeamDeleteInput): Promise<{ movedIssues: Issue[]; team: Team }> {
+  async delete(
+    id: string,
+    input: TeamDeleteInput,
+  ): Promise<{ movedIssues: Issue[]; team: Team }> {
     if (input.issueAction === 'MOVE' && !input.moveToTeamId) {
       throw new TeamDeleteMoveTargetRequiredError();
     }
@@ -156,7 +163,7 @@ export class TeamService {
         // Soft-delete all issues belonging to this team
         await tx.issue.updateMany({
           data: { archivedAt: new Date() },
-          where: { teamId: id, archivedAt: null },
+          where: { archivedAt: null, teamId: id },
         });
       }
 
@@ -183,8 +190,12 @@ export class TeamService {
 
     // Build state type mapping: source state id → target state id
     const [sourceStates, targetStates] = await Promise.all([
-      tx.workflowState.findMany({ where: { teamId: sourceTeamId, archivedAt: null } }),
-      tx.workflowState.findMany({ where: { teamId: targetTeamId, archivedAt: null } }),
+      tx.workflowState.findMany({
+        where: { archivedAt: null, teamId: sourceTeamId },
+      }),
+      tx.workflowState.findMany({
+        where: { archivedAt: null, teamId: targetTeamId },
+      }),
     ]);
 
     const stateMap = new Map<string, string>();
@@ -206,7 +217,7 @@ export class TeamService {
 
     // Get all active issues from the source team
     const issues = await tx.issue.findMany({
-      where: { teamId: sourceTeamId, archivedAt: null },
+      where: { archivedAt: null, teamId: sourceTeamId },
     });
 
     // Assign new numbers in the target team

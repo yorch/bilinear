@@ -67,7 +67,12 @@ export function IssueListView({
     // All issues are ungrouped — show them in a flat list rather than hiding them
     groups.push({
       issues: ungrouped,
-      state: { id: '__ungrouped__', name: 'Issues', color: '#94a3b8', type: 'backlog' },
+      state: {
+        color: '#94a3b8',
+        id: '__ungrouped__',
+        name: 'Issues',
+        type: 'backlog',
+      },
     });
   }
 

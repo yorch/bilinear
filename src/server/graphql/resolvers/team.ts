@@ -50,7 +50,11 @@ export const teamResolvers = {
           result.team.id,
           result.team,
         );
-        return { lastSyncId: sync.id.toString(), success: true, team: result.team };
+        return {
+          lastSyncId: sync.id.toString(),
+          success: true,
+          team: result.team,
+        };
       } catch (err) {
         const error = err as Error & { code?: string };
         if (error.name === 'TeamKeyInvalidError') {

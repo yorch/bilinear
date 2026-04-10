@@ -560,10 +560,14 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                     </div>
                   </label>
 
-                  <label className={cn(
-                    'flex items-start gap-2',
-                    otherTeams.length > 0 ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed',
-                  )}>
+                  <label
+                    className={cn(
+                      'flex items-start gap-2',
+                      otherTeams.length > 0
+                        ? 'cursor-pointer'
+                        : 'opacity-50 cursor-not-allowed',
+                    )}
+                  >
                     <input
                       type="radio"
                       name="issueAction"
@@ -612,7 +616,9 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                     </button>
                     <button
                       type="button"
-                      disabled={deleting || (issueAction === 'MOVE' && !moveToTeamId)}
+                      disabled={
+                        deleting || (issueAction === 'MOVE' && !moveToTeamId)
+                      }
                       onClick={handleDelete}
                       className="rounded bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
