@@ -7,7 +7,7 @@ import { CommandPalette } from '@/components/command-palette/command-palette';
 import { CreateTeamModal } from '@/components/teams/create-team-modal';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useRecentItems } from '@/hooks/use-recent-items';
-import type { DBTeam } from '@/lib/db';
+import type { DBTeam, DBWorkflowState } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { gqlError } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -21,7 +21,9 @@ const TEAM_CREATE_MUTATION = `
         id organizationId parentId
         key name displayName description icon color private timezone
         cyclesEnabled issueEstimationType triageEnabled issueCount
+        defaultIssueStateId
         createdAt updatedAt archivedAt
+        states { id teamId name color type position description createdAt updatedAt archivedAt }
       }
     }
   }
@@ -38,7 +40,7 @@ export const WorkspaceClient = observer(function WorkspaceClient({
 }: {
   children: React.ReactNode;
 }) {
-  const { uiStore, teamStore } = useStore();
+  const { uiStore, teamStore, workflowStateStore } = useStore();
   const params = useParams<{ workspace?: string }>();
   const workspaceKey = params.workspace;
   const { items: recentItems } = useRecentItems(workspaceKey);
@@ -65,15 +67,24 @@ export const WorkspaceClient = observer(function WorkspaceClient({
       if (result.errors?.length) {
         throw new Error(gqlError(result, 'Failed to create team'));
       }
-      const team = (result.data?.teamCreate as { team?: DBTeam })?.team;
+      const payload = result.data?.teamCreate as {
+        team?: DBTeam & { states?: DBWorkflowState[] };
+      };
+      const team = payload?.team;
       if (team) {
-        teamStore.applySyncAction('I', team.id, team);
+        const { states, ...teamData } = team;
+        teamStore.applySyncAction('I', teamData.id, teamData);
+        if (states) {
+          for (const state of states) {
+            workflowStateStore.applySyncAction('I', state.id, state);
+          }
+        }
         if (workspaceKey) {
           router.push(`/${workspaceKey}/team/${team.key}`);
         }
       }
     },
-    [teamStore, workspaceKey, router],
+    [teamStore, workflowStateStore, workspaceKey, router],
   );
 
   return (

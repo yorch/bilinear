@@ -3,6 +3,7 @@ import type {
   PrismaClient,
   Team,
   TeamMembership,
+  WorkflowState,
 } from '../../generated/prisma';
 
 // Prisma's $transaction callback receives a lighter client (without $connect, etc.)
@@ -68,7 +69,7 @@ export class TeamService {
     orgId: string,
     userId: string,
     input: TeamCreateInput,
-  ): Promise<Team> {
+  ): Promise<{ states: WorkflowState[]; team: Team }> {
     this.validateKey(input.key);
 
     return this.prisma.$transaction(async tx => {
@@ -88,7 +89,7 @@ export class TeamService {
         },
       });
 
-      await this.seedDefaultStates(tx, team.id, input.triageEnabled ?? false);
+      const states = await this.seedDefaultStates(tx, team.id, input.triageEnabled ?? false);
 
       // Add creator as team owner
       await tx.teamMembership.create({
@@ -99,7 +100,9 @@ export class TeamService {
         },
       });
 
-      return team;
+      // Re-read team to include the updated defaultIssueStateId
+      const updatedTeam = await tx.team.findUnique({ where: { id: team.id } });
+      return { states, team: updatedTeam ?? team };
     });
   }
 
@@ -297,7 +300,7 @@ export class TeamService {
     tx: PrismaLike,
     teamId: string,
     triageEnabled: boolean,
-  ): Promise<void> {
+  ): Promise<WorkflowState[]> {
     const states = triageEnabled
       ? [
           TRIAGE_STATE,
@@ -324,6 +327,8 @@ export class TeamService {
         where: { id: teamId },
       });
     }
+
+    return created;
   }
 }
 

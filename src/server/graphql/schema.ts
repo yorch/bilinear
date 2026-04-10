@@ -53,6 +53,7 @@ export const typeDefs = `
     issueEstimationType: String!
     triageEnabled: Boolean!
     issueCount: Int!
+    defaultIssueStateId: ID
     parentId: ID
     organization: Organization!
     parent: Team

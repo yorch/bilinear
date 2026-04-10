@@ -26,19 +26,31 @@ export const teamResolvers = {
       ]);
 
       try {
-        const team = await ctx.services.team.create(
+        const result = await ctx.services.team.create(
           ctx.orgId,
           ctx.userId,
           input,
         );
+
+        // Emit sync actions for the workflow states so clients receive them
+        for (const state of result.states) {
+          await ctx.services.sync.createSyncAction(
+            ctx.orgId,
+            'I',
+            'WorkflowState',
+            state.id,
+            state,
+          );
+        }
+
         const sync = await ctx.services.sync.createSyncAction(
           ctx.orgId,
           'I',
           'Team',
-          team.id,
-          team,
+          result.team.id,
+          result.team,
         );
-        return { lastSyncId: sync.id.toString(), success: true, team };
+        return { lastSyncId: sync.id.toString(), success: true, team: result.team };
       } catch (err) {
         const error = err as Error & { code?: string };
         if (error.name === 'TeamKeyInvalidError') {

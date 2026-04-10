@@ -100,7 +100,11 @@ describe('teamResolvers', () => {
       });
       ctx.prisma.team.create.mockResolvedValue(TEST_TEAM);
       ctx.prisma.teamMembership.create.mockResolvedValue(TEST_TEAM_MEMBERSHIP);
-      ctx.prisma.workflowState.create.mockResolvedValue({});
+      for (const state of DEFAULT_WORKFLOW_STATES) {
+        ctx.prisma.workflowState.create.mockResolvedValueOnce(state);
+      }
+      ctx.prisma.team.update.mockResolvedValue(TEST_TEAM);
+      ctx.prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
 
       const result = await teamResolvers.Mutation.teamCreate(
         null,

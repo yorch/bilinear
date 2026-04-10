@@ -36,13 +36,15 @@ describe('TeamService', () => {
         prisma.workflowState.create.mockResolvedValueOnce(state);
       }
       prisma.team.update.mockResolvedValue(TEST_TEAM);
+      prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
 
       const result = await service.create(TEST_ORG.id, TEST_USER.id, {
         key: 'ENG',
         name: 'Engineering',
       });
 
-      expect(result).toEqual(TEST_TEAM);
+      expect(result.team).toEqual(TEST_TEAM);
+      expect(result.states).toHaveLength(5);
       expect(prisma.team.create).toHaveBeenCalledOnce();
       // 5 default workflow states
       expect(prisma.workflowState.create).toHaveBeenCalledTimes(5);
@@ -71,6 +73,7 @@ describe('TeamService', () => {
         prisma.workflowState.create.mockResolvedValueOnce(state);
       }
       prisma.team.update.mockResolvedValue(TEST_TEAM);
+      prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
 
       await service.create(TEST_ORG.id, TEST_USER.id, {
         key: 'ENG',
