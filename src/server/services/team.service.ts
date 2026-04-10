@@ -208,13 +208,22 @@ export class TeamService {
         ]
       : DEFAULT_WORKFLOW_STATES;
 
-    await Promise.all(
+    const created = await Promise.all(
       states.map(state =>
         tx.workflowState.create({
           data: { ...state, teamId },
         }),
       ),
     );
+
+    // Set the first "backlog" state as the team's default issue state
+    const backlogState = created.find(s => s.type === 'backlog');
+    if (backlogState) {
+      await tx.team.update({
+        data: { defaultIssueStateId: backlogState.id },
+        where: { id: teamId },
+      });
+    }
   }
 }
 

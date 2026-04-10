@@ -128,6 +128,12 @@ async function main() {
     states[cfg.name] = state.id;
   }
 
+  // Set Backlog as the default issue state for the team
+  await prisma.team.update({
+    data: { defaultIssueStateId: states.Backlog },
+    where: { id: team.id },
+  });
+
   // ── Sample issues ──────────────────────────────────────────────────────────
 
   const issueSeeds = [

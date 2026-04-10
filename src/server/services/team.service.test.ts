@@ -16,6 +16,14 @@ describe('TeamService', () => {
   });
 
   describe('create', () => {
+    const mockStates = [
+      { id: 'ws-backlog', type: 'backlog' },
+      { id: 'ws-todo', type: 'unstarted' },
+      { id: 'ws-in-progress', type: 'started' },
+      { id: 'ws-done', type: 'completed' },
+      { id: 'ws-canceled', type: 'canceled' },
+    ];
+
     it('creates a team with default workflow states and adds creator as owner', async () => {
       prisma.team.create.mockResolvedValue(TEST_TEAM);
       prisma.teamMembership.create.mockResolvedValue({
@@ -24,7 +32,10 @@ describe('TeamService', () => {
         teamId: TEST_TEAM.id,
         userId: TEST_USER.id,
       });
-      prisma.workflowState.create.mockResolvedValue({});
+      for (const state of mockStates) {
+        prisma.workflowState.create.mockResolvedValueOnce(state);
+      }
+      prisma.team.update.mockResolvedValue(TEST_TEAM);
 
       const result = await service.create(TEST_ORG.id, TEST_USER.id, {
         key: 'ENG',
@@ -35,6 +46,11 @@ describe('TeamService', () => {
       expect(prisma.team.create).toHaveBeenCalledOnce();
       // 5 default workflow states
       expect(prisma.workflowState.create).toHaveBeenCalledTimes(5);
+      // Sets backlog as default issue state
+      expect(prisma.team.update).toHaveBeenCalledWith({
+        data: { defaultIssueStateId: 'ws-backlog' },
+        where: { id: TEST_TEAM.id },
+      });
       // Creator added as owner
       expect(prisma.teamMembership.create).toHaveBeenCalledWith({
         data: { isOwner: true, teamId: TEST_TEAM.id, userId: TEST_USER.id },
@@ -47,7 +63,14 @@ describe('TeamService', () => {
         triageEnabled: true,
       });
       prisma.teamMembership.create.mockResolvedValue({});
-      prisma.workflowState.create.mockResolvedValue({});
+      const triageMockStates = [
+        { id: 'ws-triage', type: 'triage' },
+        ...mockStates,
+      ];
+      for (const state of triageMockStates) {
+        prisma.workflowState.create.mockResolvedValueOnce(state);
+      }
+      prisma.team.update.mockResolvedValue(TEST_TEAM);
 
       await service.create(TEST_ORG.id, TEST_USER.id, {
         key: 'ENG',
@@ -60,6 +83,11 @@ describe('TeamService', () => {
       const firstCall = prisma.workflowState.create.mock.calls[0][0];
       expect(firstCall.data.type).toBe('triage');
       expect(firstCall.data.position).toBe(0);
+      // Still sets backlog (not triage) as default
+      expect(prisma.team.update).toHaveBeenCalledWith({
+        data: { defaultIssueStateId: 'ws-backlog' },
+        where: { id: TEST_TEAM.id },
+      });
     });
 
     it('throws TeamKeyInvalidError for lowercase key', async () => {
