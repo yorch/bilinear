@@ -3,7 +3,7 @@
 ## Issue Tracker — Linear Rebuild
 
 **Established:** Sprint 1-2
-**Last updated:** Sprint 11-12
+**Last updated:** Sprint 13-14
 **Status:** Living document — updated each sprint
 
 > This is the primary onboarding document for new contributors. All patterns here are the mandated conventions for the codebase. If you deviate from a pattern, document why.
@@ -958,3 +958,129 @@ tests/
 **Auth in tests:** Use `loginAs(page, email)` from `tests/fixtures/auth.ts`. It drives the email → verify flow. Set `TEST_AUTH_CODE` env var to a known bypass code when running against a test seed.
 
 **Configuration:** `playwright.config.ts` at project root. Starts `yarn dev` automatically before running tests (`webServer`). In CI, runs only Chromium to save time (`workers: 1`).
+
+---
+
+## 32. Adding a New Sync Entity (Sprint 13-14)
+
+When adding a new entity to the real-time sync pipeline, touch five files in order. `ProjectUpdate` (Sprint 13-14) is the canonical example.
+
+### Step 1 — Client type (`src/lib/db.ts`)
+
+Add a `DB*` interface that mirrors the Prisma model with JS-friendly types (Date → string, BigInt → string):
+
+```typescript
+export interface DBProjectUpdate {
+  id: string;
+  projectId: string;
+  userId: string;
+  body: string;
+  health?: string | null;
+  editedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+Add a Dexie version bump with the new table:
+
+```typescript
+// Bump the version — NEVER modify a previous version block
+this.version(3).stores({
+  ...allPreviousTableSchemas,
+  projectUpdates: 'id, projectId, userId',
+});
+```
+
+And add a typed table property to `AppDatabase`:
+
+```typescript
+projectUpdates!: Table<DBProjectUpdate, string>;
+```
+
+### Step 2 — MobX store
+
+Add an `updatePool` observable map and the three standard methods to the relevant store:
+
+```typescript
+updatePool = new Map<string, DBProjectUpdate>();
+
+// makeObservable: add applyUpdateSyncAction, updatePool, upsertUpdates
+
+upsertUpdates(updates: DBProjectUpdate[]) {
+  for (const update of updates) this.updatePool.set(update.id, update);
+}
+
+getUpdates(projectId: string): DBProjectUpdate[] {
+  return Array.from(this.updatePool.values())
+    .filter(u => u.projectId === projectId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));  // ISO strings sort lexicographically
+}
+
+applyUpdateSyncAction(actionType: string, id: string, data: DBProjectUpdate | null) {
+  if (actionType === 'I' || actionType === 'U' || actionType === 'A') {
+    if (data) this.updatePool.set(id, data);
+  } else if (actionType === 'D') {
+    this.updatePool.delete(id);
+  }
+}
+```
+
+> **ISO date sort:** For `createdAt` fields stored as ISO 8601 strings, `b.createdAt.localeCompare(a.createdAt)` is equivalent to comparing `Date.getTime()` values and avoids the `new Date()` allocation.
+
+> **Architecture boundary:** `SyncActionType` lives in `src/server/services/sync.service.ts` (server-only). Never import it in store or client code — accept `string` instead and check `=== 'I'` etc.
+
+### Step 3 — Bootstrap endpoint (`src/app/api/sync/bootstrap/route.ts`)
+
+Add the new entity to the `getBootstrapData` call and emit its lines in the streaming response:
+
+```typescript
+for (const update of data.projectUpdates) {
+  lines.push(`ProjectUpdate=${JSON.stringify(update)}`);
+}
+```
+
+### Step 4 — SyncManager (`src/lib/sync-manager.ts`)
+
+Three places:
+
+1. **`loadFromIndexedDB`** — hydrate the store from Dexie on startup:
+   ```typescript
+   const projectUpdates = await db.projectUpdates.toArray();
+   projectStore.upsertUpdates(projectUpdates);
+   ```
+
+2. **`fullBootstrap`** — save bootstrap data to Dexie atomically, then populate stores:
+   ```typescript
+   // In the Dexie transaction
+   await db.projectUpdates.clear();
+   await db.projectUpdates.bulkPut(batches.projectUpdates);
+   // After the transaction
+   projectStore.upsertUpdates(batches.projectUpdates);
+   ```
+
+3. **`applyActions`** — route the model name in the switch statement:
+   ```typescript
+   case 'ProjectUpdate':
+     db.projectUpdates  // for Dexie upsert/delete
+     projectStore.applyUpdateSyncAction(action, id, data as DBProjectUpdate | null);
+     break;
+   ```
+
+### Step 5 — Bootstrap service (`src/server/services/sync.service.ts`)
+
+Add the Prisma query to `getBootstrapData`'s `Promise.all`:
+
+```typescript
+this.prisma.projectUpdate.findMany({
+  orderBy: { createdAt: 'desc' },
+  take: 500,  // hard cap — add TODO comment if unbounded growth is a risk
+  where: { project: { archivedAt: null, organizationId: orgId, trashed: false } },
+}),
+```
+
+Add to destructuring and the return object.
+
+### Store unit tests
+
+Pure store tests (no Prisma mock needed) go alongside the store file. Follow `src/stores/project-store.test.ts` as the reference: test `upsertMany`, `getUpdates` (filter + sort), and `applyUpdateSyncAction` (all four action types + null data guard).

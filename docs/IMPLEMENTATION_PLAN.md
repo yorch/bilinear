@@ -19,6 +19,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 | Sprint 7-8: Sync Engine               | [`docs/sprints/07-08-sync-engine.md`](sprints/07-08-sync-engine.md)                       |
 | Sprint 9-10: Search & Command Palette | [`docs/sprints/09-10-search-command-palette.md`](sprints/09-10-search-command-palette.md) |
 | Sprint 11-12: Polish & Performance    | [`docs/sprints/11-12-polish-performance.md`](sprints/11-12-polish-performance.md)         |
+| Sprint 13-14: Projects                | [`docs/sprints/13-14-projects.md`](sprints/13-14-projects.md)                             |
 
 > **Pattern Documentation:** `docs/PATTERNS.md` is the living onboarding document for all contributors. It is updated each sprint as new patterns are established. All subsequent sprints should follow the patterns in that document.
 
@@ -149,19 +150,21 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 
 ## Phase 2: Essential Features (Weeks 13-24)
 
-### Sprint 13-14: Projects
+### Sprint 13-14: Projects ✅ COMPLETE (partial)
 
-- [ ] Create migrations: projects, project_teams, project_members, project_milestones, project_updates
-- [ ] Project CRUD with cross-team support
-- [ ] Project status system (Backlog/Planned/In Progress/Completed/Canceled)
-- [ ] Project health indicator (On Track/At Risk/Off Track)
-- [ ] Project lead assignment
-- [ ] Start/target date with resolution (day/month/quarter)
-- [ ] Project list and detail views
-- [ ] Project milestones CRUD
-- [ ] Project updates CRUD with health selection
-- [ ] Progress tracking (completed issues / total scope)
-- [ ] Assign issues to projects (Shift+P shortcut)
+- [x] Create migrations: projects, project_teams, project_members, project_milestones, project_updates
+- [x] Project CRUD with cross-team support
+- [x] Project status system (Backlog/Planned/In Progress/Completed/Canceled)
+- [x] Project health indicator (On Track/At Risk/Off Track)
+- [x] Project lead assignment
+- [x] Start/target date with resolution (day/month/quarter)
+- [x] Project list and detail views
+- [x] Project milestones CRUD _(backend + store; UI in detail view)_
+- [x] Project updates CRUD with health selection _(full feature: create, edit, delete, real-time sync)_
+- [ ] Progress tracking (completed issues / total scope) _(deferred)_
+- [ ] Assign issues to projects (Shift+P shortcut) _(deferred)_
+
+**Deliverable:** Project list + detail views with updates feed, milestones, real-time sync via WebSocket ✅
 
 ### Sprint 15-16: Cycles (Sprints)
 

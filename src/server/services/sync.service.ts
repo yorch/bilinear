@@ -48,6 +48,7 @@ export class SyncService {
       labelAssignments,
       projects,
       projectMilestones,
+      projectUpdates,
       lastSyncAction,
     ] = await Promise.all([
       this.prisma.organization.findUnique({ where: { id: orgId } }),
@@ -80,6 +81,14 @@ export class SyncService {
           project: { archivedAt: null, organizationId: orgId, trashed: false },
         },
       }),
+      // TODO: paginate if a project org accumulates >500 updates
+      this.prisma.projectUpdate.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 500,
+        where: {
+          project: { archivedAt: null, organizationId: orgId, trashed: false },
+        },
+      }),
       this.prisma.syncAction.findFirst({
         orderBy: { id: 'desc' },
         select: { id: true },
@@ -105,6 +114,7 @@ export class SyncService {
       organizations: organizations ? [organizations] : [],
       projectMilestones,
       projects,
+      projectUpdates,
       teams,
       users,
       workflowStates,

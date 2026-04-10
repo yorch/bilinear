@@ -70,6 +70,7 @@ export class SyncManager {
       issues,
       projects,
       projectMilestones,
+      projectUpdates,
       meta,
     ] = await Promise.all([
       db.organizations.toArray(),
@@ -80,6 +81,7 @@ export class SyncManager {
       db.issues.toArray(),
       db.projects.toArray(),
       db.projectMilestones.toArray(),
+      db.projectUpdates.toArray(),
       db.syncMetadata.get('lastSyncId'),
     ]);
 
@@ -108,6 +110,7 @@ export class SyncManager {
       issueStore.upsertMany(issues);
       projectStore.upsertMany(projects);
       projectStore.upsertMilestones(projectMilestones);
+      projectStore.upsertUpdates(projectUpdates);
       syncStore.setLastSyncId(String(meta.value));
       return true;
     }
@@ -151,6 +154,7 @@ export class SyncManager {
         organizations: [] as object[],
         projectMilestones: [] as object[],
         projects: [] as object[],
+        projectUpdates: [] as object[],
         teams: [] as object[],
         users: [] as object[],
         workflowStates: [] as object[],
@@ -190,6 +194,7 @@ export class SyncManager {
           db.issues,
           db.projects,
           db.projectMilestones,
+          db.projectUpdates,
           db.syncMetadata,
         ],
         async () => {
@@ -202,6 +207,7 @@ export class SyncManager {
             db.issues.clear(),
             db.projects.clear(),
             db.projectMilestones.clear(),
+            db.projectUpdates.clear(),
           ]);
           await Promise.all([
             db.organizations.bulkPut(
@@ -234,6 +240,11 @@ export class SyncManager {
             db.projectMilestones.bulkPut(
               batches.projectMilestones as Parameters<
                 typeof db.projectMilestones.bulkPut
+              >[0],
+            ),
+            db.projectUpdates.bulkPut(
+              batches.projectUpdates as Parameters<
+                typeof db.projectUpdates.bulkPut
               >[0],
             ),
             db.syncMetadata.put({ key: 'lastSyncId', value: lastSyncId }),
@@ -271,6 +282,11 @@ export class SyncManager {
       projectStore.upsertMilestones(
         batches.projectMilestones as Parameters<
           typeof projectStore.upsertMilestones
+        >[0],
+      );
+      projectStore.upsertUpdates(
+        batches.projectUpdates as Parameters<
+          typeof projectStore.upsertUpdates
         >[0],
       );
       syncStore.setLastSyncId(lastSyncId);
@@ -345,12 +361,14 @@ export class SyncManager {
       organizations: object[];
       projects: object[];
       projectMilestones: object[];
+      projectUpdates: object[];
     } = {
       issueLabels: [],
       issues: [],
       organizations: [],
       projectMilestones: [],
       projects: [],
+      projectUpdates: [],
       teams: [],
       users: [],
       workflowStates: [],
@@ -363,7 +381,8 @@ export class SyncManager {
         | 'issueLabels'
         | 'issues'
         | 'projects'
-        | 'projectMilestones';
+        | 'projectMilestones'
+        | 'projectUpdates';
       id: string;
     }[] = [];
 
@@ -455,6 +474,18 @@ export class SyncManager {
             dexieUpserts.projectMilestones.push(data);
           }
           break;
+        case 'ProjectUpdate':
+          projectStore.applyUpdateSyncAction(
+            act,
+            modelId,
+            data as Parameters<typeof projectStore.applyUpdateSyncAction>[2],
+          );
+          if (act === 'D') {
+            dexieDeletes.push({ id: modelId, table: 'projectUpdates' });
+          } else if (data) {
+            dexieUpserts.projectUpdates.push(data);
+          }
+          break;
       }
 
       // Update max sync ID
@@ -476,6 +507,7 @@ export class SyncManager {
         db.issues,
         db.projects,
         db.projectMilestones,
+        db.projectUpdates,
         db.syncMetadata,
       ],
       async () => {
@@ -514,6 +546,12 @@ export class SyncManager {
             db.projectMilestones.bulkPut(
               dexieUpserts.projectMilestones as Parameters<
                 typeof db.projectMilestones.bulkPut
+              >[0],
+            ),
+          dexieUpserts.projectUpdates.length > 0 &&
+            db.projectUpdates.bulkPut(
+              dexieUpserts.projectUpdates as Parameters<
+                typeof db.projectUpdates.bulkPut
               >[0],
             ),
           db.syncMetadata.put({ key: 'lastSyncId', value: maxId }),
