@@ -50,7 +50,11 @@ export const issueResolvers = {
       if (!issue.projectId) {
         return null;
       }
-      return ctx.services.project.findById(issue.projectId);
+      const project = await ctx.services.project.findById(issue.projectId);
+      if (project && project.organizationId !== ctx.orgId) {
+        return null;
+      }
+      return project;
     },
 
     state: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {

@@ -67,7 +67,9 @@ export const CreateProjectModal = observer(function CreateProjectModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || selectedTeamIds.length === 0 || submitting) return;
+    if (!name.trim() || selectedTeamIds.length === 0 || submitting) {
+      return;
+    }
 
     setSubmitting(true);
     setSubmitError('');
@@ -88,7 +90,9 @@ export const CreateProjectModal = observer(function CreateProjectModal({
     }
   };
 
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   const canSubmit =
     name.trim().length > 0 && selectedTeamIds.length > 0 && !submitting;
@@ -99,10 +103,14 @@ export const CreateProjectModal = observer(function CreateProjectModal({
       aria-label="Create project"
       className="fixed inset-0 z-50 flex h-screen w-screen items-center justify-center bg-black/40 p-0 m-0 border-none max-w-none max-h-none"
       onClick={e => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
       }}
       onKeyDown={e => {
-        if (e.key === 'Escape') onClose();
+        if (e.key === 'Escape') {
+          onClose();
+        }
       }}
     >
       <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
@@ -152,10 +160,14 @@ export const CreateProjectModal = observer(function CreateProjectModal({
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              <label
+                htmlFor="project-status"
+                className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+              >
                 Status
               </label>
               <select
+                id="project-status"
                 value={statusType}
                 onChange={e => setStatusType(e.target.value)}
                 className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
@@ -169,9 +181,9 @@ export const CreateProjectModal = observer(function CreateProjectModal({
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
                 Teams
-              </label>
+              </span>
               <div className="flex flex-wrap gap-2">
                 {teams.map(team => (
                   <button

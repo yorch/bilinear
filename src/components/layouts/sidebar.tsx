@@ -27,7 +27,7 @@ export const Sidebar = observer(function Sidebar({
   onToggle,
   workspaceKey,
 }: SidebarProps) {
-  const { teamStore, projectStore, uiStore, syncStore } = useStore();
+  const { teamStore, uiStore, syncStore } = useStore();
   const pathname = usePathname();
   const base = workspaceKey ? `/${workspaceKey}` : '';
 

@@ -71,11 +71,11 @@ export class ProjectStore {
   }
 
   applySyncAction(actionType: string, id: string, data: DBProject | null) {
-    if (actionType === 'I' || actionType === 'U') {
+    if (actionType === 'I' || actionType === 'U' || actionType === 'A') {
       if (data) {
         this.pool.set(id, data);
       }
-    } else if (actionType === 'D' || actionType === 'A') {
+    } else if (actionType === 'D') {
       this.pool.delete(id);
     }
   }
@@ -85,11 +85,11 @@ export class ProjectStore {
     id: string,
     data: DBProjectMilestone | null,
   ) {
-    if (actionType === 'I' || actionType === 'U') {
+    if (actionType === 'I' || actionType === 'U' || actionType === 'A') {
       if (data) {
         this.milestonePool.set(id, data);
       }
-    } else if (actionType === 'D' || actionType === 'A') {
+    } else if (actionType === 'D') {
       this.milestonePool.delete(id);
     }
   }

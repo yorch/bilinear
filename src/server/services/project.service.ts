@@ -80,6 +80,7 @@ export class ProjectService {
       const slugId = await this.generateUniqueSlugId(
         tx as unknown as PrismaClient,
         input.name,
+        orgId,
       );
 
       const project = await tx.project.create({
@@ -150,20 +151,34 @@ export class ProjectService {
   async update(id: string, input: ProjectUpdateInput): Promise<Project> {
     const data: Record<string, unknown> = {};
 
-    if (input.name !== undefined) data.name = input.name;
-    if (input.description !== undefined) data.description = input.description;
-    if (input.content !== undefined) data.content = input.content;
-    if (input.icon !== undefined) data.icon = input.icon;
-    if (input.color !== undefined) data.color = input.color;
-    if (input.priority !== undefined) data.priority = input.priority;
-    if (input.startDateResolution !== undefined)
+    if (input.name !== undefined) {
+      data.name = input.name;
+    }
+    if (input.description !== undefined) {
+      data.description = input.description;
+    }
+    if (input.content !== undefined) {
+      data.content = input.content;
+    }
+    if (input.icon !== undefined) {
+      data.icon = input.icon;
+    }
+    if (input.color !== undefined) {
+      data.color = input.color;
+    }
+    if (input.priority !== undefined) {
+      data.priority = input.priority;
+    }
+    if (input.startDateResolution !== undefined) {
       data.startDateResolution = input.startDateResolution;
-    if (input.targetDateResolution !== undefined)
+    }
+    if (input.targetDateResolution !== undefined) {
       data.targetDateResolution = input.targetDateResolution;
+    }
 
     if (input.statusType !== undefined) {
       data.statusType = input.statusType;
-      if (input.statusType === 'started' || input.statusType === 'inProgress') {
+      if (input.statusType === 'inProgress') {
         data.startedAt = new Date();
       } else if (input.statusType === 'completed') {
         data.completedAt = new Date();
@@ -177,11 +192,15 @@ export class ProjectService {
       data.healthUpdatedAt = new Date();
     }
 
-    if ('leadId' in input) data.leadId = input.leadId;
-    if ('startDate' in input)
+    if ('leadId' in input) {
+      data.leadId = input.leadId;
+    }
+    if ('startDate' in input) {
       data.startDate = input.startDate ? new Date(input.startDate) : null;
-    if ('targetDate' in input)
+    }
+    if ('targetDate' in input) {
       data.targetDate = input.targetDate ? new Date(input.targetDate) : null;
+    }
 
     return this.prisma.project.update({
       data,
@@ -204,8 +223,9 @@ export class ProjectService {
   }
 
   async addTeam(projectId: string, teamId: string) {
-    return this.prisma.projectTeam.create({
-      data: { projectId, teamId },
+    await this.prisma.projectTeam.createMany({
+      data: [{ projectId, teamId }],
+      skipDuplicates: true,
     });
   }
 
@@ -216,8 +236,9 @@ export class ProjectService {
   }
 
   async addMember(projectId: string, userId: string) {
-    return this.prisma.projectMember.create({
-      data: { projectId, userId },
+    await this.prisma.projectMember.createMany({
+      data: [{ projectId, userId }],
+      skipDuplicates: true,
     });
   }
 
@@ -295,11 +316,18 @@ export class ProjectService {
     input: ProjectMilestoneUpdateInput,
   ): Promise<ProjectMilestone> {
     const data: Record<string, unknown> = {};
-    if (input.name !== undefined) data.name = input.name;
-    if (input.description !== undefined) data.description = input.description;
-    if ('targetDate' in input)
+    if (input.name !== undefined) {
+      data.name = input.name;
+    }
+    if (input.description !== undefined) {
+      data.description = input.description;
+    }
+    if ('targetDate' in input) {
       data.targetDate = input.targetDate ? new Date(input.targetDate) : null;
-    if (input.sortOrder !== undefined) data.sortOrder = input.sortOrder;
+    }
+    if (input.sortOrder !== undefined) {
+      data.sortOrder = input.sortOrder;
+    }
 
     return this.prisma.projectMilestone.update({ data, where: { id } });
   }
@@ -353,9 +381,15 @@ export class ProjectService {
     input: ProjectUpdateUpdateInput,
   ): Promise<ProjectUpdate> {
     const data: Record<string, unknown> = { editedAt: new Date() };
-    if (input.body !== undefined) data.body = input.body;
-    if (input.bodyData !== undefined) data.bodyData = input.bodyData;
-    if (input.health !== undefined) data.health = input.health;
+    if (input.body !== undefined) {
+      data.body = input.body;
+    }
+    if (input.bodyData !== undefined) {
+      data.bodyData = input.bodyData;
+    }
+    if (input.health !== undefined) {
+      data.health = input.health;
+    }
 
     return this.prisma.projectUpdate.update({ data, where: { id } });
   }
@@ -372,6 +406,7 @@ export class ProjectService {
   private async generateUniqueSlugId(
     prisma: PrismaClient,
     name: string,
+    organizationId: string,
   ): Promise<string> {
     const base = name
       .toLowerCase()
@@ -383,8 +418,8 @@ export class ProjectService {
 
     const slug = base || 'project';
 
-    const existing = await prisma.project.findUnique({
-      where: { slugId: slug },
+    const existing = await prisma.project.findFirst({
+      where: { organizationId, slugId: slug },
     });
 
     if (!existing) {
@@ -395,8 +430,8 @@ export class ProjectService {
     for (let i = 0; i < 5; i++) {
       const suffix = Math.random().toString(36).slice(2, 6);
       const candidate = `${slug}-${suffix}`;
-      const conflict = await prisma.project.findUnique({
-        where: { slugId: candidate },
+      const conflict = await prisma.project.findFirst({
+        where: { organizationId, slugId: candidate },
       });
       if (!conflict) {
         return candidate;

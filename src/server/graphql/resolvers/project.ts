@@ -1,9 +1,5 @@
 import { GraphQLError } from 'graphql';
-import type {
-  Project,
-  ProjectMilestone,
-  ProjectUpdate,
-} from '../../../generated/prisma';
+import type { Project, ProjectUpdate } from '../../../generated/prisma';
 import { requireAuth } from '../../middleware/auth';
 import type {
   ProjectCreateInput,
@@ -22,9 +18,14 @@ function getProgressCached(
   ctx: GraphQLContext,
   projectId: string,
 ): Promise<{ progress: number; scope: number }> {
-  const cache = ((ctx as unknown as Record<symbol, unknown>)[
-    progressCacheKey
-  ] ??= new Map<string, Promise<{ progress: number; scope: number }>>()) as Map<
+  const ctxRecord = ctx as unknown as Record<symbol, unknown>;
+  if (!ctxRecord[progressCacheKey]) {
+    ctxRecord[progressCacheKey] = new Map<
+      string,
+      Promise<{ progress: number; scope: number }>
+    >();
+  }
+  const cache = ctxRecord[progressCacheKey] as Map<
     string,
     Promise<{ progress: number; scope: number }>
   >;
@@ -53,6 +54,17 @@ export const projectResolvers = {
         });
       }
 
+      const orgMember = await ctx.prisma.organizationMember.findUnique({
+        where: {
+          organizationId_userId: { organizationId: ctx.orgId, userId },
+        },
+      });
+      if (!orgMember) {
+        throw new GraphQLError('User is not a member of this organization', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+
       await ctx.services.project.addMember(projectId, userId);
       const project = await ctx.services.project.findById(projectId);
       const sync = await ctx.services.sync.createSyncAction(
@@ -75,6 +87,13 @@ export const projectResolvers = {
       const existing = await ctx.services.project.findById(projectId);
       if (!existing || existing.organizationId !== ctx.orgId) {
         throw new GraphQLError('Project not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+
+      const team = await ctx.services.team.findById(teamId);
+      if (!team || team.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Team not found', {
           extensions: { code: 'NOT_FOUND' },
         });
       }
@@ -121,6 +140,22 @@ export const projectResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+
+      if (input.teamIds && input.teamIds.length > 0) {
+        const teams = await ctx.prisma.team.findMany({
+          where: { id: { in: input.teamIds } },
+        });
+        if (teams.length !== input.teamIds.length) {
+          throw new GraphQLError('One or more teams not found', {
+            extensions: { code: 'NOT_FOUND' },
+          });
+        }
+        if (teams.some(t => t.organizationId !== ctx.orgId)) {
+          throw new GraphQLError('Teams must belong to the same organization', {
+            extensions: { code: 'FORBIDDEN' },
+          });
+        }
+      }
 
       const project = await ctx.services.project.create(
         ctx.orgId,
@@ -207,6 +242,15 @@ export const projectResolvers = {
         });
       }
 
+      const milestoneProject = await ctx.services.project.findById(
+        existing.projectId,
+      );
+      if (!milestoneProject || milestoneProject.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Milestone not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+
       await ctx.services.project.deleteMilestone(id);
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
@@ -227,6 +271,15 @@ export const projectResolvers = {
 
       const existing = await ctx.services.project.findMilestoneById(id);
       if (!existing) {
+        throw new GraphQLError('Milestone not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+
+      const milestoneProject = await ctx.services.project.findById(
+        existing.projectId,
+      );
+      if (!milestoneProject || milestoneProject.organizationId !== ctx.orgId) {
         throw new GraphQLError('Milestone not found', {
           extensions: { code: 'NOT_FOUND' },
         });
@@ -372,6 +425,15 @@ export const projectResolvers = {
         });
       }
 
+      const updateProject = await ctx.services.project.findById(
+        existing.projectId,
+      );
+      if (!updateProject || updateProject.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Project update not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+
       await ctx.services.project.deleteProjectUpdate(id);
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
@@ -397,6 +459,15 @@ export const projectResolvers = {
         });
       }
 
+      const updateProject = await ctx.services.project.findById(
+        existing.projectId,
+      );
+      if (!updateProject || updateProject.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Project update not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+
       const update = await ctx.services.project.updateProjectUpdate(id, input);
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
@@ -415,7 +486,9 @@ export const projectResolvers = {
 
   Project: {
     creator: async (project: Project, _args: unknown, ctx: GraphQLContext) => {
-      if (!project.creatorId) return null;
+      if (!project.creatorId) {
+        return null;
+      }
       return ctx.services.user.findById(project.creatorId);
     },
 
@@ -427,7 +500,9 @@ export const projectResolvers = {
     },
 
     lead: async (project: Project, _args: unknown, ctx: GraphQLContext) => {
-      if (!project.leadId) return null;
+      if (!project.leadId) {
+        return null;
+      }
       return ctx.services.user.findById(project.leadId);
     },
 
@@ -513,7 +588,9 @@ export const projectResolvers = {
       let start = 0;
       if (args.after) {
         const idx = filtered.findIndex(p => p.id === args.after);
-        if (idx >= 0) start = idx + 1;
+        if (idx >= 0) {
+          start = idx + 1;
+        }
       }
       const limit = args.first ?? 50;
       const page = filtered.slice(start, start + limit);

@@ -1,6 +1,6 @@
 'use client';
 
-import { Calendar, CircleDot, Plus, Target, User } from 'lucide-react';
+import { Calendar, Plus, Target } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -134,6 +134,7 @@ const ProjectGroup = observer(function ProjectGroup({
           )}
           fill="currentColor"
           viewBox="0 0 20 20"
+          aria-hidden="true"
         >
           <path
             fillRule="evenodd"

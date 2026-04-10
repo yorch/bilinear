@@ -1,16 +1,8 @@
 'use client';
 
-import {
-  ArrowLeft,
-  Calendar,
-  CircleDot,
-  Plus,
-  Target,
-  User,
-} from 'lucide-react';
+import { ArrowLeft, Calendar, CircleDot, Target, User } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
-import { useState } from 'react';
 import { gql } from '@/lib/graphql';
 import {
   PROJECT_HEALTH_OPTIONS,

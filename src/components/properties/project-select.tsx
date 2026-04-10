@@ -42,7 +42,9 @@ export const ProjectSelect = observer(function ProjectSelect({
   }, [isOpen]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      return;
+    }
     const handleClickOutside = (e: MouseEvent) => {
       if (
         containerRef.current &&

@@ -375,7 +375,7 @@ model Project {
   id                         String    @id @default(uuid()) @db.Uuid
   organizationId             String    @map("organization_id") @db.Uuid
   name                       String    @db.VarChar(255)
-  slugId                     String    @unique @map("slug_id") @db.VarChar(255)
+  slugId                     String    @map("slug_id") @db.VarChar(255)
   description                String    @default("")
   content                    String?
   icon                       String?   @db.VarChar(255)
@@ -424,6 +424,7 @@ model Project {
   milestones                 ProjectMilestone[]
   updates                    ProjectUpdate[]
 
+  @@unique([organizationId, slugId])
   @@index([organizationId])
   @@index([statusType])
   @@index([leadId])
