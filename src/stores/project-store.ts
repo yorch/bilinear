@@ -89,10 +89,6 @@ export class ProjectStore {
       );
   }
 
-  findUpdateById(id: string): DBProjectUpdate | null {
-    return this.updatePool.get(id) ?? null;
-  }
-
   applySyncAction(actionType: string, id: string, data: DBProject | null) {
     if (actionType === 'I' || actionType === 'U' || actionType === 'A') {
       if (data) {

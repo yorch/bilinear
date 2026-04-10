@@ -27,16 +27,26 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  const openCreate = () => {
+    setEditingId(null);
+    setCreating(true);
+  };
+
+  const openEdit = (id: string) => {
+    setCreating(false);
+    setEditingId(id);
+  };
+
   return (
     <div className="mt-6">
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
           Updates ({updates.length})
         </h3>
-        {!creating && (
+        {!creating && !editingId && (
           <button
             type="button"
-            onClick={() => setCreating(true)}
+            onClick={openCreate}
             className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -85,10 +95,15 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span
-                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
-                      style={{
-                        backgroundColor: author?.avatarBgColor ?? '#6366f1',
-                      }}
+                      className={cn(
+                        'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white',
+                        !author?.avatarBgColor && 'bg-indigo-500',
+                      )}
+                      style={
+                        author?.avatarBgColor
+                          ? { backgroundColor: author.avatarBgColor }
+                          : undefined
+                      }
                     >
                       {author?.initials ?? '?'}
                     </span>
@@ -114,7 +129,7 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
                     <div className="flex shrink-0 items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => setEditingId(update.id)}
+                        onClick={() => openEdit(update.id)}
                         className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
                         title="Edit"
                       >

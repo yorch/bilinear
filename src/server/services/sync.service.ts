@@ -81,6 +81,7 @@ export class SyncService {
           project: { archivedAt: null, organizationId: orgId, trashed: false },
         },
       }),
+      // TODO: paginate if a project org accumulates >500 updates
       this.prisma.projectUpdate.findMany({
         orderBy: { createdAt: 'desc' },
         take: 500,
