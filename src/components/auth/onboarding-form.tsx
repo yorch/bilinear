@@ -24,7 +24,7 @@ const ORGANIZATION_CREATE_MUTATION = `
 interface OrganizationCreateResult {
   accessToken: string;
   refreshToken: string;
-  organization: { id: string };
+  organization: { id: string; urlKey: string };
 }
 
 function slugify(value: string): string {
@@ -85,7 +85,7 @@ export function OnboardingForm() {
         method: 'POST',
       });
 
-      router.push(`/${organization.id}`);
+      router.push(`/${organization.urlKey}`);
     } catch {
       setError('Something went wrong. Please try again.');
     } finally {

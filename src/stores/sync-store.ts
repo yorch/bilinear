@@ -13,13 +13,16 @@ export class SyncStore {
   status: SyncStatus = 'idle';
   error: string | null = null;
   wsConnected = false;
+  organizationName: string | null = null;
 
   constructor() {
     makeObservable(this, {
       error: observable,
       lastSyncId: observable,
+      organizationName: observable,
       setError: action,
       setLastSyncId: action,
+      setOrganizationName: action,
       setStatus: action,
       setWsConnected: action,
       status: observable,
@@ -41,5 +44,9 @@ export class SyncStore {
 
   setWsConnected(connected: boolean) {
     this.wsConnected = connected;
+  }
+
+  setOrganizationName(name: string) {
+    this.organizationName = name;
   }
 }

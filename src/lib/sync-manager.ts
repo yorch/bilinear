@@ -86,6 +86,9 @@ export class SyncManager {
     } = this.stores;
 
     if (orgs.length > 0 || teams.length > 0) {
+      if (orgs[0]?.name) {
+        syncStore.setOrganizationName(orgs[0].name);
+      }
       teamStore.upsertMany(teams);
       userStore.upsertMany(users);
       workflowStateStore.upsertMany(states);
@@ -210,6 +213,10 @@ export class SyncManager {
       );
 
       // Populate MobX stores
+      const firstOrg = batches.organizations[0] as { name?: string } | undefined;
+      if (firstOrg?.name) {
+        syncStore.setOrganizationName(firstOrg.name);
+      }
       teamStore.upsertMany(
         batches.teams as Parameters<typeof teamStore.upsertMany>[0],
       );

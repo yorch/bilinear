@@ -19,7 +19,7 @@ export const Sidebar = observer(function Sidebar({
   onToggle,
   workspaceKey,
 }: SidebarProps) {
-  const { teamStore, uiStore } = useStore();
+  const { teamStore, uiStore, syncStore } = useStore();
   const pathname = usePathname();
   const base = workspaceKey ? `/${workspaceKey}` : '';
 
@@ -59,7 +59,7 @@ export const Sidebar = observer(function Sidebar({
         </button>
         {!collapsed && (
           <span className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-            {workspaceKey ?? 'Issue Tracker'}
+            {syncStore.organizationName ?? workspaceKey ?? 'Issue Tracker'}
           </span>
         )}
       </div>
