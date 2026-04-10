@@ -124,9 +124,6 @@ export class CustomViewService {
   }
 
   async delete(id: string): Promise<CustomView> {
-    return this.prisma.customView.update({
-      data: { archivedAt: new Date() },
-      where: { id },
-    });
+    return this.prisma.customView.delete({ where: { id } });
   }
 }

@@ -300,22 +300,43 @@ export class CycleService {
       nextStart.setHours(0, 0, 0, 0);
     }
 
-    const created: Cycle[] = [];
+    // Build all cycle date ranges first, then create them in a single
+    // transaction to prevent overlapping cycles from concurrent calls.
+    const ranges: Array<{ startsAt: Date; endsAt: Date }> = [];
     for (let i = 0; i < toCreate; i++) {
       const endsAt = new Date(nextStart);
       endsAt.setDate(endsAt.getDate() + durationWeeks * 7);
-
-      const cycle = await this.create(orgId, {
-        endsAt: endsAt.toISOString(),
-        startsAt: nextStart.toISOString(),
-        teamId,
-      });
-      created.push(cycle);
-
+      ranges.push({ endsAt, startsAt: new Date(nextStart) });
       nextStart = new Date(endsAt);
       nextStart.setDate(nextStart.getDate() + cooldownDays);
     }
 
-    return created;
+    return this.prisma.$transaction(async tx => {
+      const created: Cycle[] = [];
+
+      // Get the current max cycle number inside the transaction
+      const lastCycle = await tx.cycle.findFirst({
+        orderBy: { number: 'desc' },
+        select: { number: true },
+        where: { teamId },
+      });
+      let nextNumber = (lastCycle?.number ?? 0) + 1;
+
+      for (const range of ranges) {
+        const cycle = await tx.cycle.create({
+          data: {
+            endsAt: range.endsAt,
+            number: nextNumber,
+            organizationId: orgId,
+            startsAt: range.startsAt,
+            teamId,
+          },
+        });
+        created.push(cycle);
+        nextNumber++;
+      }
+
+      return created;
+    });
   }
 }

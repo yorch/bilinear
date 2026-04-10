@@ -273,8 +273,8 @@ export function BoardView({
               .filter(i => i.stateId === state.id)
               .sort(
                 (a, b) =>
-                  (a as { sortOrder?: number }).sortOrder ??
-                  0 - ((b as { sortOrder?: number }).sortOrder ?? 0),
+                  ((a as { sortOrder?: number }).sortOrder ?? 0) -
+                  ((b as { sortOrder?: number }).sortOrder ?? 0),
               ),
             label: state.name,
           }));
@@ -337,43 +337,56 @@ export function BoardView({
     const issueId = String(active.id);
     const overId = String(over.id);
 
-    if (groupBy === 'status') {
-      // Find which column the issue was dropped onto
-      const targetColumn = columns.find(
-        col => col.id === overId || col.issues.some(i => i.id === overId),
-      );
-      if (targetColumn) {
-        const issue = issues.find(i => i.id === issueId);
-        if (issue && issue.stateId !== targetColumn.id) {
-          onUpdate(issueId, { stateId: targetColumn.id });
-        }
-      }
+    // Find which column the dragged card landed in
+    const targetColumn = columns.find(
+      col => col.id === overId || col.issues.some(i => i.id === overId),
+    );
+    if (!targetColumn) {
+      return;
+    }
+
+    const issue = issues.find(i => i.id === issueId);
+    if (!issue) {
+      return;
+    }
+
+    const patch: Record<string, unknown> = {};
+
+    // Column change: update the groupBy field
+    if (groupBy === 'status' && issue.stateId !== targetColumn.id) {
+      patch.stateId = targetColumn.id;
     } else if (groupBy === 'assignee') {
-      const targetColumn = columns.find(
-        col => col.id === overId || col.issues.some(i => i.id === overId),
-      );
-      if (targetColumn) {
-        const newAssigneeId =
-          targetColumn.id === 'unassigned' ? null : targetColumn.id;
-        const issue = issues.find(i => i.id === issueId);
-        if (issue && (issue.assigneeId ?? null) !== newAssigneeId) {
-          onUpdate(issueId, { assigneeId: newAssigneeId });
-        }
+      const newAssigneeId =
+        targetColumn.id === 'unassigned' ? null : targetColumn.id;
+      if ((issue.assigneeId ?? null) !== newAssigneeId) {
+        patch.assigneeId = newAssigneeId;
       }
     } else if (groupBy === 'priority') {
-      const targetColumn = columns.find(
-        col => col.id === overId || col.issues.some(i => i.id === overId),
+      const newPriority = parseInt(
+        targetColumn.id.replace('priority-', ''),
+        10,
       );
-      if (targetColumn) {
-        const newPriority = parseInt(
-          targetColumn.id.replace('priority-', ''),
-          10,
-        );
-        const issue = issues.find(i => i.id === issueId);
-        if (issue && issue.priority !== newPriority) {
-          onUpdate(issueId, { priority: newPriority });
-        }
+      if (issue.priority !== newPriority) {
+        patch.priority = newPriority;
       }
+    }
+
+    // Within-column reorder: compute new sortOrder between neighbors
+    if (overId !== targetColumn.id && overId !== issueId) {
+      const colIssues = targetColumn.issues.filter(i => i.id !== issueId);
+      const overIndex = colIssues.findIndex(i => i.id === overId);
+      if (overIndex >= 0) {
+        const prev = colIssues[overIndex - 1];
+        const next = colIssues[overIndex];
+        const prevOrder = (prev as { sortOrder?: number })?.sortOrder ?? 0;
+        const nextOrder =
+          (next as { sortOrder?: number })?.sortOrder ?? prevOrder + 1;
+        patch.sortOrder = (prevOrder + nextOrder) / 2;
+      }
+    }
+
+    if (Object.keys(patch).length > 0) {
+      onUpdate(issueId, patch);
     }
   };
 
