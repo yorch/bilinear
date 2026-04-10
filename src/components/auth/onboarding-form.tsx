@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { gql } from '@/lib/graphql';
 
 const ORGANIZATION_CREATE_MUTATION = `
   mutation OrganizationCreate($input: OrganizationCreateInput!) {
@@ -19,6 +20,12 @@ const ORGANIZATION_CREATE_MUTATION = `
     }
   }
 `;
+
+interface OrganizationCreateResult {
+  accessToken: string;
+  refreshToken: string;
+  organization: { id: string };
+}
 
 function slugify(value: string): string {
   return value
@@ -59,26 +66,19 @@ export function OnboardingForm() {
     setError(null);
 
     try {
-      const res = await fetch('/api/graphql', {
-        body: JSON.stringify({
-          query: ORGANIZATION_CREATE_MUTATION,
-          variables: { input: { name: name.trim(), urlKey } },
-        }),
-        headers: { 'Content-Type': 'application/json' },
-        method: 'POST',
+      const data = await gql(ORGANIZATION_CREATE_MUTATION, {
+        input: { name: name.trim(), urlKey },
       });
 
-      const data = await res.json();
-
       if (data.errors?.length) {
-        setError(data.errors[0].message);
+        setError((data.errors[0] as { message: string }).message);
         return;
       }
 
-      const { accessToken, refreshToken, organization } =
-        data.data.organizationCreate;
+      const { accessToken, refreshToken, organization } = (
+        data.data as { organizationCreate: OrganizationCreateResult }
+      ).organizationCreate;
 
-      // Update session cookies with new tokens that include orgId
       await fetch('/api/auth/session', {
         body: JSON.stringify({ accessToken, refreshToken }),
         headers: { 'Content-Type': 'application/json' },

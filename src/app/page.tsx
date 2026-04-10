@@ -1,6 +1,6 @@
-import { jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { verifyAccessToken } from '@/server/lib/jwt';
 import { prisma } from '../server/lib/prisma';
 
 export default async function RootPage() {
@@ -14,13 +14,8 @@ export default async function RootPage() {
   let orgId: string | undefined;
 
   try {
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) {
-      throw new Error('JWT_SECRET is not set');
-    }
-    const secret = new TextEncoder().encode(jwtSecret);
-    const { payload } = await jwtVerify(token, secret);
-    orgId = payload.orgId as string | undefined;
+    const result = await verifyAccessToken(token);
+    orgId = result.orgId || undefined;
   } catch {
     // Token invalid — redirect to login
     redirect('/login');

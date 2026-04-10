@@ -1,6 +1,9 @@
 import { GraphQLError } from 'graphql';
+import { Prisma } from '../../../generated/prisma';
 import { requireAuth, requireUserId } from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
+
+const URL_KEY_RE = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
 
 export const organizationResolvers = {
   Mutation: {
@@ -11,44 +14,19 @@ export const organizationResolvers = {
     ) => {
       requireUserId(ctx);
 
-      // Validate urlKey format: lowercase alphanumeric + hyphens, 3-63 chars
-      const urlKeyRe = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
-      if (!urlKeyRe.test(input.urlKey)) {
+      if (!URL_KEY_RE.test(input.urlKey)) {
         throw new GraphQLError(
           'URL key must be 3-63 characters, lowercase alphanumeric and hyphens only',
           { extensions: { code: 'BAD_USER_INPUT' } },
         );
       }
 
-      // Check uniqueness
-      const existing = await ctx.prisma.organization.findUnique({
-        where: { urlKey: input.urlKey },
-      });
-      if (existing) {
-        throw new GraphQLError('This URL key is already taken', {
-          extensions: { code: 'BAD_USER_INPUT' },
-        });
-      }
+      const organization = await createOrgWithOwner(ctx, input);
 
-      // Create org + owner membership in a transaction
-      const organization = await ctx.prisma.$transaction(async tx => {
-        const org = await tx.organization.create({
-          data: { name: input.name, urlKey: input.urlKey },
-        });
-
-        await tx.organizationMember.create({
-          data: {
-            organizationId: org.id,
-            role: 'owner',
-            userId: ctx.userId,
-          },
-        });
-
-        return org;
-      });
-
-      // Re-issue tokens so the JWT now contains the new orgId
-      const tokenPair = await ctx.services.auth.issueTokenPair(ctx.userId);
+      const tokenPair = await ctx.services.auth.reissueTokens(
+        ctx.userId,
+        organization.id,
+      );
 
       return {
         accessToken: tokenPair.accessToken,
@@ -77,3 +55,36 @@ export const organizationResolvers = {
     },
   },
 };
+
+async function createOrgWithOwner(
+  ctx: GraphQLContext & { userId: string },
+  input: { name: string; urlKey: string },
+) {
+  try {
+    return await ctx.prisma.$transaction(async tx => {
+      const org = await tx.organization.create({
+        data: { name: input.name, urlKey: input.urlKey },
+      });
+
+      await tx.organizationMember.create({
+        data: {
+          organizationId: org.id,
+          role: 'owner',
+          userId: ctx.userId,
+        },
+      });
+
+      return org;
+    });
+  } catch (err) {
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === 'P2002'
+    ) {
+      throw new GraphQLError('This URL key is already taken', {
+        extensions: { code: 'BAD_USER_INPUT' },
+      });
+    }
+    throw err;
+  }
+}

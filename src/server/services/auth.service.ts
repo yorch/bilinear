@@ -201,9 +201,20 @@ export class AuthService {
     }
   }
 
-  async issueTokenPair(userId: string): Promise<AuthPayload> {
-    const org = await this.userService.getOrganizationForUser(userId);
-    const orgId = org?.id ?? '';
+  /** Re-issue access + refresh tokens after an org change (e.g. onboarding). */
+  async reissueTokens(userId: string, orgId: string): Promise<AuthPayload> {
+    return this.issueTokenPair(userId, orgId);
+  }
+
+  private async issueTokenPair(
+    userId: string,
+    knownOrgId?: string,
+  ): Promise<AuthPayload> {
+    let orgId = knownOrgId;
+    if (!orgId) {
+      const org = await this.userService.getOrganizationForUser(userId);
+      orgId = org?.id ?? '';
+    }
 
     // Pre-generate a UUID so we can sign the refresh JWT before inserting the
     // DB record. This avoids a two-step create → update with a 'pending' hash
