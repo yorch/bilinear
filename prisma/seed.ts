@@ -77,14 +77,16 @@ async function main() {
   const existingTeam = await prisma.team.findFirst({
     where: { key: 'ENG', organizationId: org.id },
   });
-  const team = existingTeam ?? await prisma.team.create({
-    data: {
-      displayName: 'Engineering',
-      key: 'ENG',
-      name: 'Engineering',
-      organizationId: org.id,
-    },
-  });
+  const team =
+    existingTeam ??
+    (await prisma.team.create({
+      data: {
+        displayName: 'Engineering',
+        key: 'ENG',
+        name: 'Engineering',
+        organizationId: org.id,
+      },
+    }));
 
   await prisma.teamMembership.upsert({
     create: { isOwner: true, teamId: team.id, userId: demoUser.id },
