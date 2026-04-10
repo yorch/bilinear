@@ -1,19 +1,23 @@
 import { action, computed, makeObservable, observable } from 'mobx';
-import type { DBProject, DBProjectMilestone } from '@/lib/db';
+import type { DBProject, DBProjectMilestone, DBProjectUpdate } from '@/lib/db';
 
 export class ProjectStore {
   pool = new Map<string, DBProject>();
   milestonePool = new Map<string, DBProjectMilestone>();
+  updatePool = new Map<string, DBProjectUpdate>();
 
   constructor() {
     makeObservable(this, {
       all: computed,
       applyMilestoneSyncAction: action,
       applySyncAction: action,
+      applyUpdateSyncAction: action,
       milestonePool: observable,
       pool: observable,
+      updatePool: observable,
       upsertMany: action,
       upsertMilestones: action,
+      upsertUpdates: action,
     });
   }
 
@@ -70,6 +74,25 @@ export class ProjectStore {
     }
   }
 
+  upsertUpdates(updates: DBProjectUpdate[]) {
+    for (const update of updates) {
+      this.updatePool.set(update.id, update);
+    }
+  }
+
+  getUpdates(projectId: string): DBProjectUpdate[] {
+    return Array.from(this.updatePool.values())
+      .filter(u => u.projectId === projectId)
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+  }
+
+  findUpdateById(id: string): DBProjectUpdate | null {
+    return this.updatePool.get(id) ?? null;
+  }
+
   applySyncAction(actionType: string, id: string, data: DBProject | null) {
     if (actionType === 'I' || actionType === 'U' || actionType === 'A') {
       if (data) {
@@ -91,6 +114,20 @@ export class ProjectStore {
       }
     } else if (actionType === 'D') {
       this.milestonePool.delete(id);
+    }
+  }
+
+  applyUpdateSyncAction(
+    actionType: string,
+    id: string,
+    data: DBProjectUpdate | null,
+  ) {
+    if (actionType === 'I' || actionType === 'U' || actionType === 'A') {
+      if (data) {
+        this.updatePool.set(id, data);
+      }
+    } else if (actionType === 'D') {
+      this.updatePool.delete(id);
     }
   }
 }

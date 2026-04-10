@@ -60,6 +60,9 @@ export async function GET(req: NextRequest) {
     for (const milestone of data.projectMilestones) {
       lines.push(`ProjectMilestone=${JSON.stringify(milestone)}`);
     }
+    for (const update of data.projectUpdates) {
+      lines.push(`ProjectUpdate=${JSON.stringify(update)}`);
+    }
 
     lines.push(`_metadata_=${JSON.stringify({ lastSyncId: data.lastSyncId })}`);
 

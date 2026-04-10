@@ -3,6 +3,7 @@
 import { ArrowLeft, Calendar, CircleDot, Target, User } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
+import { ProjectUpdatesSection } from '@/components/projects/project-updates-section';
 import { SimpleSelect } from '@/components/ui/select';
 import { gql } from '@/lib/graphql';
 import {
@@ -24,6 +25,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
 }: ProjectDetailViewProps) {
   const { projectStore, issueStore, userStore, teamStore, workflowStateStore } =
     useStore();
+  const viewerId = userStore.currentUserId ?? '';
   const project = projectStore.findBySlugId(projectSlugId);
 
   if (!project) {
@@ -234,6 +236,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
               )}
             </div>
           </div>
+          <ProjectUpdatesSection projectId={project.id} viewerId={viewerId} />
         </div>
       </div>
     </div>

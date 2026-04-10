@@ -155,6 +155,17 @@ export interface DBProjectMilestone {
   archivedAt?: string | null;
 }
 
+export interface DBProjectUpdate {
+  id: string;
+  projectId: string;
+  userId: string;
+  body: string;
+  health?: string | null;
+  editedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DBSyncMetadata {
   key: string;
   value: unknown;
@@ -171,6 +182,7 @@ export class AppDatabase extends Dexie {
   issueLabels!: Table<DBIssueLabel, string>;
   projects!: Table<DBProject, string>;
   projectMilestones!: Table<DBProjectMilestone, string>;
+  projectUpdates!: Table<DBProjectUpdate, string>;
   syncMetadata!: Table<DBSyncMetadata, string>;
 
   constructor() {
@@ -191,6 +203,19 @@ export class AppDatabase extends Dexie {
       organizations: 'id',
       projectMilestones: 'id, projectId',
       projects: 'id, organizationId, statusType, leadId',
+      syncMetadata: 'key',
+      teams: 'id, organizationId, parentId',
+      users: 'id, email',
+      workflowStates: 'id, teamId',
+    });
+    this.version(3).stores({
+      issueLabels: 'id, organizationId, teamId, parentId',
+      issues:
+        'id, teamId, stateId, assigneeId, organizationId, identifier, projectId',
+      organizations: 'id',
+      projectMilestones: 'id, projectId',
+      projects: 'id, organizationId, statusType, leadId',
+      projectUpdates: 'id, projectId, userId',
       syncMetadata: 'key',
       teams: 'id, organizationId, parentId',
       users: 'id, email',
