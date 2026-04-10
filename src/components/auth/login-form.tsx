@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { gql } from '@/lib/graphql';
 
 const EMAIL_LOGIN_MUTATION = `
   mutation EmailLogin($input: EmailLoginInput!) {
@@ -24,19 +25,10 @@ export function LoginForm() {
     setError(null);
 
     try {
-      const res = await fetch('/api/graphql', {
-        body: JSON.stringify({
-          query: EMAIL_LOGIN_MUTATION,
-          variables: { input: { email } },
-        }),
-        headers: { 'Content-Type': 'application/json' },
-        method: 'POST',
-      });
-
-      const data = await res.json();
+      const data = await gql(EMAIL_LOGIN_MUTATION, { input: { email } });
 
       if (data.errors?.length) {
-        setError(data.errors[0].message);
+        setError((data.errors[0] as { message: string }).message);
         return;
       }
 

@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { gql } from '@/lib/graphql';
 
 const EMAIL_VERIFY_MUTATION = `
   mutation EmailVerify($input: EmailVerifyInput!) {
@@ -48,27 +49,28 @@ export function VerifyCodeForm() {
     setError(null);
 
     try {
-      const res = await fetch('/api/graphql', {
-        body: JSON.stringify({
-          query: EMAIL_VERIFY_MUTATION,
-          variables: { input: { code: verifyCode, email } },
-        }),
-        headers: { 'Content-Type': 'application/json' },
-        method: 'POST',
+      const data = await gql(EMAIL_VERIFY_MUTATION, {
+        input: { code: verifyCode, email },
       });
 
-      const data = await res.json();
-
       if (data.errors?.length) {
+        const err = data.errors[0] as {
+          message: string;
+          extensions?: { code: string };
+        };
         setError(
-          data.errors[0].extensions?.code === 'INVALID_CODE'
+          err.extensions?.code === 'INVALID_CODE'
             ? 'Invalid or expired code. Please try again.'
-            : data.errors[0].message,
+            : err.message,
         );
         return;
       }
 
-      const { accessToken, refreshToken } = data.data.emailVerify;
+      const { accessToken, refreshToken } = (
+        data.data as {
+          emailVerify: { accessToken: string; refreshToken: string };
+        }
+      ).emailVerify;
 
       // Store tokens in cookies via server action / API
       await fetch('/api/auth/session', {

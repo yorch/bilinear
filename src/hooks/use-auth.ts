@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import { gql } from '@/lib/graphql';
 
 interface AuthUser {
   id: string;
@@ -35,25 +36,26 @@ export function useAuth() {
 
   const fetchViewer = useCallback(async () => {
     try {
-      const res = await fetch('/api/graphql', {
-        body: JSON.stringify({ query: VIEWER_QUERY }),
-        headers: { 'Content-Type': 'application/json' },
-        method: 'POST',
-      });
-
-      const data = await res.json();
+      const data = await gql(VIEWER_QUERY);
 
       if (data.errors?.length) {
-        const code = data.errors[0].extensions?.code;
-        if (code === 'UNAUTHENTICATED') {
+        const err = data.errors[0] as {
+          message: string;
+          extensions?: { code: string };
+        };
+        if (err.extensions?.code === 'UNAUTHENTICATED') {
           setState({ error: null, loading: false, user: null });
           return;
         }
-        setState({ error: data.errors[0].message, loading: false, user: null });
+        setState({ error: err.message, loading: false, user: null });
         return;
       }
 
-      setState({ error: null, loading: false, user: data.data.viewer });
+      setState({
+        error: null,
+        loading: false,
+        user: (data.data as { viewer: AuthUser }).viewer,
+      });
     } catch (err) {
       setState({ error: String(err), loading: false, user: null });
     }
@@ -64,12 +66,7 @@ export function useAuth() {
   }, [fetchViewer]);
 
   const logout = useCallback(async () => {
-    await fetch('/api/graphql', {
-      body: JSON.stringify({ query: 'mutation { logout { success } }' }),
-      headers: { 'Content-Type': 'application/json' },
-      method: 'POST',
-    });
-
+    await gql('mutation { logout { success } }');
     await fetch('/api/auth/session', { method: 'DELETE' });
 
     setState({ error: null, loading: false, user: null });
