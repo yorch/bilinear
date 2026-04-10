@@ -166,6 +166,43 @@ export interface DBProjectUpdate {
   updatedAt: string;
 }
 
+export interface DBCycle {
+  id: string;
+  organizationId: string;
+  teamId: string;
+  number: number;
+  name?: string | null;
+  description?: string | null;
+  startsAt: string;
+  endsAt: string;
+  completedAt?: string | null;
+  progress: number;
+  scope: number;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string | null;
+}
+
+export interface DBCustomView {
+  id: string;
+  organizationId: string;
+  teamId?: string | null;
+  creatorId: string;
+  name: string;
+  description?: string | null;
+  icon?: string | null;
+  color?: string | null;
+  filters: object;
+  sort: object;
+  groupBy?: string | null;
+  layout: string;
+  shared: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string | null;
+}
+
 export interface DBSyncMetadata {
   key: string;
   value: unknown;
@@ -180,9 +217,11 @@ export class AppDatabase extends Dexie {
   workflowStates!: Table<DBWorkflowState, string>;
   issues!: Table<DBIssue, string>;
   issueLabels!: Table<DBIssueLabel, string>;
+  cycles!: Table<DBCycle, string>;
   projects!: Table<DBProject, string>;
   projectMilestones!: Table<DBProjectMilestone, string>;
   projectUpdates!: Table<DBProjectUpdate, string>;
+  customViews!: Table<DBCustomView, string>;
   syncMetadata!: Table<DBSyncMetadata, string>;
 
   constructor() {
@@ -212,6 +251,35 @@ export class AppDatabase extends Dexie {
       issueLabels: 'id, organizationId, teamId, parentId',
       issues:
         'id, teamId, stateId, assigneeId, organizationId, identifier, projectId',
+      organizations: 'id',
+      projectMilestones: 'id, projectId',
+      projects: 'id, organizationId, statusType, leadId',
+      projectUpdates: 'id, projectId, userId',
+      syncMetadata: 'key',
+      teams: 'id, organizationId, parentId',
+      users: 'id, email',
+      workflowStates: 'id, teamId',
+    });
+    this.version(4).stores({
+      cycles: 'id, teamId, organizationId',
+      issueLabels: 'id, organizationId, teamId, parentId',
+      issues:
+        'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
+      organizations: 'id',
+      projectMilestones: 'id, projectId',
+      projects: 'id, organizationId, statusType, leadId',
+      projectUpdates: 'id, projectId, userId',
+      syncMetadata: 'key',
+      teams: 'id, organizationId, parentId',
+      users: 'id, email',
+      workflowStates: 'id, teamId',
+    });
+    this.version(5).stores({
+      customViews: 'id, organizationId, teamId, creatorId',
+      cycles: 'id, teamId, organizationId',
+      issueLabels: 'id, organizationId, teamId, parentId',
+      issues:
+        'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
       organizations: 'id',
       projectMilestones: 'id, projectId',
       projects: 'id, organizationId, statusType, leadId',

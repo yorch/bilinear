@@ -31,6 +31,13 @@ export const issueResolvers = {
       return ctx.services.user.findById(issue.creatorId);
     },
 
+    cycle: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
+      if (!issue.cycleId) {
+        return null;
+      }
+      return ctx.services.cycle.findById(issue.cycleId);
+    },
+
     dueDate: (issue: Issue) => {
       return issue.dueDate ? issue.dueDate.toISOString().split('T')[0] : null;
     },

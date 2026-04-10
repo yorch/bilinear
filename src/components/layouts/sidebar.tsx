@@ -1,9 +1,12 @@
 'use client';
 
 import {
+  Archive,
+  Eye,
   Inbox,
   PanelLeft,
   Plus,
+  RefreshCw,
   Settings,
   Target,
   User,
@@ -27,7 +30,7 @@ export const Sidebar = observer(function Sidebar({
   onToggle,
   workspaceKey,
 }: SidebarProps) {
-  const { teamStore, uiStore, syncStore } = useStore();
+  const { customViewStore, teamStore, uiStore, syncStore } = useStore();
   const pathname = usePathname();
   const base = workspaceKey ? `/${workspaceKey}` : '';
 
@@ -133,10 +136,17 @@ export const Sidebar = observer(function Sidebar({
               ) : (
                 teams.map(team => {
                   const href = `${base}/team/${team.key}`;
+                  const cyclesHref = `${href}/cycles`;
+                  const backlogHref = `${href}/backlog`;
                   const isActive =
-                    pathname === href || pathname.startsWith(`${href}/`);
+                    pathname === href ||
+                    (pathname.startsWith(`${href}/`) &&
+                      !pathname.startsWith(cyclesHref) &&
+                      !pathname.startsWith(backlogHref));
+                  const isCyclesActive = pathname.startsWith(cyclesHref);
+                  const isBacklogActive = pathname.startsWith(backlogHref);
                   return (
-                    <li key={team.id}>
+                    <li key={team.id} className="flex flex-col gap-0.5">
                       <Link
                         href={href}
                         title={team.displayName || team.name}
@@ -158,6 +168,53 @@ export const Sidebar = observer(function Sidebar({
                           {team.displayName || team.name}
                         </span>
                       </Link>
+                      <Link
+                        href={backlogHref}
+                        title="Backlog"
+                        className={cn(
+                          'flex items-center gap-2 rounded-md py-1 pl-8 pr-2 text-xs transition-colors',
+                          isBacklogActive
+                            ? 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
+                            : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
+                        )}
+                      >
+                        <Archive className="h-3 w-3" />
+                        Backlog
+                      </Link>
+                      <Link
+                        href={cyclesHref}
+                        title="Cycles"
+                        className={cn(
+                          'flex items-center gap-2 rounded-md py-1 pl-8 pr-2 text-xs transition-colors',
+                          isCyclesActive
+                            ? 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
+                            : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
+                        )}
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                        Cycles
+                      </Link>
+                      {/* Custom Views for this team */}
+                      {customViewStore.getByTeamId(team.id).map(view => {
+                        const viewHref = `${href}/view/${view.id}`;
+                        const isViewActive = pathname === viewHref;
+                        return (
+                          <Link
+                            key={view.id}
+                            href={viewHref}
+                            title={view.name}
+                            className={cn(
+                              'flex items-center gap-2 rounded-md py-1 pl-8 pr-2 text-xs transition-colors',
+                              isViewActive
+                                ? 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
+                                : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
+                            )}
+                          >
+                            <Eye className="h-3 w-3" />
+                            <span className="truncate">{view.name}</span>
+                          </Link>
+                        );
+                      })}
                     </li>
                   );
                 })

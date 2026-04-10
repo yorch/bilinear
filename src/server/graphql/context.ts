@@ -5,6 +5,8 @@ import { redis } from '../lib/redis';
 import type { AuthContext } from '../middleware/auth';
 import { extractAuthContext } from '../middleware/auth';
 import { AuthService } from '../services/auth.service';
+import { CustomViewService } from '../services/custom-view.service';
+import { CycleService } from '../services/cycle.service';
 import { IssueService } from '../services/issue.service';
 import { LabelService } from '../services/label.service';
 import { ProjectService } from '../services/project.service';
@@ -18,6 +20,8 @@ export interface GraphQLContext extends AuthContext {
   prisma: PrismaClient;
   services: {
     auth: AuthService;
+    customView: CustomViewService;
+    cycle: CycleService;
     issue: IssueService;
     label: LabelService;
     project: ProjectService;
@@ -37,8 +41,10 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
 
   const userService = new UserService(prisma);
   const authService = new AuthService(prisma, userService);
+  const customViewService = new CustomViewService(prisma);
   const teamService = new TeamService(prisma);
   const workflowStateService = new WorkflowStateService(prisma);
+  const cycleService = new CycleService(prisma);
   const issueService = new IssueService(prisma);
   const labelService = new LabelService(prisma);
   const projectService = new ProjectService(prisma);
@@ -50,6 +56,8 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
     prisma,
     services: {
       auth: authService,
+      customView: customViewService,
+      cycle: cycleService,
       issue: issueService,
       label: labelService,
       project: projectService,

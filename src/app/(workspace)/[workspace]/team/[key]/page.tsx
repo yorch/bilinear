@@ -6,21 +6,24 @@ import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
+import { type BoardGroupBy, BoardView } from '@/components/issues/board-view';
 import { CreateIssueModal } from '@/components/issues/create-issue-modal';
+import { FilterBuilder } from '@/components/issues/filter-builder';
 import { IssueListView } from '@/components/issues/issue-list-view';
 import type { OpenProperty } from '@/components/issues/issue-row';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
+import { type ViewMode, ViewToggle } from '@/components/issues/view-toggle';
 import { useChord, useHotkeys } from '@/hooks/use-hotkeys';
 import { useRecentItems } from '@/hooks/use-recent-items';
 import type { DBIssue, DBIssueLabel } from '@/lib/db';
+import {
+  applyFilters,
+  createEmptyFilterSet,
+  type FilterSet,
+} from '@/lib/filter-engine';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
-import type {
-  IssueDetail,
-  IssueLabel,
-  IssueUser,
-  WorkflowState,
-} from '@/types/issues';
+import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
 
 // ---------------------------------------------------------------------------
 // GraphQL mutations (queries replaced by MobX store reads)
@@ -101,6 +104,11 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   // Which property popover to force-open on the selected row (keyboard shortcut)
   const [openProperty, setOpenProperty] = useState<OpenProperty>(null);
+  // View mode (list vs board) and board group-by
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [boardGroupBy, setBoardGroupBy] = useState<BoardGroupBy>('status');
+  // Filters
+  const [filterSet, setFilterSet] = useState<FilterSet>(createEmptyFilterSet());
 
   // Recent items tracking (for command palette) — scoped to this workspace
   const { addRecent } = useRecentItems(workspace);
@@ -111,9 +119,9 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   const teamId = team?.id ?? null;
 
   const rawStates = teamId ? workflowStateStore.findByTeamId(teamId) : [];
-  const states: WorkflowState[] = rawStates;
+  const states = rawStates;
 
-  const issues: IssueDetail[] = (() => {
+  const allIssues: IssueDetail[] = (() => {
     if (!teamId) {
       return [];
     }
@@ -137,6 +145,11 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         return a.sortOrder - b.sortOrder;
       });
   })();
+
+  const issues = useMemo(
+    () => applyFilters(allIssues, filterSet),
+    [allIssues, filterSet],
+  );
 
   const users: IssueUser[] = userStore.all.map(u => ({
     avatarBackgroundColor: u.avatarBgColor,
@@ -416,6 +429,9 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     { enabled: hasSelection },
     [hasSelection],
   );
+  useHotkeys('q', () => setOpenProperty('cycle'), { enabled: hasSelection }, [
+    hasSelection,
+  ]);
 
   // Backspace / Delete — archive selected issue
   useHotkeys(
@@ -438,6 +454,10 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     { enabled: hasSelection },
     [selectedId, handleArchive, hasSelection],
   );
+
+  // Alt+1 — list view, Alt+2 — board view
+  useHotkeys('alt+1', () => setViewMode('list'), {}, []);
+  useHotkeys('alt+2', () => setViewMode('board'), {}, []);
 
   // G then I — go to my issues (placeholder navigation)
   useChord('g', 'i', () => router.push(`/${workspace}/my-issues`), [workspace]);
@@ -501,6 +521,18 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
           {team.displayName ?? team.name} — Issues
         </h1>
         <div className="flex items-center gap-2">
+          {viewMode === 'board' && (
+            <select
+              value={boardGroupBy}
+              onChange={e => setBoardGroupBy(e.target.value as BoardGroupBy)}
+              className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+            >
+              <option value="status">Group by status</option>
+              <option value="assignee">Group by assignee</option>
+              <option value="priority">Group by priority</option>
+            </select>
+          )}
+          <ViewToggle mode={viewMode} onChange={setViewMode} />
           <Link
             href={`/${workspace}/team/${teamKey}/settings`}
             title="Team settings"
@@ -518,22 +550,47 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         </div>
       </div>
 
-      {/* Issue list */}
-      <div className="flex-1 overflow-y-auto">
-        <IssueListView
-          issues={issues}
+      {/* Filter bar */}
+      <div className="border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
+        <FilterBuilder
+          filterSet={filterSet}
+          onChange={setFilterSet}
           states={states}
           users={users}
           labels={labels}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          onOpen={handleOpen}
-          onUpdate={handleUpdate}
-          onArchive={handleArchive}
-          onDelete={handleDelete}
-          openProperty={openProperty}
-          onPropertyClosed={() => setOpenProperty(null)}
         />
+      </div>
+
+      {/* Issue list / board */}
+      <div className="flex-1 overflow-y-auto">
+        {viewMode === 'list' ? (
+          <IssueListView
+            issues={issues}
+            states={states}
+            users={users}
+            labels={labels}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            onOpen={handleOpen}
+            onUpdate={handleUpdate}
+            onArchive={handleArchive}
+            onDelete={handleDelete}
+            openProperty={openProperty}
+            onPropertyClosed={() => setOpenProperty(null)}
+          />
+        ) : (
+          <BoardView
+            issues={issues}
+            states={states}
+            users={users}
+            labels={labels}
+            groupBy={boardGroupBy}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            onOpen={handleOpen}
+            onUpdate={handleUpdate}
+          />
+        )}
       </div>
 
       {/* Detail panel (lazy-loaded) */}

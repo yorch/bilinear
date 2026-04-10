@@ -1,3 +1,5 @@
+import { CustomViewStore } from './custom-view-store';
+import { CycleStore } from './cycle-store';
 import { IssueStore } from './issue-store';
 import { LabelStore } from './label-store';
 import { ProjectStore } from './project-store';
@@ -8,6 +10,8 @@ import { UserStore } from './user-store';
 import { WorkflowStateStore } from './workflow-state-store';
 
 export class RootStore {
+  customViewStore: CustomViewStore;
+  cycleStore: CycleStore;
   issueStore: IssueStore;
   labelStore: LabelStore;
   projectStore: ProjectStore;
@@ -22,6 +26,8 @@ export class RootStore {
     this.userStore = new UserStore();
     this.teamStore = new TeamStore();
     this.workflowStateStore = new WorkflowStateStore();
+    this.customViewStore = new CustomViewStore();
+    this.cycleStore = new CycleStore();
     this.issueStore = new IssueStore();
     this.labelStore = new LabelStore();
     this.projectStore = new ProjectStore();

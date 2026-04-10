@@ -46,9 +46,11 @@ export class SyncService {
       workflowStates,
       issueLabels,
       labelAssignments,
+      cycles,
       projects,
       projectMilestones,
       projectUpdates,
+      customViews,
       lastSyncAction,
     ] = await Promise.all([
       this.prisma.organization.findUnique({ where: { id: orgId } }),
@@ -72,6 +74,9 @@ export class SyncService {
           issue: { archivedAt: null, organizationId: orgId, trashed: false },
         },
       }),
+      this.prisma.cycle.findMany({
+        where: { archivedAt: null, organizationId: orgId },
+      }),
       this.prisma.project.findMany({
         where: { archivedAt: null, organizationId: orgId, trashed: false },
       }),
@@ -89,6 +94,9 @@ export class SyncService {
           project: { archivedAt: null, organizationId: orgId, trashed: false },
         },
       }),
+      this.prisma.customView.findMany({
+        where: { archivedAt: null, organizationId: orgId },
+      }),
       this.prisma.syncAction.findFirst({
         orderBy: { id: 'desc' },
         select: { id: true },
@@ -105,6 +113,8 @@ export class SyncService {
     }
 
     return {
+      customViews,
+      cycles,
       issueLabels,
       issues: issues.map(i => ({
         ...i,

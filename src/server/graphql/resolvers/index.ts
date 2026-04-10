@@ -1,5 +1,7 @@
 import { DateTimeScalar, JSONScalar, UUIDScalar } from '../types/scalars';
 import { authResolvers } from './auth';
+import { customViewResolvers } from './custom-view';
+import { cycleResolvers } from './cycle';
 import { issueResolvers } from './issue';
 import { labelResolvers } from './label';
 import { organizationResolvers } from './organization';
@@ -44,6 +46,14 @@ export const resolvers = {
     ...authResolvers.AuthPayload,
   },
 
+  CustomView: {
+    ...customViewResolvers.CustomView,
+  },
+
+  Cycle: {
+    ...cycleResolvers.Cycle,
+  },
+
   Date: DateScalar,
 
   DateTime: DateTimeScalar,
@@ -61,6 +71,8 @@ export const resolvers = {
   Mutation: {
     ...authResolvers.Mutation,
     ...organizationResolvers.Mutation,
+    ...customViewResolvers.Mutation,
+    ...cycleResolvers.Mutation,
     ...issueResolvers.Mutation,
     ...labelResolvers.Mutation,
     ...projectResolvers.Mutation,
@@ -84,10 +96,12 @@ export const resolvers = {
   Query: {
     ...userResolvers.Query,
     ...organizationResolvers.Query,
+    ...customViewResolvers.Query,
     ...teamResolvers.Query,
     ...issueResolvers.Query,
     ...labelResolvers.Query,
     ...searchResolvers.Query,
+    ...cycleResolvers.Query,
     ...projectResolvers.Query,
   },
 
