@@ -177,7 +177,9 @@ model Team {
   issues                  Issue[]
   labels                  IssueLabel[]
 
-  @@unique([organizationId, key])
+  // Unique on (organizationId, key) is enforced via a partial index in the DB
+  // (WHERE archived_at IS NULL) so archived teams don't block key reuse.
+  @@index([organizationId, key])
   @@index([organizationId])
   @@index([parentId])
   @@map("teams")
