@@ -58,29 +58,15 @@ export class IssueRelationService {
     }
 
     return this.prisma.$transaction(async tx => {
-      // Circular block check inside transaction to close TOCTOU window
-      if (type === 'blocks') {
+      // Circular block check: A blocks B cannot coexist with B blocks A (and same for blocked_by).
+      // Runs inside the transaction to close the TOCTOU window.
+      if (type === 'blocks' || type === 'blocked_by') {
         const circular = await tx.issueRelation.findUnique({
           where: {
             issueId_relatedIssueId_type: {
               issueId: relatedIssueId,
               relatedIssueId: issueId,
-              type: 'blocks',
-            },
-          },
-        });
-        if (circular) {
-          throw new IssueRelationCircularError();
-        }
-      }
-
-      if (type === 'blocked_by') {
-        const circular = await tx.issueRelation.findUnique({
-          where: {
-            issueId_relatedIssueId_type: {
-              issueId: relatedIssueId,
-              relatedIssueId: issueId,
-              type: 'blocked_by',
+              type,
             },
           },
         });

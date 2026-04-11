@@ -52,17 +52,16 @@ export const SubIssueList = observer(function SubIssueList({
   // TransactionQueue per mount
   const tq = useMemo(() => new TransactionQueue(), []);
 
-  // Reactively derive sub-issues using pool.size as dependency
   const subIssues = useMemo(
     () =>
       Array.from(issueStore.pool.values()).filter(
         i => i.parentId === parentIssueId && !i.trashed && !i.archivedAt,
       ),
+    // pool.size changes whenever the pool is mutated, giving MobX a stable dependency
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [parentIssueId, issueStore.pool.values],
+    [parentIssueId, issueStore.pool.size],
   );
 
-  // Group sub-issues by state category
   const grouped = useMemo(() => {
     const map = new Map<string, typeof subIssues>();
     for (const issue of subIssues) {
@@ -75,7 +74,7 @@ export const SubIssueList = observer(function SubIssueList({
     }
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subIssues, workflowStateStore.findById]);
+  }, [subIssues, workflowStateStore.pool.size]);
 
   return (
     <div className="mt-6">

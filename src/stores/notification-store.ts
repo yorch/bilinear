@@ -41,12 +41,6 @@ export class NotificationStore {
     return this.pool.get(id) ?? null;
   }
 
-  // The pool only holds the current user's notifications (server-scoped).
-  // No userId filter needed, but kept for API symmetry.
-  findByUserId(userId: string): DBNotification[] {
-    return this.all.filter(n => n.userId === userId);
-  }
-
   markRead(id: string) {
     const existing = this.pool.get(id);
     if (existing) {

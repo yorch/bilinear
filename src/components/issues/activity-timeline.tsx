@@ -3,9 +3,7 @@
 import { Activity, Clock } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { gql } from '@/lib/graphql';
-import { cn } from '@/lib/utils';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { cn, formatRelativeTime } from '@/lib/utils';
 
 interface ActivityActor {
   id: string;
@@ -27,8 +25,6 @@ interface ActivityTimelineProps {
   issueId: string;
 }
 
-// ─── GraphQL ──────────────────────────────────────────────────────────────────
-
 const GET_ISSUE_ACTIVITIES_QUERY = `
   query GetIssueActivities($issueId: ID!, $limit: Int) {
     issueActivities(issueId: $issueId, limit: $limit) {
@@ -46,8 +42,6 @@ const GET_ISSUE_ACTIVITIES_QUERY = `
     }
   }
 `;
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const FIELD_LABELS: Record<string, string> = {
   assigneeId: 'assignee',
@@ -78,37 +72,6 @@ function formatActivityDescription(activity: IssueActivity): string {
   }
   return `${actorName} changed ${field} from ${activity.oldValue} to ${activity.newValue}`;
 }
-
-function formatRelativeTime(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / (1000 * 60));
-
-  if (diffMins < 1) {
-    return 'just now';
-  }
-  if (diffMins < 60) {
-    return `${diffMins}m ago`;
-  }
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) {
-    return `${diffHours}h ago`;
-  }
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays === 1) {
-    return 'yesterday';
-  }
-  if (diffDays < 7) {
-    return `${diffDays}d ago`;
-  }
-  if (diffDays < 30) {
-    return `${Math.floor(diffDays / 7)}w ago`;
-  }
-  return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
-}
-
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export function ActivityTimeline({ issueId }: ActivityTimelineProps) {
   const [activities, setActivities] = useState<IssueActivity[]>([]);
