@@ -3,6 +3,7 @@
 import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 import { AssigneeSelect } from '../properties/assignee-select';
+import { CycleSelect } from '../properties/cycle-select';
 import { DueDatePicker } from '../properties/due-date-picker';
 import { LabelSelect } from '../properties/label-select';
 import { PrioritySelect } from '../properties/priority-select';
@@ -15,6 +16,7 @@ export interface IssueRowData {
   priority: number;
   stateId: string;
   assigneeId?: string | null;
+  cycleId?: string | null;
   dueDate?: string | null;
   labels: IssueLabel[];
 }
@@ -27,6 +29,7 @@ export type OpenProperty =
   | 'label'
   | 'dueDate'
   | 'project'
+  | 'cycle'
   | null;
 
 interface IssueRowProps {
@@ -34,6 +37,7 @@ interface IssueRowProps {
   states: WorkflowState[];
   users: IssueUser[];
   allLabels: IssueLabel[];
+  teamId?: string;
   selected: boolean;
   onSelect: () => void;
   onOpen: () => void;
@@ -51,6 +55,7 @@ export function IssueRow({
   states,
   users,
   allLabels,
+  teamId,
   selected,
   onSelect,
   onOpen,
@@ -128,6 +133,17 @@ export function IssueRow({
         forceOpen={openProperty === 'assignee'}
         onClose={onPropertyClosed}
       />
+
+      {/* Cycle */}
+      {teamId && (
+        <CycleSelect
+          value={issue.cycleId ?? null}
+          teamId={teamId}
+          onChange={cycleId => onUpdate(issue.id, { cycleId })}
+          open={openProperty === 'cycle'}
+          onClose={onPropertyClosed}
+        />
+      )}
 
       {/* Status */}
       <StatusSelect

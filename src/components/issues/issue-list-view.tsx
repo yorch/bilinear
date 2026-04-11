@@ -12,6 +12,7 @@ interface IssueListViewProps {
   states: WorkflowState[];
   users: IssueUser[];
   labels: IssueLabel[];
+  teamId?: string;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onOpen: (id: string) => void;
@@ -41,6 +42,7 @@ export function IssueListView({
   states,
   users,
   labels,
+  teamId,
   selectedId,
   onSelect,
   onOpen,
@@ -105,6 +107,7 @@ export function IssueListView({
               states={states}
               users={users}
               allLabels={labels}
+              teamId={teamId}
               selected={issue.id === selectedId}
               onSelect={() => onSelect(issue.id)}
               onOpen={() => onOpen(issue.id)}

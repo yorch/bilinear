@@ -34,6 +34,8 @@ model Organization {
   labels               IssueLabel[]
   syncActions          SyncAction[]
   projects             Project[]
+  cycles               Cycle[]
+  customViews          CustomView[]
 
   @@map("organizations")
 }
@@ -72,6 +74,7 @@ model User {
   projectsCreated Project[]  @relation("ProjectCreator")
   projectMemberships ProjectMember[]
   projectUpdates  ProjectUpdate[]
+  customViews     CustomView[] @relation("CreatedViews")
 
   @@map("users")
 }
@@ -182,6 +185,8 @@ model Team {
   issues                  Issue[]
   labels                  IssueLabel[]
   projectTeams            ProjectTeam[]
+  cycles                  Cycle[]
+  customViews             CustomView[]
 
   // Unique on (organizationId, key) is enforced via a partial index in the DB
   // (WHERE archived_at IS NULL) so archived teams don't block key reuse.
@@ -304,6 +309,7 @@ model Issue {
   parent          Issue?       @relation("SubIssues", fields: [parentId], references: [id], onDelete: SetNull)
   children        Issue[]      @relation("SubIssues")
   labelAssignments IssueLabelAssignment[]
+  cycle           Cycle?       @relation(fields: [cycleId], references: [id], onDelete: SetNull)
   project         Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
   projectMilestone ProjectMilestone? @relation(fields: [projectMilestoneId], references: [id], onDelete: SetNull)
 
@@ -501,6 +507,75 @@ model ProjectUpdate {
 
   @@index([projectId])
   @@map("project_updates")
+}
+
+model Cycle {
+  id                 String    @id @default(uuid()) @db.Uuid
+  organizationId     String    @map("organization_id") @db.Uuid
+  teamId             String    @map("team_id") @db.Uuid
+  number             Int
+  name               String?   @db.VarChar(255)
+  description        String?
+
+  startsAt           DateTime  @map("starts_at") @db.Timestamptz
+  endsAt             DateTime  @map("ends_at") @db.Timestamptz
+
+  completedAt        DateTime? @map("completed_at") @db.Timestamptz
+  autoArchivedAt     DateTime? @map("auto_archived_at") @db.Timestamptz
+
+  progress           Float     @default(0)
+  scope              Float     @default(0)
+
+  scopeHistory       Json      @default("[]") @map("scope_history")
+  completedScopeHistory Json   @default("[]") @map("completed_scope_history")
+  issueCountHistory  Json      @default("[]") @map("issue_count_history")
+  completedIssueCountHistory Json @default("[]") @map("completed_issue_count_history")
+
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt         DateTime? @map("archived_at") @db.Timestamptz
+
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team               Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  issues             Issue[]
+
+  @@unique([teamId, number])
+  @@index([organizationId])
+  @@index([teamId])
+  @@index([teamId, startsAt])
+  @@map("cycles")
+}
+
+model CustomView {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  teamId          String?   @map("team_id") @db.Uuid
+  creatorId       String    @map("creator_id") @db.Uuid
+  name            String    @db.VarChar(255)
+  description     String?
+  icon            String?   @db.VarChar(255)
+  color           String?   @db.VarChar(7)
+
+  filters         Json      @default("{}")
+  sort            Json      @default("[]")
+  groupBy         String?   @map("group_by") @db.VarChar(50)
+  layout          String    @default("list") @db.VarChar(10)
+
+  shared          Boolean   @default(false)
+  sortOrder       Float     @default(0) @map("sort_order")
+
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt      DateTime? @map("archived_at") @db.Timestamptz
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team            Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  creator         User      @relation("CreatedViews", fields: [creatorId], references: [id])
+
+  @@index([organizationId])
+  @@index([teamId])
+  @@index([creatorId])
+  @@map("custom_views")
 }
 
 model IssueLabelAssignment {

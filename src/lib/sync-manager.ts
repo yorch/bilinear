@@ -68,9 +68,11 @@ export class SyncManager {
       states,
       labels,
       issues,
+      cycles,
       projects,
       projectMilestones,
       projectUpdates,
+      customViews,
       meta,
     ] = await Promise.all([
       db.organizations.toArray(),
@@ -79,9 +81,11 @@ export class SyncManager {
       db.workflowStates.toArray(),
       db.issueLabels.toArray(),
       db.issues.toArray(),
+      db.cycles.toArray(),
       db.projects.toArray(),
       db.projectMilestones.toArray(),
       db.projectUpdates.toArray(),
+      db.customViews.toArray(),
       db.syncMetadata.get('lastSyncId'),
     ]);
 
@@ -95,7 +99,9 @@ export class SyncManager {
       workflowStateStore,
       labelStore,
       issueStore,
+      cycleStore,
       projectStore,
+      customViewStore,
       syncStore,
     } = this.stores;
 
@@ -108,9 +114,11 @@ export class SyncManager {
       workflowStateStore.upsertMany(states);
       labelStore.upsertMany(labels);
       issueStore.upsertMany(issues);
+      cycleStore.upsertMany(cycles);
       projectStore.upsertMany(projects);
       projectStore.upsertMilestones(projectMilestones);
       projectStore.upsertUpdates(projectUpdates);
+      customViewStore.upsertMany(customViews);
       syncStore.setLastSyncId(String(meta.value));
       return true;
     }
@@ -130,7 +138,9 @@ export class SyncManager {
       workflowStateStore,
       labelStore,
       issueStore,
+      cycleStore,
       projectStore,
+      customViewStore,
     } = this.stores;
 
     try {
@@ -149,6 +159,8 @@ export class SyncManager {
       const lines = text.split('\n').filter(Boolean);
 
       const batches = {
+        customViews: [] as object[],
+        cycles: [] as object[],
         issueLabels: [] as object[],
         issues: [] as object[],
         organizations: [] as object[],
@@ -192,9 +204,11 @@ export class SyncManager {
           db.workflowStates,
           db.issueLabels,
           db.issues,
+          db.cycles,
           db.projects,
           db.projectMilestones,
           db.projectUpdates,
+          db.customViews,
           db.syncMetadata,
         ],
         async () => {
@@ -205,9 +219,11 @@ export class SyncManager {
             db.workflowStates.clear(),
             db.issueLabels.clear(),
             db.issues.clear(),
+            db.cycles.clear(),
             db.projects.clear(),
             db.projectMilestones.clear(),
             db.projectUpdates.clear(),
+            db.customViews.clear(),
           ]);
           await Promise.all([
             db.organizations.bulkPut(
@@ -234,6 +250,9 @@ export class SyncManager {
             db.issues.bulkPut(
               batches.issues as Parameters<typeof db.issues.bulkPut>[0],
             ),
+            db.cycles.bulkPut(
+              batches.cycles as Parameters<typeof db.cycles.bulkPut>[0],
+            ),
             db.projects.bulkPut(
               batches.projects as Parameters<typeof db.projects.bulkPut>[0],
             ),
@@ -245,6 +264,11 @@ export class SyncManager {
             db.projectUpdates.bulkPut(
               batches.projectUpdates as Parameters<
                 typeof db.projectUpdates.bulkPut
+              >[0],
+            ),
+            db.customViews.bulkPut(
+              batches.customViews as Parameters<
+                typeof db.customViews.bulkPut
               >[0],
             ),
             db.syncMetadata.put({ key: 'lastSyncId', value: lastSyncId }),
@@ -276,6 +300,9 @@ export class SyncManager {
       issueStore.upsertMany(
         batches.issues as Parameters<typeof issueStore.upsertMany>[0],
       );
+      cycleStore.upsertMany(
+        batches.cycles as Parameters<typeof cycleStore.upsertMany>[0],
+      );
       projectStore.upsertMany(
         batches.projects as Parameters<typeof projectStore.upsertMany>[0],
       );
@@ -288,6 +315,9 @@ export class SyncManager {
         batches.projectUpdates as Parameters<
           typeof projectStore.upsertUpdates
         >[0],
+      );
+      customViewStore.upsertMany(
+        batches.customViews as Parameters<typeof customViewStore.upsertMany>[0],
       );
       syncStore.setLastSyncId(lastSyncId);
       syncStore.setStatus('connected');
@@ -345,7 +375,9 @@ export class SyncManager {
       workflowStateStore,
       labelStore,
       issueStore,
+      cycleStore,
       projectStore,
+      customViewStore,
       syncStore,
     } = this.stores;
 
@@ -358,11 +390,15 @@ export class SyncManager {
       workflowStates: object[];
       issueLabels: object[];
       issues: object[];
+      cycles: object[];
       organizations: object[];
       projects: object[];
       projectMilestones: object[];
       projectUpdates: object[];
+      customViews: object[];
     } = {
+      customViews: [],
+      cycles: [],
       issueLabels: [],
       issues: [],
       organizations: [],
@@ -380,9 +416,11 @@ export class SyncManager {
         | 'workflowStates'
         | 'issueLabels'
         | 'issues'
+        | 'cycles'
         | 'projects'
         | 'projectMilestones'
-        | 'projectUpdates';
+        | 'projectUpdates'
+        | 'customViews';
       id: string;
     }[] = [];
 
@@ -450,6 +488,18 @@ export class SyncManager {
             dexieUpserts.issues.push(data);
           }
           break;
+        case 'Cycle':
+          cycleStore.applySyncAction(
+            act,
+            modelId,
+            data as Parameters<typeof cycleStore.applySyncAction>[2],
+          );
+          if (act === 'D') {
+            dexieDeletes.push({ id: modelId, table: 'cycles' });
+          } else if (data) {
+            dexieUpserts.cycles.push(data);
+          }
+          break;
         case 'Project':
           projectStore.applySyncAction(
             act,
@@ -486,6 +536,18 @@ export class SyncManager {
             dexieUpserts.projectUpdates.push(data);
           }
           break;
+        case 'CustomView':
+          customViewStore.applySyncAction(
+            act,
+            modelId,
+            data as Parameters<typeof customViewStore.applySyncAction>[2],
+          );
+          if (act === 'D') {
+            dexieDeletes.push({ id: modelId, table: 'customViews' });
+          } else if (data) {
+            dexieUpserts.customViews.push(data);
+          }
+          break;
       }
 
       // Update max sync ID
@@ -505,9 +567,11 @@ export class SyncManager {
         db.workflowStates,
         db.issueLabels,
         db.issues,
+        db.cycles,
         db.projects,
         db.projectMilestones,
         db.projectUpdates,
+        db.customViews,
         db.syncMetadata,
       ],
       async () => {
@@ -536,6 +600,10 @@ export class SyncManager {
             db.issues.bulkPut(
               dexieUpserts.issues as Parameters<typeof db.issues.bulkPut>[0],
             ),
+          dexieUpserts.cycles.length > 0 &&
+            db.cycles.bulkPut(
+              dexieUpserts.cycles as Parameters<typeof db.cycles.bulkPut>[0],
+            ),
           dexieUpserts.projects.length > 0 &&
             db.projects.bulkPut(
               dexieUpserts.projects as Parameters<
@@ -552,6 +620,12 @@ export class SyncManager {
             db.projectUpdates.bulkPut(
               dexieUpserts.projectUpdates as Parameters<
                 typeof db.projectUpdates.bulkPut
+              >[0],
+            ),
+          dexieUpserts.customViews.length > 0 &&
+            db.customViews.bulkPut(
+              dexieUpserts.customViews as Parameters<
+                typeof db.customViews.bulkPut
               >[0],
             ),
           db.syncMetadata.put({ key: 'lastSyncId', value: maxId }),

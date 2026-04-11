@@ -123,8 +123,10 @@ export const typeDefs = `
     parentId: ID
     projectId: ID
     projectMilestoneId: ID
+    cycleId: ID
     organizationId: ID!
     branchName: String
+    cycle: Cycle
     startedAt: DateTime
     completedAt: DateTime
     canceledAt: DateTime
@@ -192,6 +194,7 @@ export const typeDefs = `
     sortOrder: Float
     projectId: String
     projectMilestoneId: String
+    cycleId: String
   }
 
   input IssueUpdateInput {
@@ -209,6 +212,7 @@ export const typeDefs = `
     trashed: Boolean
     projectId: String
     projectMilestoneId: String
+    cycleId: String
   }
 
   input IssueFilter {
@@ -519,6 +523,103 @@ export const typeDefs = `
     leadId: String
   }
 
+  type Cycle {
+    id: ID!
+    number: Int!
+    name: String
+    description: String
+    startsAt: DateTime!
+    endsAt: DateTime!
+    completedAt: DateTime
+    progress: Float!
+    scope: Float!
+    teamId: ID!
+    organizationId: ID!
+    team: Team!
+    issues: [Issue!]!
+    archivedAt: DateTime
+    createdAt: DateTime!
+    updatedAt: DateTime!
+  }
+
+  type CyclePayload {
+    success: Boolean!
+    cycle: Cycle
+    lastSyncId: String!
+  }
+
+  input CycleCreateInput {
+    id: String
+    teamId: String!
+    name: String
+    description: String
+    startsAt: DateTime!
+    endsAt: DateTime!
+  }
+
+  input CycleUpdateInput {
+    name: String
+    description: String
+    startsAt: DateTime
+    endsAt: DateTime
+  }
+
+  type CustomView {
+    id: ID!
+    organizationId: ID!
+    teamId: ID
+    creatorId: ID!
+    name: String!
+    description: String
+    icon: String
+    color: String
+    filters: JSON!
+    sort: JSON!
+    groupBy: String
+    layout: String!
+    shared: Boolean!
+    sortOrder: Float!
+    creator: User!
+    team: Team
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    archivedAt: DateTime
+  }
+
+  type CustomViewPayload {
+    success: Boolean!
+    customView: CustomView
+    lastSyncId: String!
+  }
+
+  input CustomViewCreateInput {
+    id: String
+    name: String!
+    description: String
+    icon: String
+    color: String
+    filters: JSON
+    sort: JSON
+    groupBy: String
+    layout: String
+    shared: Boolean
+    teamId: String
+    sortOrder: Float
+  }
+
+  input CustomViewUpdateInput {
+    name: String
+    description: String
+    icon: String
+    color: String
+    filters: JSON
+    sort: JSON
+    groupBy: String
+    layout: String
+    shared: Boolean
+    sortOrder: Float
+  }
+
   scalar JSON
 
   type Query {
@@ -541,6 +642,10 @@ export const typeDefs = `
       includeArchived: Boolean
     ): IssueConnection!
     labels(teamId: String): IssueLabelConnection!
+    cycle(id: ID!): Cycle!
+    cycles(teamId: String!, includeArchived: Boolean): [Cycle!]!
+    customView(id: ID!): CustomView!
+    customViews(teamId: String): [CustomView!]!
     project(id: ID!): Project!
     projects(
       filter: ProjectFilter
@@ -580,6 +685,18 @@ export const typeDefs = `
     issueLabelCreate(input: IssueLabelCreateInput!): IssueLabelPayload!
     issueLabelUpdate(id: ID!, input: IssueLabelUpdateInput!): IssueLabelPayload!
     issueLabelArchive(id: ID!): IssueLabelPayload!
+
+    customViewCreate(input: CustomViewCreateInput!): CustomViewPayload!
+    customViewUpdate(id: ID!, input: CustomViewUpdateInput!): CustomViewPayload!
+    customViewArchive(id: ID!): CustomViewPayload!
+    customViewDelete(id: ID!): DeletePayload!
+
+    cycleCreate(input: CycleCreateInput!): CyclePayload!
+    cycleUpdate(id: ID!, input: CycleUpdateInput!): CyclePayload!
+    cycleArchive(id: ID!): CyclePayload!
+    cycleDelete(id: ID!): DeletePayload!
+    cycleAddIssue(cycleId: ID!, issueId: ID!): IssuePayload!
+    cycleRemoveIssue(issueId: ID!): IssuePayload!
 
     projectCreate(input: ProjectCreateInput!): ProjectPayload!
     projectUpdate(id: ID!, input: ProjectUpdateInput!): ProjectPayload!

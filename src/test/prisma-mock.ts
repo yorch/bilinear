@@ -36,6 +36,8 @@ function createMockModel(): MockModel {
 export type MockPrismaClient = {
   [K in keyof PrismaClient]: K extends
     | 'authToken'
+    | 'customView'
+    | 'cycle'
     | 'issue'
     | 'issueLabel'
     | 'issueLabelAssignment'
@@ -62,6 +64,8 @@ export function createMockPrisma(): MockPrismaClient {
       },
     ),
     authToken: createMockModel(),
+    customView: createMockModel(),
+    cycle: createMockModel(),
     issue: createMockModel(),
     issueLabel: createMockModel(),
     issueLabelAssignment: createMockModel(),
