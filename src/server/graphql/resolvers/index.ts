@@ -3,7 +3,11 @@ import { authResolvers } from './auth';
 import { customViewResolvers } from './custom-view';
 import { cycleResolvers } from './cycle';
 import { issueResolvers } from './issue';
+import { issueActivityResolvers } from './issue-activity';
+import { issueRelationResolvers } from './issue-relation';
+import { issueTemplateResolvers } from './issue-template';
 import { labelResolvers } from './label';
+import { notificationResolvers } from './notification';
 import { organizationResolvers } from './organization';
 import { projectResolvers } from './project';
 import { searchResolvers } from './search';
@@ -62,14 +66,29 @@ export const resolvers = {
     ...issueResolvers.Issue,
   },
 
+  IssueActivity: {
+    ...issueActivityResolvers.IssueActivity,
+  },
+
   IssueLabel: {
     ...labelResolvers.IssueLabel,
+  },
+
+  IssueRelation: {
+    ...issueRelationResolvers.IssueRelation,
+  },
+
+  IssueTemplate: {
+    ...issueTemplateResolvers.IssueTemplate,
   },
 
   JSON: JSONScalar,
 
   Mutation: {
     ...authResolvers.Mutation,
+    ...notificationResolvers.Mutation,
+    ...issueRelationResolvers.Mutation,
+    ...issueTemplateResolvers.Mutation,
     ...organizationResolvers.Mutation,
     ...customViewResolvers.Mutation,
     ...cycleResolvers.Mutation,
@@ -79,6 +98,10 @@ export const resolvers = {
     ...teamResolvers.Mutation,
     ...teamMembershipResolvers.Mutation,
     ...workflowStateResolvers.Mutation,
+  },
+
+  Notification: {
+    ...notificationResolvers.Notification,
   },
 
   Project: {
@@ -95,6 +118,10 @@ export const resolvers = {
 
   Query: {
     ...userResolvers.Query,
+    ...issueActivityResolvers.Query,
+    ...notificationResolvers.Query,
+    ...issueRelationResolvers.Query,
+    ...issueTemplateResolvers.Query,
     ...organizationResolvers.Query,
     ...customViewResolvers.Query,
     ...teamResolvers.Query,

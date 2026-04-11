@@ -8,7 +8,11 @@ import { AuthService } from '../services/auth.service';
 import { CustomViewService } from '../services/custom-view.service';
 import { CycleService } from '../services/cycle.service';
 import { IssueService } from '../services/issue.service';
+import { IssueActivityService } from '../services/issue-activity.service';
+import { IssueRelationService } from '../services/issue-relation.service';
+import { IssueTemplateService } from '../services/issue-template.service';
 import { LabelService } from '../services/label.service';
+import { NotificationService } from '../services/notification.service';
 import { ProjectService } from '../services/project.service';
 import { SearchService } from '../services/search.service';
 import { SyncService } from '../services/sync.service';
@@ -23,7 +27,11 @@ export interface GraphQLContext extends AuthContext {
     customView: CustomViewService;
     cycle: CycleService;
     issue: IssueService;
+    issueActivity: IssueActivityService;
+    issueRelation: IssueRelationService;
+    issueTemplate: IssueTemplateService;
     label: LabelService;
+    notification: NotificationService;
     project: ProjectService;
     search: SearchService;
     sync: SyncService;
@@ -42,10 +50,14 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const userService = new UserService(prisma);
   const authService = new AuthService(prisma, userService);
   const customViewService = new CustomViewService(prisma);
+  const issueActivityService = new IssueActivityService(prisma);
+  const notificationService = new NotificationService(prisma);
   const teamService = new TeamService(prisma);
   const workflowStateService = new WorkflowStateService(prisma);
   const cycleService = new CycleService(prisma);
   const issueService = new IssueService(prisma);
+  const issueRelationService = new IssueRelationService(prisma);
+  const issueTemplateService = new IssueTemplateService(prisma);
   const labelService = new LabelService(prisma);
   const projectService = new ProjectService(prisma);
   const syncService = new SyncService(prisma, redis);
@@ -59,7 +71,11 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
       customView: customViewService,
       cycle: cycleService,
       issue: issueService,
+      issueActivity: issueActivityService,
+      issueRelation: issueRelationService,
+      issueTemplate: issueTemplateService,
       label: labelService,
+      notification: notificationService,
       project: projectService,
       search: searchService,
       sync: syncService,

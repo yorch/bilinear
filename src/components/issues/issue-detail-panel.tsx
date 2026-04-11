@@ -13,6 +13,7 @@ import { DueDatePicker } from '../properties/due-date-picker';
 import { LabelDot, LabelSelect } from '../properties/label-select';
 import { PrioritySelect } from '../properties/priority-select';
 import { StatusSelect } from '../properties/status-select';
+import { ActivityTimeline } from './activity-timeline';
 
 interface IssueDetail {
   id: string;
@@ -249,6 +250,12 @@ export function IssueDetailPanel({
                 )}
               </button>
             )}
+          </div>
+
+          {/* Activity */}
+          <div className="mt-6">
+            <p className="mb-3 text-xs font-medium text-zinc-500">Activity</p>
+            <ActivityTimeline issueId={issue.id} />
           </div>
         </div>
       </div>

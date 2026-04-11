@@ -1,5 +1,6 @@
 import { AuthService } from '../server/services/auth.service';
 import { IssueService } from '../server/services/issue.service';
+import { IssueActivityService } from '../server/services/issue-activity.service';
 import { LabelService } from '../server/services/label.service';
 import { SearchService } from '../server/services/search.service';
 import type { SyncActionType } from '../server/services/sync.service';
@@ -28,6 +29,7 @@ export interface MockGraphQLContext {
   services: {
     auth: AuthService;
     issue: IssueService;
+    issueActivity: IssueActivityService;
     label: LabelService;
     search: SearchService;
     sync: MockSyncService;
@@ -50,6 +52,7 @@ export function createMockContext(
     services: {
       auth: new AuthService(prisma as never, userService),
       issue: new IssueService(prisma as never),
+      issueActivity: new IssueActivityService(prisma as never),
       label: new LabelService(prisma as never),
       search: new SearchService(prisma as never),
       sync: new MockSyncService(),

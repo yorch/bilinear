@@ -1,7 +1,10 @@
 import { CustomViewStore } from './custom-view-store';
 import { CycleStore } from './cycle-store';
+import { IssueRelationStore } from './issue-relation-store';
 import { IssueStore } from './issue-store';
+import { IssueTemplateStore } from './issue-template-store';
 import { LabelStore } from './label-store';
+import { NotificationStore } from './notification-store';
 import { ProjectStore } from './project-store';
 import { SyncStore } from './sync-store';
 import { TeamStore } from './team-store';
@@ -12,8 +15,11 @@ import { WorkflowStateStore } from './workflow-state-store';
 export class RootStore {
   customViewStore: CustomViewStore;
   cycleStore: CycleStore;
+  issueRelationStore: IssueRelationStore;
   issueStore: IssueStore;
+  issueTemplateStore: IssueTemplateStore;
   labelStore: LabelStore;
+  notificationStore: NotificationStore;
   projectStore: ProjectStore;
   syncStore: SyncStore;
   teamStore: TeamStore;
@@ -28,8 +34,11 @@ export class RootStore {
     this.workflowStateStore = new WorkflowStateStore();
     this.customViewStore = new CustomViewStore();
     this.cycleStore = new CycleStore();
+    this.issueRelationStore = new IssueRelationStore();
     this.issueStore = new IssueStore();
+    this.issueTemplateStore = new IssueTemplateStore();
     this.labelStore = new LabelStore();
+    this.notificationStore = new NotificationStore();
     this.projectStore = new ProjectStore();
     this.uiStore = new UIStore();
   }

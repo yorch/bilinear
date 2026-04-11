@@ -39,8 +39,13 @@ export type MockPrismaClient = {
     | 'customView'
     | 'cycle'
     | 'issue'
+    | 'issueActivity'
     | 'issueLabel'
     | 'issueLabelAssignment'
+    | 'issueRelation'
+    | 'issueTemplate'
+    | 'notification'
+    | 'notificationSubscription'
     | 'organization'
     | 'organizationMember'
     | 'team'
@@ -67,8 +72,13 @@ export function createMockPrisma(): MockPrismaClient {
     customView: createMockModel(),
     cycle: createMockModel(),
     issue: createMockModel(),
+    issueActivity: createMockModel(),
     issueLabel: createMockModel(),
     issueLabelAssignment: createMockModel(),
+    issueRelation: createMockModel(),
+    issueTemplate: createMockModel(),
+    notification: createMockModel(),
+    notificationSubscription: createMockModel(),
     organization: createMockModel(),
     organizationMember: createMockModel(),
     team: createMockModel(),

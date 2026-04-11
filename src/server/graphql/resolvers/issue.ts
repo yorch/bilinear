@@ -6,7 +6,33 @@ import type {
   IssueFilter,
   IssueUpdateInput,
 } from '../../services/issue.service';
+import type { IssueActivityCreateInput } from '../../services/issue-activity.service';
 import type { GraphQLContext } from '../context';
+
+// Fields tracked in the activity timeline on every issue update
+const TRACKED_ACTIVITY_FIELDS = [
+  'stateId',
+  'assigneeId',
+  'priority',
+  'title',
+  'estimate',
+  'dueDate',
+  'projectId',
+  'trashed',
+  'cycleId',
+  'parentId',
+] as const;
+
+function issueFieldToString(issue: Issue, field: string): string | null {
+  const v = issue[field as keyof Issue];
+  if (v == null) {
+    return null;
+  }
+  if (v instanceof Date) {
+    return v.toISOString().split('T')[0];
+  }
+  return String(v);
+}
 
 export const issueResolvers = {
   Issue: {
@@ -202,6 +228,33 @@ export const issueResolvers = {
       await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
 
       const issue = await ctx.services.issue.update(id, input);
+
+      // Record an activity entry for each changed tracked field
+      const activities: IssueActivityCreateInput[] = [];
+      for (const field of TRACKED_ACTIVITY_FIELDS) {
+        if (
+          !(field in input) ||
+          (input as Record<string, unknown>)[field] === undefined
+        ) {
+          continue;
+        }
+        const oldStr = issueFieldToString(existing, field);
+        const newRaw = (input as Record<string, unknown>)[field];
+        const newStr = newRaw != null ? String(newRaw) : null;
+        if (oldStr !== newStr) {
+          activities.push({
+            actorId: ctx.userId,
+            field,
+            issueId: id,
+            newValue: newStr ?? undefined,
+            oldValue: oldStr ?? undefined,
+          });
+        }
+      }
+      if (activities.length > 0) {
+        await ctx.services.issueActivity.createMany(activities);
+      }
+
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
         'U',

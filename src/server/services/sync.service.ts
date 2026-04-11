@@ -51,6 +51,8 @@ export class SyncService {
       projectMilestones,
       projectUpdates,
       customViews,
+      issueRelations,
+      issueTemplates,
       lastSyncAction,
     ] = await Promise.all([
       this.prisma.organization.findUnique({ where: { id: orgId } }),
@@ -97,6 +99,14 @@ export class SyncService {
       this.prisma.customView.findMany({
         where: { archivedAt: null, organizationId: orgId },
       }),
+      this.prisma.issueRelation.findMany({
+        where: {
+          issue: { archivedAt: null, organizationId: orgId, trashed: false },
+        },
+      }),
+      this.prisma.issueTemplate.findMany({
+        where: { archivedAt: null, team: { organizationId: orgId } },
+      }),
       this.prisma.syncAction.findFirst({
         orderBy: { id: 'desc' },
         select: { id: true },
@@ -116,10 +126,12 @@ export class SyncService {
       customViews,
       cycles,
       issueLabels,
+      issueRelations,
       issues: issues.map(i => ({
         ...i,
         labelIds: labelIdsByIssue.get(i.id) ?? [],
       })),
+      issueTemplates,
       lastSyncId: (lastSyncAction?.id ?? BigInt(0)).toString(),
       organizations: organizations ? [organizations] : [],
       projectMilestones,
