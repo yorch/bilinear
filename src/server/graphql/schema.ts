@@ -787,9 +787,15 @@ export const typeDefs = `
     bodyData: JSON
   }
 
+  type OrganizationMemberEntry {
+    userId: ID!
+    role: String!
+  }
+
   type Query {
     viewer: User!
     organization: Organization!
+    organizationMembers: [OrganizationMemberEntry!]!
     team(id: ID!): Team!
     teams: [Team!]!
     issue(id: ID!): Issue!

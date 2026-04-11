@@ -97,6 +97,18 @@ export const organizationResolvers = {
       }
       return org;
     },
+
+    organizationMembers: async (
+      _parent: unknown,
+      _args: unknown,
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      return ctx.prisma.organizationMember.findMany({
+        select: { role: true, userId: true },
+        where: { organizationId: ctx.orgId },
+      });
+    },
   },
 };
 

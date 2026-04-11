@@ -32,6 +32,13 @@ export class CommentForbiddenError extends Error {
   }
 }
 
+export class CommentReactionNotFoundError extends Error {
+  constructor() {
+    super('Reaction not found');
+    this.name = 'CommentReactionNotFoundError';
+  }
+}
+
 const COMMENT_INCLUDE = {
   author: true,
   reactions: {
@@ -236,7 +243,7 @@ export class CommentService {
       where: { commentId_userId_emoji: { commentId, emoji, userId } },
     });
     if (!reaction) {
-      throw new CommentNotFoundError();
+      throw new CommentReactionNotFoundError();
     }
 
     await this.prisma.commentReaction.delete({

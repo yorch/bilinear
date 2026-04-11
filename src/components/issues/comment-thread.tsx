@@ -172,7 +172,7 @@ export function CommentThread({ issueId, currentUserId }: CommentThreadProps) {
   const deleteComment = async (id: string) => {
     try {
       await gql(COMMENT_DELETE_MUTATION, { id });
-      setComments(prev => prev.filter(c => c.id !== id));
+      await fetchComments();
       toast.success('Comment deleted');
     } catch {
       toast.error('Failed to delete comment');
@@ -287,6 +287,7 @@ function CommentCard({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [replyBody, setReplyBody] = useState('');
   const menuRef = useRef<HTMLDivElement>(null);
+  const emojiRef = useRef<HTMLDivElement>(null);
 
   const isOwn = comment.author.id === currentUserId;
   const isResolved = !!comment.resolvedAt;
@@ -295,6 +296,9 @@ function CommentCard({
     const handleClick = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setShowMenu(false);
+      }
+      if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) {
+        setShowEmojiPicker(false);
       }
     };
     document.addEventListener('mousedown', handleClick);
@@ -364,7 +368,7 @@ function CommentCard({
           {/* Actions */}
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             {/* Emoji reaction */}
-            <div className="relative">
+            <div ref={emojiRef} className="relative">
               <button
                 type="button"
                 onClick={() => setShowEmojiPicker(v => !v)}

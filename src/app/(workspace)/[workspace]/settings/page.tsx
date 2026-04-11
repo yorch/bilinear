@@ -24,6 +24,10 @@ const ORGANIZATION_QUERY = `
       dataRegion
       createdAt
     }
+    organizationMembers {
+      userId
+      role
+    }
   }
 `;
 
@@ -89,9 +93,23 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
         if (cancelled) {
           return;
         }
-        const data = result.data?.organization as OrgInfo | undefined;
-        if (data) {
-          setOrg(data);
+        const data = result.data as
+          | {
+              organization?: OrgInfo;
+              organizationMembers?: { userId: string; role: string }[];
+            }
+          | undefined;
+        if (data?.organization) {
+          setOrg(data.organization);
+        }
+        if (data?.organizationMembers) {
+          const roles: Record<string, OrgRole> = {};
+          for (const m of data.organizationMembers) {
+            if (ORG_ROLES.includes(m.role as OrgRole)) {
+              roles[m.userId] = m.role as OrgRole;
+            }
+          }
+          setMemberRoles(roles);
         }
       })
       .catch(() => {

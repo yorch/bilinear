@@ -19,6 +19,7 @@ import { Underline } from '@tiptap/extension-underline';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { all, createLowlight } from 'lowlight';
+import { Link2 } from 'lucide-react';
 import { useCallback, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import './tiptap-editor.css';
@@ -103,7 +104,7 @@ export function TipTapEditor({
     }
   }, [editor, content]);
 
-  const _setLink = useCallback(() => {
+  const setLink = useCallback(() => {
     if (!editor) {
       return;
     }
@@ -159,6 +160,13 @@ export function TipTapEditor({
             title="Strikethrough"
           >
             <span className="line-through">S</span>
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={setLink}
+            active={editor.isActive('link')}
+            title="Link"
+          >
+            <Link2 className="h-3 w-3" />
           </ToolbarButton>
           <div className="mx-1 h-4 w-px bg-zinc-300 dark:bg-zinc-600" />
           <ToolbarButton

@@ -38,6 +38,7 @@ export const teamMembershipResolvers = {
           input.teamId,
           input.userId,
           input.isOwner ?? false,
+          input.role ?? 'member',
         );
         const sync = await ctx.services.sync.createSyncAction(
           ctx.orgId,
@@ -97,7 +98,10 @@ export const teamMembershipResolvers = {
       {
         id,
         input,
-      }: { id: string; input: { isOwner?: boolean; sortOrder?: number } },
+      }: {
+        id: string;
+        input: { isOwner?: boolean; role?: string; sortOrder?: number };
+      },
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);

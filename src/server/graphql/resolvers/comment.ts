@@ -7,6 +7,33 @@ import type {
 } from '../../services/comment.service';
 import type { GraphQLContext } from '../context';
 
+/** Resolves the issue for a comment and verifies org + team access.
+ *  Must be called after requireAuth(ctx) so ctx.userId and ctx.orgId are non-null. */
+async function requireCommentAccess(
+  ctx: GraphQLContext & { userId: string; orgId: string },
+  commentId: string,
+): Promise<void> {
+  const comment = await ctx.services.comment.findById(commentId);
+  if (!comment) {
+    throw new GraphQLError('Comment not found', {
+      extensions: { code: 'NOT_FOUND' },
+    });
+  }
+  const issue = await ctx.services.issue.findById(comment.issueId);
+  if (!issue || issue.organizationId !== ctx.orgId) {
+    throw new GraphQLError('Comment not found', {
+      extensions: { code: 'NOT_FOUND' },
+    });
+  }
+  const { teamId } = issue;
+  if (!teamId) {
+    throw new GraphQLError('Comment not found', {
+      extensions: { code: 'NOT_FOUND' },
+    });
+  }
+  await requireTeamMember(ctx.prisma, teamId, ctx.userId);
+}
+
 type CommentWithRelations = Comment & {
   author: unknown;
   reactions: unknown[];
@@ -105,6 +132,7 @@ export const commentResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+      await requireCommentAccess(ctx, commentId);
       try {
         const reaction = await ctx.services.comment.addReaction(
           commentId,
@@ -135,6 +163,7 @@ export const commentResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+      await requireCommentAccess(ctx, commentId);
       try {
         const result = await ctx.services.comment.removeReaction(
           commentId,
@@ -151,7 +180,10 @@ export const commentResolvers = {
         return { lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         const error = err as Error;
-        if (error.name === 'CommentNotFoundError') {
+        if (
+          error.name === 'CommentNotFoundError' ||
+          error.name === 'CommentReactionNotFoundError'
+        ) {
           throw new GraphQLError(error.message, {
             extensions: { code: 'NOT_FOUND' },
           });
@@ -165,6 +197,7 @@ export const commentResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+      await requireCommentAccess(ctx, id);
       try {
         const comment = await ctx.services.comment.resolve(id, ctx.userId);
         const sync = await ctx.services.sync.createSyncAction(
@@ -191,6 +224,7 @@ export const commentResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+      await requireCommentAccess(ctx, id);
       try {
         const comment = await ctx.services.comment.unresolve(id);
         const sync = await ctx.services.sync.createSyncAction(
