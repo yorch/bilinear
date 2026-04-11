@@ -7,6 +7,7 @@ import {
   getPriorityConfig,
 } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
+import { useStore } from '@/providers/store-provider';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 import { TipTapEditor } from '../editor/tiptap-editor';
 import { AssigneeSelect } from '../properties/assignee-select';
@@ -48,6 +49,8 @@ export function IssueDetailPanel({
   onClose,
   onUpdate,
 }: IssueDetailPanelProps) {
+  const { userStore } = useStore();
+  const currentUserId = userStore.currentUser?.id;
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [editingDesc, setEditingDesc] = useState(false);
@@ -265,7 +268,7 @@ export function IssueDetailPanel({
           {/* Comments */}
           <div className="mt-6">
             <p className="mb-3 text-xs font-medium text-zinc-500">Comments</p>
-            <CommentThread issueId={issue.id} />
+            <CommentThread issueId={issue.id} currentUserId={currentUserId} />
           </div>
 
           {/* Activity */}

@@ -104,6 +104,16 @@ export class CommentService {
   ): Promise<
     Comment & { author: unknown; reactions: unknown[]; replies: unknown[] }
   > {
+    if (input.parentId) {
+      const parent = await this.prisma.comment.findUnique({
+        select: { archivedAt: true, issueId: true },
+        where: { id: input.parentId },
+      });
+      if (!parent || parent.archivedAt || parent.issueId !== input.issueId) {
+        throw new CommentNotFoundError();
+      }
+    }
+
     return this.prisma.comment.create({
       data: {
         authorId,

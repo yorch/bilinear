@@ -274,6 +274,11 @@ export function CommentThread({ issueId, currentUserId }: CommentThreadProps) {
           onReply={id => setShowReplyTo(showReplyTo === id ? null : id)}
           showReplyTo={showReplyTo}
           onSubmitReply={submitComment}
+          onUpdate={updated =>
+            setComments(prev =>
+              updateCommentInTree(prev, updated.id, () => updated),
+            )
+          }
         />
       ))}
 
@@ -301,6 +306,7 @@ function CommentCard({
   onReply,
   showReplyTo,
   onSubmitReply,
+  onUpdate,
 }: {
   comment: CommentItem;
   currentUserId?: string;
@@ -315,6 +321,7 @@ function CommentCard({
   onReply: (id: string) => void;
   showReplyTo: string | null;
   onSubmitReply: (body: string, parentId?: string) => void;
+  onUpdate: (comment: CommentItem) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [editBody, setEditBody] = useState(comment.body);
@@ -346,10 +353,16 @@ function CommentCard({
       return;
     }
     try {
-      await gql(COMMENT_UPDATE_MUTATION, {
+      const res = await gql(COMMENT_UPDATE_MUTATION, {
         id: comment.id,
         input: { body: editBody },
       });
+      const updated = (
+        res.data as { commentUpdate?: { comment: CommentItem } } | undefined
+      )?.commentUpdate?.comment;
+      if (updated) {
+        onUpdate(updated);
+      }
       setEditing(false);
     } catch {
       toast.error('Failed to update comment');
@@ -536,10 +549,10 @@ function CommentCard({
             </div>
           </div>
         ) : (
-          <div
+          <TipTapEditor
+            content={comment.body}
+            readOnly
             className="prose prose-sm dark:prose-invert max-w-none text-zinc-700 dark:text-zinc-300"
-            // biome-ignore lint/security/noDangerouslySetInnerHtml: rich text from TipTap, trusted server content
-            dangerouslySetInnerHTML={{ __html: comment.body }}
           />
         )}
 
@@ -583,6 +596,7 @@ function CommentCard({
               onReply={onReply}
               showReplyTo={showReplyTo}
               onSubmitReply={onSubmitReply}
+              onUpdate={onUpdate}
             />
           ))}
         </div>

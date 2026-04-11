@@ -116,6 +116,7 @@ export const commentResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+      await requireCommentAccess(ctx, id);
       try {
         await ctx.services.comment.delete(id, ctx.userId);
         const sync = await ctx.services.sync.createSyncAction(
@@ -228,6 +229,7 @@ export const commentResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+      await requireCommentAccess(ctx, id);
       try {
         const comment = await ctx.services.comment.update(
           id,
@@ -254,20 +256,8 @@ export const commentResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      const comment = await ctx.services.comment.findById(id);
-      if (!comment) {
-        throw new GraphQLError('Comment not found', {
-          extensions: { code: 'NOT_FOUND' },
-        });
-      }
-      // Verify the org owns the issue
-      const issue = await ctx.services.issue.findById(comment.issueId);
-      if (!issue || issue.organizationId !== ctx.orgId) {
-        throw new GraphQLError('Comment not found', {
-          extensions: { code: 'NOT_FOUND' },
-        });
-      }
-      return comment;
+      await requireCommentAccess(ctx, id);
+      return ctx.services.comment.findById(id);
     },
     comments: async (
       _parent: unknown,
