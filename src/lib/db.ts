@@ -203,6 +203,52 @@ export interface DBCustomView {
   archivedAt?: string | null;
 }
 
+export interface DBNotification {
+  id: string;
+  organizationId: string;
+  userId: string;
+  issueId?: string | null;
+  actorId?: string | null;
+  type: string;
+  data: object;
+  read: boolean;
+  readAt?: string | null;
+  snoozedUntilAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DBIssueActivity {
+  id: string;
+  issueId: string;
+  actorId?: string | null;
+  field: string;
+  oldValue?: string | null;
+  newValue?: string | null;
+  createdAt: string;
+}
+
+export interface DBIssueRelation {
+  id: string;
+  issueId: string;
+  relatedIssueId: string;
+  type: string;
+  createdAt: string;
+}
+
+export interface DBIssueTemplate {
+  id: string;
+  teamId: string;
+  creatorId?: string | null;
+  name: string;
+  description?: string | null;
+  templateData: object;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string | null;
+}
+
 export interface DBSyncMetadata {
   key: string;
   value: unknown;
@@ -216,12 +262,16 @@ export class AppDatabase extends Dexie {
   teams!: Table<DBTeam, string>;
   workflowStates!: Table<DBWorkflowState, string>;
   issues!: Table<DBIssue, string>;
+  issueActivities!: Table<DBIssueActivity, string>;
   issueLabels!: Table<DBIssueLabel, string>;
+  issueRelations!: Table<DBIssueRelation, string>;
+  issueTemplates!: Table<DBIssueTemplate, string>;
   cycles!: Table<DBCycle, string>;
   projects!: Table<DBProject, string>;
   projectMilestones!: Table<DBProjectMilestone, string>;
   projectUpdates!: Table<DBProjectUpdate, string>;
   customViews!: Table<DBCustomView, string>;
+  notifications!: Table<DBNotification, string>;
   syncMetadata!: Table<DBSyncMetadata, string>;
 
   constructor() {
@@ -280,6 +330,25 @@ export class AppDatabase extends Dexie {
       issueLabels: 'id, organizationId, teamId, parentId',
       issues:
         'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
+      organizations: 'id',
+      projectMilestones: 'id, projectId',
+      projects: 'id, organizationId, statusType, leadId',
+      projectUpdates: 'id, projectId, userId',
+      syncMetadata: 'key',
+      teams: 'id, organizationId, parentId',
+      users: 'id, email',
+      workflowStates: 'id, teamId',
+    });
+    this.version(6).stores({
+      customViews: 'id, organizationId, teamId, creatorId',
+      cycles: 'id, teamId, organizationId',
+      issueActivities: 'id, issueId',
+      issueLabels: 'id, organizationId, teamId, parentId',
+      issueRelations: 'id, issueId, relatedIssueId',
+      issues:
+        'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
+      issueTemplates: 'id, teamId, creatorId',
+      notifications: 'id, userId, organizationId, issueId, read',
       organizations: 'id',
       projectMilestones: 'id, projectId',
       projects: 'id, organizationId, statusType, leadId',

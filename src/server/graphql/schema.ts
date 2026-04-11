@@ -542,6 +542,40 @@ export const typeDefs = `
     updatedAt: DateTime!
   }
 
+  type Notification {
+    id: ID!
+    organizationId: ID!
+    userId: ID!
+    issueId: ID
+    actorId: ID
+    type: String!
+    data: JSON!
+    read: Boolean!
+    readAt: DateTime
+    snoozedUntilAt: DateTime
+    actor: User
+    issue: Issue
+    createdAt: DateTime!
+    updatedAt: DateTime!
+  }
+
+  type NotificationPayload {
+    success: Boolean!
+    notification: Notification
+    lastSyncId: String!
+  }
+
+  type IssueActivity {
+    id: ID!
+    issueId: ID!
+    actorId: ID
+    field: String!
+    oldValue: String
+    newValue: String
+    actor: User
+    createdAt: DateTime!
+  }
+
   type CyclePayload {
     success: Boolean!
     cycle: Cycle
@@ -620,6 +654,64 @@ export const typeDefs = `
     sortOrder: Float
   }
 
+  type IssueRelation {
+    id: ID!
+    issueId: ID!
+    relatedIssueId: ID!
+    type: String!
+    issue: Issue!
+    relatedIssue: Issue!
+    createdAt: DateTime!
+  }
+
+  type IssueRelationPayload {
+    success: Boolean!
+    issueRelation: IssueRelation
+    lastSyncId: String!
+  }
+
+  input IssueRelationCreateInput {
+    issueId: String!
+    relatedIssueId: String!
+    type: String!
+  }
+
+  type IssueTemplate {
+    id: ID!
+    teamId: ID!
+    creatorId: ID
+    name: String!
+    description: String
+    templateData: JSON!
+    isDefault: Boolean!
+    team: Team!
+    creator: User
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    archivedAt: DateTime
+  }
+
+  type IssueTemplatePayload {
+    success: Boolean!
+    issueTemplate: IssueTemplate
+    lastSyncId: String!
+  }
+
+  input IssueTemplateCreateInput {
+    teamId: String!
+    name: String!
+    description: String
+    templateData: JSON
+    isDefault: Boolean
+  }
+
+  input IssueTemplateUpdateInput {
+    name: String
+    description: String
+    templateData: JSON
+    isDefault: Boolean
+  }
+
   scalar JSON
 
   type Query {
@@ -653,6 +745,12 @@ export const typeDefs = `
       after: String
       includeArchived: Boolean
     ): ProjectConnection!
+    notifications(limit: Int): [Notification!]!
+    notificationUnreadCount: Int!
+    issueActivities(issueId: ID!, limit: Int): [IssueActivity!]!
+    issueRelations(issueId: ID!): [IssueRelation!]!
+    issueTemplates(teamId: String!, includeArchived: Boolean): [IssueTemplate!]!
+    issueTemplate(id: ID!): IssueTemplate!
   }
 
   type Mutation {
@@ -715,5 +813,19 @@ export const typeDefs = `
     projectUpdateCreate(input: ProjectUpdateCreateInput!): ProjectUpdatePayload!
     projectUpdateUpdate(id: ID!, input: ProjectUpdateUpdateInput!): ProjectUpdatePayload!
     projectUpdateDelete(id: ID!): DeletePayload!
+
+    notificationMarkRead(id: ID!): NotificationPayload!
+    notificationMarkAllRead: DeletePayload!
+    notificationSnooze(id: ID!, until: DateTime!): NotificationPayload!
+    notificationSubscribe(issueId: ID!): DeletePayload!
+    notificationUnsubscribe(issueId: ID!): DeletePayload!
+
+    issueRelationCreate(input: IssueRelationCreateInput!): IssueRelationPayload!
+    issueRelationDelete(id: ID!): DeletePayload!
+
+    issueTemplateCreate(input: IssueTemplateCreateInput!): IssueTemplatePayload!
+    issueTemplateUpdate(id: ID!, input: IssueTemplateUpdateInput!): IssueTemplatePayload!
+    issueTemplateArchive(id: ID!): IssueTemplatePayload!
+    issueTemplateDelete(id: ID!): DeletePayload!
   }
 `;

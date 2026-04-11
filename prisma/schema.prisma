@@ -32,6 +32,7 @@ model Organization {
   teams                Team[]
   issues               Issue[]
   labels               IssueLabel[]
+  notifications        Notification[]
   syncActions          SyncAction[]
   projects             Project[]
   cycles               Cycle[]
@@ -75,6 +76,11 @@ model User {
   projectMemberships ProjectMember[]
   projectUpdates  ProjectUpdate[]
   customViews     CustomView[] @relation("CreatedViews")
+  issueActivities IssueActivity[] @relation("ActivityActor")
+  notificationSubscriptions NotificationSubscription[]
+  receivedNotifications Notification[] @relation("ReceivedNotifications")
+  sentNotifications Notification[] @relation("SentNotifications")
+  createdTemplates IssueTemplate[] @relation("CreatedTemplates")
 
   @@map("users")
 }
@@ -187,6 +193,7 @@ model Team {
   projectTeams            ProjectTeam[]
   cycles                  Cycle[]
   customViews             CustomView[]
+  issueTemplates          IssueTemplate[]
 
   // Unique on (organizationId, key) is enforced via a partial index in the DB
   // (WHERE archived_at IS NULL) so archived teams don't block key reuse.
@@ -309,9 +316,15 @@ model Issue {
   parent          Issue?       @relation("SubIssues", fields: [parentId], references: [id], onDelete: SetNull)
   children        Issue[]      @relation("SubIssues")
   labelAssignments IssueLabelAssignment[]
+  activities      IssueActivity[]
   cycle           Cycle?       @relation(fields: [cycleId], references: [id], onDelete: SetNull)
+  notifications   Notification[]
   project         Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
   projectMilestone ProjectMilestone? @relation(fields: [projectMilestoneId], references: [id], onDelete: SetNull)
+  subscriptions   NotificationSubscription[]
+  issueRelations  IssueRelation[] @relation("IssueRelations")
+  relatedToIssues IssueRelation[] @relation("RelatedIssues")
+  files           File[]
 
   @@unique([teamId, number])
   @@index([organizationId])
@@ -591,4 +604,122 @@ model IssueLabelAssignment {
   @@index([issueId])
   @@index([labelId])
   @@map("issue_label_assignments")
+}
+
+model Notification {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  issueId         String?   @map("issue_id") @db.Uuid
+  actorId         String?   @map("actor_id") @db.Uuid
+  // ISSUE_ASSIGNED, ISSUE_MENTIONED, ISSUE_COMMENTED, ISSUE_STATUS_CHANGED
+  type            String    @db.VarChar(50)
+  data            Json      @default("{}")
+  read            Boolean   @default(false)
+  readAt          DateTime? @map("read_at") @db.Timestamptz
+  snoozedUntilAt  DateTime? @map("snoozed_until_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  actor           User?        @relation("SentNotifications", fields: [actorId], references: [id], onDelete: SetNull)
+  issue           Issue?       @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user            User         @relation("ReceivedNotifications", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+  @@index([organizationId])
+  @@index([issueId])
+  @@map("notifications")
+}
+
+model NotificationSubscription {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  issueId   String   @map("issue_id") @db.Uuid
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, issueId])
+  @@index([userId])
+  @@index([issueId])
+  @@map("notification_subscriptions")
+}
+
+model IssueActivity {
+  id          String   @id @default(uuid()) @db.Uuid
+  issueId     String   @map("issue_id") @db.Uuid
+  actorId     String?  @map("actor_id") @db.Uuid
+  field       String   @db.VarChar(50)
+  oldValue    String?  @map("old_value")
+  newValue    String?  @map("new_value")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  actor       User?    @relation("ActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+  issue       Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([issueId, createdAt])
+  @@index([actorId])
+  @@map("issue_activities")
+}
+
+model IssueRelation {
+  id             String   @id @default(uuid()) @db.Uuid
+  issueId        String   @map("issue_id") @db.Uuid
+  relatedIssueId String   @map("related_issue_id") @db.Uuid
+  // related, blocks, blocked_by, duplicate
+  type           String   @db.VarChar(20)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  issue          Issue    @relation("IssueRelations", fields: [issueId], references: [id], onDelete: Cascade)
+  relatedIssue   Issue    @relation("RelatedIssues", fields: [relatedIssueId], references: [id], onDelete: Cascade)
+
+  @@unique([issueId, relatedIssueId, type])
+  @@index([issueId])
+  @@index([relatedIssueId])
+  @@map("issue_relations")
+}
+
+model IssueTemplate {
+  id           String    @id @default(uuid()) @db.Uuid
+  teamId       String    @map("team_id") @db.Uuid
+  creatorId    String?   @map("creator_id") @db.Uuid
+  name         String    @db.VarChar(255)
+  description  String?
+  templateData Json      @default("{}") @map("template_data")
+  isDefault    Boolean   @default(false) @map("is_default")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt   DateTime? @map("archived_at") @db.Timestamptz
+
+  creator      User?     @relation("CreatedTemplates", fields: [creatorId], references: [id], onDelete: SetNull)
+  team         Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+  @@index([creatorId])
+  @@map("issue_templates")
+}
+
+model File {
+  id          String    @id @default(uuid()) @db.Uuid
+  issueId     String?   @map("issue_id") @db.Uuid
+  projectId   String?   @map("project_id") @db.Uuid
+  uploaderId  String?   @map("uploader_id") @db.Uuid
+  name        String    @db.VarChar(500)
+  key         String    @db.VarChar(1000)
+  size        Int
+  mimeType    String    @map("mime_type") @db.VarChar(255)
+  url         String?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  issue       Issue?    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([issueId])
+  @@index([projectId])
+  @@index([uploaderId])
+  @@map("files")
 }

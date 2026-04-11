@@ -69,6 +69,12 @@ export async function GET(req: NextRequest) {
     for (const view of data.customViews) {
       lines.push(`CustomView=${JSON.stringify(view)}`);
     }
+    for (const relation of data.issueRelations) {
+      lines.push(`IssueRelation=${JSON.stringify(relation)}`);
+    }
+    for (const template of data.issueTemplates) {
+      lines.push(`IssueTemplate=${JSON.stringify(template)}`);
+    }
 
     lines.push(`_metadata_=${JSON.stringify({ lastSyncId: data.lastSyncId })}`);
 

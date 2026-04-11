@@ -73,6 +73,9 @@ export class SyncManager {
       projectMilestones,
       projectUpdates,
       customViews,
+      notifications,
+      issueRelations,
+      issueTemplates,
       meta,
     ] = await Promise.all([
       db.organizations.toArray(),
@@ -86,6 +89,9 @@ export class SyncManager {
       db.projectMilestones.toArray(),
       db.projectUpdates.toArray(),
       db.customViews.toArray(),
+      db.notifications.toArray(),
+      db.issueRelations.toArray(),
+      db.issueTemplates.toArray(),
       db.syncMetadata.get('lastSyncId'),
     ]);
 
@@ -102,6 +108,9 @@ export class SyncManager {
       cycleStore,
       projectStore,
       customViewStore,
+      notificationStore,
+      issueRelationStore,
+      issueTemplateStore,
       syncStore,
     } = this.stores;
 
@@ -119,6 +128,9 @@ export class SyncManager {
       projectStore.upsertMilestones(projectMilestones);
       projectStore.upsertUpdates(projectUpdates);
       customViewStore.upsertMany(customViews);
+      notificationStore.upsertMany(notifications);
+      issueRelationStore.upsertMany(issueRelations);
+      issueTemplateStore.upsertMany(issueTemplates);
       syncStore.setLastSyncId(String(meta.value));
       return true;
     }
@@ -141,6 +153,9 @@ export class SyncManager {
       cycleStore,
       projectStore,
       customViewStore,
+      notificationStore,
+      issueRelationStore,
+      issueTemplateStore,
     } = this.stores;
 
     try {
@@ -162,7 +177,10 @@ export class SyncManager {
         customViews: [] as object[],
         cycles: [] as object[],
         issueLabels: [] as object[],
+        issueRelations: [] as object[],
         issues: [] as object[],
+        issueTemplates: [] as object[],
+        notifications: [] as object[],
         organizations: [] as object[],
         projectMilestones: [] as object[],
         projects: [] as object[],
@@ -209,6 +227,9 @@ export class SyncManager {
           db.projectMilestones,
           db.projectUpdates,
           db.customViews,
+          db.notifications,
+          db.issueRelations,
+          db.issueTemplates,
           db.syncMetadata,
         ],
         async () => {
@@ -224,6 +245,9 @@ export class SyncManager {
             db.projectMilestones.clear(),
             db.projectUpdates.clear(),
             db.customViews.clear(),
+            db.notifications.clear(),
+            db.issueRelations.clear(),
+            db.issueTemplates.clear(),
           ]);
           await Promise.all([
             db.organizations.bulkPut(
@@ -269,6 +293,21 @@ export class SyncManager {
             db.customViews.bulkPut(
               batches.customViews as Parameters<
                 typeof db.customViews.bulkPut
+              >[0],
+            ),
+            db.notifications.bulkPut(
+              batches.notifications as Parameters<
+                typeof db.notifications.bulkPut
+              >[0],
+            ),
+            db.issueRelations.bulkPut(
+              batches.issueRelations as Parameters<
+                typeof db.issueRelations.bulkPut
+              >[0],
+            ),
+            db.issueTemplates.bulkPut(
+              batches.issueTemplates as Parameters<
+                typeof db.issueTemplates.bulkPut
               >[0],
             ),
             db.syncMetadata.put({ key: 'lastSyncId', value: lastSyncId }),
@@ -318,6 +357,21 @@ export class SyncManager {
       );
       customViewStore.upsertMany(
         batches.customViews as Parameters<typeof customViewStore.upsertMany>[0],
+      );
+      notificationStore.upsertMany(
+        batches.notifications as Parameters<
+          typeof notificationStore.upsertMany
+        >[0],
+      );
+      issueRelationStore.upsertMany(
+        batches.issueRelations as Parameters<
+          typeof issueRelationStore.upsertMany
+        >[0],
+      );
+      issueTemplateStore.upsertMany(
+        batches.issueTemplates as Parameters<
+          typeof issueTemplateStore.upsertMany
+        >[0],
       );
       syncStore.setLastSyncId(lastSyncId);
       syncStore.setStatus('connected');
@@ -378,6 +432,9 @@ export class SyncManager {
       cycleStore,
       projectStore,
       customViewStore,
+      notificationStore,
+      issueRelationStore,
+      issueTemplateStore,
       syncStore,
     } = this.stores;
 
@@ -396,11 +453,17 @@ export class SyncManager {
       projectMilestones: object[];
       projectUpdates: object[];
       customViews: object[];
+      notifications: object[];
+      issueRelations: object[];
+      issueTemplates: object[];
     } = {
       customViews: [],
       cycles: [],
       issueLabels: [],
+      issueRelations: [],
       issues: [],
+      issueTemplates: [],
+      notifications: [],
       organizations: [],
       projectMilestones: [],
       projects: [],
@@ -420,7 +483,10 @@ export class SyncManager {
         | 'projects'
         | 'projectMilestones'
         | 'projectUpdates'
-        | 'customViews';
+        | 'customViews'
+        | 'notifications'
+        | 'issueRelations'
+        | 'issueTemplates';
       id: string;
     }[] = [];
 
@@ -548,6 +614,53 @@ export class SyncManager {
             dexieUpserts.customViews.push(data);
           }
           break;
+        case 'Notification':
+          notificationStore.applySyncAction(
+            act,
+            modelId,
+            data as Parameters<typeof notificationStore.applySyncAction>[2],
+          );
+          if (act === 'D') {
+            dexieDeletes.push({ id: modelId, table: 'notifications' });
+          } else if (data) {
+            dexieUpserts.notifications.push(data);
+          }
+          break;
+        case 'IssueRelation':
+          issueRelationStore.applySyncAction(
+            act,
+            modelId,
+            data as Parameters<typeof issueRelationStore.applySyncAction>[2],
+          );
+          if (act === 'D') {
+            dexieDeletes.push({ id: modelId, table: 'issueRelations' });
+          } else if (data) {
+            dexieUpserts.issueRelations.push(data);
+          }
+          break;
+        case 'IssueTemplate':
+          issueTemplateStore.applySyncAction(
+            act,
+            modelId,
+            data as Parameters<typeof issueTemplateStore.applySyncAction>[2],
+          );
+          if (act === 'D') {
+            dexieDeletes.push({ id: modelId, table: 'issueTemplates' });
+          } else if (data) {
+            dexieUpserts.issueTemplates.push(data);
+          }
+          break;
+        case 'IssueActivity':
+          // IssueActivity is queried per-issue via GraphQL when the detail panel opens;
+          // we only persist it to Dexie for offline reads, no MobX store needed.
+          if (act === 'D') {
+            await db.issueActivities.delete(modelId);
+          } else if (data) {
+            await db.issueActivities.put(
+              data as Parameters<typeof db.issueActivities.put>[0],
+            );
+          }
+          break;
       }
 
       // Update max sync ID
@@ -572,6 +685,9 @@ export class SyncManager {
         db.projectMilestones,
         db.projectUpdates,
         db.customViews,
+        db.notifications,
+        db.issueRelations,
+        db.issueTemplates,
         db.syncMetadata,
       ],
       async () => {
@@ -626,6 +742,24 @@ export class SyncManager {
             db.customViews.bulkPut(
               dexieUpserts.customViews as Parameters<
                 typeof db.customViews.bulkPut
+              >[0],
+            ),
+          dexieUpserts.notifications.length > 0 &&
+            db.notifications.bulkPut(
+              dexieUpserts.notifications as Parameters<
+                typeof db.notifications.bulkPut
+              >[0],
+            ),
+          dexieUpserts.issueRelations.length > 0 &&
+            db.issueRelations.bulkPut(
+              dexieUpserts.issueRelations as Parameters<
+                typeof db.issueRelations.bulkPut
+              >[0],
+            ),
+          dexieUpserts.issueTemplates.length > 0 &&
+            db.issueTemplates.bulkPut(
+              dexieUpserts.issueTemplates as Parameters<
+                typeof db.issueTemplates.bulkPut
               >[0],
             ),
           db.syncMetadata.put({ key: 'lastSyncId', value: maxId }),
