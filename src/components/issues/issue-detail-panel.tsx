@@ -8,10 +8,16 @@ import {
 } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
-import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
+import type {
+  IssueDetail,
+  IssueLabel,
+  IssueUser,
+  WorkflowState,
+} from '@/types/issues';
 import { TipTapEditor } from '../editor/tiptap-editor';
 import { AssigneeSelect } from '../properties/assignee-select';
 import { DueDatePicker } from '../properties/due-date-picker';
+import { EstimatePicker } from '../properties/estimate-picker';
 import { LabelDot, LabelSelect } from '../properties/label-select';
 import { PrioritySelect } from '../properties/priority-select';
 import { StatusSelect } from '../properties/status-select';
@@ -19,20 +25,6 @@ import { ActivityTimeline } from './activity-timeline';
 import { CommentThread } from './comment-thread';
 import { RelationsSection } from './relations-section';
 import { SubIssueList } from './sub-issue-list';
-
-interface IssueDetail {
-  id: string;
-  identifier: string;
-  title: string;
-  description?: string | null;
-  priority: number;
-  stateId: string;
-  assigneeId?: string | null;
-  dueDate?: string | null;
-  labels: IssueLabel[];
-  createdAt: string;
-  updatedAt: string;
-}
 
 interface IssueDetailPanelProps {
   issue: IssueDetail | null;
@@ -51,12 +43,15 @@ export function IssueDetailPanel({
   onClose,
   onUpdate,
 }: IssueDetailPanelProps) {
-  const { userStore } = useStore();
+  const { userStore, teamStore } = useStore();
   const currentUserId = userStore.currentUser?.id;
   const mentionUsers = useMemo(
     () => users.map(u => ({ id: u.id, label: u.displayName })),
     [users],
   );
+  // Resolve estimation type from team so the correct scale displays
+  const estimationType =
+    teamStore.findById(issue?.teamId ?? '')?.issueEstimationType ?? 'notUsed';
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [editingDesc, setEditingDesc] = useState(false);
@@ -233,6 +228,20 @@ export function IssueDetailPanel({
                 </span>
               )}
             </div>
+
+            {/* Estimate — only shown when the team uses estimation */}
+            {estimationType !== 'notUsed' && (
+              <>
+                <span className="text-zinc-500">Estimate</span>
+                <EstimatePicker
+                  value={issue.estimate}
+                  estimationType={estimationType}
+                  onChange={estimate =>
+                    onUpdate(issue.id, { estimate: estimate ?? undefined })
+                  }
+                />
+              </>
+            )}
           </div>
 
           {/* Description */}
@@ -281,7 +290,12 @@ export function IssueDetailPanel({
           {/* Comments */}
           <div className="mt-6">
             <p className="mb-3 text-xs font-medium text-zinc-500">Comments</p>
-            <CommentThread issueId={issue.id} currentUserId={currentUserId} />
+            <CommentThread
+              issueId={issue.id}
+              teamId={issue.teamId}
+              currentUserId={currentUserId}
+              mentionUsers={mentionUsers}
+            />
           </div>
 
           {/* Activity */}

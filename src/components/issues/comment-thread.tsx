@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn, formatRelativeTime } from '@/lib/utils';
+import type { MentionItem } from '../editor/mention-list';
 import { TipTapEditor } from '../editor/tiptap-editor';
 import { UserAvatar } from '../properties/assignee-select';
 
@@ -46,7 +47,9 @@ interface CommentItem {
 
 interface CommentThreadProps {
   issueId: string;
+  teamId?: string;
   currentUserId?: string;
+  mentionUsers?: MentionItem[];
 }
 
 const COMMENTS_FRAGMENT = `
@@ -144,7 +147,12 @@ function updateCommentInTree(
   });
 }
 
-export function CommentThread({ issueId, currentUserId }: CommentThreadProps) {
+export function CommentThread({
+  issueId,
+  teamId,
+  currentUserId,
+  mentionUsers,
+}: CommentThreadProps) {
   const [comments, setComments] = useState<CommentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
@@ -268,6 +276,9 @@ export function CommentThread({ issueId, currentUserId }: CommentThreadProps) {
           key={comment.id}
           comment={comment}
           currentUserId={currentUserId}
+          mentionUsers={mentionUsers}
+          issueId={issueId}
+          teamId={teamId}
           onDelete={deleteComment}
           onToggleResolve={toggleResolve}
           onToggleReaction={toggleReaction}
@@ -279,26 +290,42 @@ export function CommentThread({ issueId, currentUserId }: CommentThreadProps) {
               updateCommentInTree(prev, updated.id, () => updated),
             )
           }
+          onConvertToSubIssue={id =>
+            setComments(prev => prev.filter(c => c.id !== id))
+          }
         />
       ))}
 
       {/* New comment composer */}
       <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
         <CommentComposer
-          placeholder="Write a comment… (supports **markdown**)"
+          placeholder="Write a comment… (supports **markdown**, @mentions)"
           onSubmit={body => submitComment(body)}
           submitting={submitting}
           value={newComment}
           onChange={setNewComment}
+          mentionUsers={mentionUsers}
         />
       </div>
     </div>
   );
 }
 
+const CONVERT_TO_SUB_ISSUE_MUTATION = `
+  mutation ConvertCommentToSubIssue($input: IssueCreateInput!) {
+    issueCreate(input: $input) {
+      success lastSyncId
+      issue { id title identifier }
+    }
+  }
+`;
+
 function CommentCard({
   comment,
   currentUserId,
+  mentionUsers,
+  issueId,
+  teamId,
   depth = 0,
   onDelete,
   onToggleResolve,
@@ -307,9 +334,13 @@ function CommentCard({
   showReplyTo,
   onSubmitReply,
   onUpdate,
+  onConvertToSubIssue,
 }: {
   comment: CommentItem;
   currentUserId?: string;
+  mentionUsers?: MentionItem[];
+  issueId: string;
+  teamId?: string;
   depth?: number;
   onDelete: (id: string) => void;
   onToggleResolve: (comment: CommentItem) => void;
@@ -322,6 +353,7 @@ function CommentCard({
   showReplyTo: string | null;
   onSubmitReply: (body: string, parentId?: string) => void;
   onUpdate: (comment: CommentItem) => void;
+  onConvertToSubIssue: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [editBody, setEditBody] = useState(comment.body);
@@ -366,6 +398,45 @@ function CommentCard({
       setEditing(false);
     } catch {
       toast.error('Failed to update comment');
+    }
+  };
+
+  const handleQuoteReply = () => {
+    // Wrap the comment body in a <blockquote> for the reply composer
+    const quoted = `<blockquote>${comment.body}</blockquote><p></p>`;
+    onReply(comment.id);
+    // Use a microtask so the reply box is mounted before we set its content
+    setTimeout(() => {
+      setReplyBody(quoted);
+    }, 50);
+  };
+
+  const handleConvertToSubIssue = async () => {
+    setShowMenu(false);
+    if (!teamId) {
+      toast.error('Cannot convert — team not resolved');
+      return;
+    }
+    // Strip HTML to derive a title — keep it to 255 chars
+    const parser =
+      typeof window !== 'undefined' ? new DOMParser() : null;
+    const text = parser
+      ? parser.parseFromString(comment.body, 'text/html').body.textContent ?? ''
+      : comment.body.replace(/<[^>]+>/g, '');
+    const title = text.trim().slice(0, 255) || 'Sub-issue from comment';
+    try {
+      await gql(CONVERT_TO_SUB_ISSUE_MUTATION, {
+        input: {
+          description: comment.body,
+          parentId: issueId,
+          teamId,
+          title,
+        },
+      });
+      toast.success('Converted to sub-issue');
+      onConvertToSubIssue(comment.id);
+    } catch {
+      toast.error('Failed to convert comment to sub-issue');
     }
   };
 
@@ -455,13 +526,13 @@ function CommentCard({
               )}
             </div>
 
-            {/* Reply */}
+            {/* Quote reply */}
             {depth === 0 && (
               <button
                 type="button"
-                onClick={() => onReply(comment.id)}
+                onClick={handleQuoteReply}
                 className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
-                title="Reply"
+                title="Quote reply"
               >
                 <CornerDownRight className="h-3.5 w-3.5" />
               </button>
@@ -482,18 +553,18 @@ function CommentCard({
               <CheckCircle className="h-3.5 w-3.5" />
             </button>
 
-            {/* More menu (edit/delete) */}
-            {isOwn && (
-              <div ref={menuRef} className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowMenu(v => !v)}
-                  className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
-                >
-                  <MoreHorizontal className="h-3.5 w-3.5" />
-                </button>
-                {showMenu && (
-                  <div className="absolute right-0 top-6 z-50 min-w-[120px] rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+            {/* More menu (edit/delete/convert) */}
+            <div ref={menuRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setShowMenu(v => !v)}
+                className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </button>
+              {showMenu && (
+                <div className="absolute right-0 top-6 z-50 min-w-[160px] rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+                  {isOwn && (
                     <button
                       type="button"
                       onClick={() => {
@@ -504,6 +575,18 @@ function CommentCard({
                     >
                       Edit
                     </button>
+                  )}
+                  {/* Convert to sub-issue — only on top-level comments */}
+                  {depth === 0 && (
+                    <button
+                      type="button"
+                      onClick={handleConvertToSubIssue}
+                      className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                    >
+                      Convert to sub-issue
+                    </button>
+                  )}
+                  {isOwn && (
                     <button
                       type="button"
                       onClick={() => {
@@ -514,10 +597,10 @@ function CommentCard({
                     >
                       Delete
                     </button>
-                  </div>
-                )}
-              </div>
-            )}
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -589,6 +672,9 @@ function CommentCard({
               key={reply.id}
               comment={reply}
               currentUserId={currentUserId}
+              mentionUsers={mentionUsers}
+              issueId={issueId}
+              teamId={teamId}
               depth={1}
               onDelete={onDelete}
               onToggleResolve={onToggleResolve}
@@ -597,6 +683,7 @@ function CommentCard({
               showReplyTo={showReplyTo}
               onSubmitReply={onSubmitReply}
               onUpdate={onUpdate}
+              onConvertToSubIssue={onConvertToSubIssue}
             />
           ))}
         </div>
@@ -614,6 +701,7 @@ function CommentCard({
             submitting={false}
             value={replyBody}
             onChange={setReplyBody}
+            mentionUsers={mentionUsers}
             compact
           />
         </div>
@@ -628,6 +716,7 @@ function CommentComposer({
   submitting,
   value,
   onChange,
+  mentionUsers,
   compact = false,
 }: {
   placeholder: string;
@@ -635,6 +724,7 @@ function CommentComposer({
   submitting: boolean;
   value: string;
   onChange: (v: string) => void;
+  mentionUsers?: MentionItem[];
   compact?: boolean;
 }) {
   const isEmpty = !value || value === '<p></p>' || value.trim() === '';
@@ -651,6 +741,7 @@ function CommentComposer({
         placeholder={placeholder}
         onChange={onChange}
         showToolbar={!compact}
+        mentionUsers={mentionUsers}
         className={cn('text-sm', compact ? 'min-h-[40px]' : 'min-h-[80px]')}
       />
       <div className="mt-2 flex justify-end">

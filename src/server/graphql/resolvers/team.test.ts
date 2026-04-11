@@ -84,9 +84,51 @@ describe('teamResolvers', () => {
   describe('Query.teams', () => {
     it('returns teams for the organization', async () => {
       ctx.prisma.team.findMany.mockResolvedValue([TEST_TEAM]);
+      // Org admin sees all teams (no private filtering needed)
+      ctx.prisma.organizationMember.findUnique.mockResolvedValue({
+        organizationId: TEST_ORG.id,
+        role: 'admin',
+        userId: TEST_USER.id,
+      });
 
       const result = await teamResolvers.Query.teams(null, {}, ctx as never);
       expect(result).toEqual([TEST_TEAM]);
+    });
+
+    it('filters out private teams for non-members', async () => {
+      const privateTeam = { ...TEST_TEAM, id: 'private-1', private: true };
+      ctx.prisma.team.findMany.mockResolvedValue([TEST_TEAM, privateTeam]);
+      // Non-admin user
+      ctx.prisma.organizationMember.findUnique.mockResolvedValue({
+        organizationId: TEST_ORG.id,
+        role: 'member',
+        userId: TEST_USER.id,
+      });
+      // User is only a member of TEST_TEAM, not the private team
+      ctx.prisma.teamMembership.findMany.mockResolvedValue([
+        { teamId: TEST_TEAM.id },
+      ]);
+
+      const result = await teamResolvers.Query.teams(null, {}, ctx as never);
+      expect(result).toEqual([TEST_TEAM]);
+    });
+
+    it('shows private teams to their members', async () => {
+      const privateTeam = { ...TEST_TEAM, id: 'private-1', private: true };
+      ctx.prisma.team.findMany.mockResolvedValue([TEST_TEAM, privateTeam]);
+      ctx.prisma.organizationMember.findUnique.mockResolvedValue({
+        organizationId: TEST_ORG.id,
+        role: 'member',
+        userId: TEST_USER.id,
+      });
+      // User is member of both teams
+      ctx.prisma.teamMembership.findMany.mockResolvedValue([
+        { teamId: TEST_TEAM.id },
+        { teamId: privateTeam.id },
+      ]);
+
+      const result = await teamResolvers.Query.teams(null, {}, ctx as never);
+      expect(result).toEqual([TEST_TEAM, privateTeam]);
     });
   });
 

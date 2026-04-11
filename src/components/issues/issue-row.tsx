@@ -5,6 +5,7 @@ import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 import { AssigneeSelect } from '../properties/assignee-select';
 import { CycleSelect } from '../properties/cycle-select';
 import { DueDatePicker } from '../properties/due-date-picker';
+import { EstimateBadge, EstimatePicker } from '../properties/estimate-picker';
 import { LabelSelect } from '../properties/label-select';
 import { PrioritySelect } from '../properties/priority-select';
 import { StatusSelect } from '../properties/status-select';
@@ -15,6 +16,7 @@ export interface IssueRowData {
   title: string;
   priority: number;
   stateId: string;
+  estimate?: number | null;
   assigneeId?: string | null;
   cycleId?: string | null;
   dueDate?: string | null;
@@ -30,6 +32,7 @@ export type OpenProperty =
   | 'dueDate'
   | 'project'
   | 'cycle'
+  | 'estimate'
   | null;
 
 interface IssueRowProps {
@@ -38,6 +41,7 @@ interface IssueRowProps {
   users: IssueUser[];
   allLabels: IssueLabel[];
   teamId?: string;
+  estimationType?: string;
   selected: boolean;
   onSelect: () => void;
   onOpen: () => void;
@@ -56,6 +60,7 @@ export function IssueRow({
   users,
   allLabels,
   teamId,
+  estimationType,
   selected,
   onSelect,
   onOpen,
@@ -143,6 +148,22 @@ export function IssueRow({
           open={openProperty === 'cycle'}
           onClose={onPropertyClosed}
         />
+      )}
+
+      {/* Estimate — only when team has estimation enabled */}
+      {estimationType && estimationType !== 'notUsed' && (
+        openProperty === 'estimate' ? (
+          <EstimatePicker
+            value={issue.estimate}
+            estimationType={estimationType}
+            onChange={estimate => {
+              onUpdate(issue.id, { estimate: estimate ?? undefined });
+              onPropertyClosed?.();
+            }}
+          />
+        ) : (
+          <EstimateBadge value={issue.estimate} estimationType={estimationType} />
+        )
       )}
 
       {/* Status */}

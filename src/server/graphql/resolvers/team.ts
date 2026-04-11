@@ -178,12 +178,51 @@ export const teamResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
+      // Private teams are only visible to members and org admins/owners
+      if (team.private) {
+        const orgMembership = await ctx.prisma.organizationMember.findUnique({
+          select: { role: true },
+          where: { organizationId_userId: { organizationId: ctx.orgId, userId: ctx.userId } },
+        });
+        const isOrgAdmin = orgMembership?.role === 'admin' || orgMembership?.role === 'owner';
+        if (!isOrgAdmin) {
+          const teamMembership = await ctx.prisma.teamMembership.findUnique({
+            where: { teamId_userId: { teamId: id, userId: ctx.userId } },
+          });
+          if (!teamMembership) {
+            throw new GraphQLError('Team not found', {
+              extensions: { code: 'NOT_FOUND' },
+            });
+          }
+        }
+      }
       return team;
     },
 
     teams: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
-      return ctx.services.team.findByOrgId(ctx.orgId);
+      const allTeams = await ctx.services.team.findByOrgId(ctx.orgId);
+
+      // Check if the user is an org admin/owner — they see all teams
+      const orgMembership = await ctx.prisma.organizationMember.findUnique({
+        select: { role: true },
+        where: { organizationId_userId: { organizationId: ctx.orgId, userId: ctx.userId } },
+      });
+      if (orgMembership?.role === 'admin' || orgMembership?.role === 'owner') {
+        return allTeams;
+      }
+
+      // Non-admins: filter out private teams they're not members of
+      const memberTeamIds = new Set(
+        (
+          await ctx.prisma.teamMembership.findMany({
+            select: { teamId: true },
+            where: { teamId: { in: allTeams.map(t => t.id) }, userId: ctx.userId },
+          })
+        ).map(m => m.teamId),
+      );
+
+      return allTeams.filter(t => !t.private || memberTeamIds.has(t.id));
     },
   },
 

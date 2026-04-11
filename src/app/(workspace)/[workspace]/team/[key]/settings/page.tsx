@@ -7,6 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   type TeamMember,
+  type TeamRole,
   TeamMemberManagement,
 } from '@/components/teams/team-member-management';
 import { SimpleSelect } from '@/components/ui/select';
@@ -25,6 +26,7 @@ const TEAM_MEMBERS_QUERY = `
       members {
         id
         owner
+        role
         user {
           id displayName email initials avatarUrl avatarBackgroundColor
         }
@@ -85,7 +87,7 @@ const MEMBERSHIP_UPDATE_MUTATION = `
     teamMembershipUpdate(id: $id, input: $input) {
       success
       teamMembership {
-        id owner
+        id owner role
       }
     }
   }
@@ -98,6 +100,7 @@ const MEMBERSHIP_UPDATE_MUTATION = `
 interface RawMembership {
   id: string;
   owner: boolean;
+  role?: string;
   user: {
     id: string;
     displayName: string;
@@ -121,6 +124,7 @@ function rawToMember(m: RawMembership): TeamMember {
     initials: m.user.initials,
     isOwner: m.owner,
     membershipId: m.id,
+    role: (m.role as TeamMember['role']) ?? 'member',
     userId: m.user.id,
   };
 }
@@ -142,6 +146,8 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
   // ── Local form state ──────────────────────────────────────────────────────
   const [name, setName] = useState(team?.name ?? '');
   const [description, setDescription] = useState(team?.description ?? '');
+  const [isPrivate, setIsPrivate] = useState(team?.private ?? false);
+  const [parentId, setParentId] = useState(team?.parentId ?? '');
   const [triageEnabled, setTriageEnabled] = useState(
     team?.triageEnabled ?? false,
   );
@@ -181,6 +187,8 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
     if (team) {
       setName(team.name);
       setDescription(team.description ?? '');
+      setIsPrivate(team.private ?? false);
+      setParentId(team.parentId ?? '');
       setTriageEnabled(team.triageEnabled);
     }
   }, [team]);
@@ -228,6 +236,11 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
+  // Parent team options — exclude self and own descendants to prevent cycles
+  const parentTeamOptions = teamStore.all.filter(
+    t => t.id !== team?.id && !t.parentId && !t.archivedAt,
+  );
+
   const handleSave = useCallback(async () => {
     if (!team || saving) {
       return;
@@ -240,6 +253,8 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         input: {
           description: description.trim() || null,
           name: name.trim(),
+          parentId: parentId || null,
+          private: isPrivate,
           triageEnabled,
         },
       });
@@ -257,7 +272,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
     } finally {
       setSaving(false);
     }
-  }, [team, name, description, triageEnabled, saving, teamStore]);
+  }, [team, name, description, isPrivate, parentId, triageEnabled, saving, teamStore]);
 
   const handleAddMember = useCallback(
     async (userId: string) => {
@@ -316,6 +331,25 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         ),
       );
       toast.success(isOwner ? 'Owner role granted' : 'Owner role removed');
+    },
+    [],
+  );
+
+  const handleUpdateRole = useCallback(
+    async (membershipId: string, role: TeamRole) => {
+      const result = await gql(MEMBERSHIP_UPDATE_MUTATION, {
+        id: membershipId,
+        input: { role },
+      });
+      if (result.errors?.length) {
+        throw new Error(gqlError(result, 'Failed to update role'));
+      }
+      setMembers(prev =>
+        prev.map(m =>
+          m.membershipId === membershipId ? { ...m, role } : m,
+        ),
+      );
+      toast.success('Role updated');
     },
     [],
   );
@@ -429,6 +463,32 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                 </span>
               </div>
             </div>
+
+            {/* Parent team */}
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="settings-parent"
+                className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+              >
+                Parent team
+              </label>
+              <select
+                id="settings-parent"
+                value={parentId}
+                onChange={e => setParentId(e.target.value)}
+                className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100 dark:bg-zinc-900"
+              >
+                <option value="">None (top-level team)</option>
+                {parentTeamOptions.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.displayName || t.name} ({t.key})
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-zinc-400">
+                Makes this a sub-team that inherits settings from its parent.
+              </p>
+            </div>
           </div>
         </section>
 
@@ -436,7 +496,37 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
             Workflow
           </h2>
-          <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
+          <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900 flex flex-col gap-5">
+            {/* Private team toggle */}
+            <label className="flex cursor-pointer items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Private team
+                </p>
+                <p className="text-xs text-zinc-400">
+                  Only team members can see this team and its issues
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isPrivate}
+                onClick={() => setIsPrivate(v => !v)}
+                className={cn(
+                  'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                  isPrivate ? 'bg-indigo-600' : 'bg-zinc-200 dark:bg-zinc-700',
+                )}
+              >
+                <span
+                  className={cn(
+                    'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-200',
+                    isPrivate ? 'translate-x-4' : 'translate-x-0',
+                  )}
+                />
+              </button>
+            </label>
+
+            {/* Triage toggle */}
             <label className="flex cursor-pointer items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
@@ -502,6 +592,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                 onAddMember={handleAddMember}
                 onRemoveMember={handleRemoveMember}
                 onToggleOwner={handleToggleOwner}
+                onUpdateRole={handleUpdateRole}
               />
             )}
           </div>

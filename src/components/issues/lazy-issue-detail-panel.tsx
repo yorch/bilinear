@@ -2,25 +2,16 @@
 
 import { lazy, Suspense } from 'react';
 import { DetailPanelSkeleton } from '@/components/ui/skeleton';
-import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
+import type {
+  IssueDetail,
+  IssueLabel,
+  IssueUser,
+  WorkflowState,
+} from '@/types/issues';
 
 const IssueDetailPanel = lazy(() =>
   import('./issue-detail-panel').then(m => ({ default: m.IssueDetailPanel })),
 );
-
-interface IssueDetail {
-  id: string;
-  identifier: string;
-  title: string;
-  description?: string | null;
-  priority: number;
-  stateId: string;
-  assigneeId?: string | null;
-  dueDate?: string | null;
-  labels: IssueLabel[];
-  createdAt: string;
-  updatedAt: string;
-}
 
 interface Props {
   issue: IssueDetail | null;
