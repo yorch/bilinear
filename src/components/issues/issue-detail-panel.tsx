@@ -8,12 +8,14 @@ import {
 } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
+import { TipTapEditor } from '../editor/tiptap-editor';
 import { AssigneeSelect } from '../properties/assignee-select';
 import { DueDatePicker } from '../properties/due-date-picker';
 import { LabelDot, LabelSelect } from '../properties/label-select';
 import { PrioritySelect } from '../properties/priority-select';
 import { StatusSelect } from '../properties/status-select';
 import { ActivityTimeline } from './activity-timeline';
+import { CommentThread } from './comment-thread';
 
 interface IssueDetail {
   id: string;
@@ -230,26 +232,40 @@ export function IssueDetailPanel({
               Description
             </p>
             {editingDesc ? (
-              <textarea
-                value={descDraft}
-                onChange={e => setDescDraft(e.target.value)}
-                onBlur={saveDesc}
-                rows={6}
-                className="w-full resize-none rounded-md border border-zinc-200 bg-transparent p-2 text-sm outline-none focus:border-indigo-400 dark:border-zinc-700"
-              />
+              <div className="rounded-md border border-indigo-400 bg-transparent p-2 transition-colors">
+                <TipTapEditor
+                  content={descDraft}
+                  placeholder="Add a description… (supports **markdown**, /slash commands)"
+                  onChange={html => setDescDraft(html)}
+                  onBlur={saveDesc}
+                  readOnly={false}
+                  showToolbar={true}
+                  className="text-sm"
+                />
+              </div>
             ) : (
               <button
                 type="button"
-                className="min-h-[60px] w-full cursor-text rounded-md p-2 text-left text-sm text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                className="w-full cursor-text rounded-md p-2 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
                 onClick={() => setEditingDesc(true)}
               >
-                {issue.description || (
-                  <span className="text-zinc-400 italic">
-                    Add a description…
-                  </span>
-                )}
+                <TipTapEditor
+                  content={descDraft}
+                  placeholder="Add a description… (supports **markdown**, /slash commands)"
+                  onChange={html => setDescDraft(html)}
+                  onBlur={saveDesc}
+                  readOnly={true}
+                  showToolbar={false}
+                  className="text-sm"
+                />
               </button>
             )}
+          </div>
+
+          {/* Comments */}
+          <div className="mt-6">
+            <p className="mb-3 text-xs font-medium text-zinc-500">Comments</p>
+            <CommentThread issueId={issue.id} />
           </div>
 
           {/* Activity */}

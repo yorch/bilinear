@@ -52,7 +52,26 @@ export const Sidebar = observer(function Sidebar({
     },
   ];
 
-  const teams = teamStore.all;
+  const allTeams = teamStore.all;
+  // Build hierarchy: root teams (no parent) with their children
+  const rootTeams = allTeams.filter(t => !t.parentId);
+  const childTeamsByParent = allTeams.reduce<Record<string, typeof allTeams>>(
+    (acc, t) => {
+      if (t.parentId) {
+        if (!acc[t.parentId]) {
+          acc[t.parentId] = [];
+        }
+        acc[t.parentId].push(t);
+      }
+      return acc;
+    },
+    {},
+  );
+  // Flatten into display order: each root team followed by its children
+  const teams = rootTeams.flatMap(t => [
+    t,
+    ...(childTeamsByParent[t.id] ?? []),
+  ]);
 
   return (
     <aside
@@ -135,6 +154,7 @@ export const Sidebar = observer(function Sidebar({
                 </li>
               ) : (
                 teams.map(team => {
+                  const isChild = !!team.parentId;
                   const href = `${base}/team/${team.key}`;
                   const cyclesHref = `${href}/cycles`;
                   const backlogHref = `${href}/backlog`;
@@ -148,7 +168,10 @@ export const Sidebar = observer(function Sidebar({
                   const isCyclesActive = pathname.startsWith(cyclesHref);
                   const isBacklogActive = pathname.startsWith(backlogHref);
                   return (
-                    <li key={team.id} className="flex flex-col gap-0.5">
+                    <li
+                      key={team.id}
+                      className={cn('flex flex-col gap-0.5', isChild && 'ml-3')}
+                    >
                       <Link
                         href={href}
                         title={team.displayName || team.name}
@@ -163,10 +186,14 @@ export const Sidebar = observer(function Sidebar({
                           {team.icon ? (
                             <span className="text-xs">{team.icon}</span>
                           ) : (
-                            <Users className="h-3.5 w-3.5" />
+                            <Users
+                              className={cn(
+                                isChild ? 'h-3 w-3' : 'h-3.5 w-3.5',
+                              )}
+                            />
                           )}
                         </span>
-                        <span className="truncate">
+                        <span className={cn('truncate', isChild && 'text-xs')}>
                           {team.displayName || team.name}
                         </span>
                       </Link>

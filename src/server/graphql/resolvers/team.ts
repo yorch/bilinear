@@ -223,6 +223,8 @@ export const teamResolvers = {
 
   TeamMembership: {
     owner: (membership: TeamMembership) => membership.isOwner,
+    role: (membership: TeamMembership & { role?: string }) =>
+      membership.role ?? 'member',
 
     team: async (
       membership: TeamMembership,

@@ -196,4 +196,29 @@ export class NotificationService {
       });
     }
   }
+
+  async notifyCommentSubscribers(
+    orgId: string,
+    issueId: string,
+    actorId: string,
+    commentId: string,
+  ): Promise<Notification[]> {
+    const subscribers = await this.getSubscribers(issueId);
+    const recipientIds = subscribers.filter(id => id !== actorId);
+    if (recipientIds.length === 0) {
+      return [];
+    }
+
+    return Promise.all(
+      recipientIds.map(userId =>
+        this.create(orgId, {
+          actorId,
+          data: { commentId, issueId },
+          issueId,
+          type: 'ISSUE_COMMENT',
+          userId,
+        }),
+      ),
+    );
+  }
 }

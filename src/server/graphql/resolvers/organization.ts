@@ -1,6 +1,10 @@
 import { GraphQLError } from 'graphql';
 import { Prisma } from '../../../generated/prisma';
-import { requireAuth, requireUserId } from '../../middleware/auth';
+import {
+  requireAuth,
+  requireOrgRole,
+  requireUserId,
+} from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
 
 const URL_KEY_RE = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
@@ -35,6 +39,46 @@ export const organizationResolvers = {
         refreshToken: tokenPair.refreshToken,
         success: true,
       };
+    },
+    organizationMemberUpdateRole: async (
+      _parent: unknown,
+      { userId, role }: { userId: string; role: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, [
+        'owner',
+        'admin',
+      ]);
+
+      const VALID_ROLES = ['owner', 'admin', 'member', 'guest'];
+      if (!VALID_ROLES.includes(role)) {
+        throw new GraphQLError('Invalid role', {
+          extensions: { code: 'BAD_USER_INPUT' },
+        });
+      }
+
+      const membership = await ctx.prisma.organizationMember.findUnique({
+        where: { organizationId_userId: { organizationId: ctx.orgId, userId } },
+      });
+      if (!membership) {
+        throw new GraphQLError('Member not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+
+      await ctx.prisma.organizationMember.update({
+        data: { role },
+        where: { organizationId_userId: { organizationId: ctx.orgId, userId } },
+      });
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'U',
+        'OrganizationMember',
+        membership.id,
+        { ...membership, role },
+      );
+      return { lastSyncId: sync.id.toString(), success: true };
     },
   },
 

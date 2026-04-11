@@ -66,11 +66,18 @@ export const typeDefs = `
     archivedAt: DateTime
   }
 
+  enum TeamMemberRole {
+    admin
+    member
+    guest
+  }
+
   type TeamMembership {
     id: ID!
     team: Team!
     user: User!
     owner: Boolean!
+    role: TeamMemberRole!
     sortOrder: Float!
     createdAt: DateTime!
     updatedAt: DateTime!
@@ -311,6 +318,7 @@ export const typeDefs = `
     private: Boolean
     timezone: String
     triageEnabled: Boolean
+    parentId: String
   }
 
   input TeamUpdateInput {
@@ -326,6 +334,7 @@ export const typeDefs = `
     triageEnabled: Boolean
     autoClosePeriod: Int
     autoArchivePeriod: Int
+    parentId: String
   }
 
   enum TeamDeleteIssueAction {
@@ -342,10 +351,12 @@ export const typeDefs = `
     teamId: String!
     userId: String!
     isOwner: Boolean
+    role: TeamMemberRole
   }
 
   input TeamMembershipUpdateInput {
     isOwner: Boolean
+    role: TeamMemberRole
     sortOrder: Float
   }
 
@@ -721,6 +732,61 @@ export const typeDefs = `
 
   scalar JSON
 
+  type Comment {
+    id: ID!
+    issueId: ID!
+    authorId: ID!
+    body: String!
+    bodyData: JSON
+    parentId: ID
+    resolvedAt: DateTime
+    resolvedById: ID
+    editedAt: DateTime
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    archivedAt: DateTime
+    author: User!
+    parent: Comment
+    replies: [Comment!]!
+    resolvedBy: User
+    reactions: [CommentReaction!]!
+    replyCount: Int!
+  }
+
+  type CommentReaction {
+    id: ID!
+    commentId: ID!
+    userId: ID!
+    emoji: String!
+    user: User!
+    createdAt: DateTime!
+  }
+
+  type CommentPayload {
+    success: Boolean!
+    comment: Comment
+    lastSyncId: String!
+  }
+
+  type CommentReactionPayload {
+    success: Boolean!
+    reaction: CommentReaction
+    lastSyncId: String!
+  }
+
+  input CommentCreateInput {
+    id: String
+    issueId: String!
+    body: String!
+    bodyData: JSON
+    parentId: String
+  }
+
+  input CommentUpdateInput {
+    body: String
+    bodyData: JSON
+  }
+
   type Query {
     viewer: User!
     organization: Organization!
@@ -758,6 +824,8 @@ export const typeDefs = `
     issueRelations(issueId: ID!): [IssueRelation!]!
     issueTemplates(teamId: String!, includeArchived: Boolean): [IssueTemplate!]!
     issueTemplate(id: ID!): IssueTemplate!
+    comments(issueId: ID!, includeArchived: Boolean): [Comment!]!
+    comment(id: ID!): Comment!
   }
 
   type Mutation {
@@ -834,5 +902,15 @@ export const typeDefs = `
     issueTemplateUpdate(id: ID!, input: IssueTemplateUpdateInput!): IssueTemplatePayload!
     issueTemplateArchive(id: ID!): IssueTemplatePayload!
     issueTemplateDelete(id: ID!): DeletePayload!
+
+    commentCreate(input: CommentCreateInput!): CommentPayload!
+    commentUpdate(id: ID!, input: CommentUpdateInput!): CommentPayload!
+    commentDelete(id: ID!): DeletePayload!
+    commentResolve(id: ID!): CommentPayload!
+    commentUnresolve(id: ID!): CommentPayload!
+    commentReactionAdd(commentId: ID!, emoji: String!): CommentReactionPayload!
+    commentReactionRemove(commentId: ID!, emoji: String!): DeletePayload!
+
+    organizationMemberUpdateRole(userId: ID!, role: String!): DeletePayload!
   }
 `;

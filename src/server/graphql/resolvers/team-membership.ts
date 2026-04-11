@@ -12,7 +12,14 @@ export const teamMembershipResolvers = {
       _parent: unknown,
       {
         input,
-      }: { input: { isOwner?: boolean; teamId: string; userId: string } },
+      }: {
+        input: {
+          isOwner?: boolean;
+          role?: string;
+          teamId: string;
+          userId: string;
+        };
+      },
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);

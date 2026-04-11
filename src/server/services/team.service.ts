@@ -37,6 +37,7 @@ export interface TeamCreateInput {
   id?: string;
   key: string;
   name: string;
+  parentId?: string;
   private?: boolean;
   timezone?: string;
   triageEnabled?: boolean;
@@ -52,6 +53,7 @@ export interface TeamUpdateInput {
   icon?: string;
   issueEstimationType?: string;
   name?: string;
+  parentId?: string | null;
   private?: boolean;
   timezone?: string;
   triageEnabled?: boolean;
@@ -83,6 +85,7 @@ export class TeamService {
           key: input.key,
           name: input.name,
           organizationId: orgId,
+          parentId: input.parentId ?? null,
           private: input.private ?? false,
           timezone: input.timezone ?? 'UTC',
           triageEnabled: input.triageEnabled ?? false,
@@ -135,6 +138,7 @@ export class TeamService {
         icon: input.icon,
         issueEstimationType: input.issueEstimationType,
         name: input.name,
+        parentId: input.parentId,
         private: input.private,
         timezone: input.timezone,
         triageEnabled: input.triageEnabled,
