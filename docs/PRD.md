@@ -1,8 +1,8 @@
 # Product Requirements Document (PRD)
 
-## Issue Tracker — Linear Rebuild
+## Issue Tracker — Open-Source Linear Alternative
 
-**Version:** 1.0
+**Version:** 1.1
 **Date:** April 2026
 **Status:** Draft
 
@@ -12,7 +12,7 @@
 
 ### 1.1 Vision
 
-Build a modern, high-performance issue tracking and project management platform that matches Linear's feature set, speed, and UX quality. The product targets engineering teams who need fast, keyboard-driven workflows with real-time collaboration.
+Build a modern, high-performance issue tracking and project management platform that matches Linear's feature set, speed, and UX quality — and ships it as a fully open-source, self-hostable alternative. The primary differentiator over Linear is **self-hosting**: teams that can't or won't use a SaaS product (data residency, cost at scale, compliance, air-gapped environments) get a first-class experience without compromise. Enterprise features (SAML, SCIM, audit logs) are free for self-hosted deployments since the hosting cost is borne by the operator.
 
 ### 1.2 Target Users
 
@@ -22,11 +22,13 @@ Build a modern, high-performance issue tracking and project management platform 
 
 ### 1.3 Core Value Propositions
 
-1. **Speed:** Sub-100ms interactions via local-first architecture
-2. **Keyboard-first:** Every action reachable without a mouse
-3. **Opinionated workflows:** Sensible defaults that reduce configuration overhead
-4. **Real-time collaboration:** Instant sync across all connected clients
-5. **Beautiful design:** Dark-mode-forward, minimal chrome, high information density
+1. **Self-hostable:** Docker Compose for small teams, production-ready for larger orgs; no SaaS lock-in
+2. **Speed:** Sub-100ms interactions via local-first architecture
+3. **Keyboard-first:** Every action reachable without a mouse
+4. **Opinionated workflows:** Sensible defaults that reduce configuration overhead
+5. **Real-time collaboration:** Instant sync across all connected clients
+6. **Beautiful design:** Dark-mode-forward, minimal chrome, high information density
+7. **Enterprise features free for self-hosted:** SAML, SCIM, audit logs, granular permissions — no paywalls when you own the infra
 
 ---
 
@@ -303,14 +305,39 @@ Build a modern, high-performance issue tracking and project management platform 
 - Templates and AI summaries
 - Comments on documents
 
-### 2.20 SLAs (P2)
+### 2.20 Custom Fields (P2)
+
+A deliberate departure from Linear's "no custom fields" stance, enabling non-engineering teams (ops, HR, marketing) to use the same tool.
+
+- Fields scoped at workspace or team level
+- Types: text, number, date, select (single), multi-select, URL, checkbox
+- Fields appear as optional columns in list view and properties in detail panel
+- Filterable, sortable, and exportable to CSV
+- Max 20 custom fields per team
+- Custom fields do **not** affect the core data model for issues; they are stored as a JSONB metadata column
+
+**Non-goal:** Custom fields will not replace the fixed Priority, Estimate, or Status systems. Those remain opinionated and fixed.
+
+### 2.20b Public Roadmaps (P2)
+
+Share a read-only, public-facing view of product progress — a feature Linear doesn't offer. Useful for open-source projects and transparent product orgs.
+
+- Enable per workspace; toggled per initiative or project
+- Public URL: `app.example.com/roadmap/[workspace-slug]`
+- Shows: initiatives, projects (name, status, health, target date, milestone progress)
+- Does **not** expose: issue titles, comments, assignees, internal notes
+- Optionally password-protected
+- Embeddable as iframe
+- Subscribable: visitors can sign up for email updates when projects change status
+
+### 2.21 SLAs (P2)
 
 - Auto-apply deadlines based on rules
 - Risk progression: Low → Medium → High → Breached → Achieved/Failed
 - Business day configuration
 - Notifications 24h before breach
 
-### 2.21 Backlog Management (P1)
+### 2.22 Backlog Management (P1)
 
 #### 2.21.1 Backlog View
 
@@ -342,7 +369,7 @@ Build a modern, high-performance issue tracking and project management platform 
 - Auto-label suggestions on newly triaged issues
 - Assignee suggestions based on team workload and domain expertise
 
-### 2.22 Automated Workflows / Rules Engine (P2)
+### 2.23 Automated Workflows / Rules Engine (P2)
 
 #### 2.22.1 Rule Anatomy
 
@@ -369,7 +396,7 @@ Build a modern, high-performance issue tracking and project management platform 
 - Rule execution log: audit trail of every rule-triggered action (who/what/when)
 - Enable/disable individual rules without deleting them
 
-### 2.23 Team Analytics & Insights (P2)
+### 2.24 Team Analytics & Insights (P2)
 
 #### 2.23.1 Velocity & Throughput
 
@@ -435,7 +462,21 @@ Build a modern, high-performance issue tracking and project management platform 
 - IP restriction support (Enterprise)
 - Audit logging (Enterprise)
 
-### 3.4 Scalability
+### 3.4 Self-Hosting & Deployment
+
+This is the primary differentiator over Linear. Deployment must be a first-class experience.
+
+- **Docker Compose (small teams):** single `docker-compose.yml` spins up the full stack (app, ws-server, PostgreSQL, Redis). `docker compose up` → running in <5 minutes.
+- **Environment configuration:** all secrets and URLs via `.env`; documented `.env.example` covers every required variable
+- **Database migrations:** `yarn db:migrate` (Prisma) runnable at startup or manually; no raw SQL required
+- **Upgrades:** documented upgrade path; migrations are always backwards-compatible within a minor version
+- **Backup:** documented backup/restore for PostgreSQL volume
+- **Resource requirements:** minimum viable deployment on a $6/mo VPS (1 vCPU, 1GB RAM) for teams <20; recommended 2 vCPU / 4GB for teams up to 100
+- **No license key or phone-home:** fully functional offline; no telemetry without opt-in
+
+Enterprise features (SAML SSO, SCIM, audit logs, IP restrictions) are **not paywalled** for self-hosted deployments — they are configuration, not gating.
+
+### 3.5 Scalability
 
 - Support workspaces with 500+ users
 - Support teams with 100,000+ issues
@@ -446,13 +487,17 @@ Build a modern, high-performance issue tracking and project management platform 
 
 ## 4. Out of Scope (V1)
 
-- Mobile native apps (web responsive first)
+- Mobile native apps (web responsive first; native apps documented as a future phase)
 - Desktop Electron app
 - AI/ML features (triage intelligence, auto-assign, AI-assisted backlog suggestions) — targeted for Phase 5
-- Customer tracking (Linear Asks)
-- AI-powered predictive analytics and insights (basic team analytics are in Phase 3; advanced AI-driven insights are Phase 5)
-- Public-facing roadmaps
-- Custom fields (use labels + templates)
+- Customer tracking (Linear Asks / Customer Requests)
+- AI-powered predictive analytics (basic team analytics are in Phase 3; advanced AI-driven insights are Phase 5)
+
+**Deliberately in scope (diverging from Linear):**
+
+- Custom fields (§2.20) — unlocks non-engineering teams
+- Public roadmaps (§2.20b) — differentiator vs Linear
+- Enterprise features free for self-hosted (SAML, SCIM, audit logs in Phase 3, no paywall)
 
 ---
 
@@ -471,10 +516,10 @@ Build a modern, high-performance issue tracking and project management platform 
 
 ## 6. Milestones
 
-| Phase                 | Duration     | Deliverable                                          |
-| --------------------- | ------------ | ---------------------------------------------------- |
-| Phase 1: Foundation   | Months 1-3   | Auth, issues, teams, list view, real-time sync       |
-| Phase 2: Essential    | Months 4-6   | Projects, cycles, board view, filters, notifications |
-| Phase 3: Organization | Months 7-9   | Sub-teams, roles, SAML, audit logs, templates        |
-| Phase 4: Integrations | Months 10-12 | GitHub, Slack, webhooks, import/export               |
-| Phase 5: Advanced     | Months 13+   | Initiatives, SLAs, docs, AI, analytics               |
+| Phase                 | Duration     | Deliverable                                                           |
+| --------------------- | ------------ | --------------------------------------------------------------------- |
+| Phase 1: Foundation   | Months 1-3   | Auth, issues, teams, list view, real-time sync, Docker Compose deploy |
+| Phase 2: Essential    | Months 4-6   | Projects, cycles, board view, filters, notifications, custom fields   |
+| Phase 3: Organization | Months 7-9   | Sub-teams, roles, SAML/SCIM (free), audit logs, templates             |
+| Phase 4: Integrations | Months 10-12 | GitHub, Slack, webhooks, import/export, public roadmaps               |
+| Phase 5: Advanced     | Months 13+   | Initiatives, SLAs, docs, AI agent, analytics                          |

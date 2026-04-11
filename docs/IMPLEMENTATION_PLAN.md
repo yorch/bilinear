@@ -1,11 +1,11 @@
 # Implementation Plan
 
-## Issue Tracker — Linear Rebuild
+## Issue Tracker — Open-Source Linear Alternative
 
 **Version:** 1.2
 **Date:** April 2026
 
-> **Status snapshot (April 2026):** Phase 1 complete. Phase 2 (Sprints 13-24) complete. Phase 3 in progress — Sprints 27-28 complete, Sprints 25-26 / 29-30 / 31-32 partially shipped. Sprints 33-38 not started. Phase 4 and 5 not started. See each sprint section for the per-item breakdown.
+> **Status snapshot (April 2026):** Phase 1 complete. Phase 2 (Sprints 13-22) complete; Sprints 23-26 (Custom Fields, Sub-Issues) not yet started. Phase 3 in progress — Sprints 29-30 complete, Sprints 27-28 / 31-32 / 33-34 partially shipped. Sprints 35-40 not started. Phase 4 and 5 not started. See each sprint section for the per-item breakdown.
 
 ---
 
@@ -145,12 +145,18 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [x] E2E tests for critical paths (auth, issue CRUD, sync, offline, keyboard shortcuts)
 - [x] API rate limiting implementation (Redis fixed-window, 5 000 req/hr + complexity budget)
 - [x] Structured logging (pino + pino-pretty, `src/server/lib/logger.ts`; Sentry integration deferred)
+- [ ] **Docker Compose packaging** — single `docker-compose.yml` for full stack (app + ws-server + PostgreSQL + Redis)
+- [ ] `.env.example` covering every required variable with documentation
+- [ ] Startup migration check: warn if pending migrations on boot
+- [ ] `README.md` self-hosting section: prerequisites, `docker compose up`, first-run walkthrough
+- [ ] Backup/restore documentation for PostgreSQL volume
+- [ ] Minimum resource validation: documented requirements for $6/mo VPS (1 vCPU / 1GB RAM)
 
-**Deliverable:** Polished, performant MVP with auth, issues, teams, real-time sync
+**Deliverable:** Polished, performant MVP with auth, issues, teams, real-time sync — fully self-hostable via Docker Compose
 
 ---
 
-## Phase 2: Essential Features (Weeks 13-24)
+## Phase 2: Essential Features (Weeks 13-26)
 
 ### Sprint 13-14: Projects ✅ COMPLETE
 
@@ -223,7 +229,23 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Manual subscribe/unsubscribe via `Shift+S` shortcut (deferred — no hotkey bound)
 - [ ] Activity collapsing for dense histories (deferred)
 
-### Sprint 23-24: Sub-Issues, Relations & Templates ✅ COMPLETE
+### Sprint 23-24: Custom Fields
+
+- [ ] Create migrations: `custom_field_definitions` (team-scoped or workspace-scoped), `custom_field_values` (JSONB on issues)
+- [ ] Field types: `text`, `number`, `date`, `select`, `multi_select`, `url`, `checkbox`
+- [ ] Custom field CRUD (GraphQL mutations + queries)
+- [ ] Max 20 fields per team; validation enforced at service layer
+- [ ] Custom field values included in issue create/update mutations
+- [ ] List view: optional columns for custom fields (toggled via column picker)
+- [ ] Issue detail panel: custom fields section below standard properties
+- [ ] Filter builder: custom fields as filterable dimensions
+- [ ] Custom field values included in CSV export
+- [ ] Sync: `custom_field_definitions` and `custom_field_values` included in bootstrap + delta payloads
+- [ ] MobX store: `CustomFieldStore` (definitions pool + per-issue value map)
+
+**Note:** Custom fields do not replace Priority, Estimate, or Status — those remain opinionated and fixed. Custom fields are additive metadata only.
+
+### Sprint 25-26: Sub-Issues, Relations & Templates ✅ COMPLETE
 
 - [x] Sub-issue creation and management via `Issue.parentId` (`src/components/issues/sub-issue-list.tsx`)
 - [x] Multiple nesting levels (recursive parent relation)
@@ -238,9 +260,9 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 
 ---
 
-## Phase 3: Organization (Weeks 25-38)
+## Phase 3: Organization (Weeks 27-40)
 
-### Sprint 25-26: Rich Text Editor 🟡 PARTIAL
+### Sprint 27-28: Rich Text Editor 🟡 PARTIAL
 
 - [x] TipTap editor integration (`src/components/editor/tiptap-editor.tsx`)
 - [x] Markdown-equivalent support: bold, italic, underline, strikethrough, headings, bullet/ordered/task lists, code blocks with syntax highlighting (lowlight), tables with resizable columns, blockquotes, horizontal rule, links
@@ -256,7 +278,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Embed support (YouTube, Loom)
 - [ ] Collaborative editing (YJS / Hocuspocus)
 
-### Sprint 27-28: Comments & Reactions ✅ COMPLETE (partial)
+### Sprint 29-30: Comments & Reactions ✅ COMPLETE (partial)
 
 - [x] Threaded comments on issues (`Comment.parentId`, `src/components/issues/comment-thread.tsx`)
 - [x] Rich text (TipTap) in comments
@@ -268,17 +290,22 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Convert comment to sub-issue
 - [ ] Quote reply
 
-### Sprint 29-30: Sub-Teams & Advanced Roles 🟡 PARTIAL
+### Sprint 31-32: Sub-Teams, Advanced Roles & SAML/SCIM 🟡 PARTIAL
 
 - [x] Sub-team hierarchy — `Team.parentId` with `TeamHierarchy` relation; parent selector in team settings; `TeamService.findChildren()`
 - [x] Private teams — `Team.private` flag; visibility filtering in `teamResolvers.Query.teams`
 - [x] Team owner role — `TeamMembership.isOwner` + `TeamMemberRole` (`admin` / `member` / `guest`) with UI toggle in `team-member-management.tsx`
 - [x] Workspace admin settings page — `src/app/(workspace)/[workspace]/settings/page.tsx` (org info, teams, member roles)
+- [ ] Sub-team hierarchy up to 5 levels deep (current implementation supports parent/child; depth limit not enforced)
 - [ ] Inheritance of cycle schedules / estimation config from parent team (schema fields exist per-team, no `getEffectiveConfig()` logic)
 - [ ] Guest role **enforcement** — guest is present as a role value and rendered in UI, but access control only checks `TeamMembership` existence, not role
 - [ ] Cross-team issue visibility rules — issues are strictly scoped by `teamId` today (`requireTeamMember()`); no cross-team visibility logic
+- [ ] **SAML SSO** — SP-initiated SAML 2.0 with identity provider metadata URL; JIT user provisioning on first login; free for self-hosted deployments
+- [ ] **SCIM** — user/group provisioning via SCIM 2.0 API; auto-deprovision on directory removal; free for self-hosted deployments
+- [ ] **Audit log** — append-only ledger of security-relevant events (auth, permission changes, team/member changes, data exports); filterable/searchable; free for self-hosted deployments
+- [ ] IP restriction rules (allowlist by CIDR) — workspace admin setting
 
-### Sprint 31-32: Estimates, Progress Tracking & Team Analytics 🟡 PARTIAL
+### Sprint 33-34: Estimates, Progress Tracking & Team Analytics 🟡 PARTIAL
 
 - [x] Per-team estimation scale configuration (`Team.issueEstimationType`)
 - [x] Estimate assignment via `Shift+E` shortcut (`src/app/(workspace)/[workspace]/team/[key]/page.tsx`)
@@ -298,7 +325,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] CSV export
 - [ ] Workspace-level aggregate analytics view (cross-team)
 
-### Sprint 33-34: Documents (Linear Docs)
+### Sprint 35-36: Documents (Linear Docs)
 
 - [ ] Create migrations: documents
 - [ ] Document CRUD with collaborative editing
@@ -307,7 +334,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Comments on documents
 - [ ] Document templates
 
-### Sprint 35-36: Triage Workflow
+### Sprint 37-38: Triage Workflow
 
 - [ ] Enable triage per team
 - [ ] Triage inbox view
@@ -316,7 +343,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Triage responsibility assignment
 - [ ] Require priority before leaving triage (optional)
 
-### Sprint 37-38: Automated Workflows & Rules Engine
+### Sprint 39-40: Automated Workflows & Rules Engine
 
 - [ ] Create migrations: automation_rules, automation_rule_conditions, automation_rule_actions, automation_run_log
 - [ ] Rules CRUD (GraphQL mutations + queries)
@@ -333,9 +360,9 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 
 ---
 
-## Phase 4: Integrations (Weeks 39-52)
+## Phase 4: Integrations (Weeks 41-56)
 
-### Sprint 39-40: GitHub Integration
+### Sprint 41-42: GitHub Integration
 
 - [ ] GitHub OAuth app setup
 - [ ] Link PRs to issues via branch name / PR title / magic words
@@ -344,7 +371,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Git branch name copy (issue.branchName)
 - [ ] Commit/PR linkback messages
 
-### Sprint 41-42: Slack Integration
+### Sprint 43-44: Slack Integration
 
 - [ ] Slack app setup (OAuth, events API)
 - [ ] /linear slash command for issue creation
@@ -354,7 +381,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Rich unfurls for issue/project links
 - [ ] Bidirectional thread sync (Slack ↔ Linear comments)
 
-### Sprint 43-44: Webhooks
+### Sprint 45-46: Webhooks
 
 - [ ] Webhook CRUD (GraphQL + settings UI)
 - [ ] Event dispatch for 14 resource types
@@ -363,7 +390,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Auto-disable persistently failing webhooks
 - [ ] Webhook delivery logs
 
-### Sprint 45-46: Import/Export
+### Sprint 47-48: Import/Export
 
 - [ ] CSV import with field mapping
 - [ ] Jira import (API-based)
@@ -373,7 +400,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] CSV export
 - [ ] Bulk delete of imported data (rollback)
 
-### Sprint 47-48: OAuth2 Provider
+### Sprint 49-50: OAuth2 Provider
 
 - [ ] OAuth2 authorization server
 - [ ] App registration and management
@@ -381,7 +408,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Token lifecycle: 24h access, refresh tokens
 - [ ] Actor modes: user vs app
 
-### Sprint 49-50: API SDK & Developer Experience
+### Sprint 51-52: API SDK & Developer Experience
 
 - [ ] TypeScript SDK auto-generation from GraphQL schema
 - [ ] SDK: chained model access, pagination helpers, raw query support
@@ -390,11 +417,27 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] API key management UI
 - [ ] Developer portal
 
+### Sprint 53-54: Public Roadmaps
+
+A differentiator vs Linear. Read-only, public-facing view of product progress.
+
+- [ ] `public_roadmaps` table: workspace FK, slug, enabled flag, password hash (nullable), title, description
+- [ ] Toggle per workspace: enable/disable public roadmap
+- [ ] Toggle per initiative/project: include or exclude from public roadmap
+- [ ] Public URL scheme: `/roadmap/[workspace-slug]` — served as a standalone, unauthenticated route
+- [ ] Roadmap page shows: initiatives, projects (name, status, health, target date, milestone progress circles)
+- [ ] Does **not** expose: issue titles, comments, assignees, internal notes, estimated values
+- [ ] Optional password protection (bcrypt-hashed; token stored in session cookie)
+- [ ] Embeddable via `<iframe>` (X-Frame-Options: SAMEORIGIN relaxed for embed routes)
+- [ ] Email subscribe: visitors enter email to receive status update notifications when projects change status
+- [ ] Subscriber management: workspace admin can view/export/purge subscriber list
+- [ ] Roadmap settings page under Workspace Settings → Public Roadmap
+
 ---
 
-## Phase 5: Advanced (Weeks 53+)
+## Phase 5: Advanced (Weeks 57+)
 
-### Sprint 51-52: Initiatives & Roadmaps
+### Sprint 57-58: Initiatives & Strategic Planning
 
 - [ ] Initiative CRUD (name, status, health, owner, target date)
 - [ ] Initiative ↔ project associations
@@ -403,7 +446,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Timeline view (Gantt-like) for projects
 - [ ] Draggable timeline bars
 
-### Sprint 53-54: SLAs
+### Sprint 59-60: SLAs
 
 - [ ] SLA rule configuration
 - [ ] Auto-apply SLA deadlines based on conditions
@@ -412,39 +455,38 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] SLA notifications (24h before breach)
 - [ ] SLA filtering and reporting
 
-### Sprint 55+: AI Features, Mobile, Desktop
+### Sprint 61+: AI Features, Mobile, Desktop
 
-- [ ] Triage intelligence (AI-powered assignee/label suggestions)
+- [ ] Triage intelligence (AI-powered assignee/label suggestions, pluggable providers)
 - [ ] Document summarization
 - [ ] Natural language filtering
-- [ ] Mobile app (React Native)
+- [ ] Coding tool deeplinks (launch Cursor/Claude Code from issue with pre-filled context)
+- [ ] Mobile app (React Native) — iOS and Android
 - [ ] Desktop app (Electron)
-- [ ] Advanced analytics and insights
-- [ ] Customer tracking (Asks)
-- [ ] SAML SSO / SCIM provisioning
-- [ ] IP restrictions
-- [ ] Audit log with streaming
+- [ ] Advanced analytics and AI-driven insights
+- [ ] Customer tracking (Linear Asks equivalent)
 
 ---
 
 ## Technical Milestones
 
-| Milestone | Target   | Criteria                                                                       | Status         |
-| --------- | -------- | ------------------------------------------------------------------------------ | -------------- |
-| **Alpha** | Week 12  | Auth + Issues + Teams + List View + Sync Engine                                | ✅ Reached      |
-| **Beta**  | Week 24  | + Projects + Cycles + Board + Filters + Backlog + Notifications                | ✅ Reached      |
-| **RC1**   | Week 38  | + Rich Editor + Comments + Sub-teams + Triage + Docs + Automations + Analytics | 🟡 In progress |
-| **v1.0**  | Week 50  | + GitHub + Slack + Webhooks + Import/Export + OAuth                            | ⬜ Not started  |
-| **v2.0**  | Week 62+ | + Initiatives + SLAs + AI + Mobile + Desktop                                   | ⬜ Not started  |
+| Milestone | Target   | Criteria                                                                                        | Status         |
+| --------- | -------- | ----------------------------------------------------------------------------------------------- | -------------- |
+| **Alpha** | Week 12  | Auth + Issues + Teams + List View + Sync Engine + **Docker Compose deploy**                     | ✅ Reached      |
+| **Beta**  | Week 26  | + Projects + Cycles + Board + Filters + Backlog + Notifications + **Custom Fields**             | ✅ Reached      |
+| **RC1**   | Week 40  | + Rich Editor + Comments + Sub-teams + **SAML/SCIM** + Triage + Docs + Automations + Analytics  | 🟡 In progress |
+| **v1.0**  | Week 54  | + GitHub + Slack + Webhooks + Import/Export + OAuth + **Public Roadmaps**                       | ⬜ Not started  |
+| **v2.0**  | Week 68+ | + Initiatives + SLAs + AI + Mobile + Desktop                                                    | ⬜ Not started  |
 
 **RC1 gap analysis** (remaining work to hit RC1):
 
-- Rich editor: slash-command wiring, persisted file uploads, issue/project @mentions, Mermaid, embeds, collaborative editing (Sprint 25-26)
-- Sub-teams: config inheritance, guest-role enforcement, cross-team visibility (Sprint 29-30)
-- Triage: entirely unstarted (Sprint 35-36)
-- Documents: entirely unstarted (Sprint 33-34)
-- Automations: entirely unstarted (Sprint 37-38)
-- Analytics: burndown/burnup, cycle-based velocity, flow histograms, date ranges, CSV, workspace rollup (Sprint 31-32)
+- Custom Fields: entirely unstarted (Sprint 23-24)
+- Rich editor: slash-command wiring, persisted file uploads, issue/project @mentions, Mermaid, embeds, collaborative editing (Sprint 27-28)
+- Sub-teams: config inheritance, guest-role enforcement, cross-team visibility, SAML/SCIM, audit log, IP restrictions (Sprint 31-32)
+- Analytics: burndown/burnup, cycle-based velocity, flow histograms, date ranges, CSV, workspace rollup (Sprint 33-34)
+- Documents: entirely unstarted (Sprint 35-36)
+- Triage: entirely unstarted (Sprint 37-38)
+- Automations: entirely unstarted (Sprint 39-40)
 
 ---
 
