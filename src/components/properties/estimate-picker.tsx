@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useOutsideClick } from '@/hooks/use-outside-click';
 import { cn } from '@/lib/utils';
 
 /** Estimation scale point values per estimation type. */
@@ -40,6 +41,8 @@ const SCALE_OPTIONS: Record<string, Array<{ label: string; value: number }>> = {
 interface EstimatePickerProps {
   value?: number | null;
   estimationType?: string;
+  forceOpen?: boolean;
+  onClose?: () => void;
   /** onChange receives null to clear the estimate */
   onChange: (estimate: number | null) => void;
 }
@@ -81,32 +84,28 @@ export function EstimateBadge({
 export function EstimatePicker({
   value,
   estimationType = 'notUsed',
+  forceOpen,
+  onClose,
   onChange,
 }: EstimatePickerProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside click
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
-        setOpen(false);
-      }
-    };
-    if (open) {
-      document.addEventListener('mousedown', handler);
-    }
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+    if (forceOpen) setOpen(true);
+  }, [forceOpen]);
+
+  useOutsideClick(containerRef, () => {
+    setOpen(false);
+    onClose?.();
+  }, open);
 
   const scale = SCALE_OPTIONS[estimationType];
 
   const handleSelect = (v: number | null) => {
     onChange(v);
     setOpen(false);
+    onClose?.();
   };
 
   return (

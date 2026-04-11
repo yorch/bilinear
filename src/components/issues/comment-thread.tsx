@@ -129,6 +129,15 @@ const REACTION_REMOVE_MUTATION = `
   }
 `;
 
+const CONVERT_TO_SUB_ISSUE_MUTATION = `
+  mutation ConvertCommentToSubIssue($input: IssueCreateInput!) {
+    issueCreate(input: $input) {
+      success lastSyncId
+      issue { id title identifier }
+    }
+  }
+`;
+
 const QUICK_EMOJIS = ['👍', '👎', '❤️', '🎉', '😄', '🚀', '👀', '😕'];
 
 function updateCommentInTree(
@@ -311,15 +320,6 @@ export function CommentThread({
   );
 }
 
-const CONVERT_TO_SUB_ISSUE_MUTATION = `
-  mutation ConvertCommentToSubIssue($input: IssueCreateInput!) {
-    issueCreate(input: $input) {
-      success lastSyncId
-      issue { id title identifier }
-    }
-  }
-`;
-
 function CommentCard({
   comment,
   currentUserId,
@@ -417,12 +417,9 @@ function CommentCard({
       toast.error('Cannot convert — team not resolved');
       return;
     }
-    // Strip HTML to derive a title — keep it to 255 chars
-    const parser =
-      typeof window !== 'undefined' ? new DOMParser() : null;
-    const text = parser
-      ? parser.parseFromString(comment.body, 'text/html').body.textContent ?? ''
-      : comment.body.replace(/<[^>]+>/g, '');
+    const text =
+      new DOMParser().parseFromString(comment.body, 'text/html').body
+        .textContent ?? '';
     const title = text.trim().slice(0, 255) || 'Sub-issue from comment';
     try {
       await gql(CONVERT_TO_SUB_ISSUE_MUTATION, {

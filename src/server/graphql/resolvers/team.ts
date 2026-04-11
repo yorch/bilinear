@@ -12,6 +12,18 @@ import type {
 } from '../../services/team.service';
 import type { GraphQLContext } from '../context';
 
+async function isOrgAdmin(
+  prisma: GraphQLContext['prisma'],
+  orgId: string,
+  userId: string,
+): Promise<boolean> {
+  const membership = await prisma.organizationMember.findUnique({
+    select: { role: true },
+    where: { organizationId_userId: { organizationId: orgId, userId } },
+  });
+  return membership?.role === 'admin' || membership?.role === 'owner';
+}
+
 export const teamResolvers = {
   Mutation: {
     teamCreate: async (
@@ -178,22 +190,14 @@ export const teamResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      // Private teams are only visible to members and org admins/owners
-      if (team.private) {
-        const orgMembership = await ctx.prisma.organizationMember.findUnique({
-          select: { role: true },
-          where: { organizationId_userId: { organizationId: ctx.orgId, userId: ctx.userId } },
+      if (team.private && !(await isOrgAdmin(ctx.prisma, ctx.orgId, ctx.userId))) {
+        const teamMembership = await ctx.prisma.teamMembership.findUnique({
+          where: { teamId_userId: { teamId: id, userId: ctx.userId } },
         });
-        const isOrgAdmin = orgMembership?.role === 'admin' || orgMembership?.role === 'owner';
-        if (!isOrgAdmin) {
-          const teamMembership = await ctx.prisma.teamMembership.findUnique({
-            where: { teamId_userId: { teamId: id, userId: ctx.userId } },
+        if (!teamMembership) {
+          throw new GraphQLError('Team not found', {
+            extensions: { code: 'NOT_FOUND' },
           });
-          if (!teamMembership) {
-            throw new GraphQLError('Team not found', {
-              extensions: { code: 'NOT_FOUND' },
-            });
-          }
         }
       }
       return team;
@@ -203,12 +207,7 @@ export const teamResolvers = {
       requireAuth(ctx);
       const allTeams = await ctx.services.team.findByOrgId(ctx.orgId);
 
-      // Check if the user is an org admin/owner — they see all teams
-      const orgMembership = await ctx.prisma.organizationMember.findUnique({
-        select: { role: true },
-        where: { organizationId_userId: { organizationId: ctx.orgId, userId: ctx.userId } },
-      });
-      if (orgMembership?.role === 'admin' || orgMembership?.role === 'owner') {
+      if (await isOrgAdmin(ctx.prisma, ctx.orgId, ctx.userId)) {
         return allTeams;
       }
 

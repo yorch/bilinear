@@ -170,7 +170,11 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
     [teamId, workflowStateStore.pool.size],
   );
 
-  const users = userStore.all;
+  const users = useMemo(
+    () => userStore.all,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [userStore.pool.size],
+  );
 
   // ── Issues by state ───────────────────────────────────────────────────────
 
@@ -190,15 +194,10 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
 
   // ── Completion rate ────────────────────────────────────────────────────────
 
-  const completedStateIds = useMemo(
-    () => new Set(states.filter(s => s.type === 'completed').map(s => s.id)),
-    [states],
-  );
-
-  const canceledStateIds = useMemo(
-    () => new Set(states.filter(s => s.type === 'cancelled').map(s => s.id)),
-    [states],
-  );
+  const { completedStateIds, canceledStateIds } = useMemo(() => ({
+    canceledStateIds: new Set(states.filter(s => s.type === 'cancelled').map(s => s.id)),
+    completedStateIds: new Set(states.filter(s => s.type === 'completed').map(s => s.id)),
+  }), [states]);
 
   const { completedCount, inProgressCount, openCount, canceledCount } = useMemo(() => {
     let completed = 0;
@@ -238,12 +237,10 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
       weeks.push({ count: 0, start: weekStart(d) });
     }
 
+    const weekMap = new Map(weeks.map(w => [w.start.getTime(), w]));
     for (const issue of issues) {
       if (!issue.completedAt) continue;
-      const completed = new Date(issue.completedAt);
-      const ws = weekStart(completed);
-      const wsTime = ws.getTime();
-      const bin = weeks.find(w => w.start.getTime() === wsTime);
+      const bin = weekMap.get(weekStart(new Date(issue.completedAt)).getTime());
       if (bin) bin.count++;
     }
 
