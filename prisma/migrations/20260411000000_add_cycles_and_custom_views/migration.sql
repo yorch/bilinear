@@ -1,6 +1,6 @@
 -- CreateTable
 CREATE TABLE "cycles" (
-    "id" UUID NOT NULL DEFAULT uuid_generate_v4(),
+    "id" UUID NOT NULL,
     "organization_id" UUID NOT NULL,
     "team_id" UUID NOT NULL,
     "number" INTEGER NOT NULL,
@@ -25,7 +25,7 @@ CREATE TABLE "cycles" (
 
 -- CreateTable
 CREATE TABLE "custom_views" (
-    "id" UUID NOT NULL DEFAULT uuid_generate_v4(),
+    "id" UUID NOT NULL,
     "organization_id" UUID NOT NULL,
     "team_id" UUID,
     "creator_id" UUID NOT NULL,
