@@ -267,7 +267,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
 
       txQueue.enqueue(
         ISSUE_CREATE_MUTATION,
-        { input: { ...input, teamId, stateId: effectiveStateId || undefined } },
+        { input: { ...input, stateId: effectiveStateId || undefined, teamId } },
         {
           onError: err => {
             console.error('[TeamPage] issueCreate failed:', err);

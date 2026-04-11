@@ -15,7 +15,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
     steps:
       - uses: actions/checkout@v6
 
@@ -32,30 +31,10 @@ jobs:
         run: yarn db:generate
 
       - name: Lint
-        run: |
-          yarn lint 2>&1 | tee /tmp/lint-output.txt
-          LINT_EXIT=${PIPESTATUS[0]}
-          if [ $LINT_EXIT -ne 0 ]; then
-            gh pr comment ${{ github.event.pull_request.number }} \
-              --body "## CI Lint failure$(printf '\n```\n')$(cat /tmp/lint-output.txt)$(printf '\n```')" \
-              --repo ${{ github.repository }} || true
-            exit $LINT_EXIT
-          fi
-        env:
-          GH_TOKEN: ${{ github.token }}
+        run: yarn lint
 
       - name: Typecheck
-        run: |
-          yarn typecheck 2>&1 | tee /tmp/typecheck-output.txt
-          TC_EXIT=${PIPESTATUS[0]}
-          if [ $TC_EXIT -ne 0 ]; then
-            gh pr comment ${{ github.event.pull_request.number }} \
-              --body "## CI Typecheck failure$(printf '\n```\n')$(cat /tmp/typecheck-output.txt)$(printf '\n```')" \
-              --repo ${{ github.repository }} || true
-            exit $TC_EXIT
-          fi
-        env:
-          GH_TOKEN: ${{ github.token }}
+        run: yarn typecheck
 
   test:
     name: Test (unit)
