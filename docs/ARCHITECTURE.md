@@ -2,10 +2,10 @@
 
 ## Issue Tracker — Linear Rebuild
 
-**Version:** 1.2
+**Version:** 1.3
 **Date:** April 2026
 
-> **Implementation Status (as of Sprint 11-12)**
+> **Implementation Status (as of Sprint 27-28 / partial Sprint 25-26, 29-32)**
 >
 > This document describes the **target architecture** for the full system. The table below tracks what is actually built:
 >
@@ -46,8 +46,18 @@
 > | API rate limiting — Redis fixed-window per user (5 000 req/hr + complexity) | ✅ Built | Sprint 11-12 |
 > | Structured logging — pino + pino-pretty (`src/server/lib/logger.ts`) | ✅ Built | Sprint 11-12 |
 > | E2E tests — Playwright (`tests/e2e/`, `yarn test:e2e`) | ✅ Built | Sprint 11-12 |
-> | TipTap rich text editor | 🔲 Planned | Sprint 25-26 |
-> | BullMQ background queues | 🔲 Planned | Sprint 41+ |
+> | Projects (cross-team, milestones, updates, progress) | ✅ Built | Sprint 13-14 |
+> | Cycles (cycle CRUD, list/detail views, `Q` shortcut) | ✅ Built | Sprint 15-16 |
+> | Board view with drag-and-drop via @dnd-kit | ✅ Built | Sprint 17-18 |
+> | Filter builder, custom views, backlog page | ✅ Built | Sprint 19-20 |
+> | Notifications + inbox + issue activity timeline | ✅ Built | Sprint 21-22 |
+> | Sub-issues (`Issue.parentId`), issue relations, issue templates | ✅ Built | Sprint 23-24 |
+> | TipTap rich text editor (markdown, user @mentions, image upload, tables, code highlighting) | 🟡 Partial | Sprint 25-26 — no slash commands wired, no drag-drop, no Mermaid / embeds / YJS |
+> | Threaded comments with reactions and resolution (`Comment`, `CommentReaction`) | ✅ Built | Sprint 27-28 |
+> | Sub-team hierarchy (`Team.parentId`), private teams, team roles (`TeamMemberRole`) | 🟡 Partial | Sprint 29-30 — no config inheritance, guest enforcement, or cross-team visibility |
+> | Team analytics dashboard (stat cards + CSS bar charts) | 🟡 Partial | Sprint 31-32 — no burndown/burnup, flow histograms, date ranges, or CSV |
+> | Workspace admin settings page | ✅ Built | Sprint 29-30 |
+> | BullMQ background queues | 🔲 Planned | Sprint 37+ |
 >
 > Everything below describes the **intended final architecture**. Sections referencing unbuilt components are design specs, not current reality.
 
@@ -237,16 +247,20 @@ interface SyncAction {
 Phase 1 (Full Bootstrap):
   GET /api/sync/bootstrap
   → Returns all "instant-load" models (active/non-archived only):
-    Organization, Team, User, Issue (with labelIds), WorkflowState, IssueLabel
+    Organization, Team, User, WorkflowState, IssueLabel, Issue (with labelIds),
+    Project, ProjectMilestone, ProjectUpdate, Cycle, CustomView,
+    IssueRelation, IssueTemplate
   → Response: line-delimited ModelName=<JSON>\n
   → Ends with _metadata_={"lastSyncId":"N"}  ← string, not number
   → Written atomically to IndexedDB via Dexie transaction before MobX population
 
-Phase 2 (Partial Bootstrap — future sprints):
-  GET /api/sync/bootstrap?type=partial
-  → Returns deferred models: Comment, IssueHistory, Attachment
+Deferred (not in bootstrap; loaded on demand via GraphQL today):
+  Comment, CommentReaction, IssueActivity, Notification, File
+  (A `?type=partial` endpoint is specced below but not yet implemented —
+   these models are currently fetched per-issue/per-view via GraphQL
+   and applied to stores via SyncAction deltas.)
 
-Phase 3 (Real-time):
+Phase 2 (Real-time):
   WebSocket connection to ws://host:3001?token=<jwt>
   → Server pushes: {cmd: "sync", sync: [SyncAction]}
   → {cmd: "ping"} → client replies {cmd: "pong"}
@@ -259,9 +273,9 @@ Reconnection (Delta Sync):
   → Falls back to full bootstrap if delta returns non-200
 ```
 
-**Implementation details (Sprint 7-8):**
+**Implementation details (Sprint 7-8, extended Sprint 13-24):**
 
-- Bootstrap is fetched server-side with a single DB round-trip (7 parallel Prisma queries, lastSyncId included)
+- Bootstrap is fetched server-side with a single DB round-trip (13 parallel Prisma queries — orgs, teams, users, workflow states, labels, issues, projects, milestones, updates, cycles, custom views, relations, templates — plus `lastSyncId`)
 - `Issue.labelIds` is denormalized from the `IssueLabelAssignment` join table during bootstrap
 - WebSocket auth uses a JWT passed as a `?token=` query param (browsers cannot set custom WS headers)
 - The WS token is retrieved from `GET /api/auth/session` which reads the httpOnly cookie server-side
@@ -269,12 +283,12 @@ Reconnection (Delta Sync):
 
 ### 3.5 Model Load Strategies
 
-| Strategy  | When Loaded       | Examples                   |
-| --------- | ----------------- | -------------------------- |
-| `instant` | Full bootstrap    | Issue, Team, User, Project |
-| `partial` | Partial bootstrap | Comment, IssueHistory      |
-| `lazy`    | On demand         | Attachment content         |
-| `local`   | Client-only       | UI state, drafts           |
+| Strategy  | When Loaded                                      | Examples                                                                                  |
+| --------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `instant` | Full bootstrap                                    | Organization, Team, User, WorkflowState, IssueLabel, Issue, Project, Cycle, CustomView    |
+| `partial` | On demand (planned `?type=partial`, not yet live) | Comment, CommentReaction, IssueActivity, Notification                                     |
+| `lazy`    | On demand (per request)                           | File content, full-text search results                                                    |
+| `local`   | Client-only                                       | UI state, drafts                                                                          |
 
 ### 3.6 Conflict Resolution
 
