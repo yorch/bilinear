@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { Issue } from '../../../generated/prisma';
+import { logger } from '../../lib/logger';
 import { requireAuth, requireTeamMember } from '../../middleware/auth';
 import type {
   IssueCreateInput,
@@ -141,6 +142,35 @@ export const issueResolvers = {
           ctx.userId,
           input,
         );
+
+        // Auto-subscribe creator and notify assignee (fire-and-forget — don't
+        // block the response on notification delivery)
+        void ctx.services.notification
+          .autoSubscribe(ctx.userId, issue.id)
+          .catch(err =>
+            logger.error({ err }, 'Failed to auto-subscribe issue creator'),
+          );
+        if (input.assigneeId && input.assigneeId !== ctx.userId) {
+          void ctx.services.notification
+            .autoSubscribe(input.assigneeId, issue.id)
+            .catch(err =>
+              logger.error({ err }, 'Failed to auto-subscribe issue assignee'),
+            );
+          void ctx.services.notification
+            .createForIssueAssignment(
+              ctx.orgId,
+              issue.id,
+              input.assigneeId,
+              ctx.userId,
+            )
+            .catch(err =>
+              logger.error(
+                { err },
+                'Failed to create issue assignment notification',
+              ),
+            );
+        }
+
         const sync = await ctx.services.sync.createSyncAction(
           ctx.orgId,
           'I',
@@ -253,6 +283,55 @@ export const issueResolvers = {
       }
       if (activities.length > 0) {
         await ctx.services.issueActivity.createMany(activities);
+      }
+
+      // Auto-subscribe the actor so they receive future notifications on issues
+      // they interact with (consistent with Linear's subscription behaviour).
+      void ctx.services.notification.autoSubscribe(ctx.userId, issue.id);
+
+      // Notifications: assignment change
+      if (
+        'assigneeId' in input &&
+        input.assigneeId !== undefined &&
+        input.assigneeId !== existing.assigneeId
+      ) {
+        if (input.assigneeId) {
+          // Auto-subscribe new assignee and notify them
+          void ctx.services.notification
+            .autoSubscribe(input.assigneeId, issue.id)
+            .catch(err =>
+              logger.error({ err }, 'Failed to auto-subscribe issue assignee'),
+            );
+          void ctx.services.notification
+            .createForIssueAssignment(
+              ctx.orgId,
+              issue.id,
+              input.assigneeId,
+              ctx.userId,
+            )
+            .catch(err =>
+              logger.error(
+                { err },
+                'Failed to create issue assignment notification',
+              ),
+            );
+        }
+      }
+
+      // Notifications: status change — oldStatus/newStatus are workflow-state UUIDs;
+      // human-readable names are resolved in the notification UI via the state store.
+      if (
+        'stateId' in input &&
+        input.stateId &&
+        input.stateId !== existing.stateId
+      ) {
+        void ctx.services.notification.createForStatusChange(
+          ctx.orgId,
+          issue.id,
+          ctx.userId,
+          existing.stateId,
+          input.stateId,
+        );
       }
 
       const sync = await ctx.services.sync.createSyncAction(

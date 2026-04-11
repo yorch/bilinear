@@ -12,6 +12,18 @@ import type {
 } from '../../services/team.service';
 import type { GraphQLContext } from '../context';
 
+async function isOrgAdmin(
+  prisma: GraphQLContext['prisma'],
+  orgId: string,
+  userId: string,
+): Promise<boolean> {
+  const membership = await prisma.organizationMember.findUnique({
+    select: { role: true },
+    where: { organizationId_userId: { organizationId: orgId, userId } },
+  });
+  return membership?.role === 'admin' || membership?.role === 'owner';
+}
+
 export const teamResolvers = {
   Mutation: {
     teamCreate: async (
@@ -178,12 +190,44 @@ export const teamResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
+      if (
+        team.private &&
+        !(await isOrgAdmin(ctx.prisma, ctx.orgId, ctx.userId))
+      ) {
+        const teamMembership = await ctx.prisma.teamMembership.findUnique({
+          where: { teamId_userId: { teamId: id, userId: ctx.userId } },
+        });
+        if (!teamMembership) {
+          throw new GraphQLError('Team not found', {
+            extensions: { code: 'NOT_FOUND' },
+          });
+        }
+      }
       return team;
     },
 
     teams: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
-      return ctx.services.team.findByOrgId(ctx.orgId);
+      const allTeams = await ctx.services.team.findByOrgId(ctx.orgId);
+
+      if (await isOrgAdmin(ctx.prisma, ctx.orgId, ctx.userId)) {
+        return allTeams;
+      }
+
+      // Non-admins: filter out private teams they're not members of
+      const memberTeamIds = new Set(
+        (
+          await ctx.prisma.teamMembership.findMany({
+            select: { teamId: true },
+            where: {
+              teamId: { in: allTeams.map(t => t.id) },
+              userId: ctx.userId,
+            },
+          })
+        ).map(m => m.teamId),
+      );
+
+      return allTeams.filter(t => !t.private || memberTeamIds.has(t.id));
     },
   },
 

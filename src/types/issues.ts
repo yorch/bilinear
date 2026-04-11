@@ -37,6 +37,8 @@ export interface IssueBase {
 }
 
 export interface IssueDetail extends IssueBase {
+  teamId: string;
+  estimate?: number | null;
   description?: string | null;
   createdAt: string;
   updatedAt: string;

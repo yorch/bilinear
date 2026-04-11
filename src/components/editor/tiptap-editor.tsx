@@ -7,6 +7,7 @@ import { Highlight } from '@tiptap/extension-highlight';
 import { HorizontalRule } from '@tiptap/extension-horizontal-rule';
 import { Image } from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
+import Mention from '@tiptap/extension-mention';
 import { Placeholder } from '@tiptap/extension-placeholder';
 import { Table } from '@tiptap/extension-table';
 import { TableCell } from '@tiptap/extension-table-cell';
@@ -16,12 +17,14 @@ import { TaskItem } from '@tiptap/extension-task-item';
 import { TaskList } from '@tiptap/extension-task-list';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Underline } from '@tiptap/extension-underline';
-import { EditorContent, useEditor } from '@tiptap/react';
+import { EditorContent, ReactRenderer, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { all, createLowlight } from 'lowlight';
-import { Link2 } from 'lucide-react';
-import { useCallback, useEffect, useRef } from 'react';
+import { ImageIcon, Link2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { cn } from '@/lib/utils';
+import type { MentionItem, MentionListHandle } from './mention-list';
+import { MentionList } from './mention-list';
 import './tiptap-editor.css';
 
 const lowlight = createLowlight(all);
@@ -35,6 +38,117 @@ export interface TipTapEditorProps {
   readOnly?: boolean;
   autofocus?: boolean;
   showToolbar?: boolean;
+  /** Users available for @mentions */
+  mentionUsers?: MentionItem[];
+}
+
+// Popup dimensions match the MentionList CSS (w-48 / max-h-48)
+const POPUP_W = 192;
+const POPUP_H = 192;
+const POPUP_GAP = 4;
+
+/**
+ * Position a fixed popup below the caret, clamping to the viewport so it
+ * never overflows the right edge or the bottom of the screen.
+ */
+function positionPopup(
+  popup: HTMLDivElement,
+  clientRect: (() => DOMRect | null) | null | undefined,
+) {
+  const rect = clientRect?.();
+  if (!rect) {
+    return;
+  }
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  // Prefer below caret; flip above when not enough room below.
+  let top = rect.bottom + POPUP_GAP;
+  if (top + POPUP_H > vh) {
+    top = rect.top - POPUP_H - POPUP_GAP;
+  }
+  // Clamp left so the popup never goes off the right edge.
+  const left = Math.min(rect.left, vw - POPUP_W - POPUP_GAP);
+
+  popup.style.top = `${Math.max(0, top)}px`;
+  popup.style.left = `${Math.max(0, left)}px`;
+}
+
+/**
+ * Build the Mention extension with a React-rendered floating dropdown.
+ *
+ * Accepts a **ref** instead of a plain array so the `items` callback always
+ * reads the latest users — TipTap extensions are created once and cannot be
+ * hot-reloaded when props change.
+ */
+function buildMentionExtension(usersRef: React.RefObject<MentionItem[]>) {
+  return Mention.configure({
+    HTMLAttributes: { class: 'mention' },
+    renderLabel: ({ node }) => `@${node.attrs.label ?? node.attrs.id}`,
+    suggestion: {
+      char: '@',
+      items: ({ query }: { query: string }) => {
+        const q = query.toLowerCase();
+        return (usersRef.current ?? [])
+          .filter(u => u.label.toLowerCase().includes(q))
+          .slice(0, 8);
+      },
+      render: () => {
+        let component: ReactRenderer<MentionListHandle> | null = null;
+        let popup: HTMLDivElement | null = null;
+
+        return {
+          onExit() {
+            component?.destroy();
+            popup?.remove();
+            popup = null;
+            component = null;
+          },
+          onKeyDown({ event }: { event: KeyboardEvent }) {
+            if (event.key === 'Escape') {
+              popup?.remove();
+              popup = null;
+              component?.destroy();
+              component = null;
+              return true;
+            }
+            return component?.ref?.onKeyDown(event) ?? false;
+          },
+          onStart(props: {
+            editor: unknown;
+            items: MentionItem[];
+            command: (item: MentionItem) => void;
+            clientRect?: (() => DOMRect | null) | null;
+          }) {
+            popup = document.createElement('div');
+            popup.style.cssText =
+              'position:fixed;z-index:9999;pointer-events:auto;';
+            document.body.appendChild(popup);
+
+            component = new ReactRenderer(MentionList, {
+              editor: props.editor as never,
+              props: { command: props.command, items: props.items },
+            });
+            popup.appendChild(component.element);
+            positionPopup(popup, props.clientRect);
+          },
+          onUpdate(props: {
+            items: MentionItem[];
+            command: (item: MentionItem) => void;
+            clientRect?: (() => DOMRect | null) | null;
+          }) {
+            component?.updateProps({
+              command: props.command,
+              items: props.items,
+            });
+            if (popup) {
+              positionPopup(popup, props.clientRect);
+            }
+          },
+        };
+      },
+    },
+  });
 }
 
 export function TipTapEditor({
@@ -46,24 +160,25 @@ export function TipTapEditor({
   readOnly = false,
   autofocus = false,
   showToolbar = false,
+  mentionUsers,
 }: TipTapEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
-  const editor = useEditor({
-    autofocus,
-    content,
-    editable: !readOnly,
-    editorProps: {
-      attributes: {
-        class: cn(
-          'prose prose-sm dark:prose-invert max-w-none focus:outline-none',
-          'prose-zinc min-h-[80px]',
-          readOnly ? 'cursor-default' : 'cursor-text',
-        ),
-      },
-    },
-    extensions: [
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  // Keep a ref to the latest mentionUsers so the suggestion `items` callback
+  // always reads fresh data even though TipTap extensions cannot be hot-reloaded.
+  const mentionUsersRef = useRef<MentionItem[]>(mentionUsers ?? []);
+  useEffect(() => {
+    mentionUsersRef.current = mentionUsers ?? [];
+  }, [mentionUsers]);
+
+  // Extensions are built once — TipTap does not support hot-reloading them.
+  // Mutable state (mentionUsers) is accessed via mentionUsersRef at call time.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: extensions must be stable after editor creation
+  const extensions = useMemo(
+    () => [
       StarterKit.configure({
         codeBlock: false,
         horizontalRule: false,
@@ -87,10 +202,31 @@ export function TipTapEditor({
       Underline,
       HorizontalRule,
       CharacterCount,
+      // Only add the Mention extension when the caller opts in by providing users.
+      // The extension reads from mentionUsersRef so suggestions stay current.
+      ...(mentionUsers != null ? [buildMentionExtension(mentionUsersRef)] : []),
     ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  const editor = useEditor({
+    autofocus,
+    content,
+    editable: !readOnly,
+    editorProps: {
+      attributes: {
+        class: cn(
+          'prose prose-sm dark:prose-invert max-w-none focus:outline-none',
+          'prose-zinc min-h-[80px]',
+          readOnly ? 'cursor-default' : 'cursor-text',
+        ),
+      },
+    },
+    extensions,
     onBlur: () => onBlur?.(),
-    onUpdate: ({ editor }) => {
-      onChangeRef.current?.(editor.getHTML());
+    onUpdate: ({ editor: ed }) => {
+      onChangeRef.current?.(ed.getHTML());
     },
   });
 
@@ -124,6 +260,32 @@ export function TipTapEditor({
         .run();
     }
   }, [editor]);
+
+  /**
+   * Insert an image from a file input — converts to a base64 data URL.
+   *
+   * ⚠️ Base64 images are stored inline in the issue description HTML, so large
+   * images will bloat DB records and sync payloads. Until server-side file
+   * storage is wired up (the `File` model exists in the schema), images are
+   * capped at 2 MB. Larger files are silently skipped.
+   */
+  const handleImageFile = useCallback(
+    (file: File) => {
+      const MAX_SIZE = 2 * 1024 * 1024; // 2 MB
+      if (!editor || !file.type.startsWith('image/') || file.size > MAX_SIZE) {
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = e => {
+        const src = e.target?.result as string;
+        if (src) {
+          editor.chain().focus().setImage({ src }).run();
+        }
+      };
+      reader.readAsDataURL(file);
+    },
+    [editor],
+  );
 
   if (!editor) {
     return null;
@@ -253,6 +415,29 @@ export function TipTapEditor({
           >
             —
           </ToolbarButton>
+          <div className="mx-1 h-4 w-px bg-zinc-300 dark:bg-zinc-600" />
+          {/* Image upload */}
+          <ToolbarButton
+            onClick={() => imageInputRef.current?.click()}
+            active={false}
+            title="Insert image"
+          >
+            <ImageIcon className="h-3 w-3" />
+          </ToolbarButton>
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={e => {
+              const file = e.target.files?.[0];
+              if (file) {
+                handleImageFile(file);
+              }
+              // Reset so same file can be selected again
+              e.target.value = '';
+            }}
+          />
         </div>
       )}
 

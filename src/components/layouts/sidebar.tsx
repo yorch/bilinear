@@ -2,6 +2,7 @@
 
 import {
   Archive,
+  BarChart2,
   Eye,
   Inbox,
   PanelLeft,
@@ -159,14 +160,17 @@ export const Sidebar = observer(function Sidebar({
                   const cyclesHref = `${href}/cycles`;
                   const backlogHref = `${href}/backlog`;
                   const viewHrefPrefix = `${href}/view/`;
+                  const analyticsHref = `${href}/analytics`;
                   const isActive =
                     pathname === href ||
                     (pathname.startsWith(`${href}/`) &&
                       !pathname.startsWith(cyclesHref) &&
                       !pathname.startsWith(backlogHref) &&
+                      !pathname.startsWith(analyticsHref) &&
                       !pathname.startsWith(viewHrefPrefix));
                   const isCyclesActive = pathname.startsWith(cyclesHref);
                   const isBacklogActive = pathname.startsWith(backlogHref);
+                  const isAnalyticsActive = pathname.startsWith(analyticsHref);
                   return (
                     <li
                       key={team.id}
@@ -222,6 +226,19 @@ export const Sidebar = observer(function Sidebar({
                       >
                         <RefreshCw className="h-3 w-3" />
                         Cycles
+                      </Link>
+                      <Link
+                        href={analyticsHref}
+                        title="Analytics"
+                        className={cn(
+                          'flex items-center gap-2 rounded-md py-1 pl-8 pr-2 text-xs transition-colors',
+                          isAnalyticsActive
+                            ? 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
+                            : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
+                        )}
+                      >
+                        <BarChart2 className="h-3 w-3" />
+                        Analytics
                       </Link>
                       {/* Custom Views for this team */}
                       {customViewStore.getByTeamId(team.id).map(view => {

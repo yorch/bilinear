@@ -25,7 +25,7 @@ interface IssueWithTeam extends IssueDetail {
 const ISSUE_QUERY = `
   query Issue($id: ID!) {
     issue(id: $id) {
-      id identifier title description priority stateId assigneeId dueDate createdAt updatedAt
+      id identifier title description priority estimate stateId teamId assigneeId dueDate createdAt updatedAt
       labels { id name color }
       team {
         id key

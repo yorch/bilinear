@@ -1,5 +1,5 @@
 import { GraphQLError } from 'graphql';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createMockContext,
   type MockGraphQLContext,
@@ -9,6 +9,7 @@ import {
   TEST_ISSUE,
   TEST_TEAM,
   TEST_USER,
+  TEST_USER_2,
 } from '../../../test/fixtures';
 import { issueResolvers } from './issue';
 
@@ -50,6 +51,143 @@ describe('issueResolvers', () => {
       expect(result.lastSyncId).toBe('1');
     });
 
+    it('auto-subscribes the creator', async () => {
+      ctx.prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1 });
+      ctx.prisma.issue.create.mockResolvedValue(TEST_ISSUE);
+      ctx.prisma.issueLabelAssignment.deleteMany.mockResolvedValue({
+        count: 0,
+      });
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        teamId: TEST_TEAM.id,
+        userId: TEST_USER.id,
+      });
+      ctx.prisma.notificationSubscription.findUnique.mockResolvedValue(null);
+      ctx.prisma.notificationSubscription.create.mockResolvedValue({
+        active: true,
+        issueId: TEST_ISSUE.id,
+        userId: TEST_USER.id,
+      });
+
+      await issueResolvers.Mutation.issueCreate(
+        null,
+        {
+          input: {
+            stateId: DEFAULT_WORKFLOW_STATES[0].id,
+            teamId: TEST_TEAM.id,
+            title: 'Test issue',
+          },
+        },
+        ctx as never,
+      );
+
+      // Allow fire-and-forget promises to settle
+      await vi.waitFor(() =>
+        expect(ctx.prisma.notificationSubscription.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ userId: TEST_USER.id }),
+          }),
+        ),
+      );
+    });
+
+    it('notifies and subscribes the assignee when different from creator', async () => {
+      ctx.prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1 });
+      ctx.prisma.issue.create.mockResolvedValue({
+        ...TEST_ISSUE,
+        assigneeId: TEST_USER_2.id,
+      });
+      ctx.prisma.issueLabelAssignment.deleteMany.mockResolvedValue({
+        count: 0,
+      });
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        teamId: TEST_TEAM.id,
+        userId: TEST_USER.id,
+      });
+      ctx.prisma.notificationSubscription.findUnique.mockResolvedValue(null);
+      ctx.prisma.notificationSubscription.create.mockResolvedValue({
+        active: true,
+        issueId: TEST_ISSUE.id,
+        userId: TEST_USER_2.id,
+      });
+      ctx.prisma.notification.create.mockResolvedValue({
+        actorId: TEST_USER.id,
+        createdAt: new Date(),
+        data: {},
+        id: 'notif-1',
+        issueId: TEST_ISSUE.id,
+        organizationId: TEST_ISSUE.organizationId,
+        read: false,
+        readAt: null,
+        snoozedUntilAt: null,
+        type: 'ISSUE_ASSIGNED',
+        updatedAt: new Date(),
+        userId: TEST_USER_2.id,
+      });
+
+      await issueResolvers.Mutation.issueCreate(
+        null,
+        {
+          input: {
+            assigneeId: TEST_USER_2.id,
+            stateId: DEFAULT_WORKFLOW_STATES[0].id,
+            teamId: TEST_TEAM.id,
+            title: 'Test issue',
+          },
+        },
+        ctx as never,
+      );
+
+      await vi.waitFor(() =>
+        expect(ctx.prisma.notification.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              type: 'ISSUE_ASSIGNED',
+              userId: TEST_USER_2.id,
+            }),
+          }),
+        ),
+      );
+    });
+
+    it('does not notify the assignee when they are the creator', async () => {
+      ctx.prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1 });
+      ctx.prisma.issue.create.mockResolvedValue({
+        ...TEST_ISSUE,
+        assigneeId: TEST_USER.id,
+      });
+      ctx.prisma.issueLabelAssignment.deleteMany.mockResolvedValue({
+        count: 0,
+      });
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        teamId: TEST_TEAM.id,
+        userId: TEST_USER.id,
+      });
+      ctx.prisma.notificationSubscription.findUnique.mockResolvedValue(null);
+      ctx.prisma.notificationSubscription.create.mockResolvedValue({
+        active: true,
+        issueId: TEST_ISSUE.id,
+        userId: TEST_USER.id,
+      });
+
+      await issueResolvers.Mutation.issueCreate(
+        null,
+        {
+          input: {
+            assigneeId: TEST_USER.id, // same as ctx.userId
+            stateId: DEFAULT_WORKFLOW_STATES[0].id,
+            teamId: TEST_TEAM.id,
+            title: 'Test issue',
+          },
+        },
+        ctx as never,
+      );
+
+      // Notification should NOT have been created (self-assignment)
+      await vi.waitFor(() =>
+        expect(ctx.prisma.notification.create).not.toHaveBeenCalled(),
+      );
+    });
+
     it('throws UNAUTHENTICATED when not logged in', async () => {
       ctx = createMockContext({ orgId: null, userId: null });
 
@@ -83,6 +221,129 @@ describe('issueResolvers', () => {
 
       expect(result.success).toBe(true);
       expect(result.issue?.title).toBe('Updated');
+    });
+
+    it('auto-subscribes the actor on any update', async () => {
+      const updated = { ...TEST_ISSUE, title: 'Updated' };
+      ctx.prisma.issue.findUnique.mockResolvedValue(TEST_ISSUE);
+      ctx.prisma.issue.update.mockResolvedValue(updated);
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        teamId: TEST_TEAM.id,
+        userId: TEST_USER.id,
+      });
+      ctx.prisma.notificationSubscription.findUnique.mockResolvedValue(null);
+      ctx.prisma.notificationSubscription.create.mockResolvedValue({
+        active: true,
+        issueId: TEST_ISSUE.id,
+        userId: TEST_USER.id,
+      });
+
+      await issueResolvers.Mutation.issueUpdate(
+        null,
+        { id: TEST_ISSUE.id, input: { title: 'Updated' } },
+        ctx as never,
+      );
+
+      await vi.waitFor(() =>
+        expect(ctx.prisma.notificationSubscription.create).toHaveBeenCalled(),
+      );
+    });
+
+    it('notifies and subscribes the new assignee when assigneeId changes', async () => {
+      const issueWithoutAssignee = { ...TEST_ISSUE, assigneeId: null };
+      const updated = { ...TEST_ISSUE, assigneeId: TEST_USER_2.id };
+      ctx.prisma.issue.findUnique.mockResolvedValue(issueWithoutAssignee);
+      ctx.prisma.issue.update.mockResolvedValue(updated);
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        teamId: TEST_TEAM.id,
+        userId: TEST_USER.id,
+      });
+      ctx.prisma.notificationSubscription.findUnique.mockResolvedValue(null);
+      ctx.prisma.notificationSubscription.create.mockResolvedValue({
+        active: true,
+        issueId: TEST_ISSUE.id,
+        userId: TEST_USER_2.id,
+      });
+      ctx.prisma.notification.create.mockResolvedValue({
+        actorId: TEST_USER.id,
+        createdAt: new Date(),
+        data: {},
+        id: 'notif-2',
+        issueId: TEST_ISSUE.id,
+        organizationId: TEST_ISSUE.organizationId,
+        read: false,
+        readAt: null,
+        snoozedUntilAt: null,
+        type: 'ISSUE_ASSIGNED',
+        updatedAt: new Date(),
+        userId: TEST_USER_2.id,
+      });
+
+      await issueResolvers.Mutation.issueUpdate(
+        null,
+        { id: TEST_ISSUE.id, input: { assigneeId: TEST_USER_2.id } },
+        ctx as never,
+      );
+
+      await vi.waitFor(() =>
+        expect(ctx.prisma.notification.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              type: 'ISSUE_ASSIGNED',
+              userId: TEST_USER_2.id,
+            }),
+          }),
+        ),
+      );
+    });
+
+    it('notifies subscribers when stateId changes', async () => {
+      const newStateId = DEFAULT_WORKFLOW_STATES[1].id;
+      const updated = { ...TEST_ISSUE, stateId: newStateId };
+      ctx.prisma.issue.findUnique.mockResolvedValue(TEST_ISSUE);
+      ctx.prisma.issue.update.mockResolvedValue(updated);
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        teamId: TEST_TEAM.id,
+        userId: TEST_USER.id,
+      });
+      ctx.prisma.notificationSubscription.findUnique.mockResolvedValue(null);
+      ctx.prisma.notificationSubscription.create.mockResolvedValue({
+        active: true,
+        issueId: TEST_ISSUE.id,
+        userId: TEST_USER.id,
+      });
+      // Subscriber list (excluding the actor who made the change)
+      ctx.prisma.notificationSubscription.findMany.mockResolvedValue([
+        { userId: TEST_USER_2.id },
+      ]);
+      ctx.prisma.notification.create.mockResolvedValue({
+        actorId: TEST_USER.id,
+        createdAt: new Date(),
+        data: {},
+        id: 'notif-3',
+        issueId: TEST_ISSUE.id,
+        organizationId: TEST_ISSUE.organizationId,
+        read: false,
+        readAt: null,
+        snoozedUntilAt: null,
+        type: 'ISSUE_STATUS_CHANGED',
+        updatedAt: new Date(),
+        userId: TEST_USER_2.id,
+      });
+
+      await issueResolvers.Mutation.issueUpdate(
+        null,
+        { id: TEST_ISSUE.id, input: { stateId: newStateId } },
+        ctx as never,
+      );
+
+      await vi.waitFor(() =>
+        expect(ctx.prisma.notification.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ type: 'ISSUE_STATUS_CHANGED' }),
+          }),
+        ),
+      );
     });
 
     it('throws NOT_FOUND when issue does not exist', async () => {

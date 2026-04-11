@@ -6,6 +6,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '@/lib/toast';
 import { cn, getErrorMessage } from '@/lib/utils';
 
+export type TeamRole = 'admin' | 'member' | 'guest';
+
 export interface TeamMember {
   membershipId: string;
   userId: string;
@@ -15,6 +17,7 @@ export interface TeamMember {
   avatarUrl?: string | null;
   avatarBackgroundColor: string;
   isOwner: boolean;
+  role?: TeamRole;
 }
 
 export interface OrgUser {
@@ -33,7 +36,20 @@ interface TeamMemberManagementProps {
   onAddMember: (userId: string) => Promise<void>;
   onRemoveMember: (membershipId: string) => Promise<void>;
   onToggleOwner: (membershipId: string, isOwner: boolean) => Promise<void>;
+  onUpdateRole?: (membershipId: string, role: TeamRole) => Promise<void>;
 }
+
+const ROLE_LABELS: Record<TeamRole, string> = {
+  admin: 'Admin',
+  guest: 'Guest',
+  member: 'Member',
+};
+
+const ROLE_COLORS: Record<TeamRole, string> = {
+  admin: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+  guest: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400',
+  member: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
+};
 
 function Avatar({
   user,
@@ -81,6 +97,7 @@ export function TeamMemberManagement({
   onAddMember,
   onRemoveMember,
   onToggleOwner,
+  onUpdateRole,
 }: TeamMemberManagementProps) {
   const [addOpen, setAddOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -154,6 +171,20 @@ export function TeamMemberManagement({
     }
   };
 
+  const handleUpdateRole = async (membershipId: string, role: TeamRole) => {
+    if (!onUpdateRole) {
+      return;
+    }
+    setLoadingMembershipId(membershipId);
+    try {
+      await onUpdateRole(membershipId, role);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to update role'));
+    } finally {
+      setLoadingMembershipId(null);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-3">
       <ul className="flex flex-col divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -185,6 +216,42 @@ export function TeamMemberManagement({
                   {member.email}
                 </span>
               </div>
+              {/* Role badge / selector */}
+              {member.role && (
+                <div className="shrink-0">
+                  {canManageMembers && onUpdateRole ? (
+                    <select
+                      value={member.role}
+                      disabled={isLoading}
+                      onChange={e =>
+                        handleUpdateRole(
+                          member.membershipId,
+                          e.target.value as TeamRole,
+                        )
+                      }
+                      className={cn(
+                        'appearance-none rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer border border-transparent focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:opacity-50',
+                        ROLE_COLORS[member.role],
+                      )}
+                    >
+                      {(Object.keys(ROLE_LABELS) as TeamRole[]).map(r => (
+                        <option key={r} value={r}>
+                          {ROLE_LABELS[r]}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span
+                      className={cn(
+                        'rounded-full px-2 py-0.5 text-xs font-medium',
+                        ROLE_COLORS[member.role],
+                      )}
+                    >
+                      {ROLE_LABELS[member.role]}
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="flex items-center gap-1">
                 {pendingRemoveId === member.membershipId ? (
                   <>

@@ -434,6 +434,12 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   useHotkeys('q', () => setOpenProperty('cycle'), { enabled: hasSelection }, [
     hasSelection,
   ]);
+  useHotkeys(
+    'shift+e',
+    () => setOpenProperty('estimate'),
+    { enabled: hasSelection },
+    [hasSelection],
+  );
 
   // Backspace / Delete — archive selected issue
   useHotkeys(
