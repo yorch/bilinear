@@ -10,37 +10,11 @@ import {
 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useState } from 'react';
+import type { DBNotification } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface NotificationActor {
-  id: string;
-  displayName: string;
-  initials: string;
-  avatarBgColor: string | null;
-}
-
-interface NotificationIssue {
-  id: string;
-  identifier: string;
-  title: string;
-}
-
-interface Notification {
-  id: string;
-  type: string;
-  read: boolean;
-  readAt: string | null;
-  snoozedUntilAt: string | null;
-  data: Record<string, unknown> | null;
-  createdAt: string;
-  actor: NotificationActor | null;
-  issue: NotificationIssue | null;
-}
 
 // ─── GraphQL ──────────────────────────────────────────────────────────────────
 
@@ -54,17 +28,11 @@ const GET_NOTIFICATIONS_QUERY = `
       snoozedUntilAt
       data
       createdAt
-      actor {
-        id
-        displayName
-        initials
-        avatarBgColor
-      }
-      issue {
-        id
-        identifier
-        title
-      }
+      userId
+      actorId
+      issueId
+      organizationId
+      updatedAt
     }
   }
 `;
@@ -150,7 +118,7 @@ function getNotificationLabel(type: string): string {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 interface NotificationItemProps {
-  notification: Notification;
+  notification: DBNotification;
   onMarkRead: (id: string) => void;
   markingId: string | null;
 }
@@ -160,7 +128,7 @@ function NotificationItem({
   onMarkRead,
   markingId,
 }: NotificationItemProps) {
-  const { actor, issue, type, read, createdAt, id } = notification;
+  const { type, read, createdAt, id } = notification;
   const isMarkingThis = markingId === id;
 
   return (
@@ -187,22 +155,6 @@ function NotificationItem({
       {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-1 text-sm">
-          {actor && (
-            <span
-              className={cn(
-                'flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white',
-                !actor.avatarBgColor && 'bg-indigo-500',
-              )}
-              style={
-                actor.avatarBgColor
-                  ? { backgroundColor: actor.avatarBgColor }
-                  : undefined
-              }
-              title={actor.displayName}
-            >
-              {actor.initials}
-            </span>
-          )}
           <span
             className={cn(
               'font-medium',
@@ -211,19 +163,9 @@ function NotificationItem({
                 : 'text-zinc-900 dark:text-zinc-100',
             )}
           >
-            {actor?.displayName ?? 'System'}
-          </span>
-          <span className="text-zinc-500 dark:text-zinc-400">
             {getNotificationLabel(type)}
           </span>
         </div>
-
-        {issue && (
-          <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
-            <span className="font-mono">{issue.identifier}</span>{' '}
-            <span>{issue.title}</span>
-          </p>
-        )}
 
         <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
           {formatRelativeTime(createdAt)}
@@ -249,59 +191,58 @@ function NotificationItem({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export const NotificationInbox = observer(function NotificationInbox() {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _store = useStore(); // ensure store context is available
+  const store = useStore();
+  const { notificationStore } = store;
 
-  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
 
+  // Initial fetch — populate the store; subsequent updates arrive via WebSocket
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
 
-    const fetchNotifications = async () => {
-      setLoading(true);
-      try {
-        const res = await gql(GET_NOTIFICATIONS_QUERY, { limit: 50 });
-        if (!cancelled) {
-          const data = res.data as
-            | { notifications?: Notification[] }
-            | undefined;
-          setNotifications(data?.notifications ?? []);
+    gql(GET_NOTIFICATIONS_QUERY, { limit: 50 })
+      .then(res => {
+        if (cancelled) {
+          return;
         }
-      } catch {
+        const data =
+          (res.data as { notifications?: DBNotification[] } | undefined)
+            ?.notifications ?? [];
+        notificationStore.upsertMany(data);
+        setLoading(false);
+      })
+      .catch(() => {
         if (!cancelled) {
           toast.error('Failed to load notifications');
-        }
-      } finally {
-        if (!cancelled) {
           setLoading(false);
         }
-      }
-    };
+      });
 
-    fetchNotifications();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [notificationStore]);
+
+  // Reactive — re-renders when the store is updated (e.g. via WS sync actions)
+  const notifications = notificationStore.all;
 
   const handleMarkRead = async (id: string) => {
+    notificationStore.markRead(id); // Optimistic update
     setMarkingId(id);
     try {
       const res = await gql(MARK_READ_MUTATION, { id });
       if (res.errors?.length) {
         throw new Error('Failed to mark notification as read');
       }
-      setNotifications(prev =>
-        prev.map(n =>
-          n.id === id
-            ? { ...n, read: true, readAt: new Date().toISOString() }
-            : n,
-        ),
-      );
     } catch {
+      // Roll back optimistic update
+      notificationStore.optimisticUpdate(id, {
+        read: false,
+        readAt: undefined,
+      });
       toast.error('Failed to mark notification as read');
     } finally {
       setMarkingId(null);
@@ -315,10 +256,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
       if (res.errors?.length) {
         throw new Error('Failed to mark all notifications as read');
       }
-      const now = new Date().toISOString();
-      setNotifications(prev =>
-        prev.map(n => ({ ...n, read: true, readAt: n.readAt ?? now })),
-      );
+      notificationStore.markAllRead();
     } catch {
       toast.error('Failed to mark all notifications as read');
     } finally {

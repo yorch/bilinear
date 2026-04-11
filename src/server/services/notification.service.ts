@@ -38,13 +38,18 @@ export class NotificationService {
     return this.prisma.notification.findUnique({ where: { id } });
   }
 
-  async findByUserId(userId: string, limit = 50): Promise<Notification[]> {
+  async findByUserId(
+    userId: string,
+    orgId: string,
+    limit = 50,
+  ): Promise<Notification[]> {
     const now = new Date();
     return this.prisma.notification.findMany({
       orderBy: { createdAt: 'desc' },
       take: limit,
       where: {
         OR: [{ snoozedUntilAt: null }, { snoozedUntilAt: { lte: now } }],
+        organizationId: orgId,
         userId,
       },
     });

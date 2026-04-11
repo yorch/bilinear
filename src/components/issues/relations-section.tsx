@@ -1,11 +1,12 @@
 'use client';
 
 import { ChevronDown, Plus, Trash2, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn } from '@/lib/utils';
+import { useStore } from '@/providers/store-provider';
 
 // ─── GraphQL documents ────────────────────────────────────────────────────────
 
@@ -81,6 +82,7 @@ interface RelationsSectionProps {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function RelationsSection({ issueId }: RelationsSectionProps) {
+  const store = useStore();
   const [relations, setRelations] = useState<IssueRelation[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -138,28 +140,23 @@ export function RelationsSection({ issueId }: RelationsSectionProps) {
     type: RelationType,
     relatedIdentifier: string,
   ) => {
-    // We rely on backend to resolve the identifier → id; we send identifier as a hint.
+    const normalized = relatedIdentifier.trim().toUpperCase();
+
+    // Resolve identifier → UUID using the local issue store
+    const relatedIssue = Array.from(store.issueStore.pool.values()).find(
+      i => i.identifier === normalized,
+    );
+    if (!relatedIssue) {
+      toast.error(`Issue "${normalized}" not found`);
+      return;
+    }
+
     try {
-      const result = await new Promise<IssueRelation>((resolve, reject) => {
+      await new Promise<void>((resolve, reject) => {
         tq.enqueue(
           CREATE_ISSUE_RELATION,
-          {
-            input: {
-              issueId,
-              relatedIssueIdentifier: relatedIdentifier.trim().toUpperCase(),
-              type,
-            },
-          },
-          {
-            onError: reject,
-            onSuccess: data => {
-              const rel = (data as Record<string, unknown>)
-                ?.issueRelationCreate as {
-                issueRelation: IssueRelation;
-              };
-              resolve(rel.issueRelation);
-            },
-          },
+          { input: { issueId, relatedIssueId: relatedIssue.id, type } },
+          { onError: reject, onSuccess: () => resolve() },
         );
       });
       // Refresh relations from server to get full issue objects
@@ -167,9 +164,6 @@ export function RelationsSection({ issueId }: RelationsSectionProps) {
       const data = refreshed.data?.issueRelations;
       if (Array.isArray(data)) {
         setRelations(data as IssueRelation[]);
-      } else {
-        // Fallback: add minimal entry
-        setRelations(prev => [...prev, result]);
       }
       setShowAddForm(false);
     } catch {
@@ -234,9 +228,9 @@ export function RelationsSection({ issueId }: RelationsSectionProps) {
                     return (
                       <li
                         key={rel.id}
-                        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 group"
+                        className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
                       >
-                        <span className="font-mono text-xs text-zinc-400 shrink-0">
+                        <span className="shrink-0 font-mono text-xs text-zinc-400">
                           {other?.identifier ?? '—'}
                         </span>
                         <span className="flex-1 truncate text-zinc-700 dark:text-zinc-300">
@@ -245,7 +239,7 @@ export function RelationsSection({ issueId }: RelationsSectionProps) {
                         <button
                           type="button"
                           onClick={() => handleDelete(rel.id)}
-                          className="hidden group-hover:flex items-center rounded p-0.5 text-zinc-400 hover:text-red-500"
+                          className="hidden items-center rounded p-0.5 text-zinc-400 hover:text-red-500 group-hover:flex"
                           aria-label="Remove relation"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -282,6 +276,21 @@ function AddRelationForm({ onSubmit, onClose }: AddRelationFormProps) {
   const [identifier, setIdentifier] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [typeOpen, setTypeOpen] = useState(false);
+  const typeDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close type dropdown on outside click
+  useEffect(() => {
+    if (!typeOpen) {
+      return;
+    }
+    const handler = (e: MouseEvent) => {
+      if (!typeDropdownRef.current?.contains(e.target as Node)) {
+        setTypeOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [typeOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -303,7 +312,7 @@ function AddRelationForm({ onSubmit, onClose }: AddRelationFormProps) {
     >
       <div className="flex items-center gap-2">
         {/* Type selector */}
-        <div className="relative">
+        <div ref={typeDropdownRef} className="relative">
           <button
             type="button"
             onClick={() => setTypeOpen(o => !o)}

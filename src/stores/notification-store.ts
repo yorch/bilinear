@@ -18,19 +18,15 @@ export class NotificationStore {
     });
   }
 
+  // Returns all notifications sorted newest-first.
+  // Snooze filtering is handled server-side; the pool should not contain
+  // active snoozed items. Avoiding `new Date()` here keeps this computed
+  // properly cacheable by MobX.
   get all(): DBNotification[] {
-    const now = new Date().toISOString();
-    return Array.from(this.pool.values())
-      .filter(
-        n =>
-          n.snoozedUntilAt === null ||
-          n.snoozedUntilAt === undefined ||
-          n.snoozedUntilAt <= now,
-      )
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
+    return Array.from(this.pool.values()).sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
   }
 
   get unread(): DBNotification[] {
@@ -45,6 +41,8 @@ export class NotificationStore {
     return this.pool.get(id) ?? null;
   }
 
+  // The pool only holds the current user's notifications (server-scoped).
+  // No userId filter needed, but kept for API symmetry.
   findByUserId(userId: string): DBNotification[] {
     return this.all.filter(n => n.userId === userId);
   }
@@ -60,10 +58,12 @@ export class NotificationStore {
     }
   }
 
-  markAllRead(userId: string) {
+  // Marks all notifications in the pool as read. The pool is already scoped
+  // to the current user/org, so no userId filter is needed.
+  markAllRead() {
     const now = new Date().toISOString();
     for (const [id, notification] of this.pool) {
-      if (notification.userId === userId && !notification.read) {
+      if (!notification.read) {
         this.pool.set(id, { ...notification, read: true, readAt: now });
       }
     }

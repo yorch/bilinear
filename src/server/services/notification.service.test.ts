@@ -63,6 +63,24 @@ describe('NotificationService', () => {
     });
   });
 
+  describe('findByUserId', () => {
+    it('scopes results to userId and orgId', async () => {
+      prisma.notification.findMany.mockResolvedValue([TEST_NOTIFICATION]);
+
+      const result = await service.findByUserId(TEST_USER.id, TEST_ORG.id);
+
+      expect(result).toEqual([TEST_NOTIFICATION]);
+      expect(prisma.notification.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            organizationId: TEST_ORG.id,
+            userId: TEST_USER.id,
+          }),
+        }),
+      );
+    });
+  });
+
   describe('markRead', () => {
     it('marks notification as read', async () => {
       const readNotification = {

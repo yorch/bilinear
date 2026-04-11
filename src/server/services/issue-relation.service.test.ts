@@ -29,18 +29,18 @@ describe('IssueRelationService', () => {
 
   describe('create', () => {
     it('creates relation and its inverse for blocks type', async () => {
-      // No circular check hit (no existing reverse blocks)
+      // Inside $transaction: no circular relation found
       prisma.issueRelation.findUnique.mockResolvedValueOnce(null);
       // No duplicate relation
       prisma.issueRelation.findUnique.mockResolvedValueOnce(null);
-      // Inside $transaction: create the primary relation
+      // Create the primary relation
       prisma.issueRelation.create.mockResolvedValueOnce({
         ...TEST_RELATION,
         type: 'blocks',
       });
-      // Inside $transaction: check if inverse already exists
+      // Inverse (blocked_by) does not already exist
       prisma.issueRelation.findUnique.mockResolvedValueOnce(null);
-      // Inside $transaction: create the inverse blocked_by relation
+      // Create the inverse blocked_by relation
       prisma.issueRelation.create.mockResolvedValueOnce({
         createdAt: new Date('2026-02-15T00:00:00Z'),
         id: '00000000-0000-0000-0000-000000000701',
@@ -78,7 +78,7 @@ describe('IssueRelationService', () => {
     });
 
     it('throws IssueRelationAlreadyExistsError when relation already exists', async () => {
-      // No circular check (type is 'related', so no circular check block runs)
+      // No circular check hit (type is 'related')
       // Duplicate check finds existing
       prisma.issueRelation.findUnique.mockResolvedValueOnce(TEST_RELATION);
 
@@ -130,6 +130,52 @@ describe('IssueRelationService', () => {
       expect(prisma.issueRelation.delete).toHaveBeenCalledWith({
         where: { id: TEST_RELATION.id },
       });
+    });
+
+    it('also deletes the inverse blocked_by relation when deleting a blocks relation', async () => {
+      const blocksRelation = { ...TEST_RELATION, type: 'blocks' };
+      prisma.issueRelation.findUnique.mockResolvedValue(blocksRelation);
+      prisma.issueRelation.deleteMany.mockResolvedValue({ count: 1 });
+      prisma.issueRelation.delete.mockResolvedValue(blocksRelation);
+
+      await service.delete(blocksRelation.id);
+
+      expect(prisma.issueRelation.deleteMany).toHaveBeenCalledWith({
+        where: {
+          issueId: blocksRelation.relatedIssueId,
+          relatedIssueId: blocksRelation.issueId,
+          type: 'blocked_by',
+        },
+      });
+      expect(prisma.issueRelation.delete).toHaveBeenCalledWith({
+        where: { id: blocksRelation.id },
+      });
+    });
+
+    it('also deletes the inverse duplicate relation when deleting a duplicate relation', async () => {
+      const dupRelation = { ...TEST_RELATION, type: 'duplicate' };
+      prisma.issueRelation.findUnique.mockResolvedValue(dupRelation);
+      prisma.issueRelation.deleteMany.mockResolvedValue({ count: 1 });
+      prisma.issueRelation.delete.mockResolvedValue(dupRelation);
+
+      await service.delete(dupRelation.id);
+
+      expect(prisma.issueRelation.deleteMany).toHaveBeenCalledWith({
+        where: {
+          issueId: dupRelation.relatedIssueId,
+          relatedIssueId: dupRelation.issueId,
+          type: 'duplicate',
+        },
+      });
+    });
+
+    it('does NOT call deleteMany for related type (no directed inverse)', async () => {
+      prisma.issueRelation.findUnique.mockResolvedValue(TEST_RELATION);
+      prisma.issueRelation.delete.mockResolvedValue(TEST_RELATION);
+
+      await service.delete(TEST_RELATION.id);
+
+      expect(prisma.issueRelation.deleteMany).not.toHaveBeenCalled();
     });
 
     it('throws IssueRelationNotFoundError when not found', async () => {

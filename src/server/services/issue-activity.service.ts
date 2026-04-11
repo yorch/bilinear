@@ -38,17 +38,19 @@ export class IssueActivityService {
       return [];
     }
 
-    return this.prisma.$transaction(
-      activities.map(input =>
-        this.prisma.issueActivity.create({
-          data: {
-            actorId: input.actorId ?? null,
-            field: input.field,
-            issueId: input.issueId,
-            newValue: input.newValue ?? null,
-            oldValue: input.oldValue ?? null,
-          },
-        }),
+    return this.prisma.$transaction(async tx =>
+      Promise.all(
+        activities.map(input =>
+          tx.issueActivity.create({
+            data: {
+              actorId: input.actorId ?? null,
+              field: input.field,
+              issueId: input.issueId,
+              newValue: input.newValue ?? null,
+              oldValue: input.oldValue ?? null,
+            },
+          }),
+        ),
       ),
     );
   }

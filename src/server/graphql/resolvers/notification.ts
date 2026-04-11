@@ -14,15 +14,11 @@ export const notificationResolvers = {
 
       await ctx.services.notification.markAllRead(ctx.userId, ctx.orgId);
 
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'U',
-        'Notification',
-        ctx.userId,
-        null,
-      );
+      // markAllRead is user-scoped and doesn't require cross-client broadcast;
+      // return current org sync cursor instead of creating a spurious SyncAction.
+      const lastSyncId = await ctx.services.sync.getLastSyncId(ctx.orgId);
 
-      return { lastSyncId: sync.id.toString(), success: true };
+      return { lastSyncId: lastSyncId.toString(), success: true };
     },
 
     notificationMarkRead: async (
@@ -186,7 +182,11 @@ export const notificationResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      return ctx.services.notification.findByUserId(ctx.userId, limit ?? 50);
+      return ctx.services.notification.findByUserId(
+        ctx.userId,
+        ctx.orgId,
+        limit ?? 50,
+      );
     },
     notificationUnreadCount: async (
       _parent: unknown,

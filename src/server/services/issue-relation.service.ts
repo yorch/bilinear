@@ -33,69 +33,85 @@ export class IssueRelationCircularError extends Error {
   }
 }
 
+function inverseType(type: IssueRelationType): IssueRelationType | null {
+  if (type === 'blocks') {
+    return 'blocked_by';
+  }
+  if (type === 'blocked_by') {
+    return 'blocks';
+  }
+  if (type === 'duplicate') {
+    return 'duplicate';
+  }
+  return null; // 'related' has no directed inverse
+}
+
 export class IssueRelationService {
   constructor(private prisma: PrismaClient) {}
 
   async create(input: IssueRelationCreateInput): Promise<IssueRelation> {
     const { issueId, relatedIssueId, type } = input;
 
-    // Prevent self-relations
+    // Self-relation check can stay outside — no race risk here
     if (issueId === relatedIssueId) {
       throw new IssueRelationCircularError();
     }
 
-    // Check for circular blocks: if A blocks B, B cannot block A
-    if (type === 'blocks') {
-      const circular = await this.prisma.issueRelation.findUnique({
-        where: {
-          issueId_relatedIssueId_type: {
-            issueId: relatedIssueId,
-            relatedIssueId: issueId,
-            type: 'blocks',
-          },
-        },
-      });
-      if (circular) {
-        throw new IssueRelationCircularError();
-      }
-    }
-
-    if (type === 'blocked_by') {
-      const circular = await this.prisma.issueRelation.findUnique({
-        where: {
-          issueId_relatedIssueId_type: {
-            issueId: relatedIssueId,
-            relatedIssueId: issueId,
-            type: 'blocked_by',
-          },
-        },
-      });
-      if (circular) {
-        throw new IssueRelationCircularError();
-      }
-    }
-
-    // Check for duplicate relation
-    const existing = await this.prisma.issueRelation.findUnique({
-      where: { issueId_relatedIssueId_type: { issueId, relatedIssueId, type } },
-    });
-    if (existing) {
-      throw new IssueRelationAlreadyExistsError();
-    }
-
     return this.prisma.$transaction(async tx => {
+      // Circular block check inside transaction to close TOCTOU window
+      if (type === 'blocks') {
+        const circular = await tx.issueRelation.findUnique({
+          where: {
+            issueId_relatedIssueId_type: {
+              issueId: relatedIssueId,
+              relatedIssueId: issueId,
+              type: 'blocks',
+            },
+          },
+        });
+        if (circular) {
+          throw new IssueRelationCircularError();
+        }
+      }
+
+      if (type === 'blocked_by') {
+        const circular = await tx.issueRelation.findUnique({
+          where: {
+            issueId_relatedIssueId_type: {
+              issueId: relatedIssueId,
+              relatedIssueId: issueId,
+              type: 'blocked_by',
+            },
+          },
+        });
+        if (circular) {
+          throw new IssueRelationCircularError();
+        }
+      }
+
+      // Duplicate relation check
+      const existing = await tx.issueRelation.findUnique({
+        where: {
+          issueId_relatedIssueId_type: { issueId, relatedIssueId, type },
+        },
+      });
+      if (existing) {
+        throw new IssueRelationAlreadyExistsError();
+      }
+
       const relation = await tx.issueRelation.create({
         data: { issueId, relatedIssueId, type },
       });
 
       // Auto-create inverse relation
-      if (type === 'blocks') {
+      const inv = inverseType(type);
+      if (inv) {
         const inverseExists = await tx.issueRelation.findUnique({
           where: {
             issueId_relatedIssueId_type: {
               issueId: relatedIssueId,
               relatedIssueId: issueId,
-              type: 'blocked_by',
+              type: inv,
             },
           },
         });
@@ -104,45 +120,7 @@ export class IssueRelationService {
             data: {
               issueId: relatedIssueId,
               relatedIssueId: issueId,
-              type: 'blocked_by',
-            },
-          });
-        }
-      } else if (type === 'blocked_by') {
-        const inverseExists = await tx.issueRelation.findUnique({
-          where: {
-            issueId_relatedIssueId_type: {
-              issueId: relatedIssueId,
-              relatedIssueId: issueId,
-              type: 'blocks',
-            },
-          },
-        });
-        if (!inverseExists) {
-          await tx.issueRelation.create({
-            data: {
-              issueId: relatedIssueId,
-              relatedIssueId: issueId,
-              type: 'blocks',
-            },
-          });
-        }
-      } else if (type === 'duplicate') {
-        const inverseExists = await tx.issueRelation.findUnique({
-          where: {
-            issueId_relatedIssueId_type: {
-              issueId: relatedIssueId,
-              relatedIssueId: issueId,
-              type: 'duplicate',
-            },
-          },
-        });
-        if (!inverseExists) {
-          await tx.issueRelation.create({
-            data: {
-              issueId: relatedIssueId,
-              relatedIssueId: issueId,
-              type: 'duplicate',
+              type: inv,
             },
           });
         }
@@ -159,7 +137,21 @@ export class IssueRelationService {
     if (!relation) {
       throw new IssueRelationNotFoundError();
     }
-    return this.prisma.issueRelation.delete({ where: { id } });
+
+    return this.prisma.$transaction(async tx => {
+      // Delete the auto-created inverse relation if one exists
+      const inv = inverseType(relation.type as IssueRelationType);
+      if (inv) {
+        await tx.issueRelation.deleteMany({
+          where: {
+            issueId: relation.relatedIssueId,
+            relatedIssueId: relation.issueId,
+            type: inv,
+          },
+        });
+      }
+      return tx.issueRelation.delete({ where: { id } });
+    });
   }
 
   async findById(id: string): Promise<IssueRelation | null> {
