@@ -52,29 +52,20 @@ export const SubIssueList = observer(function SubIssueList({
   // TransactionQueue per mount
   const tq = useMemo(() => new TransactionQueue(), []);
 
-  const subIssues = useMemo(
-    () =>
-      Array.from(issueStore.pool.values()).filter(
-        i => i.parentId === parentIssueId && !i.trashed && !i.archivedAt,
-      ),
-    // pool.size changes whenever the pool is mutated, giving MobX a stable dependency
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [parentIssueId, issueStore.pool.size],
+  // Derived in render so MobX (observer) tracks pool access and re-renders on changes
+  const subIssues = Array.from(issueStore.pool.values()).filter(
+    i => i.parentId === parentIssueId && !i.trashed && !i.archivedAt,
   );
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, typeof subIssues>();
-    for (const issue of subIssues) {
-      const state = workflowStateStore.findById(issue.stateId);
-      const category = state?.type ?? 'backlog';
-      if (!map.has(category)) {
-        map.set(category, []);
-      }
-      map.get(category)?.push(issue);
+  const grouped = new Map<string, typeof subIssues>();
+  for (const issue of subIssues) {
+    const state = workflowStateStore.findById(issue.stateId);
+    const category = state?.type ?? 'backlog';
+    if (!grouped.has(category)) {
+      grouped.set(category, []);
     }
-    return map;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subIssues, workflowStateStore.pool.size]);
+    grouped.get(category)?.push(issue);
+  }
 
   return (
     <div className="mt-6">

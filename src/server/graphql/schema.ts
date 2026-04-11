@@ -654,11 +654,18 @@ export const typeDefs = `
     sortOrder: Float
   }
 
+  enum IssueRelationType {
+    related
+    blocks
+    blocked_by
+    duplicate
+  }
+
   type IssueRelation {
     id: ID!
     issueId: ID!
     relatedIssueId: ID!
-    type: String!
+    type: IssueRelationType!
     issue: Issue!
     relatedIssue: Issue!
     createdAt: DateTime!
@@ -673,7 +680,7 @@ export const typeDefs = `
   input IssueRelationCreateInput {
     issueId: String!
     relatedIssueId: String!
-    type: String!
+    type: IssueRelationType!
   }
 
   type IssueTemplate {

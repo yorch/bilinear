@@ -173,6 +173,7 @@ export const issueTemplateResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
+      await requireTeamMember(ctx.prisma, template.teamId, ctx.userId);
       return template;
     },
     issueTemplates: async (

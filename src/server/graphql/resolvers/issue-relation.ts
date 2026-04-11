@@ -1,6 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { IssueRelation } from '../../../generated/prisma';
-import { requireAuth } from '../../middleware/auth';
+import { requireAuth, requireTeamMember } from '../../middleware/auth';
 import type { IssueRelationCreateInput } from '../../services/issue-relation.service';
 import type { GraphQLContext } from '../context';
 
@@ -28,13 +28,13 @@ export const issueRelationResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      // Verify both issues belong to the user's org
       const issue = await ctx.services.issue.findById(input.issueId);
       if (!issue || issue.organizationId !== ctx.orgId) {
         throw new GraphQLError('Issue not found', {
           extensions: { code: 'NOT_FOUND' },
         });
       }
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
       const relatedIssue = await ctx.services.issue.findById(
         input.relatedIssueId,
       );
@@ -43,6 +43,7 @@ export const issueRelationResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
+      await requireTeamMember(ctx.prisma, relatedIssue.teamId, ctx.userId);
       try {
         const relation = await ctx.services.issueRelation.create(input);
         const sync = await ctx.services.sync.createSyncAction(
@@ -84,13 +85,13 @@ export const issueRelationResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      // Verify ownership through issue
       const issue = await ctx.services.issue.findById(relation.issueId);
       if (!issue || issue.organizationId !== ctx.orgId) {
         throw new GraphQLError('Issue relation not found', {
           extensions: { code: 'NOT_FOUND' },
         });
       }
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
       await ctx.services.issueRelation.delete(id);
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
@@ -115,6 +116,7 @@ export const issueRelationResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
       return ctx.services.issueRelation.findByIssueId(issueId);
     },
   },

@@ -1,6 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { Notification } from '../../../generated/prisma';
-import { requireAuth } from '../../middleware/auth';
+import { requireAuth, requireTeamMember } from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
 
 export const notificationResolvers = {
@@ -109,18 +109,13 @@ export const notificationResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
 
       await ctx.services.notification.subscribe(ctx.userId, issueId);
 
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'U',
-        'NotificationSubscription',
-        ctx.userId,
-        { issueId, userId: ctx.userId },
-      );
-
-      return { lastSyncId: sync.id.toString(), success: true };
+      // Subscriptions are user-local; no cross-client sync action needed.
+      const lastSyncId = await ctx.services.sync.getLastSyncId(ctx.orgId);
+      return { lastSyncId: lastSyncId.toString(), success: true };
     },
 
     notificationUnsubscribe: async (
@@ -136,18 +131,12 @@ export const notificationResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
 
       await ctx.services.notification.unsubscribe(ctx.userId, issueId);
 
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'U',
-        'NotificationSubscription',
-        ctx.userId,
-        { active: false, issueId, userId: ctx.userId },
-      );
-
-      return { lastSyncId: sync.id.toString(), success: true };
+      const lastSyncId = await ctx.services.sync.getLastSyncId(ctx.orgId);
+      return { lastSyncId: lastSyncId.toString(), success: true };
     },
   },
 

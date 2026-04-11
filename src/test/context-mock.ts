@@ -1,6 +1,6 @@
 import { AuthService } from '../server/services/auth.service';
-import { IssueActivityService } from '../server/services/issue-activity.service';
 import { IssueService } from '../server/services/issue.service';
+import { IssueActivityService } from '../server/services/issue-activity.service';
 import { LabelService } from '../server/services/label.service';
 import { SearchService } from '../server/services/search.service';
 import type { SyncActionType } from '../server/services/sync.service';
