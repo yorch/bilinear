@@ -56,9 +56,7 @@ export function EstimateBadge({
   estimationType?: string;
 }) {
   if (!value) {
-    return (
-      <span className="text-xs text-zinc-400 dark:text-zinc-500">–</span>
-    );
+    return <span className="text-xs text-zinc-400 dark:text-zinc-500">–</span>;
   }
 
   if (estimationType === 'tShirt') {
@@ -92,13 +90,19 @@ export function EstimatePicker({
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (forceOpen) setOpen(true);
+    if (forceOpen) {
+      setOpen(true);
+    }
   }, [forceOpen]);
 
-  useOutsideClick(containerRef, () => {
-    setOpen(false);
-    onClose?.();
-  }, open);
+  useOutsideClick(
+    containerRef,
+    () => {
+      setOpen(false);
+      onClose?.();
+    },
+    open,
+  );
 
   const scale = SCALE_OPTIONS[estimationType];
 

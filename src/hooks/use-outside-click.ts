@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from 'react';
+import { type RefObject, useEffect } from 'react';
 
 /**
  * Calls `handler` when a mousedown event fires outside the given element.
@@ -10,7 +10,9 @@ export function useOutsideClick(
   enabled = true,
 ) {
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      return;
+    }
     const listener = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         handler();

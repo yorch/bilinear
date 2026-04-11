@@ -157,7 +157,9 @@ export function IssueRow({
           estimationType={estimationType}
           forceOpen={openProperty === 'estimate'}
           onClose={onPropertyClosed}
-          onChange={estimate => onUpdate(issue.id, { estimate: estimate ?? undefined })}
+          onChange={estimate =>
+            onUpdate(issue.id, { estimate: estimate ?? undefined })
+          }
         />
       )}
 

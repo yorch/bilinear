@@ -190,7 +190,10 @@ export const teamResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      if (team.private && !(await isOrgAdmin(ctx.prisma, ctx.orgId, ctx.userId))) {
+      if (
+        team.private &&
+        !(await isOrgAdmin(ctx.prisma, ctx.orgId, ctx.userId))
+      ) {
         const teamMembership = await ctx.prisma.teamMembership.findUnique({
           where: { teamId_userId: { teamId: id, userId: ctx.userId } },
         });
@@ -216,7 +219,10 @@ export const teamResolvers = {
         (
           await ctx.prisma.teamMembership.findMany({
             select: { teamId: true },
-            where: { teamId: { in: allTeams.map(t => t.id) }, userId: ctx.userId },
+            where: {
+              teamId: { in: allTeams.map(t => t.id) },
+              userId: ctx.userId,
+            },
           })
         ).map(m => m.teamId),
       );

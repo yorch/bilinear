@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { Issue } from '../../../generated/prisma';
+import { logger } from '../../lib/logger';
 import { requireAuth, requireTeamMember } from '../../middleware/auth';
 import type {
   IssueCreateInput,
@@ -144,18 +145,30 @@ export const issueResolvers = {
 
         // Auto-subscribe creator and notify assignee (fire-and-forget — don't
         // block the response on notification delivery)
-        void ctx.services.notification.autoSubscribe(ctx.userId, issue.id);
+        void ctx.services.notification
+          .autoSubscribe(ctx.userId, issue.id)
+          .catch(err =>
+            logger.error({ err }, 'Failed to auto-subscribe issue creator'),
+          );
         if (input.assigneeId && input.assigneeId !== ctx.userId) {
-          void ctx.services.notification.autoSubscribe(
-            input.assigneeId,
-            issue.id,
-          );
-          void ctx.services.notification.createForIssueAssignment(
-            ctx.orgId,
-            issue.id,
-            input.assigneeId,
-            ctx.userId,
-          );
+          void ctx.services.notification
+            .autoSubscribe(input.assigneeId, issue.id)
+            .catch(err =>
+              logger.error({ err }, 'Failed to auto-subscribe issue assignee'),
+            );
+          void ctx.services.notification
+            .createForIssueAssignment(
+              ctx.orgId,
+              issue.id,
+              input.assigneeId,
+              ctx.userId,
+            )
+            .catch(err =>
+              logger.error(
+                { err },
+                'Failed to create issue assignment notification',
+              ),
+            );
         }
 
         const sync = await ctx.services.sync.createSyncAction(
@@ -284,16 +297,24 @@ export const issueResolvers = {
       ) {
         if (input.assigneeId) {
           // Auto-subscribe new assignee and notify them
-          void ctx.services.notification.autoSubscribe(
-            input.assigneeId,
-            issue.id,
-          );
-          void ctx.services.notification.createForIssueAssignment(
-            ctx.orgId,
-            issue.id,
-            input.assigneeId,
-            ctx.userId,
-          );
+          void ctx.services.notification
+            .autoSubscribe(input.assigneeId, issue.id)
+            .catch(err =>
+              logger.error({ err }, 'Failed to auto-subscribe issue assignee'),
+            );
+          void ctx.services.notification
+            .createForIssueAssignment(
+              ctx.orgId,
+              issue.id,
+              input.assigneeId,
+              ctx.userId,
+            )
+            .catch(err =>
+              logger.error(
+                { err },
+                'Failed to create issue assignment notification',
+              ),
+            );
         }
       }
 

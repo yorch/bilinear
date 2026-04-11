@@ -7,8 +7,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   type TeamMember,
-  type TeamRole,
   TeamMemberManagement,
+  type TeamRole,
 } from '@/components/teams/team-member-management';
 import { SimpleSelect } from '@/components/ui/select';
 import { gql } from '@/lib/graphql';
@@ -272,7 +272,16 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
     } finally {
       setSaving(false);
     }
-  }, [team, name, description, isPrivate, parentId, triageEnabled, saving, teamStore]);
+  }, [
+    team,
+    name,
+    description,
+    isPrivate,
+    parentId,
+    triageEnabled,
+    saving,
+    teamStore,
+  ]);
 
   const handleAddMember = useCallback(
     async (userId: string) => {
@@ -345,9 +354,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         throw new Error(gqlError(result, 'Failed to update role'));
       }
       setMembers(prev =>
-        prev.map(m =>
-          m.membershipId === membershipId ? { ...m, role } : m,
-        ),
+        prev.map(m => (m.membershipId === membershipId ? { ...m, role } : m)),
       );
       toast.success('Role updated');
     },
