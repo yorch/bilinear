@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   formatDueDate,
   getDueDateColor,
@@ -53,7 +53,10 @@ export function IssueDetailPanel({
 }: IssueDetailPanelProps) {
   const { userStore } = useStore();
   const currentUserId = userStore.currentUser?.id;
-  const mentionUsers = users.map(u => ({ id: u.id, label: u.displayName }));
+  const mentionUsers = useMemo(
+    () => users.map(u => ({ id: u.id, label: u.displayName })),
+    [users],
+  );
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [editingDesc, setEditingDesc] = useState(false);

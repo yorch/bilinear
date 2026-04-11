@@ -21,7 +21,7 @@ import { EditorContent, ReactRenderer, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { all, createLowlight } from 'lowlight';
 import { ImageIcon, Link2 } from 'lucide-react';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import type { MentionItem, MentionListHandle } from './mention-list';
 import { MentionList } from './mention-list';
@@ -42,8 +42,46 @@ export interface TipTapEditorProps {
   mentionUsers?: MentionItem[];
 }
 
-/** Build the Mention extension with a React-rendered floating dropdown. */
-function buildMentionExtension(users: MentionItem[]) {
+// Popup dimensions match the MentionList CSS (w-48 / max-h-48)
+const POPUP_W = 192;
+const POPUP_H = 192;
+const POPUP_GAP = 4;
+
+/**
+ * Position a fixed popup below the caret, clamping to the viewport so it
+ * never overflows the right edge or the bottom of the screen.
+ */
+function positionPopup(
+  popup: HTMLDivElement,
+  clientRect: (() => DOMRect | null) | null | undefined,
+) {
+  const rect = clientRect?.();
+  if (!rect) {
+    return;
+  }
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  // Prefer below caret; flip above when not enough room below.
+  let top = rect.bottom + POPUP_GAP;
+  if (top + POPUP_H > vh) {
+    top = rect.top - POPUP_H - POPUP_GAP;
+  }
+  // Clamp left so the popup never goes off the right edge.
+  const left = Math.min(rect.left, vw - POPUP_W - POPUP_GAP);
+
+  popup.style.top = `${Math.max(0, top)}px`;
+  popup.style.left = `${Math.max(0, left)}px`;
+}
+
+/**
+ * Build the Mention extension with a React-rendered floating dropdown.
+ *
+ * Accepts a **ref** instead of a plain array so the `items` callback always
+ * reads the latest users — TipTap extensions are created once and cannot be
+ * hot-reloaded when props change.
+ */
+function buildMentionExtension(usersRef: React.RefObject<MentionItem[]>) {
   return Mention.configure({
     HTMLAttributes: { class: 'mention' },
     renderLabel: ({ node }) => `@${node.attrs.label ?? node.attrs.id}`,
@@ -51,7 +89,9 @@ function buildMentionExtension(users: MentionItem[]) {
       char: '@',
       items: ({ query }: { query: string }) => {
         const q = query.toLowerCase();
-        return users.filter(u => u.label.toLowerCase().includes(q)).slice(0, 8);
+        return (usersRef.current ?? [])
+          .filter(u => u.label.toLowerCase().includes(q))
+          .slice(0, 8);
       },
       render: () => {
         let component: ReactRenderer<MentionListHandle> | null = null;
@@ -87,18 +127,10 @@ function buildMentionExtension(users: MentionItem[]) {
 
             component = new ReactRenderer(MentionList, {
               editor: props.editor as never,
-              props: {
-                command: props.command,
-                items: props.items,
-              },
+              props: { command: props.command, items: props.items },
             });
             popup.appendChild(component.element);
-
-            const rect = props.clientRect?.();
-            if (rect && popup) {
-              popup.style.top = `${rect.bottom + 4}px`;
-              popup.style.left = `${rect.left}px`;
-            }
+            positionPopup(popup, props.clientRect);
           },
           onUpdate(props: {
             items: MentionItem[];
@@ -109,11 +141,8 @@ function buildMentionExtension(users: MentionItem[]) {
               command: props.command,
               items: props.items,
             });
-
-            const rect = props.clientRect?.();
-            if (rect && popup) {
-              popup.style.top = `${rect.bottom + 4}px`;
-              popup.style.left = `${rect.left}px`;
+            if (popup) {
+              positionPopup(popup, props.clientRect);
             }
           },
         };
@@ -138,34 +167,48 @@ export function TipTapEditor({
 
   const imageInputRef = useRef<HTMLInputElement>(null);
 
-  const extensions = [
-    StarterKit.configure({
-      codeBlock: false,
-      horizontalRule: false,
-    }),
-    Placeholder.configure({ placeholder }),
-    TaskList,
-    TaskItem.configure({ nested: true }),
-    Link.configure({
-      HTMLAttributes: { rel: 'noopener noreferrer' },
-      openOnClick: false,
-    }),
-    Image.configure({ inline: true }),
-    Table.configure({ resizable: true }),
-    TableRow,
-    TableCell,
-    TableHeader,
-    CodeBlockLowlight.configure({ lowlight }),
-    TextStyle,
-    Color,
-    Highlight.configure({ multicolor: true }),
-    Underline,
-    HorizontalRule,
-    CharacterCount,
-    ...(mentionUsers && mentionUsers.length > 0
-      ? [buildMentionExtension(mentionUsers)]
-      : []),
-  ];
+  // Keep a ref to the latest mentionUsers so the suggestion `items` callback
+  // always reads fresh data even though TipTap extensions cannot be hot-reloaded.
+  const mentionUsersRef = useRef<MentionItem[]>(mentionUsers ?? []);
+  useEffect(() => {
+    mentionUsersRef.current = mentionUsers ?? [];
+  }, [mentionUsers]);
+
+  // Extensions are built once — TipTap does not support hot-reloading them.
+  // Mutable state (mentionUsers) is accessed via mentionUsersRef at call time.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: extensions must be stable after editor creation
+  const extensions = useMemo(
+    () => [
+      StarterKit.configure({
+        codeBlock: false,
+        horizontalRule: false,
+      }),
+      Placeholder.configure({ placeholder }),
+      TaskList,
+      TaskItem.configure({ nested: true }),
+      Link.configure({
+        HTMLAttributes: { rel: 'noopener noreferrer' },
+        openOnClick: false,
+      }),
+      Image.configure({ inline: true }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableCell,
+      TableHeader,
+      CodeBlockLowlight.configure({ lowlight }),
+      TextStyle,
+      Color,
+      Highlight.configure({ multicolor: true }),
+      Underline,
+      HorizontalRule,
+      CharacterCount,
+      // Only add the Mention extension when the caller opts in by providing users.
+      // The extension reads from mentionUsersRef so suggestions stay current.
+      ...(mentionUsers != null ? [buildMentionExtension(mentionUsersRef)] : []),
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   const editor = useEditor({
     autofocus,
@@ -218,10 +261,18 @@ export function TipTapEditor({
     }
   }, [editor]);
 
-  /** Insert an image from a file input — converts to a base64 data URL. */
+  /**
+   * Insert an image from a file input — converts to a base64 data URL.
+   *
+   * ⚠️ Base64 images are stored inline in the issue description HTML, so large
+   * images will bloat DB records and sync payloads. Until server-side file
+   * storage is wired up (the `File` model exists in the schema), images are
+   * capped at 2 MB. Larger files are silently skipped.
+   */
   const handleImageFile = useCallback(
     (file: File) => {
-      if (!editor || !file.type.startsWith('image/')) {
+      const MAX_SIZE = 2 * 1024 * 1024; // 2 MB
+      if (!editor || !file.type.startsWith('image/') || file.size > MAX_SIZE) {
         return;
       }
       const reader = new FileReader();

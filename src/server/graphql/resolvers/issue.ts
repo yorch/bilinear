@@ -272,6 +272,10 @@ export const issueResolvers = {
         await ctx.services.issueActivity.createMany(activities);
       }
 
+      // Auto-subscribe the actor so they receive future notifications on issues
+      // they interact with (consistent with Linear's subscription behaviour).
+      void ctx.services.notification.autoSubscribe(ctx.userId, issue.id);
+
       // Notifications: assignment change
       if (
         'assigneeId' in input &&
@@ -293,7 +297,8 @@ export const issueResolvers = {
         }
       }
 
-      // Notifications: status change
+      // Notifications: status change — oldStatus/newStatus are workflow-state UUIDs;
+      // human-readable names are resolved in the notification UI via the state store.
       if (
         'stateId' in input &&
         input.stateId &&

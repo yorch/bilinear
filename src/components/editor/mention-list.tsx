@@ -48,26 +48,30 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(
       el?.scrollIntoView({ block: 'nearest' });
     }, [selectedIndex]);
 
-    useImperativeHandle(ref, () => ({
-      onKeyDown: (event: KeyboardEvent) => {
-        if (event.key === 'ArrowUp') {
-          setSelectedIndex(i => (i <= 0 ? items.length - 1 : i - 1));
-          return true;
-        }
-        if (event.key === 'ArrowDown') {
-          setSelectedIndex(i => (i >= items.length - 1 ? 0 : i + 1));
-          return true;
-        }
-        if (event.key === 'Enter') {
-          const item = items[selectedIndex];
-          if (item) {
-            command(item);
+    useImperativeHandle(
+      ref,
+      () => ({
+        onKeyDown: (event: KeyboardEvent) => {
+          if (event.key === 'ArrowUp') {
+            setSelectedIndex(i => (i <= 0 ? items.length - 1 : i - 1));
+            return true;
           }
-          return true;
-        }
-        return false;
-      },
-    }));
+          if (event.key === 'ArrowDown') {
+            setSelectedIndex(i => (i >= items.length - 1 ? 0 : i + 1));
+            return true;
+          }
+          if (event.key === 'Enter') {
+            const item = items[selectedIndex];
+            if (item) {
+              command(item);
+            }
+            return true;
+          }
+          return false;
+        },
+      }),
+      [items, command, selectedIndex],
+    );
 
     if (items.length === 0) {
       return (

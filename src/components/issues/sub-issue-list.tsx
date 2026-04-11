@@ -45,8 +45,10 @@ export const SubIssueList = observer(function SubIssueList({
 }: SubIssueListProps) {
   const { issueStore, workflowStateStore } = useStore();
 
-  // Resolve the parent issue's teamId so sub-issue creation sends the right team
-  const teamId = issueStore.findById(parentIssueId)?.teamId ?? '';
+  // Resolve the parent issue's teamId so sub-issue creation sends the right team.
+  // If the issue isn't in the store yet, render nothing — the panel only mounts
+  // when the issue is already loaded, so this guards against race conditions only.
+  const teamId = issueStore.findById(parentIssueId)?.teamId;
   const [collapsed, setCollapsed] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
 
@@ -66,6 +68,13 @@ export const SubIssueList = observer(function SubIssueList({
       grouped.set(category, []);
     }
     grouped.get(category)?.push(issue);
+  }
+
+  // Guard: parent issue not yet in store — can happen during a race between
+  // bootstrap and panel open; renders nothing rather than using an empty teamId
+  // that would make sub-issue creation silently fail server-side.
+  if (!teamId) {
+    return null;
   }
 
   return (
