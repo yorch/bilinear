@@ -37,6 +37,7 @@ export interface TeamCreateInput {
   id?: string;
   key: string;
   name: string;
+  parentId?: string;
   private?: boolean;
   timezone?: string;
   triageEnabled?: boolean;
@@ -52,6 +53,7 @@ export interface TeamUpdateInput {
   icon?: string;
   issueEstimationType?: string;
   name?: string;
+  parentId?: string | null;
   private?: boolean;
   timezone?: string;
   triageEnabled?: boolean;
@@ -83,6 +85,7 @@ export class TeamService {
           key: input.key,
           name: input.name,
           organizationId: orgId,
+          parentId: input.parentId ?? null,
           private: input.private ?? false,
           timezone: input.timezone ?? 'UTC',
           triageEnabled: input.triageEnabled ?? false,
@@ -135,6 +138,7 @@ export class TeamService {
         icon: input.icon,
         issueEstimationType: input.issueEstimationType,
         name: input.name,
+        parentId: input.parentId,
         private: input.private,
         timezone: input.timezone,
         triageEnabled: input.triageEnabled,
@@ -255,22 +259,50 @@ export class TeamService {
     teamId: string,
     userId: string,
     isOwner = false,
+    role = 'member',
   ): Promise<TeamMembership> {
-    return this.prisma.teamMembership.create({
-      data: { isOwner, teamId, userId },
+    return this.prisma.$transaction(async tx => {
+      const membership = await tx.teamMembership.create({
+        data: { isOwner, teamId, userId },
+      });
+      await tx.teamMemberRole.upsert({
+        create: { role, teamId, userId },
+        update: { role },
+        where: { teamId_userId: { teamId, userId } },
+      });
+      return membership;
     });
   }
 
   async updateMembership(
     id: string,
-    input: { isOwner?: boolean; sortOrder?: number },
+    input: { isOwner?: boolean; role?: string; sortOrder?: number },
   ): Promise<TeamMembership> {
-    return this.prisma.teamMembership.update({
-      data: {
-        isOwner: input.isOwner,
-        sortOrder: input.sortOrder,
-      },
-      where: { id },
+    return this.prisma.$transaction(async tx => {
+      const membership = await tx.teamMembership.update({
+        data: {
+          isOwner: input.isOwner,
+          sortOrder: input.sortOrder,
+        },
+        where: { id },
+      });
+      if (input.role !== undefined) {
+        await tx.teamMemberRole.upsert({
+          create: {
+            role: input.role,
+            teamId: membership.teamId,
+            userId: membership.userId,
+          },
+          update: { role: input.role },
+          where: {
+            teamId_userId: {
+              teamId: membership.teamId,
+              userId: membership.userId,
+            },
+          },
+        });
+      }
+      return membership;
     });
   }
 

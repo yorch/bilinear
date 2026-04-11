@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
+import { TipTapEditor } from '../editor/tiptap-editor';
 import { AssigneeSelect } from '../properties/assignee-select';
 import { DueDatePicker } from '../properties/due-date-picker';
 import { LabelSelect } from '../properties/label-select';
@@ -133,12 +134,11 @@ export function CreateIssueModal({
 
           {/* Description */}
           <div className="px-5 pt-2">
-            <textarea
-              placeholder="Add description... (optional)"
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              rows={3}
-              className="w-full resize-none bg-transparent text-sm text-zinc-600 placeholder-zinc-400 outline-none dark:text-zinc-400"
+            <TipTapEditor
+              content={description}
+              placeholder="Add description… (optional, supports **markdown**)"
+              onChange={html => setDescription(html)}
+              className="text-sm text-zinc-600 dark:text-zinc-400"
             />
           </div>
 

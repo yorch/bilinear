@@ -223,6 +223,22 @@ export const teamResolvers = {
 
   TeamMembership: {
     owner: (membership: TeamMembership) => membership.isOwner,
+    role: async (
+      membership: TeamMembership,
+      _args: unknown,
+      ctx: GraphQLContext,
+    ) => {
+      const tmr = await ctx.prisma.teamMemberRole.findUnique({
+        select: { role: true },
+        where: {
+          teamId_userId: {
+            teamId: membership.teamId,
+            userId: membership.userId,
+          },
+        },
+      });
+      return tmr?.role ?? 'member';
+    },
 
     team: async (
       membership: TeamMembership,

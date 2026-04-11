@@ -1,0 +1,202 @@
+/* TipTap editor styles */
+.tiptap-wrapper .ProseMirror {
+  padding: 0.25rem 0;
+  outline: none;
+}
+
+.tiptap-wrapper .ProseMirror p.is-editor-empty:first-child::before {
+  float: left;
+  height: 0;
+  font-style: italic;
+  color: #a1a1aa; /* zinc-400 */
+  pointer-events: none;
+  content: attr(data-placeholder);
+}
+
+.dark .tiptap-wrapper .ProseMirror p.is-editor-empty:first-child::before {
+  color: #71717a; /* zinc-500 */
+}
+
+/* Task list */
+.tiptap-wrapper .ProseMirror ul[data-type="taskList"] {
+  padding: 0;
+  list-style: none;
+}
+
+.tiptap-wrapper .ProseMirror ul[data-type="taskList"] li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  padding: 0.125rem 0;
+}
+
+.tiptap-wrapper .ProseMirror ul[data-type="taskList"] li > label {
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+  user-select: none;
+}
+
+.tiptap-wrapper
+  .ProseMirror
+  ul[data-type="taskList"]
+  li
+  > label
+  input[type="checkbox"] {
+  accent-color: #6366f1; /* indigo-500 */
+  cursor: pointer; /* indigo-500 */
+}
+
+.tiptap-wrapper .ProseMirror ul[data-type="taskList"] li > div {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Code block */
+.tiptap-wrapper .ProseMirror pre {
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  background: #18181b; /* zinc-900 */
+  border-radius: 0.5rem;
+}
+
+.tiptap-wrapper .ProseMirror pre code {
+  padding: 0;
+  font-size: inherit;
+  color: #e4e4e7; /* zinc-200 */
+  background: transparent;
+}
+
+/* Inline code (not inside pre blocks) */
+.tiptap-wrapper .ProseMirror :not(pre) > code {
+  padding: 0.125rem 0.3rem;
+  font-size: 0.85em;
+  color: #be185d; /* pink-700 */
+  background: #f4f4f5; /* zinc-100 */
+  border-radius: 0.25rem;
+}
+
+.dark .tiptap-wrapper .ProseMirror :not(pre) > code {
+  color: #f9a8d4; /* pink-300 */
+  background: #27272a; /* pink-300 */
+}
+
+/* Table */
+.tiptap-wrapper .ProseMirror table {
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.tiptap-wrapper .ProseMirror table td,
+.tiptap-wrapper .ProseMirror table th {
+  position: relative;
+  box-sizing: border-box;
+  min-width: 1em;
+  padding: 0.375rem 0.5rem;
+  vertical-align: top;
+  border: 1px solid #e4e4e7;
+}
+
+.dark .tiptap-wrapper .ProseMirror table td,
+.dark .tiptap-wrapper .ProseMirror table th {
+  border-color: #3f3f46; /* zinc-700 */
+}
+
+.tiptap-wrapper .ProseMirror table th {
+  font-weight: 600;
+  text-align: left;
+  background-color: #f4f4f5;
+}
+
+.dark .tiptap-wrapper .ProseMirror table th {
+  background-color: #27272a; /* zinc-800 */
+}
+
+.tiptap-wrapper .ProseMirror table .selectedCell:after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  background: rgba(99, 102, 241, 0.1);
+}
+
+/* Blockquote */
+.tiptap-wrapper .ProseMirror blockquote {
+  padding-left: 1rem;
+  margin: 0.75rem 0;
+  font-style: italic;
+  color: #71717a; /* zinc-500 */
+  border-left: 3px solid #6366f1;
+}
+
+/* Horizontal rule */
+.tiptap-wrapper .ProseMirror hr {
+  margin: 1rem 0;
+  border: none;
+  border-top: 1px solid #e4e4e7;
+}
+
+.dark .tiptap-wrapper .ProseMirror hr {
+  border-color: #3f3f46; /* zinc-700 */
+}
+
+/* Links */
+.tiptap-wrapper .ProseMirror a {
+  color: #6366f1; /* indigo-500 */
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Highlight */
+.tiptap-wrapper .ProseMirror mark {
+  padding: 0.05em 0.1em;
+  color: inherit;
+  background-color: #fef08a; /* yellow-200 */
+  border-radius: 0.125rem;
+}
+
+.dark .tiptap-wrapper .ProseMirror mark {
+  background-color: #713f12; /* yellow-900 */
+}
+
+/* Images */
+.tiptap-wrapper .ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.375rem;
+}
+
+.tiptap-wrapper .ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid #6366f1;
+}
+
+/* Heading spacing */
+.tiptap-wrapper .ProseMirror h1,
+.tiptap-wrapper .ProseMirror h2,
+.tiptap-wrapper .ProseMirror h3 {
+  margin-top: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+.tiptap-wrapper .ProseMirror h1:first-child,
+.tiptap-wrapper .ProseMirror h2:first-child,
+.tiptap-wrapper .ProseMirror h3:first-child {
+  margin-top: 0;
+}
+
+/* Paragraph spacing */
+.tiptap-wrapper .ProseMirror p {
+  margin: 0.25rem 0;
+}
+
+.tiptap-wrapper .ProseMirror > *:first-child {
+  margin-top: 0;
+}
+
+.tiptap-wrapper .ProseMirror > *:last-child {
+  margin-bottom: 0;
+}
