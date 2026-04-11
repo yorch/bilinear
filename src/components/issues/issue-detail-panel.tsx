@@ -17,6 +17,8 @@ import { PrioritySelect } from '../properties/priority-select';
 import { StatusSelect } from '../properties/status-select';
 import { ActivityTimeline } from './activity-timeline';
 import { CommentThread } from './comment-thread';
+import { RelationsSection } from './relations-section';
+import { SubIssueList } from './sub-issue-list';
 
 interface IssueDetail {
   id: string;
@@ -51,6 +53,7 @@ export function IssueDetailPanel({
 }: IssueDetailPanelProps) {
   const { userStore } = useStore();
   const currentUserId = userStore.currentUser?.id;
+  const mentionUsers = users.map(u => ({ id: u.id, label: u.displayName }));
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [editingDesc, setEditingDesc] = useState(false);
@@ -238,11 +241,12 @@ export function IssueDetailPanel({
               <div className="rounded-md border border-indigo-400 bg-transparent p-2 transition-colors">
                 <TipTapEditor
                   content={descDraft}
-                  placeholder="Add a description… (supports **markdown**, /slash commands)"
+                  placeholder="Add a description… (supports **markdown**, /slash commands, @mentions)"
                   onChange={html => setDescDraft(html)}
                   onBlur={saveDesc}
                   readOnly={false}
                   showToolbar={true}
+                  mentionUsers={mentionUsers}
                   className="text-sm"
                 />
               </div>
@@ -254,7 +258,7 @@ export function IssueDetailPanel({
               >
                 <TipTapEditor
                   content={descDraft}
-                  placeholder="Add a description… (supports **markdown**, /slash commands)"
+                  placeholder="Add a description… (supports **markdown**, /slash commands, @mentions)"
                   onChange={html => setDescDraft(html)}
                   onBlur={saveDesc}
                   readOnly={true}
@@ -264,6 +268,12 @@ export function IssueDetailPanel({
               </button>
             )}
           </div>
+
+          {/* Sub-issues */}
+          <SubIssueList parentIssueId={issue.id} />
+
+          {/* Relations */}
+          <RelationsSection issueId={issue.id} />
 
           {/* Comments */}
           <div className="mt-6">

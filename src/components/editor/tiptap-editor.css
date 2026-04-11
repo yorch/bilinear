@@ -200,3 +200,18 @@
 .tiptap-wrapper .ProseMirror > *:last-child {
   margin-bottom: 0;
 }
+
+/* @mention chip */
+.tiptap-wrapper .ProseMirror .mention {
+  padding: 0.1em 0.3em;
+  font-size: 0.875em;
+  font-weight: 500;
+  color: #6366f1; /* indigo-500 */
+  background-color: #eef2ff; /* indigo-50 */
+  border-radius: 0.25rem;
+}
+
+.dark .tiptap-wrapper .ProseMirror .mention {
+  color: #a5b4fc; /* indigo-300 */
+  background-color: #1e1b4b; /* indigo-950 */
+}

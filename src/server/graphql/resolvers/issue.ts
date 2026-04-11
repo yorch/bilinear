@@ -141,6 +141,23 @@ export const issueResolvers = {
           ctx.userId,
           input,
         );
+
+        // Auto-subscribe creator and notify assignee (fire-and-forget — don't
+        // block the response on notification delivery)
+        void ctx.services.notification.autoSubscribe(ctx.userId, issue.id);
+        if (input.assigneeId && input.assigneeId !== ctx.userId) {
+          void ctx.services.notification.autoSubscribe(
+            input.assigneeId,
+            issue.id,
+          );
+          void ctx.services.notification.createForIssueAssignment(
+            ctx.orgId,
+            issue.id,
+            input.assigneeId,
+            ctx.userId,
+          );
+        }
+
         const sync = await ctx.services.sync.createSyncAction(
           ctx.orgId,
           'I',
@@ -253,6 +270,42 @@ export const issueResolvers = {
       }
       if (activities.length > 0) {
         await ctx.services.issueActivity.createMany(activities);
+      }
+
+      // Notifications: assignment change
+      if (
+        'assigneeId' in input &&
+        input.assigneeId !== undefined &&
+        input.assigneeId !== existing.assigneeId
+      ) {
+        if (input.assigneeId) {
+          // Auto-subscribe new assignee and notify them
+          void ctx.services.notification.autoSubscribe(
+            input.assigneeId,
+            issue.id,
+          );
+          void ctx.services.notification.createForIssueAssignment(
+            ctx.orgId,
+            issue.id,
+            input.assigneeId,
+            ctx.userId,
+          );
+        }
+      }
+
+      // Notifications: status change
+      if (
+        'stateId' in input &&
+        input.stateId &&
+        input.stateId !== existing.stateId
+      ) {
+        void ctx.services.notification.createForStatusChange(
+          ctx.orgId,
+          issue.id,
+          ctx.userId,
+          existing.stateId,
+          input.stateId,
+        );
       }
 
       const sync = await ctx.services.sync.createSyncAction(

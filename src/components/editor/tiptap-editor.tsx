@@ -7,6 +7,7 @@ import { Highlight } from '@tiptap/extension-highlight';
 import { HorizontalRule } from '@tiptap/extension-horizontal-rule';
 import { Image } from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
+import Mention from '@tiptap/extension-mention';
 import { Placeholder } from '@tiptap/extension-placeholder';
 import { Table } from '@tiptap/extension-table';
 import { TableCell } from '@tiptap/extension-table-cell';
@@ -16,12 +17,14 @@ import { TaskItem } from '@tiptap/extension-task-item';
 import { TaskList } from '@tiptap/extension-task-list';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Underline } from '@tiptap/extension-underline';
-import { EditorContent, useEditor } from '@tiptap/react';
+import { EditorContent, ReactRenderer, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { all, createLowlight } from 'lowlight';
-import { Link2 } from 'lucide-react';
+import { ImageIcon, Link2 } from 'lucide-react';
 import { useCallback, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
+import type { MentionItem, MentionListHandle } from './mention-list';
+import { MentionList } from './mention-list';
 import './tiptap-editor.css';
 
 const lowlight = createLowlight(all);
@@ -35,6 +38,88 @@ export interface TipTapEditorProps {
   readOnly?: boolean;
   autofocus?: boolean;
   showToolbar?: boolean;
+  /** Users available for @mentions */
+  mentionUsers?: MentionItem[];
+}
+
+/** Build the Mention extension with a React-rendered floating dropdown. */
+function buildMentionExtension(users: MentionItem[]) {
+  return Mention.configure({
+    HTMLAttributes: { class: 'mention' },
+    renderLabel: ({ node }) => `@${node.attrs.label ?? node.attrs.id}`,
+    suggestion: {
+      char: '@',
+      items: ({ query }: { query: string }) => {
+        const q = query.toLowerCase();
+        return users.filter(u => u.label.toLowerCase().includes(q)).slice(0, 8);
+      },
+      render: () => {
+        let component: ReactRenderer<MentionListHandle> | null = null;
+        let popup: HTMLDivElement | null = null;
+
+        return {
+          onExit() {
+            component?.destroy();
+            popup?.remove();
+            popup = null;
+            component = null;
+          },
+          onKeyDown({ event }: { event: KeyboardEvent }) {
+            if (event.key === 'Escape') {
+              popup?.remove();
+              popup = null;
+              component?.destroy();
+              component = null;
+              return true;
+            }
+            return component?.ref?.onKeyDown(event) ?? false;
+          },
+          onStart(props: {
+            editor: unknown;
+            items: MentionItem[];
+            command: (item: MentionItem) => void;
+            clientRect?: (() => DOMRect | null) | null;
+          }) {
+            popup = document.createElement('div');
+            popup.style.cssText =
+              'position:fixed;z-index:9999;pointer-events:auto;';
+            document.body.appendChild(popup);
+
+            component = new ReactRenderer(MentionList, {
+              editor: props.editor as never,
+              props: {
+                command: props.command,
+                items: props.items,
+              },
+            });
+            popup.appendChild(component.element);
+
+            const rect = props.clientRect?.();
+            if (rect && popup) {
+              popup.style.top = `${rect.bottom + 4}px`;
+              popup.style.left = `${rect.left}px`;
+            }
+          },
+          onUpdate(props: {
+            items: MentionItem[];
+            command: (item: MentionItem) => void;
+            clientRect?: (() => DOMRect | null) | null;
+          }) {
+            component?.updateProps({
+              command: props.command,
+              items: props.items,
+            });
+
+            const rect = props.clientRect?.();
+            if (rect && popup) {
+              popup.style.top = `${rect.bottom + 4}px`;
+              popup.style.left = `${rect.left}px`;
+            }
+          },
+        };
+      },
+    },
+  });
 }
 
 export function TipTapEditor({
@@ -46,9 +131,41 @@ export function TipTapEditor({
   readOnly = false,
   autofocus = false,
   showToolbar = false,
+  mentionUsers,
 }: TipTapEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const extensions = [
+    StarterKit.configure({
+      codeBlock: false,
+      horizontalRule: false,
+    }),
+    Placeholder.configure({ placeholder }),
+    TaskList,
+    TaskItem.configure({ nested: true }),
+    Link.configure({
+      HTMLAttributes: { rel: 'noopener noreferrer' },
+      openOnClick: false,
+    }),
+    Image.configure({ inline: true }),
+    Table.configure({ resizable: true }),
+    TableRow,
+    TableCell,
+    TableHeader,
+    CodeBlockLowlight.configure({ lowlight }),
+    TextStyle,
+    Color,
+    Highlight.configure({ multicolor: true }),
+    Underline,
+    HorizontalRule,
+    CharacterCount,
+    ...(mentionUsers && mentionUsers.length > 0
+      ? [buildMentionExtension(mentionUsers)]
+      : []),
+  ];
 
   const editor = useEditor({
     autofocus,
@@ -63,34 +180,10 @@ export function TipTapEditor({
         ),
       },
     },
-    extensions: [
-      StarterKit.configure({
-        codeBlock: false,
-        horizontalRule: false,
-      }),
-      Placeholder.configure({ placeholder }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      Link.configure({
-        HTMLAttributes: { rel: 'noopener noreferrer' },
-        openOnClick: false,
-      }),
-      Image.configure({ inline: true }),
-      Table.configure({ resizable: true }),
-      TableRow,
-      TableCell,
-      TableHeader,
-      CodeBlockLowlight.configure({ lowlight }),
-      TextStyle,
-      Color,
-      Highlight.configure({ multicolor: true }),
-      Underline,
-      HorizontalRule,
-      CharacterCount,
-    ],
+    extensions,
     onBlur: () => onBlur?.(),
-    onUpdate: ({ editor }) => {
-      onChangeRef.current?.(editor.getHTML());
+    onUpdate: ({ editor: ed }) => {
+      onChangeRef.current?.(ed.getHTML());
     },
   });
 
@@ -124,6 +217,24 @@ export function TipTapEditor({
         .run();
     }
   }, [editor]);
+
+  /** Insert an image from a file input — converts to a base64 data URL. */
+  const handleImageFile = useCallback(
+    (file: File) => {
+      if (!editor || !file.type.startsWith('image/')) {
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = e => {
+        const src = e.target?.result as string;
+        if (src) {
+          editor.chain().focus().setImage({ src }).run();
+        }
+      };
+      reader.readAsDataURL(file);
+    },
+    [editor],
+  );
 
   if (!editor) {
     return null;
@@ -253,6 +364,29 @@ export function TipTapEditor({
           >
             —
           </ToolbarButton>
+          <div className="mx-1 h-4 w-px bg-zinc-300 dark:bg-zinc-600" />
+          {/* Image upload */}
+          <ToolbarButton
+            onClick={() => imageInputRef.current?.click()}
+            active={false}
+            title="Insert image"
+          >
+            <ImageIcon className="h-3 w-3" />
+          </ToolbarButton>
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={e => {
+              const file = e.target.files?.[0];
+              if (file) {
+                handleImageFile(file);
+              }
+              // Reset so same file can be selected again
+              e.target.value = '';
+            }}
+          />
         </div>
       )}
 

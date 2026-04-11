@@ -31,21 +31,22 @@ const CREATE_SUB_ISSUE_MUTATION = `
     issueCreate(input: $input) {
       success
       lastSyncId
-      issue { id title identifier priority stateId }
+      issue { id title identifier priority stateId teamId }
     }
   }
 `;
 
 interface SubIssueListProps {
   parentIssueId: string;
-  teamKey: string;
 }
 
 export const SubIssueList = observer(function SubIssueList({
   parentIssueId,
-  teamKey,
 }: SubIssueListProps) {
   const { issueStore, workflowStateStore } = useStore();
+
+  // Resolve the parent issue's teamId so sub-issue creation sends the right team
+  const teamId = issueStore.findById(parentIssueId)?.teamId ?? '';
   const [collapsed, setCollapsed] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
 
@@ -97,7 +98,7 @@ export const SubIssueList = observer(function SubIssueList({
       {showCreateForm && (
         <CreateSubIssueForm
           parentIssueId={parentIssueId}
-          teamKey={teamKey}
+          teamId={teamId}
           tq={tq}
           onClose={() => setShowCreateForm(false)}
         />
@@ -181,14 +182,14 @@ export const SubIssueList = observer(function SubIssueList({
 
 interface CreateSubIssueFormProps {
   parentIssueId: string;
-  teamKey: string;
+  teamId: string;
   tq: TransactionQueue;
   onClose: () => void;
 }
 
 function CreateSubIssueForm({
   parentIssueId,
-  teamKey: _teamKey,
+  teamId,
   tq,
   onClose,
 }: CreateSubIssueFormProps) {
@@ -207,7 +208,7 @@ function CreateSubIssueForm({
       await new Promise<void>((resolve, reject) => {
         tq.enqueue(
           CREATE_SUB_ISSUE_MUTATION,
-          { input: { parentId: parentIssueId, title: title.trim() } },
+          { input: { parentId: parentIssueId, teamId, title: title.trim() } },
           {
             onError: err => reject(err),
             onSuccess: () => resolve(),
