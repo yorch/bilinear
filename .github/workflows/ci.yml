@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v6
 
@@ -35,24 +36,26 @@ jobs:
           yarn lint 2>&1 | tee /tmp/lint-output.txt
           LINT_EXIT=${PIPESTATUS[0]}
           if [ $LINT_EXIT -ne 0 ]; then
-            echo "## Lint failure" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            cat /tmp/lint-output.txt >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
+            gh pr comment ${{ github.event.pull_request.number }} \
+              --body "## CI Lint failure$(printf '\n```\n')$(cat /tmp/lint-output.txt)$(printf '\n```')" \
+              --repo ${{ github.repository }} || true
             exit $LINT_EXIT
           fi
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Typecheck
         run: |
           yarn typecheck 2>&1 | tee /tmp/typecheck-output.txt
           TC_EXIT=${PIPESTATUS[0]}
           if [ $TC_EXIT -ne 0 ]; then
-            echo "## Typecheck failure" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            cat /tmp/typecheck-output.txt >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
+            gh pr comment ${{ github.event.pull_request.number }} \
+              --body "## CI Typecheck failure$(printf '\n```\n')$(cat /tmp/typecheck-output.txt)$(printf '\n```')" \
+              --repo ${{ github.repository }} || true
             exit $TC_EXIT
           fi
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   test:
     name: Test (unit)
