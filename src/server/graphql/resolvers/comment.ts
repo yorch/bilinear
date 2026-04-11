@@ -7,31 +7,46 @@ import type {
 } from '../../services/comment.service';
 import type { GraphQLContext } from '../context';
 
-/** Resolves the issue for a comment and verifies org + team access.
+/** Verifies org + team access for a comment. Single DB query via include.
  *  Must be called after requireAuth(ctx) so ctx.userId and ctx.orgId are non-null. */
 async function requireCommentAccess(
   ctx: GraphQLContext & { userId: string; orgId: string },
   commentId: string,
 ): Promise<void> {
-  const comment = await ctx.services.comment.findById(commentId);
-  if (!comment) {
-    throw new GraphQLError('Comment not found', {
-      extensions: { code: 'NOT_FOUND' },
-    });
-  }
-  const issue = await ctx.services.issue.findById(comment.issueId);
+  const row = await ctx.prisma.comment.findUnique({
+    select: { issue: { select: { organizationId: true, teamId: true } } },
+    where: { id: commentId },
+  });
+  const issue = row?.issue;
   if (!issue || issue.organizationId !== ctx.orgId) {
     throw new GraphQLError('Comment not found', {
       extensions: { code: 'NOT_FOUND' },
     });
   }
-  const { teamId } = issue;
-  if (!teamId) {
+  if (!issue.teamId) {
     throw new GraphQLError('Comment not found', {
       extensions: { code: 'NOT_FOUND' },
     });
   }
-  await requireTeamMember(ctx.prisma, teamId, ctx.userId);
+  await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
+}
+
+function handleCommentError(err: unknown): never {
+  const error = err as Error;
+  if (
+    error.name === 'CommentNotFoundError' ||
+    error.name === 'CommentReactionNotFoundError'
+  ) {
+    throw new GraphQLError(error.message, {
+      extensions: { code: 'NOT_FOUND' },
+    });
+  }
+  if (error.name === 'CommentForbiddenError') {
+    throw new GraphQLError(error.message, {
+      extensions: { code: 'FORBIDDEN' },
+    });
+  }
+  throw err;
 }
 
 type CommentWithRelations = Comment & {
@@ -112,18 +127,7 @@ export const commentResolvers = {
         );
         return { lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        const error = err as Error;
-        if (error.name === 'CommentNotFoundError') {
-          throw new GraphQLError(error.message, {
-            extensions: { code: 'NOT_FOUND' },
-          });
-        }
-        if (error.name === 'CommentForbiddenError') {
-          throw new GraphQLError(error.message, {
-            extensions: { code: 'FORBIDDEN' },
-          });
-        }
-        throw err;
+        handleCommentError(err);
       }
     },
     commentReactionAdd: async (
@@ -148,13 +152,7 @@ export const commentResolvers = {
         );
         return { lastSyncId: sync.id.toString(), reaction, success: true };
       } catch (err) {
-        const error = err as Error;
-        if (error.name === 'CommentNotFoundError') {
-          throw new GraphQLError(error.message, {
-            extensions: { code: 'NOT_FOUND' },
-          });
-        }
-        throw err;
+        handleCommentError(err);
       }
     },
     commentReactionRemove: async (
@@ -179,16 +177,7 @@ export const commentResolvers = {
         );
         return { lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        const error = err as Error;
-        if (
-          error.name === 'CommentNotFoundError' ||
-          error.name === 'CommentReactionNotFoundError'
-        ) {
-          throw new GraphQLError(error.message, {
-            extensions: { code: 'NOT_FOUND' },
-          });
-        }
-        throw err;
+        handleCommentError(err);
       }
     },
     commentResolve: async (
@@ -209,13 +198,7 @@ export const commentResolvers = {
         );
         return { comment, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        const error = err as Error;
-        if (error.name === 'CommentNotFoundError') {
-          throw new GraphQLError(error.message, {
-            extensions: { code: 'NOT_FOUND' },
-          });
-        }
-        throw err;
+        handleCommentError(err);
       }
     },
     commentUnresolve: async (
@@ -236,13 +219,7 @@ export const commentResolvers = {
         );
         return { comment, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        const error = err as Error;
-        if (error.name === 'CommentNotFoundError') {
-          throw new GraphQLError(error.message, {
-            extensions: { code: 'NOT_FOUND' },
-          });
-        }
-        throw err;
+        handleCommentError(err);
       }
     },
     commentUpdate: async (
@@ -266,18 +243,7 @@ export const commentResolvers = {
         );
         return { comment, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        const error = err as Error;
-        if (error.name === 'CommentNotFoundError') {
-          throw new GraphQLError(error.message, {
-            extensions: { code: 'NOT_FOUND' },
-          });
-        }
-        if (error.name === 'CommentForbiddenError') {
-          throw new GraphQLError(error.message, {
-            extensions: { code: 'FORBIDDEN' },
-          });
-        }
-        throw err;
+        handleCommentError(err);
       }
     },
   },

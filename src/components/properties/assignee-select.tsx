@@ -28,10 +28,14 @@ export function UserAvatar({
     User,
     'initials' | 'avatarUrl' | 'avatarBackgroundColor' | 'displayName'
   >;
-  size?: 'sm' | 'xs';
+  size?: 'xs' | 'sm' | 'md';
 }) {
   const sizeClass =
-    size === 'xs' ? 'h-4 w-4 text-[8px]' : 'h-5 w-5 text-[10px]';
+    size === 'xs'
+      ? 'h-4 w-4 text-[8px]'
+      : size === 'md'
+        ? 'h-6 w-6 text-[10px]'
+        : 'h-5 w-5 text-[10px]';
   if (user.avatarUrl) {
     return (
       // biome-ignore lint/performance/noImgElement: avatar URL is external, size unknown at build time

@@ -5,7 +5,7 @@ import { observer } from 'mobx-react-lite';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
@@ -127,23 +127,22 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
 
   const members = userStore.all;
   const allTeams = teamStore.all;
-  const rootTeams = allTeams.filter(t => !t.parentId);
-  const childTeamsByParent = allTeams.reduce<Record<string, typeof allTeams>>(
-    (acc, t) => {
-      if (t.parentId) {
-        if (!acc[t.parentId]) {
-          acc[t.parentId] = [];
+  const teams = useMemo(() => {
+    const rootTeams = allTeams.filter(t => !t.parentId);
+    const childTeamsByParent = allTeams.reduce<Record<string, typeof allTeams>>(
+      (acc, t) => {
+        if (t.parentId) {
+          if (!acc[t.parentId]) {
+            acc[t.parentId] = [];
+          }
+          acc[t.parentId].push(t);
         }
-        acc[t.parentId].push(t);
-      }
-      return acc;
-    },
-    {},
-  );
-  const teams = rootTeams.flatMap(t => [
-    t,
-    ...(childTeamsByParent[t.id] ?? []),
-  ]);
+        return acc;
+      },
+      {},
+    );
+    return rootTeams.flatMap(t => [t, ...(childTeamsByParent[t.id] ?? [])]);
+  }, [allTeams]);
 
   const updateMemberRole = async (userId: string, role: OrgRole) => {
     setUpdatingRole(userId);

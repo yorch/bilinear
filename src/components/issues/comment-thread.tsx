@@ -11,6 +11,7 @@ import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { TipTapEditor } from '../editor/tiptap-editor';
+import { UserAvatar } from '../properties/assignee-select';
 
 interface CommentAuthor {
   id: string;
@@ -127,6 +128,22 @@ const REACTION_REMOVE_MUTATION = `
 
 const QUICK_EMOJIS = ['👍', '👎', '❤️', '🎉', '😄', '🚀', '👀', '😕'];
 
+function updateCommentInTree(
+  comments: CommentItem[],
+  id: string,
+  updater: (c: CommentItem) => CommentItem,
+): CommentItem[] {
+  return comments.map(c => {
+    if (c.id === id) {
+      return updater(c);
+    }
+    if (c.replies.length > 0) {
+      return { ...c, replies: updateCommentInTree(c.replies, id, updater) };
+    }
+    return c;
+  });
+}
+
 export function CommentThread({ issueId, currentUserId }: CommentThreadProps) {
   const [comments, setComments] = useState<CommentItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -172,7 +189,11 @@ export function CommentThread({ issueId, currentUserId }: CommentThreadProps) {
   const deleteComment = async (id: string) => {
     try {
       await gql(COMMENT_DELETE_MUTATION, { id });
-      await fetchComments();
+      setComments(prev =>
+        prev
+          .filter(c => c.id !== id)
+          .map(c => ({ ...c, replies: c.replies.filter(r => r.id !== id) })),
+      );
       toast.success('Comment deleted');
     } catch {
       toast.error('Failed to delete comment');
@@ -181,12 +202,26 @@ export function CommentThread({ issueId, currentUserId }: CommentThreadProps) {
 
   const toggleResolve = async (comment: CommentItem) => {
     try {
-      if (comment.resolvedAt) {
-        await gql(COMMENT_UNRESOLVE_MUTATION, { id: comment.id });
-      } else {
-        await gql(COMMENT_RESOLVE_MUTATION, { id: comment.id });
+      const isResolved = !!comment.resolvedAt;
+      const mutation = isResolved
+        ? COMMENT_UNRESOLVE_MUTATION
+        : COMMENT_RESOLVE_MUTATION;
+      const key = isResolved ? 'commentUnresolve' : 'commentResolve';
+      const res = await gql(mutation, { id: comment.id });
+      type ResolvePayload = {
+        comment: { id: string; resolvedAt: string | null };
+      };
+      const updated = (
+        res.data as Record<string, ResolvePayload | undefined> | undefined
+      )?.[key]?.comment;
+      if (updated) {
+        setComments(prev =>
+          updateCommentInTree(prev, updated.id, c => ({
+            ...c,
+            resolvedAt: updated.resolvedAt,
+          })),
+        );
       }
-      await fetchComments();
     } catch {
       toast.error('Failed to update comment');
     }
@@ -347,7 +382,7 @@ function CommentCard({
         {/* Header */}
         <div className="mb-2 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Avatar author={comment.author} size="sm" />
+            <UserAvatar user={comment.author} size="md" />
             <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
               {comment.author.displayName}
             </span>
@@ -619,27 +654,5 @@ function CommentComposer({
         </button>
       </div>
     </div>
-  );
-}
-
-function Avatar({
-  author,
-  size = 'md',
-}: {
-  author: CommentAuthor;
-  size?: 'sm' | 'md';
-}) {
-  const dim = size === 'sm' ? 'h-6 w-6 text-[10px]' : 'h-7 w-7 text-xs';
-  return (
-    <span
-      className={cn(
-        'flex shrink-0 items-center justify-center rounded-full font-semibold text-white',
-        dim,
-      )}
-      style={{ backgroundColor: author.avatarBackgroundColor }}
-      title={author.displayName}
-    >
-      {author.initials}
-    </span>
   );
 }
