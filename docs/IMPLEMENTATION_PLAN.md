@@ -2,8 +2,10 @@
 
 ## Issue Tracker — Linear Rebuild
 
-**Version:** 1.1
+**Version:** 1.2
 **Date:** April 2026
+
+> **Status snapshot (April 2026):** Phase 1 complete. Phase 2 (Sprints 13-24) complete. Phase 3 in progress — Sprints 27-28 complete, Sprints 25-26 / 29-30 / 31-32 partially shipped. Sprints 33-38 not started. Phase 4 and 5 not started. See each sprint section for the per-item breakdown.
 
 ---
 
@@ -23,7 +25,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 
 > **Pattern Documentation:** `docs/PATTERNS.md` is the living onboarding document for all contributors. It is updated each sprint as new patterns are established. All subsequent sprints should follow the patterns in that document.
 
-> **Phase 2+ sprints** will be broken into detailed docs following the same format once Phase 1 patterns are established and documented.
+> **Phase 2 sprints** (13-24) were implemented without dedicated sprint detail docs. New Phase 3+ features should still create detail docs when a sprint is started, following the format established in `docs/sprints/`.
 
 ---
 
@@ -57,12 +59,12 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [x] Implement team CRUD (GraphQL mutations + queries)
 - [x] Implement workflow state CRUD with category constraints
 - [x] Seed default workflow states per team (Backlog, Todo, In Progress, Done, Canceled; Triage only when enabled)
-- [ ] Team settings page: name, key, timezone, estimation _(deferred — backend done, UI pending)_
-- [ ] Sidebar: team navigation, team switcher _(partial — basic sidebar exists)_
-- [ ] Team creation modal _(deferred)_
-- [ ] Team members management UI _(deferred)_
+- [x] Team settings page: name, description, identifier (key), parent team, private toggle, triage toggle, delete-with-issues flow (`src/app/(workspace)/[workspace]/team/[key]/settings/page.tsx`)
+- [x] Sidebar: team navigation with nested sub-team hierarchy, root/child rendering, collapsed mini-icons (`src/components/layouts/sidebar.tsx`)
+- [x] Team creation modal: name, key auto-derive, description, private toggle (`src/components/teams/create-team-modal.tsx`)
+- [x] Team members management UI: add/remove, owner toggle, role selector (admin/member/guest) (`src/components/teams/team-member-management.tsx`)
 
-**Deliverable:** Team + workflow state backend with GraphQL API ✅; settings UI deferred
+**Deliverable:** Teams with workflow states, full CRUD, sidebar navigation, settings and member management UI ✅
 
 ### Sprint 5-6: Issue CRUD & List View ✅ COMPLETE
 
@@ -106,7 +108,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 
 **Deliverable:** Real-time sync across multiple browser tabs/users, offline support ✅
 
-### Sprint 9-10: Search & Command Palette
+### Sprint 9-10: Search & Command Palette ✅ COMPLETE
 
 **Goal:** Fast search and keyboard-first navigation
 
@@ -127,7 +129,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 
 **Deliverable:** Full keyboard-driven navigation matching Linear's shortcut system
 
-### Sprint 11-12: Polish & Performance
+### Sprint 11-12: Polish & Performance ✅ COMPLETE
 
 **Goal:** Production-ready foundation
 
@@ -150,7 +152,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 
 ## Phase 2: Essential Features (Weeks 13-24)
 
-### Sprint 13-14: Projects ✅ COMPLETE (partial)
+### Sprint 13-14: Projects ✅ COMPLETE
 
 - [x] Create migrations: projects, project_teams, project_members, project_milestones, project_updates
 - [x] Project CRUD with cross-team support
@@ -159,132 +161,142 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [x] Project lead assignment
 - [x] Start/target date with resolution (day/month/quarter)
 - [x] Project list and detail views
-- [x] Project milestones CRUD _(backend + store; UI in detail view)_
-- [x] Project updates CRUD with health selection _(full feature: create, edit, delete, real-time sync)_
-- [ ] Progress tracking (completed issues / total scope) _(deferred)_
-- [ ] Assign issues to projects (Shift+P shortcut) _(deferred)_
+- [x] Project milestones CRUD (backend + store; UI in detail view)
+- [x] Project updates CRUD with health selection (create, edit, delete, real-time sync)
+- [x] Progress tracking: `Project.progress` / `Project.scope` computed from completed vs total issues, exposed via GraphQL and rendered as bar in list + detail views (`project.service.ts#getProgress`)
+- [x] Assign issues to projects via Shift+P shortcut (`src/app/(workspace)/[workspace]/team/[key]/page.tsx`)
+- [ ] Progress _charts_ over time (scope history, completion trend) — schema has history fields but they are unpopulated and not exposed via GraphQL; tracked under Sprint 31-32
 
-**Deliverable:** Project list + detail views with updates feed, milestones, real-time sync via WebSocket ✅
+**Deliverable:** Project list + detail views with updates feed, milestones, progress bars, real-time sync via WebSocket ✅
 
-### Sprint 15-16: Cycles (Sprints)
+### Sprint 15-16: Cycles (Sprints) ✅ COMPLETE
 
-- [ ] Create migrations: cycles
-- [ ] Cycle CRUD with team configuration
-- [ ] Auto-create upcoming cycles (up to 15)
-- [ ] Active/upcoming/completed cycle states
-- [ ] Auto-rollover of unfinished work
-- [ ] Cycle duration (1-8 weeks), cooldown periods
-- [ ] Cycle detail view with progress charts
-- [ ] Capacity estimation based on velocity
-- [ ] Assign issues to cycles (Q shortcut)
+- [x] Create migration: `cycles` table (`Cycle` model in `prisma/schema.prisma`)
+- [x] Cycle CRUD with team configuration (cycle service + resolvers)
+- [x] Auto-create upcoming cycles per team configuration
+- [x] Active / upcoming / completed cycle states
+- [x] Cycle duration and cooldown periods stored on `Team`
+- [x] Cycle list and detail views (`src/components/cycles/cycle-list-view.tsx`, `cycle-detail-view.tsx`)
+- [x] Assign issues to cycles via `Q` shortcut (`src/app/(workspace)/[workspace]/team/[key]/page.tsx`)
+- [ ] Auto-rollover of unfinished work at cycle boundary (deferred)
+- [ ] Capacity estimation based on velocity (deferred — rolls into Sprint 31-32 analytics)
+- [ ] Burndown / burnup charts on cycle detail (deferred — tracked under Sprint 31-32)
 
-### Sprint 17-18: Board View (Kanban)
+### Sprint 17-18: Board View (Kanban) ✅ COMPLETE
 
-- [ ] Board view component with status columns
-- [ ] Issue cards (title, ID, priority icon, assignee avatar, label dots)
-- [ ] Drag-and-drop between columns (status change) via @dnd-kit
-- [ ] Drag within column (reorder)
-- [ ] Multi-select drag
-- [ ] Swimlanes (group by assignee, priority, etc.)
-- [ ] View toggle (Alt+1 list, Alt+2 board)
+- [x] Board view component with status columns (`src/components/issues/board-view.tsx`)
+- [x] Issue cards (title, ID, priority icon, assignee avatar, label dots)
+- [x] Drag-and-drop between columns (status change) via @dnd-kit
+- [x] View toggle `Alt+1` list / `Alt+2` board (`src/components/issues/view-toggle.tsx`)
+- [ ] Drag within column (reorder) — deferred
+- [ ] Multi-select drag — deferred
+- [ ] Swimlanes (group by assignee, priority, etc.) — deferred
 
-### Sprint 19-20: Advanced Filtering, Custom Views & Backlog Management
+### Sprint 19-20: Advanced Filtering, Custom Views & Backlog Management ✅ COMPLETE
 
-- [ ] Filter builder UI (add filter → field → operator → value)
-- [ ] Filter pills/chips display
-- [ ] All filter fields: status, assignee, creator, label, priority, project, cycle, estimate, dates
-- [ ] AND/OR composition
-- [ ] Save filter as custom view (personal or shared)
-- [ ] Custom view CRUD
-- [ ] Custom view: layout, columns, grouping, sorting configuration
-- [ ] Sidebar: custom views under team
-- [ ] Sort by: priority, status, assignee, created, updated, due date, manual
+- [x] Filter builder UI (add filter → field → operator → value) (`src/components/issues/filter-builder.tsx`)
+- [x] Filter pills/chips display
+- [x] Filter fields: status, assignee, creator, label, priority, project, cycle, estimate, dates
+- [x] Save filter as custom view (`src/components/views/save-view-modal.tsx`, `CustomView` model)
+- [x] Custom view CRUD (backend + store)
+- [x] Sidebar: custom views under team
+- [x] Sort by: priority, status, assignee, created, updated, due date
+- [x] Backlog view route (`src/app/(workspace)/[workspace]/team/[key]/backlog/page.tsx`)
+- [x] Backlog displays Backlog + Unstarted state categories, sortable by priority/estimate/age
+- [x] Bulk operations from backlog: set priority, set estimate, move to cycle, archive
+- [x] Inline estimate + priority editing directly in backlog rows
+- [x] "Move to cycle" action from backlog
+- [ ] AND/OR composition in filter builder (only flat AND today)
+- [ ] Drag-to-reorder within priority bands (manual backlog ordering)
 - [ ] Multi-level sorting
-- [ ] Backlog view route (`/[workspace]/team/[key]/backlog`)
-- [ ] Backlog displays Backlog + Unstarted state categories; sortable by priority/estimate/age
-- [ ] Drag-to-reorder within priority bands for manual backlog ordering
-- [ ] Bulk operations from backlog: set priority, set estimate, move to cycle, archive
-- [ ] Inline estimate + priority editing directly in backlog rows (no panel open required)
-- [ ] "Move to cycle" action from backlog (add selected issues to active/upcoming cycle)
-- [ ] Visual staleness indicators (age, last-updated) on backlog items
+- [ ] Visual staleness indicators on backlog items
 
-### Sprint 21-22: Notifications & Activity
+### Sprint 21-22: Notifications & Activity ✅ COMPLETE
 
-- [ ] Create migrations: notifications, notification_subscriptions
-- [ ] Notification creation on: assign, mention, comment, status change
-- [ ] Notification inbox UI (up to 500)
-- [ ] Read/unread state, mark all read
-- [ ] Snooze notifications
-- [ ] Auto-subscribe rules (create, assign, mention)
-- [ ] Manual subscribe/unsubscribe (Shift+S)
-- [ ] Issue activity history UI (timeline of changes)
-- [ ] Activity collapsing for dense histories
+- [x] Create migrations: `notifications`, `notification_subscriptions`, `issue_activities`
+- [x] Notification creation on: assign, mention, comment, status change
+- [x] Notification inbox UI (`src/components/notifications/notification-inbox.tsx`)
+- [x] Read/unread state, mark all read
+- [x] Auto-subscribe rules (create, assign, mention)
+- [x] Issue activity history timeline (`src/components/issues/activity-timeline.tsx`)
+- [ ] Snooze notifications (deferred)
+- [ ] Manual subscribe/unsubscribe via `Shift+S` shortcut (deferred — no hotkey bound)
+- [ ] Activity collapsing for dense histories (deferred)
 
-### Sprint 23-24: Sub-Issues, Relations & Templates
+### Sprint 23-24: Sub-Issues, Relations & Templates ✅ COMPLETE
 
-- [ ] Sub-issue creation and management
-- [ ] Multiple nesting levels
-- [ ] Property inheritance (project, cycle)
-- [ ] Auto-close parent/child status cascading
-- [ ] Issue relations CRUD (related, blocks, blocked by, duplicate)
-- [ ] Visual indicators for blocking/blocked
-- [ ] Issue template CRUD (standard + form templates)
-- [ ] Template application via Alt+C and creation modal
-- [ ] Default templates per team
+- [x] Sub-issue creation and management via `Issue.parentId` (`src/components/issues/sub-issue-list.tsx`)
+- [x] Multiple nesting levels (recursive parent relation)
+- [x] Issue relations CRUD — related, blocks, blocked by, duplicate (`IssueRelation` model, `src/components/issues/relations-section.tsx`)
+- [x] Visual indicators for blocking/blocked (relations section)
+- [x] Issue template CRUD (`IssueTemplate` model, `src/components/issues/template-selector.tsx`)
+- [x] Template application via creation modal
+- [ ] Property inheritance from parent issue (project, cycle auto-applied to children) — deferred
+- [ ] Auto-close parent when all children closed / cascade status — deferred
+- [ ] `Alt+C` shortcut to open template picker — deferred (template picker accessible only from create modal)
+- [ ] Default templates per team — deferred
 
 ---
 
 ## Phase 3: Organization (Weeks 25-38)
 
-### Sprint 25-26: Rich Text Editor
+### Sprint 25-26: Rich Text Editor 🟡 PARTIAL
 
-- [ ] TipTap editor integration
-- [ ] Full Markdown support (bold, italic, lists, code, tables, blockquotes)
-- [ ] @mentions (users, issues, projects)
-- [ ] Slash commands (/code, /table, /diagram, /file, /date)
-- [ ] Image upload and drag-drop
-- [ ] File attachments
+- [x] TipTap editor integration (`src/components/editor/tiptap-editor.tsx`)
+- [x] Markdown-equivalent support: bold, italic, underline, strikethrough, headings, bullet/ordered/task lists, code blocks with syntax highlighting (lowlight), tables with resizable columns, blockquotes, horizontal rule, links
+- [x] @mentions for **users** via `@tiptap/extension-mention` and `src/components/editor/mention-list.tsx`
+- [x] Image upload via toolbar (base64, 2 MB limit, no drag-drop)
+- [x] File attachments as a separate in-issue component (`src/components/issues/file-attachments.tsx`, `File` model exists)
+- [ ] @mentions for **issues** and **projects** (users only today)
+- [ ] Slash commands — `src/components/editor/slash-commands.ts` exists but is **not wired** into the editor's extension list; the planned `/code`, `/table`, `/diagram`, `/file`, `/date` commands are not implemented
+- [ ] Image drag-and-drop
+- [ ] File attachment upload persisted to `File` model (current component stores base64 in memory only, not uploaded via GraphQL)
 - [ ] Mermaid diagram rendering
-- [ ] Collapsible sections
+- [ ] Collapsible sections (details/accordion node)
 - [ ] Embed support (YouTube, Loom)
-- [ ] Collaborative editing (YJS integration)
+- [ ] Collaborative editing (YJS / Hocuspocus)
 
-### Sprint 27-28: Comments & Reactions
+### Sprint 27-28: Comments & Reactions ✅ COMPLETE (partial)
 
-- [ ] Threaded comments on issues and projects
-- [ ] Full markdown in comments
-- [ ] @mentions in comments (with notifications)
-- [ ] Emoji reactions on comments, issues, project updates
+- [x] Threaded comments on issues (`Comment.parentId`, `src/components/issues/comment-thread.tsx`)
+- [x] Rich text (TipTap) in comments
+- [x] @mentions in comments (wired through `TipTapEditor.mentionUsers`, triggers notifications)
+- [x] Emoji reactions on comments (`CommentReaction` model)
+- [x] Comment resolution / unresolve (`Comment.resolvedAt`, `resolvedById`)
+- [ ] Threaded comments on **projects** (issue-only today)
+- [ ] Reactions on issues and project updates (comments only today)
 - [ ] Convert comment to sub-issue
-- [ ] Comment resolution (resolve/unresolve)
 - [ ] Quote reply
 
-### Sprint 29-30: Sub-Teams & Advanced Roles
+### Sprint 29-30: Sub-Teams & Advanced Roles 🟡 PARTIAL
 
-- [ ] Sub-team hierarchy (parent/child teams)
-- [ ] Inheritance: cycle schedules, estimation config
-- [ ] Private teams (hidden from non-members)
-- [ ] Team owner role with configurable member permissions
-- [ ] Guest role (team-specific access)
-- [ ] Cross-team issue visibility rules
-- [ ] Workspace admin settings page
+- [x] Sub-team hierarchy — `Team.parentId` with `TeamHierarchy` relation; parent selector in team settings; `TeamService.findChildren()`
+- [x] Private teams — `Team.private` flag; visibility filtering in `teamResolvers.Query.teams`
+- [x] Team owner role — `TeamMembership.isOwner` + `TeamMemberRole` (`admin` / `member` / `guest`) with UI toggle in `team-member-management.tsx`
+- [x] Workspace admin settings page — `src/app/(workspace)/[workspace]/settings/page.tsx` (org info, teams, member roles)
+- [ ] Inheritance of cycle schedules / estimation config from parent team (schema fields exist per-team, no `getEffectiveConfig()` logic)
+- [ ] Guest role **enforcement** — guest is present as a role value and rendered in UI, but access control only checks `TeamMembership` existence, not role
+- [ ] Cross-team issue visibility rules — issues are strictly scoped by `teamId` today (`requireTeamMember()`); no cross-team visibility logic
 
-### Sprint 31-32: Estimates, Progress Tracking & Team Analytics
+### Sprint 31-32: Estimates, Progress Tracking & Team Analytics 🟡 PARTIAL
 
-- [ ] Per-team estimation scale configuration
-- [ ] Estimate assignment (Shift+E shortcut)
-- [ ] Cycle progress charts (burndown, burnup, velocity)
-- [ ] Project progress charts (completion, scope history)
+- [x] Per-team estimation scale configuration (`Team.issueEstimationType`)
+- [x] Estimate assignment via `Shift+E` shortcut (`src/app/(workspace)/[workspace]/team/[key]/page.tsx`)
+- [x] Team analytics dashboard route (`src/app/(workspace)/[workspace]/team/[key]/analytics/page.tsx`) — stat cards + CSS-only bar charts (no chart library)
+- [x] 8-week velocity chart (weekly bins, issues-only) — partial implementation of the planned cycle-based, points-inclusive velocity with 3/6/12-cycle rolling averages
+- [x] Average cycle-time stat (days, started→completed) — partial implementation of the planned lead-time / cycle-time / time-in-state histograms
+- [x] Assignee workload bar chart — partial team health panel (workload only; no overdue or unestimated breakdowns)
+- [ ] Cycle detail burndown / burnup charts (`cycle-detail-view.tsx` only shows a progress percentage today)
+- [ ] Project progress charts over time — schema has `scopeHistory` / `completedScopeHistory` / `issueCountHistory` / `completedIssueCountHistory` JSON fields on `Project`, but they are never populated or exposed via GraphQL
 - [ ] Live completion predictions
-- [ ] Team analytics dashboard (`/[workspace]/team/[key]/analytics`)
-- [ ] Velocity chart: issues + points completed per cycle, rolling average (3/6/12 cycles)
-- [ ] Throughput trend chart (weekly/monthly)
-- [ ] Cycle metrics: burndown, burnup, scope creep, carryover rate
+- [ ] Cycle-based velocity chart with rolling averages (3/6/12 cycles) and story-point velocity
+- [ ] Throughput trend chart (weekly / monthly, separate from velocity)
+- [ ] Cycle metrics: scope creep, carryover rate
 - [ ] Flow metrics: lead time histogram, cycle time histogram, time-in-state distribution
-- [ ] Team health panel: per-member workload, overdue count, unestimated percentage
-- [ ] Date range selector: current cycle, last N cycles, last 30/90/180 days, custom
-- [ ] Export analytics data to CSV
-- [ ] Workspace-level aggregate analytics view (cross-team summary)
+- [ ] Team health: overdue count, unestimated percentage
+- [ ] Date range selector (current cycle / last N cycles / 30-180 days / custom) — analytics is all-time today
+- [ ] CSV export
+- [ ] Workspace-level aggregate analytics view (cross-team)
 
 ### Sprint 33-34: Documents (Linear Docs)
 
@@ -417,13 +429,22 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 
 ## Technical Milestones
 
-| Milestone | Target   | Criteria                                                                       |
-| --------- | -------- | ------------------------------------------------------------------------------ |
-| **Alpha** | Week 12  | Auth + Issues + Teams + List View + Sync Engine                                |
-| **Beta**  | Week 24  | + Projects + Cycles + Board + Filters + Backlog + Notifications                |
-| **RC1**   | Week 38  | + Rich Editor + Comments + Sub-teams + Triage + Docs + Automations + Analytics |
-| **v1.0**  | Week 50  | + GitHub + Slack + Webhooks + Import/Export + OAuth                            |
-| **v2.0**  | Week 62+ | + Initiatives + SLAs + AI + Mobile + Desktop                                   |
+| Milestone | Target   | Criteria                                                                       | Status         |
+| --------- | -------- | ------------------------------------------------------------------------------ | -------------- |
+| **Alpha** | Week 12  | Auth + Issues + Teams + List View + Sync Engine                                | ✅ Reached      |
+| **Beta**  | Week 24  | + Projects + Cycles + Board + Filters + Backlog + Notifications                | ✅ Reached      |
+| **RC1**   | Week 38  | + Rich Editor + Comments + Sub-teams + Triage + Docs + Automations + Analytics | 🟡 In progress |
+| **v1.0**  | Week 50  | + GitHub + Slack + Webhooks + Import/Export + OAuth                            | ⬜ Not started  |
+| **v2.0**  | Week 62+ | + Initiatives + SLAs + AI + Mobile + Desktop                                   | ⬜ Not started  |
+
+**RC1 gap analysis** (remaining work to hit RC1):
+
+- Rich editor: slash-command wiring, persisted file uploads, issue/project @mentions, Mermaid, embeds, collaborative editing (Sprint 25-26)
+- Sub-teams: config inheritance, guest-role enforcement, cross-team visibility (Sprint 29-30)
+- Triage: entirely unstarted (Sprint 35-36)
+- Documents: entirely unstarted (Sprint 33-34)
+- Automations: entirely unstarted (Sprint 37-38)
+- Analytics: burndown/burnup, cycle-based velocity, flow histograms, date ranges, CSV, workspace rollup (Sprint 31-32)
 
 ---
 
