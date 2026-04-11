@@ -267,11 +267,13 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
 
       txQueue.enqueue(
         ISSUE_CREATE_MUTATION,
-        { input: { ...input, teamId } },
+        { input: { ...input, teamId, stateId: effectiveStateId || undefined } },
         {
           onError: err => {
             console.error('[TeamPage] issueCreate failed:', err);
-            issueStore.pool.delete(tempId);
+            runInAction(() => {
+              issueStore.pool.delete(tempId);
+            });
           },
           onSuccess: data => {
             const created = (data as { issueCreate?: { issue?: DBIssue } })
