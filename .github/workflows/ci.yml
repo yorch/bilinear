@@ -31,10 +31,28 @@ jobs:
         run: yarn db:generate
 
       - name: Lint
-        run: yarn lint
+        run: |
+          yarn lint 2>&1 | tee /tmp/lint-output.txt
+          LINT_EXIT=${PIPESTATUS[0]}
+          if [ $LINT_EXIT -ne 0 ]; then
+            echo "## Lint failure" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat /tmp/lint-output.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit $LINT_EXIT
+          fi
 
       - name: Typecheck
-        run: yarn typecheck
+        run: |
+          yarn typecheck 2>&1 | tee /tmp/typecheck-output.txt
+          TC_EXIT=${PIPESTATUS[0]}
+          if [ $TC_EXIT -ne 0 ]; then
+            echo "## Typecheck failure" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat /tmp/typecheck-output.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit $TC_EXIT
+          fi
 
   test:
     name: Test (unit)
