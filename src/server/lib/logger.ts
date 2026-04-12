@@ -59,7 +59,8 @@ function withSentryCapture(base: pino.Logger): pino.Logger {
       ) {
         Sentry.captureException((first as Record<string, unknown>).err);
       }
-      return (base[method] as (...a: unknown[]) => void)(...args);
+      // Use Reflect.apply to preserve `base` as `this`, matching pino's internal binding.
+      return Reflect.apply(base[method], base, args);
     };
 
   proxy.error = captureAndLog('error') as pino.LogFn;

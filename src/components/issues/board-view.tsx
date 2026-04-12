@@ -300,6 +300,7 @@ interface BoardSwimlaneProps {
   label: string;
   issues: IssueRowData[];
   columns: Omit<Column, 'issues'>[];
+  groupBy: BoardGroupBy;
   users: IssueUser[];
   selectedId: string | null;
   selectedIds: Set<string>;
@@ -316,6 +317,7 @@ function BoardSwimlane({
   label,
   issues,
   columns,
+  groupBy,
   users,
   selectedId,
   selectedIds,
@@ -325,21 +327,9 @@ function BoardSwimlane({
 }: BoardSwimlaneProps) {
   const [collapsed, setCollapsed] = useState(false);
 
-  const swimlaneColumns: Column[] = columns.map(col => ({
-    ...col,
-    issues: issues.filter(i => {
-      // The column id encodes what to match (stateId, assigneeId/unassigned, priority-N)
-      if (col.id === 'unassigned') {
-        return !i.assigneeId;
-      }
-      if (col.id.startsWith('priority-')) {
-        const p = parseInt(col.id.replace('priority-', ''), 10);
-        return i.priority === p;
-      }
-      // status column — matches stateId
-      return i.stateId === col.id;
-    }),
-  }));
+  // Reuse the same assignment logic as the flat board to ensure consistency
+  // (especially for 'assignee' groupBy where col.id is a user ID, not a stateId)
+  const swimlaneColumns = assignIssuesToColumns(columns, issues, groupBy);
 
   return (
     <div className="mb-4">
@@ -684,6 +674,7 @@ export function BoardView({
               label={group.label}
               issues={group.issues}
               columns={colDefs}
+              groupBy={groupBy}
               users={users}
               selectedId={selectedId}
               selectedIds={selectedIds}

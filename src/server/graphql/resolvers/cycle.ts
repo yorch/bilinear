@@ -185,24 +185,52 @@ export const cycleResolvers = {
 
     cycleRollover: async (
       _parent: unknown,
-      {
-        cycleId,
-        targetCycleId: _targetCycleId,
-      }: { cycleId: string; targetCycleId?: string },
+      { cycleId }: { cycleId: string },
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+
+      const existing = await ctx.services.cycle.findById(cycleId);
+      if (!existing || existing.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Cycle not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
+
       try {
         const result = await ctx.services.cycle.rollover(ctx.orgId, cycleId);
-        const sync = await ctx.services.sync.createSyncAction(
+
+        // Broadcast cycle completion
+        let lastSync = await ctx.services.sync.createSyncAction(
           ctx.orgId,
           'U',
           'Cycle',
           cycleId,
           { completedAt: new Date().toISOString(), id: cycleId },
         );
+
+        // Broadcast each moved issue so connected clients update their cycle view
+        if (result.movedIssueIds.length > 0) {
+          const movedIssues = await ctx.prisma.issue.findMany({
+            where: {
+              id: { in: result.movedIssueIds },
+              organizationId: ctx.orgId,
+            },
+          });
+          for (const issue of movedIssues) {
+            lastSync = await ctx.services.sync.createSyncAction(
+              ctx.orgId,
+              'U',
+              'Issue',
+              issue.id,
+              issue,
+            );
+          }
+        }
+
         return {
-          lastSyncId: sync.id.toString(),
+          lastSyncId: lastSync.id.toString(),
           movedCount: result.movedCount,
           nextCycleId: result.nextCycleId,
           success: true,
@@ -283,6 +311,15 @@ export const cycleResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+
+      const cycle = await ctx.services.cycle.findById(cycleId);
+      if (!cycle || cycle.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Cycle not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+      await requireTeamMember(ctx.prisma, cycle.teamId, ctx.userId);
+
       return ctx.services.cycle.getBurndown(cycleId);
     },
 
@@ -309,6 +346,7 @@ export const cycleResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+      await requireTeamMember(ctx.prisma, teamId, ctx.userId);
       return ctx.services.cycle.getVelocity(teamId, cycleCount ?? 8);
     },
   },

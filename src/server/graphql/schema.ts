@@ -903,7 +903,7 @@ export const typeDefs = `
     cycleDelete(id: ID!): DeletePayload!
     cycleAddIssue(cycleId: ID!, issueId: ID!): IssuePayload!
     cycleRemoveIssue(issueId: ID!): IssuePayload!
-    cycleRollover(cycleId: ID!, targetCycleId: ID): CycleRolloverPayload!
+    cycleRollover(cycleId: ID!): CycleRolloverPayload!
 
     projectCreate(input: ProjectCreateInput!): ProjectPayload!
     projectUpdate(id: ID!, input: ProjectUpdateInput!): ProjectPayload!

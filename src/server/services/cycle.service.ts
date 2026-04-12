@@ -218,64 +218,76 @@ export class CycleService {
   /**
    * Roll over a cycle: mark it completed and move all incomplete issues
    * to the target cycle (or the next upcoming cycle for the team).
+   * All mutations run in a single transaction to prevent partial rollover.
    */
   async rollover(
-    _orgId: string,
+    orgId: string,
     cycleId: string,
-  ): Promise<{ movedCount: number; nextCycleId: string | null }> {
-    const cycle = await this.prisma.cycle.findUnique({
-      where: { id: cycleId },
+  ): Promise<{
+    movedCount: number;
+    nextCycleId: string | null;
+    movedIssueIds: string[];
+  }> {
+    const cycle = await this.prisma.cycle.findFirst({
+      where: { id: cycleId, organizationId: orgId },
     });
     if (!cycle) {
       throw new CycleNotFoundError();
     }
 
-    // Mark the cycle completed
-    await this.prisma.cycle.update({
-      data: { completedAt: new Date() },
-      where: { id: cycleId },
-    });
-
-    // Find incomplete issues (not in completed/cancelled state)
-    const incompleteIssues = await this.prisma.issue.findMany({
-      include: { state: { select: { type: true } } },
-      where: {
-        archivedAt: null,
-        cycleId,
-        trashed: false,
-      },
-    });
-
-    const toMove = incompleteIssues.filter(
-      i => i.state.type !== 'completed' && i.state.type !== 'canceled',
-    );
-
-    // Find next upcoming cycle
-    const now = new Date();
-    const nextCycle = await this.prisma.cycle.findFirst({
-      orderBy: { startsAt: 'asc' },
-      where: {
-        archivedAt: null,
-        id: { not: cycleId },
-        startsAt: { gte: now },
-        teamId: cycle.teamId,
-      },
-    });
-
-    if (toMove.length > 0 && nextCycle) {
-      await this.prisma.issue.updateMany({
-        data: { addedToCycleAt: new Date(), cycleId: nextCycle.id },
-        where: { id: { in: toMove.map(i => i.id) } },
+    return this.prisma.$transaction(async tx => {
+      // Mark the cycle completed
+      await tx.cycle.update({
+        data: { completedAt: new Date() },
+        where: { id: cycleId },
       });
-    } else if (toMove.length > 0) {
-      // No next cycle - unassign issues
-      await this.prisma.issue.updateMany({
-        data: { addedToCycleAt: null, cycleId: null },
-        where: { id: { in: toMove.map(i => i.id) } },
-      });
-    }
 
-    return { movedCount: toMove.length, nextCycleId: nextCycle?.id ?? null };
+      // Find incomplete issues (not in completed/cancelled state)
+      const incompleteIssues = await tx.issue.findMany({
+        include: { state: { select: { type: true } } },
+        where: {
+          archivedAt: null,
+          cycleId,
+          trashed: false,
+        },
+      });
+
+      const toMove = incompleteIssues.filter(
+        i => i.state.type !== 'completed' && i.state.type !== 'canceled',
+      );
+
+      // Find next upcoming cycle for this org+team
+      const now = new Date();
+      const nextCycle = await tx.cycle.findFirst({
+        orderBy: { startsAt: 'asc' },
+        where: {
+          archivedAt: null,
+          id: { not: cycleId },
+          organizationId: orgId,
+          startsAt: { gte: now },
+          teamId: cycle.teamId,
+        },
+      });
+
+      if (toMove.length > 0 && nextCycle) {
+        await tx.issue.updateMany({
+          data: { addedToCycleAt: new Date(), cycleId: nextCycle.id },
+          where: { id: { in: toMove.map(i => i.id) } },
+        });
+      } else if (toMove.length > 0) {
+        // No next cycle — unassign issues
+        await tx.issue.updateMany({
+          data: { addedToCycleAt: null, cycleId: null },
+          where: { id: { in: toMove.map(i => i.id) } },
+        });
+      }
+
+      return {
+        movedCount: toMove.length,
+        movedIssueIds: toMove.map(i => i.id),
+        nextCycleId: nextCycle?.id ?? null,
+      };
+    });
   }
 
   /**
@@ -355,7 +367,14 @@ export class CycleService {
     const start = new Date(cycle.startsAt);
     const end = new Date(Math.min(cycle.endsAt.getTime(), Date.now()));
 
-    // Generate daily data points
+    // Sort completed timestamps ascending once — O(n log n) — then walk a
+    // single pointer through them as days advance, giving O(days + n) total
+    // instead of O(days × n).
+    const completedDates = issues
+      .filter(i => i.completedAt !== null)
+      .map(i => i.completedAt as Date)
+      .sort((a, b) => a.getTime() - b.getTime());
+
     const points: Array<{
       date: string;
       remaining: number;
@@ -363,19 +382,23 @@ export class CycleService {
     }> = [];
     const current = new Date(start);
     current.setHours(0, 0, 0, 0);
+    let completedIdx = 0;
 
     while (current <= end) {
       const dayEnd = new Date(current);
       dayEnd.setHours(23, 59, 59, 999);
 
-      const completedByDay = issues.filter(
-        i => i.completedAt && i.completedAt <= dayEnd,
-      ).length;
+      while (
+        completedIdx < completedDates.length &&
+        completedDates[completedIdx] <= dayEnd
+      ) {
+        completedIdx++;
+      }
 
       points.push({
-        completed: completedByDay,
+        completed: completedIdx,
         date: current.toISOString().slice(0, 10),
-        remaining: totalIssues - completedByDay,
+        remaining: totalIssues - completedIdx,
       });
 
       current.setDate(current.getDate() + 1);

@@ -102,10 +102,12 @@ export function IssueDetailPanel({
     setSubscribed(null);
     gql(CHECK_SUBSCRIPTION_QUERY, { issueId: issue.id })
       .then(res => {
-        const val = res.data?.notificationIsSubscribed;
-        if (typeof val === 'boolean') {
-          setSubscribed(val);
+        if (res.errors?.length) {
+          setSubscribed(false);
+          return;
         }
+        const val = res.data?.notificationIsSubscribed;
+        setSubscribed(typeof val === 'boolean' ? val : false);
       })
       .catch(() => setSubscribed(false));
   }, [issue?.id]);
