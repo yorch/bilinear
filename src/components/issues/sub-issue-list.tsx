@@ -45,10 +45,14 @@ export const SubIssueList = observer(function SubIssueList({
 }: SubIssueListProps) {
   const { issueStore, workflowStateStore } = useStore();
 
-  // Resolve the parent issue's teamId so sub-issue creation sends the right team.
-  // If the issue isn't in the store yet, render nothing — the panel only mounts
-  // when the issue is already loaded, so this guards against race conditions only.
-  const teamId = issueStore.findById(parentIssueId)?.teamId;
+  // Resolve the parent issue's teamId, projectId, and cycleId so sub-issue
+  // creation inherits them. If the issue isn't in the store yet, render nothing
+  // — the panel only mounts when the issue is already loaded, so this guards
+  // against race conditions only.
+  const parentIssue = issueStore.findById(parentIssueId);
+  const teamId = parentIssue?.teamId;
+  const parentProjectId = parentIssue?.projectId ?? null;
+  const parentCycleId = parentIssue?.cycleId ?? null;
   const [collapsed, setCollapsed] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
 
@@ -110,6 +114,8 @@ export const SubIssueList = observer(function SubIssueList({
           teamId={teamId}
           tq={tq}
           onClose={() => setShowCreateForm(false)}
+          parentProjectId={parentProjectId}
+          parentCycleId={parentCycleId}
         />
       )}
 
@@ -194,6 +200,8 @@ interface CreateSubIssueFormProps {
   teamId: string;
   tq: TransactionQueue;
   onClose: () => void;
+  parentProjectId: string | null;
+  parentCycleId: string | null;
 }
 
 function CreateSubIssueForm({
@@ -201,6 +209,8 @@ function CreateSubIssueForm({
   teamId,
   tq,
   onClose,
+  parentProjectId,
+  parentCycleId,
 }: CreateSubIssueFormProps) {
   const [title, setTitle] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -217,7 +227,15 @@ function CreateSubIssueForm({
       await new Promise<void>((resolve, reject) => {
         tq.enqueue(
           CREATE_SUB_ISSUE_MUTATION,
-          { input: { parentId: parentIssueId, teamId, title: title.trim() } },
+          {
+            input: {
+              cycleId: parentCycleId ?? undefined,
+              parentId: parentIssueId,
+              projectId: parentProjectId ?? undefined,
+              teamId,
+              title: title.trim(),
+            },
+          },
           {
             onError: err => reject(err),
             onSuccess: () => resolve(),
