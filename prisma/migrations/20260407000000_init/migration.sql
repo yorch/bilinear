@@ -931,3 +931,11 @@ ALTER TABLE "team_member_roles" ADD CONSTRAINT "team_member_roles_team_id_fkey" 
 -- AddForeignKey
 ALTER TABLE "team_member_roles" ADD CONSTRAINT "team_member_roles_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
+-- CreateIndex (manual): Full-text search on issues
+-- Prisma does not emit GIN indexes via schema.prisma, so this is maintained manually.
+-- Powers searchIssues GraphQL query in SearchService via:
+--   to_tsvector('english', title || ' ' || COALESCE(description, ''))
+CREATE INDEX IF NOT EXISTS idx_issues_fts
+  ON issues
+  USING GIN (to_tsvector('english', title || ' ' || COALESCE(description, '')));
+
