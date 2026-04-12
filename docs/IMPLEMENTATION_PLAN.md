@@ -145,10 +145,10 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [x] E2E tests for critical paths (auth, issue CRUD, sync, offline, keyboard shortcuts)
 - [x] API rate limiting implementation (Redis fixed-window, 5 000 req/hr + complexity budget)
 - [x] Structured logging (pino + pino-pretty, `src/server/lib/logger.ts`; Sentry integration deferred)
-- [ ] **Docker Compose packaging** — single `docker-compose.yml` for full stack (app + ws-server + PostgreSQL + Redis)
-- [ ] `.env.example` covering every required variable with documentation
+- [x] **Docker Compose packaging** — `deployment/docker-compose.yaml` builds full stack (app + ws-server + PostgreSQL + Redis); `README.md` points to it
+- [x] `.env.example` covering every required variable with documentation
 - [ ] Startup migration check: warn if pending migrations on boot
-- [ ] `README.md` self-hosting section: prerequisites, `docker compose up`, first-run walkthrough
+- [x] `README.md` self-hosting section: prerequisites, `docker compose up`, first-run walkthrough (`deployment/` section)
 - [ ] Backup/restore documentation for PostgreSQL volume
 - [ ] Minimum resource validation: documented requirements for $6/mo VPS (1 vCPU / 1GB RAM)
 
@@ -184,9 +184,10 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [x] Cycle duration and cooldown periods stored on `Team`
 - [x] Cycle list and detail views (`src/components/cycles/cycle-list-view.tsx`, `cycle-detail-view.tsx`)
 - [x] Assign issues to cycles via `Q` shortcut (`src/app/(workspace)/[workspace]/team/[key]/page.tsx`)
-- [ ] Auto-rollover of unfinished work at cycle boundary (deferred)
-- [ ] Capacity estimation based on velocity (deferred — rolls into Sprint 31-32 analytics)
-- [ ] Burndown / burnup charts on cycle detail (deferred — tracked under Sprint 31-32)
+- [x] Manual rollover of unfinished work to next cycle (`cycleRollover` mutation + button in cycle detail view)
+- [ ] **Auto**-rollover at cycle boundary — manual button only; no automatic trigger when cycle ends
+- [ ] Capacity estimation based on velocity (deferred — rolls into Sprint 33-34 analytics)
+- [x] Burndown chart on cycle detail (`BurndownChart` SVG component with ideal line + actual line)
 
 ### Sprint 17-18: Board View (Kanban) ✅ COMPLETE
 
@@ -194,9 +195,9 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [x] Issue cards (title, ID, priority icon, assignee avatar, label dots)
 - [x] Drag-and-drop between columns (status change) via @dnd-kit
 - [x] View toggle `Alt+1` list / `Alt+2` board (`src/components/issues/view-toggle.tsx`)
-- [ ] Drag within column (reorder) — deferred
+- [x] Drag within column (reorder) — `sortOrder` midpoint calculation on drop
 - [ ] Multi-select drag — deferred
-- [ ] Swimlanes (group by assignee, priority, etc.) — deferred
+- [x] Swimlanes (group by assignee, priority) — `BoardSwimlaneBy` prop, grouping logic in `board-view.tsx`
 
 ### Sprint 19-20: Advanced Filtering, Custom Views & Backlog Management ✅ COMPLETE
 
@@ -212,7 +213,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [x] Bulk operations from backlog: set priority, set estimate, move to cycle, archive
 - [x] Inline estimate + priority editing directly in backlog rows
 - [x] "Move to cycle" action from backlog
-- [ ] AND/OR composition in filter builder (only flat AND today)
+- [x] AND/OR composition in filter builder (`FilterComposition` toggle in filter-builder.tsx)
 - [ ] Drag-to-reorder within priority bands (manual backlog ordering)
 - [ ] Multi-level sorting
 - [ ] Visual staleness indicators on backlog items
@@ -225,7 +226,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [x] Read/unread state, mark all read
 - [x] Auto-subscribe rules (create, assign, mention)
 - [x] Issue activity history timeline (`src/components/issues/activity-timeline.tsx`)
-- [ ] Snooze notifications (deferred)
+- [x] Snooze notifications (`notificationSnooze` mutation, `snoozedUntilAt` field)
 - [ ] Manual subscribe/unsubscribe via `Shift+S` shortcut (deferred — no hotkey bound)
 - [ ] Activity collapsing for dense histories (deferred)
 
@@ -255,7 +256,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [x] Template application via creation modal
 - [ ] Property inheritance from parent issue (project, cycle auto-applied to children) — deferred
 - [ ] Auto-close parent when all children closed / cascade status — deferred
-- [ ] `Alt+C` shortcut to open template picker — deferred (template picker accessible only from create modal)
+- [x] `Alt+C` shortcut to open template picker — implemented in `create-issue-modal.tsx`
 - [ ] Default templates per team — deferred
 
 ---
@@ -313,7 +314,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [x] 8-week velocity chart (weekly bins, issues-only) — partial implementation of the planned cycle-based, points-inclusive velocity with 3/6/12-cycle rolling averages
 - [x] Average cycle-time stat (days, started→completed) — partial implementation of the planned lead-time / cycle-time / time-in-state histograms
 - [x] Assignee workload bar chart — partial team health panel (workload only; no overdue or unestimated breakdowns)
-- [ ] Cycle detail burndown / burnup charts (`cycle-detail-view.tsx` only shows a progress percentage today)
+- [x] Cycle detail burndown chart (`BurndownChart` SVG with ideal line + actual remaining issues; burnup not yet implemented)
 - [ ] Project progress charts over time — schema has `scopeHistory` / `completedScopeHistory` / `issueCountHistory` / `completedIssueCountHistory` JSON fields on `Project`, but they are never populated or exposed via GraphQL
 - [ ] Live completion predictions
 - [ ] Cycle-based velocity chart with rolling averages (3/6/12 cycles) and story-point velocity
@@ -483,7 +484,7 @@ A differentiator vs Linear. Read-only, public-facing view of product progress.
 - Custom Fields: entirely unstarted (Sprint 23-24)
 - Rich editor: slash-command wiring, persisted file uploads, issue/project @mentions, Mermaid, embeds, collaborative editing (Sprint 27-28)
 - Sub-teams: config inheritance, guest-role enforcement, cross-team visibility, SAML/SCIM, audit log, IP restrictions (Sprint 31-32)
-- Analytics: burndown/burnup, cycle-based velocity, flow histograms, date ranges, CSV, workspace rollup (Sprint 33-34)
+- Analytics: burnup chart, cycle-based velocity, flow histograms, date ranges, CSV, workspace rollup (Sprint 33-34; burndown chart ✅ done)
 - Documents: entirely unstarted (Sprint 35-36)
 - Triage: entirely unstarted (Sprint 37-38)
 - Automations: entirely unstarted (Sprint 39-40)
