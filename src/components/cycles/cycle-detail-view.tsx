@@ -211,21 +211,12 @@ function BurndownChart({ data }: BurndownChartProps) {
           </text>
         ))}
 
-        {/* Legend — each item in its own <g> so offsets are self-contained */}
+        {/* Legend — each non-first item in its own <g> so offsets are self-contained */}
         <g transform={`translate(${paddingLeft + 4}, ${paddingTop + 4})`}>
-          <g transform="translate(0, 0)">
-            <line
-              x1={0}
-              y1={6}
-              x2={16}
-              y2={6}
-              stroke="#6366f1"
-              strokeWidth={2}
-            />
-            <text x={20} y={10} fontSize={9} fill="currentColor" opacity={0.7}>
-              Remaining
-            </text>
-          </g>
+          <line x1={0} y1={6} x2={16} y2={6} stroke="#6366f1" strokeWidth={2} />
+          <text x={20} y={10} fontSize={9} fill="currentColor" opacity={0.7}>
+            Remaining
+          </text>
           <g transform="translate(78, 0)">
             <line
               x1={0}

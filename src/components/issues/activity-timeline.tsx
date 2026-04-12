@@ -89,7 +89,7 @@ export function ActivityTimeline({
     if (!issueId) {
       return;
     }
-    void refetchKey; // referenced so this dep is not pruned
+    void refetchKey; // must be referenced here; Biome strips unused effect deps
 
     let cancelled = false;
 

@@ -103,6 +103,13 @@ const SNOOZE_PRESETS: SnoozePreset[] = [
   },
 ];
 
+function isSnoozed(n: { snoozedUntilAt?: string | null }): boolean {
+  if (!n.snoozedUntilAt) {
+    return false;
+  }
+  return new Date(n.snoozedUntilAt) > new Date();
+}
+
 function getNotificationIcon(type: string) {
   switch (type) {
     case 'ISSUE_ASSIGNED':
@@ -361,8 +368,6 @@ export const NotificationInbox = observer(function NotificationInbox() {
     }
   };
 
-  const isSnoozed = (n: { snoozedUntilAt?: string | null }) =>
-    !!n.snoozedUntilAt && new Date(n.snoozedUntilAt) > new Date();
   const unread = notifications.filter(n => !n.read && !isSnoozed(n));
   const read = notifications.filter(n => n.read && !isSnoozed(n));
   const hasUnread = unread.length > 0;
