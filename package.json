@@ -38,6 +38,8 @@
     "@prisma/adapter-pg": "7.7.0",
     "@prisma/client": "7.7.0",
     "@radix-ui/react-slot": "1.2.4",
+    "@sentry/nextjs": "10.48.0",
+    "@tanstack/react-virtual": "3.13.23",
     "@tiptap/extension-character-count": "3.22.3",
     "@tiptap/extension-code-block": "3.22.3",
     "@tiptap/extension-code-block-lowlight": "3.22.3",

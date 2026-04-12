@@ -239,15 +239,21 @@ export class IssueService {
       }
     }
 
-    return this.prisma.$transaction(async tx => {
-      const issue = await tx.issue.update({ data, where: { id } });
+    const issue = await this.prisma.$transaction(async tx => {
+      const updated = await tx.issue.update({ data, where: { id } });
 
       if (input.labelIds !== undefined) {
         await this.syncLabels(tx, id, input.labelIds);
       }
 
-      return issue;
+      return updated;
     });
+
+    if (input.stateId !== undefined && issue.parentId) {
+      await this.maybeCloseParent(issue.parentId, issue.teamId);
+    }
+
+    return issue;
   }
 
   async archive(id: string): Promise<Issue> {
@@ -274,6 +280,55 @@ export class IssueService {
       where: { issueId },
     });
     return assignments.map(a => a.label);
+  }
+
+  private async maybeCloseParent(
+    parentId: string,
+    teamId: string,
+  ): Promise<void> {
+    // Get all non-archived children of this parent
+    const siblings = await this.prisma.issue.findMany({
+      include: { state: { select: { type: true } } },
+      where: { archivedAt: null, parentId, trashed: false },
+    });
+    if (siblings.length === 0) {
+      return;
+    }
+
+    // Check if all are completed or cancelled
+    const allDone = siblings.every(
+      s => s.state.type === 'completed' || s.state.type === 'canceled',
+    );
+    if (!allDone) {
+      return;
+    }
+
+    // Get parent, check it's not already done
+    const parent = await this.prisma.issue.findUnique({
+      include: { state: { select: { type: true } } },
+      where: { id: parentId },
+    });
+    if (
+      !parent ||
+      parent.state.type === 'completed' ||
+      parent.state.type === 'canceled'
+    ) {
+      return;
+    }
+
+    // Find first completed state for the team
+    const completedState = await this.prisma.workflowState.findFirst({
+      orderBy: { position: 'asc' },
+      where: { archivedAt: null, teamId, type: 'completed' },
+    });
+    if (!completedState) {
+      return;
+    }
+
+    await this.prisma.issue.update({
+      data: { completedAt: new Date(), stateId: completedState.id },
+      where: { id: parentId },
+    });
   }
 
   private async syncLabels(

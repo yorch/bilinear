@@ -17,6 +17,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import type { DBWorkflowState } from '@/lib/db';
 import { cn } from '@/lib/utils';
@@ -27,6 +28,7 @@ import type { IssueRowData } from './issue-row';
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export type BoardGroupBy = 'status' | 'assignee' | 'priority';
+export type BoardSwimlaneBy = 'assignee' | 'priority' | 'none';
 
 interface BoardViewProps {
   issues: IssueRowData[];
@@ -34,6 +36,7 @@ interface BoardViewProps {
   users: IssueUser[];
   labels: IssueLabel[];
   groupBy: BoardGroupBy;
+  swimlaneBy?: BoardSwimlaneBy;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onOpen: (id: string) => void;
@@ -47,12 +50,23 @@ interface Column {
   issues: IssueRowData[];
 }
 
+// ─── Priority labels ────────────────────────────────────────────────────────
+
+const PRIORITY_LABELS: Record<number, string> = {
+  0: 'No priority',
+  1: 'Urgent',
+  2: 'High',
+  3: 'Medium',
+  4: 'Low',
+};
+
 // ─── Card component ─────────────────────────────────────────────────────────
 
 interface BoardCardProps {
   issue: IssueRowData;
   users: IssueUser[];
   selected: boolean;
+  multiSelected: boolean;
   onSelect: () => void;
   onOpen: () => void;
   isDragging?: boolean;
@@ -62,6 +76,7 @@ function BoardCardInner({
   issue,
   users,
   selected,
+  multiSelected,
   onSelect,
   onOpen,
   isDragging,
@@ -77,7 +92,9 @@ function BoardCardInner({
         'w-full cursor-pointer rounded-lg border bg-white p-3 text-left shadow-sm transition-shadow hover:shadow-md dark:bg-zinc-900',
         selected
           ? 'border-indigo-500 ring-1 ring-indigo-500'
-          : 'border-zinc-200 dark:border-zinc-700',
+          : multiSelected
+            ? 'border-blue-500 ring-2 ring-blue-500'
+            : 'border-zinc-200 dark:border-zinc-700',
         isDragging && 'rotate-2 shadow-lg',
       )}
       onClick={onSelect}
@@ -132,13 +149,25 @@ function BoardCardInner({
 
 // ─── Sortable card (drag handle) ────────────────────────────────────────────
 
+interface SortableCardProps extends Omit<BoardCardProps, 'isDragging'> {
+  onMultiSelect: (
+    e: React.MouseEvent,
+    issueId: string,
+    columnIssueIds: string[],
+  ) => void;
+  columnIssueIds: string[];
+}
+
 function SortableCard({
   issue,
   users,
   selected,
+  multiSelected,
   onSelect,
   onOpen,
-}: Omit<BoardCardProps, 'isDragging'>) {
+  onMultiSelect,
+  columnIssueIds,
+}: SortableCardProps) {
   const {
     attributes,
     listeners,
@@ -154,14 +183,33 @@ function SortableCard({
     transition,
   };
 
+  const handleClick = (e: React.MouseEvent) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey) {
+      e.preventDefault();
+      onMultiSelect(e, issue.id, columnIssueIds);
+    } else {
+      onSelect();
+    }
+  };
+
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
       <BoardCardInner
         issue={issue}
         users={users}
         selected={selected}
-        onSelect={onSelect}
+        multiSelected={multiSelected}
+        onSelect={() => {}} // handled via wrapper click
         onOpen={onOpen}
+        isDragging={isDragging}
+      />
+      {/* Invisible overlay to intercept clicks without interfering with DnD listeners */}
+      <button
+        type="button"
+        aria-label="Open issue"
+        className="absolute inset-0 cursor-pointer bg-transparent"
+        onClick={handleClick}
+        onDoubleClick={onOpen}
       />
     </div>
   );
@@ -173,16 +221,25 @@ function BoardColumn({
   column,
   users,
   selectedId,
+  selectedIds,
   onSelect,
   onOpen,
+  onMultiSelect,
 }: {
   column: Column;
   users: IssueUser[];
   selectedId: string | null;
+  selectedIds: Set<string>;
   onSelect: (id: string) => void;
   onOpen: (id: string) => void;
+  onMultiSelect: (
+    e: React.MouseEvent,
+    issueId: string,
+    columnIssueIds: string[],
+  ) => void;
 }) {
   const { setNodeRef } = useDroppable({ id: column.id });
+  const columnIssueIds = column.issues.map(i => i.id);
 
   return (
     <div className="flex w-72 flex-shrink-0 flex-col">
@@ -208,18 +265,22 @@ function BoardColumn({
         className="flex flex-1 flex-col gap-2 overflow-y-auto rounded-lg bg-zinc-50 p-2 dark:bg-zinc-900/50"
       >
         <SortableContext
-          items={column.issues.map(i => i.id)}
+          items={columnIssueIds}
           strategy={verticalListSortingStrategy}
         >
           {column.issues.map(issue => (
-            <SortableCard
-              key={issue.id}
-              issue={issue}
-              users={users}
-              selected={issue.id === selectedId}
-              onSelect={() => onSelect(issue.id)}
-              onOpen={() => onOpen(issue.id)}
-            />
+            <div key={issue.id} className="relative">
+              <SortableCard
+                issue={issue}
+                users={users}
+                selected={issue.id === selectedId}
+                multiSelected={selectedIds.has(issue.id)}
+                onSelect={() => onSelect(issue.id)}
+                onOpen={() => onOpen(issue.id)}
+                onMultiSelect={onMultiSelect}
+                columnIssueIds={columnIssueIds}
+              />
+            </div>
           ))}
         </SortableContext>
 
@@ -233,15 +294,152 @@ function BoardColumn({
   );
 }
 
-// ─── Priority labels ────────────────────────────────────────────────────────
+// ─── Swimlane component ──────────────────────────────────────────────────────
 
-const PRIORITY_LABELS: Record<number, string> = {
-  0: 'No priority',
-  1: 'Urgent',
-  2: 'High',
-  3: 'Medium',
-  4: 'Low',
-};
+interface BoardSwimlaneProps {
+  label: string;
+  issues: IssueRowData[];
+  columns: Omit<Column, 'issues'>[];
+  groupBy: BoardGroupBy;
+  users: IssueUser[];
+  selectedId: string | null;
+  selectedIds: Set<string>;
+  onSelect: (id: string) => void;
+  onOpen: (id: string) => void;
+  onMultiSelect: (
+    e: React.MouseEvent,
+    issueId: string,
+    columnIssueIds: string[],
+  ) => void;
+}
+
+function BoardSwimlane({
+  label,
+  issues,
+  columns,
+  groupBy,
+  users,
+  selectedId,
+  selectedIds,
+  onSelect,
+  onOpen,
+  onMultiSelect,
+}: BoardSwimlaneProps) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  // Reuse the same assignment logic as the flat board to ensure consistency
+  // (especially for 'assignee' groupBy where col.id is a user ID, not a stateId)
+  const swimlaneColumns = assignIssuesToColumns(columns, issues, groupBy);
+
+  return (
+    <div className="mb-4">
+      {/* Swimlane header */}
+      <button
+        type="button"
+        onClick={() => setCollapsed(c => !c)}
+        className="mb-2 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
+      >
+        {collapsed ? (
+          <ChevronRight className="h-4 w-4 text-zinc-400" />
+        ) : (
+          <ChevronDown className="h-4 w-4 text-zinc-400" />
+        )}
+        <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+          {label}
+        </span>
+        <span className="text-xs text-zinc-400 dark:text-zinc-500">
+          ({issues.length})
+        </span>
+      </button>
+
+      {!collapsed && (
+        <div className="flex gap-4 overflow-x-auto pb-4 pl-6">
+          {swimlaneColumns.map(col => (
+            <BoardColumn
+              key={col.id}
+              column={col}
+              users={users}
+              selectedId={selectedId}
+              selectedIds={selectedIds}
+              onSelect={onSelect}
+              onOpen={onOpen}
+              onMultiSelect={onMultiSelect}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Helper: build column definitions (without issues) ──────────────────────
+
+function buildColumnDefs(
+  groupBy: BoardGroupBy,
+  states: DBWorkflowState[],
+  users: IssueUser[],
+): Omit<Column, 'issues'>[] {
+  switch (groupBy) {
+    case 'status':
+      return states
+        .filter(s => !s.archivedAt)
+        .sort((a, b) => a.position - b.position)
+        .map(state => ({
+          color: state.color,
+          id: state.id,
+          label: state.name,
+        }));
+
+    case 'assignee': {
+      const cols: Omit<Column, 'issues'>[] = [
+        { id: 'unassigned', label: 'Unassigned' },
+      ];
+      for (const user of users) {
+        cols.push({ id: user.id, label: user.displayName });
+      }
+      return cols;
+    }
+
+    case 'priority':
+      return [1, 2, 3, 4, 0].map(p => ({
+        id: `priority-${p}`,
+        label: PRIORITY_LABELS[p] ?? `Priority ${p}`,
+      }));
+
+    default:
+      return [];
+  }
+}
+
+function assignIssuesToColumns(
+  colDefs: Omit<Column, 'issues'>[],
+  issues: IssueRowData[],
+  groupBy: BoardGroupBy,
+): Column[] {
+  return colDefs.map(def => {
+    let colIssues: IssueRowData[];
+
+    if (groupBy === 'status') {
+      colIssues = issues
+        .filter(i => i.stateId === def.id)
+        .sort(
+          (a, b) =>
+            ((a as { sortOrder?: number }).sortOrder ?? 0) -
+            ((b as { sortOrder?: number }).sortOrder ?? 0),
+        );
+    } else if (groupBy === 'assignee') {
+      colIssues =
+        def.id === 'unassigned'
+          ? issues.filter(i => !i.assigneeId)
+          : issues.filter(i => i.assigneeId === def.id);
+    } else {
+      const p = parseInt(def.id.replace('priority-', ''), 10);
+      colIssues = issues.filter(i => i.priority === p);
+    }
+
+    return { ...def, issues: colIssues };
+  });
+}
 
 // ─── Main Board View ────────────────────────────────────────────────────────
 
@@ -250,12 +448,17 @@ export function BoardView({
   states,
   users,
   groupBy,
+  swimlaneBy,
   selectedId,
   onSelect,
   onOpen,
   onUpdate,
 }: BoardViewProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  // Multi-select state (internal to the board, separate from parent selectedId)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Track the last-clicked issue id per column for shift-click range select
+  const [lastClickedId, setLastClickedId] = useState<string | null>(null);
 
   const mouseSensor = useSensor(MouseSensor, {
     activationConstraint: { distance: 8 },
@@ -265,68 +468,98 @@ export function BoardView({
   });
   const sensors = useSensors(mouseSensor, touchSensor);
 
-  // Build columns based on groupBy
-  const columns: Column[] = (() => {
-    switch (groupBy) {
-      case 'status':
-        return states
-          .filter(s => !s.archivedAt)
-          .sort((a, b) => a.position - b.position)
-          .map(state => ({
-            color: state.color,
-            id: state.id,
-            issues: issues
-              .filter(i => i.stateId === state.id)
-              .sort(
-                (a, b) =>
-                  ((a as { sortOrder?: number }).sortOrder ?? 0) -
-                  ((b as { sortOrder?: number }).sortOrder ?? 0),
-              ),
-            label: state.name,
-          }));
+  // Build column definitions
+  const colDefs = buildColumnDefs(groupBy, states, users);
 
-      case 'assignee': {
-        const unassigned: IssueRowData[] = [];
-        const byUser = new Map<string, IssueRowData[]>();
+  // Build full columns (with issues) for flat board mode
+  const columns: Column[] = assignIssuesToColumns(colDefs, issues, groupBy);
 
-        for (const issue of issues) {
-          if (!issue.assigneeId) {
-            unassigned.push(issue);
-          } else {
-            const list = byUser.get(issue.assigneeId) ?? [];
-            list.push(issue);
-            byUser.set(issue.assigneeId, list);
-          }
-        }
+  // Determine if swimlanes should be active
+  const useSwimlanes =
+    swimlaneBy != null && swimlaneBy !== 'none' && swimlaneBy !== groupBy;
 
-        const cols: Column[] = [
-          { id: 'unassigned', issues: unassigned, label: 'Unassigned' },
-        ];
-        for (const user of users) {
-          const userIssues = byUser.get(user.id);
-          if (userIssues && userIssues.length > 0) {
-            cols.push({
-              id: user.id,
-              issues: userIssues,
-              label: user.displayName,
+  // Build swimlane groups when needed
+  const swimlaneGroups: {
+    id: string;
+    label: string;
+    issues: IssueRowData[];
+  }[] = useSwimlanes
+    ? (() => {
+        if (swimlaneBy === 'assignee') {
+          const unassigned = issues.filter(i => !i.assigneeId);
+          const groups: {
+            id: string;
+            label: string;
+            issues: IssueRowData[];
+          }[] = [];
+          if (unassigned.length > 0) {
+            groups.push({
+              id: 'unassigned',
+              issues: unassigned,
+              label: 'Unassigned',
             });
           }
+          for (const user of users) {
+            const userIssues = issues.filter(i => i.assigneeId === user.id);
+            if (userIssues.length > 0) {
+              groups.push({
+                id: user.id,
+                issues: userIssues,
+                label: user.displayName,
+              });
+            }
+          }
+          return groups;
         }
-        return cols;
-      }
+        // swimlaneBy === 'priority'
+        return [1, 2, 3, 4, 0]
+          .map(p => ({
+            id: `priority-${p}`,
+            issues: issues.filter(i => i.priority === p),
+            label: PRIORITY_LABELS[p] ?? `Priority ${p}`,
+          }))
+          .filter(g => g.issues.length > 0);
+      })()
+    : [];
 
-      case 'priority': {
-        return [1, 2, 3, 4, 0].map(p => ({
-          id: `priority-${p}`,
-          issues: issues.filter(i => i.priority === p),
-          label: PRIORITY_LABELS[p] ?? `Priority ${p}`,
-        }));
-      }
+  // ── Multi-select handlers ────────────────────────────────────────────────
 
-      default:
-        return [];
+  const handleMultiSelect = (
+    e: React.MouseEvent,
+    issueId: string,
+    columnIssueIds: string[],
+  ) => {
+    if (e.shiftKey && lastClickedId) {
+      // Range select within the column
+      const start = columnIssueIds.indexOf(lastClickedId);
+      const end = columnIssueIds.indexOf(issueId);
+      if (start >= 0 && end >= 0) {
+        const [from, to] = start < end ? [start, end] : [end, start];
+        const rangeIds = columnIssueIds.slice(from, to + 1);
+        setSelectedIds(prev => {
+          const next = new Set(prev);
+          for (const id of rangeIds) {
+            next.add(id);
+          }
+          return next;
+        });
+      }
+    } else {
+      // Cmd/Ctrl+Click — toggle
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        if (next.has(issueId)) {
+          next.delete(issueId);
+        } else {
+          next.add(issueId);
+        }
+        return next;
+      });
     }
-  })();
+    setLastClickedId(issueId);
+  };
+
+  // ── DnD handlers ─────────────────────────────────────────────────────────
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(String(event.active.id));
@@ -340,7 +573,7 @@ export function BoardView({
       return;
     }
 
-    const issueId = String(active.id);
+    const draggedId = String(active.id);
     const overId = String(over.id);
 
     // Find which column the dragged card landed in
@@ -351,52 +584,73 @@ export function BoardView({
       return;
     }
 
-    const issue = issues.find(i => i.id === issueId);
-    if (!issue) {
-      return;
-    }
-
-    const patch: Record<string, unknown> = {};
-
-    // Column change: update the groupBy field
-    if (groupBy === 'status' && issue.stateId !== targetColumn.id) {
-      patch.stateId = targetColumn.id;
-    } else if (groupBy === 'assignee') {
-      const newAssigneeId =
-        targetColumn.id === 'unassigned' ? null : targetColumn.id;
-      if ((issue.assigneeId ?? null) !== newAssigneeId) {
-        patch.assigneeId = newAssigneeId;
+    // Build patch for a single issue based on target column
+    const buildPatch = (issueId: string): Record<string, unknown> => {
+      const issue = issues.find(i => i.id === issueId);
+      if (!issue) {
+        return {};
       }
-    } else if (groupBy === 'priority') {
-      const newPriority = parseInt(
-        targetColumn.id.replace('priority-', ''),
-        10,
-      );
-      if (issue.priority !== newPriority) {
-        patch.priority = newPriority;
-      }
-    }
 
-    // Within-column reorder: compute new sortOrder between neighbors
-    if (overId !== targetColumn.id && overId !== issueId) {
-      const colIssues = targetColumn.issues.filter(i => i.id !== issueId);
-      const overIndex = colIssues.findIndex(i => i.id === overId);
-      if (overIndex >= 0) {
-        const prev = colIssues[overIndex - 1];
-        const next = colIssues[overIndex];
-        const prevOrder = (prev as { sortOrder?: number })?.sortOrder ?? 0;
-        const nextOrder =
-          (next as { sortOrder?: number })?.sortOrder ?? prevOrder + 1;
-        patch.sortOrder = (prevOrder + nextOrder) / 2;
-      }
-    }
+      const patch: Record<string, unknown> = {};
 
-    if (Object.keys(patch).length > 0) {
-      onUpdate(issueId, patch);
+      if (groupBy === 'status' && issue.stateId !== targetColumn.id) {
+        patch.stateId = targetColumn.id;
+      } else if (groupBy === 'assignee') {
+        const newAssigneeId =
+          targetColumn.id === 'unassigned' ? null : targetColumn.id;
+        if ((issue.assigneeId ?? null) !== newAssigneeId) {
+          patch.assigneeId = newAssigneeId;
+        }
+      } else if (groupBy === 'priority') {
+        const newPriority = parseInt(
+          targetColumn.id.replace('priority-', ''),
+          10,
+        );
+        if (issue.priority !== newPriority) {
+          patch.priority = newPriority;
+        }
+      }
+
+      return patch;
+    };
+
+    const isMultiDrag = selectedIds.has(draggedId) && selectedIds.size > 1;
+
+    if (isMultiDrag) {
+      // Apply patch to all selected issues
+      for (const id of selectedIds) {
+        const patch = buildPatch(id);
+        if (Object.keys(patch).length > 0) {
+          onUpdate(id, patch);
+        }
+      }
+      setSelectedIds(new Set());
+    } else {
+      // Single drag — also handle within-column reorder
+      const patch = buildPatch(draggedId);
+
+      if (overId !== targetColumn.id && overId !== draggedId) {
+        const colIssues = targetColumn.issues.filter(i => i.id !== draggedId);
+        const overIndex = colIssues.findIndex(i => i.id === overId);
+        if (overIndex >= 0) {
+          const prev = colIssues[overIndex - 1];
+          const next = colIssues[overIndex];
+          const prevOrder = (prev as { sortOrder?: number })?.sortOrder ?? 0;
+          const nextOrder =
+            (next as { sortOrder?: number })?.sortOrder ?? prevOrder + 1;
+          patch.sortOrder = (prevOrder + nextOrder) / 2;
+        }
+      }
+
+      if (Object.keys(patch).length > 0) {
+        onUpdate(draggedId, patch);
+      }
     }
   };
 
   const activeIssue = activeId ? issues.find(i => i.id === activeId) : null;
+  const isDraggingMultiple =
+    activeId != null && selectedIds.has(activeId) && selectedIds.size > 1;
 
   if (issues.length === 0) {
     return (
@@ -412,30 +666,60 @@ export function BoardView({
       onDragEnd={handleDragEnd}
       onDragStart={handleDragStart}
     >
-      <div className="flex gap-4 overflow-x-auto p-4">
-        {columns.map(column => (
-          <BoardColumn
-            key={column.id}
-            column={column}
-            users={users}
-            selectedId={selectedId}
-            onSelect={onSelect}
-            onOpen={onOpen}
-          />
-        ))}
-      </div>
+      {useSwimlanes ? (
+        <div className="p-4">
+          {swimlaneGroups.map(group => (
+            <BoardSwimlane
+              key={group.id}
+              label={group.label}
+              issues={group.issues}
+              columns={colDefs}
+              groupBy={groupBy}
+              users={users}
+              selectedId={selectedId}
+              selectedIds={selectedIds}
+              onSelect={onSelect}
+              onOpen={onOpen}
+              onMultiSelect={handleMultiSelect}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="flex gap-4 overflow-x-auto p-4">
+          {columns.map(column => (
+            <BoardColumn
+              key={column.id}
+              column={column}
+              users={users}
+              selectedId={selectedId}
+              selectedIds={selectedIds}
+              onSelect={onSelect}
+              onOpen={onOpen}
+              onMultiSelect={handleMultiSelect}
+            />
+          ))}
+        </div>
+      )}
 
       <DragOverlay>
-        {activeIssue && (
-          <BoardCardInner
-            issue={activeIssue}
-            users={users}
-            selected={false}
-            onSelect={() => {}}
-            onOpen={() => {}}
-            isDragging
-          />
-        )}
+        {activeIssue &&
+          (isDraggingMultiple ? (
+            <div className="flex items-center gap-2 rounded-lg border border-blue-500 bg-white px-4 py-3 shadow-lg dark:bg-zinc-900">
+              <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                Dragging {selectedIds.size} issues
+              </span>
+            </div>
+          ) : (
+            <BoardCardInner
+              issue={activeIssue}
+              users={users}
+              selected={false}
+              multiSelected={false}
+              onSelect={() => {}}
+              onOpen={() => {}}
+              isDragging
+            />
+          ))}
       </DragOverlay>
     </DndContext>
   );

@@ -4,12 +4,13 @@ import {
   Bell,
   Check,
   CheckCheck,
+  Clock,
   MessageSquare,
   RefreshCw,
   User,
 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { DBNotification } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -55,6 +56,60 @@ const MARK_ALL_READ_MUTATION = `
   }
 `;
 
+const SNOOZE_MUTATION = `
+  mutation NotificationSnooze($id: ID!, $until: DateTime!) {
+    notificationSnooze(id: $id, until: $until) {
+      success lastSyncId
+    }
+  }
+`;
+
+// ─── Snooze helpers ───────────────────────────────────────────────────────────
+
+interface SnoozePreset {
+  label: string;
+  getUntil: () => Date;
+}
+
+const SNOOZE_PRESETS: SnoozePreset[] = [
+  {
+    getUntil: () => new Date(Date.now() + 60 * 60 * 1000),
+    label: '1 hour',
+  },
+  {
+    getUntil: () => new Date(Date.now() + 4 * 60 * 60 * 1000),
+    label: '4 hours',
+  },
+  {
+    getUntil: () => {
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      d.setHours(9, 0, 0, 0);
+      return d;
+    },
+    label: 'Tomorrow 9am',
+  },
+  {
+    getUntil: () => {
+      const d = new Date();
+      // Move to next Monday
+      const day = d.getDay(); // 0 = Sunday, 1 = Monday, ...
+      const daysUntilMonday = day === 0 ? 1 : 8 - day;
+      d.setDate(d.getDate() + daysUntilMonday);
+      d.setHours(9, 0, 0, 0);
+      return d;
+    },
+    label: 'Next week',
+  },
+];
+
+function isSnoozed(n: { snoozedUntilAt?: string | null }): boolean {
+  if (!n.snoozedUntilAt) {
+    return false;
+  }
+  return new Date(n.snoozedUntilAt) > new Date();
+}
+
 function getNotificationIcon(type: string) {
   switch (type) {
     case 'ISSUE_ASSIGNED':
@@ -89,16 +144,37 @@ function getNotificationLabel(type: string): string {
 interface NotificationItemProps {
   notification: DBNotification;
   onMarkRead: (id: string) => void;
+  onSnooze: (id: string, until: Date) => void;
   markingId: string | null;
+  snoozingId: string | null;
 }
 
 function NotificationItem({
   notification,
   onMarkRead,
+  onSnooze,
   markingId,
+  snoozingId,
 }: NotificationItemProps) {
   const { type, read, createdAt, id } = notification;
   const isMarkingThis = markingId === id;
+  const isSnoozingThis = snoozingId === id;
+  const [snoozeOpen, setSnoozeOpen] = useState(false);
+  const snoozeRef = useRef<HTMLDivElement>(null);
+
+  // Close snooze dropdown when clicking outside
+  useEffect(() => {
+    if (!snoozeOpen) {
+      return;
+    }
+    const handler = (e: MouseEvent) => {
+      if (snoozeRef.current && !snoozeRef.current.contains(e.target as Node)) {
+        setSnoozeOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [snoozeOpen]);
 
   return (
     <div
@@ -141,17 +217,51 @@ function NotificationItem({
         </p>
       </div>
 
-      {/* Mark read button */}
+      {/* Action buttons (unread only) */}
       {!read && (
-        <button
-          type="button"
-          onClick={() => onMarkRead(id)}
-          disabled={isMarkingThis}
-          className="shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-indigo-600 dark:hover:bg-zinc-800 dark:hover:text-indigo-400 disabled:opacity-50"
-          title="Mark as read"
-        >
-          <Check className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          {/* Snooze button with dropdown */}
+          <div ref={snoozeRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setSnoozeOpen(o => !o)}
+              disabled={isSnoozingThis}
+              className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300 disabled:opacity-50"
+              title="Snooze"
+            >
+              <Clock className="h-3.5 w-3.5" />
+            </button>
+
+            {snoozeOpen && (
+              <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+                {SNOOZE_PRESETS.map(preset => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      setSnoozeOpen(false);
+                      onSnooze(id, preset.getUntil());
+                    }}
+                    className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Mark read button */}
+          <button
+            type="button"
+            onClick={() => onMarkRead(id)}
+            disabled={isMarkingThis}
+            className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-indigo-600 dark:hover:bg-zinc-800 dark:hover:text-indigo-400 disabled:opacity-50"
+            title="Mark as read"
+          >
+            <Check className="h-3.5 w-3.5" />
+          </button>
+        </div>
       )}
     </div>
   );
@@ -166,6 +276,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
   const [loading, setLoading] = useState(true);
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
+  const [snoozingId, setSnoozingId] = useState<string | null>(null);
 
   // Initial fetch — populate the store; subsequent updates arrive via WebSocket
   useEffect(() => {
@@ -218,6 +329,30 @@ export const NotificationInbox = observer(function NotificationInbox() {
     }
   };
 
+  const handleSnooze = async (id: string, until: Date) => {
+    // Optimistic: mark as snoozed in store — the derived filter will hide it
+    notificationStore.optimisticUpdate(id, {
+      snoozedUntilAt: until.toISOString(),
+    });
+    setSnoozingId(id);
+    try {
+      const res = await gql(SNOOZE_MUTATION, {
+        id,
+        until: until.toISOString(),
+      });
+      if (res.errors?.length) {
+        throw new Error('Failed to snooze notification');
+      }
+      toast.success('Notification snoozed');
+    } catch {
+      // Roll back optimistic update
+      notificationStore.optimisticUpdate(id, { snoozedUntilAt: null });
+      toast.error('Failed to snooze notification');
+    } finally {
+      setSnoozingId(null);
+    }
+  };
+
   const handleMarkAllRead = async () => {
     setMarkingAll(true);
     try {
@@ -233,8 +368,8 @@ export const NotificationInbox = observer(function NotificationInbox() {
     }
   };
 
-  const unread = notifications.filter(n => !n.read);
-  const read = notifications.filter(n => n.read);
+  const unread = notifications.filter(n => !n.read && !isSnoozed(n));
+  const read = notifications.filter(n => n.read && !isSnoozed(n));
   const hasUnread = unread.length > 0;
 
   return (
@@ -301,7 +436,9 @@ export const NotificationInbox = observer(function NotificationInbox() {
                 key={notification.id}
                 notification={notification}
                 onMarkRead={handleMarkRead}
+                onSnooze={handleSnooze}
                 markingId={markingId}
+                snoozingId={snoozingId}
               />
             ))}
           </div>
@@ -320,7 +457,9 @@ export const NotificationInbox = observer(function NotificationInbox() {
                 key={notification.id}
                 notification={notification}
                 onMarkRead={handleMarkRead}
+                onSnooze={handleSnooze}
                 markingId={markingId}
+                snoozingId={snoozingId}
               />
             ))}
           </div>

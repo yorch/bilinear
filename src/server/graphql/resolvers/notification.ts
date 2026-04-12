@@ -165,6 +165,24 @@ export const notificationResolvers = {
   },
 
   Query: {
+    notificationIsSubscribed: async (
+      _parent: unknown,
+      { issueId }: { issueId: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+
+      const issue = await ctx.services.issue.findById(issueId);
+      if (!issue || issue.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Issue not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
+
+      return ctx.services.notification.isSubscribed(ctx.userId, issueId);
+    },
+
     notifications: async (
       _parent: unknown,
       { limit }: { limit?: number },

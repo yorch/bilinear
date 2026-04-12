@@ -1,9 +1,10 @@
 'use client';
 
-import { ArrowLeft, Calendar, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Calendar, RefreshCw, RotateCcw } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn } from '@/lib/utils';
@@ -24,6 +25,286 @@ function formatDate(iso: string): string {
   });
 }
 
+// ---------------------------------------------------------------------------
+// GraphQL strings
+// ---------------------------------------------------------------------------
+
+const CYCLE_ROLLOVER_MUTATION = `
+  mutation CycleRollover($cycleId: ID!) {
+    cycleRollover(cycleId: $cycleId) { success lastSyncId movedCount nextCycleId }
+  }
+`;
+
+const CYCLE_BURNDOWN_QUERY = `
+  query CycleBurndown($cycleId: ID!) {
+    cycleBurndown(cycleId: $cycleId) { date remaining completed }
+  }
+`;
+
+const CYCLE_VELOCITY_QUERY = `
+  query CycleVelocity($teamId: ID!, $cycleCount: Int) {
+    cycleVelocity(teamId: $teamId, cycleCount: $cycleCount) {
+      averageIssues
+      cycles { cycleId cycleNumber completedIssues }
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface BurndownPoint {
+  date: string;
+  remaining: number;
+  completed: number;
+}
+
+interface VelocityCycle {
+  cycleId: string;
+  cycleNumber: number;
+  completedIssues: number;
+}
+
+interface VelocityResult {
+  averageIssues: number;
+  cycles: VelocityCycle[];
+}
+
+// ---------------------------------------------------------------------------
+// Burndown chart (SVG, no library)
+// ---------------------------------------------------------------------------
+
+interface BurndownChartProps {
+  data: BurndownPoint[];
+}
+
+function BurndownChart({ data }: BurndownChartProps) {
+  if (data.length === 0) {
+    return (
+      <p className="py-6 text-center text-xs text-zinc-400">
+        Burndown data will appear once the cycle starts.
+      </p>
+    );
+  }
+
+  const width = 600;
+  const height = 300;
+  const paddingLeft = 36;
+  const paddingRight = 12;
+  const paddingTop = 12;
+  const paddingBottom = 32;
+
+  const chartWidth = width - paddingLeft - paddingRight;
+  const chartHeight = height - paddingTop - paddingBottom;
+
+  const maxY = Math.max(
+    ...data.map(d => Math.max(d.remaining, d.completed)),
+    1,
+  );
+  const n = data.length;
+
+  const xScale = (i: number) =>
+    paddingLeft + (n > 1 ? (i / (n - 1)) * chartWidth : chartWidth / 2);
+  const yScale = (v: number) =>
+    paddingTop + chartHeight - (v / maxY) * chartHeight;
+
+  // Ideal burndown: linear from total issues (first remaining + first completed) down to 0
+  const totalIssues = data[0].remaining + data[0].completed;
+  const idealPoints = data.map((_, i) => ({
+    x: xScale(i),
+    y: yScale(totalIssues - (totalIssues / (n - 1 || 1)) * i),
+  }));
+
+  const toPath = (pts: Array<{ x: number; y: number }>) =>
+    pts
+      .map(
+        (p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`,
+      )
+      .join(' ');
+
+  const remainingPath = toPath(
+    data.map((d, i) => ({ x: xScale(i), y: yScale(d.remaining) })),
+  );
+  const completedPath = toPath(
+    data.map((d, i) => ({ x: xScale(i), y: yScale(d.completed) })),
+  );
+  const idealPath = toPath(idealPoints);
+
+  // Y-axis ticks
+  const yTicks = [0, Math.round(maxY / 2), maxY];
+
+  // X-axis: every 3rd label
+  const xLabels = data
+    .map((d, i) => ({
+      i,
+      label: new Date(d.date).toLocaleDateString('en-US', {
+        day: 'numeric',
+        month: 'short',
+      }),
+    }))
+    .filter((_, i) => i % 3 === 0 || i === n - 1);
+
+  return (
+    <div className="w-full overflow-x-auto">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="w-full"
+        style={{ height: 300 }}
+        aria-label="Burndown chart"
+      >
+        {/* Y-axis grid lines + labels */}
+        {yTicks.map(v => {
+          const y = yScale(v);
+          return (
+            <g key={v}>
+              <line
+                x1={paddingLeft}
+                y1={y}
+                x2={width - paddingRight}
+                y2={y}
+                stroke="currentColor"
+                strokeOpacity={0.08}
+                strokeWidth={1}
+              />
+              <text
+                x={paddingLeft - 4}
+                y={y + 4}
+                textAnchor="end"
+                fontSize={10}
+                fill="currentColor"
+                opacity={0.45}
+              >
+                {v}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Ideal burndown (gray dashed) */}
+        <path
+          d={idealPath}
+          fill="none"
+          stroke="#a1a1aa"
+          strokeWidth={1.5}
+          strokeDasharray="5,3"
+        />
+
+        {/* Completed (green) */}
+        <path d={completedPath} fill="none" stroke="#22c55e" strokeWidth={2} />
+
+        {/* Remaining (blue) */}
+        <path d={remainingPath} fill="none" stroke="#6366f1" strokeWidth={2} />
+
+        {/* X-axis labels */}
+        {xLabels.map(({ i, label }) => (
+          <text
+            key={i}
+            x={xScale(i)}
+            y={height - 6}
+            textAnchor="middle"
+            fontSize={9}
+            fill="currentColor"
+            opacity={0.45}
+          >
+            {label}
+          </text>
+        ))}
+
+        {/* Legend — each non-first item in its own <g> so offsets are self-contained */}
+        <g transform={`translate(${paddingLeft + 4}, ${paddingTop + 4})`}>
+          <line x1={0} y1={6} x2={16} y2={6} stroke="#6366f1" strokeWidth={2} />
+          <text x={20} y={10} fontSize={9} fill="currentColor" opacity={0.7}>
+            Remaining
+          </text>
+          <g transform="translate(78, 0)">
+            <line
+              x1={0}
+              y1={6}
+              x2={16}
+              y2={6}
+              stroke="#22c55e"
+              strokeWidth={2}
+            />
+            <text x={20} y={10} fontSize={9} fill="currentColor" opacity={0.7}>
+              Completed
+            </text>
+          </g>
+          <g transform="translate(158, 0)">
+            <line
+              x1={0}
+              y1={6}
+              x2={16}
+              y2={6}
+              stroke="#a1a1aa"
+              strokeWidth={1.5}
+              strokeDasharray="5,3"
+            />
+            <text x={20} y={10} fontSize={9} fill="currentColor" opacity={0.7}>
+              Ideal
+            </text>
+          </g>
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Velocity bar chart (CSS, same pattern as analytics page)
+// ---------------------------------------------------------------------------
+
+interface VelocityBarChartProps {
+  cycles: VelocityCycle[];
+}
+
+function VelocityBarChart({ cycles }: VelocityBarChartProps) {
+  const max = Math.max(...cycles.map(c => c.completedIssues), 1);
+
+  if (cycles.length === 0) {
+    return (
+      <p className="py-4 text-center text-xs text-zinc-400">
+        No velocity data yet.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex items-end gap-2 h-24 mt-2">
+      {cycles.map(c => {
+        const pct = max > 0 ? (c.completedIssues / max) * 100 : 0;
+        return (
+          <div
+            key={c.cycleId}
+            className="flex flex-1 flex-col items-center gap-1"
+          >
+            <span className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400">
+              {c.completedIssues > 0 ? c.completedIssues : ''}
+            </span>
+            <div
+              className="w-full rounded-t bg-indigo-500"
+              style={{
+                height: `${Math.max(pct, c.completedIssues > 0 ? 4 : 0)}%`,
+                minHeight: c.completedIssues > 0 ? '4px' : '0',
+              }}
+            />
+            <span
+              className="max-w-full truncate text-[9px] text-zinc-400"
+              title={`Cycle ${c.cycleNumber}`}
+            >
+              #{c.cycleNumber}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
 export const CycleDetailView = observer(function CycleDetailView({
   cycleId,
   workspaceKey,
@@ -39,12 +320,53 @@ export const CycleDetailView = observer(function CycleDetailView({
   const [nameValue, setNameValue] = useState('');
   const nameInputRef = useRef<HTMLInputElement>(null);
 
+  // Rollover state
+  const [rollingOver, setRollingOver] = useState(false);
+
+  // Burndown state
+  const [burndown, setBurndown] = useState<BurndownPoint[] | null>(null);
+  const [burndownLoading, setBurndownLoading] = useState(false);
+
+  // Velocity state
+  const [velocity, setVelocity] = useState<VelocityResult | null>(null);
+
   // Focus the name input when editing starts
   useEffect(() => {
     if (editingName) {
       nameInputRef.current?.focus();
     }
   }, [editingName]);
+
+  // Fetch burndown data
+  useEffect(() => {
+    if (!cycleId) {
+      return;
+    }
+    setBurndownLoading(true);
+    gql(CYCLE_BURNDOWN_QUERY, { cycleId })
+      .then(res => {
+        const points = (res.data?.cycleBurndown ?? []) as BurndownPoint[];
+        setBurndown(points);
+      })
+      .catch(() => setBurndown([]))
+      .finally(() => setBurndownLoading(false));
+  }, [cycleId]);
+
+  // Fetch velocity data
+  const teamId = cycle?.teamId;
+  useEffect(() => {
+    if (!teamId) {
+      return;
+    }
+    gql(CYCLE_VELOCITY_QUERY, { cycleCount: 6, teamId })
+      .then(res => {
+        const result = res.data?.cycleVelocity as VelocityResult | undefined;
+        if (result) {
+          setVelocity(result);
+        }
+      })
+      .catch(() => {});
+  }, [teamId]);
 
   const handleRemoveIssue = useCallback(
     (issueId: string) => {
@@ -68,6 +390,42 @@ export const CycleDetailView = observer(function CycleDetailView({
     [issueStore, txQueue],
   );
 
+  const handleRollover = useCallback(async () => {
+    if (rollingOver) {
+      return;
+    }
+    setRollingOver(true);
+    try {
+      const res = await gql(CYCLE_ROLLOVER_MUTATION, { cycleId });
+      if (res.errors?.length) {
+        toast.error('Failed to roll over cycle');
+        return;
+      }
+      const payload = res.data?.cycleRollover as
+        | {
+            success: boolean;
+            movedCount: number;
+            nextCycleId: string | null;
+          }
+        | undefined;
+      if (payload?.success) {
+        if (payload.nextCycleId) {
+          toast.success(
+            `Rolled over. ${payload.movedCount} incomplete issue${payload.movedCount === 1 ? '' : 's'} moved to next cycle.`,
+          );
+        } else {
+          toast.success(
+            `${payload.movedCount} issue${payload.movedCount === 1 ? '' : 's'} unassigned.`,
+          );
+        }
+      }
+    } catch {
+      toast.error('Failed to roll over cycle');
+    } finally {
+      setRollingOver(false);
+    }
+  }, [cycleId, rollingOver]);
+
   if (!cycle) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
@@ -88,6 +446,10 @@ export const CycleDetailView = observer(function CycleDetailView({
   const endsAtMs = new Date(cycle.endsAt).getTime();
   const isActive = !cycle.completedAt && startsAtMs <= now && endsAtMs > now;
   const isUpcoming = startsAtMs > now;
+  const isCompleted = !isActive && !isUpcoming;
+
+  // Show rollover button for active cycles or cycles whose end date has passed
+  const showRollover = isActive || endsAtMs <= now;
 
   const statusLabel = isActive
     ? 'Active'
@@ -164,6 +526,19 @@ export const CycleDetailView = observer(function CycleDetailView({
             {displayName}
           </button>
         )}
+
+        {/* Roll over button — only for active / past cycles */}
+        {showRollover && (
+          <button
+            type="button"
+            onClick={handleRollover}
+            disabled={rollingOver}
+            className="ml-auto flex items-center gap-1.5 rounded border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            {rollingOver ? 'Rolling over…' : 'Roll over'}
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -210,6 +585,48 @@ export const CycleDetailView = observer(function CycleDetailView({
               />
             </div>
           </div>
+
+          {/* Burndown chart — active or completed cycles */}
+          {(isActive || isCompleted) && (
+            <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                Burndown
+              </h3>
+              {burndownLoading ? (
+                <div className="h-[300px] animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
+              ) : (
+                <BurndownChart data={burndown ?? []} />
+              )}
+            </div>
+          )}
+
+          {/* Velocity / capacity section */}
+          {velocity && (
+            <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                Velocity
+              </h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Avg velocity:{' '}
+                <span className="font-medium text-zinc-700 dark:text-zinc-200">
+                  {velocity.averageIssues} issues/cycle
+                </span>
+                {velocity.cycles.length > 0 &&
+                  ` (based on last ${velocity.cycles.length} cycle${velocity.cycles.length === 1 ? '' : 's'})`}
+              </p>
+              {isUpcoming && (
+                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  Capacity estimate:{' '}
+                  <span className="font-medium text-zinc-700 dark:text-zinc-200">
+                    ~{velocity.averageIssues} issues
+                  </span>
+                </p>
+              )}
+              {velocity.cycles.length > 0 && (
+                <VelocityBarChart cycles={velocity.cycles} />
+              )}
+            </div>
+          )}
 
           {/* Issues */}
           <div className="mt-6">

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { gql } from '@/lib/graphql';
 import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 import { TipTapEditor } from '../editor/tiptap-editor';
@@ -9,6 +10,13 @@ import { DueDatePicker } from '../properties/due-date-picker';
 import { LabelSelect } from '../properties/label-select';
 import { PrioritySelect } from '../properties/priority-select';
 import { StatusSelect } from '../properties/status-select';
+import { TemplateSelector } from './template-selector';
+
+const GET_TEMPLATES_QUERY = `
+  query GetIssueTemplates($teamId: ID!) {
+    issueTemplates(teamId: $teamId) { id name templateData isDefault }
+  }
+`;
 
 interface CreateIssueInput {
   title: string;
@@ -28,6 +36,7 @@ interface CreateIssueModalProps {
   users: IssueUser[];
   labels: IssueLabel[];
   defaultStateId?: string;
+  teamId?: string;
 }
 
 export function CreateIssueModal({
@@ -38,6 +47,7 @@ export function CreateIssueModal({
   users,
   labels,
   defaultStateId,
+  teamId,
 }: CreateIssueModalProps) {
   const titleRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState('');
@@ -48,7 +58,31 @@ export function CreateIssueModal({
   const [labelIds, setLabelIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
 
+  const applyTemplate = useCallback((data: object) => {
+    const d = data as Record<string, unknown>;
+    if (typeof d.title === 'string') {
+      setTitle(d.title);
+    }
+    if (typeof d.description === 'string') {
+      setDescription(d.description);
+    }
+    if (typeof d.priority === 'number') {
+      setPriority(d.priority);
+    }
+    if (typeof d.stateId === 'string') {
+      setStateId(d.stateId);
+    }
+    if (Array.isArray(d.labelIds)) {
+      setLabelIds(d.labelIds as string[]);
+    }
+    if (typeof d.assigneeId === 'string') {
+      setAssigneeId(d.assigneeId);
+    }
+  }, []);
+
+  // When modal opens, reset fields; if teamId is provided, fetch and apply default template
   useEffect(() => {
     if (open) {
       setTitle('');
@@ -58,14 +92,43 @@ export function CreateIssueModal({
       setPriority(0);
       setLabelIds([]);
       setDueDate(null);
+      setTemplateOpen(false);
       setTimeout(() => titleRef.current?.focus(), 50);
+
+      if (teamId) {
+        gql(GET_TEMPLATES_QUERY, { teamId })
+          .then(res => {
+            const templates = (
+              res.data as {
+                issueTemplates?: Array<{
+                  id: string;
+                  name: string;
+                  templateData: object;
+                  isDefault: boolean;
+                }>;
+              }
+            )?.issueTemplates;
+            const defaultTemplate = templates?.find(t => t.isDefault);
+            if (defaultTemplate) {
+              applyTemplate(defaultTemplate.templateData);
+            }
+          })
+          .catch(() => {
+            // Silently fail — template auto-apply is best-effort
+          });
+      }
     }
-  }, [open, defaultStateId, states]);
+  }, [open, defaultStateId, states, teamId, applyTemplate]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onClose();
+      }
+      // Alt+C — open template selector
+      if (e.altKey && e.key === 'c') {
+        e.preventDefault();
+        setTemplateOpen(true);
       }
     };
     if (open) {
@@ -161,6 +224,14 @@ export function CreateIssueModal({
               onChange={setLabelIds}
             />
             <DueDatePicker value={dueDate} onChange={setDueDate} />
+            {teamId && (
+              <TemplateSelector
+                teamId={teamId}
+                onSelect={applyTemplate}
+                forceOpen={templateOpen}
+                onClose={() => setTemplateOpen(false)}
+              />
+            )}
           </div>
 
           {/* Actions */}

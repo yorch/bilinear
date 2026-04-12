@@ -215,6 +215,198 @@ export class CycleService {
     });
   }
 
+  /**
+   * Roll over a cycle: mark it completed and move all incomplete issues
+   * to the target cycle (or the next upcoming cycle for the team).
+   * All mutations run in a single transaction to prevent partial rollover.
+   */
+  async rollover(
+    orgId: string,
+    cycleId: string,
+  ): Promise<{
+    movedCount: number;
+    nextCycleId: string | null;
+    movedIssueIds: string[];
+  }> {
+    const cycle = await this.prisma.cycle.findFirst({
+      where: { id: cycleId, organizationId: orgId },
+    });
+    if (!cycle) {
+      throw new CycleNotFoundError();
+    }
+
+    return this.prisma.$transaction(async tx => {
+      // Mark the cycle completed
+      await tx.cycle.update({
+        data: { completedAt: new Date() },
+        where: { id: cycleId },
+      });
+
+      // Find incomplete issues (not in completed/cancelled state)
+      const incompleteIssues = await tx.issue.findMany({
+        include: { state: { select: { type: true } } },
+        where: {
+          archivedAt: null,
+          cycleId,
+          trashed: false,
+        },
+      });
+
+      const toMove = incompleteIssues.filter(
+        i => i.state.type !== 'completed' && i.state.type !== 'canceled',
+      );
+
+      // Find next upcoming cycle for this org+team
+      const now = new Date();
+      const nextCycle = await tx.cycle.findFirst({
+        orderBy: { startsAt: 'asc' },
+        where: {
+          archivedAt: null,
+          id: { not: cycleId },
+          organizationId: orgId,
+          startsAt: { gte: now },
+          teamId: cycle.teamId,
+        },
+      });
+
+      if (toMove.length > 0 && nextCycle) {
+        await tx.issue.updateMany({
+          data: { addedToCycleAt: new Date(), cycleId: nextCycle.id },
+          where: { id: { in: toMove.map(i => i.id) } },
+        });
+      } else if (toMove.length > 0) {
+        // No next cycle — unassign issues
+        await tx.issue.updateMany({
+          data: { addedToCycleAt: null, cycleId: null },
+          where: { id: { in: toMove.map(i => i.id) } },
+        });
+      }
+
+      return {
+        movedCount: toMove.length,
+        movedIssueIds: toMove.map(i => i.id),
+        nextCycleId: nextCycle?.id ?? null,
+      };
+    });
+  }
+
+  /**
+   * Get velocity data for the last N completed cycles.
+   */
+  async getVelocity(
+    teamId: string,
+    cycleCount = 8,
+  ): Promise<{
+    averageIssues: number;
+    cycles: Array<{
+      cycleId: string;
+      cycleNumber: number;
+      completedIssues: number;
+    }>;
+  }> {
+    const now = new Date();
+    const completedCycles = await this.prisma.cycle.findMany({
+      orderBy: { startsAt: 'desc' },
+      take: cycleCount,
+      where: {
+        archivedAt: null,
+        OR: [{ completedAt: { not: null } }, { endsAt: { lte: now } }],
+        teamId,
+      },
+    });
+
+    const cycles = await Promise.all(
+      completedCycles.map(async cycle => {
+        const completedIssues = await this.prisma.issue.count({
+          where: {
+            archivedAt: null,
+            completedAt: { not: null },
+            cycleId: cycle.id,
+            trashed: false,
+          },
+        });
+        return {
+          completedIssues,
+          cycleId: cycle.id,
+          cycleNumber: cycle.number,
+        };
+      }),
+    );
+
+    const averageIssues =
+      cycles.length > 0
+        ? cycles.reduce((sum, c) => sum + c.completedIssues, 0) / cycles.length
+        : 0;
+
+    return { averageIssues, cycles };
+  }
+
+  /**
+   * Compute burndown data for a cycle using issue completedAt timestamps.
+   */
+  async getBurndown(
+    cycleId: string,
+  ): Promise<Array<{ date: string; remaining: number; completed: number }>> {
+    const cycle = await this.prisma.cycle.findUnique({
+      where: { id: cycleId },
+    });
+    if (!cycle) {
+      return [];
+    }
+
+    const issues = await this.prisma.issue.findMany({
+      select: { completedAt: true, id: true },
+      where: { archivedAt: null, cycleId, trashed: false },
+    });
+
+    const totalIssues = issues.length;
+    if (totalIssues === 0) {
+      return [];
+    }
+
+    const start = new Date(cycle.startsAt);
+    const end = new Date(Math.min(cycle.endsAt.getTime(), Date.now()));
+
+    // Sort completed timestamps ascending once — O(n log n) — then walk a
+    // single pointer through them as days advance, giving O(days + n) total
+    // instead of O(days × n).
+    const completedDates = issues
+      .filter(i => i.completedAt !== null)
+      .map(i => i.completedAt as Date)
+      .sort((a, b) => a.getTime() - b.getTime());
+
+    const points: Array<{
+      date: string;
+      remaining: number;
+      completed: number;
+    }> = [];
+    const current = new Date(start);
+    current.setHours(0, 0, 0, 0);
+    let completedIdx = 0;
+
+    while (current <= end) {
+      const dayEnd = new Date(current);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      while (
+        completedIdx < completedDates.length &&
+        completedDates[completedIdx] <= dayEnd
+      ) {
+        completedIdx++;
+      }
+
+      points.push({
+        completed: completedIdx,
+        date: current.toISOString().slice(0, 10),
+        remaining: totalIssues - completedIdx,
+      });
+
+      current.setDate(current.getDate() + 1);
+    }
+
+    return points;
+  }
+
   async addIssueToCycle(cycleId: string, issueId: string): Promise<void> {
     await this.prisma.issue.update({
       data: { addedToCycleAt: new Date(), cycleId },

@@ -33,15 +33,29 @@ interface IssueTemplate {
 interface TemplateSelectorProps {
   teamId: string;
   onSelect: (templateData: object) => void;
+  forceOpen?: boolean;
+  onClose?: () => void;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function TemplateSelector({ teamId, onSelect }: TemplateSelectorProps) {
+export function TemplateSelector({
+  teamId,
+  onSelect,
+  forceOpen,
+  onClose,
+}: TemplateSelectorProps) {
   const [templates, setTemplates] = useState<IssueTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Sync controlled forceOpen into local open state
+  useEffect(() => {
+    if (forceOpen) {
+      setOpen(true);
+    }
+  }, [forceOpen]);
 
   // Load templates once when dropdown opens (or on mount if teamId is available)
   useEffect(() => {
@@ -75,11 +89,12 @@ export function TemplateSelector({ teamId, onSelect }: TemplateSelectorProps) {
         !dropdownRef.current.contains(e.target as Node)
       ) {
         setOpen(false);
+        onClose?.();
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [open]);
+  }, [open, onClose]);
 
   // Close on Escape
   useEffect(() => {
@@ -89,11 +104,12 @@ export function TemplateSelector({ teamId, onSelect }: TemplateSelectorProps) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setOpen(false);
+        onClose?.();
       }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open]);
+  }, [open, onClose]);
 
   // Sort: default first, then alphabetical
   const sorted = useMemo(
@@ -107,9 +123,14 @@ export function TemplateSelector({ teamId, onSelect }: TemplateSelectorProps) {
     [templates],
   );
 
+  const closeDropdown = () => {
+    setOpen(false);
+    onClose?.();
+  };
+
   const handleSelect = (template: IssueTemplate) => {
     onSelect(template.templateData);
-    setOpen(false);
+    closeDropdown();
   };
 
   if (templates.length === 0 && !loading) {
@@ -150,7 +171,7 @@ export function TemplateSelector({ teamId, onSelect }: TemplateSelectorProps) {
             </span>
             <button
               type="button"
-              onClick={() => setOpen(false)}
+              onClick={closeDropdown}
               className="rounded p-0.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
               aria-label="Close"
             >
