@@ -14,7 +14,10 @@ dockerfilePath = "deployment/Dockerfile"
 buildTarget = "ws"
 
 [deploy]
-startCommand = "node_modules/.bin/tsx src/server/ws/index.ts"
+# startCommand is intentionally omitted — the Dockerfile ws stage already sets
+# CMD ["node_modules/.bin/tsx", "src/server/ws/index.ts"], so duplicating it
+# here would be redundant and could cause drift if the Dockerfile CMD changes.
+healthcheckPath = "/"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 5

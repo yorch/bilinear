@@ -71,6 +71,9 @@ export class WsClient {
     if (process.env.NEXT_PUBLIC_WS_URL) {
       const url = process.env.NEXT_PUBLIC_WS_URL;
       if (!url.startsWith('ws://') && !url.startsWith('wss://')) {
+        // console.error is intentional here: this is client-side code and the
+        // server-side logger is not available. The misconfiguration must be
+        // surfaced visibly in the browser console for operators to notice.
         console.error(
           `[WsClient] NEXT_PUBLIC_WS_URL must start with ws:// or wss://, got: ${url}`,
         );

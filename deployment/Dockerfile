@@ -65,6 +65,9 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=deps /app/node_modules ./node_modules
 # Remove heavy dev-only packages not needed by the ws server.
 # The ws server only requires: ioredis, ws, jose, tsx (+ their transitive deps).
+# TODO: replace this allowlist-based pruning with a purpose-built package.json
+#       (e.g. `npm pack` / yarn workspaces) so new server deps don't get silently
+#       excluded and cause runtime crashes.
 RUN rm -rf \
     node_modules/@biomejs \
     node_modules/@playwright \
@@ -93,9 +96,12 @@ RUN rm -rf \
     node_modules/nodemailer \
     node_modules/pino \
     node_modules/pino-pretty
-# Source files the ws server imports
+# Source files the ws server imports.
+# Copy the entire server/lib directory — the ws server imports logger, jwt, and
+# potentially other helpers from there, so copying only jwt.ts would cause
+# runtime "Cannot find module" errors if any transitive import is added.
 COPY --from=builder /app/src/server/ws ./src/server/ws
-COPY --from=builder /app/src/server/lib/jwt.ts ./src/server/lib/jwt.ts
+COPY --from=builder /app/src/server/lib ./src/server/lib
 # tsx needs tsconfig.json for @/ path alias resolution
 COPY package.json tsconfig.json ./
 
