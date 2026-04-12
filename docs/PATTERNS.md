@@ -3,7 +3,7 @@
 ## Issue Tracker — Linear Rebuild
 
 **Established:** Sprint 1-2
-**Last updated:** Sprint 13-14
+**Last updated:** Sprint 33-34
 **Status:** Living document — updated each sprint
 
 > This is the primary onboarding document for new contributors. All patterns here are the mandated conventions for the codebase. If you deviate from a pattern, document why.
@@ -1045,12 +1045,14 @@ for (const update of data.projectUpdates) {
 Three places:
 
 1. **`loadFromIndexedDB`** — hydrate the store from Dexie on startup:
+
    ```typescript
    const projectUpdates = await db.projectUpdates.toArray();
    projectStore.upsertUpdates(projectUpdates);
    ```
 
 2. **`fullBootstrap`** — save bootstrap data to Dexie atomically, then populate stores:
+
    ```typescript
    // In the Dexie transaction
    await db.projectUpdates.clear();
@@ -1060,6 +1062,7 @@ Three places:
    ```
 
 3. **`applyActions`** — route the model name in the switch statement:
+
    ```typescript
    case 'ProjectUpdate':
      db.projectUpdates  // for Dexie upsert/delete
@@ -1084,3 +1087,102 @@ Add to destructuring and the return object.
 ### Store unit tests
 
 Pure store tests (no Prisma mock needed) go alongside the store file. Follow `src/stores/project-store.test.ts` as the reference: test `upsertMany`, `getUpdates` (filter + sort), and `applyUpdateSyncAction` (all four action types + null data guard).
+
+---
+
+## 33. Board View / Drag-and-Drop Pattern (Sprint 17-18)
+
+The board view uses `@dnd-kit` for drag-and-drop. Key conventions:
+
+- `DndContext` wraps the entire board; `SortableContext` wraps each column
+- Drag end handler reads `active.id` (issue ID) and `over.id` (target column / state ID)
+- On drop: immediately apply optimistic MobX update (`issueStore.updateIssue()`), then enqueue the `issueUpdate` mutation via `TransactionQueue`
+- State columns are derived from `workflowStateStore.getTeamStates(teamId)` — never hardcoded
+- Reference: `src/components/issues/board-view.tsx`
+
+---
+
+## 34. Filter Builder Pattern (Sprint 19-20)
+
+Filters are stored as `FilterData` objects (`src/types/issues.ts`) and applied client-side via `issueStore.getFilteredIssues()`.
+
+```typescript
+// FilterData shape — each key is optional; all present filters are ANDed
+interface FilterData {
+  stateIds?: string[];
+  assigneeIds?: string[];
+  labelIds?: string[];
+  priorities?: number[];
+  projectIds?: string[];
+  cycleIds?: string[];
+  creatorIds?: string[];
+  estimate?: { gte?: number; lte?: number };
+  dueDate?: { gte?: string; lte?: string };
+}
+```
+
+- `FilterBuilder` component (`src/components/issues/filter-builder.tsx`) renders filter pills and handles add/remove/change
+- Saving a filter creates a `CustomView` record via GraphQL (`customViewCreate` mutation) — `CustomViewStore` holds the pool
+- Active filters are kept in URL params (`?filter=<base64-encoded-json>`) so deep-linking works
+- Server-side search (`searchIssues`) accepts the same filter shape and applies it as Prisma `where` clauses
+
+---
+
+## 35. Notification Pattern (Sprint 21-22)
+
+Notifications are created server-side in service methods; the client receives them via WebSocket sync.
+
+```typescript
+// Trigger notification in a service method
+await ctx.services.notification.create({
+  orgId,
+  userId: targetUserId,
+  type: 'issueAssignment',
+  issueId,
+  actorId: ctx.userId,
+});
+```
+
+- `NotificationStore` holds the pool; `NotificationInbox` component reads from it
+- Unread count badge: `notificationStore.unreadCount` (computed from `readAt === null`)
+- "Mark all read" calls `notificationsMarkAllRead` mutation → updates all `readAt` fields → `SyncAction` propagates to store
+- Reference: `src/server/services/notification.service.ts`, `src/stores/notification-store.ts`, `src/components/notifications/notification-inbox.tsx`
+
+---
+
+## 36. Comment Thread Pattern (Sprint 29-30)
+
+Comments are fetched on demand via GraphQL (not part of bootstrap), stored in component-local state.
+
+```typescript
+// Load comments for an issue
+const { data } = await graphql(ISSUE_COMMENTS_QUERY, { issueId });
+```
+
+- `CommentThread` component (`src/components/issues/comment-thread.tsx`) handles threading via `parentId`
+- Reactions use the `commentReactionToggle` mutation — the component maintains optimistic local state
+- Resolution: `commentResolve` / `commentUnresolve` mutations; resolved comments are visually collapsed
+- Rich text in comments uses the same `TipTapEditor` component as issue descriptions
+- @mentions in comments trigger `issueMention` notifications via `NotificationService`
+- Reference: `src/components/issues/comment-thread.tsx`, `src/server/services/comment.service.ts`
+
+---
+
+## 37. TipTap Rich Text Editor Pattern (Sprint 27-28)
+
+The `TipTapEditor` component (`src/components/editor/tiptap-editor.tsx`) is used for issue descriptions and comments.
+
+```tsx
+<TipTapEditor
+  content={issue.description}
+  onChange={(json) => updateIssue({ description: JSON.stringify(json) })}
+  mentionUsers={teamMembers}  // passed for @mention autocomplete
+  editable={canEdit}
+/>
+```
+
+- Extensions: StarterKit, Highlight, TaskList, Table, CodeBlockLowlight, Image, Mention
+- `mentionUsers` prop feeds the `MentionList` suggestion component
+- Image upload: toolbar button → base64 insert (2 MB limit); not yet persisted to the `File` model
+- Slash commands file (`src/components/editor/slash-commands.ts`) exists but is **not wired** into the extension list — do not remove, it is planned for Sprint 35+
+- Reference: `src/components/editor/tiptap-editor.tsx`, `src/components/editor/mention-list.tsx`

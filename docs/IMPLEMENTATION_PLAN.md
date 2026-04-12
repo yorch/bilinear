@@ -5,7 +5,7 @@
 **Version:** 1.2
 **Date:** April 2026
 
-> **Status snapshot (April 2026):** Phase 1 complete. Phase 2 (Sprints 13-22) complete; Sprints 23-26 (Custom Fields, Sub-Issues) not yet started. Phase 3 in progress — Sprints 29-30 complete, Sprints 27-28 / 31-32 / 33-34 partially shipped. Sprints 35-40 not started. Phase 4 and 5 not started. See each sprint section for the per-item breakdown.
+> **Status snapshot (April 2026):** Phase 1 complete. Phase 2 (Sprints 13-26) complete — Sprints 13-22 and 25-26 done; Sprint 23-24 (Custom Fields) not yet started. Phase 3 in progress — Sprints 27-28, 29-30 shipped (27-28 partial); Sprints 31-32, 33-34 partially shipped. Sprints 35-40 not started. Phase 4 and 5 not started. See each sprint section for the per-item breakdown.
 
 ---
 
@@ -25,7 +25,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 
 > **Pattern Documentation:** `docs/PATTERNS.md` is the living onboarding document for all contributors. It is updated each sprint as new patterns are established. All subsequent sprints should follow the patterns in that document.
 
-> **Phase 2 sprints** (13-24) were implemented without dedicated sprint detail docs. New Phase 3+ features should still create detail docs when a sprint is started, following the format established in `docs/sprints/`.
+> **Phase 2 sprints** (13-26, excluding 23-24 which is unstarted) were implemented without dedicated sprint detail docs. New Phase 3+ features should still create detail docs when a sprint is started, following the format established in `docs/sprints/`.
 
 ---
 
@@ -171,7 +171,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [x] Project updates CRUD with health selection (create, edit, delete, real-time sync)
 - [x] Progress tracking: `Project.progress` / `Project.scope` computed from completed vs total issues, exposed via GraphQL and rendered as bar in list + detail views (`project.service.ts#getProgress`)
 - [x] Assign issues to projects via Shift+P shortcut (`src/app/(workspace)/[workspace]/team/[key]/page.tsx`)
-- [ ] Progress _charts_ over time (scope history, completion trend) — schema has history fields but they are unpopulated and not exposed via GraphQL; tracked under Sprint 31-32
+- [ ] Progress _charts_ over time (scope history, completion trend) — schema has history fields but they are unpopulated and not exposed via GraphQL; tracked under Sprint 33-34
 
 **Deliverable:** Project list + detail views with updates feed, milestones, progress bars, real-time sync via WebSocket ✅
 
@@ -470,13 +470,13 @@ A differentiator vs Linear. Read-only, public-facing view of product progress.
 
 ## Technical Milestones
 
-| Milestone | Target   | Criteria                                                                                        | Status         |
-| --------- | -------- | ----------------------------------------------------------------------------------------------- | -------------- |
-| **Alpha** | Week 12  | Auth + Issues + Teams + List View + Sync Engine + **Docker Compose deploy**                     | ✅ Reached      |
-| **Beta**  | Week 26  | + Projects + Cycles + Board + Filters + Backlog + Notifications + **Custom Fields**             | ✅ Reached      |
-| **RC1**   | Week 40  | + Rich Editor + Comments + Sub-teams + **SAML/SCIM** + Triage + Docs + Automations + Analytics  | 🟡 In progress |
-| **v1.0**  | Week 54  | + GitHub + Slack + Webhooks + Import/Export + OAuth + **Public Roadmaps**                       | ⬜ Not started  |
-| **v2.0**  | Week 68+ | + Initiatives + SLAs + AI + Mobile + Desktop                                                    | ⬜ Not started  |
+| Milestone | Target   | Criteria                                                                                       | Status        |
+| --------- | -------- | ---------------------------------------------------------------------------------------------- | ------------- |
+| **Alpha** | Week 12  | Auth + Issues + Teams + List View + Sync Engine + **Docker Compose deploy**                    | ✅ Reached     |
+| **Beta**  | Week 26  | + Projects + Cycles + Board + Filters + Backlog + Notifications + **Custom Fields**            | ✅ Reached     |
+| **RC1**   | Week 40  | + Rich Editor + Comments + Sub-teams + **SAML/SCIM** + Triage + Docs + Automations + Analytics | 🟡 In progress |
+| **v1.0**  | Week 54  | + GitHub + Slack + Webhooks + Import/Export + OAuth + **Public Roadmaps**                      | ⬜ Not started |
+| **v2.0**  | Week 68+ | + Initiatives + SLAs + AI + Mobile + Desktop                                                   | ⬜ Not started |
 
 **RC1 gap analysis** (remaining work to hit RC1):
 

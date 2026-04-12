@@ -5,7 +5,7 @@
 **Version:** 1.3
 **Date:** April 2026
 
-> **Implementation Status (as of Sprint 27-28 / partial Sprint 25-26, 29-32)**
+> **Implementation Status (as of Sprint 33-34 / partial Sprint 27-28, 31-34)**
 >
 > This document describes the **target architecture** for the full system. The table below tracks what is actually built:
 >
@@ -22,7 +22,9 @@
 > | REST sync endpoints (`/api/sync/bootstrap`, `/api/sync/delta`) | ✅ Built | Sprint 7-8 |
 > | Standalone WebSocket server (`yarn ws:server`, port 3001) | ✅ Built | Sprint 7-8 |
 > | Redis pub/sub for real-time broadcast | ✅ Built | Sprint 7-8 |
-> | MobX stores (IssueStore, TeamStore, UserStore, LabelStore, WorkflowStateStore, SyncStore, UIStore) | ✅ Built | Sprint 7-8 |
+> | MobX stores — core (IssueStore, TeamStore, UserStore, LabelStore, WorkflowStateStore, SyncStore, UIStore) | ✅ Built | Sprint 7-8 |
+>
+| MobX stores — extended (CycleStore, ProjectStore, CustomViewStore, NotificationStore, IssueRelationStore, IssueTemplateStore) | ✅ Built | Sprints 13-26 |
 > | IndexedDB cache via Dexie.js | ✅ Built | Sprint 7-8 |
 > | SyncManager (bootstrap → IndexedDB → MobX → WebSocket delta catch-up) | ✅ Built | Sprint 7-8 |
 > | TransactionQueue (serial mutation queue with retry/rollback) | ✅ Built | Sprint 7-8 |
@@ -51,12 +53,12 @@
 > | Board view with drag-and-drop via @dnd-kit | ✅ Built | Sprint 17-18 |
 > | Filter builder, custom views, backlog page | ✅ Built | Sprint 19-20 |
 > | Notifications + inbox + issue activity timeline | ✅ Built | Sprint 21-22 |
-> | Sub-issues (`Issue.parentId`), issue relations, issue templates | ✅ Built | Sprint 23-24 |
-> | TipTap rich text editor (markdown, user @mentions, image upload, tables, code highlighting) | 🟡 Partial | Sprint 25-26 — no slash commands wired, no drag-drop, no Mermaid / embeds / YJS |
-> | Threaded comments with reactions and resolution (`Comment`, `CommentReaction`) | ✅ Built | Sprint 27-28 |
-> | Sub-team hierarchy (`Team.parentId`), private teams, team roles (`TeamMemberRole`) | 🟡 Partial | Sprint 29-30 — no config inheritance, guest enforcement, or cross-team visibility |
-> | Team analytics dashboard (stat cards + CSS bar charts) | 🟡 Partial | Sprint 31-32 — no burndown/burnup, flow histograms, date ranges, or CSV |
-> | Workspace admin settings page | ✅ Built | Sprint 29-30 |
+> | Sub-issues (`Issue.parentId`), issue relations, issue templates | ✅ Built | Sprint 25-26 |
+> | TipTap rich text editor (markdown, user @mentions, image upload, tables, code highlighting) | 🟡 Partial | Sprint 27-28 — no slash commands wired, no drag-drop, no Mermaid / embeds / YJS |
+> | Threaded comments with reactions and resolution (`Comment`, `CommentReaction`) | ✅ Built | Sprint 29-30 |
+> | Sub-team hierarchy (`Team.parentId`), private teams, team roles (`TeamMemberRole`) | 🟡 Partial | Sprint 31-32 — no config inheritance, guest enforcement, or cross-team visibility |
+> | Team analytics dashboard (stat cards + CSS bar charts) | 🟡 Partial | Sprint 33-34 — no burndown/burnup, flow histograms, date ranges, or CSV |
+> | Workspace admin settings page | ✅ Built | Sprint 31-32 |
 > | BullMQ background queues | 🔲 Planned | Sprint 37+ |
 >
 > Everything below describes the **intended final architecture**. Sections referencing unbuilt components are design specs, not current reality.
@@ -283,12 +285,12 @@ Reconnection (Delta Sync):
 
 ### 3.5 Model Load Strategies
 
-| Strategy  | When Loaded                                      | Examples                                                                                  |
-| --------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| `instant` | Full bootstrap                                    | Organization, Team, User, WorkflowState, IssueLabel, Issue, Project, Cycle, CustomView    |
-| `partial` | On demand (planned `?type=partial`, not yet live) | Comment, CommentReaction, IssueActivity, Notification                                     |
-| `lazy`    | On demand (per request)                           | File content, full-text search results                                                    |
-| `local`   | Client-only                                       | UI state, drafts                                                                          |
+| Strategy  | When Loaded                                       | Examples                                                                               |
+| --------- | ------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `instant` | Full bootstrap                                    | Organization, Team, User, WorkflowState, IssueLabel, Issue, Project, Cycle, CustomView |
+| `partial` | On demand (planned `?type=partial`, not yet live) | Comment, CommentReaction, IssueActivity, Notification                                  |
+| `lazy`    | On demand (per request)                           | File content, full-text search results                                                 |
+| `local`   | Client-only                                       | UI state, drafts                                                                       |
 
 ### 3.6 Conflict Resolution
 

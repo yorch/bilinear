@@ -339,42 +339,29 @@ CREATE INDEX idx_issue_labels_label ON issue_label_assignments(label_id);
 ### 2.6 Comments
 
 ```sql
+-- Comments are currently issue-only. Project and project_update comments are planned but deferred.
+-- Bot actors, quote-reply, and polymorphic parent are planned but not yet implemented.
 CREATE TABLE comments (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    issue_id        UUID NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+    author_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     body            TEXT NOT NULL,
     body_data       JSONB,  -- ProseMirror document JSON
-
-    -- Polymorphic parent
-    issue_id        UUID REFERENCES issues(id) ON DELETE CASCADE,
-    project_id      UUID,  -- FK to projects
-    project_update_id UUID,
-
-    -- Author (one of these)
-    user_id         UUID REFERENCES users(id),
-    bot_actor       JSONB,
 
     -- Threading
     parent_id       UUID REFERENCES comments(id) ON DELETE SET NULL,
 
     -- Resolution
     resolved_at     TIMESTAMPTZ,
-    resolving_user_id UUID REFERENCES users(id),
-    resolving_comment_id UUID REFERENCES comments(id),
-
-    -- Quote
-    quoted_text     TEXT,
-
-    -- Reactions
-    reaction_data   JSONB NOT NULL DEFAULT '{}',
+    resolved_by_id  UUID REFERENCES users(id) ON DELETE SET NULL,
 
     edited_at       TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     archived_at     TIMESTAMPTZ
 );
-CREATE INDEX idx_comments_issue ON comments(issue_id);
-CREATE INDEX idx_comments_project ON comments(project_id);
-CREATE INDEX idx_comments_user ON comments(user_id);
+CREATE INDEX idx_comments_issue ON comments(issue_id, created_at);
+CREATE INDEX idx_comments_author ON comments(author_id);
 CREATE INDEX idx_comments_parent ON comments(parent_id);
 ```
 
@@ -670,23 +657,22 @@ CREATE TABLE attachments (
 CREATE INDEX idx_attachments_issue ON attachments(issue_id);
 ```
 
-### 2.15 Reactions
+### 2.15 Comment Reactions
 
 ```sql
-CREATE TABLE reactions (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    emoji           VARCHAR(32) NOT NULL,
-    user_id         UUID REFERENCES users(id),
+-- Reactions on issues and project updates are planned but deferred.
+-- Only comment reactions are currently implemented.
+CREATE TABLE comment_reactions (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    comment_id  UUID NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    emoji       VARCHAR(50) NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
 
-    -- Polymorphic target (exactly one should be non-null)
-    comment_id      UUID REFERENCES comments(id) ON DELETE CASCADE,
-    issue_id        UUID REFERENCES issues(id) ON DELETE CASCADE,
-    project_update_id UUID REFERENCES project_updates(id) ON DELETE CASCADE,
-
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    UNIQUE(comment_id, user_id, emoji)
 );
-CREATE INDEX idx_reactions_comment ON reactions(comment_id) WHERE comment_id IS NOT NULL;
-CREATE INDEX idx_reactions_issue ON reactions(issue_id) WHERE issue_id IS NOT NULL;
+CREATE INDEX idx_comment_reactions_comment ON comment_reactions(comment_id);
+CREATE INDEX idx_comment_reactions_user ON comment_reactions(user_id);
 ```
 
 ### 2.16 Notifications
@@ -927,6 +913,7 @@ CREATE TABLE auth_tokens (
     -- For magic_link: hash of the 6-digit code sent in email
     -- For refresh: hash of the signed JWT
     -- For api_key: hash of the key string
+    code            VARCHAR(6),    -- raw magic link code (kept briefly for verification; null for non-magic-link tokens)
     label           VARCHAR(255),  -- for API keys (user-visible name)
 
     ip_address      VARCHAR(45),   -- IPv4 or IPv6
@@ -963,6 +950,49 @@ CREATE TABLE audit_entries (
 CREATE INDEX idx_audit_org ON audit_entries(organization_id, created_at DESC);
 CREATE INDEX idx_audit_actor ON audit_entries(actor_id);
 CREATE INDEX idx_audit_type ON audit_entries(type);
+```
+
+### 2.25 Files
+
+```sql
+-- Tracks uploaded files attached to issues or projects.
+-- Currently, file content is stored externally (S3-compatible); this table holds metadata only.
+CREATE TABLE files (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    issue_id    UUID REFERENCES issues(id) ON DELETE CASCADE,
+    project_id  UUID,  -- FK to projects (not yet enforced via constraint)
+    uploader_id UUID,  -- FK to users
+    name        VARCHAR(500) NOT NULL,
+    key         VARCHAR(1000) NOT NULL,  -- storage key / path
+    size        INT NOT NULL,            -- bytes
+    mime_type   VARCHAR(255) NOT NULL,
+    url         TEXT,
+
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_files_issue ON files(issue_id);
+CREATE INDEX idx_files_project ON files(project_id);
+CREATE INDEX idx_files_uploader ON files(uploader_id);
+```
+
+### 2.26 Team Member Roles
+
+```sql
+-- Stores explicit per-team roles for team members.
+-- Role values: 'admin', 'member', 'guest'
+-- Complements TeamMembership.is_owner; guest enforcement is planned but not yet active.
+CREATE TABLE team_member_roles (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    team_id     UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role        VARCHAR(20) NOT NULL DEFAULT 'member',
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    UNIQUE(team_id, user_id)
+);
+CREATE INDEX idx_team_member_roles_team ON team_member_roles(team_id);
+CREATE INDEX idx_team_member_roles_user ON team_member_roles(user_id);
 ```
 
 ---
@@ -1028,40 +1058,23 @@ yarn prisma generate     # rebuilds src/generated/prisma/ (gitignored)
 yarn prisma migrate dev  # applies new migration
 ```
 
-> **Note:** The `Team` model in `prisma/schema.prisma` is a minimal stub (Sprint 1-2) with only `id`, `organizationId`, `name`, `key`, and lifecycle fields. The full `teams` table definition in section 2.2 above represents the Sprint 3-4 target. Additional columns will be added via Prisma migrations in Sprint 3-4.
-
 ### Migration Files
 
-Use Prisma migrations for schema management:
+Migrations use date-based names. Current migrations in `prisma/migrations/`:
 
 ```
 prisma/
 ├── schema.prisma
+├── prisma.config.ts
 └── migrations/
-    ├── 0001_create_organizations/migration.sql
-    ├── 0002_create_users/migration.sql
-    ├── 0003_create_teams/migration.sql
-    ├── 0004_create_workflow_states/migration.sql
-    ├── 0005_create_issues/migration.sql
-    ├── 0006_create_labels/migration.sql
-    ├── 0007_create_comments/migration.sql
-    ├── 0008_create_relations/migration.sql
-    ├── 0009_create_history/migration.sql
-    ├── 0010_create_projects/migration.sql
-    ├── 0011_create_milestones/migration.sql
-    ├── 0012_create_project_updates/migration.sql
-    ├── 0013_create_cycles/migration.sql
-    ├── 0014_create_initiatives/migration.sql
-    ├── 0015_create_attachments/migration.sql
-    ├── 0016_create_reactions/migration.sql
-    ├── 0017_create_notifications/migration.sql
-    ├── 0018_create_custom_views/migration.sql
-    ├── 0019_create_favorites/migration.sql
-    ├── 0020_create_documents/migration.sql
-    ├── 0021_create_templates/migration.sql
-    ├── 0022_create_webhooks/migration.sql
-    ├── 0023_create_sync_actions/migration.sql
-    ├── 0024_create_auth_tokens/migration.sql
-    ├── 0025_create_audit_entries/migration.sql
-    └── 0026_add_foreign_keys/migration.sql
+    ├── 20260407000000_init/                      -- all core tables (orgs, users, teams, states, issues, labels, sync)
+    ├── 20260407000001_add_fulltext_search/        -- GIN index on issues for PostgreSQL FTS
+    ├── 20260409000000_add_projects/               -- projects, project_teams, project_members, milestones, updates
+    ├── 20260409000000_backfill_default_issue_state/
+    ├── 20260409000001_team_key_unique_active_only/ -- partial unique index: key unique within active teams
+    ├── 20260411000000_add_cycles_and_custom_views/ -- cycles, custom_views, notifications, notification_subscriptions,
+    │                                               --   issue_activities, issue_relations, issue_templates, files
+    └── 20260411000001_add_comments_and_roles/     -- comments, comment_reactions, team_member_roles
 ```
+
+Many of the tables described in section 2 (Favorites, Documents, Templates, Webhooks, Audit Log, Initiatives, Attachments) are **design targets** that exist in this schema document but are not yet implemented in migrations or the Prisma schema. Sections for unbuilt tables are kept here as the canonical design reference for future sprints.
