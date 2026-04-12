@@ -73,9 +73,12 @@ function formatActivityDescription(activity: IssueActivity): string {
   return `${actorName} changed ${field} from ${activity.oldValue} to ${activity.newValue}`;
 }
 
+const COLLAPSE_THRESHOLD = 5;
+
 export function ActivityTimeline({ issueId }: ActivityTimelineProps) {
   const [activities, setActivities] = useState<IssueActivity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     if (!issueId) {
@@ -135,11 +138,18 @@ export function ActivityTimeline({ issueId }: ActivityTimelineProps) {
     );
   }
 
+  const shouldCollapse = activities.length > COLLAPSE_THRESHOLD;
+  const visibleActivities =
+    shouldCollapse && !expanded
+      ? activities.slice(0, COLLAPSE_THRESHOLD)
+      : activities;
+  const hiddenCount = activities.length - COLLAPSE_THRESHOLD;
+
   return (
     <div className="flex flex-col gap-0">
-      {activities.map((activity, index) => {
+      {visibleActivities.map((activity, index) => {
         const actor = activity.actor;
-        const isLast = index === activities.length - 1;
+        const isLast = index === visibleActivities.length - 1 && (!shouldCollapse || expanded);
 
         return (
           <div key={activity.id} className="flex gap-3">
@@ -176,6 +186,16 @@ export function ActivityTimeline({ issueId }: ActivityTimelineProps) {
           </div>
         );
       })}
+
+      {shouldCollapse && (
+        <button
+          type="button"
+          onClick={() => setExpanded(e => !e)}
+          className="mt-1 text-xs text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+        >
+          {expanded ? 'Show less' : `Show ${hiddenCount} more`}
+        </button>
+      )}
     </div>
   );
 }

@@ -1,12 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Bell, BellOff } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   formatDueDate,
   getDueDateColor,
   getPriorityConfig,
 } from '@/lib/issue-utils';
+import { gql } from '@/lib/graphql';
+import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useStore } from '@/providers/store-provider';
 import type {
   IssueDetail,
@@ -25,6 +29,28 @@ import { ActivityTimeline } from './activity-timeline';
 import { CommentThread } from './comment-thread';
 import { RelationsSection } from './relations-section';
 import { SubIssueList } from './sub-issue-list';
+
+// ---------------------------------------------------------------------------
+// GraphQL strings
+// ---------------------------------------------------------------------------
+
+const CHECK_SUBSCRIPTION_QUERY = `
+  query NotificationIsSubscribed($issueId: ID!) {
+    notificationIsSubscribed(issueId: $issueId)
+  }
+`;
+
+const SUBSCRIBE_MUTATION = `
+  mutation NotificationSubscribe($issueId: ID!) {
+    notificationSubscribe(issueId: $issueId) { success lastSyncId }
+  }
+`;
+
+const UNSUBSCRIBE_MUTATION = `
+  mutation NotificationUnsubscribe($issueId: ID!) {
+    notificationUnsubscribe(issueId: $issueId) { success lastSyncId }
+  }
+`;
 
 interface IssueDetailPanelProps {
   issue: IssueDetail | null;
@@ -58,12 +84,46 @@ export function IssueDetailPanel({
   const [descDraft, setDescDraft] = useState('');
   const titleRef = useRef<HTMLInputElement>(null);
 
+  // Subscription state: null = loading, true = subscribed, false = not subscribed
+  const [subscribed, setSubscribed] = useState<boolean | null>(null);
+
   useEffect(() => {
     if (issue) {
       setTitleDraft(issue.title);
       setDescDraft(issue.description ?? '');
     }
   }, [issue]);
+
+  // Fetch subscription status when issue changes
+  useEffect(() => {
+    if (!issue?.id) return;
+    setSubscribed(null);
+    gql(CHECK_SUBSCRIPTION_QUERY, { issueId: issue.id })
+      .then(res => {
+        const val = res.data?.notificationIsSubscribed;
+        if (typeof val === 'boolean') setSubscribed(val);
+      })
+      .catch(() => setSubscribed(false));
+  }, [issue?.id]);
+
+  const handleToggleSubscription = useCallback(async () => {
+    if (!issue?.id || subscribed === null) return;
+    const prev = subscribed;
+    setSubscribed(!prev);
+    try {
+      const mutation = prev ? UNSUBSCRIBE_MUTATION : SUBSCRIBE_MUTATION;
+      const res = await gql(mutation, { issueId: issue.id });
+      if (res.errors?.length) {
+        setSubscribed(prev);
+        toast.error(prev ? 'Failed to unsubscribe' : 'Failed to subscribe');
+      }
+    } catch {
+      setSubscribed(prev);
+      toast.error(prev ? 'Failed to unsubscribe' : 'Failed to subscribe');
+    }
+  }, [issue?.id, subscribed]);
+
+  useHotkeys('shift+s', handleToggleSubscription, {}, [subscribed, issue?.id]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -117,14 +177,31 @@ export function IssueDetailPanel({
           <span className="font-mono text-xs text-zinc-400">
             {issue.identifier}
           </span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-            aria-label="Close"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-1">
+            {subscribed !== null && (
+              <button
+                type="button"
+                onClick={handleToggleSubscription}
+                className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                aria-label={subscribed ? 'Unsubscribe (Shift+S)' : 'Subscribe (Shift+S)'}
+                title={subscribed ? 'Unsubscribe (Shift+S)' : 'Subscribe (Shift+S)'}
+              >
+                {subscribed ? (
+                  <BellOff className="h-4 w-4" />
+                ) : (
+                  <Bell className="h-4 w-4" />
+                )}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Scrollable body */}

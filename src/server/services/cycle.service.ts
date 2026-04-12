@@ -249,6 +249,150 @@ export class CycleService {
   }
 
   /**
+   * Roll over a cycle: mark it completed and move all incomplete issues
+   * to the target cycle (or the next upcoming cycle for the team).
+   */
+  async rollover(
+    orgId: string,
+    cycleId: string,
+  ): Promise<{ movedCount: number; nextCycleId: string | null }> {
+    const cycle = await this.prisma.cycle.findUnique({ where: { id: cycleId } });
+    if (!cycle) throw new CycleNotFoundError();
+
+    // Mark the cycle completed
+    await this.prisma.cycle.update({
+      data: { completedAt: new Date() },
+      where: { id: cycleId },
+    });
+
+    // Find incomplete issues (not in completed/cancelled state)
+    const incompleteIssues = await this.prisma.issue.findMany({
+      include: { state: { select: { type: true } } },
+      where: {
+        archivedAt: null,
+        cycleId,
+        trashed: false,
+      },
+    });
+
+    const toMove = incompleteIssues.filter(
+      i => i.state.type !== 'completed' && i.state.type !== 'canceled',
+    );
+
+    // Find next upcoming cycle
+    const now = new Date();
+    const nextCycle = await this.prisma.cycle.findFirst({
+      orderBy: { startsAt: 'asc' },
+      where: {
+        archivedAt: null,
+        id: { not: cycleId },
+        startsAt: { gte: now },
+        teamId: cycle.teamId,
+      },
+    });
+
+    if (toMove.length > 0 && nextCycle) {
+      await this.prisma.issue.updateMany({
+        data: { addedToCycleAt: new Date(), cycleId: nextCycle.id },
+        where: { id: { in: toMove.map(i => i.id) } },
+      });
+    } else if (toMove.length > 0) {
+      // No next cycle - unassign issues
+      await this.prisma.issue.updateMany({
+        data: { addedToCycleAt: null, cycleId: null },
+        where: { id: { in: toMove.map(i => i.id) } },
+      });
+    }
+
+    return { movedCount: toMove.length, nextCycleId: nextCycle?.id ?? null };
+  }
+
+  /**
+   * Get velocity data for the last N completed cycles.
+   */
+  async getVelocity(
+    teamId: string,
+    cycleCount = 8,
+  ): Promise<{ averageIssues: number; cycles: Array<{ cycleId: string; cycleNumber: number; completedIssues: number }> }> {
+    const now = new Date();
+    const completedCycles = await this.prisma.cycle.findMany({
+      orderBy: { startsAt: 'desc' },
+      take: cycleCount,
+      where: {
+        archivedAt: null,
+        OR: [{ completedAt: { not: null } }, { endsAt: { lte: now } }],
+        teamId,
+      },
+    });
+
+    const cycles = await Promise.all(
+      completedCycles.map(async cycle => {
+        const completedIssues = await this.prisma.issue.count({
+          where: {
+            archivedAt: null,
+            completedAt: { not: null },
+            cycleId: cycle.id,
+            trashed: false,
+          },
+        });
+        return { completedIssues, cycleId: cycle.id, cycleNumber: cycle.number };
+      }),
+    );
+
+    const averageIssues =
+      cycles.length > 0
+        ? cycles.reduce((sum, c) => sum + c.completedIssues, 0) / cycles.length
+        : 0;
+
+    return { averageIssues, cycles };
+  }
+
+  /**
+   * Compute burndown data for a cycle using issue completedAt timestamps.
+   */
+  async getBurndown(
+    cycleId: string,
+  ): Promise<Array<{ date: string; remaining: number; completed: number }>> {
+    const cycle = await this.prisma.cycle.findUnique({ where: { id: cycleId } });
+    if (!cycle) return [];
+
+    const issues = await this.prisma.issue.findMany({
+      select: { completedAt: true, id: true },
+      where: { archivedAt: null, cycleId, trashed: false },
+    });
+
+    const totalIssues = issues.length;
+    if (totalIssues === 0) return [];
+
+    const start = new Date(cycle.startsAt);
+    const end = new Date(Math.min(cycle.endsAt.getTime(), Date.now()));
+
+    // Generate daily data points
+    const points: Array<{ date: string; remaining: number; completed: number }> = [];
+    const current = new Date(start);
+    current.setHours(0, 0, 0, 0);
+
+    while (current <= end) {
+      const dayEnd = new Date(current);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      const completedByDay = issues.filter(
+        i => i.completedAt && i.completedAt <= dayEnd,
+      ).length;
+
+      points.push({
+        completed: completedByDay,
+        date: current.toISOString().slice(0, 10),
+        remaining: totalIssues - completedByDay,
+      });
+
+      current.setDate(current.getDate() + 1);
+    }
+
+    return points;
+  }
+
+  /**
    * Auto-create upcoming cycles for a team based on its cycle configuration.
    * Creates cycles up to the specified count into the future.
    */

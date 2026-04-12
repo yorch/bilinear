@@ -99,34 +99,37 @@ export function IssueListView({
           name={state.name}
           color={state.color}
           count={groupIssues.length}
-        >
-          {groupIssues.map(issue => (
-            <IssueRow
-              key={issue.id}
-              issue={issue}
-              states={states}
-              users={users}
-              allLabels={labels}
-              teamId={teamId}
-              selected={issue.id === selectedId}
-              onSelect={() => onSelect(issue.id)}
-              onOpen={() => onOpen(issue.id)}
-              onUpdate={onUpdate}
-              openProperty={issue.id === selectedId ? openProperty : null}
-              onPropertyClosed={onPropertyClosed}
-              onContextMenu={e => {
-                e.preventDefault();
-                setCtxMenu({
-                  identifier: issue.identifier,
-                  issueId: issue.id,
-                  title: issue.title,
-                  x: e.clientX,
-                  y: e.clientY,
-                });
-              }}
-            />
-          ))}
-        </GroupSection>
+          items={groupIssues}
+          renderItem={(item, _idx) => {
+            const issue = item as IssueRowData;
+            return (
+              <IssueRow
+                key={issue.id}
+                issue={issue}
+                states={states}
+                users={users}
+                allLabels={labels}
+                teamId={teamId}
+                selected={issue.id === selectedId}
+                onSelect={() => onSelect(issue.id)}
+                onOpen={() => onOpen(issue.id)}
+                onUpdate={onUpdate}
+                openProperty={issue.id === selectedId ? openProperty : null}
+                onPropertyClosed={onPropertyClosed}
+                onContextMenu={e => {
+                  e.preventDefault();
+                  setCtxMenu({
+                    identifier: issue.identifier,
+                    issueId: issue.id,
+                    title: issue.title,
+                    x: e.clientX,
+                    y: e.clientY,
+                  });
+                }}
+              />
+            );
+          }}
+        />
       ))}
 
       {ctxMenu && (
