@@ -6,7 +6,7 @@ import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
-import { type BoardGroupBy, BoardView } from '@/components/issues/board-view';
+import { type BoardGroupBy, type BoardSwimlaneBy, BoardView } from '@/components/issues/board-view';
 import { CreateIssueModal } from '@/components/issues/create-issue-modal';
 import { FilterBuilder } from '@/components/issues/filter-builder';
 import { IssueListView } from '@/components/issues/issue-list-view';
@@ -104,9 +104,10 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   // Which property popover to force-open on the selected row (keyboard shortcut)
   const [openProperty, setOpenProperty] = useState<OpenProperty>(null);
-  // View mode (list vs board) and board group-by
+  // View mode (list vs board), board group-by, and swimlane
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [boardGroupBy, setBoardGroupBy] = useState<BoardGroupBy>('status');
+  const [swimlaneBy, setSwimlaneBy] = useState<BoardSwimlaneBy>('none');
   // Filters
   const [filterSet, setFilterSet] = useState<FilterSet>(createEmptyFilterSet());
 
@@ -530,15 +531,26 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         </h1>
         <div className="flex items-center gap-2">
           {viewMode === 'board' && (
-            <select
-              value={boardGroupBy}
-              onChange={e => setBoardGroupBy(e.target.value as BoardGroupBy)}
-              className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
-            >
-              <option value="status">Group by status</option>
-              <option value="assignee">Group by assignee</option>
-              <option value="priority">Group by priority</option>
-            </select>
+            <>
+              <select
+                value={boardGroupBy}
+                onChange={e => setBoardGroupBy(e.target.value as BoardGroupBy)}
+                className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+              >
+                <option value="status">Group by status</option>
+                <option value="assignee">Group by assignee</option>
+                <option value="priority">Group by priority</option>
+              </select>
+              <select
+                value={swimlaneBy}
+                onChange={e => setSwimlaneBy(e.target.value as BoardSwimlaneBy)}
+                className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+              >
+                <option value="none">No swimlanes</option>
+                <option value="assignee">Swimlane by assignee</option>
+                <option value="priority">Swimlane by priority</option>
+              </select>
+            </>
           )}
           <ViewToggle mode={viewMode} onChange={setViewMode} />
           <Link
@@ -594,6 +606,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
             users={users}
             labels={labels}
             groupBy={boardGroupBy}
+            swimlaneBy={swimlaneBy}
             selectedId={selectedId}
             onSelect={setSelectedId}
             onOpen={handleOpen}
@@ -624,6 +637,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         users={users}
         labels={labels}
         defaultStateId={defaultStateId}
+        teamId={teamId ?? undefined}
       />
     </div>
   );
