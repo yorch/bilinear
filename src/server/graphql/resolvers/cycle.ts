@@ -183,6 +183,38 @@ export const cycleResolvers = {
       };
     },
 
+    cycleRollover: async (
+      _parent: unknown,
+      { cycleId, targetCycleId: _targetCycleId }: { cycleId: string; targetCycleId?: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      try {
+        const result = await ctx.services.cycle.rollover(ctx.orgId, cycleId);
+        const sync = await ctx.services.sync.createSyncAction(
+          ctx.orgId,
+          'U',
+          'Cycle',
+          cycleId,
+          { completedAt: new Date().toISOString(), id: cycleId },
+        );
+        return {
+          lastSyncId: sync.id.toString(),
+          movedCount: result.movedCount,
+          nextCycleId: result.nextCycleId,
+          success: true,
+        };
+      } catch (err) {
+        const error = err as Error;
+        if (error.name === 'CycleNotFoundError') {
+          throw new GraphQLError(error.message, {
+            extensions: { code: 'NOT_FOUND' },
+          });
+        }
+        throw err;
+      }
+    },
+
     cycleUpdate: async (
       _parent: unknown,
       { id, input }: { id: string; input: CycleUpdateInput },
@@ -240,6 +272,24 @@ export const cycleResolvers = {
       }
       await requireTeamMember(ctx.prisma, cycle.teamId, ctx.userId);
       return cycle;
+    },
+
+    cycleBurndown: async (
+      _parent: unknown,
+      { cycleId }: { cycleId: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      return ctx.services.cycle.getBurndown(cycleId);
+    },
+
+    cycleVelocity: async (
+      _parent: unknown,
+      { teamId, cycleCount }: { teamId: string; cycleCount?: number },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      return ctx.services.cycle.getVelocity(teamId, cycleCount ?? 8);
     },
 
     cycles: async (

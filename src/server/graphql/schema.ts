@@ -593,6 +593,30 @@ export const typeDefs = `
     lastSyncId: String!
   }
 
+  type CycleRolloverPayload {
+    success: Boolean!
+    lastSyncId: String!
+    movedCount: Int!
+    nextCycleId: ID
+  }
+
+  type CycleVelocityCycle {
+    cycleId: ID!
+    cycleNumber: Int!
+    completedIssues: Int!
+  }
+
+  type CycleVelocityResult {
+    averageIssues: Float!
+    cycles: [CycleVelocityCycle!]!
+  }
+
+  type CycleBurndownPoint {
+    date: String!
+    remaining: Int!
+    completed: Int!
+  }
+
   input CycleCreateInput {
     id: String
     teamId: String!
