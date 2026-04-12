@@ -1,3 +1,7 @@
+
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
 -- CreateTable
 CREATE TABLE "organizations" (
     "id" UUID NOT NULL,
@@ -164,6 +168,7 @@ CREATE TABLE "issues" (
     "creator_id" UUID,
     "parent_id" UUID,
     "project_id" UUID,
+    "project_milestone_id" UUID,
     "cycle_id" UUID,
     "branch_name" VARCHAR(500),
     "sla_breaches_at" TIMESTAMPTZ,
@@ -225,6 +230,148 @@ CREATE TABLE "sync_actions" (
 );
 
 -- CreateTable
+CREATE TABLE "projects" (
+    "id" UUID NOT NULL,
+    "organization_id" UUID NOT NULL,
+    "name" VARCHAR(255) NOT NULL,
+    "slug_id" VARCHAR(255) NOT NULL,
+    "description" TEXT NOT NULL DEFAULT '',
+    "content" TEXT,
+    "icon" VARCHAR(255),
+    "color" VARCHAR(7) NOT NULL DEFAULT '#6366f1',
+    "status_type" VARCHAR(20) NOT NULL DEFAULT 'planned',
+    "status_name" VARCHAR(255),
+    "health" VARCHAR(20),
+    "health_updated_at" TIMESTAMPTZ,
+    "priority" SMALLINT NOT NULL DEFAULT 0,
+    "priority_sort_order" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "progress" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "scope" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "start_date" DATE,
+    "target_date" DATE,
+    "start_date_resolution" VARCHAR(20),
+    "target_date_resolution" VARCHAR(20),
+    "lead_id" UUID,
+    "creator_id" UUID,
+    "completed_issue_count_history" JSONB NOT NULL DEFAULT '[]',
+    "completed_scope_history" JSONB NOT NULL DEFAULT '[]',
+    "issue_count_history" JSONB NOT NULL DEFAULT '[]',
+    "scope_history" JSONB NOT NULL DEFAULT '[]',
+    "started_at" TIMESTAMPTZ,
+    "completed_at" TIMESTAMPTZ,
+    "canceled_at" TIMESTAMPTZ,
+    "auto_archived_at" TIMESTAMPTZ,
+    "trashed" BOOLEAN NOT NULL DEFAULT false,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+    "archived_at" TIMESTAMPTZ,
+
+    CONSTRAINT "projects_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "project_teams" (
+    "id" UUID NOT NULL,
+    "project_id" UUID NOT NULL,
+    "team_id" UUID NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "project_teams_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "project_members" (
+    "id" UUID NOT NULL,
+    "project_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "project_members_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "project_milestones" (
+    "id" UUID NOT NULL,
+    "project_id" UUID NOT NULL,
+    "name" VARCHAR(255) NOT NULL,
+    "description" TEXT,
+    "target_date" DATE,
+    "sort_order" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+    "archived_at" TIMESTAMPTZ,
+
+    CONSTRAINT "project_milestones_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "project_updates" (
+    "id" UUID NOT NULL,
+    "project_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "body" TEXT NOT NULL,
+    "body_data" JSONB NOT NULL,
+    "health" VARCHAR(20) NOT NULL,
+    "diff" JSONB,
+    "diff_markdown" TEXT,
+    "edited_at" TIMESTAMPTZ,
+    "reaction_data" JSONB NOT NULL DEFAULT '{}',
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+    "archived_at" TIMESTAMPTZ,
+
+    CONSTRAINT "project_updates_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "cycles" (
+    "id" UUID NOT NULL,
+    "organization_id" UUID NOT NULL,
+    "team_id" UUID NOT NULL,
+    "number" INTEGER NOT NULL,
+    "name" VARCHAR(255),
+    "description" TEXT,
+    "starts_at" TIMESTAMPTZ NOT NULL,
+    "ends_at" TIMESTAMPTZ NOT NULL,
+    "completed_at" TIMESTAMPTZ,
+    "auto_archived_at" TIMESTAMPTZ,
+    "progress" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "scope" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "scope_history" JSONB NOT NULL DEFAULT '[]',
+    "completed_scope_history" JSONB NOT NULL DEFAULT '[]',
+    "issue_count_history" JSONB NOT NULL DEFAULT '[]',
+    "completed_issue_count_history" JSONB NOT NULL DEFAULT '[]',
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+    "archived_at" TIMESTAMPTZ,
+
+    CONSTRAINT "cycles_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "custom_views" (
+    "id" UUID NOT NULL,
+    "organization_id" UUID NOT NULL,
+    "team_id" UUID,
+    "creator_id" UUID NOT NULL,
+    "name" VARCHAR(255) NOT NULL,
+    "description" TEXT,
+    "icon" VARCHAR(255),
+    "color" VARCHAR(7),
+    "filters" JSONB NOT NULL DEFAULT '{}',
+    "sort" JSONB NOT NULL DEFAULT '[]',
+    "group_by" VARCHAR(50),
+    "layout" VARCHAR(10) NOT NULL DEFAULT 'list',
+    "shared" BOOLEAN NOT NULL DEFAULT false,
+    "sort_order" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+    "archived_at" TIMESTAMPTZ,
+
+    CONSTRAINT "custom_views_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "issue_label_assignments" (
     "id" UUID NOT NULL,
     "issue_id" UUID NOT NULL,
@@ -232,6 +379,133 @@ CREATE TABLE "issue_label_assignments" (
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "issue_label_assignments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "notifications" (
+    "id" UUID NOT NULL,
+    "organization_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "issue_id" UUID,
+    "actor_id" UUID,
+    "type" VARCHAR(50) NOT NULL,
+    "data" JSONB NOT NULL DEFAULT '{}',
+    "read" BOOLEAN NOT NULL DEFAULT false,
+    "read_at" TIMESTAMPTZ,
+    "snoozed_until_at" TIMESTAMPTZ,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT "notifications_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "notification_subscriptions" (
+    "id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "issue_id" UUID NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT "notification_subscriptions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "issue_activities" (
+    "id" UUID NOT NULL,
+    "issue_id" UUID NOT NULL,
+    "actor_id" UUID,
+    "field" VARCHAR(50) NOT NULL,
+    "old_value" TEXT,
+    "new_value" TEXT,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "issue_activities_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "issue_relations" (
+    "id" UUID NOT NULL,
+    "issue_id" UUID NOT NULL,
+    "related_issue_id" UUID NOT NULL,
+    "type" VARCHAR(20) NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "issue_relations_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "issue_templates" (
+    "id" UUID NOT NULL,
+    "team_id" UUID NOT NULL,
+    "creator_id" UUID,
+    "name" VARCHAR(255) NOT NULL,
+    "description" TEXT,
+    "template_data" JSONB NOT NULL DEFAULT '{}',
+    "is_default" BOOLEAN NOT NULL DEFAULT false,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+    "archived_at" TIMESTAMPTZ,
+
+    CONSTRAINT "issue_templates_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "files" (
+    "id" UUID NOT NULL,
+    "issue_id" UUID,
+    "project_id" UUID,
+    "uploader_id" UUID,
+    "name" VARCHAR(500) NOT NULL,
+    "key" VARCHAR(1000) NOT NULL,
+    "size" INTEGER NOT NULL,
+    "mime_type" VARCHAR(255) NOT NULL,
+    "url" TEXT,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "files_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "comments" (
+    "id" UUID NOT NULL,
+    "issue_id" UUID NOT NULL,
+    "author_id" UUID NOT NULL,
+    "body" TEXT NOT NULL,
+    "body_data" JSONB,
+    "parent_id" UUID,
+    "resolved_at" TIMESTAMPTZ,
+    "resolved_by_id" UUID,
+    "edited_at" TIMESTAMPTZ,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+    "archived_at" TIMESTAMPTZ,
+
+    CONSTRAINT "comments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "comment_reactions" (
+    "id" UUID NOT NULL,
+    "comment_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "emoji" VARCHAR(50) NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "comment_reactions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "team_member_roles" (
+    "id" UUID NOT NULL,
+    "team_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "role" VARCHAR(20) NOT NULL DEFAULT 'member',
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT "team_member_roles_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -256,13 +530,13 @@ CREATE INDEX "auth_tokens_user_id_idx" ON "auth_tokens"("user_id");
 CREATE INDEX "auth_tokens_token_hash_idx" ON "auth_tokens"("token_hash");
 
 -- CreateIndex
+CREATE INDEX "teams_organization_id_key_idx" ON "teams"("organization_id", "key");
+
+-- CreateIndex
 CREATE INDEX "teams_organization_id_idx" ON "teams"("organization_id");
 
 -- CreateIndex
 CREATE INDEX "teams_parent_id_idx" ON "teams"("parent_id");
-
--- CreateIndex
-CREATE UNIQUE INDEX "teams_organization_id_key_key" ON "teams"("organization_id", "key");
 
 -- CreateIndex
 CREATE INDEX "team_memberships_team_id_idx" ON "team_memberships"("team_id");
@@ -331,6 +605,63 @@ CREATE INDEX "sync_actions_organization_id_id_idx" ON "sync_actions"("organizati
 CREATE INDEX "sync_actions_created_at_idx" ON "sync_actions"("created_at");
 
 -- CreateIndex
+CREATE INDEX "projects_organization_id_idx" ON "projects"("organization_id");
+
+-- CreateIndex
+CREATE INDEX "projects_status_type_idx" ON "projects"("status_type");
+
+-- CreateIndex
+CREATE INDEX "projects_lead_id_idx" ON "projects"("lead_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "projects_organization_id_slug_id_key" ON "projects"("organization_id", "slug_id");
+
+-- CreateIndex
+CREATE INDEX "project_teams_project_id_idx" ON "project_teams"("project_id");
+
+-- CreateIndex
+CREATE INDEX "project_teams_team_id_idx" ON "project_teams"("team_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "project_teams_project_id_team_id_key" ON "project_teams"("project_id", "team_id");
+
+-- CreateIndex
+CREATE INDEX "project_members_project_id_idx" ON "project_members"("project_id");
+
+-- CreateIndex
+CREATE INDEX "project_members_user_id_idx" ON "project_members"("user_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "project_members_project_id_user_id_key" ON "project_members"("project_id", "user_id");
+
+-- CreateIndex
+CREATE INDEX "project_milestones_project_id_idx" ON "project_milestones"("project_id");
+
+-- CreateIndex
+CREATE INDEX "project_updates_project_id_idx" ON "project_updates"("project_id");
+
+-- CreateIndex
+CREATE INDEX "cycles_organization_id_idx" ON "cycles"("organization_id");
+
+-- CreateIndex
+CREATE INDEX "cycles_team_id_idx" ON "cycles"("team_id");
+
+-- CreateIndex
+CREATE INDEX "cycles_team_id_starts_at_idx" ON "cycles"("team_id", "starts_at");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "cycles_team_id_number_key" ON "cycles"("team_id", "number");
+
+-- CreateIndex
+CREATE INDEX "custom_views_organization_id_idx" ON "custom_views"("organization_id");
+
+-- CreateIndex
+CREATE INDEX "custom_views_team_id_idx" ON "custom_views"("team_id");
+
+-- CreateIndex
+CREATE INDEX "custom_views_creator_id_idx" ON "custom_views"("creator_id");
+
+-- CreateIndex
 CREATE INDEX "issue_label_assignments_issue_id_idx" ON "issue_label_assignments"("issue_id");
 
 -- CreateIndex
@@ -338,6 +669,84 @@ CREATE INDEX "issue_label_assignments_label_id_idx" ON "issue_label_assignments"
 
 -- CreateIndex
 CREATE UNIQUE INDEX "issue_label_assignments_issue_id_label_id_key" ON "issue_label_assignments"("issue_id", "label_id");
+
+-- CreateIndex
+CREATE INDEX "notifications_user_id_read_idx" ON "notifications"("user_id", "read");
+
+-- CreateIndex
+CREATE INDEX "notifications_user_id_created_at_idx" ON "notifications"("user_id", "created_at");
+
+-- CreateIndex
+CREATE INDEX "notifications_organization_id_idx" ON "notifications"("organization_id");
+
+-- CreateIndex
+CREATE INDEX "notifications_issue_id_idx" ON "notifications"("issue_id");
+
+-- CreateIndex
+CREATE INDEX "notification_subscriptions_user_id_idx" ON "notification_subscriptions"("user_id");
+
+-- CreateIndex
+CREATE INDEX "notification_subscriptions_issue_id_idx" ON "notification_subscriptions"("issue_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "notification_subscriptions_user_id_issue_id_key" ON "notification_subscriptions"("user_id", "issue_id");
+
+-- CreateIndex
+CREATE INDEX "issue_activities_issue_id_created_at_idx" ON "issue_activities"("issue_id", "created_at");
+
+-- CreateIndex
+CREATE INDEX "issue_activities_actor_id_idx" ON "issue_activities"("actor_id");
+
+-- CreateIndex
+CREATE INDEX "issue_relations_issue_id_idx" ON "issue_relations"("issue_id");
+
+-- CreateIndex
+CREATE INDEX "issue_relations_related_issue_id_idx" ON "issue_relations"("related_issue_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "issue_relations_issue_id_related_issue_id_type_key" ON "issue_relations"("issue_id", "related_issue_id", "type");
+
+-- CreateIndex
+CREATE INDEX "issue_templates_team_id_idx" ON "issue_templates"("team_id");
+
+-- CreateIndex
+CREATE INDEX "issue_templates_creator_id_idx" ON "issue_templates"("creator_id");
+
+-- CreateIndex
+CREATE INDEX "files_issue_id_idx" ON "files"("issue_id");
+
+-- CreateIndex
+CREATE INDEX "files_project_id_idx" ON "files"("project_id");
+
+-- CreateIndex
+CREATE INDEX "files_uploader_id_idx" ON "files"("uploader_id");
+
+-- CreateIndex
+CREATE INDEX "comments_issue_id_created_at_idx" ON "comments"("issue_id", "created_at");
+
+-- CreateIndex
+CREATE INDEX "comments_author_id_idx" ON "comments"("author_id");
+
+-- CreateIndex
+CREATE INDEX "comments_parent_id_idx" ON "comments"("parent_id");
+
+-- CreateIndex
+CREATE INDEX "comment_reactions_comment_id_idx" ON "comment_reactions"("comment_id");
+
+-- CreateIndex
+CREATE INDEX "comment_reactions_user_id_idx" ON "comment_reactions"("user_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "comment_reactions_comment_id_user_id_emoji_key" ON "comment_reactions"("comment_id", "user_id", "emoji");
+
+-- CreateIndex
+CREATE INDEX "team_member_roles_team_id_idx" ON "team_member_roles"("team_id");
+
+-- CreateIndex
+CREATE INDEX "team_member_roles_user_id_idx" ON "team_member_roles"("user_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "team_member_roles_team_id_user_id_key" ON "team_member_roles"("team_id", "user_id");
 
 -- AddForeignKey
 ALTER TABLE "organization_members" ADD CONSTRAINT "organization_members_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -385,6 +794,15 @@ ALTER TABLE "issues" ADD CONSTRAINT "issues_snoozed_by_id_fkey" FOREIGN KEY ("sn
 ALTER TABLE "issues" ADD CONSTRAINT "issues_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "issues"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "issues" ADD CONSTRAINT "issues_cycle_id_fkey" FOREIGN KEY ("cycle_id") REFERENCES "cycles"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "issues" ADD CONSTRAINT "issues_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "issues" ADD CONSTRAINT "issues_project_milestone_id_fkey" FOREIGN KEY ("project_milestone_id") REFERENCES "project_milestones"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "issue_labels" ADD CONSTRAINT "issue_labels_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -400,7 +818,116 @@ ALTER TABLE "issue_labels" ADD CONSTRAINT "issue_labels_creator_id_fkey" FOREIGN
 ALTER TABLE "sync_actions" ADD CONSTRAINT "sync_actions_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "projects" ADD CONSTRAINT "projects_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "projects" ADD CONSTRAINT "projects_lead_id_fkey" FOREIGN KEY ("lead_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "projects" ADD CONSTRAINT "projects_creator_id_fkey" FOREIGN KEY ("creator_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "project_teams" ADD CONSTRAINT "project_teams_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "project_teams" ADD CONSTRAINT "project_teams_team_id_fkey" FOREIGN KEY ("team_id") REFERENCES "teams"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "project_members" ADD CONSTRAINT "project_members_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "project_members" ADD CONSTRAINT "project_members_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "project_milestones" ADD CONSTRAINT "project_milestones_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "project_updates" ADD CONSTRAINT "project_updates_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "project_updates" ADD CONSTRAINT "project_updates_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "cycles" ADD CONSTRAINT "cycles_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "cycles" ADD CONSTRAINT "cycles_team_id_fkey" FOREIGN KEY ("team_id") REFERENCES "teams"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "custom_views" ADD CONSTRAINT "custom_views_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "custom_views" ADD CONSTRAINT "custom_views_team_id_fkey" FOREIGN KEY ("team_id") REFERENCES "teams"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "custom_views" ADD CONSTRAINT "custom_views_creator_id_fkey" FOREIGN KEY ("creator_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "issue_label_assignments" ADD CONSTRAINT "issue_label_assignments_issue_id_fkey" FOREIGN KEY ("issue_id") REFERENCES "issues"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "issue_label_assignments" ADD CONSTRAINT "issue_label_assignments_label_id_fkey" FOREIGN KEY ("label_id") REFERENCES "issue_labels"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_actor_id_fkey" FOREIGN KEY ("actor_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_issue_id_fkey" FOREIGN KEY ("issue_id") REFERENCES "issues"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "notification_subscriptions" ADD CONSTRAINT "notification_subscriptions_issue_id_fkey" FOREIGN KEY ("issue_id") REFERENCES "issues"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "notification_subscriptions" ADD CONSTRAINT "notification_subscriptions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "issue_activities" ADD CONSTRAINT "issue_activities_actor_id_fkey" FOREIGN KEY ("actor_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "issue_activities" ADD CONSTRAINT "issue_activities_issue_id_fkey" FOREIGN KEY ("issue_id") REFERENCES "issues"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "issue_relations" ADD CONSTRAINT "issue_relations_issue_id_fkey" FOREIGN KEY ("issue_id") REFERENCES "issues"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "issue_relations" ADD CONSTRAINT "issue_relations_related_issue_id_fkey" FOREIGN KEY ("related_issue_id") REFERENCES "issues"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "issue_templates" ADD CONSTRAINT "issue_templates_creator_id_fkey" FOREIGN KEY ("creator_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "issue_templates" ADD CONSTRAINT "issue_templates_team_id_fkey" FOREIGN KEY ("team_id") REFERENCES "teams"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "files" ADD CONSTRAINT "files_issue_id_fkey" FOREIGN KEY ("issue_id") REFERENCES "issues"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "comments" ADD CONSTRAINT "comments_issue_id_fkey" FOREIGN KEY ("issue_id") REFERENCES "issues"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "comments" ADD CONSTRAINT "comments_author_id_fkey" FOREIGN KEY ("author_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "comments" ADD CONSTRAINT "comments_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "comments"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "comments" ADD CONSTRAINT "comments_resolved_by_id_fkey" FOREIGN KEY ("resolved_by_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "comment_reactions" ADD CONSTRAINT "comment_reactions_comment_id_fkey" FOREIGN KEY ("comment_id") REFERENCES "comments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "comment_reactions" ADD CONSTRAINT "comment_reactions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "team_member_roles" ADD CONSTRAINT "team_member_roles_team_id_fkey" FOREIGN KEY ("team_id") REFERENCES "teams"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "team_member_roles" ADD CONSTRAINT "team_member_roles_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
