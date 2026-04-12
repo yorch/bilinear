@@ -98,7 +98,10 @@ function BurndownChart({ data }: BurndownChartProps) {
   const chartWidth = width - paddingLeft - paddingRight;
   const chartHeight = height - paddingTop - paddingBottom;
 
-  const maxY = Math.max(...data.map(d => Math.max(d.remaining, d.completed)), 1);
+  const maxY = Math.max(
+    ...data.map(d => Math.max(d.remaining, d.completed)),
+    1,
+  );
   const n = data.length;
 
   const xScale = (i: number) =>
@@ -114,10 +117,18 @@ function BurndownChart({ data }: BurndownChartProps) {
   }));
 
   const toPath = (pts: Array<{ x: number; y: number }>) =>
-    pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+    pts
+      .map(
+        (p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`,
+      )
+      .join(' ');
 
-  const remainingPath = toPath(data.map((d, i) => ({ x: xScale(i), y: yScale(d.remaining) })));
-  const completedPath = toPath(data.map((d, i) => ({ x: xScale(i), y: yScale(d.completed) })));
+  const remainingPath = toPath(
+    data.map((d, i) => ({ x: xScale(i), y: yScale(d.remaining) })),
+  );
+  const completedPath = toPath(
+    data.map((d, i) => ({ x: xScale(i), y: yScale(d.completed) })),
+  );
   const idealPath = toPath(idealPoints);
 
   // Y-axis ticks
@@ -125,7 +136,13 @@ function BurndownChart({ data }: BurndownChartProps) {
 
   // X-axis: every 3rd label
   const xLabels = data
-    .map((d, i) => ({ i, label: new Date(d.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }) }))
+    .map((d, i) => ({
+      i,
+      label: new Date(d.date).toLocaleDateString('en-US', {
+        day: 'numeric',
+        month: 'short',
+      }),
+    }))
     .filter((_, i) => i % 3 === 0 || i === n - 1);
 
   return (
@@ -197,11 +214,32 @@ function BurndownChart({ data }: BurndownChartProps) {
         {/* Legend */}
         <g transform={`translate(${paddingLeft + 4}, ${paddingTop + 4})`}>
           <line x1={0} y1={6} x2={16} y2={6} stroke="#6366f1" strokeWidth={2} />
-          <text x={20} y={10} fontSize={9} fill="currentColor" opacity={0.7}>Remaining</text>
-          <line x1={70} y1={6} x2={86} y2={6} stroke="#22c55e" strokeWidth={2} />
-          <text x={90} y={10} fontSize={9} fill="currentColor" opacity={0.7}>Completed</text>
-          <line x1={148} y1={6} x2={164} y2={6} stroke="#a1a1aa" strokeWidth={1.5} strokeDasharray="5,3" />
-          <text x={168} y={10} fontSize={9} fill="currentColor" opacity={0.7}>Ideal</text>
+          <text x={20} y={10} fontSize={9} fill="currentColor" opacity={0.7}>
+            Remaining
+          </text>
+          <line
+            x1={70}
+            y1={6}
+            x2={86}
+            y2={6}
+            stroke="#22c55e"
+            strokeWidth={2}
+          />
+          <text x={90} y={10} fontSize={9} fill="currentColor" opacity={0.7}>
+            Completed
+          </text>
+          <line
+            x1={148}
+            y1={6}
+            x2={164}
+            y2={6}
+            stroke="#a1a1aa"
+            strokeWidth={1.5}
+            strokeDasharray="5,3"
+          />
+          <text x={168} y={10} fontSize={9} fill="currentColor" opacity={0.7}>
+            Ideal
+          </text>
         </g>
       </svg>
     </div>
@@ -221,7 +259,9 @@ function VelocityBarChart({ cycles }: VelocityBarChartProps) {
 
   if (cycles.length === 0) {
     return (
-      <p className="py-4 text-center text-xs text-zinc-400">No velocity data yet.</p>
+      <p className="py-4 text-center text-xs text-zinc-400">
+        No velocity data yet.
+      </p>
     );
   }
 
@@ -230,7 +270,10 @@ function VelocityBarChart({ cycles }: VelocityBarChartProps) {
       {cycles.map(c => {
         const pct = max > 0 ? (c.completedIssues / max) * 100 : 0;
         return (
-          <div key={c.cycleId} className="flex flex-1 flex-col items-center gap-1">
+          <div
+            key={c.cycleId}
+            className="flex flex-1 flex-col items-center gap-1"
+          >
             <span className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400">
               {c.completedIssues > 0 ? c.completedIssues : ''}
             </span>
@@ -241,7 +284,10 @@ function VelocityBarChart({ cycles }: VelocityBarChartProps) {
                 minHeight: c.completedIssues > 0 ? '4px' : '0',
               }}
             />
-            <span className="max-w-full truncate text-[9px] text-zinc-400" title={`Cycle ${c.cycleNumber}`}>
+            <span
+              className="max-w-full truncate text-[9px] text-zinc-400"
+              title={`Cycle ${c.cycleNumber}`}
+            >
               #{c.cycleNumber}
             </span>
           </div>
@@ -289,7 +335,9 @@ export const CycleDetailView = observer(function CycleDetailView({
 
   // Fetch burndown data
   useEffect(() => {
-    if (!cycleId) return;
+    if (!cycleId) {
+      return;
+    }
     setBurndownLoading(true);
     gql(CYCLE_BURNDOWN_QUERY, { cycleId })
       .then(res => {
@@ -303,11 +351,15 @@ export const CycleDetailView = observer(function CycleDetailView({
   // Fetch velocity data
   const teamId = cycle?.teamId;
   useEffect(() => {
-    if (!teamId) return;
-    gql(CYCLE_VELOCITY_QUERY, { teamId, cycleCount: 6 })
+    if (!teamId) {
+      return;
+    }
+    gql(CYCLE_VELOCITY_QUERY, { cycleCount: 6, teamId })
       .then(res => {
         const result = res.data?.cycleVelocity as VelocityResult | undefined;
-        if (result) setVelocity(result);
+        if (result) {
+          setVelocity(result);
+        }
       })
       .catch(() => {});
   }, [teamId]);
@@ -335,7 +387,9 @@ export const CycleDetailView = observer(function CycleDetailView({
   );
 
   const handleRollover = useCallback(async () => {
-    if (rollingOver) return;
+    if (rollingOver) {
+      return;
+    }
     setRollingOver(true);
     try {
       const res = await gql(CYCLE_ROLLOVER_MUTATION, { cycleId });
@@ -343,11 +397,13 @@ export const CycleDetailView = observer(function CycleDetailView({
         toast.error('Failed to roll over cycle');
         return;
       }
-      const payload = res.data?.cycleRollover as {
-        success: boolean;
-        movedCount: number;
-        nextCycleId: string | null;
-      } | undefined;
+      const payload = res.data?.cycleRollover as
+        | {
+            success: boolean;
+            movedCount: number;
+            nextCycleId: string | null;
+          }
+        | undefined;
       if (payload?.success) {
         if (payload.nextCycleId) {
           toast.success(

@@ -6,7 +6,11 @@ import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
-import { type BoardGroupBy, type BoardSwimlaneBy, BoardView } from '@/components/issues/board-view';
+import {
+  type BoardGroupBy,
+  type BoardSwimlaneBy,
+  BoardView,
+} from '@/components/issues/board-view';
 import { CreateIssueModal } from '@/components/issues/create-issue-modal';
 import { FilterBuilder } from '@/components/issues/filter-builder';
 import { IssueListView } from '@/components/issues/issue-list-view';

@@ -157,7 +157,9 @@ function NotificationItem({
 
   // Close snooze dropdown when clicking outside
   useEffect(() => {
-    if (!snoozeOpen) return;
+    if (!snoozeOpen) {
+      return;
+    }
     const handler = (e: MouseEvent) => {
       if (snoozeRef.current && !snoozeRef.current.contains(e.target as Node)) {
         setSnoozeOpen(false);
@@ -330,7 +332,10 @@ export const NotificationInbox = observer(function NotificationInbox() {
     setSnoozedIds(prev => new Set(prev).add(id));
     setSnoozingId(id);
     try {
-      const res = await gql(SNOOZE_MUTATION, { id, until: until.toISOString() });
+      const res = await gql(SNOOZE_MUTATION, {
+        id,
+        until: until.toISOString(),
+      });
       if (res.errors?.length) {
         throw new Error('Failed to snooze notification');
       }

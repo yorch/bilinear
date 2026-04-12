@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { gql } from '@/lib/graphql';
 import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
@@ -60,7 +60,7 @@ export function CreateIssueModal({
   const [submitting, setSubmitting] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
 
-  const applyTemplate = (data: object) => {
+  const applyTemplate = useCallback((data: object) => {
     const d = data as Record<string, unknown>;
     if (typeof d.title === 'string') {
       setTitle(d.title);
@@ -80,7 +80,7 @@ export function CreateIssueModal({
     if (typeof d.assigneeId === 'string') {
       setAssigneeId(d.assigneeId);
     }
-  };
+  }, []);
 
   // When modal opens, reset fields; if teamId is provided, fetch and apply default template
   useEffect(() => {
@@ -118,8 +118,7 @@ export function CreateIssueModal({
           });
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultStateId, states, teamId]);
+  }, [open, defaultStateId, states, teamId, applyTemplate]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

@@ -1,7 +1,7 @@
 'use client';
 
-import { useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { StatusDot } from '../properties/status-select';
 

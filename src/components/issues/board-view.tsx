@@ -150,7 +150,11 @@ function BoardCardInner({
 // ─── Sortable card (drag handle) ────────────────────────────────────────────
 
 interface SortableCardProps extends Omit<BoardCardProps, 'isDragging'> {
-  onMultiSelect: (e: React.MouseEvent, issueId: string, columnIssueIds: string[]) => void;
+  onMultiSelect: (
+    e: React.MouseEvent,
+    issueId: string,
+    columnIssueIds: string[],
+  ) => void;
   columnIssueIds: string[];
 }
 
@@ -200,9 +204,10 @@ function SortableCard({
         isDragging={isDragging}
       />
       {/* Invisible overlay to intercept clicks without interfering with DnD listeners */}
-      <div
-        className="absolute inset-0"
-        style={{ cursor: 'pointer' }}
+      <button
+        type="button"
+        aria-label="Open issue"
+        className="absolute inset-0 cursor-pointer bg-transparent"
         onClick={handleClick}
         onDoubleClick={onOpen}
       />
@@ -227,7 +232,11 @@ function BoardColumn({
   selectedIds: Set<string>;
   onSelect: (id: string) => void;
   onOpen: (id: string) => void;
-  onMultiSelect: (e: React.MouseEvent, issueId: string, columnIssueIds: string[]) => void;
+  onMultiSelect: (
+    e: React.MouseEvent,
+    issueId: string,
+    columnIssueIds: string[],
+  ) => void;
 }) {
   const { setNodeRef } = useDroppable({ id: column.id });
   const columnIssueIds = column.issues.map(i => i.id);
@@ -296,7 +305,11 @@ interface BoardSwimlaneProps {
   selectedIds: Set<string>;
   onSelect: (id: string) => void;
   onOpen: (id: string) => void;
-  onMultiSelect: (e: React.MouseEvent, issueId: string, columnIssueIds: string[]) => void;
+  onMultiSelect: (
+    e: React.MouseEvent,
+    issueId: string,
+    columnIssueIds: string[],
+  ) => void;
 }
 
 function BoardSwimlane({
@@ -381,7 +394,11 @@ function buildColumnDefs(
       return states
         .filter(s => !s.archivedAt)
         .sort((a, b) => a.position - b.position)
-        .map(state => ({ color: state.color, id: state.id, label: state.name }));
+        .map(state => ({
+          color: state.color,
+          id: state.id,
+          label: state.name,
+        }));
 
     case 'assignee': {
       const cols: Omit<Column, 'issues'>[] = [
@@ -472,34 +489,48 @@ export function BoardView({
     swimlaneBy != null && swimlaneBy !== 'none' && swimlaneBy !== groupBy;
 
   // Build swimlane groups when needed
-  const swimlaneGroups: { id: string; label: string; issues: IssueRowData[] }[] =
-    useSwimlanes
-      ? (() => {
-          if (swimlaneBy === 'assignee') {
-            const unassigned = issues.filter(i => !i.assigneeId);
-            const groups: { id: string; label: string; issues: IssueRowData[] }[] =
-              [];
-            if (unassigned.length > 0) {
-              groups.push({ id: 'unassigned', issues: unassigned, label: 'Unassigned' });
-            }
-            for (const user of users) {
-              const userIssues = issues.filter(i => i.assigneeId === user.id);
-              if (userIssues.length > 0) {
-                groups.push({ id: user.id, issues: userIssues, label: user.displayName });
-              }
-            }
-            return groups;
+  const swimlaneGroups: {
+    id: string;
+    label: string;
+    issues: IssueRowData[];
+  }[] = useSwimlanes
+    ? (() => {
+        if (swimlaneBy === 'assignee') {
+          const unassigned = issues.filter(i => !i.assigneeId);
+          const groups: {
+            id: string;
+            label: string;
+            issues: IssueRowData[];
+          }[] = [];
+          if (unassigned.length > 0) {
+            groups.push({
+              id: 'unassigned',
+              issues: unassigned,
+              label: 'Unassigned',
+            });
           }
-          // swimlaneBy === 'priority'
-          return [1, 2, 3, 4, 0]
-            .map(p => ({
-              id: `priority-${p}`,
-              issues: issues.filter(i => i.priority === p),
-              label: PRIORITY_LABELS[p] ?? `Priority ${p}`,
-            }))
-            .filter(g => g.issues.length > 0);
-        })()
-      : [];
+          for (const user of users) {
+            const userIssues = issues.filter(i => i.assigneeId === user.id);
+            if (userIssues.length > 0) {
+              groups.push({
+                id: user.id,
+                issues: userIssues,
+                label: user.displayName,
+              });
+            }
+          }
+          return groups;
+        }
+        // swimlaneBy === 'priority'
+        return [1, 2, 3, 4, 0]
+          .map(p => ({
+            id: `priority-${p}`,
+            issues: issues.filter(i => i.priority === p),
+            label: PRIORITY_LABELS[p] ?? `Priority ${p}`,
+          }))
+          .filter(g => g.issues.length > 0);
+      })()
+    : [];
 
   // ── Multi-select handlers ────────────────────────────────────────────────
 
@@ -517,7 +548,9 @@ export function BoardView({
         const rangeIds = columnIssueIds.slice(from, to + 1);
         setSelectedIds(prev => {
           const next = new Set(prev);
-          for (const id of rangeIds) next.add(id);
+          for (const id of rangeIds) {
+            next.add(id);
+          }
           return next;
         });
       }
@@ -564,7 +597,9 @@ export function BoardView({
     // Build patch for a single issue based on target column
     const buildPatch = (issueId: string): Record<string, unknown> => {
       const issue = issues.find(i => i.id === issueId);
-      if (!issue) return {};
+      if (!issue) {
+        return {};
+      }
 
       const patch: Record<string, unknown> = {};
 

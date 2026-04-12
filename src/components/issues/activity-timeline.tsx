@@ -149,7 +149,9 @@ export function ActivityTimeline({ issueId }: ActivityTimelineProps) {
     <div className="flex flex-col gap-0">
       {visibleActivities.map((activity, index) => {
         const actor = activity.actor;
-        const isLast = index === visibleActivities.length - 1 && (!shouldCollapse || expanded);
+        const isLast =
+          index === visibleActivities.length - 1 &&
+          (!shouldCollapse || expanded);
 
         return (
           <div key={activity.id} className="flex gap-3">

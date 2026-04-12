@@ -2,15 +2,15 @@
 
 import { Bell, BellOff } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useHotkeys } from '@/hooks/use-hotkeys';
+import { gql } from '@/lib/graphql';
 import {
   formatDueDate,
   getDueDateColor,
   getPriorityConfig,
 } from '@/lib/issue-utils';
-import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
-import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useStore } from '@/providers/store-provider';
 import type {
   IssueDetail,
@@ -96,18 +96,24 @@ export function IssueDetailPanel({
 
   // Fetch subscription status when issue changes
   useEffect(() => {
-    if (!issue?.id) return;
+    if (!issue?.id) {
+      return;
+    }
     setSubscribed(null);
     gql(CHECK_SUBSCRIPTION_QUERY, { issueId: issue.id })
       .then(res => {
         const val = res.data?.notificationIsSubscribed;
-        if (typeof val === 'boolean') setSubscribed(val);
+        if (typeof val === 'boolean') {
+          setSubscribed(val);
+        }
       })
       .catch(() => setSubscribed(false));
   }, [issue?.id]);
 
   const handleToggleSubscription = useCallback(async () => {
-    if (!issue?.id || subscribed === null) return;
+    if (!issue?.id || subscribed === null) {
+      return;
+    }
     const prev = subscribed;
     setSubscribed(!prev);
     try {
@@ -183,8 +189,12 @@ export function IssueDetailPanel({
                 type="button"
                 onClick={handleToggleSubscription}
                 className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                aria-label={subscribed ? 'Unsubscribe (Shift+S)' : 'Subscribe (Shift+S)'}
-                title={subscribed ? 'Unsubscribe (Shift+S)' : 'Subscribe (Shift+S)'}
+                aria-label={
+                  subscribed ? 'Unsubscribe (Shift+S)' : 'Subscribe (Shift+S)'
+                }
+                title={
+                  subscribed ? 'Unsubscribe (Shift+S)' : 'Subscribe (Shift+S)'
+                }
               >
                 {subscribed ? (
                   <BellOff className="h-4 w-4" />

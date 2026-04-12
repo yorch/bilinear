@@ -282,26 +282,37 @@ export class IssueService {
     return assignments.map(a => a.label);
   }
 
-  private async maybeCloseParent(parentId: string, teamId: string): Promise<void> {
+  private async maybeCloseParent(
+    parentId: string,
+    teamId: string,
+  ): Promise<void> {
     // Get all non-archived children of this parent
     const siblings = await this.prisma.issue.findMany({
       include: { state: { select: { type: true } } },
       where: { archivedAt: null, parentId, trashed: false },
     });
-    if (siblings.length === 0) return;
+    if (siblings.length === 0) {
+      return;
+    }
 
     // Check if all are completed or cancelled
     const allDone = siblings.every(
       s => s.state.type === 'completed' || s.state.type === 'canceled',
     );
-    if (!allDone) return;
+    if (!allDone) {
+      return;
+    }
 
     // Get parent, check it's not already done
     const parent = await this.prisma.issue.findUnique({
       include: { state: { select: { type: true } } },
       where: { id: parentId },
     });
-    if (!parent || parent.state.type === 'completed' || parent.state.type === 'canceled') {
+    if (
+      !parent ||
+      parent.state.type === 'completed' ||
+      parent.state.type === 'canceled'
+    ) {
       return;
     }
 
@@ -310,7 +321,9 @@ export class IssueService {
       orderBy: { position: 'asc' },
       where: { archivedAt: null, teamId, type: 'completed' },
     });
-    if (!completedState) return;
+    if (!completedState) {
+      return;
+    }
 
     await this.prisma.issue.update({
       data: { completedAt: new Date(), stateId: completedState.id },

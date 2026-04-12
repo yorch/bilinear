@@ -220,11 +220,15 @@ export class CycleService {
    * to the target cycle (or the next upcoming cycle for the team).
    */
   async rollover(
-    orgId: string,
+    _orgId: string,
     cycleId: string,
   ): Promise<{ movedCount: number; nextCycleId: string | null }> {
-    const cycle = await this.prisma.cycle.findUnique({ where: { id: cycleId } });
-    if (!cycle) throw new CycleNotFoundError();
+    const cycle = await this.prisma.cycle.findUnique({
+      where: { id: cycleId },
+    });
+    if (!cycle) {
+      throw new CycleNotFoundError();
+    }
 
     // Mark the cycle completed
     await this.prisma.cycle.update({
@@ -280,7 +284,14 @@ export class CycleService {
   async getVelocity(
     teamId: string,
     cycleCount = 8,
-  ): Promise<{ averageIssues: number; cycles: Array<{ cycleId: string; cycleNumber: number; completedIssues: number }> }> {
+  ): Promise<{
+    averageIssues: number;
+    cycles: Array<{
+      cycleId: string;
+      cycleNumber: number;
+      completedIssues: number;
+    }>;
+  }> {
     const now = new Date();
     const completedCycles = await this.prisma.cycle.findMany({
       orderBy: { startsAt: 'desc' },
@@ -302,7 +313,11 @@ export class CycleService {
             trashed: false,
           },
         });
-        return { completedIssues, cycleId: cycle.id, cycleNumber: cycle.number };
+        return {
+          completedIssues,
+          cycleId: cycle.id,
+          cycleNumber: cycle.number,
+        };
       }),
     );
 
@@ -320,8 +335,12 @@ export class CycleService {
   async getBurndown(
     cycleId: string,
   ): Promise<Array<{ date: string; remaining: number; completed: number }>> {
-    const cycle = await this.prisma.cycle.findUnique({ where: { id: cycleId } });
-    if (!cycle) return [];
+    const cycle = await this.prisma.cycle.findUnique({
+      where: { id: cycleId },
+    });
+    if (!cycle) {
+      return [];
+    }
 
     const issues = await this.prisma.issue.findMany({
       select: { completedAt: true, id: true },
@@ -329,13 +348,19 @@ export class CycleService {
     });
 
     const totalIssues = issues.length;
-    if (totalIssues === 0) return [];
+    if (totalIssues === 0) {
+      return [];
+    }
 
     const start = new Date(cycle.startsAt);
     const end = new Date(Math.min(cycle.endsAt.getTime(), Date.now()));
 
     // Generate daily data points
-    const points: Array<{ date: string; remaining: number; completed: number }> = [];
+    const points: Array<{
+      date: string;
+      remaining: number;
+      completed: number;
+    }> = [];
     const current = new Date(start);
     current.setHours(0, 0, 0, 0);
 

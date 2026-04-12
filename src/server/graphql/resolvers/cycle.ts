@@ -185,7 +185,10 @@ export const cycleResolvers = {
 
     cycleRollover: async (
       _parent: unknown,
-      { cycleId, targetCycleId: _targetCycleId }: { cycleId: string; targetCycleId?: string },
+      {
+        cycleId,
+        targetCycleId: _targetCycleId,
+      }: { cycleId: string; targetCycleId?: string },
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
@@ -283,15 +286,6 @@ export const cycleResolvers = {
       return ctx.services.cycle.getBurndown(cycleId);
     },
 
-    cycleVelocity: async (
-      _parent: unknown,
-      { teamId, cycleCount }: { teamId: string; cycleCount?: number },
-      ctx: GraphQLContext,
-    ) => {
-      requireAuth(ctx);
-      return ctx.services.cycle.getVelocity(teamId, cycleCount ?? 8);
-    },
-
     cycles: async (
       _parent: unknown,
       args: {
@@ -307,6 +301,15 @@ export const cycleResolvers = {
         args.teamId,
         args.includeArchived ?? false,
       );
+    },
+
+    cycleVelocity: async (
+      _parent: unknown,
+      { teamId, cycleCount }: { teamId: string; cycleCount?: number },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      return ctx.services.cycle.getVelocity(teamId, cycleCount ?? 8);
     },
   },
 };

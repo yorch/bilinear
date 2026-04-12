@@ -51,7 +51,12 @@ function withSentryCapture(base: pino.Logger): pino.Logger {
       const first = args[0];
       if (first instanceof Error) {
         Sentry.captureException(first);
-      } else if (first !== null && typeof first === 'object' && 'err' in first && (first as Record<string, unknown>).err instanceof Error) {
+      } else if (
+        first !== null &&
+        typeof first === 'object' &&
+        'err' in first &&
+        (first as Record<string, unknown>).err instanceof Error
+      ) {
         Sentry.captureException((first as Record<string, unknown>).err);
       }
       return (base[method] as (...a: unknown[]) => void)(...args);
