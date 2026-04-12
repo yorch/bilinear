@@ -23,6 +23,8 @@ interface IssueActivity {
 
 interface ActivityTimelineProps {
   issueId: string;
+  /** Increment this to trigger a re-fetch (e.g. after an issue update). */
+  refetchKey?: number;
 }
 
 const GET_ISSUE_ACTIVITIES_QUERY = `
@@ -75,7 +77,10 @@ function formatActivityDescription(activity: IssueActivity): string {
 
 const COLLAPSE_THRESHOLD = 5;
 
-export function ActivityTimeline({ issueId }: ActivityTimelineProps) {
+export function ActivityTimeline({
+  issueId,
+  refetchKey,
+}: ActivityTimelineProps) {
   const [activities, setActivities] = useState<IssueActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
@@ -84,6 +89,7 @@ export function ActivityTimeline({ issueId }: ActivityTimelineProps) {
     if (!issueId) {
       return;
     }
+    void refetchKey; // referenced so this dep is not pruned
 
     let cancelled = false;
 
@@ -118,7 +124,7 @@ export function ActivityTimeline({ issueId }: ActivityTimelineProps) {
     return () => {
       cancelled = true;
     };
-  }, [issueId]);
+  }, [issueId, refetchKey]);
 
   if (loading) {
     return (

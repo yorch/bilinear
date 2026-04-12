@@ -211,35 +211,48 @@ function BurndownChart({ data }: BurndownChartProps) {
           </text>
         ))}
 
-        {/* Legend */}
+        {/* Legend — each item in its own <g> so offsets are self-contained */}
         <g transform={`translate(${paddingLeft + 4}, ${paddingTop + 4})`}>
-          <line x1={0} y1={6} x2={16} y2={6} stroke="#6366f1" strokeWidth={2} />
-          <text x={20} y={10} fontSize={9} fill="currentColor" opacity={0.7}>
-            Remaining
-          </text>
-          <line
-            x1={70}
-            y1={6}
-            x2={86}
-            y2={6}
-            stroke="#22c55e"
-            strokeWidth={2}
-          />
-          <text x={90} y={10} fontSize={9} fill="currentColor" opacity={0.7}>
-            Completed
-          </text>
-          <line
-            x1={148}
-            y1={6}
-            x2={164}
-            y2={6}
-            stroke="#a1a1aa"
-            strokeWidth={1.5}
-            strokeDasharray="5,3"
-          />
-          <text x={168} y={10} fontSize={9} fill="currentColor" opacity={0.7}>
-            Ideal
-          </text>
+          <g transform="translate(0, 0)">
+            <line
+              x1={0}
+              y1={6}
+              x2={16}
+              y2={6}
+              stroke="#6366f1"
+              strokeWidth={2}
+            />
+            <text x={20} y={10} fontSize={9} fill="currentColor" opacity={0.7}>
+              Remaining
+            </text>
+          </g>
+          <g transform="translate(78, 0)">
+            <line
+              x1={0}
+              y1={6}
+              x2={16}
+              y2={6}
+              stroke="#22c55e"
+              strokeWidth={2}
+            />
+            <text x={20} y={10} fontSize={9} fill="currentColor" opacity={0.7}>
+              Completed
+            </text>
+          </g>
+          <g transform="translate(158, 0)">
+            <line
+              x1={0}
+              y1={6}
+              x2={16}
+              y2={6}
+              stroke="#a1a1aa"
+              strokeWidth={1.5}
+              strokeDasharray="5,3"
+            />
+            <text x={20} y={10} fontSize={9} fill="currentColor" opacity={0.7}>
+              Ideal
+            </text>
+          </g>
         </g>
       </svg>
     </div>

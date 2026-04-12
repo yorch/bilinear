@@ -6,6 +6,7 @@ import {
 } from '../../test/prisma-mock';
 import {
   CycleInvalidDatesError,
+  CycleNotFoundError,
   CycleOverlapError,
   CycleService,
 } from './cycle.service';
@@ -209,6 +210,166 @@ describe('CycleService', () => {
         data: { addedToCycleAt: expect.any(Date), cycleId: TEST_CYCLE.id },
         where: { id: issueId },
       });
+    });
+  });
+
+  describe('rollover', () => {
+    const NEXT_CYCLE = {
+      ...TEST_CYCLE,
+      endsAt: new Date('2026-03-30T00:00:00Z'),
+      id: '00000000-0000-0000-0000-000000000601',
+      number: 2,
+      startsAt: new Date('2026-03-16T00:00:00Z'),
+    };
+
+    it('throws CycleNotFoundError when cycle not in org', async () => {
+      prisma.cycle.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.rollover('wrong-org-id', TEST_CYCLE.id),
+      ).rejects.toThrow(CycleNotFoundError);
+    });
+
+    it('marks cycle completed and moves incomplete issues to next cycle', async () => {
+      const issueId = '00000000-0000-0000-0000-000000000400';
+      prisma.cycle.findFirst.mockResolvedValueOnce(TEST_CYCLE); // org scope check
+      prisma.cycle.update.mockResolvedValue({
+        ...TEST_CYCLE,
+        completedAt: new Date(),
+      });
+      prisma.issue.findMany.mockResolvedValue([
+        {
+          archivedAt: null,
+          id: issueId,
+          state: { type: 'started' },
+          trashed: false,
+        },
+      ]);
+      prisma.cycle.findFirst.mockResolvedValueOnce(NEXT_CYCLE); // next upcoming
+      prisma.issue.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.rollover(TEST_ORG.id, TEST_CYCLE.id);
+
+      expect(result.movedCount).toBe(1);
+      expect(result.movedIssueIds).toEqual([issueId]);
+      expect(result.nextCycleId).toBe(NEXT_CYCLE.id);
+      expect(prisma.issue.updateMany).toHaveBeenCalledWith({
+        data: { addedToCycleAt: expect.any(Date), cycleId: NEXT_CYCLE.id },
+        where: { id: { in: [issueId] } },
+      });
+    });
+
+    it('unassigns issues when no next cycle exists', async () => {
+      const issueId = '00000000-0000-0000-0000-000000000400';
+      prisma.cycle.findFirst.mockResolvedValueOnce(TEST_CYCLE); // org scope check
+      prisma.cycle.update.mockResolvedValue({
+        ...TEST_CYCLE,
+        completedAt: new Date(),
+      });
+      prisma.issue.findMany.mockResolvedValue([
+        {
+          archivedAt: null,
+          id: issueId,
+          state: { type: 'backlog' },
+          trashed: false,
+        },
+      ]);
+      prisma.cycle.findFirst.mockResolvedValueOnce(null); // no next cycle
+      prisma.issue.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.rollover(TEST_ORG.id, TEST_CYCLE.id);
+
+      expect(result.movedCount).toBe(1);
+      expect(result.nextCycleId).toBeNull();
+      expect(prisma.issue.updateMany).toHaveBeenCalledWith({
+        data: { addedToCycleAt: null, cycleId: null },
+        where: { id: { in: [issueId] } },
+      });
+    });
+
+    it('does not move already-completed or canceled issues', async () => {
+      prisma.cycle.findFirst.mockResolvedValueOnce(TEST_CYCLE);
+      prisma.cycle.update.mockResolvedValue({
+        ...TEST_CYCLE,
+        completedAt: new Date(),
+      });
+      prisma.issue.findMany.mockResolvedValue([
+        { id: 'i1', state: { type: 'completed' } },
+        { id: 'i2', state: { type: 'canceled' } },
+      ]);
+      prisma.cycle.findFirst.mockResolvedValueOnce(NEXT_CYCLE);
+
+      const result = await service.rollover(TEST_ORG.id, TEST_CYCLE.id);
+
+      expect(result.movedCount).toBe(0);
+      expect(result.movedIssueIds).toEqual([]);
+      expect(prisma.issue.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getVelocity', () => {
+    it('returns average and per-cycle completed issue counts', async () => {
+      const cycle1 = { ...TEST_CYCLE, id: 'c1', number: 1 };
+      const cycle2 = { ...TEST_CYCLE, id: 'c2', number: 2 };
+      prisma.cycle.findMany.mockResolvedValue([cycle1, cycle2]);
+      prisma.issue.count
+        .mockResolvedValueOnce(4) // cycle1
+        .mockResolvedValueOnce(6); // cycle2
+
+      const result = await service.getVelocity(TEST_TEAM.id, 8);
+
+      expect(result.averageIssues).toBe(5);
+      expect(result.cycles).toEqual([
+        { completedIssues: 4, cycleId: 'c1', cycleNumber: 1 },
+        { completedIssues: 6, cycleId: 'c2', cycleNumber: 2 },
+      ]);
+    });
+
+    it('returns zero average when no completed cycles', async () => {
+      prisma.cycle.findMany.mockResolvedValue([]);
+
+      const result = await service.getVelocity(TEST_TEAM.id);
+
+      expect(result.averageIssues).toBe(0);
+      expect(result.cycles).toEqual([]);
+    });
+  });
+
+  describe('getBurndown', () => {
+    it('returns empty array when cycle not found', async () => {
+      prisma.cycle.findUnique.mockResolvedValue(null);
+
+      const result = await service.getBurndown('nonexistent');
+      expect(result).toEqual([]);
+    });
+
+    it('returns empty array when cycle has no issues', async () => {
+      prisma.cycle.findUnique.mockResolvedValue(TEST_CYCLE);
+      prisma.issue.findMany.mockResolvedValue([]);
+
+      const result = await service.getBurndown(TEST_CYCLE.id);
+      expect(result).toEqual([]);
+    });
+
+    it('produces day-by-day burndown points', async () => {
+      const start = new Date('2026-03-01T00:00:00Z');
+      const end = new Date('2026-03-03T00:00:00Z'); // 3-day cycle for brevity
+      const cycle = { ...TEST_CYCLE, endsAt: end, startsAt: start };
+      prisma.cycle.findUnique.mockResolvedValue(cycle);
+      prisma.issue.findMany.mockResolvedValue([
+        { completedAt: new Date('2026-03-01T12:00:00Z'), id: 'i1' },
+        { completedAt: null, id: 'i2' },
+      ]);
+
+      const result = await service.getBurndown(TEST_CYCLE.id);
+
+      // Expect a data point for each day from start up to min(end, now)
+      expect(result.length).toBeGreaterThan(0);
+      expect(result[0].date).toBe('2026-03-01');
+      // After day 1: 1 issue completed, 1 remaining
+      const day1 = result.find(p => p.date === '2026-03-01');
+      expect(day1?.completed).toBe(1);
+      expect(day1?.remaining).toBe(1);
     });
   });
 });

@@ -13,7 +13,7 @@ import { StatusSelect } from '../properties/status-select';
 import { TemplateSelector } from './template-selector';
 
 const GET_TEMPLATES_QUERY = `
-  query GetIssueTemplates($teamId: String!) {
+  query GetIssueTemplates($teamId: ID!) {
     issueTemplates(teamId: $teamId) { id name templateData isDefault }
   }
 `;

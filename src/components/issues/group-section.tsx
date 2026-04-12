@@ -7,6 +7,21 @@ import { StatusDot } from '../properties/status-select';
 
 const VIRTUAL_THRESHOLD = 20;
 
+/**
+ * A collapsible group header with two rendering strategies:
+ *
+ * **`children` (non-virtual)** — use for small lists (≤20 items).
+ * Pass your rendered rows directly as children. Simple, composable, no overhead.
+ *
+ * **`items` + `renderItem` (virtual)** — use for large lists (>20 items).
+ * Pass the raw data array and a render function; `useVirtualizer` is activated
+ * automatically and only the visible rows are mounted. Requires a fixed
+ * `itemHeight` (default 36px) for accurate scrollbar sizing.
+ *
+ * If `items` is provided but has ≤20 entries the component transparently falls
+ * back to the non-virtual `children` path, so you can always pass both and let
+ * the component decide.
+ */
 interface GroupSectionProps {
   name: string;
   color: string;

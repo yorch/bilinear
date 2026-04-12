@@ -82,7 +82,17 @@ export function IssueDetailPanel({
   const [titleDraft, setTitleDraft] = useState('');
   const [editingDesc, setEditingDesc] = useState(false);
   const [descDraft, setDescDraft] = useState('');
+  const [activityKey, setActivityKey] = useState(0);
   const titleRef = useRef<HTMLInputElement>(null);
+
+  // Wrap onUpdate so any mutation triggers an activity re-fetch
+  const handleUpdate = useCallback(
+    (id: string, patch: Record<string, unknown>) => {
+      onUpdate(id, patch);
+      setActivityKey(k => k + 1);
+    },
+    [onUpdate],
+  );
 
   // Subscription state: null = loading, true = subscribed, false = not subscribed
   const [subscribed, setSubscribed] = useState<boolean | null>(null);
@@ -154,14 +164,14 @@ export function IssueDetailPanel({
 
   const saveTitle = () => {
     if (titleDraft.trim() && titleDraft.trim() !== issue.title) {
-      onUpdate(issue.id, { title: titleDraft.trim() });
+      handleUpdate(issue.id, { title: titleDraft.trim() });
     }
     setEditingTitle(false);
   };
 
   const saveDesc = () => {
     if (descDraft !== (issue.description ?? '')) {
-      onUpdate(issue.id, { description: descDraft || null });
+      handleUpdate(issue.id, { description: descDraft || null });
     }
     setEditingDesc(false);
   };
@@ -257,7 +267,7 @@ export function IssueDetailPanel({
             <StatusSelect
               value={issue.stateId}
               states={states}
-              onChange={stateId => onUpdate(issue.id, { stateId })}
+              onChange={stateId => handleUpdate(issue.id, { stateId })}
             />
 
             {/* Priority */}
@@ -265,7 +275,7 @@ export function IssueDetailPanel({
             <div className="flex items-center gap-1.5">
               <PrioritySelect
                 value={issue.priority}
-                onChange={priority => onUpdate(issue.id, { priority })}
+                onChange={priority => handleUpdate(issue.id, { priority })}
               />
               <span className="text-xs text-zinc-600">
                 {priorityConfig.label}
@@ -278,7 +288,7 @@ export function IssueDetailPanel({
               <AssigneeSelect
                 value={issue.assigneeId}
                 users={users}
-                onChange={assigneeId => onUpdate(issue.id, { assigneeId })}
+                onChange={assigneeId => handleUpdate(issue.id, { assigneeId })}
               />
               <span className="text-xs text-zinc-600">
                 {assignee?.displayName ?? 'No assignee'}
@@ -291,7 +301,7 @@ export function IssueDetailPanel({
               <LabelSelect
                 value={issue.labels.map(l => l.id)}
                 labels={labels}
-                onChange={labelIds => onUpdate(issue.id, { labelIds })}
+                onChange={labelIds => handleUpdate(issue.id, { labelIds })}
               />
               {issue.labels.map(l => (
                 <span
@@ -309,7 +319,7 @@ export function IssueDetailPanel({
             <div className="flex items-center gap-1.5">
               <DueDatePicker
                 value={issue.dueDate}
-                onChange={dueDate => onUpdate(issue.id, { dueDate })}
+                onChange={dueDate => handleUpdate(issue.id, { dueDate })}
               />
               {issue.dueDate && (
                 <span className={cn('text-xs', dueDateColor)}>
@@ -326,7 +336,7 @@ export function IssueDetailPanel({
                   value={issue.estimate}
                   estimationType={estimationType}
                   onChange={estimate =>
-                    onUpdate(issue.id, { estimate: estimate ?? undefined })
+                    handleUpdate(issue.id, { estimate: estimate ?? undefined })
                   }
                 />
               </>
@@ -390,7 +400,7 @@ export function IssueDetailPanel({
           {/* Activity */}
           <div className="mt-6">
             <p className="mb-3 text-xs font-medium text-zinc-500">Activity</p>
-            <ActivityTimeline issueId={issue.id} />
+            <ActivityTimeline issueId={issue.id} refetchKey={activityKey} />
           </div>
         </div>
       </div>

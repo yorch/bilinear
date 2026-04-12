@@ -12,6 +12,30 @@ import {
 } from '../../test/prisma-mock';
 import { IssueService, IssueStateRequiredError } from './issue.service';
 
+const COMPLETED_STATE = DEFAULT_WORKFLOW_STATES[3]; // type: 'completed'
+const CANCELED_STATE = DEFAULT_WORKFLOW_STATES[4]; // type: 'canceled'
+const IN_PROGRESS_STATE = DEFAULT_WORKFLOW_STATES[2]; // type: 'started'
+
+const PARENT_ISSUE = {
+  ...TEST_ISSUE,
+  id: '00000000-0000-0000-0000-000000000401',
+  identifier: 'ENG-2',
+  number: 2,
+  parentId: null,
+  state: { type: 'started' },
+  stateId: IN_PROGRESS_STATE.id,
+};
+
+const CHILD_ISSUE = {
+  ...TEST_ISSUE,
+  id: '00000000-0000-0000-0000-000000000402',
+  identifier: 'ENG-3',
+  number: 3,
+  parentId: PARENT_ISSUE.id,
+  state: { type: 'started' },
+  stateId: IN_PROGRESS_STATE.id,
+};
+
 describe('IssueService', () => {
   let prisma: MockPrismaClient;
   let service: IssueService;
@@ -245,6 +269,129 @@ describe('IssueService', () => {
       expect(prisma.issue.delete).toHaveBeenCalledWith({
         where: { id: TEST_ISSUE.id },
       });
+    });
+  });
+
+  describe('maybeCloseParent (via update)', () => {
+    it('closes parent when last child is completed', async () => {
+      // update() returns child issue with parentId set
+      const updatedChild = {
+        ...CHILD_ISSUE,
+        stateId: COMPLETED_STATE.id,
+      };
+      // First call: child update inside $transaction
+      prisma.issue.update.mockResolvedValueOnce(updatedChild);
+      prisma.issueLabelAssignment.deleteMany.mockResolvedValue({ count: 0 });
+
+      // siblings query — only the child itself, now completed
+      prisma.issue.findMany.mockResolvedValue([
+        { id: CHILD_ISSUE.id, state: { type: 'completed' } },
+      ]);
+      // parent fetch — not yet done
+      prisma.issue.findUnique.mockResolvedValue({
+        ...PARENT_ISSUE,
+        state: { type: 'started' },
+      });
+      // completed state lookup
+      prisma.workflowState.findFirst.mockResolvedValue(COMPLETED_STATE);
+      // Second call: parent close update
+      prisma.issue.update.mockResolvedValueOnce({
+        ...PARENT_ISSUE,
+        completedAt: new Date(),
+        stateId: COMPLETED_STATE.id,
+      });
+
+      await service.update(CHILD_ISSUE.id, { stateId: COMPLETED_STATE.id });
+
+      // Verify the parent was closed
+      expect(prisma.issue.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            completedAt: expect.any(Date),
+            stateId: COMPLETED_STATE.id,
+          }),
+          where: { id: PARENT_ISSUE.id },
+        }),
+      );
+    });
+
+    it('counts canceled children as done for parent-close check', async () => {
+      const updatedChild = {
+        ...CHILD_ISSUE,
+        stateId: CANCELED_STATE.id,
+      };
+      // First call: child update inside $transaction
+      prisma.issue.update.mockResolvedValueOnce(updatedChild);
+      prisma.issueLabelAssignment.deleteMany.mockResolvedValue({ count: 0 });
+
+      // Two siblings: one completed, one canceled → all done
+      prisma.issue.findMany.mockResolvedValue([
+        { id: 'sibling-1', state: { type: 'completed' } },
+        { id: CHILD_ISSUE.id, state: { type: 'canceled' } },
+      ]);
+      prisma.issue.findUnique.mockResolvedValue({
+        ...PARENT_ISSUE,
+        state: { type: 'started' },
+      });
+      prisma.workflowState.findFirst.mockResolvedValue(COMPLETED_STATE);
+      // Second call: parent close update
+      prisma.issue.update.mockResolvedValueOnce({
+        ...PARENT_ISSUE,
+        completedAt: new Date(),
+        stateId: COMPLETED_STATE.id,
+      });
+
+      await service.update(CHILD_ISSUE.id, { stateId: CANCELED_STATE.id });
+
+      expect(prisma.workflowState.findFirst).toHaveBeenCalled();
+      expect(prisma.issue.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: PARENT_ISSUE.id },
+        }),
+      );
+    });
+
+    it('does not close parent when sibling is still in progress', async () => {
+      const updatedChild = {
+        ...CHILD_ISSUE,
+        stateId: COMPLETED_STATE.id,
+      };
+      prisma.issue.update.mockResolvedValue(updatedChild);
+      prisma.issueLabelAssignment.deleteMany.mockResolvedValue({ count: 0 });
+
+      // One sibling still in progress
+      prisma.issue.findMany.mockResolvedValue([
+        { id: CHILD_ISSUE.id, state: { type: 'completed' } },
+        { id: 'sibling-2', state: { type: 'started' } },
+      ]);
+
+      await service.update(CHILD_ISSUE.id, { stateId: COMPLETED_STATE.id });
+
+      // Parent should NOT have been closed
+      expect(prisma.issue.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('does not close parent when parent is already completed', async () => {
+      const updatedChild = {
+        ...CHILD_ISSUE,
+        stateId: COMPLETED_STATE.id,
+      };
+      prisma.issue.update.mockResolvedValue(updatedChild);
+      prisma.issueLabelAssignment.deleteMany.mockResolvedValue({ count: 0 });
+
+      prisma.issue.findMany.mockResolvedValue([
+        { id: CHILD_ISSUE.id, state: { type: 'completed' } },
+      ]);
+      // Parent already done
+      prisma.issue.findUnique.mockResolvedValue({
+        ...PARENT_ISSUE,
+        state: { type: 'completed' },
+      });
+
+      await service.update(CHILD_ISSUE.id, { stateId: COMPLETED_STATE.id });
+
+      // workflowState.findFirst should not have been called
+      expect(prisma.workflowState.findFirst).not.toHaveBeenCalled();
     });
   });
 

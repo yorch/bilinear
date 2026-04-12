@@ -270,8 +270,6 @@ export const NotificationInbox = observer(function NotificationInbox() {
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
   const [snoozingId, setSnoozingId] = useState<string | null>(null);
-  // Track snoozed IDs locally so we can hide them immediately after snoozing
-  const [snoozedIds, setSnoozedIds] = useState<Set<string>>(new Set());
 
   // Initial fetch — populate the store; subsequent updates arrive via WebSocket
   useEffect(() => {
@@ -325,11 +323,10 @@ export const NotificationInbox = observer(function NotificationInbox() {
   };
 
   const handleSnooze = async (id: string, until: Date) => {
-    // Optimistic: mark as snoozed in store and hide from list
+    // Optimistic: mark as snoozed in store — the derived filter will hide it
     notificationStore.optimisticUpdate(id, {
       snoozedUntilAt: until.toISOString(),
     });
-    setSnoozedIds(prev => new Set(prev).add(id));
     setSnoozingId(id);
     try {
       const res = await gql(SNOOZE_MUTATION, {
@@ -343,11 +340,6 @@ export const NotificationInbox = observer(function NotificationInbox() {
     } catch {
       // Roll back optimistic update
       notificationStore.optimisticUpdate(id, { snoozedUntilAt: null });
-      setSnoozedIds(prev => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
       toast.error('Failed to snooze notification');
     } finally {
       setSnoozingId(null);
@@ -369,8 +361,10 @@ export const NotificationInbox = observer(function NotificationInbox() {
     }
   };
 
-  const unread = notifications.filter(n => !n.read && !snoozedIds.has(n.id));
-  const read = notifications.filter(n => n.read && !snoozedIds.has(n.id));
+  const isSnoozed = (n: { snoozedUntilAt?: string | null }) =>
+    !!n.snoozedUntilAt && new Date(n.snoozedUntilAt) > new Date();
+  const unread = notifications.filter(n => !n.read && !isSnoozed(n));
+  const read = notifications.filter(n => n.read && !isSnoozed(n));
   const hasUnread = unread.length > 0;
 
   return (
