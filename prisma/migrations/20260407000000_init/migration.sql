@@ -530,7 +530,10 @@ CREATE INDEX "auth_tokens_user_id_idx" ON "auth_tokens"("user_id");
 CREATE INDEX "auth_tokens_token_hash_idx" ON "auth_tokens"("token_hash");
 
 -- CreateIndex
-CREATE INDEX "teams_organization_id_key_idx" ON "teams"("organization_id", "key");
+-- Partial unique index: allows reusing a team key after soft-delete (archived_at IS NOT NULL)
+CREATE UNIQUE INDEX "teams_organization_id_key_key"
+  ON "teams" ("organization_id", "key")
+  WHERE "archived_at" IS NULL;
 
 -- CreateIndex
 CREATE INDEX "teams_organization_id_idx" ON "teams"("organization_id");
