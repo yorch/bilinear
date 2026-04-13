@@ -8,99 +8,99 @@ datasource db {
 }
 
 model Organization {
-  id                   String    @id @default(uuid()) @db.Uuid
-  name                 String    @db.VarChar(255)
-  urlKey               String    @unique @map("url_key") @db.VarChar(63)
-  logoUrl              String?   @map("logo_url")
-  dataRegion           String    @default("US") @map("data_region") @db.VarChar(2)
+  id         String  @id @default(uuid()) @db.Uuid
+  name       String  @db.VarChar(255)
+  urlKey     String  @unique @map("url_key") @db.VarChar(63)
+  logoUrl    String? @map("logo_url")
+  dataRegion String  @default("US") @map("data_region") @db.VarChar(2)
 
-  roadmapEnabled       Boolean   @default(false) @map("roadmap_enabled")
-  customersEnabled     Boolean   @default(false) @map("customers_enabled")
-  initiativesEnabled   Boolean   @default(false) @map("initiatives_enabled")
+  roadmapEnabled     Boolean @default(false) @map("roadmap_enabled")
+  customersEnabled   Boolean @default(false) @map("customers_enabled")
+  initiativesEnabled Boolean @default(false) @map("initiatives_enabled")
 
-  securitySettings     Json      @default("{}") @map("security_settings")
-  authSettings         Json      @default("{}") @map("auth_settings")
-  themeSettings        Json?     @map("theme_settings")
+  securitySettings Json  @default("{}") @map("security_settings")
+  authSettings     Json  @default("{}") @map("auth_settings")
+  themeSettings    Json? @map("theme_settings")
 
-  fiscalYearStartMonth Int       @default(1) @map("fiscal_year_start_month")
+  fiscalYearStartMonth Int @default(1) @map("fiscal_year_start_month")
 
-  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  archivedAt           DateTime? @map("archived_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz
 
-  members              OrganizationMember[]
-  teams                Team[]
-  issues               Issue[]
-  labels               IssueLabel[]
-  notifications        Notification[]
-  syncActions          SyncAction[]
-  projects             Project[]
-  cycles               Cycle[]
-  customViews          CustomView[]
+  members       OrganizationMember[]
+  teams         Team[]
+  issues        Issue[]
+  labels        IssueLabel[]
+  notifications Notification[]
+  syncActions   SyncAction[]
+  projects      Project[]
+  cycles        Cycle[]
+  customViews   CustomView[]
 
   @@map("organizations")
 }
 
 model User {
-  id              String    @id @default(uuid()) @db.Uuid
-  name            String    @db.VarChar(255)
-  displayName     String    @map("display_name") @db.VarChar(255)
-  email           String    @unique @db.VarChar(255)
-  initials        String    @db.VarChar(4)
-  avatarUrl       String?   @map("avatar_url")
-  avatarBgColor   String    @default("#6366f1") @map("avatar_bg_color") @db.VarChar(7)
+  id            String  @id @default(uuid()) @db.Uuid
+  name          String  @db.VarChar(255)
+  displayName   String  @map("display_name") @db.VarChar(255)
+  email         String  @unique @db.VarChar(255)
+  initials      String  @db.VarChar(4)
+  avatarUrl     String? @map("avatar_url")
+  avatarBgColor String  @default("#6366f1") @map("avatar_bg_color") @db.VarChar(7)
 
-  active          Boolean   @default(true)
-  lastSeen        DateTime? @map("last_seen") @db.Timestamptz
-  timezone        String?   @db.VarChar(63)
+  active   Boolean   @default(true)
+  lastSeen DateTime? @map("last_seen") @db.Timestamptz
+  timezone String?   @db.VarChar(63)
 
-  statusEmoji     String?   @map("status_emoji") @db.VarChar(32)
-  statusLabel     String?   @map("status_label") @db.VarChar(255)
-  statusUntilAt   DateTime? @map("status_until_at") @db.Timestamptz
+  statusEmoji   String?   @map("status_emoji") @db.VarChar(32)
+  statusLabel   String?   @map("status_label") @db.VarChar(255)
+  statusUntilAt DateTime? @map("status_until_at") @db.Timestamptz
 
-  passwordHash    String?   @map("password_hash")
-  googleId        String?   @map("google_id") @db.VarChar(255)
+  passwordHash String? @map("password_hash")
+  googleId     String? @map("google_id") @db.VarChar(255)
 
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  orgMemberships  OrganizationMember[]
-  authTokens      AuthToken[]
-  teamMemberships TeamMembership[]
-  assignedIssues  Issue[]    @relation("AssignedIssues")
-  createdIssues   Issue[]    @relation("CreatedIssues")
-  snoozedIssues   Issue[]    @relation("SnoozedIssues")
-  createdLabels   IssueLabel[] @relation("CreatedLabels")
-  projectsLed     Project[]  @relation("ProjectLead")
-  projectsCreated Project[]  @relation("ProjectCreator")
-  projectMemberships ProjectMember[]
-  projectUpdates  ProjectUpdate[]
-  customViews     CustomView[] @relation("CreatedViews")
-  issueActivities IssueActivity[] @relation("ActivityActor")
+  orgMemberships            OrganizationMember[]
+  authTokens                AuthToken[]
+  teamMemberships           TeamMembership[]
+  assignedIssues            Issue[]                    @relation("AssignedIssues")
+  createdIssues             Issue[]                    @relation("CreatedIssues")
+  snoozedIssues             Issue[]                    @relation("SnoozedIssues")
+  createdLabels             IssueLabel[]               @relation("CreatedLabels")
+  projectsLed               Project[]                  @relation("ProjectLead")
+  projectsCreated           Project[]                  @relation("ProjectCreator")
+  projectMemberships        ProjectMember[]
+  projectUpdates            ProjectUpdate[]
+  customViews               CustomView[]               @relation("CreatedViews")
+  issueActivities           IssueActivity[]            @relation("ActivityActor")
   notificationSubscriptions NotificationSubscription[]
-  receivedNotifications Notification[] @relation("ReceivedNotifications")
-  sentNotifications Notification[] @relation("SentNotifications")
-  createdTemplates IssueTemplate[] @relation("CreatedTemplates")
-  comments         Comment[]       @relation("AuthoredComments")
-  resolvedComments Comment[]       @relation("ResolvedComments")
-  commentReactions CommentReaction[]
-  teamMemberRoles  TeamMemberRole[]
+  receivedNotifications     Notification[]             @relation("ReceivedNotifications")
+  sentNotifications         Notification[]             @relation("SentNotifications")
+  createdTemplates          IssueTemplate[]            @relation("CreatedTemplates")
+  comments                  Comment[]                  @relation("AuthoredComments")
+  resolvedComments          Comment[]                  @relation("ResolvedComments")
+  commentReactions          CommentReaction[]
+  teamMemberRoles           TeamMemberRole[]
 
   @@map("users")
 }
 
 model OrganizationMember {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  userId         String   @map("user_id") @db.Uuid
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  userId         String @map("user_id") @db.Uuid
   // owner, admin, member, guest
-  role           String   @default("member") @db.VarChar(20)
+  role           String @default("member") @db.VarChar(20)
 
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, userId])
   @@index([organizationId])
@@ -109,25 +109,25 @@ model OrganizationMember {
 }
 
 model AuthToken {
-  id          String    @id @default(uuid()) @db.Uuid
-  userId      String    @map("user_id") @db.Uuid
+  id        String  @id @default(uuid()) @db.Uuid
+  userId    String  @map("user_id") @db.Uuid
   // magic_link, refresh, api_key
-  type        String    @db.VarChar(20)
-  tokenHash   String    @map("token_hash")
+  type      String  @db.VarChar(20)
+  tokenHash String  @map("token_hash")
   // 6-digit code for magic link
-  code        String?   @db.VarChar(6)
+  code      String? @db.VarChar(6)
 
-  expiresAt   DateTime  @map("expires_at") @db.Timestamptz
-  lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz
-  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz
 
-  label       String?   @db.VarChar(255)
-  ipAddress   String?   @map("ip_address") @db.VarChar(45)
-  userAgent   String?   @map("user_agent")
+  label     String? @db.VarChar(255)
+  ipAddress String? @map("ip_address") @db.VarChar(45)
+  userAgent String? @map("user_agent")
 
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([tokenHash])
@@ -135,70 +135,70 @@ model AuthToken {
 }
 
 model Team {
-  id              String    @id @default(uuid()) @db.Uuid
-  organizationId  String    @map("organization_id") @db.Uuid
-  name            String    @db.VarChar(255)
-  key             String    @db.VarChar(10)
-  displayName     String    @map("display_name") @db.VarChar(255)
-  description     String?
-  icon            String?   @db.VarChar(255)
-  color           String?   @db.VarChar(7)
-  private         Boolean   @default(false)
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @map("organization_id") @db.Uuid
+  name           String  @db.VarChar(255)
+  key            String  @db.VarChar(10)
+  displayName    String  @map("display_name") @db.VarChar(255)
+  description    String?
+  icon           String? @db.VarChar(255)
+  color          String? @db.VarChar(7)
+  private        Boolean @default(false)
 
   // Hierarchy
-  parentId        String?   @map("parent_id") @db.Uuid
+  parentId String? @map("parent_id") @db.Uuid
 
   // Timezone
-  timezone        String    @default("UTC") @db.VarChar(63)
+  timezone String @default("UTC") @db.VarChar(63)
 
   // Cycle configuration (used in Sprint 15-16)
-  cyclesEnabled           Boolean @default(false) @map("cycles_enabled")
-  cycleDuration           Int?    @default(2) @map("cycle_duration")
-  cycleCooldownTime       Int?    @default(0) @map("cycle_cooldown_time")
-  cycleStartDay           Int?    @default(1) @map("cycle_start_day")
-  cycleLockToActive       Boolean @default(false) @map("cycle_lock_to_active")
-  cycleAutoAssignStarted  Boolean @default(false) @map("cycle_auto_assign_started")
+  cyclesEnabled            Boolean @default(false) @map("cycles_enabled")
+  cycleDuration            Int?    @default(2) @map("cycle_duration")
+  cycleCooldownTime        Int?    @default(0) @map("cycle_cooldown_time")
+  cycleStartDay            Int?    @default(1) @map("cycle_start_day")
+  cycleLockToActive        Boolean @default(false) @map("cycle_lock_to_active")
+  cycleAutoAssignStarted   Boolean @default(false) @map("cycle_auto_assign_started")
   cycleAutoAssignCompleted Boolean @default(false) @map("cycle_auto_assign_completed")
 
   // Auto-close/archive
-  autoClosePeriod         Int?    @map("auto_close_period")
-  autoCloseStateId        String? @map("auto_close_state_id") @db.Uuid
-  autoArchivePeriod       Int?    @map("auto_archive_period")
-  autoCloseChildIssues    Boolean @default(false) @map("auto_close_child_issues")
-  autoCloseParentIssues   Boolean @default(false) @map("auto_close_parent_issues")
+  autoClosePeriod       Int?    @map("auto_close_period")
+  autoCloseStateId      String? @map("auto_close_state_id") @db.Uuid
+  autoArchivePeriod     Int?    @map("auto_archive_period")
+  autoCloseChildIssues  Boolean @default(false) @map("auto_close_child_issues")
+  autoCloseParentIssues Boolean @default(false) @map("auto_close_parent_issues")
 
   // Estimation
-  issueEstimationType     String  @default("notUsed") @map("issue_estimation_type") @db.VarChar(20)
-  issueEstimationExtended Boolean @default(false) @map("issue_estimation_extended")
+  issueEstimationType      String  @default("notUsed") @map("issue_estimation_type") @db.VarChar(20)
+  issueEstimationExtended  Boolean @default(false) @map("issue_estimation_extended")
   issueEstimationAllowZero Boolean @default(false) @map("issue_estimation_allow_zero")
-  defaultIssueEstimate    Float?  @map("default_issue_estimate")
+  defaultIssueEstimate     Float?  @map("default_issue_estimate")
 
   // Defaults
-  defaultIssueStateId     String? @map("default_issue_state_id") @db.Uuid
-  triageEnabled           Boolean @default(false) @map("triage_enabled")
+  defaultIssueStateId String? @map("default_issue_state_id") @db.Uuid
+  triageEnabled       Boolean @default(false) @map("triage_enabled")
 
   // Counter
-  issueCount              Int     @default(0) @map("issue_count")
+  issueCount Int @default(0) @map("issue_count")
 
   // Lifecycle
-  joinByDefault           Boolean @default(false) @map("join_by_default")
-  retiredAt               DateTime? @map("retired_at") @db.Timestamptz
-  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
-  archivedAt              DateTime? @map("archived_at") @db.Timestamptz
+  joinByDefault Boolean   @default(false) @map("join_by_default")
+  retiredAt     DateTime? @map("retired_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt    DateTime? @map("archived_at") @db.Timestamptz
 
-  organization            Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  parent                  Team?    @relation("TeamHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children                Team[]   @relation("TeamHierarchy")
-  memberships             TeamMembership[]
-  workflowStates          WorkflowState[]
-  issues                  Issue[]
-  labels                  IssueLabel[]
-  projectTeams            ProjectTeam[]
-  cycles                  Cycle[]
-  customViews             CustomView[]
-  issueTemplates          IssueTemplate[]
-  memberRoles             TeamMemberRole[]
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent         Team?            @relation("TeamHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children       Team[]           @relation("TeamHierarchy")
+  memberships    TeamMembership[]
+  workflowStates WorkflowState[]
+  issues         Issue[]
+  labels         IssueLabel[]
+  projectTeams   ProjectTeam[]
+  cycles         Cycle[]
+  customViews    CustomView[]
+  issueTemplates IssueTemplate[]
+  memberRoles    TeamMemberRole[]
 
   // Unique on (organizationId, key) is enforced via a partial index in the DB
   // (WHERE archived_at IS NULL) so archived teams don't block key reuse.
@@ -209,17 +209,17 @@ model Team {
 }
 
 model TeamMembership {
-  id        String   @id @default(uuid()) @db.Uuid
-  teamId    String   @map("team_id") @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  isOwner   Boolean  @default(false) @map("is_owner")
-  sortOrder Float    @default(0) @map("sort_order")
+  id        String  @id @default(uuid()) @db.Uuid
+  teamId    String  @map("team_id") @db.Uuid
+  userId    String  @map("user_id") @db.Uuid
+  isOwner   Boolean @default(false) @map("is_owner")
+  sortOrder Float   @default(0) @map("sort_order")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, userId])
   @@index([teamId])
@@ -228,20 +228,20 @@ model TeamMembership {
 }
 
 model WorkflowState {
-  id          String    @id @default(uuid()) @db.Uuid
-  teamId      String    @map("team_id") @db.Uuid
-  name        String    @db.VarChar(255)
-  color       String    @db.VarChar(7)
+  id          String  @id @default(uuid()) @db.Uuid
+  teamId      String  @map("team_id") @db.Uuid
+  name        String  @db.VarChar(255)
+  color       String  @db.VarChar(7)
   description String?
-  type        String    @db.VarChar(20)
-  position    Float     @default(0)
+  type        String  @db.VarChar(20)
+  position    Float   @default(0)
 
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  archivedAt  DateTime? @map("archived_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz
 
-  team        Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  issues      Issue[]
+  team   Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  issues Issue[]
 
   @@index([teamId])
   @@index([teamId, type])
@@ -249,37 +249,37 @@ model WorkflowState {
 }
 
 model Issue {
-  id              String    @id @default(uuid()) @db.Uuid
-  organizationId  String    @map("organization_id") @db.Uuid
-  teamId          String    @map("team_id") @db.Uuid
-  number          Int
-  identifier      String    @db.VarChar(20)
+  id                  String   @id @default(uuid()) @db.Uuid
+  organizationId      String   @map("organization_id") @db.Uuid
+  teamId              String   @map("team_id") @db.Uuid
+  number              Int
+  identifier          String   @db.VarChar(20)
   previousIdentifiers String[] @default([]) @map("previous_identifiers")
 
   // Content
-  title           String    @db.VarChar(1000)
-  description     String?
-  descriptionState Bytes?   @map("description_state")
+  title            String  @db.VarChar(1000)
+  description      String?
+  descriptionState Bytes?  @map("description_state")
 
   // Properties
-  priority        Int       @default(0) @db.SmallInt
-  estimate        Float?
-  dueDate         DateTime? @map("due_date") @db.Date
-  sortOrder       Float     @default(0) @map("sort_order")
-  prioritySortOrder Float   @default(0) @map("priority_sort_order")
-  subIssueSortOrder Float?  @map("sub_issue_sort_order")
+  priority          Int       @default(0) @db.SmallInt
+  estimate          Float?
+  dueDate           DateTime? @map("due_date") @db.Date
+  sortOrder         Float     @default(0) @map("sort_order")
+  prioritySortOrder Float     @default(0) @map("priority_sort_order")
+  subIssueSortOrder Float?    @map("sub_issue_sort_order")
 
   // Relationships
-  stateId         String    @map("state_id") @db.Uuid
-  assigneeId      String?   @map("assignee_id") @db.Uuid
-  creatorId       String?   @map("creator_id") @db.Uuid
-  parentId        String?   @map("parent_id") @db.Uuid
-  projectId       String?   @map("project_id") @db.Uuid
+  stateId            String  @map("state_id") @db.Uuid
+  assigneeId         String? @map("assignee_id") @db.Uuid
+  creatorId          String? @map("creator_id") @db.Uuid
+  parentId           String? @map("parent_id") @db.Uuid
+  projectId          String? @map("project_id") @db.Uuid
   projectMilestoneId String? @map("project_milestone_id") @db.Uuid
-  cycleId         String?   @map("cycle_id") @db.Uuid
+  cycleId            String? @map("cycle_id") @db.Uuid
 
   // Git
-  branchName      String?   @map("branch_name") @db.VarChar(500)
+  branchName String? @map("branch_name") @db.VarChar(500)
 
   // SLA
   slaBreachesAt   DateTime? @map("sla_breaches_at") @db.Timestamptz
@@ -289,48 +289,48 @@ model Issue {
   slaType         String?   @map("sla_type") @db.VarChar(50)
 
   // Lifecycle timestamps
-  startedAt       DateTime? @map("started_at") @db.Timestamptz
-  completedAt     DateTime? @map("completed_at") @db.Timestamptz
-  canceledAt      DateTime? @map("canceled_at") @db.Timestamptz
-  autoArchivedAt  DateTime? @map("auto_archived_at") @db.Timestamptz
-  autoClosedAt    DateTime? @map("auto_closed_at") @db.Timestamptz
-  startedTriageAt DateTime? @map("started_triage_at") @db.Timestamptz
-  triagedAt       DateTime? @map("triaged_at") @db.Timestamptz
-  addedToCycleAt  DateTime? @map("added_to_cycle_at") @db.Timestamptz
+  startedAt        DateTime? @map("started_at") @db.Timestamptz
+  completedAt      DateTime? @map("completed_at") @db.Timestamptz
+  canceledAt       DateTime? @map("canceled_at") @db.Timestamptz
+  autoArchivedAt   DateTime? @map("auto_archived_at") @db.Timestamptz
+  autoClosedAt     DateTime? @map("auto_closed_at") @db.Timestamptz
+  startedTriageAt  DateTime? @map("started_triage_at") @db.Timestamptz
+  triagedAt        DateTime? @map("triaged_at") @db.Timestamptz
+  addedToCycleAt   DateTime? @map("added_to_cycle_at") @db.Timestamptz
   addedToProjectAt DateTime? @map("added_to_project_at") @db.Timestamptz
 
   // Soft delete / snooze
-  trashed         Boolean   @default(false)
-  snoozedById     String?   @map("snoozed_by_id") @db.Uuid
-  snoozedUntilAt  DateTime? @map("snoozed_until_at") @db.Timestamptz
+  trashed        Boolean   @default(false)
+  snoozedById    String?   @map("snoozed_by_id") @db.Uuid
+  snoozedUntilAt DateTime? @map("snoozed_until_at") @db.Timestamptz
 
   // Metadata
-  reactionData    Json      @default("{}") @map("reaction_data")
-  customerTicketCount Int   @default(0) @map("customer_ticket_count")
+  reactionData        Json @default("{}") @map("reaction_data")
+  customerTicketCount Int  @default(0) @map("customer_ticket_count")
 
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  archivedAt      DateTime? @map("archived_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz
 
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  team            Team         @relation(fields: [teamId], references: [id])
-  state           WorkflowState @relation(fields: [stateId], references: [id])
-  assignee        User?        @relation("AssignedIssues", fields: [assigneeId], references: [id])
-  creator         User?        @relation("CreatedIssues", fields: [creatorId], references: [id])
-  snoozedBy       User?        @relation("SnoozedIssues", fields: [snoozedById], references: [id])
-  parent          Issue?       @relation("SubIssues", fields: [parentId], references: [id], onDelete: SetNull)
-  children        Issue[]      @relation("SubIssues")
+  organization     Organization               @relation(fields: [organizationId], references: [id])
+  team             Team                       @relation(fields: [teamId], references: [id])
+  state            WorkflowState              @relation(fields: [stateId], references: [id])
+  assignee         User?                      @relation("AssignedIssues", fields: [assigneeId], references: [id])
+  creator          User?                      @relation("CreatedIssues", fields: [creatorId], references: [id])
+  snoozedBy        User?                      @relation("SnoozedIssues", fields: [snoozedById], references: [id])
+  parent           Issue?                     @relation("SubIssues", fields: [parentId], references: [id], onDelete: SetNull)
+  children         Issue[]                    @relation("SubIssues")
   labelAssignments IssueLabelAssignment[]
-  activities      IssueActivity[]
-  cycle           Cycle?       @relation(fields: [cycleId], references: [id], onDelete: SetNull)
-  notifications   Notification[]
-  project         Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  projectMilestone ProjectMilestone? @relation(fields: [projectMilestoneId], references: [id], onDelete: SetNull)
-  subscriptions   NotificationSubscription[]
-  issueRelations  IssueRelation[] @relation("IssueRelations")
-  relatedToIssues IssueRelation[] @relation("RelatedIssues")
-  files           File[]
-  comments        Comment[]
+  activities       IssueActivity[]
+  cycle            Cycle?                     @relation(fields: [cycleId], references: [id], onDelete: SetNull)
+  notifications    Notification[]
+  project          Project?                   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  projectMilestone ProjectMilestone?          @relation(fields: [projectMilestoneId], references: [id], onDelete: SetNull)
+  subscriptions    NotificationSubscription[]
+  issueRelations   IssueRelation[]            @relation("IssueRelations")
+  relatedToIssues  IssueRelation[]            @relation("RelatedIssues")
+  files            File[]
+  comments         Comment[]
 
   @@unique([teamId, number])
   @@index([organizationId])
@@ -348,29 +348,29 @@ model Issue {
 }
 
 model IssueLabel {
-  id              String    @id @default(uuid()) @db.Uuid
-  organizationId  String    @map("organization_id") @db.Uuid
-  teamId          String?   @map("team_id") @db.Uuid
-  name            String    @db.VarChar(255)
-  color           String    @db.VarChar(7)
-  description     String?
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @map("organization_id") @db.Uuid
+  teamId         String? @map("team_id") @db.Uuid
+  name           String  @db.VarChar(255)
+  color          String  @db.VarChar(7)
+  description    String?
 
-  isGroup         Boolean   @default(false) @map("is_group")
-  parentId        String?   @map("parent_id") @db.Uuid
+  isGroup  Boolean @default(false) @map("is_group")
+  parentId String? @map("parent_id") @db.Uuid
 
-  creatorId       String?   @map("creator_id") @db.Uuid
-  lastAppliedAt   DateTime? @map("last_applied_at") @db.Timestamptz
+  creatorId     String?   @map("creator_id") @db.Uuid
+  lastAppliedAt DateTime? @map("last_applied_at") @db.Timestamptz
 
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  archivedAt      DateTime? @map("archived_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz
 
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  team            Team?      @relation(fields: [teamId], references: [id])
-  parent          IssueLabel? @relation("LabelHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children        IssueLabel[] @relation("LabelHierarchy")
-  creator         User?      @relation("CreatedLabels", fields: [creatorId], references: [id])
-  assignments     IssueLabelAssignment[]
+  organization Organization           @relation(fields: [organizationId], references: [id])
+  team         Team?                  @relation(fields: [teamId], references: [id])
+  parent       IssueLabel?            @relation("LabelHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children     IssueLabel[]           @relation("LabelHierarchy")
+  creator      User?                  @relation("CreatedLabels", fields: [creatorId], references: [id])
+  assignments  IssueLabelAssignment[]
 
   @@index([organizationId])
   @@index([teamId])
@@ -379,17 +379,17 @@ model IssueLabel {
 }
 
 model SyncAction {
-  id              BigInt   @id @default(autoincrement())
-  organizationId  String   @map("organization_id") @db.Uuid
+  id             BigInt @id @default(autoincrement())
+  organizationId String @map("organization_id") @db.Uuid
   // I=Insert, U=Update, D=Delete, A=Archive
-  action          String   @db.VarChar(1)
-  modelName       String   @map("model_name") @db.VarChar(50)
-  modelId         String   @map("model_id") @db.Uuid
-  data            Json?
+  action         String @db.VarChar(1)
+  modelName      String @map("model_name") @db.VarChar(50)
+  modelId        String @map("model_id") @db.Uuid
+  data           Json?
 
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  organization    Organization @relation(fields: [organizationId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId, id])
   @@index([createdAt])
@@ -397,57 +397,57 @@ model SyncAction {
 }
 
 model Project {
-  id                         String    @id @default(uuid()) @db.Uuid
-  organizationId             String    @map("organization_id") @db.Uuid
-  name                       String    @db.VarChar(255)
-  slugId                     String    @map("slug_id") @db.VarChar(255)
-  description                String    @default("")
-  content                    String?
-  icon                       String?   @db.VarChar(255)
-  color                      String    @default("#6366f1") @db.VarChar(7)
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @map("organization_id") @db.Uuid
+  name           String  @db.VarChar(255)
+  slugId         String  @map("slug_id") @db.VarChar(255)
+  description    String  @default("")
+  content        String?
+  icon           String? @db.VarChar(255)
+  color          String  @default("#6366f1") @db.VarChar(7)
 
-  statusType                 String    @default("planned") @map("status_type") @db.VarChar(20)
-  statusName                 String?   @map("status_name") @db.VarChar(255)
-  health                     String?   @db.VarChar(20)
-  healthUpdatedAt            DateTime? @map("health_updated_at") @db.Timestamptz
+  statusType      String    @default("planned") @map("status_type") @db.VarChar(20)
+  statusName      String?   @map("status_name") @db.VarChar(255)
+  health          String?   @db.VarChar(20)
+  healthUpdatedAt DateTime? @map("health_updated_at") @db.Timestamptz
 
-  priority                   Int       @default(0) @db.SmallInt
-  prioritySortOrder          Float     @default(0) @map("priority_sort_order")
+  priority          Int   @default(0) @db.SmallInt
+  prioritySortOrder Float @default(0) @map("priority_sort_order")
 
-  progress                   Float     @default(0)
-  scope                      Float     @default(0)
+  progress Float @default(0)
+  scope    Float @default(0)
 
-  startDate                  DateTime? @map("start_date") @db.Date
-  targetDate                 DateTime? @map("target_date") @db.Date
-  startDateResolution        String?   @map("start_date_resolution") @db.VarChar(20)
-  targetDateResolution       String?   @map("target_date_resolution") @db.VarChar(20)
+  startDate            DateTime? @map("start_date") @db.Date
+  targetDate           DateTime? @map("target_date") @db.Date
+  startDateResolution  String?   @map("start_date_resolution") @db.VarChar(20)
+  targetDateResolution String?   @map("target_date_resolution") @db.VarChar(20)
 
-  leadId                     String?   @map("lead_id") @db.Uuid
-  creatorId                  String?   @map("creator_id") @db.Uuid
+  leadId    String? @map("lead_id") @db.Uuid
+  creatorId String? @map("creator_id") @db.Uuid
 
-  completedIssueCountHistory Json      @default("[]") @map("completed_issue_count_history")
-  completedScopeHistory      Json      @default("[]") @map("completed_scope_history")
-  issueCountHistory          Json      @default("[]") @map("issue_count_history")
-  scopeHistory               Json      @default("[]") @map("scope_history")
+  completedIssueCountHistory Json @default("[]") @map("completed_issue_count_history")
+  completedScopeHistory      Json @default("[]") @map("completed_scope_history")
+  issueCountHistory          Json @default("[]") @map("issue_count_history")
+  scopeHistory               Json @default("[]") @map("scope_history")
 
-  startedAt                  DateTime? @map("started_at") @db.Timestamptz
-  completedAt                DateTime? @map("completed_at") @db.Timestamptz
-  canceledAt                 DateTime? @map("canceled_at") @db.Timestamptz
-  autoArchivedAt             DateTime? @map("auto_archived_at") @db.Timestamptz
-  trashed                    Boolean   @default(false)
+  startedAt      DateTime? @map("started_at") @db.Timestamptz
+  completedAt    DateTime? @map("completed_at") @db.Timestamptz
+  canceledAt     DateTime? @map("canceled_at") @db.Timestamptz
+  autoArchivedAt DateTime? @map("auto_archived_at") @db.Timestamptz
+  trashed        Boolean   @default(false)
 
-  createdAt                  DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt                  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  archivedAt                 DateTime? @map("archived_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz
 
-  organization               Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  lead                       User?     @relation("ProjectLead", fields: [leadId], references: [id])
-  creator                    User?     @relation("ProjectCreator", fields: [creatorId], references: [id])
-  teams                      ProjectTeam[]
-  members                    ProjectMember[]
-  issues                     Issue[]
-  milestones                 ProjectMilestone[]
-  updates                    ProjectUpdate[]
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead         User?              @relation("ProjectLead", fields: [leadId], references: [id])
+  creator      User?              @relation("ProjectCreator", fields: [creatorId], references: [id])
+  teams        ProjectTeam[]
+  members      ProjectMember[]
+  issues       Issue[]
+  milestones   ProjectMilestone[]
+  updates      ProjectUpdate[]
 
   @@unique([organizationId, slugId])
   @@index([organizationId])
@@ -462,8 +462,8 @@ model ProjectTeam {
   teamId    String   @map("team_id") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  team    Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, teamId])
   @@index([projectId])
@@ -477,8 +477,8 @@ model ProjectMember {
   userId    String   @map("user_id") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, userId])
   @@index([projectId])
@@ -494,12 +494,12 @@ model ProjectMilestone {
   targetDate  DateTime? @map("target_date") @db.Date
   sortOrder   Float     @default(0) @map("sort_order")
 
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  archivedAt  DateTime? @map("archived_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz
 
-  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  issues      Issue[]
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issues  Issue[]
 
   @@index([projectId])
   @@map("project_milestones")
@@ -517,46 +517,46 @@ model ProjectUpdate {
   editedAt     DateTime? @map("edited_at") @db.Timestamptz
   reactionData Json      @default("{}") @map("reaction_data")
 
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  archivedAt   DateTime? @map("archived_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz
 
-  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user         User      @relation(fields: [userId], references: [id])
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
 
   @@index([projectId])
   @@map("project_updates")
 }
 
 model Cycle {
-  id                 String    @id @default(uuid()) @db.Uuid
-  organizationId     String    @map("organization_id") @db.Uuid
-  teamId             String    @map("team_id") @db.Uuid
-  number             Int
-  name               String?   @db.VarChar(255)
-  description        String?
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @map("organization_id") @db.Uuid
+  teamId         String  @map("team_id") @db.Uuid
+  number         Int
+  name           String? @db.VarChar(255)
+  description    String?
 
-  startsAt           DateTime  @map("starts_at") @db.Timestamptz
-  endsAt             DateTime  @map("ends_at") @db.Timestamptz
+  startsAt DateTime @map("starts_at") @db.Timestamptz
+  endsAt   DateTime @map("ends_at") @db.Timestamptz
 
-  completedAt        DateTime? @map("completed_at") @db.Timestamptz
-  autoArchivedAt     DateTime? @map("auto_archived_at") @db.Timestamptz
+  completedAt    DateTime? @map("completed_at") @db.Timestamptz
+  autoArchivedAt DateTime? @map("auto_archived_at") @db.Timestamptz
 
-  progress           Float     @default(0)
-  scope              Float     @default(0)
+  progress Float @default(0)
+  scope    Float @default(0)
 
-  scopeHistory       Json      @default("[]") @map("scope_history")
-  completedScopeHistory Json   @default("[]") @map("completed_scope_history")
-  issueCountHistory  Json      @default("[]") @map("issue_count_history")
+  scopeHistory               Json @default("[]") @map("scope_history")
+  completedScopeHistory      Json @default("[]") @map("completed_scope_history")
+  issueCountHistory          Json @default("[]") @map("issue_count_history")
   completedIssueCountHistory Json @default("[]") @map("completed_issue_count_history")
 
-  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  archivedAt         DateTime? @map("archived_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz
 
-  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  team               Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  issues             Issue[]
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team         Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  issues       Issue[]
 
   @@unique([teamId, number])
   @@index([organizationId])
@@ -566,30 +566,30 @@ model Cycle {
 }
 
 model CustomView {
-  id              String    @id @default(uuid()) @db.Uuid
-  organizationId  String    @map("organization_id") @db.Uuid
-  teamId          String?   @map("team_id") @db.Uuid
-  creatorId       String    @map("creator_id") @db.Uuid
-  name            String    @db.VarChar(255)
-  description     String?
-  icon            String?   @db.VarChar(255)
-  color           String?   @db.VarChar(7)
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @map("organization_id") @db.Uuid
+  teamId         String? @map("team_id") @db.Uuid
+  creatorId      String  @map("creator_id") @db.Uuid
+  name           String  @db.VarChar(255)
+  description    String?
+  icon           String? @db.VarChar(255)
+  color          String? @db.VarChar(7)
 
-  filters         Json      @default("{}")
-  sort            Json      @default("[]")
-  groupBy         String?   @map("group_by") @db.VarChar(50)
-  layout          String    @default("list") @db.VarChar(10)
+  filters Json    @default("{}")
+  sort    Json    @default("[]")
+  groupBy String? @map("group_by") @db.VarChar(50)
+  layout  String  @default("list") @db.VarChar(10)
 
-  shared          Boolean   @default(false)
-  sortOrder       Float     @default(0) @map("sort_order")
+  shared    Boolean @default(false)
+  sortOrder Float   @default(0) @map("sort_order")
 
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  archivedAt      DateTime? @map("archived_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz
 
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  team            Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  creator         User      @relation("CreatedViews", fields: [creatorId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team         Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  creator      User         @relation("CreatedViews", fields: [creatorId], references: [id])
 
   @@index([organizationId])
   @@index([teamId])
@@ -603,8 +603,8 @@ model IssueLabelAssignment {
   labelId   String   @map("label_id") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  label     IssueLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  issue Issue      @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  label IssueLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
 
   @@unique([issueId, labelId])
   @@index([issueId])
@@ -613,24 +613,24 @@ model IssueLabelAssignment {
 }
 
 model Notification {
-  id              String    @id @default(uuid()) @db.Uuid
-  organizationId  String    @map("organization_id") @db.Uuid
-  userId          String    @map("user_id") @db.Uuid
-  issueId         String?   @map("issue_id") @db.Uuid
-  actorId         String?   @map("actor_id") @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  issueId        String?   @map("issue_id") @db.Uuid
+  actorId        String?   @map("actor_id") @db.Uuid
   // ISSUE_ASSIGNED, ISSUE_MENTIONED, ISSUE_COMMENTED, ISSUE_STATUS_CHANGED
-  type            String    @db.VarChar(50)
-  data            Json      @default("{}")
-  read            Boolean   @default(false)
-  readAt          DateTime? @map("read_at") @db.Timestamptz
-  snoozedUntilAt  DateTime? @map("snoozed_until_at") @db.Timestamptz
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  type           String    @db.VarChar(50)
+  data           Json      @default("{}")
+  read           Boolean   @default(false)
+  readAt         DateTime? @map("read_at") @db.Timestamptz
+  snoozedUntilAt DateTime? @map("snoozed_until_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  actor           User?        @relation("SentNotifications", fields: [actorId], references: [id], onDelete: SetNull)
-  issue           Issue?       @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user            User         @relation("ReceivedNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  actor        User?        @relation("SentNotifications", fields: [actorId], references: [id], onDelete: SetNull)
+  issue        Issue?       @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation("ReceivedNotifications", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, read])
   @@index([userId, createdAt])
@@ -647,8 +647,8 @@ model NotificationSubscription {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, issueId])
   @@index([userId])
@@ -657,16 +657,16 @@ model NotificationSubscription {
 }
 
 model IssueActivity {
-  id          String   @id @default(uuid()) @db.Uuid
-  issueId     String   @map("issue_id") @db.Uuid
-  actorId     String?  @map("actor_id") @db.Uuid
-  field       String   @db.VarChar(50)
-  oldValue    String?  @map("old_value")
-  newValue    String?  @map("new_value")
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  id        String   @id @default(uuid()) @db.Uuid
+  issueId   String   @map("issue_id") @db.Uuid
+  actorId   String?  @map("actor_id") @db.Uuid
+  field     String   @db.VarChar(50)
+  oldValue  String?  @map("old_value")
+  newValue  String?  @map("new_value")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  actor       User?    @relation("ActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
-  issue       Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  actor User? @relation("ActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
 
   @@index([issueId, createdAt])
   @@index([actorId])
@@ -681,8 +681,8 @@ model IssueRelation {
   type           String   @db.VarChar(20)
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  issue          Issue    @relation("IssueRelations", fields: [issueId], references: [id], onDelete: Cascade)
-  relatedIssue   Issue    @relation("RelatedIssues", fields: [relatedIssueId], references: [id], onDelete: Cascade)
+  issue        Issue @relation("IssueRelations", fields: [issueId], references: [id], onDelete: Cascade)
+  relatedIssue Issue @relation("RelatedIssues", fields: [relatedIssueId], references: [id], onDelete: Cascade)
 
   @@unique([issueId, relatedIssueId, type])
   @@index([issueId])
@@ -702,8 +702,8 @@ model IssueTemplate {
   updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   archivedAt   DateTime? @map("archived_at") @db.Timestamptz
 
-  creator      User?     @relation("CreatedTemplates", fields: [creatorId], references: [id], onDelete: SetNull)
-  team         Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  creator User? @relation("CreatedTemplates", fields: [creatorId], references: [id], onDelete: SetNull)
+  team    Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@index([teamId])
   @@index([creatorId])
@@ -711,18 +711,18 @@ model IssueTemplate {
 }
 
 model File {
-  id          String    @id @default(uuid()) @db.Uuid
-  issueId     String?   @map("issue_id") @db.Uuid
-  projectId   String?   @map("project_id") @db.Uuid
-  uploaderId  String?   @map("uploader_id") @db.Uuid
-  name        String    @db.VarChar(500)
-  key         String    @db.VarChar(1000)
-  size        Int
-  mimeType    String    @map("mime_type") @db.VarChar(255)
-  url         String?
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  id         String   @id @default(uuid()) @db.Uuid
+  issueId    String?  @map("issue_id") @db.Uuid
+  projectId  String?  @map("project_id") @db.Uuid
+  uploaderId String?  @map("uploader_id") @db.Uuid
+  name       String   @db.VarChar(500)
+  key        String   @db.VarChar(1000)
+  size       Int
+  mimeType   String   @map("mime_type") @db.VarChar(255)
+  url        String?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  issue       Issue?    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  issue Issue? @relation(fields: [issueId], references: [id], onDelete: Cascade)
 
   @@index([issueId])
   @@index([projectId])
@@ -731,25 +731,25 @@ model File {
 }
 
 model Comment {
-  id            String    @id @default(uuid()) @db.Uuid
-  issueId       String    @map("issue_id") @db.Uuid
-  authorId      String    @map("author_id") @db.Uuid
-  body          String
-  bodyData      Json?     @map("body_data")
-  parentId      String?   @map("parent_id") @db.Uuid
-  resolvedAt    DateTime? @map("resolved_at") @db.Timestamptz
-  resolvedById  String?   @map("resolved_by_id") @db.Uuid
-  editedAt      DateTime? @map("edited_at") @db.Timestamptz
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  archivedAt    DateTime? @map("archived_at") @db.Timestamptz
+  id           String    @id @default(uuid()) @db.Uuid
+  issueId      String    @map("issue_id") @db.Uuid
+  authorId     String    @map("author_id") @db.Uuid
+  body         String
+  bodyData     Json?     @map("body_data")
+  parentId     String?   @map("parent_id") @db.Uuid
+  resolvedAt   DateTime? @map("resolved_at") @db.Timestamptz
+  resolvedById String?   @map("resolved_by_id") @db.Uuid
+  editedAt     DateTime? @map("edited_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt   DateTime? @map("archived_at") @db.Timestamptz
 
-  issue         Issue      @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  author        User       @relation("AuthoredComments", fields: [authorId], references: [id], onDelete: Cascade)
-  parent        Comment?   @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
-  replies       Comment[]  @relation("CommentReplies")
-  resolvedBy    User?      @relation("ResolvedComments", fields: [resolvedById], references: [id], onDelete: SetNull)
-  reactions     CommentReaction[]
+  issue      Issue             @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  author     User              @relation("AuthoredComments", fields: [authorId], references: [id], onDelete: Cascade)
+  parent     Comment?          @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies    Comment[]         @relation("CommentReplies")
+  resolvedBy User?             @relation("ResolvedComments", fields: [resolvedById], references: [id], onDelete: SetNull)
+  reactions  CommentReaction[]
 
   @@index([issueId, createdAt])
   @@index([authorId])
@@ -764,8 +764,8 @@ model CommentReaction {
   emoji     String   @db.VarChar(50)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  comment   Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([commentId, userId, emoji])
   @@index([commentId])
@@ -782,8 +782,8 @@ model TeamMemberRole {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, userId])
   @@index([teamId])
