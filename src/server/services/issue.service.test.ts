@@ -342,7 +342,17 @@ describe('IssueService', () => {
   });
 
   describe('maybeCloseParent (via update)', () => {
+    // Every test in this block assumes autoCloseParentIssues is on — gate
+    // flags were added in Sprint 25-26 close-out work.
+    const mockTeamWithAutoCloseParent = () => {
+      prisma.team.findUnique.mockResolvedValue({
+        autoCloseChildIssues: false,
+        autoCloseParentIssues: true,
+      });
+    };
+
     it('closes parent when last child is completed', async () => {
+      mockTeamWithAutoCloseParent();
       // update() returns child issue with parentId set
       const updatedChild = {
         ...CHILD_ISSUE,
@@ -385,6 +395,7 @@ describe('IssueService', () => {
     });
 
     it('counts canceled children as done for parent-close check', async () => {
+      mockTeamWithAutoCloseParent();
       const updatedChild = {
         ...CHILD_ISSUE,
         stateId: CANCELED_STATE.id,
@@ -421,6 +432,7 @@ describe('IssueService', () => {
     });
 
     it('does not close parent when sibling is still in progress', async () => {
+      mockTeamWithAutoCloseParent();
       const updatedChild = {
         ...CHILD_ISSUE,
         stateId: COMPLETED_STATE.id,
@@ -436,11 +448,31 @@ describe('IssueService', () => {
 
       await service.update(CHILD_ISSUE.id, { stateId: COMPLETED_STATE.id });
 
-      // Parent should NOT have been closed
+      // Parent should NOT have been closed — parent fetch only happens after
+      // the sibling check passes.
       expect(prisma.issue.findUnique).not.toHaveBeenCalled();
     });
 
+    it('does not close parent when autoCloseParentIssues flag is off', async () => {
+      // Team does not opt into the cascade — even though all siblings are done.
+      prisma.team.findUnique.mockResolvedValue({
+        autoCloseChildIssues: false,
+        autoCloseParentIssues: false,
+      });
+      prisma.issue.update.mockResolvedValue({
+        ...CHILD_ISSUE,
+        stateId: COMPLETED_STATE.id,
+      });
+      prisma.issueLabelAssignment.deleteMany.mockResolvedValue({ count: 0 });
+
+      await service.update(CHILD_ISSUE.id, { stateId: COMPLETED_STATE.id });
+
+      // With the flag off, the cascade helper never runs — no sibling lookup.
+      expect(prisma.issue.findMany).not.toHaveBeenCalled();
+    });
+
     it('does not close parent when parent is already completed', async () => {
+      mockTeamWithAutoCloseParent();
       const updatedChild = {
         ...CHILD_ISSUE,
         stateId: COMPLETED_STATE.id,
@@ -461,6 +493,85 @@ describe('IssueService', () => {
 
       // workflowState.findFirst should not have been called
       expect(prisma.workflowState.findFirst).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('maybeCloseChildren (via update)', () => {
+    const mockTeamWithAutoCloseChildren = () => {
+      prisma.team.findUnique.mockResolvedValue({
+        autoCloseChildIssues: true,
+        autoCloseParentIssues: false,
+      });
+    };
+
+    it('closes open children when parent moves to completed', async () => {
+      const updatedParent = {
+        ...PARENT_ISSUE,
+        parentId: null,
+        stateId: COMPLETED_STATE.id,
+      };
+      prisma.issue.update.mockResolvedValueOnce(updatedParent);
+      prisma.issueLabelAssignment.deleteMany.mockResolvedValue({ count: 0 });
+      mockTeamWithAutoCloseChildren();
+
+      // parent state lookup (post-update)
+      prisma.workflowState.findUnique.mockResolvedValue({ type: 'completed' });
+      // two children: one open, one already done (won't be touched)
+      prisma.issue.findMany.mockResolvedValue([
+        { id: 'child-open', state: { type: 'started' } },
+        { id: 'child-done', state: { type: 'completed' } },
+      ]);
+      prisma.workflowState.findFirst.mockResolvedValue(COMPLETED_STATE);
+      prisma.issue.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.update(PARENT_ISSUE.id, { stateId: COMPLETED_STATE.id });
+
+      expect(prisma.issue.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            completedAt: expect.any(Date),
+            stateId: COMPLETED_STATE.id,
+          }),
+          where: { id: { in: ['child-open'] } },
+        }),
+      );
+    });
+
+    it('no-ops when parent does not move into a terminal state', async () => {
+      const updatedParent = {
+        ...PARENT_ISSUE,
+        parentId: null,
+        stateId: IN_PROGRESS_STATE.id,
+      };
+      prisma.issue.update.mockResolvedValue(updatedParent);
+      prisma.issueLabelAssignment.deleteMany.mockResolvedValue({ count: 0 });
+      mockTeamWithAutoCloseChildren();
+
+      prisma.workflowState.findUnique.mockResolvedValue({ type: 'started' });
+
+      await service.update(PARENT_ISSUE.id, { stateId: IN_PROGRESS_STATE.id });
+
+      // No children lookup because parent didn't close
+      expect(prisma.issue.findMany).not.toHaveBeenCalled();
+      expect(prisma.issue.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when flag is off', async () => {
+      prisma.team.findUnique.mockResolvedValue({
+        autoCloseChildIssues: false,
+        autoCloseParentIssues: false,
+      });
+      prisma.issue.update.mockResolvedValue({
+        ...PARENT_ISSUE,
+        parentId: null,
+        stateId: COMPLETED_STATE.id,
+      });
+      prisma.issueLabelAssignment.deleteMany.mockResolvedValue({ count: 0 });
+
+      await service.update(PARENT_ISSUE.id, { stateId: COMPLETED_STATE.id });
+
+      expect(prisma.workflowState.findUnique).not.toHaveBeenCalled();
+      expect(prisma.issue.updateMany).not.toHaveBeenCalled();
     });
   });
 

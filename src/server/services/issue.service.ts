@@ -283,8 +283,24 @@ export class IssueService {
       return updated;
     });
 
-    if (input.stateId !== undefined && issue.parentId) {
-      await this.maybeCloseParent(issue.parentId, issue.teamId);
+    if (input.stateId !== undefined) {
+      // Read the team's cascade flags once so the two cascade checks share the
+      // same lookup and stay consistent.
+      const team = await this.prisma.team.findUnique({
+        select: {
+          autoCloseChildIssues: true,
+          autoCloseParentIssues: true,
+        },
+        where: { id: issue.teamId },
+      });
+
+      if (team?.autoCloseParentIssues && issue.parentId) {
+        await this.maybeCloseParent(issue.parentId, issue.teamId);
+      }
+
+      if (team?.autoCloseChildIssues) {
+        await this.maybeCloseChildren(issue.id, issue.stateId, issue.teamId);
+      }
     }
 
     return issue;
@@ -362,6 +378,63 @@ export class IssueService {
     await this.prisma.issue.update({
       data: { completedAt: new Date(), stateId: completedState.id },
       where: { id: parentId },
+    });
+  }
+
+  /**
+   * Cascade the parent's newly-completed / -canceled state down to any open
+   * children. Fires only when `team.autoCloseChildIssues` is enabled.
+   * No-op if the parent did not move into a terminal state.
+   */
+  private async maybeCloseChildren(
+    parentId: string,
+    parentStateId: string,
+    teamId: string,
+  ): Promise<void> {
+    const parentState = await this.prisma.workflowState.findUnique({
+      select: { type: true },
+      where: { id: parentStateId },
+    });
+    if (
+      !parentState ||
+      (parentState.type !== 'completed' && parentState.type !== 'canceled')
+    ) {
+      return;
+    }
+
+    const children = await this.prisma.issue.findMany({
+      include: { state: { select: { type: true } } },
+      where: { archivedAt: null, parentId, trashed: false },
+    });
+    const openChildren = children.filter(
+      c => c.state.type !== 'completed' && c.state.type !== 'canceled',
+    );
+    if (openChildren.length === 0) {
+      return;
+    }
+
+    // Match the parent's final state by type (completed → completed,
+    // canceled → canceled); fall back to team's first state of that type.
+    const targetState = await this.prisma.workflowState.findFirst({
+      orderBy: { position: 'asc' },
+      where: {
+        archivedAt: null,
+        teamId,
+        type: parentState.type,
+      },
+    });
+    if (!targetState) {
+      return;
+    }
+
+    const now = new Date();
+    await this.prisma.issue.updateMany({
+      data: {
+        stateId: targetState.id,
+        ...(parentState.type === 'completed' ? { completedAt: now } : {}),
+        ...(parentState.type === 'canceled' ? { canceledAt: now } : {}),
+      },
+      where: { id: { in: openChildren.map(c => c.id) } },
     });
   }
 
