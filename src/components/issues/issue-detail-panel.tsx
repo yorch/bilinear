@@ -18,6 +18,7 @@ import type {
   IssueUser,
   WorkflowState,
 } from '@/types/issues';
+import { CustomFieldsEditor } from '../custom-fields/custom-fields-editor';
 import { TipTapEditor } from '../editor/tiptap-editor';
 import { AssigneeSelect } from '../properties/assignee-select';
 import { DueDatePicker } from '../properties/due-date-picker';
@@ -342,6 +343,9 @@ export function IssueDetailPanel({
               </>
             )}
           </div>
+
+          {/* Custom fields (per-team) */}
+          <CustomFieldsEditor issueId={issue.id} teamId={issue.teamId} />
 
           {/* Description */}
           <div className="mt-6">
