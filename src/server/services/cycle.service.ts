@@ -381,12 +381,12 @@ export class CycleService {
       completed: number;
     }> = [];
     const current = new Date(start);
-    current.setHours(0, 0, 0, 0);
+    current.setUTCHours(0, 0, 0, 0);
     let completedIdx = 0;
 
     while (current <= end) {
       const dayEnd = new Date(current);
-      dayEnd.setHours(23, 59, 59, 999);
+      dayEnd.setUTCHours(23, 59, 59, 999);
 
       while (
         completedIdx < completedDates.length &&
@@ -401,7 +401,7 @@ export class CycleService {
         remaining: totalIssues - completedIdx,
       });
 
-      current.setDate(current.getDate() + 1);
+      current.setUTCDate(current.getUTCDate() + 1);
     }
 
     return points;
