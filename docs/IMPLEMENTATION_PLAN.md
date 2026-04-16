@@ -254,10 +254,10 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [x] Visual indicators for blocking/blocked (relations section)
 - [x] Issue template CRUD (`IssueTemplate` model, `src/components/issues/template-selector.tsx`)
 - [x] Template application via creation modal
-- [ ] Property inheritance from parent issue (project, cycle auto-applied to children) — deferred
-- [ ] Auto-close parent when all children closed / cascade status — deferred
+- [x] Property inheritance from parent issue (project + milestone + cycle auto-applied to children at create time; `IssueService.create`)
+- [x] Auto-close cascade — both directions, gated per-team (`autoCloseParentIssues` closes parent when all children done; `autoCloseChildIssues` closes open children when parent closes)
 - [x] `Alt+C` shortcut to open template picker — implemented in `create-issue-modal.tsx`
-- [ ] Default templates per team — deferred
+- [x] Default templates per team — auto-applied on modal open when a team template has `isDefault: true` (`create-issue-modal.tsx:111`)
 
 ---
 
