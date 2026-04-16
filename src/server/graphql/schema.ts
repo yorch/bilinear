@@ -148,6 +148,7 @@ export const typeDefs = `
     children: [Issue!]!
     labels: [IssueLabel!]!
     project: Project
+    customFieldValues: [CustomFieldValue!]!
   }
 
   type IssueEdge {
@@ -754,6 +755,82 @@ export const typeDefs = `
     isDefault: Boolean
   }
 
+  enum CustomFieldType {
+    text
+    number
+    date
+    select
+    multi_select
+    url
+    checkbox
+  }
+
+  type CustomFieldDefinition {
+    id: ID!
+    teamId: ID!
+    name: String!
+    type: CustomFieldType!
+    description: String
+    required: Boolean!
+    options: JSON
+    sortOrder: Float!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    archivedAt: DateTime
+    team: Team!
+  }
+
+  type CustomFieldValue {
+    id: ID!
+    issueId: ID!
+    definitionId: ID!
+    value: JSON!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    definition: CustomFieldDefinition!
+  }
+
+  type CustomFieldDefinitionPayload {
+    success: Boolean!
+    customFieldDefinition: CustomFieldDefinition
+    lastSyncId: String!
+  }
+
+  type CustomFieldValuesPayload {
+    success: Boolean!
+    values: [CustomFieldValue!]!
+    lastSyncId: String!
+  }
+
+  input CustomFieldOptionInput {
+    value: String!
+    label: String!
+    color: String
+  }
+
+  input CustomFieldDefinitionCreateInput {
+    teamId: String!
+    name: String!
+    type: CustomFieldType!
+    description: String
+    required: Boolean
+    options: [CustomFieldOptionInput!]
+    sortOrder: Float
+  }
+
+  input CustomFieldDefinitionUpdateInput {
+    name: String
+    description: String
+    required: Boolean
+    options: [CustomFieldOptionInput!]
+    sortOrder: Float
+  }
+
+  input CustomFieldValueInput {
+    definitionId: String!
+    value: JSON
+  }
+
   scalar JSON
 
   type Comment {
@@ -857,6 +934,9 @@ export const typeDefs = `
     issueRelations(issueId: ID!): [IssueRelation!]!
     issueTemplates(teamId: String!, includeArchived: Boolean): [IssueTemplate!]!
     issueTemplate(id: ID!): IssueTemplate!
+    customFieldDefinitions(teamId: String!, includeArchived: Boolean): [CustomFieldDefinition!]!
+    customFieldDefinition(id: ID!): CustomFieldDefinition!
+    customFieldValuesForIssue(issueId: ID!): [CustomFieldValue!]!
     comments(issueId: ID!, includeArchived: Boolean): [Comment!]!
     comment(id: ID!): Comment!
   }
@@ -936,6 +1016,12 @@ export const typeDefs = `
     issueTemplateUpdate(id: ID!, input: IssueTemplateUpdateInput!): IssueTemplatePayload!
     issueTemplateArchive(id: ID!): IssueTemplatePayload!
     issueTemplateDelete(id: ID!): DeletePayload!
+
+    customFieldDefinitionCreate(input: CustomFieldDefinitionCreateInput!): CustomFieldDefinitionPayload!
+    customFieldDefinitionUpdate(id: ID!, input: CustomFieldDefinitionUpdateInput!): CustomFieldDefinitionPayload!
+    customFieldDefinitionArchive(id: ID!): CustomFieldDefinitionPayload!
+    customFieldDefinitionDelete(id: ID!): DeletePayload!
+    customFieldValuesSet(issueId: ID!, values: [CustomFieldValueInput!]!): CustomFieldValuesPayload!
 
     commentCreate(input: CommentCreateInput!): CommentPayload!
     commentUpdate(id: ID!, input: CommentUpdateInput!): CommentPayload!

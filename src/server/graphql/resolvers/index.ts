@@ -1,6 +1,7 @@
 import { DateTimeScalar, JSONScalar, UUIDScalar } from '../types/scalars';
 import { authResolvers } from './auth';
 import { commentResolvers } from './comment';
+import { customFieldResolvers } from './custom-field';
 import { customViewResolvers } from './custom-view';
 import { cycleResolvers } from './cycle';
 import { issueResolvers } from './issue';
@@ -59,6 +60,14 @@ export const resolvers = {
     ...commentResolvers.CommentReaction,
   },
 
+  CustomFieldDefinition: {
+    ...customFieldResolvers.CustomFieldDefinition,
+  },
+
+  CustomFieldValue: {
+    ...customFieldResolvers.CustomFieldValue,
+  },
+
   CustomView: {
     ...customViewResolvers.CustomView,
   },
@@ -73,6 +82,7 @@ export const resolvers = {
 
   Issue: {
     ...issueResolvers.Issue,
+    ...customFieldResolvers.Issue,
   },
 
   IssueActivity: {
@@ -100,6 +110,7 @@ export const resolvers = {
     ...issueRelationResolvers.Mutation,
     ...issueTemplateResolvers.Mutation,
     ...organizationResolvers.Mutation,
+    ...customFieldResolvers.Mutation,
     ...customViewResolvers.Mutation,
     ...cycleResolvers.Mutation,
     ...issueResolvers.Mutation,
@@ -134,6 +145,7 @@ export const resolvers = {
     ...issueRelationResolvers.Query,
     ...issueTemplateResolvers.Query,
     ...organizationResolvers.Query,
+    ...customFieldResolvers.Query,
     ...customViewResolvers.Query,
     ...teamResolvers.Query,
     ...issueResolvers.Query,
