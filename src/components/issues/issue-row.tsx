@@ -1,5 +1,7 @@
 'use client';
 
+import type { ColumnKey } from '@/hooks/use-visible-columns';
+import type { DBCustomFieldDefinition } from '@/lib/db';
 import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 import { AssigneeSelect } from '../properties/assignee-select';
@@ -51,7 +53,46 @@ interface IssueRowProps {
   openProperty?: OpenProperty;
   /** Called when the forced-open property popover closes. */
   onPropertyClosed?: () => void;
+  /**
+   * Column visibility. When omitted the row renders every built-in column
+   * (legacy behaviour) and no custom-field columns.
+   */
+  isColumnVisible?: (key: ColumnKey) => boolean;
+  /** Active custom-field definitions; only those whose column is visible render. */
+  customFields?: DBCustomFieldDefinition[];
+  /** Look up a custom-field value for this issue. */
+  getCustomFieldValue?: (definitionId: string) => unknown;
   style?: React.CSSProperties;
+}
+
+/** Single-line read-only rendering of a custom-field value for the list row. */
+function renderCustomFieldValue(
+  def: DBCustomFieldDefinition,
+  value: unknown,
+): string {
+  if (value === null || value === undefined || value === '') {
+    return '—';
+  }
+  switch (def.type) {
+    case 'checkbox':
+      return value === true ? '✓' : '—';
+    case 'select': {
+      const opt = def.options?.find(o => o.value === value);
+      return opt?.label ?? String(value);
+    }
+    case 'multi_select': {
+      if (!Array.isArray(value)) {
+        return '—';
+      }
+      return value
+        .map(v => def.options?.find(o => o.value === v)?.label ?? String(v))
+        .join(', ');
+    }
+    case 'number':
+      return typeof value === 'number' ? String(value) : '—';
+    default:
+      return String(value);
+  }
 }
 
 export function IssueRow({
@@ -68,8 +109,15 @@ export function IssueRow({
   onContextMenu,
   openProperty,
   onPropertyClosed,
+  isColumnVisible,
+  customFields,
+  getCustomFieldValue,
   style,
 }: IssueRowProps) {
+  // If no visibility function is provided, every built-in column renders
+  // (callers that haven't adopted the column picker keep their current UX).
+  const visible = (key: Parameters<NonNullable<typeof isColumnVisible>>[0]) =>
+    isColumnVisible ? isColumnVisible(key) : true;
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: presentational row container; interactive children (checkbox, button, selects) provide all a11y. onContextMenu is the only handler.
     <div
@@ -114,33 +162,39 @@ export function IssueRow({
       </button>
 
       {/* Labels */}
-      <LabelSelect
-        value={issue.labels.map(l => l.id)}
-        labels={allLabels}
-        onChange={labelIds => onUpdate(issue.id, { labelIds })}
-        forceOpen={openProperty === 'label'}
-        onClose={onPropertyClosed}
-      />
+      {visible('labels') && (
+        <LabelSelect
+          value={issue.labels.map(l => l.id)}
+          labels={allLabels}
+          onChange={labelIds => onUpdate(issue.id, { labelIds })}
+          forceOpen={openProperty === 'label'}
+          onClose={onPropertyClosed}
+        />
+      )}
 
       {/* Due date */}
-      <DueDatePicker
-        value={issue.dueDate}
-        onChange={dueDate => onUpdate(issue.id, { dueDate })}
-        forceOpen={openProperty === 'dueDate'}
-        onClose={onPropertyClosed}
-      />
+      {visible('dueDate') && (
+        <DueDatePicker
+          value={issue.dueDate}
+          onChange={dueDate => onUpdate(issue.id, { dueDate })}
+          forceOpen={openProperty === 'dueDate'}
+          onClose={onPropertyClosed}
+        />
+      )}
 
       {/* Assignee */}
-      <AssigneeSelect
-        value={issue.assigneeId}
-        users={users}
-        onChange={assigneeId => onUpdate(issue.id, { assigneeId })}
-        forceOpen={openProperty === 'assignee'}
-        onClose={onPropertyClosed}
-      />
+      {visible('assignee') && (
+        <AssigneeSelect
+          value={issue.assigneeId}
+          users={users}
+          onChange={assigneeId => onUpdate(issue.id, { assigneeId })}
+          forceOpen={openProperty === 'assignee'}
+          onClose={onPropertyClosed}
+        />
+      )}
 
       {/* Cycle */}
-      {teamId && (
+      {teamId && visible('cycle') && (
         <CycleSelect
           value={issue.cycleId ?? null}
           teamId={teamId}
@@ -151,17 +205,36 @@ export function IssueRow({
       )}
 
       {/* Estimate — only when team has estimation enabled */}
-      {estimationType && estimationType !== 'notUsed' && (
-        <EstimatePicker
-          value={issue.estimate}
-          estimationType={estimationType}
-          forceOpen={openProperty === 'estimate'}
-          onClose={onPropertyClosed}
-          onChange={estimate =>
-            onUpdate(issue.id, { estimate: estimate ?? undefined })
-          }
-        />
-      )}
+      {estimationType &&
+        estimationType !== 'notUsed' &&
+        visible('estimate') && (
+          <EstimatePicker
+            value={issue.estimate}
+            estimationType={estimationType}
+            forceOpen={openProperty === 'estimate'}
+            onClose={onPropertyClosed}
+            onChange={estimate =>
+              onUpdate(issue.id, { estimate: estimate ?? undefined })
+            }
+          />
+        )}
+
+      {/* Custom field columns (read-only cells — edit via detail panel) */}
+      {customFields?.map(def => {
+        if (!isColumnVisible?.(`custom:${def.id}`)) {
+          return null;
+        }
+        const raw = getCustomFieldValue?.(def.id);
+        return (
+          <span
+            key={def.id}
+            title={def.name}
+            className="max-w-[10rem] shrink-0 truncate text-xs text-zinc-500 dark:text-zinc-400"
+          >
+            {renderCustomFieldValue(def, raw)}
+          </span>
+        );
+      })}
 
       {/* Status */}
       <StatusSelect

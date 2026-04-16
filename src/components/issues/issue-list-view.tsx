@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import type { ColumnKey } from '@/hooks/use-visible-columns';
+import type { DBCustomFieldDefinition } from '@/lib/db';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 import { GroupSection } from './group-section';
 import { IssueContextMenu } from './issue-context-menu';
@@ -22,6 +24,9 @@ interface IssueListViewProps {
   /** Which property popover to force-open on the selected issue (keyboard shortcut). */
   openProperty?: OpenProperty;
   onPropertyClosed?: () => void;
+  isColumnVisible?: (key: ColumnKey) => boolean;
+  customFields?: DBCustomFieldDefinition[];
+  getCustomFieldValue?: (issueId: string, definitionId: string) => unknown;
 }
 
 interface Group {
@@ -51,6 +56,9 @@ export function IssueListView({
   onDelete,
   openProperty,
   onPropertyClosed,
+  isColumnVisible,
+  customFields,
+  getCustomFieldValue,
 }: IssueListViewProps) {
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null);
 
@@ -116,6 +124,13 @@ export function IssueListView({
                 onUpdate={onUpdate}
                 openProperty={issue.id === selectedId ? openProperty : null}
                 onPropertyClosed={onPropertyClosed}
+                isColumnVisible={isColumnVisible}
+                customFields={customFields}
+                getCustomFieldValue={
+                  getCustomFieldValue
+                    ? defId => getCustomFieldValue(issue.id, defId)
+                    : undefined
+                }
                 onContextMenu={e => {
                   e.preventDefault();
                   setCtxMenu({

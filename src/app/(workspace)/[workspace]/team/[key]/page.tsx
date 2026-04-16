@@ -11,6 +11,7 @@ import {
   type BoardSwimlaneBy,
   BoardView,
 } from '@/components/issues/board-view';
+import { ColumnPicker } from '@/components/issues/column-picker';
 import { CreateIssueModal } from '@/components/issues/create-issue-modal';
 import { FilterBuilder } from '@/components/issues/filter-builder';
 import { IssueListView } from '@/components/issues/issue-list-view';
@@ -19,6 +20,7 @@ import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-pane
 import { type ViewMode, ViewToggle } from '@/components/issues/view-toggle';
 import { useChord, useHotkeys } from '@/hooks/use-hotkeys';
 import { useRecentItems } from '@/hooks/use-recent-items';
+import { useVisibleColumns } from '@/hooks/use-visible-columns';
 import type { DBIssue, DBIssueLabel } from '@/lib/db';
 import {
   applyFilters,
@@ -157,6 +159,10 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     () => (teamId ? customFieldStore.findDefinitionsByTeamId(teamId) : []),
     [teamId, customFieldStore.definitions.size],
   );
+
+  // Column visibility is per-team so switching teams gives a fresh pick.
+  const { isVisible: isColumnVisible, toggle: toggleColumn } =
+    useVisibleColumns(teamId ?? 'no-team');
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: MobX observables — values.size change triggers re-filter on value updates
   const issues = useMemo(
@@ -586,7 +592,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
       </div>
 
       {/* Filter bar */}
-      <div className="border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
+      <div className="flex items-center justify-between gap-2 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
         <FilterBuilder
           filterSet={filterSet}
           onChange={setFilterSet}
@@ -595,6 +601,13 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
           labels={labels}
           customFields={customFieldDefs}
         />
+        {viewMode === 'list' && (
+          <ColumnPicker
+            isVisible={isColumnVisible}
+            onToggle={toggleColumn}
+            customFields={customFieldDefs}
+          />
+        )}
       </div>
 
       {/* Issue list / board */}
@@ -614,6 +627,11 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
             onDelete={handleDelete}
             openProperty={openProperty}
             onPropertyClosed={() => setOpenProperty(null)}
+            isColumnVisible={isColumnVisible}
+            customFields={customFieldDefs}
+            getCustomFieldValue={(issueId, definitionId) =>
+              customFieldStore.findValue(issueId, definitionId)?.value ?? null
+            }
           />
         ) : (
           <BoardView
