@@ -725,6 +725,52 @@ type TeamMembership implements Entity & Node {
 }
 ```
 
+### 4.8 Custom Fields (Sprint 23-24)
+
+Team-scoped definitions with per-issue values. Select / multi_select options
+are stored as JSON on the definition (`[{ value, label, color? }]`); other
+types accept primitive values. See §9.x for mutation payloads.
+
+```graphql
+enum CustomFieldType {
+  text
+  number
+  date
+  select
+  multi_select
+  url
+  checkbox
+}
+
+type CustomFieldDefinition {
+  id: ID!
+  teamId: ID!
+  name: String!
+  type: CustomFieldType!
+  description: String
+  required: Boolean!
+  options: JSON
+  sortOrder: Float!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+  team: Team!
+}
+
+type CustomFieldValue {
+  id: ID!
+  issueId: ID!
+  definitionId: ID!
+  value: JSON!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  definition: CustomFieldDefinition!
+}
+
+# Exposed on Issue:
+# extend type Issue { customFieldValues: [CustomFieldValue!]! }
+```
+
 ---
 
 ## 5. Queries
@@ -776,6 +822,11 @@ type Query {
   documents(first: Int, after: String): DocumentConnection!
   initiatives(first: Int, after: String): InitiativeConnection!
   webhooks(first: Int, after: String): WebhookConnection!
+
+  # Custom fields (Sprint 23-24)
+  customFieldDefinitions(teamId: String!, includeArchived: Boolean): [CustomFieldDefinition!]!
+  customFieldDefinition(id: ID!): CustomFieldDefinition!
+  customFieldValuesForIssue(issueId: ID!): [CustomFieldValue!]!
 
   # Search
   searchIssues(query: String!, first: Int, includeArchived: Boolean): IssueConnection!
@@ -873,6 +924,16 @@ type Mutation {
   customViewCreate(input: CustomViewCreateInput!): CustomViewPayload!
   customViewUpdate(id: ID!, input: CustomViewUpdateInput!): CustomViewPayload!
   customViewDelete(id: ID!): DeletePayload!
+
+  # Custom Fields (Sprint 23-24)
+  customFieldDefinitionCreate(input: CustomFieldDefinitionCreateInput!): CustomFieldDefinitionPayload!
+  customFieldDefinitionUpdate(id: ID!, input: CustomFieldDefinitionUpdateInput!): CustomFieldDefinitionPayload!
+  customFieldDefinitionArchive(id: ID!): CustomFieldDefinitionPayload!
+  customFieldDefinitionDelete(id: ID!): DeletePayload!
+  # Bulk upsert of values for one issue. Passing a null `value` for a
+  # definition removes that row. Emits an Issue SyncAction carrying
+  # `{ customFieldValues }` so the WebSocket stream updates every client.
+  customFieldValuesSet(issueId: ID!, values: [CustomFieldValueInput!]!): CustomFieldValuesPayload!
 
   # Favorites
   favoriteCreate(input: FavoriteCreateInput!): FavoritePayload!

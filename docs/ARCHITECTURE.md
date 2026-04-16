@@ -24,7 +24,7 @@
 > | Redis pub/sub for real-time broadcast | ✅ Built | Sprint 7-8 |
 > | MobX stores — core (IssueStore, TeamStore, UserStore, LabelStore, WorkflowStateStore, SyncStore, UIStore) | ✅ Built | Sprint 7-8 |
 >
-| MobX stores — extended (CycleStore, ProjectStore, CustomViewStore, NotificationStore, IssueRelationStore, IssueTemplateStore) | ✅ Built | Sprints 13-26 |
+| MobX stores — extended (CycleStore, ProjectStore, CustomViewStore, NotificationStore, IssueRelationStore, IssueTemplateStore, CustomFieldStore) | ✅ Built | Sprints 13-26 |
 > | IndexedDB cache via Dexie.js | ✅ Built | Sprint 7-8 |
 > | SyncManager (bootstrap → IndexedDB → MobX → WebSocket delta catch-up) | ✅ Built | Sprint 7-8 |
 > | TransactionQueue (serial mutation queue with retry/rollback) | ✅ Built | Sprint 7-8 |

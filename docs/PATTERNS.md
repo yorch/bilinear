@@ -85,6 +85,42 @@ Every model must follow these conventions (see `DATABASE_SCHEMA.md` section 1):
 | snake_case DB mapping    | `@map("url_key")`, `@@map("organizations")`                |
 | Timezone-aware datetimes | `@db.Timestamptz` (not `@db.Timestamp`)                    |
 
+### Date iteration — stay in one TZ domain
+
+`@db.Timestamptz` columns come back as UTC `Date` objects. When iterating
+days (e.g. burndown charts) pick one TZ domain and stay in it — mixing
+local and UTC accessors causes off-by-one bugs on non-UTC machines:
+
+```ts
+// Bad: mixes local-time mutation with UTC serialization.
+current.setHours(0, 0, 0, 0);
+points.push({ date: current.toISOString().slice(0, 10), ... });
+
+// Good: UTC everywhere (pair with setUTCDate for iteration).
+current.setUTCHours(0, 0, 0, 0);
+points.push({ date: current.toISOString().slice(0, 10), ... });
+current.setUTCDate(current.getUTCDate() + 1);
+```
+
+CI typically runs in UTC, so this class of bug only reproduces on
+developer machines in non-UTC zones. See `CycleService.getBurndown`.
+
+### Nullable JSON columns
+
+Prisma's `Json?` columns accept `Prisma.InputJsonValue` on write. Two
+gotchas for service-layer code:
+
+- Plain arrays of typed objects (e.g. `CustomFieldOption[]`) don't
+  satisfy `InputJsonValue` because the type wants an index signature.
+  Cast via `as unknown as Prisma.InputJsonValue` when the value is
+  non-null.
+- To explicitly clear a nullable JSON column, assign `Prisma.JsonNull`
+  (not the literal `null`) — plain `null` is rejected by the compile-
+  time type.
+
+See `CustomFieldService.createDefinition` / `updateDefinition` for the
+canonical pattern.
+
 ---
 
 ## 3. GraphQL Resolver Pattern

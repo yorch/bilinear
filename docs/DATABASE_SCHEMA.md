@@ -995,6 +995,61 @@ CREATE INDEX idx_team_member_roles_team ON team_member_roles(team_id);
 CREATE INDEX idx_team_member_roles_user ON team_member_roles(user_id);
 ```
 
+### 2.27 Custom Fields
+
+```sql
+-- Team-scoped definitions. Values live in a separate table (custom_field_values)
+-- keyed by (issue_id, definition_id) so filter/sort stay indexable.
+CREATE TYPE custom_field_type AS ENUM (
+    'text', 'number', 'date',
+    'select', 'multi_select',
+    'url', 'checkbox'
+);
+
+CREATE TABLE custom_field_definitions (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    team_id     UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    name        VARCHAR(255) NOT NULL,
+    type        custom_field_type NOT NULL,
+    description TEXT,
+    required    BOOLEAN NOT NULL DEFAULT FALSE,
+    -- For select / multi_select: JSONB array of { value, label, color? }.
+    -- NULL for other types; service layer rejects options on non-select types.
+    options     JSONB,
+    sort_order  DOUBLE PRECISION NOT NULL DEFAULT 0,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    archived_at TIMESTAMPTZ
+);
+CREATE INDEX idx_custom_field_definitions_team ON custom_field_definitions(team_id);
+
+CREATE TABLE custom_field_values (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    issue_id       UUID NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+    definition_id  UUID NOT NULL REFERENCES custom_field_definitions(id) ON DELETE CASCADE,
+    -- JSONB shape by type:
+    --   text / url       → string
+    --   number           → number
+    --   date             → ISO date string
+    --   checkbox         → boolean
+    --   select           → option value string
+    --   multi_select     → array of option value strings
+    value          JSONB NOT NULL,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    UNIQUE(issue_id, definition_id)
+);
+CREATE INDEX idx_custom_field_values_issue ON custom_field_values(issue_id);
+CREATE INDEX idx_custom_field_values_definition ON custom_field_values(definition_id);
+```
+
+**Validation** is enforced at the service layer (`CustomFieldService`):
+- Max 20 active definitions per team
+- `select` / `multi_select` types require at least one option; option values must be unique per field
+- Non-select types reject options
+- Value type and allowed-option membership are validated before upsert
+
 ---
 
 ## 3. Entity Relationship Summary
@@ -1013,6 +1068,7 @@ teams 1──* issues
 teams 1──* workflow_states
 teams 1──* cycles
 teams 1──* team_memberships
+teams 1──* custom_field_definitions
 teams *──* projects (via project_teams)
 teams 0..1──* teams (parent/child)
 
@@ -1027,6 +1083,8 @@ issues 1──* attachments
 issues 1──* issue_relations
 issues 1──* issue_history
 issues 1──* notifications
+issues 1──* custom_field_values
+custom_field_definitions 1──* custom_field_values
 
 projects 1──* project_milestones
 projects 1──* project_updates
@@ -1060,21 +1118,18 @@ yarn prisma migrate dev  # applies new migration
 
 ### Migration Files
 
-Migrations use date-based names. Current migrations in `prisma/migrations/`:
+Migrations use date-based names. The pre-release incremental history was
+consolidated into a single baseline migration; new features ship as
+additive migrations on top of it.
 
 ```
 prisma/
 ├── schema.prisma
 ├── prisma.config.ts
 └── migrations/
-    ├── 20260407000000_init/                      -- all core tables (orgs, users, teams, states, issues, labels, sync)
-    ├── 20260407000001_add_fulltext_search/        -- GIN index on issues for PostgreSQL FTS
-    ├── 20260409000000_add_projects/               -- projects, project_teams, project_members, milestones, updates
-    ├── 20260409000000_backfill_default_issue_state/
-    ├── 20260409000001_team_key_unique_active_only/ -- partial unique index: key unique within active teams
-    ├── 20260411000000_add_cycles_and_custom_views/ -- cycles, custom_views, notifications, notification_subscriptions,
-    │                                               --   issue_activities, issue_relations, issue_templates, files
-    └── 20260411000001_add_comments_and_roles/     -- comments, comment_reactions, team_member_roles
+    ├── 20260407000000_init/            -- consolidated baseline: all pre-sprint-23 tables,
+    │                                   --   the FTS GIN index, and the partial unique index on teams(org, key)
+    └── 20260416120000_custom_fields/   -- custom_field_definitions, custom_field_values, custom_field_type enum
 ```
 
 Many of the tables described in section 2 (Favorites, Documents, Templates, Webhooks, Audit Log, Initiatives, Attachments) are **design targets** that exist in this schema document but are not yet implemented in migrations or the Prisma schema. Sections for unbuilt tables are kept here as the canonical design reference for future sprints.
