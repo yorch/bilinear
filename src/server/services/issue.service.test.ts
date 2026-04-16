@@ -131,6 +131,75 @@ describe('IssueService', () => {
       ).rejects.toThrow(IssueStateRequiredError);
     });
 
+    it('inherits project, milestone, and cycle from parent when not supplied', async () => {
+      const projectId = '00000000-0000-0000-0000-000000000A01';
+      const milestoneId = '00000000-0000-0000-0000-000000000A02';
+      const cycleId = '00000000-0000-0000-0000-000000000A03';
+      prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 4 });
+      prisma.issue.findUnique.mockResolvedValue({
+        ...PARENT_ISSUE,
+        cycleId,
+        projectId,
+        projectMilestoneId: milestoneId,
+      });
+      prisma.issue.create.mockResolvedValue({
+        ...CHILD_ISSUE,
+        cycleId,
+        projectId,
+        projectMilestoneId: milestoneId,
+      });
+
+      await service.create(TEST_ORG.id, TEST_USER.id, {
+        parentId: PARENT_ISSUE.id,
+        stateId: DEFAULT_WORKFLOW_STATES[0].id,
+        teamId: TEST_TEAM.id,
+        title: 'Child',
+      });
+
+      expect(prisma.issue.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            cycleId,
+            parentId: PARENT_ISSUE.id,
+            projectId,
+            projectMilestoneId: milestoneId,
+          }),
+        }),
+      );
+    });
+
+    it('keeps explicit project/cycle overrides and drops inherited milestone when projects differ', async () => {
+      const parentProjectId = '00000000-0000-0000-0000-000000000B01';
+      const parentMilestoneId = '00000000-0000-0000-0000-000000000B02';
+      const overrideProjectId = '00000000-0000-0000-0000-000000000B03';
+      prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 5 });
+      prisma.issue.findUnique.mockResolvedValue({
+        ...PARENT_ISSUE,
+        cycleId: null,
+        projectId: parentProjectId,
+        projectMilestoneId: parentMilestoneId,
+      });
+      prisma.issue.create.mockResolvedValue(CHILD_ISSUE);
+
+      await service.create(TEST_ORG.id, TEST_USER.id, {
+        parentId: PARENT_ISSUE.id,
+        projectId: overrideProjectId,
+        stateId: DEFAULT_WORKFLOW_STATES[0].id,
+        teamId: TEST_TEAM.id,
+        title: 'Child',
+      });
+
+      expect(prisma.issue.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            projectId: overrideProjectId,
+            // milestone not inherited because the child is in a different project
+            projectMilestoneId: undefined,
+          }),
+        }),
+      );
+    });
+
     it('creates label assignments when labelIds provided', async () => {
       const labelId = '00000000-0000-0000-0000-000000000500';
       prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1 });

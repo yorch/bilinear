@@ -81,13 +81,47 @@ export class IssueService {
         throw new IssueStateRequiredError();
       }
 
+      // Property inheritance: a child created from a parent inherits the
+      // parent's project and cycle when the caller does not supply them.
+      // Keeps parent/child work grouped by default without forcing a
+      // policy (caller can still pass explicit values to opt out).
+      let inheritedProjectId = input.projectId;
+      let inheritedProjectMilestoneId = input.projectMilestoneId;
+      let inheritedCycleId = input.cycleId;
+      if (input.parentId) {
+        const parent = await tx.issue.findUnique({
+          select: {
+            cycleId: true,
+            projectId: true,
+            projectMilestoneId: true,
+          },
+          where: { id: input.parentId },
+        });
+        if (parent) {
+          if (inheritedProjectId === undefined) {
+            inheritedProjectId = parent.projectId ?? undefined;
+          }
+          if (
+            inheritedProjectMilestoneId === undefined &&
+            // Only inherit the milestone if we're also on the parent's project
+            inheritedProjectId === parent.projectId
+          ) {
+            inheritedProjectMilestoneId =
+              parent.projectMilestoneId ?? undefined;
+          }
+          if (inheritedCycleId === undefined) {
+            inheritedCycleId = parent.cycleId ?? undefined;
+          }
+        }
+      }
+
       const issue = await tx.issue.create({
         data: {
-          addedToCycleAt: input.cycleId ? new Date() : undefined,
-          addedToProjectAt: input.projectId ? new Date() : undefined,
+          addedToCycleAt: inheritedCycleId ? new Date() : undefined,
+          addedToProjectAt: inheritedProjectId ? new Date() : undefined,
           assigneeId: input.assigneeId,
           creatorId,
-          cycleId: input.cycleId,
+          cycleId: inheritedCycleId,
           description: input.description,
           dueDate: input.dueDate ? new Date(input.dueDate) : undefined,
           estimate: input.estimate,
@@ -97,8 +131,8 @@ export class IssueService {
           organizationId: orgId,
           parentId: input.parentId,
           priority: input.priority ?? 0,
-          projectId: input.projectId,
-          projectMilestoneId: input.projectMilestoneId,
+          projectId: inheritedProjectId,
+          projectMilestoneId: inheritedProjectMilestoneId,
           sortOrder: input.sortOrder ?? 0,
           stateId,
           teamId: input.teamId,
