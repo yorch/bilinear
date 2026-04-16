@@ -1,3 +1,4 @@
+import { CustomFieldStore } from './custom-field-store';
 import { CustomViewStore } from './custom-view-store';
 import { CycleStore } from './cycle-store';
 import { IssueRelationStore } from './issue-relation-store';
@@ -13,6 +14,7 @@ import { UserStore } from './user-store';
 import { WorkflowStateStore } from './workflow-state-store';
 
 export class RootStore {
+  customFieldStore: CustomFieldStore;
   customViewStore: CustomViewStore;
   cycleStore: CycleStore;
   issueRelationStore: IssueRelationStore;
@@ -32,6 +34,7 @@ export class RootStore {
     this.userStore = new UserStore();
     this.teamStore = new TeamStore();
     this.workflowStateStore = new WorkflowStateStore();
+    this.customFieldStore = new CustomFieldStore();
     this.customViewStore = new CustomViewStore();
     this.cycleStore = new CycleStore();
     this.issueRelationStore = new IssueRelationStore();

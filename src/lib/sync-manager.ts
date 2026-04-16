@@ -76,6 +76,8 @@ export class SyncManager {
       notifications,
       issueRelations,
       issueTemplates,
+      customFieldDefinitions,
+      customFieldValues,
       meta,
     ] = await Promise.all([
       db.organizations.toArray(),
@@ -92,6 +94,8 @@ export class SyncManager {
       db.notifications.toArray(),
       db.issueRelations.toArray(),
       db.issueTemplates.toArray(),
+      db.customFieldDefinitions.toArray(),
+      db.customFieldValues.toArray(),
       db.syncMetadata.get('lastSyncId'),
     ]);
 
@@ -108,6 +112,7 @@ export class SyncManager {
       cycleStore,
       projectStore,
       customViewStore,
+      customFieldStore,
       notificationStore,
       issueRelationStore,
       issueTemplateStore,
@@ -131,6 +136,8 @@ export class SyncManager {
       notificationStore.upsertMany(notifications);
       issueRelationStore.upsertMany(issueRelations);
       issueTemplateStore.upsertMany(issueTemplates);
+      customFieldStore.upsertDefinitions(customFieldDefinitions);
+      customFieldStore.upsertValues(customFieldValues);
       syncStore.setLastSyncId(String(meta.value));
       return true;
     }
@@ -153,6 +160,7 @@ export class SyncManager {
       cycleStore,
       projectStore,
       customViewStore,
+      customFieldStore,
       notificationStore,
       issueRelationStore,
       issueTemplateStore,
@@ -174,6 +182,8 @@ export class SyncManager {
       const lines = text.split('\n').filter(Boolean);
 
       const batches = {
+        customFieldDefinitions: [] as object[],
+        customFieldValues: [] as object[],
         customViews: [] as object[],
         cycles: [] as object[],
         issueLabels: [] as object[],
@@ -230,6 +240,8 @@ export class SyncManager {
           db.notifications,
           db.issueRelations,
           db.issueTemplates,
+          db.customFieldDefinitions,
+          db.customFieldValues,
           db.syncMetadata,
         ],
         async () => {
@@ -248,6 +260,8 @@ export class SyncManager {
             db.notifications.clear(),
             db.issueRelations.clear(),
             db.issueTemplates.clear(),
+            db.customFieldDefinitions.clear(),
+            db.customFieldValues.clear(),
           ]);
           await Promise.all([
             db.organizations.bulkPut(
@@ -308,6 +322,16 @@ export class SyncManager {
             db.issueTemplates.bulkPut(
               batches.issueTemplates as Parameters<
                 typeof db.issueTemplates.bulkPut
+              >[0],
+            ),
+            db.customFieldDefinitions.bulkPut(
+              batches.customFieldDefinitions as Parameters<
+                typeof db.customFieldDefinitions.bulkPut
+              >[0],
+            ),
+            db.customFieldValues.bulkPut(
+              batches.customFieldValues as Parameters<
+                typeof db.customFieldValues.bulkPut
               >[0],
             ),
             db.syncMetadata.put({ key: 'lastSyncId', value: lastSyncId }),
@@ -373,6 +397,16 @@ export class SyncManager {
           typeof issueTemplateStore.upsertMany
         >[0],
       );
+      customFieldStore.upsertDefinitions(
+        batches.customFieldDefinitions as Parameters<
+          typeof customFieldStore.upsertDefinitions
+        >[0],
+      );
+      customFieldStore.upsertValues(
+        batches.customFieldValues as Parameters<
+          typeof customFieldStore.upsertValues
+        >[0],
+      );
       syncStore.setLastSyncId(lastSyncId);
       syncStore.setStatus('connected');
     } catch (err) {
@@ -432,6 +466,7 @@ export class SyncManager {
       cycleStore,
       projectStore,
       customViewStore,
+      customFieldStore,
       notificationStore,
       issueRelationStore,
       issueTemplateStore,
@@ -456,7 +491,11 @@ export class SyncManager {
       notifications: object[];
       issueRelations: object[];
       issueTemplates: object[];
+      customFieldDefinitions: object[];
+      customFieldValues: object[];
     } = {
+      customFieldDefinitions: [],
+      customFieldValues: [],
       customViews: [],
       cycles: [],
       issueLabels: [],
@@ -486,9 +525,16 @@ export class SyncManager {
         | 'customViews'
         | 'notifications'
         | 'issueRelations'
-        | 'issueTemplates';
+        | 'issueTemplates'
+        | 'customFieldDefinitions';
       id: string;
     }[] = [];
+    /**
+     * Issue-scoped value replacements: key is the issueId, value is the list
+     * of new rows. We defer Dexie writes so we can delete stale rows and
+     * insert fresh ones atomically in the closing transaction.
+     */
+    const customFieldValueReplaces = new Map<string, object[]>();
 
     for (const action of actions) {
       const { action: act, modelName, modelId, data } = action;
@@ -552,6 +598,37 @@ export class SyncManager {
             dexieDeletes.push({ id: modelId, table: 'issues' });
           } else if (data) {
             dexieUpserts.issues.push(data);
+          }
+          // Custom field values ride the 'Issue' stream with shape
+          // { customFieldValues: [...] }. When present, replace the issue's
+          // entire value set on both the MobX store and Dexie.
+          if (data && typeof data === 'object' && 'customFieldValues' in data) {
+            customFieldStore.applyValueSyncAction(
+              act,
+              modelId,
+              data as Parameters<
+                typeof customFieldStore.applyValueSyncAction
+              >[2],
+            );
+            const values = (data as { customFieldValues?: object[] })
+              .customFieldValues;
+            if (values) {
+              customFieldValueReplaces.set(modelId, values);
+            }
+          }
+          break;
+        case 'CustomFieldDefinition':
+          customFieldStore.applyDefinitionSyncAction(
+            act,
+            modelId,
+            data as Parameters<
+              typeof customFieldStore.applyDefinitionSyncAction
+            >[2],
+          );
+          if (act === 'D') {
+            dexieDeletes.push({ id: modelId, table: 'customFieldDefinitions' });
+          } else if (data) {
+            dexieUpserts.customFieldDefinitions.push(data);
           }
           break;
         case 'Cycle':
@@ -688,6 +765,8 @@ export class SyncManager {
         db.notifications,
         db.issueRelations,
         db.issueTemplates,
+        db.customFieldDefinitions,
+        db.customFieldValues,
         db.syncMetadata,
       ],
       async () => {
@@ -762,11 +841,37 @@ export class SyncManager {
                 typeof db.issueTemplates.bulkPut
               >[0],
             ),
+          dexieUpserts.customFieldDefinitions.length > 0 &&
+            db.customFieldDefinitions.bulkPut(
+              dexieUpserts.customFieldDefinitions as Parameters<
+                typeof db.customFieldDefinitions.bulkPut
+              >[0],
+            ),
           db.syncMetadata.put({ key: 'lastSyncId', value: maxId }),
         ]);
         await Promise.all(
           dexieDeletes.map(({ table, id }) => db[table].delete(id)),
         );
+        // Replace each affected issue's value rows atomically: delete the
+        // stale set by issueId index, then bulkPut the fresh list.
+        for (const [issueId, values] of customFieldValueReplaces) {
+          await db.customFieldValues.where('issueId').equals(issueId).delete();
+          if (values.length > 0) {
+            await db.customFieldValues.bulkPut(
+              values as Parameters<typeof db.customFieldValues.bulkPut>[0],
+            );
+          }
+        }
+        // When a definition is deleted, Postgres cascade-deletes its values;
+        // mirror that on the client so stale rows don't linger.
+        for (const del of dexieDeletes) {
+          if (del.table === 'customFieldDefinitions') {
+            await db.customFieldValues
+              .where('definitionId')
+              .equals(del.id)
+              .delete();
+          }
+        }
       },
     );
   }

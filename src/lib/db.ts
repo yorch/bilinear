@@ -249,6 +249,36 @@ export interface DBIssueTemplate {
   archivedAt?: string | null;
 }
 
+export interface DBCustomFieldDefinition {
+  id: string;
+  teamId: string;
+  name: string;
+  type:
+    | 'text'
+    | 'number'
+    | 'date'
+    | 'select'
+    | 'multi_select'
+    | 'url'
+    | 'checkbox';
+  description?: string | null;
+  required: boolean;
+  options?: Array<{ value: string; label: string; color?: string }> | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string | null;
+}
+
+export interface DBCustomFieldValue {
+  id: string;
+  issueId: string;
+  definitionId: string;
+  value: unknown;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DBSyncMetadata {
   key: string;
   value: unknown;
@@ -266,6 +296,8 @@ export class AppDatabase extends Dexie {
   issueLabels!: Table<DBIssueLabel, string>;
   issueRelations!: Table<DBIssueRelation, string>;
   issueTemplates!: Table<DBIssueTemplate, string>;
+  customFieldDefinitions!: Table<DBCustomFieldDefinition, string>;
+  customFieldValues!: Table<DBCustomFieldValue, string>;
   cycles!: Table<DBCycle, string>;
   projects!: Table<DBProject, string>;
   projectMilestones!: Table<DBProjectMilestone, string>;
@@ -340,6 +372,27 @@ export class AppDatabase extends Dexie {
       workflowStates: 'id, teamId',
     });
     this.version(6).stores({
+      customViews: 'id, organizationId, teamId, creatorId',
+      cycles: 'id, teamId, organizationId',
+      issueActivities: 'id, issueId',
+      issueLabels: 'id, organizationId, teamId, parentId',
+      issueRelations: 'id, issueId, relatedIssueId',
+      issues:
+        'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
+      issueTemplates: 'id, teamId, creatorId',
+      notifications: 'id, userId, organizationId, issueId, read',
+      organizations: 'id',
+      projectMilestones: 'id, projectId',
+      projects: 'id, organizationId, statusType, leadId',
+      projectUpdates: 'id, projectId, userId',
+      syncMetadata: 'key',
+      teams: 'id, organizationId, parentId',
+      users: 'id, email',
+      workflowStates: 'id, teamId',
+    });
+    this.version(7).stores({
+      customFieldDefinitions: 'id, teamId',
+      customFieldValues: 'id, issueId, definitionId, [issueId+definitionId]',
       customViews: 'id, organizationId, teamId, creatorId',
       cycles: 'id, teamId, organizationId',
       issueActivities: 'id, issueId',
