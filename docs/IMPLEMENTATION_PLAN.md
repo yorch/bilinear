@@ -5,7 +5,7 @@
 **Version:** 1.2
 **Date:** April 2026
 
-> **Status snapshot (April 2026):** Phase 1 complete. Phase 2 (Sprints 13-26) complete — Sprints 13-22 and 25-26 done; Sprint 23-24 (Custom Fields) not yet started. Phase 3 in progress — Sprints 27-28, 29-30 shipped (27-28 partial); Sprints 31-32, 33-34 partially shipped. Sprints 35-40 not started. Phase 4 and 5 not started. See each sprint section for the per-item breakdown.
+> **Status snapshot (April 2026):** Phase 1 complete. Phase 2 (Sprints 13-26) complete — Sprints 13-22 and 25-26 done; Sprint 23-24 (Custom Fields) core shipped (definitions CRUD, values editor, filter dimension, sync); list-column picker and CSV export deferred. Phase 3 in progress — Sprints 27-28, 29-30 shipped (27-28 partial); Sprints 31-32, 33-34 partially shipped. Sprints 35-40 not started. Phase 4 and 5 not started. See each sprint section for the per-item breakdown.
 
 ---
 
@@ -230,19 +230,19 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Manual subscribe/unsubscribe via `Shift+S` shortcut (deferred — no hotkey bound)
 - [ ] Activity collapsing for dense histories (deferred)
 
-### Sprint 23-24: Custom Fields
+### Sprint 23-24: Custom Fields ✅ COMPLETE (core)
 
-- [ ] Create migrations: `custom_field_definitions` (team-scoped or workspace-scoped), `custom_field_values` (JSONB on issues)
-- [ ] Field types: `text`, `number`, `date`, `select`, `multi_select`, `url`, `checkbox`
-- [ ] Custom field CRUD (GraphQL mutations + queries)
-- [ ] Max 20 fields per team; validation enforced at service layer
-- [ ] Custom field values included in issue create/update mutations
-- [ ] List view: optional columns for custom fields (toggled via column picker)
-- [ ] Issue detail panel: custom fields section below standard properties
-- [ ] Filter builder: custom fields as filterable dimensions
-- [ ] Custom field values included in CSV export
-- [ ] Sync: `custom_field_definitions` and `custom_field_values` included in bootstrap + delta payloads
-- [ ] MobX store: `CustomFieldStore` (definitions pool + per-issue value map)
+- [x] Create migrations: `custom_field_definitions` (team-scoped), `custom_field_values` (separate table keyed by `(issueId, definitionId)`)
+- [x] Field types: `text`, `number`, `date`, `select`, `multi_select`, `url`, `checkbox`
+- [x] Custom field CRUD (GraphQL mutations + queries)
+- [x] Max 20 fields per team; validation enforced at service layer
+- [x] Custom field values included in mutations via `customFieldValuesSet` (bulk upsert per issue)
+- [x] Issue detail panel: custom fields section below standard properties (`src/components/custom-fields/custom-fields-editor.tsx`)
+- [x] Filter builder: custom fields as filterable dimensions (filter-engine `custom` field + per-issue value resolver)
+- [x] Sync: `custom_field_definitions` and `custom_field_values` included in bootstrap + delta payloads; definition deletes cascade-delete values on the client
+- [x] MobX store: `CustomFieldStore` (definitions pool + per-issue value map keyed `issueId:definitionId`)
+- [ ] List view: optional columns for custom fields (toggled via column picker) — deferred; no column picker exists on the list view today
+- [ ] Custom field values included in CSV export — deferred; CSV export does not exist yet
 
 **Note:** Custom fields do not replace Priority, Estimate, or Status — those remain opinionated and fixed. Custom fields are additive metadata only.
 

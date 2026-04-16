@@ -26,12 +26,15 @@ export type FilterField =
   | 'estimate'
   | 'dueDate'
   | 'createdAt'
-  | 'updatedAt';
+  | 'updatedAt'
+  | 'custom';
 
 export interface FilterCondition {
   field: FilterField;
   operator: FilterOperator;
-  value?: string | string[] | number | null;
+  value?: string | string[] | number | boolean | null;
+  /** Set when `field === 'custom'` — identifies which custom field to match. */
+  customFieldId?: string;
 }
 
 export type FilterComposition = 'and' | 'or';
@@ -76,13 +79,23 @@ export interface FilterableIssue {
   updatedAt?: string;
 }
 
+/** Resolves an issue's value for a given custom-field definition id. */
+export type CustomFieldValueResolver = (
+  issueId: string,
+  definitionId: string,
+) => unknown;
+
 function matchCondition(
   issue: FilterableIssue,
   condition: FilterCondition,
+  customFieldResolver?: CustomFieldValueResolver,
 ): boolean {
   const { field, operator, value } = condition;
 
-  const fieldValue = getFieldValue(issue, field);
+  const fieldValue =
+    field === 'custom' && condition.customFieldId
+      ? (customFieldResolver?.(issue.id, condition.customFieldId) ?? null)
+      : getFieldValue(issue, field);
 
   switch (operator) {
     case 'eq':
@@ -96,6 +109,10 @@ function matchCondition(
           const issueLabels = issue.labelIds ?? [];
           return value.some(v => issueLabels.includes(v));
         }
+        if (Array.isArray(fieldValue)) {
+          // Custom multi_select — match if any selected value overlaps
+          return value.some(v => (fieldValue as unknown[]).includes(v));
+        }
         return value.includes(String(fieldValue));
       }
       return false;
@@ -104,6 +121,9 @@ function matchCondition(
         if (field === 'label') {
           const issueLabels = issue.labelIds ?? [];
           return !value.some(v => issueLabels.includes(v));
+        }
+        if (Array.isArray(fieldValue)) {
+          return !value.some(v => (fieldValue as unknown[]).includes(v));
         }
         return !value.includes(String(fieldValue));
       }
@@ -169,6 +189,7 @@ function getFieldValue(
 export function applyFilters<T extends FilterableIssue>(
   issues: T[],
   filterSet: FilterSet,
+  customFieldResolver?: CustomFieldValueResolver,
 ): T[] {
   if (filterSet.conditions.length === 0) {
     return issues;
@@ -176,9 +197,13 @@ export function applyFilters<T extends FilterableIssue>(
 
   return issues.filter(issue => {
     if (filterSet.composition === 'and') {
-      return filterSet.conditions.every(c => matchCondition(issue, c));
+      return filterSet.conditions.every(c =>
+        matchCondition(issue, c, customFieldResolver),
+      );
     }
-    return filterSet.conditions.some(c => matchCondition(issue, c));
+    return filterSet.conditions.some(c =>
+      matchCondition(issue, c, customFieldResolver),
+    );
   });
 }
 

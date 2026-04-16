@@ -96,6 +96,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     userStore,
     workflowStateStore,
     labelStore,
+    customFieldStore,
     syncStore,
   } = useStore();
 
@@ -151,9 +152,19 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
       });
   })();
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: MobX observables — size changes when definitions mutate, which is the signal we want to re-run on
+  const customFieldDefs = useMemo(
+    () => (teamId ? customFieldStore.findDefinitionsByTeamId(teamId) : []),
+    [teamId, customFieldStore.definitions.size],
+  );
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: MobX observables — values.size change triggers re-filter on value updates
   const issues = useMemo(
-    () => applyFilters(allIssues, filterSet),
-    [allIssues, filterSet],
+    () =>
+      applyFilters(allIssues, filterSet, (issueId, definitionId) => {
+        return customFieldStore.findValue(issueId, definitionId)?.value ?? null;
+      }),
+    [allIssues, filterSet, customFieldStore.values.size],
   );
 
   const users: IssueUser[] = userStore.all.map(u => ({
@@ -582,6 +593,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
           states={states}
           users={users}
           labels={labels}
+          customFields={customFieldDefs}
         />
       </div>
 

@@ -243,6 +243,7 @@ const BacklogPage = observer(function BacklogPage() {
     userStore,
     workflowStateStore,
     labelStore,
+    customFieldStore,
     syncStore,
   } = useStore();
 
@@ -281,9 +282,19 @@ const BacklogPage = observer(function BacklogPage() {
       }));
   }, [teamId, issueStore, labelStore, backlogStateIds]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: MobX observables — definitions.size change triggers re-compute
+  const customFieldDefs = useMemo(
+    () => (teamId ? customFieldStore.findDefinitionsByTeamId(teamId) : []),
+    [teamId, customFieldStore.definitions.size],
+  );
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: MobX observables — values.size change triggers re-filter
   const filteredIssues = useMemo(
-    () => applyFilters(allBacklogIssues, filterSet),
-    [allBacklogIssues, filterSet],
+    () =>
+      applyFilters(allBacklogIssues, filterSet, (issueId, definitionId) => {
+        return customFieldStore.findValue(issueId, definitionId)?.value ?? null;
+      }),
+    [allBacklogIssues, filterSet, customFieldStore.values.size],
   );
 
   // Group by priority
@@ -440,6 +451,7 @@ const BacklogPage = observer(function BacklogPage() {
           states={states}
           users={users}
           labels={labels}
+          customFields={customFieldDefs}
         />
       </div>
 

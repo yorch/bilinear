@@ -2,7 +2,7 @@
 
 import { Plus, X } from 'lucide-react';
 import { useState } from 'react';
-import type { DBWorkflowState } from '@/lib/db';
+import type { DBCustomFieldDefinition, DBWorkflowState } from '@/lib/db';
 import type {
   FilterComposition,
   FilterCondition,
@@ -51,6 +51,7 @@ interface FilterPillProps {
   states: DBWorkflowState[];
   users: IssueUser[];
   labels: IssueLabel[];
+  customFields?: DBCustomFieldDefinition[];
   onRemove: () => void;
 }
 
@@ -59,9 +60,15 @@ function FilterPill({
   states,
   users,
   labels,
+  customFields,
   onRemove,
 }: FilterPillProps) {
+  const customDef =
+    condition.field === 'custom' && condition.customFieldId
+      ? customFields?.find(d => d.id === condition.customFieldId)
+      : undefined;
   const fieldLabel =
+    customDef?.name ??
     FILTER_FIELDS.find(f => f.value === condition.field)?.label ??
     condition.field;
   const opLabel =
@@ -93,6 +100,20 @@ function FilterPill({
     valueLabel =
       PRIORITY_OPTIONS.find(p => p.value === String(condition.value))?.label ??
       String(condition.value);
+  } else if (condition.field === 'custom' && customDef) {
+    if (Array.isArray(condition.value)) {
+      valueLabel = condition.value
+        .map(
+          v => customDef.options?.find(o => o.value === v)?.label ?? String(v),
+        )
+        .join(', ');
+    } else if (customDef.type === 'checkbox') {
+      valueLabel = condition.value ? 'true' : 'false';
+    } else {
+      valueLabel =
+        customDef.options?.find(o => o.value === condition.value)?.label ??
+        String(condition.value ?? '');
+    }
   } else {
     valueLabel = String(condition.value ?? '');
   }
@@ -119,22 +140,66 @@ interface AddFilterFormProps {
   states: DBWorkflowState[];
   users: IssueUser[];
   labels: IssueLabel[];
+  customFields?: DBCustomFieldDefinition[];
   onAdd: (condition: FilterCondition) => void;
   onCancel: () => void;
+}
+
+/**
+ * Field-select option. Built-in values are FilterField strings; custom-field
+ * entries use `custom:<uuid>` to carry the definition id through the select.
+ */
+interface FieldOption {
+  value: string;
+  label: string;
 }
 
 function AddFilterForm({
   states,
   users,
   labels,
+  customFields,
   onAdd,
   onCancel,
 }: AddFilterFormProps) {
-  const [field, setField] = useState<FilterField>('status');
+  const [fieldValue, setFieldValue] = useState<string>('status');
   const [operator, setOperator] = useState<FilterOperator>('eq');
   const [value, setValue] = useState<string>('');
 
+  const customFieldId = fieldValue.startsWith('custom:')
+    ? fieldValue.slice('custom:'.length)
+    : undefined;
+  const customDef = customFieldId
+    ? customFields?.find(d => d.id === customFieldId)
+    : undefined;
+  const field: FilterField = customFieldId
+    ? 'custom'
+    : (fieldValue as FilterField);
+
+  const fieldOptions: FieldOption[] = [
+    ...FILTER_FIELDS.map(f => ({ label: f.label, value: f.value })),
+    ...(customFields ?? []).map(d => ({
+      label: d.name,
+      value: `custom:${d.id}`,
+    })),
+  ];
+
   const getValueOptions = () => {
+    if (customDef) {
+      if (customDef.type === 'select' || customDef.type === 'multi_select') {
+        return (customDef.options ?? []).map(o => ({
+          label: o.label,
+          value: o.value,
+        }));
+      }
+      if (customDef.type === 'checkbox') {
+        return [
+          { label: 'True', value: 'true' },
+          { label: 'False', value: 'false' },
+        ];
+      }
+      return [];
+    }
     switch (field) {
       case 'status':
         return states
@@ -157,14 +222,14 @@ function AddFilterForm({
   return (
     <div className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white p-2 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
       <select
-        value={field}
+        value={fieldValue}
         onChange={e => {
-          setField(e.target.value as FilterField);
+          setFieldValue(e.target.value);
           setValue('');
         }}
         className="rounded border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
       >
-        {FILTER_FIELDS.map(f => (
+        {fieldOptions.map(f => (
           <option key={f.value} value={f.value}>
             {f.label}
           </option>
@@ -210,11 +275,18 @@ function AddFilterForm({
       <button
         type="button"
         onClick={() => {
-          const resolvedValue =
-            field === 'priority' ? parseInt(value, 10) : value;
+          let resolvedValue: string | number | boolean = value;
+          if (field === 'priority') {
+            resolvedValue = Number.parseInt(value, 10);
+          } else if (customDef?.type === 'number') {
+            resolvedValue = Number(value);
+          } else if (customDef?.type === 'checkbox') {
+            resolvedValue = value === 'true';
+          }
           onAdd({
             field,
             operator,
+            ...(customFieldId ? { customFieldId } : {}),
             ...(needsValue ? { value: resolvedValue } : {}),
           });
         }}
@@ -242,6 +314,7 @@ interface FilterBuilderProps {
   states: DBWorkflowState[];
   users: IssueUser[];
   labels: IssueLabel[];
+  customFields?: DBCustomFieldDefinition[];
 }
 
 export function FilterBuilder({
@@ -250,6 +323,7 @@ export function FilterBuilder({
   states,
   users,
   labels,
+  customFields,
 }: FilterBuilderProps) {
   const [showAddForm, setShowAddForm] = useState(false);
 
@@ -304,11 +378,12 @@ export function FilterBuilder({
 
       {filterSet.conditions.map((condition, index) => (
         <FilterPill
-          key={`${condition.field}-${condition.operator}-${String(condition.value)}`}
+          key={`${condition.field}-${condition.customFieldId ?? ''}-${condition.operator}-${String(condition.value)}`}
           condition={condition}
           states={states}
           users={users}
           labels={labels}
+          customFields={customFields}
           onRemove={() => handleRemove(index)}
         />
       ))}
@@ -318,6 +393,7 @@ export function FilterBuilder({
           states={states}
           users={users}
           labels={labels}
+          customFields={customFields}
           onAdd={handleAdd}
           onCancel={() => setShowAddForm(false)}
         />
