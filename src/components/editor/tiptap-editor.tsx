@@ -23,8 +23,12 @@ import { all, createLowlight } from 'lowlight';
 import { ImageIcon, Link2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { cn } from '@/lib/utils';
+import { Details, DetailsSummary } from './details-node';
+import { EmbedNode } from './embed-node';
 import type { MentionItem, MentionListHandle } from './mention-list';
 import { MentionList } from './mention-list';
+import { MermaidNode } from './mermaid-node';
+import { SlashCommands } from './slash-commands';
 import './tiptap-editor.css';
 
 const lowlight = createLowlight(all);
@@ -202,6 +206,11 @@ export function TipTapEditor({
       Underline,
       HorizontalRule,
       CharacterCount,
+      SlashCommands,
+      MermaidNode,
+      Details,
+      DetailsSummary,
+      EmbedNode,
       // Only add the Mention extension when the caller opts in by providing users.
       // The extension reads from mentionUsersRef so suggestions stay current.
       ...(mentionUsers != null ? [buildMentionExtension(mentionUsersRef)] : []),
