@@ -187,18 +187,19 @@ model Team {
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   archivedAt    DateTime? @map("archived_at") @db.Timestamptz
 
-  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  parent         Team?            @relation("TeamHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children       Team[]           @relation("TeamHierarchy")
-  memberships    TeamMembership[]
-  workflowStates WorkflowState[]
-  issues         Issue[]
-  labels         IssueLabel[]
-  projectTeams   ProjectTeam[]
-  cycles         Cycle[]
-  customViews    CustomView[]
-  issueTemplates IssueTemplate[]
-  memberRoles    TeamMemberRole[]
+  organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent                 Team?                   @relation("TeamHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children               Team[]                  @relation("TeamHierarchy")
+  memberships            TeamMembership[]
+  workflowStates         WorkflowState[]
+  issues                 Issue[]
+  labels                 IssueLabel[]
+  projectTeams           ProjectTeam[]
+  cycles                 Cycle[]
+  customViews            CustomView[]
+  issueTemplates         IssueTemplate[]
+  memberRoles            TeamMemberRole[]
+  customFieldDefinitions CustomFieldDefinition[]
 
   // Unique on (organizationId, key) is enforced via a partial index in the DB
   // (WHERE archived_at IS NULL) so archived teams don't block key reuse.
@@ -312,25 +313,26 @@ model Issue {
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   archivedAt DateTime? @map("archived_at") @db.Timestamptz
 
-  organization     Organization               @relation(fields: [organizationId], references: [id])
-  team             Team                       @relation(fields: [teamId], references: [id])
-  state            WorkflowState              @relation(fields: [stateId], references: [id])
-  assignee         User?                      @relation("AssignedIssues", fields: [assigneeId], references: [id])
-  creator          User?                      @relation("CreatedIssues", fields: [creatorId], references: [id])
-  snoozedBy        User?                      @relation("SnoozedIssues", fields: [snoozedById], references: [id])
-  parent           Issue?                     @relation("SubIssues", fields: [parentId], references: [id], onDelete: SetNull)
-  children         Issue[]                    @relation("SubIssues")
-  labelAssignments IssueLabelAssignment[]
-  activities       IssueActivity[]
-  cycle            Cycle?                     @relation(fields: [cycleId], references: [id], onDelete: SetNull)
-  notifications    Notification[]
-  project          Project?                   @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  projectMilestone ProjectMilestone?          @relation(fields: [projectMilestoneId], references: [id], onDelete: SetNull)
-  subscriptions    NotificationSubscription[]
-  issueRelations   IssueRelation[]            @relation("IssueRelations")
-  relatedToIssues  IssueRelation[]            @relation("RelatedIssues")
-  files            File[]
-  comments         Comment[]
+  organization      Organization               @relation(fields: [organizationId], references: [id])
+  team              Team                       @relation(fields: [teamId], references: [id])
+  state             WorkflowState              @relation(fields: [stateId], references: [id])
+  assignee          User?                      @relation("AssignedIssues", fields: [assigneeId], references: [id])
+  creator           User?                      @relation("CreatedIssues", fields: [creatorId], references: [id])
+  snoozedBy         User?                      @relation("SnoozedIssues", fields: [snoozedById], references: [id])
+  parent            Issue?                     @relation("SubIssues", fields: [parentId], references: [id], onDelete: SetNull)
+  children          Issue[]                    @relation("SubIssues")
+  labelAssignments  IssueLabelAssignment[]
+  activities        IssueActivity[]
+  cycle             Cycle?                     @relation(fields: [cycleId], references: [id], onDelete: SetNull)
+  notifications     Notification[]
+  project           Project?                   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  projectMilestone  ProjectMilestone?          @relation(fields: [projectMilestoneId], references: [id], onDelete: SetNull)
+  subscriptions     NotificationSubscription[]
+  issueRelations    IssueRelation[]            @relation("IssueRelations")
+  relatedToIssues   IssueRelation[]            @relation("RelatedIssues")
+  files             File[]
+  comments          Comment[]
+  customFieldValues CustomFieldValue[]
 
   @@unique([teamId, number])
   @@index([organizationId])
@@ -708,6 +710,61 @@ model IssueTemplate {
   @@index([teamId])
   @@index([creatorId])
   @@map("issue_templates")
+}
+
+enum CustomFieldType {
+  text
+  number
+  date
+  select
+  multi_select
+  url
+  checkbox
+
+  @@map("custom_field_type")
+}
+
+/// Team-scoped custom field definition.
+/// `options` holds `[{ value, label, color? }]` for select/multi_select types;
+/// null for other types.
+model CustomFieldDefinition {
+  id          String          @id @default(uuid()) @db.Uuid
+  teamId      String          @map("team_id") @db.Uuid
+  name        String          @db.VarChar(255)
+  type        CustomFieldType
+  description String?
+  required    Boolean         @default(false)
+  options     Json?
+  sortOrder   Float           @default(0) @map("sort_order")
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt  DateTime?       @map("archived_at") @db.Timestamptz
+
+  team   Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  values CustomFieldValue[]
+
+  @@index([teamId])
+  @@map("custom_field_definitions")
+}
+
+/// One row per (issueId, definitionId) holding the typed JSON value.
+/// Value shape by type: text/url → string, number → number, date → ISO date string,
+/// checkbox → boolean, select → string (option value), multi_select → string[].
+model CustomFieldValue {
+  id           String   @id @default(uuid()) @db.Uuid
+  issueId      String   @map("issue_id") @db.Uuid
+  definitionId String   @map("definition_id") @db.Uuid
+  value        Json
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  issue      Issue                 @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  definition CustomFieldDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+
+  @@unique([issueId, definitionId])
+  @@index([issueId])
+  @@index([definitionId])
+  @@map("custom_field_values")
 }
 
 model File {
