@@ -6,6 +6,7 @@ import type { AuthContext } from '../middleware/auth';
 import { extractAuthContext } from '../middleware/auth';
 import { AuthService } from '../services/auth.service';
 import { CommentService } from '../services/comment.service';
+import { CustomFieldService } from '../services/custom-field.service';
 import { CustomViewService } from '../services/custom-view.service';
 import { CycleService } from '../services/cycle.service';
 import { IssueService } from '../services/issue.service';
@@ -26,6 +27,7 @@ export interface GraphQLContext extends AuthContext {
   services: {
     auth: AuthService;
     comment: CommentService;
+    customField: CustomFieldService;
     customView: CustomViewService;
     cycle: CycleService;
     issue: IssueService;
@@ -52,6 +54,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const userService = new UserService(prisma);
   const authService = new AuthService(prisma, userService);
   const commentService = new CommentService(prisma);
+  const customFieldService = new CustomFieldService(prisma);
   const customViewService = new CustomViewService(prisma);
   const issueActivityService = new IssueActivityService(prisma);
   const notificationService = new NotificationService(prisma);
@@ -72,6 +75,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
     services: {
       auth: authService,
       comment: commentService,
+      customField: customFieldService,
       customView: customViewService,
       cycle: cycleService,
       issue: issueService,

@@ -38,6 +38,8 @@ export type MockPrismaClient = {
     | 'authToken'
     | 'comment'
     | 'commentReaction'
+    | 'customFieldDefinition'
+    | 'customFieldValue'
     | 'customView'
     | 'cycle'
     | 'issue'
@@ -74,6 +76,8 @@ export function createMockPrisma(): MockPrismaClient {
     authToken: createMockModel(),
     comment: createMockModel(),
     commentReaction: createMockModel(),
+    customFieldDefinition: createMockModel(),
+    customFieldValue: createMockModel(),
     customView: createMockModel(),
     cycle: createMockModel(),
     issue: createMockModel(),
