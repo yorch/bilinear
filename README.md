@@ -15,6 +15,8 @@ A Linear-style issue tracker built with Next.js 16, GraphQL, and PostgreSQL. See
 - **next-themes** — dark/light/system theme switching (`ThemeProvider`, `.dark` class on `<html>`)
 - **sonner** — toast notification library (wrapped via `src/lib/toast.ts`)
 - **pino** + **pino-pretty** — structured JSON logging (server-side, pretty-printed in dev)
+- **TipTap** — rich-text editor for issue descriptions, comments, and documents (mentions, slash commands, Mermaid, embeds, file uploads)
+- **@sentry/nextjs** — error tracking (`sentry.{client,edge,server}.config.ts`)
 - **TailwindCSS v4** + shadcn/ui — styling
 - **Playwright** — E2E browser testing (`tests/e2e/`, `yarn test:e2e`)
 - **Biome** — linting and formatting (replaces ESLint + Prettier)
@@ -135,44 +137,67 @@ src/
 │   └── api/sync/delta/       # GET — SyncActions since lastSyncId
 ├── server/                   # Backend-only code (never imported by client)
 │   ├── graphql/              # schema.ts, context.ts, resolvers/, types/
-│   ├── services/             # AuthService, UserService, TeamService,
-│   │                         # WorkflowStateService, IssueService, LabelService,
-│   │                         # SyncService (SyncAction creation + Redis broadcast)
-│   ├── lib/                  # prisma.ts, redis.ts, jwt.ts, email.ts
-│   ├── middleware/           # JWT extraction, requireAuth, requireOrgRole, requireTeamMember
+│   ├── services/             # auth, user, team, workflow-state, label, issue,
+│   │                         # issue-activity, issue-relation, issue-template,
+│   │                         # project, cycle, custom-view, custom-field,
+│   │                         # comment, notification, document, file, roadmap,
+│   │                         # search, sync (one class per domain)
+│   ├── lib/                  # prisma, redis, jwt, email, logger (pino), tiptap-schema
+│   ├── middleware/           # JWT extraction, requireAuth, requireOrgRole, requireTeamMember, rate limiter
 │   └── ws/                   # Standalone WebSocket server (yarn ws:server)
 │       ├── index.ts          # WS server entry point, Redis PubSub relay
 │       └── connection-manager.ts  # Track connected clients per org
 ├── stores/                   # MobX observable stores
 │   ├── root-store.ts         # RootStore aggregating all entity stores
 │   ├── sync-store.ts         # lastSyncId, connection status
-│   ├── issue-store.ts        # Issue pool + optimisticUpdate
-│   ├── team-store.ts         # Team pool
-│   ├── user-store.ts         # User pool + currentUserId
-│   ├── label-store.ts        # IssueLabel pool
+│   ├── ui-store.ts           # Sidebar collapsed, active team, selection
+│   ├── issue-store.ts        # Issue pool + optimistic updates
+│   ├── team-store.ts
+│   ├── user-store.ts
+│   ├── label-store.ts
 │   ├── workflow-state-store.ts
-│   └── ui-store.ts           # Sidebar collapsed, active team, selection
+│   ├── project-store.ts
+│   ├── cycle-store.ts
+│   ├── custom-view-store.ts
+│   ├── custom-field-store.ts
+│   ├── notification-store.ts
+│   ├── issue-relation-store.ts
+│   ├── issue-template-store.ts
+│   └── document-store.ts
 ├── providers/
 │   ├── store-provider.tsx    # React context for MobX RootStore
 │   └── sync-provider.tsx     # Bootstrap + WebSocket lifecycle
 ├── components/
 │   ├── auth/                 # LoginForm, VerifyCodeForm
-│   ├── issues/               # IssueListView, IssueRow, IssueDetailPanel, CreateIssueModal, GroupSection
-│   ├── layouts/              # AppShell, Sidebar (collapsible), WorkspaceClient
-│   ├── properties/           # StatusSelect, PrioritySelect, AssigneeSelect, LabelSelect, DueDatePicker
+│   ├── layouts/              # AppShell, Sidebar, WorkspaceClient
+│   ├── command-palette/      # Cmd+K modal (lazy-loaded)
+│   ├── issues/               # IssueListView, IssueRow, IssueDetailPanel, CreateIssueModal, GroupSection, comments, file attachments
+│   ├── views/                # Custom view pages, filter builder, column picker, CSV export
+│   ├── properties/           # StatusSelect, PrioritySelect, AssigneeSelect, LabelSelect, ProjectSelect, CycleSelect, DueDatePicker
+│   ├── cycles/               # Cycle list/detail, BurndownChart SVG, rollover action
+│   ├── projects/             # Project list/detail, milestones, updates
+│   ├── custom-fields/        # Team settings UI + detail panel value editors
+│   ├── notifications/        # Notification bell + inbox list
+│   ├── editor/               # TipTap extension set (mention, slash, mermaid, embed, details)
+│   ├── documents/            # Document tree + editor
+│   ├── roadmap/              # Public roadmap page + Workspace Settings config
+│   ├── teams/                # Team member management, team settings
 │   ├── ui/                   # shadcn/ui primitives + Skeleton components
 │   ├── error-boundary.tsx    # ErrorBoundary class component + SectionError
 │   └── theme-toggle.tsx      # Three-way light/dark/system toggle
-├── hooks/                    # useAuth, useHotkeys (supports string | string[]), useTheme
+├── hooks/                    # useAuth, useHotkeys, useChord, useRecentItems, useTheme
 ├── lib/
 │   ├── db.ts                 # Dexie.js AppDatabase (IndexedDB schema + DB interfaces)
 │   ├── sync-manager.ts       # Sync lifecycle: bootstrap → IndexedDB → MobX → WebSocket
 │   ├── transaction-queue.ts  # Serial GraphQL mutation queue with retry/rollback
 │   ├── ws-client.ts          # WebSocket client with exponential backoff reconnect
+│   ├── csv-export.ts         # Flat-row exporter for the filtered issue list
+│   ├── fuzzy-search.ts       # Local fuzzy match for store search
+│   ├── toast.ts              # sonner wrapper (do not import sonner directly)
 │   ├── graphql.ts            # Shared fetch helper for GraphQL mutations
 │   ├── utils.ts
 │   └── issue-utils.ts
-└── types/                    # issues.ts (shared frontend types: WorkflowState, IssueUser, etc.)
+└── types/                    # Shared frontend types (issues.ts, filter-composition.ts, ...)
 ```
 
 See `docs/PATTERNS.md` for conventions used throughout the codebase.

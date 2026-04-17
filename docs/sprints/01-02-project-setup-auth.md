@@ -4,6 +4,7 @@
 **Phase:** 1 (Foundation)  
 **Weeks:** 1-2  
 **Goal:** Working app shell with authentication
+**Status:** ✅ Shipped — this file is the historical build spec. For current state see `docs/IMPLEMENTATION_PLAN.md`, `docs/PATTERNS.md`, and the source tree.
 
 **Prerequisites:** None (first sprint)
 

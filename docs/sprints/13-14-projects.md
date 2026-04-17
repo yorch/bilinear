@@ -4,6 +4,7 @@
 **Phase:** 2 (Essential Features)  
 **Weeks:** 13-14  
 **Goal:** Project list, detail views, milestones, and project updates with real-time sync
+**Status:** ✅ Shipped — historical spec; current state lives in `docs/IMPLEMENTATION_PLAN.md` and the source tree.
 
 **Prerequisites:** Sprints 1-12 (full Phase 1 foundation — sync engine, MobX stores, WebSocket)
 

@@ -4,6 +4,7 @@
 **Phase:** 1 (Foundation)  
 **Weeks:** 7-8  
 **Goal:** Local-first architecture with optimistic updates and real-time sync
+**Status:** ✅ Shipped — historical spec; current state lives in `docs/ARCHITECTURE.md` §3 and the source tree.
 
 **Prerequisites:** Sprint 5-6 (issue CRUD, list view — sync wraps around existing mutations)
 

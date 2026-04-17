@@ -4,6 +4,7 @@
 **Phase:** 1 (Foundation)  
 **Weeks:** 3-4  
 **Goal:** Teams with customizable workflow states
+**Status:** ✅ Shipped — historical spec; current state lives in `docs/IMPLEMENTATION_PLAN.md` and the source tree.
 
 **Prerequisites:** Sprint 1-2 (auth, database, GraphQL server, app shell)
 

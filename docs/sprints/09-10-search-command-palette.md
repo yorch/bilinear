@@ -4,6 +4,7 @@
 **Phase:** 1 (Foundation)  
 **Weeks:** 9-10  
 **Goal:** Fast search and keyboard-first navigation via command palette
+**Status:** ✅ Shipped — historical spec; current state lives in `docs/PATTERNS.md` (§ Command Palette) and the source tree.
 
 **Prerequisites:** Sprint 7-8 (sync engine, MobX stores — search reads from local stores where possible)
 

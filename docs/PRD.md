@@ -251,22 +251,26 @@ Build a modern, high-performance issue tracking and project management platform 
 - <100ms perceived latency
 - Keyboard-navigable results
 
-### 2.14 Rich Text Editor (P0)
+### 2.14 Rich Text Editor (P0) 🟡 MOSTLY SHIPPED
 
-- Full Markdown: bold, italic, strikethrough, links, lists, code blocks, tables
-- Advanced: blockquotes, collapsible sections, Mermaid diagrams, inline dates
-- Mentions: @user, @ISSUE-ID, @project
-- Embeds: YouTube, Loom auto-embed
-- File attachments: drag-drop, up to 25MB
-- Collaborative editing with live cursors
+- [x] Full Markdown: bold, italic, strikethrough, links, lists, code blocks, tables
+- [x] Advanced: blockquotes, collapsible sections, Mermaid diagrams, slash commands
+- [x] @user mentions (via `@tiptap/extension-mention`)
+- [x] Embeds: YouTube, Loom, generic (`EmbedNode`)
+- [x] File attachments: persisted to `File` model via `POST /api/upload`; toolbar button + dedicated file-attachments block
+- [ ] @mentions for `@ISSUE-ID` and `@project`
+- [ ] Image / file drag-and-drop into the editor body
+- [ ] Collaborative editing with live cursors (YJS)
 
-### 2.15 Comments & Activity (P0)
+### 2.15 Comments & Activity (P0) 🟡 MOSTLY SHIPPED (Sprint 29-30)
 
-- Threaded comments with full markdown
-- @mentions, emoji reactions
-- Convert comments to sub-issues
-- Activity history: all property changes tracked
-- Activity collapsing for dense histories
+- [x] Threaded comments (`Comment.parentId`) with TipTap rich text
+- [x] @mentions on users, emoji reactions (`CommentReaction`)
+- [x] Comment resolution (`commentResolve` / `commentUnresolve`)
+- [x] Activity history (`IssueActivity`): field / oldValue / newValue per change
+- [ ] Convert comment to sub-issue
+- [ ] Quote reply
+- [ ] Activity collapsing for dense histories
 
 ### 2.16 Authentication (P0)
 
@@ -298,37 +302,41 @@ Build a modern, high-performance issue tracking and project management platform 
 - Rate limiting: 5,000 requests/hr + complexity points
 - TypeScript SDK auto-generated from schema
 
-### 2.19 Documents / Docs (P2)
+### 2.19 Documents / Docs (P2) 🟡 BASE SHIPPED (Sprint 35-36)
 
-- Standalone documents associated with projects, initiatives, teams
-- Collaborative editing (YJS)
-- Templates and AI summaries
-- Comments on documents
+- [x] Standalone documents associated with projects and teams (initiative association deferred until Initiatives ship)
+- [x] Nested hierarchy via `parentId` self-relation
+- [x] TipTap-powered editor matching the issue description editor
+- [ ] Collaborative editing (YJS / Hocuspocus)
+- [ ] Templates and AI summaries
+- [ ] Comments on documents
 
-### 2.20 Custom Fields (P2)
+### 2.20 Custom Fields (P2) ✅ SHIPPED (Sprint 23-24)
 
 A deliberate departure from Linear's "no custom fields" stance, enabling non-engineering teams (ops, HR, marketing) to use the same tool.
 
-- Fields scoped at workspace or team level
+- **Scope:** team-level only today (workspace-level scope is a future extension)
 - Types: text, number, date, select (single), multi-select, URL, checkbox
 - Fields appear as optional columns in list view and properties in detail panel
 - Filterable, sortable, and exportable to CSV
-- Max 20 custom fields per team
-- Custom fields do **not** affect the core data model for issues; they are stored as a JSONB metadata column
+- Max 20 active definitions per team (enforced in `CustomFieldService`)
+- **Storage:** definitions live in `custom_field_definitions`; values live in a separate `custom_field_values` table keyed by `(issue_id, definition_id)` so filter and sort stay indexable. **Not** a JSONB metadata column on `issues`.
 
 **Non-goal:** Custom fields will not replace the fixed Priority, Estimate, or Status systems. Those remain opinionated and fixed.
 
-### 2.20b Public Roadmaps (P2)
+### 2.20b Public Roadmaps (P2) 🟡 BASE SHIPPED (Sprint 53-54 / PR #28)
 
 Share a read-only, public-facing view of product progress — a feature Linear doesn't offer. Useful for open-source projects and transparent product orgs.
 
-- Enable per workspace; toggled per initiative or project
-- Public URL: `app.example.com/roadmap/[workspace-slug]`
-- Shows: initiatives, projects (name, status, health, target date, milestone progress)
-- Does **not** expose: issue titles, comments, assignees, internal notes
-- Optionally password-protected
-- Embeddable as iframe
-- Subscribable: visitors can sign up for email updates when projects change status
+- [x] One `PublicRoadmap` row per workspace; enable / disable toggle
+- [x] Per-project exposure toggle (`Project.roadmapVisible`)
+- [x] Public URL: `/r/[slug]` — unauthenticated route
+- [x] Shows projects (name, icon/color, status, health, target date, milestone progress counts)
+- [x] Does **not** expose: issue titles, comments, assignees, internal notes
+- [x] Optional password protection (SHA-256 hash; client sends plaintext over HTTPS)
+- [ ] Initiative-level grouping (depends on Sprint 57-58 Initiatives)
+- [ ] Embeddable as iframe
+- [ ] Subscribable: visitors can sign up for email updates when projects change status
 
 ### 2.21 SLAs (P2)
 

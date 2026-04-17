@@ -4,6 +4,7 @@
 **Phase:** 1 (Foundation)  
 **Weeks:** 11-12  
 **Goal:** Production-ready Alpha release with polish, theming, performance, testing, and observability
+**Status:** ✅ Shipped — historical spec; current state lives in `docs/IMPLEMENTATION_PLAN.md` and the source tree.
 
 **Prerequisites:** Sprints 1-10 (all foundation features complete)
 
