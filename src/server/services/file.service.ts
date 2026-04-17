@@ -54,8 +54,12 @@ export class FileService {
 
   async deleteFile(fileId: string, userId: string): Promise<PrismaFile> {
     const file = await this.prisma.file.findUnique({ where: { id: fileId } });
-    if (!file) throw new FileNotFoundError();
-    if (file.uploaderId !== userId) throw new FileForbiddenError();
+    if (!file) {
+      throw new FileNotFoundError();
+    }
+    if (file.uploaderId !== userId) {
+      throw new FileForbiddenError();
+    }
 
     return this.prisma.file.delete({ where: { id: fileId } });
   }

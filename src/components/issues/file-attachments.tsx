@@ -44,7 +44,9 @@ async function deleteFile(fileId: string): Promise<void> {
     method: 'POST',
   });
   const json = await res.json();
-  if (json.errors?.length) throw new Error(json.errors[0].message);
+  if (json.errors?.length) {
+    throw new Error(json.errors[0].message);
+  }
 }
 
 export function FileAttachments({ issueId }: FileAttachmentsProps) {
@@ -60,8 +62,12 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
-    if (!files.length) return;
-    if (inputRef.current) inputRef.current.value = '';
+    if (!files.length) {
+      return;
+    }
+    if (inputRef.current) {
+      inputRef.current.value = '';
+    }
 
     setUploading(true);
     try {
