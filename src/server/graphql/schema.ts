@@ -635,6 +635,46 @@ export const typeDefs = `
     endsAt: DateTime
   }
 
+  type Document {
+    id: ID!
+    organizationId: ID!
+    teamId: ID
+    projectId: ID
+    creatorId: ID
+    parentId: ID
+    title: String!
+    content: String
+    icon: String
+    sortOrder: Float!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    archivedAt: DateTime
+  }
+
+  input DocumentCreateInput {
+    id: ID
+    teamId: ID
+    projectId: ID
+    parentId: ID
+    title: String!
+    content: String
+    icon: String
+  }
+
+  input DocumentUpdateInput {
+    title: String
+    content: String
+    icon: String
+    sortOrder: Float
+    parentId: ID
+  }
+
+  type DocumentMutationResult {
+    success: Boolean!
+    document: Document
+    lastSyncId: String!
+  }
+
   type CustomView {
     id: ID!
     organizationId: ID!
@@ -934,6 +974,8 @@ export const typeDefs = `
     cycleBurndown(cycleId: ID!): [CycleBurndownPoint!]!
     customView(id: ID!): CustomView!
     customViews(teamId: String): [CustomView!]!
+    documents(teamId: ID, projectId: ID): [Document!]!
+    document(id: ID!): Document
     project(id: ID!): Project!
     projects(
       filter: ProjectFilter
@@ -991,6 +1033,11 @@ export const typeDefs = `
     customViewUpdate(id: ID!, input: CustomViewUpdateInput!): CustomViewPayload!
     customViewArchive(id: ID!): CustomViewPayload!
     customViewDelete(id: ID!): DeletePayload!
+
+    documentCreate(input: DocumentCreateInput!): DocumentMutationResult!
+    documentUpdate(id: ID!, input: DocumentUpdateInput!): DocumentMutationResult!
+    documentArchive(id: ID!): DocumentMutationResult!
+    documentDelete(id: ID!): DeletePayload!
 
     cycleCreate(input: CycleCreateInput!): CyclePayload!
     cycleUpdate(id: ID!, input: CycleUpdateInput!): CyclePayload!

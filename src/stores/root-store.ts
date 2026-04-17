@@ -1,6 +1,7 @@
 import { CustomFieldStore } from './custom-field-store';
 import { CustomViewStore } from './custom-view-store';
 import { CycleStore } from './cycle-store';
+import { DocumentStore } from './document-store';
 import { IssueRelationStore } from './issue-relation-store';
 import { IssueStore } from './issue-store';
 import { IssueTemplateStore } from './issue-template-store';
@@ -17,6 +18,7 @@ export class RootStore {
   customFieldStore: CustomFieldStore;
   customViewStore: CustomViewStore;
   cycleStore: CycleStore;
+  documentStore: DocumentStore;
   issueRelationStore: IssueRelationStore;
   issueStore: IssueStore;
   issueTemplateStore: IssueTemplateStore;
@@ -37,6 +39,7 @@ export class RootStore {
     this.customFieldStore = new CustomFieldStore();
     this.customViewStore = new CustomViewStore();
     this.cycleStore = new CycleStore();
+    this.documentStore = new DocumentStore();
     this.issueRelationStore = new IssueRelationStore();
     this.issueStore = new IssueStore();
     this.issueTemplateStore = new IssueTemplateStore();

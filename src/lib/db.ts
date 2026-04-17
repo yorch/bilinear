@@ -279,6 +279,22 @@ export interface DBCustomFieldValue {
   updatedAt: string;
 }
 
+export interface DBDocument {
+  id: string;
+  organizationId: string;
+  teamId?: string | null;
+  projectId?: string | null;
+  creatorId?: string | null;
+  parentId?: string | null;
+  title: string;
+  content?: string | null;
+  icon?: string | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string | null;
+}
+
 export interface DBSyncMetadata {
   key: string;
   value: unknown;
@@ -299,6 +315,7 @@ export class AppDatabase extends Dexie {
   customFieldDefinitions!: Table<DBCustomFieldDefinition, string>;
   customFieldValues!: Table<DBCustomFieldValue, string>;
   cycles!: Table<DBCycle, string>;
+  documents!: Table<DBDocument, string>;
   projects!: Table<DBProject, string>;
   projectMilestones!: Table<DBProjectMilestone, string>;
   projectUpdates!: Table<DBProjectUpdate, string>;
@@ -395,6 +412,28 @@ export class AppDatabase extends Dexie {
       customFieldValues: 'id, issueId, definitionId, [issueId+definitionId]',
       customViews: 'id, organizationId, teamId, creatorId',
       cycles: 'id, teamId, organizationId',
+      issueActivities: 'id, issueId',
+      issueLabels: 'id, organizationId, teamId, parentId',
+      issueRelations: 'id, issueId, relatedIssueId',
+      issues:
+        'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
+      issueTemplates: 'id, teamId, creatorId',
+      notifications: 'id, userId, organizationId, issueId, read',
+      organizations: 'id',
+      projectMilestones: 'id, projectId',
+      projects: 'id, organizationId, statusType, leadId',
+      projectUpdates: 'id, projectId, userId',
+      syncMetadata: 'key',
+      teams: 'id, organizationId, parentId',
+      users: 'id, email',
+      workflowStates: 'id, teamId',
+    });
+    this.version(8).stores({
+      customFieldDefinitions: 'id, teamId',
+      customFieldValues: 'id, issueId, definitionId, [issueId+definitionId]',
+      customViews: 'id, organizationId, teamId, creatorId',
+      cycles: 'id, teamId, organizationId',
+      documents: 'id, organizationId, teamId, projectId, parentId',
       issueActivities: 'id, issueId',
       issueLabels: 'id, organizationId, teamId, parentId',
       issueRelations: 'id, issueId, relatedIssueId',
