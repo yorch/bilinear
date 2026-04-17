@@ -118,9 +118,10 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
     };
   }, []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: MobX pool.size triggers re-computation when projects change
   const projects = useMemo(
-    () => projectStore.all.filter(p => !p.archivedAt && !p.trashed),
-    [projectStore.all.filter],
+    () => projectStore.all,
+    [projectStore, projectStore.pool.size],
   );
 
   const handleSave = async (e: React.FormEvent) => {
