@@ -5,7 +5,7 @@
 **Version:** 1.2
 **Date:** April 2026
 
-> **Status snapshot (April 2026):** Phase 1 complete. Phase 2 (Sprints 13-26) complete — Sprints 13-22 and 25-26 done; Sprint 23-24 (Custom Fields) core shipped (definitions CRUD, values editor, filter dimension, sync); list-column picker and CSV export deferred. Phase 3 in progress — Sprints 27-28, 29-30 shipped (27-28 partial); Sprints 31-32, 33-34 partially shipped. Sprints 35-40 not started. Phase 4 and 5 not started. See each sprint section for the per-item breakdown.
+> **Status snapshot (April 2026):** Phase 1 complete. Phase 2 (Sprints 13-26) complete — all items shipped, including the Sprint 23-24 list-column picker, CSV export, and the Sprint 25-26 cascade + property-inheritance work. Phase 3 in progress — Sprints 27-28, 29-30 shipped (27-28 partial); Sprints 31-32, 33-34 partially shipped. Sprints 35-40 not started. Phase 4 and 5 not started. See each sprint section for the per-item breakdown.
 
 ---
 
@@ -230,7 +230,7 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] Manual subscribe/unsubscribe via `Shift+S` shortcut (deferred — no hotkey bound)
 - [ ] Activity collapsing for dense histories (deferred)
 
-### Sprint 23-24: Custom Fields ✅ COMPLETE (core)
+### Sprint 23-24: Custom Fields ✅ COMPLETE
 
 - [x] Create migrations: `custom_field_definitions` (team-scoped), `custom_field_values` (separate table keyed by `(issueId, definitionId)`)
 - [x] Field types: `text`, `number`, `date`, `select`, `multi_select`, `url`, `checkbox`
@@ -241,8 +241,8 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [x] Filter builder: custom fields as filterable dimensions (filter-engine `custom` field + per-issue value resolver)
 - [x] Sync: `custom_field_definitions` and `custom_field_values` included in bootstrap + delta payloads; definition deletes cascade-delete values on the client
 - [x] MobX store: `CustomFieldStore` (definitions pool + per-issue value map keyed `issueId:definitionId`)
-- [ ] List view: optional columns for custom fields (toggled via column picker) — deferred; no column picker exists on the list view today
-- [ ] Custom field values included in CSV export — deferred; CSV export does not exist yet
+- [x] List view: optional columns for custom fields (toggled via column picker — `src/components/issues/column-picker.tsx`, `useVisibleColumns` hook with localStorage persistence; custom fields render as read-only cells with per-type formatting)
+- [x] Custom field values included in CSV export (`CsvExportButton` on the team page list view uses `src/lib/csv-export.ts`; exports the current filtered issues with one column per active custom-field definition, option labels resolved for select / multi_select)
 
 **Note:** Custom fields do not replace Priority, Estimate, or Status — those remain opinionated and fixed. Custom fields are additive metadata only.
 
