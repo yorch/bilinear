@@ -149,6 +149,7 @@ export const typeDefs = `
     labels: [IssueLabel!]!
     project: Project
     customFieldValues: [CustomFieldValue!]!
+    files: [File!]!
   }
 
   type IssueEdge {
@@ -831,6 +832,19 @@ export const typeDefs = `
     value: JSON
   }
 
+  type File {
+    id: ID!
+    name: String!
+    key: String!
+    size: Int!
+    mimeType: String!
+    url: String!
+    issueId: ID
+    projectId: ID
+    uploaderId: ID
+    createdAt: DateTime!
+  }
+
   scalar JSON
 
   type Comment {
@@ -939,6 +953,7 @@ export const typeDefs = `
     customFieldValuesForIssue(issueId: ID!): [CustomFieldValue!]!
     comments(issueId: ID!, includeArchived: Boolean): [Comment!]!
     comment(id: ID!): Comment!
+    issueFiles(issueId: ID!): [File!]!
   }
 
   type Mutation {
@@ -1032,5 +1047,7 @@ export const typeDefs = `
     commentReactionRemove(commentId: ID!, emoji: String!): DeletePayload!
 
     organizationMemberUpdateRole(userId: ID!, role: String!): DeletePayload!
+
+    fileDelete(id: ID!): DeletePayload!
   }
 `;

@@ -18,6 +18,7 @@ export class SyncManager {
   private wsUnsubscribers: Array<() => void> = [];
   private isBootstrapping = false;
   private isDeltaSyncing = false;
+  private stopped = false;
 
   constructor(stores: RootStore, wsClient: WsClient) {
     this.stores = stores;
@@ -40,6 +41,11 @@ export class SyncManager {
       await this.fullBootstrap();
     }
 
+    // Don't open a WS connection if stop() was called while we were bootstrapping
+    if (this.stopped) {
+      return;
+    }
+
     // Connect WebSocket for real-time updates
     this.setupWebSocket(token);
 
@@ -49,6 +55,7 @@ export class SyncManager {
   }
 
   stop() {
+    this.stopped = true;
     for (const unsub of this.wsUnsubscribers) {
       unsub();
     }

@@ -9,6 +9,7 @@ import { CommentService } from '../services/comment.service';
 import { CustomFieldService } from '../services/custom-field.service';
 import { CustomViewService } from '../services/custom-view.service';
 import { CycleService } from '../services/cycle.service';
+import { FileService } from '../services/file.service';
 import { IssueService } from '../services/issue.service';
 import { IssueActivityService } from '../services/issue-activity.service';
 import { IssueRelationService } from '../services/issue-relation.service';
@@ -30,6 +31,7 @@ export interface GraphQLContext extends AuthContext {
     customField: CustomFieldService;
     customView: CustomViewService;
     cycle: CycleService;
+    file: FileService;
     issue: IssueService;
     issueActivity: IssueActivityService;
     issueRelation: IssueRelationService;
@@ -53,6 +55,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
 
   const userService = new UserService(prisma);
   const authService = new AuthService(prisma, userService);
+  const fileService = new FileService(prisma);
   const commentService = new CommentService(prisma);
   const customFieldService = new CustomFieldService(prisma);
   const customViewService = new CustomViewService(prisma);
@@ -78,6 +81,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
       customField: customFieldService,
       customView: customViewService,
       cycle: cycleService,
+      file: fileService,
       issue: issueService,
       issueActivity: issueActivityService,
       issueRelation: issueRelationService,

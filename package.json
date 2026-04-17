@@ -24,7 +24,7 @@
     "db:reset": "prisma migrate reset",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
-    "ws:server": "tsx src/server/ws/index.ts",
+    "ws:server": "tsx --env-file-if-exists=.env src/server/ws/index.ts",
     "analyze": "ANALYZE=true next build",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
@@ -76,6 +76,7 @@
     "jose": "6.2.2",
     "lowlight": "3.3.0",
     "lucide-react": "1.8.0",
+    "mermaid": "11.14.0",
     "mobx": "6.15.0",
     "mobx-react-lite": "4.1.1",
     "next": "16.2.3",

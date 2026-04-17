@@ -4,6 +4,7 @@ import { commentResolvers } from './comment';
 import { customFieldResolvers } from './custom-field';
 import { customViewResolvers } from './custom-view';
 import { cycleResolvers } from './cycle';
+import { fileResolvers } from './file';
 import { issueResolvers } from './issue';
 import { issueActivityResolvers } from './issue-activity';
 import { issueRelationResolvers } from './issue-relation';
@@ -83,6 +84,7 @@ export const resolvers = {
   Issue: {
     ...issueResolvers.Issue,
     ...customFieldResolvers.Issue,
+    ...fileResolvers.Issue,
   },
 
   IssueActivity: {
@@ -106,6 +108,7 @@ export const resolvers = {
   Mutation: {
     ...authResolvers.Mutation,
     ...commentResolvers.Mutation,
+    ...fileResolvers.Mutation,
     ...notificationResolvers.Mutation,
     ...issueRelationResolvers.Mutation,
     ...issueTemplateResolvers.Mutation,
@@ -140,6 +143,7 @@ export const resolvers = {
   Query: {
     ...userResolvers.Query,
     ...commentResolvers.Query,
+    ...fileResolvers.Query,
     ...issueActivityResolvers.Query,
     ...notificationResolvers.Query,
     ...issueRelationResolvers.Query,

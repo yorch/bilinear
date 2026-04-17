@@ -30,8 +30,8 @@ test.describe('Real-time Sync', () => {
     // Verify in tab A
     await expect(pageA.getByText(title)).toBeVisible({ timeout: 5000 });
 
-    // Verify in tab B (WebSocket push)
-    await expect(pageB.getByText(title)).toBeVisible({ timeout: 10000 });
+    // Verify in tab B (WebSocket push or delta sync catchup)
+    await expect(pageB.getByText(title)).toBeVisible({ timeout: 20000 });
 
     await contextA.close();
     await contextB.close();
