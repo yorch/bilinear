@@ -13,6 +13,7 @@ import {
 } from '@/components/issues/board-view';
 import { ColumnPicker } from '@/components/issues/column-picker';
 import { CreateIssueModal } from '@/components/issues/create-issue-modal';
+import { CsvExportButton } from '@/components/issues/csv-export-button';
 import { FilterBuilder } from '@/components/issues/filter-builder';
 import { IssueListView } from '@/components/issues/issue-list-view';
 import type { OpenProperty } from '@/components/issues/issue-row';
@@ -99,6 +100,8 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     workflowStateStore,
     labelStore,
     customFieldStore,
+    projectStore,
+    cycleStore,
     syncStore,
   } = useStore();
 
@@ -602,11 +605,39 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
           customFields={customFieldDefs}
         />
         {viewMode === 'list' && (
-          <ColumnPicker
-            isVisible={isColumnVisible}
-            onToggle={toggleColumn}
-            customFields={customFieldDefs}
-          />
+          <div className="flex items-center gap-1">
+            <CsvExportButton
+              issues={issues}
+              states={states}
+              users={users}
+              projectsById={
+                new Map(
+                  Array.from(projectStore.pool.values()).map(p => [
+                    p.id,
+                    { name: p.name },
+                  ]),
+                )
+              }
+              cyclesById={
+                new Map(
+                  Array.from(cycleStore.pool.values()).map(c => [
+                    c.id,
+                    { name: c.name ?? null, number: c.number },
+                  ]),
+                )
+              }
+              customFields={customFieldDefs}
+              getCustomFieldValue={(issueId, definitionId) =>
+                customFieldStore.findValue(issueId, definitionId)?.value ?? null
+              }
+              stem={`team-${team?.key ?? 'issues'}-issues`}
+            />
+            <ColumnPicker
+              isVisible={isColumnVisible}
+              onToggle={toggleColumn}
+              customFields={customFieldDefs}
+            />
+          </div>
         )}
       </div>
 
