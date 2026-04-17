@@ -5,7 +5,7 @@
 **Version:** 1.2
 **Date:** April 2026
 
-> **Status snapshot (April 2026):** Phase 1 complete. Phase 2 (Sprints 13-26) complete — all items shipped, including the Sprint 23-24 list-column picker, CSV export, and the Sprint 25-26 cascade + property-inheritance work. Phase 3 in progress — Sprints 27-28, 29-30 shipped (27-28 partial); Sprints 31-32, 33-34 partially shipped. Sprints 35-40 not started. Phase 4 and 5 not started. See each sprint section for the per-item breakdown.
+> **Status snapshot (2026-04-17):** Phase 1 complete. Phase 2 (Sprints 13-26) complete — all items shipped, including the Sprint 23-24 list-column picker, CSV export, and the Sprint 25-26 cascade + property-inheritance work. Phase 3 in progress — Sprints 27-28 (editor: mostly shipped in PR #27), 29-30 (comments), 33-34 (analytics + burndown + Sentry), and **35-36 (Documents, shipped in PR #28)** are done or near-done; Sprints 31-32 partially shipped; Sprints 37-40 not started. Phase 4 still unstarted except **Sprint 53-54 Public Roadmaps shipped in PR #28**. Phase 5 not started. See each sprint section for the per-item breakdown.
 
 ---
 
@@ -263,20 +263,22 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 
 ## Phase 3: Organization (Weeks 27-40)
 
-### Sprint 27-28: Rich Text Editor 🟡 PARTIAL
+### Sprint 27-28: Rich Text Editor ✅ MOSTLY COMPLETE
+
+Shipped in PRs #24 (@mentions + image upload) and #27 (file uploads, embeds,
+editor enhancements). Remaining items are small.
 
 - [x] TipTap editor integration (`src/components/editor/tiptap-editor.tsx`)
 - [x] Markdown-equivalent support: bold, italic, underline, strikethrough, headings, bullet/ordered/task lists, code blocks with syntax highlighting (lowlight), tables with resizable columns, blockquotes, horizontal rule, links
 - [x] @mentions for **users** via `@tiptap/extension-mention` and `src/components/editor/mention-list.tsx`
-- [x] Image upload via toolbar (base64, 2 MB limit, no drag-drop)
-- [x] File attachments as a separate in-issue component (`src/components/issues/file-attachments.tsx`, `File` model exists)
+- [x] Image upload via toolbar — persisted to the `File` model through `POST /api/upload` (see `file-attachments.tsx:80`)
+- [x] File attachments as a separate in-issue component (`src/components/issues/file-attachments.tsx`)
+- [x] Slash commands — `SlashCommands` extension wired into `tiptap-editor.tsx:209`; popup driven by `slash-command-list.tsx`
+- [x] Mermaid diagram rendering (`mermaid-node.tsx`, wired into the extension list)
+- [x] Collapsible sections (`details-node.ts` / details-accordion node)
+- [x] Embed support — YouTube, Loom, and generic embeds via `embed-node.tsx`
 - [ ] @mentions for **issues** and **projects** (users only today)
-- [ ] Slash commands — `src/components/editor/slash-commands.ts` exists but is **not wired** into the editor's extension list; the planned `/code`, `/table`, `/diagram`, `/file`, `/date` commands are not implemented
-- [ ] Image drag-and-drop
-- [ ] File attachment upload persisted to `File` model (current component stores base64 in memory only, not uploaded via GraphQL)
-- [ ] Mermaid diagram rendering
-- [ ] Collapsible sections (details/accordion node)
-- [ ] Embed support (YouTube, Loom)
+- [ ] Image drag-and-drop (toolbar-only today)
 - [ ] Collaborative editing (YJS / Hocuspocus)
 
 ### Sprint 29-30: Comments & Reactions ✅ COMPLETE (partial)
@@ -326,14 +328,18 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] CSV export
 - [ ] Workspace-level aggregate analytics view (cross-team)
 
-### Sprint 35-36: Documents (Linear Docs)
+### Sprint 35-36: Documents (Linear Docs) ✅ SHIPPED (PR #28)
 
-- [ ] Create migrations: documents
-- [ ] Document CRUD with collaborative editing
-- [ ] Associate documents with projects, initiatives, teams
-- [ ] Document listing and search
+- [x] Migration `20260417000001_documents` — `documents` table with parent hierarchy
+- [x] Document CRUD — `documentCreate / Update / Archive / Delete` mutations, `DocumentService` + `DocumentStore`
+- [x] Associate documents with teams and projects via `teamId` / `projectId`; nest under `parentId`
+- [x] Document listing (`documents(teamId?, projectId?)`) and left-nav tree in the sidebar
+- [x] TipTap-powered rich-text editor on `/documents/[id]` — shares the editor extension set with issues
+- [ ] Document search (relies on general full-text search; no dedicated docs search UI)
 - [ ] Comments on documents
 - [ ] Document templates
+- [ ] Initiative association (depends on Sprint 57-58 Initiatives)
+- [ ] Collaborative editing (YJS / Hocuspocus) — shared with Sprint 27-28
 
 ### Sprint 37-38: Triage Workflow
 
@@ -418,21 +424,22 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [ ] API key management UI
 - [ ] Developer portal
 
-### Sprint 53-54: Public Roadmaps
+### Sprint 53-54: Public Roadmaps ✅ SHIPPED (PR #28)
 
 A differentiator vs Linear. Read-only, public-facing view of product progress.
+Shipped ahead of schedule alongside the Documents feature.
 
-- [ ] `public_roadmaps` table: workspace FK, slug, enabled flag, password hash (nullable), title, description
-- [ ] Toggle per workspace: enable/disable public roadmap
-- [ ] Toggle per initiative/project: include or exclude from public roadmap
-- [ ] Public URL scheme: `/roadmap/[workspace-slug]` — served as a standalone, unauthenticated route
-- [ ] Roadmap page shows: initiatives, projects (name, status, health, target date, milestone progress circles)
-- [ ] Does **not** expose: issue titles, comments, assignees, internal notes, estimated values
-- [ ] Optional password protection (bcrypt-hashed; token stored in session cookie)
-- [ ] Embeddable via `<iframe>` (X-Frame-Options: SAMEORIGIN relaxed for embed routes)
-- [ ] Email subscribe: visitors enter email to receive status update notifications when projects change status
-- [ ] Subscriber management: workspace admin can view/export/purge subscriber list
-- [ ] Roadmap settings page under Workspace Settings → Public Roadmap
+- [x] Migration `20260417000002_public_roadmaps` — `public_roadmaps` table + `projects.roadmap_visible` column
+- [x] Per-org public roadmap config (`publicRoadmapUpsert` mutation)
+- [x] Per-project exposure toggle — `projectSetRoadmapVisible(id, visible)` mutation + `Project.roadmapVisible`
+- [x] Public URL scheme: `/r/[slug]` — unauthenticated route, served server-side
+- [x] Roadmap page shows projects with name, icon/color, status, health, target date, and milestone progress counts (`RoadmapProject` type)
+- [x] Does **not** expose issues, comments, assignees, or internal notes
+- [x] Optional password protection — SHA-256 hash on `public_roadmaps.password_hash`; client sends plaintext over HTTPS to `publicRoadmapPage(slug, password?)`
+- [x] Roadmap settings page under Workspace Settings → Public Roadmap
+- [ ] Embeddable via `<iframe>` (headers not yet relaxed)
+- [ ] Email subscribe + subscriber management
+- [ ] Initiative-level grouping (depends on Sprint 57-58 Initiatives)
 
 ---
 
@@ -476,18 +483,20 @@ A differentiator vs Linear. Read-only, public-facing view of product progress.
 | **Alpha** | Week 12  | Auth + Issues + Teams + List View + Sync Engine + **Docker Compose deploy**                    | ✅ Reached     |
 | **Beta**  | Week 26  | + Projects + Cycles + Board + Filters + Backlog + Notifications + **Custom Fields**            | ✅ Reached     |
 | **RC1**   | Week 40  | + Rich Editor + Comments + Sub-teams + **SAML/SCIM** + Triage + Docs + Automations + Analytics | 🟡 In progress |
-| **v1.0**  | Week 54  | + GitHub + Slack + Webhooks + Import/Export + OAuth + **Public Roadmaps**                      | ⬜ Not started |
+| **v1.0**  | Week 54  | + GitHub + Slack + Webhooks + Import/Export + OAuth + **Public Roadmaps**                      | 🟡 In progress (Public Roadmaps shipped early) |
 | **v2.0**  | Week 68+ | + Initiatives + SLAs + AI + Mobile + Desktop                                                   | ⬜ Not started |
 
 **RC1 gap analysis** (remaining work to hit RC1):
 
-- Custom Fields: entirely unstarted (Sprint 23-24)
-- Rich editor: slash-command wiring, persisted file uploads, issue/project @mentions, Mermaid, embeds, collaborative editing (Sprint 27-28)
+- Rich editor: issue/project @mentions, image drag-drop, collaborative editing (Sprint 27-28 — the bulk shipped in PR #27)
 - Sub-teams: config inheritance, guest-role enforcement, cross-team visibility, SAML/SCIM, audit log, IP restrictions (Sprint 31-32)
-- Analytics: burnup chart, cycle-based velocity, flow histograms, date ranges, CSV, workspace rollup (Sprint 33-34; burndown chart ✅ done)
-- Documents: entirely unstarted (Sprint 35-36)
+- Analytics: burnup chart, cycle-based velocity with rolling averages, flow histograms, date ranges, CSV rollup, workspace-level aggregate (Sprint 33-34 — burndown + Sentry ✅ done)
+- Documents: comments on docs, doc templates, initiative association (Sprint 35-36 — base CRUD shipped in PR #28)
 - Triage: entirely unstarted (Sprint 37-38)
 - Automations: entirely unstarted (Sprint 39-40)
+
+**Custom Fields (Sprint 23-24) ✅ SHIPPED** — definitions CRUD, values CRUD,
+filterable in list views, editable in the detail panel. See lines 233-247.
 
 ---
 

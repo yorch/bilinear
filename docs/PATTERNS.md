@@ -3,7 +3,7 @@
 ## Issue Tracker — Linear Rebuild
 
 **Established:** Sprint 1-2
-**Last updated:** Sprint 33-34
+**Last updated:** 2026-04-17 (Sprints 35-36 + Public Roadmaps)
 **Status:** Living document — updated each sprint
 
 > This is the primary onboarding document for new contributors. All patterns here are the mandated conventions for the codebase. If you deviate from a pattern, document why.
@@ -17,30 +17,44 @@ src/
 ├── app/                        # Next.js App Router (pages + API routes)
 │   ├── (auth)/                 # Route group: no sidebar, centered layout
 │   ├── (workspace)/            # Route group: authenticated, sidebar layout
-│   └── api/                    # API routes (GraphQL, session, sync)
+│   ├── r/                      # Public roadmap route (unauthenticated, /r/:slug)
+│   └── api/                    # GraphQL, auth/session, sync/{bootstrap,delta}, upload, uploads/[...path]
 ├── server/                     # Backend-only code — never import from client
-│   ├── graphql/                # schema.ts, context.ts, resolvers/, types/
-│   ├── services/               # Business logic (one class per domain)
-│   ├── lib/                    # Singletons: prisma, redis, jwt, email
+│   ├── graphql/                # schema.ts, context.ts, resolvers/ (per-domain), types/
+│   ├── services/               # Business logic — one class per domain (see §5)
+│   ├── lib/                    # Singletons: prisma, redis, jwt, email, logger, tiptap-schema
 │   ├── middleware/             # Auth extraction + guards
 │   └── ws/                     # Standalone WebSocket server (separate process)
-├── stores/                     # MobX observable entity pools (Sprint 7-8+)
+├── stores/                     # MobX observable entity pools
 ├── providers/                  # React context wrappers (StoreProvider, SyncProvider)
 ├── components/                 # React components (client-safe)
 │   ├── ui/                     # shadcn/ui primitives
 │   ├── layouts/                # App shell, sidebar, WorkspaceClient
-│   ├── command-palette/        # CommandPalette modal (Sprint 9-10+)
-│   └── <feature>/              # Feature-grouped components (auth/, issues/, properties/)
-├── hooks/                      # React hooks (useAuth, useHotkeys, useChord, useRecentItems)
+│   ├── command-palette/        # CommandPalette modal (Sprint 9-10)
+│   ├── auth/                   # Login forms
+│   ├── issues/                 # Issue list, detail panel, create modal, comments, file attachments
+│   ├── views/                  # CustomView pages, filter builder, column picker, CSV export
+│   ├── properties/             # Selectors (status, assignee, priority, label, project, cycle)
+│   ├── cycles/                 # Cycle list/detail, burndown chart, rollover
+│   ├── projects/               # Project list/detail, milestones, updates
+│   ├── custom-fields/          # Custom field definition settings + detail panel editors
+│   ├── notifications/          # Notification bell + inbox list
+│   ├── editor/                 # TipTap extension set (mention, slash, mermaid, embed, details)
+│   ├── documents/              # Document tree, editor page
+│   ├── roadmap/                # Public roadmap page + config UI
+│   └── teams/                  # Team member management, team settings
+├── hooks/                      # useAuth, useHotkeys, useChord, useRecentItems, ...
 ├── lib/                        # Shared client utilities
-│   ├── db.ts                   # Dexie.js IndexedDB schema (Sprint 7-8+)
-│   ├── fuzzy-search.ts         # Local fuzzy match for store search (Sprint 9-10+)
-│   ├── sync-manager.ts         # Sync lifecycle orchestrator (Sprint 7-8+)
-│   ├── transaction-queue.ts    # Serial mutation queue (Sprint 7-8+)
-│   ├── ws-client.ts            # WebSocket client (Sprint 7-8+)
+│   ├── db.ts                   # Dexie.js IndexedDB schema
+│   ├── fuzzy-search.ts         # Local fuzzy match for store search
+│   ├── sync-manager.ts         # Sync lifecycle orchestrator
+│   ├── transaction-queue.ts    # Serial mutation queue
+│   ├── ws-client.ts            # WebSocket client
+│   ├── csv-export.ts           # Flat-row exporter for issue lists
 │   ├── graphql.ts              # Shared fetch helper
+│   ├── toast.ts                # sonner wrapper — never import sonner directly
 │   └── utils.ts / issue-utils.ts
-└── types/                      # Shared frontend type definitions (issues.ts)
+└── types/                      # Shared frontend type definitions (issues.ts, filter-composition.ts)
 ```
 
 **Rule:** Nothing under `src/server/` may be imported by client components. Server-only code uses Node.js APIs and database access that cannot run in the browser.
@@ -193,44 +207,38 @@ export class AuthService {
 Context is built per-request from the incoming headers/cookies:
 
 ```typescript
-// src/server/graphql/context.ts
+// src/server/graphql/context.ts (abbreviated; see the file for the full list)
 export interface GraphQLContext extends AuthContext {
   prisma: PrismaClient;
-  search: SearchService;     // Added Sprint 9-10: PostgreSQL full-text search
+  search: SearchService;
   services: {
     auth: AuthService;
-    issue: IssueService;
-    label: LabelService;
-    sync: SyncService;       // Added Sprint 7-8: creates SyncActions + Redis broadcast
-    team: TeamService;
     user: UserService;
+    team: TeamService;
     workflowState: WorkflowStateService;
-  };
-}
-
-export async function createContext(req: NextRequest): Promise<GraphQLContext> {
-  const auth = await extractAuthContext(
-    req.headers.get('authorization'),
-    req.cookies.get('access_token')?.value ?? null,
-  );
-  const userService = new UserService(prisma);
-  const teamService = new TeamService(prisma);
-  const workflowStateService = new WorkflowStateService(prisma);
-  return {
-    ...auth,
-    prisma,
-    search: new SearchService(prisma),
-    services: {
-      auth: new AuthService(prisma, userService),
-      issue: new IssueService(prisma),
-      label: new LabelService(prisma),
-      team: teamService,
-      user: userService,
-      workflowState: workflowStateService,
-    },
+    label: LabelService;
+    issue: IssueService;
+    issueActivity: IssueActivityService;
+    issueRelation: IssueRelationService;
+    issueTemplate: IssueTemplateService;
+    project: ProjectService;
+    cycle: CycleService;
+    customView: CustomViewService;
+    customField: CustomFieldService;
+    comment: CommentService;
+    notification: NotificationService;
+    document: DocumentService;
+    file: FileService;
+    roadmap: RoadmapService;
+    sync: SyncService;      // SyncAction writer + Redis broadcaster
   };
 }
 ```
+
+Every domain with a GraphQL resolver has a matching service in
+`src/server/services/`. When adding a new domain, wire the service into
+`createContext` — resolvers never `new` a service on the fly and never call
+`ctx.prisma` for business logic (auth guards are the exception).
 
 The `prisma` instance is exposed on context so authorization guards can perform queries without going through a service (e.g., `requireOrgRole` checks `organizationMember` directly).
 
@@ -1181,7 +1189,7 @@ await ctx.services.notification.create({
 
 - `NotificationStore` holds the pool; `NotificationInbox` component reads from it
 - Unread count badge: `notificationStore.unreadCount` (computed from `readAt === null`)
-- "Mark all read" calls `notificationsMarkAllRead` mutation → updates all `readAt` fields → `SyncAction` propagates to store
+- "Mark all read" calls `notificationMarkAllRead` mutation → updates all `readAt` fields → `SyncAction` propagates to store
 - Reference: `src/server/services/notification.service.ts`, `src/stores/notification-store.ts`, `src/components/notifications/notification-inbox.tsx`
 
 ---
@@ -1217,8 +1225,10 @@ The `TipTapEditor` component (`src/components/editor/tiptap-editor.tsx`) is used
 />
 ```
 
-- Extensions: StarterKit, Highlight, TaskList, Table, CodeBlockLowlight, Image, Mention
+- Extensions: StarterKit, Highlight, TaskList, Table, CodeBlockLowlight, Image, Mention, `SlashCommands`, `MermaidNode`, `EmbedNode` (YouTube / Loom / generic), `DetailsNode` (collapsible sections)
 - `mentionUsers` prop feeds the `MentionList` suggestion component
-- Image upload: toolbar button → base64 insert (2 MB limit); not yet persisted to the `File` model
-- Slash commands file (`src/components/editor/slash-commands.ts`) exists but is **not wired** into the extension list — do not remove, it is planned for Sprint 35+
-- Reference: `src/components/editor/tiptap-editor.tsx`, `src/components/editor/mention-list.tsx`
+- Image upload: toolbar button → `POST /api/upload` → `File` row → URL inserted as an image node. File attachments use the same flow via `file-attachments.tsx`.
+- Slash commands are wired via the `SlashCommands` extension; the popup is driven by `slash-command-list.tsx` (dynamic-imported so it stays out of the critical bundle)
+- The `Document` editor (`/documents/[id]`) reuses the same extension set so server-side markdown rendering is identical
+- Still planned: @mentions for issues / projects (users only today), image drag-and-drop, YJS / Hocuspocus collab
+- Reference: `src/components/editor/tiptap-editor.tsx`, `src/components/editor/slash-commands.ts`, `src/components/editor/embed-node.tsx`, `src/components/editor/mermaid-node.tsx`
