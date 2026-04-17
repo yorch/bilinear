@@ -14,6 +14,7 @@ import { labelResolvers } from './label';
 import { notificationResolvers } from './notification';
 import { organizationResolvers } from './organization';
 import { projectResolvers } from './project';
+import { roadmapResolvers } from './roadmap';
 import { searchResolvers } from './search';
 import { teamResolvers } from './team';
 import { teamMembershipResolvers } from './team-membership';
@@ -121,6 +122,7 @@ export const resolvers = {
     ...issueResolvers.Mutation,
     ...labelResolvers.Mutation,
     ...projectResolvers.Mutation,
+    ...roadmapResolvers.Mutation,
     ...teamResolvers.Mutation,
     ...teamMembershipResolvers.Mutation,
     ...workflowStateResolvers.Mutation,
@@ -160,6 +162,7 @@ export const resolvers = {
     ...searchResolvers.Query,
     ...cycleResolvers.Query,
     ...projectResolvers.Query,
+    ...roadmapResolvers.Query,
   },
 
   Team: {

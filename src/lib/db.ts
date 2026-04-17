@@ -137,6 +137,7 @@ export interface DBProject {
   startedAt?: string | null;
   completedAt?: string | null;
   canceledAt?: string | null;
+  roadmapVisible: boolean;
   trashed: boolean;
   createdAt: string;
   updatedAt: string;

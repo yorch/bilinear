@@ -393,6 +393,7 @@ export const typeDefs = `
     healthUpdatedAt: DateTime
     priority: Int!
     progress: Float!
+    roadmapVisible: Boolean!
     scope: Float!
     startDate: Date
     targetDate: Date
@@ -411,6 +412,58 @@ export const typeDefs = `
     members: [User!]!
     milestones: [ProjectMilestone!]!
     updates: [ProjectUpdate!]!
+  }
+
+  type PublicRoadmap {
+    id: ID!
+    organizationId: ID!
+    slug: String!
+    enabled: Boolean!
+    title: String!
+    description: String
+    hasPassword: Boolean!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+  }
+
+  type RoadmapProject {
+    id: ID!
+    name: String!
+    icon: String
+    color: String!
+    statusType: String!
+    statusName: String
+    health: String
+    targetDate: Date
+    progress: Float!
+    milestoneCount: Int!
+    completedMilestoneCount: Int!
+  }
+
+  type PublicRoadmapPage {
+    roadmap: PublicRoadmap!
+    projects: [RoadmapProject!]!
+    requiresPassword: Boolean!
+  }
+
+  type PublicRoadmapUpsertResult {
+    success: Boolean!
+    roadmap: PublicRoadmap
+    lastSyncId: String!
+  }
+
+  input PublicRoadmapUpsertInput {
+    slug: String
+    enabled: Boolean
+    title: String
+    description: String
+    password: String
+  }
+
+  type ProjectMutationResult {
+    success: Boolean!
+    project: Project
+    lastSyncId: String!
   }
 
   type ProjectMilestone {
@@ -996,6 +1049,8 @@ export const typeDefs = `
     comments(issueId: ID!, includeArchived: Boolean): [Comment!]!
     comment(id: ID!): Comment!
     issueFiles(issueId: ID!): [File!]!
+    publicRoadmap: PublicRoadmap
+    publicRoadmapPage(slug: String!, password: String): PublicRoadmapPage!
   }
 
   type Mutation {
@@ -1096,5 +1151,8 @@ export const typeDefs = `
     organizationMemberUpdateRole(userId: ID!, role: String!): DeletePayload!
 
     fileDelete(id: ID!): DeletePayload!
+
+    publicRoadmapUpsert(input: PublicRoadmapUpsertInput!): PublicRoadmapUpsertResult!
+    projectSetRoadmapVisible(id: ID!, visible: Boolean!): ProjectMutationResult!
   }
 `;
