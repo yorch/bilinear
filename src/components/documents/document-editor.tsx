@@ -32,8 +32,12 @@ export const DocumentEditor = observer(function DocumentEditor({
 
   const handleContentChange = useCallback(
     (html: string) => {
-      if (!doc) return;
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (!doc) {
+        return;
+      }
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
       saveTimeoutRef.current = setTimeout(() => {
         txQueue.enqueue(
           `mutation DocumentUpdate($id: ID!, $input: DocumentUpdateInput!) {
@@ -55,7 +59,9 @@ export const DocumentEditor = observer(function DocumentEditor({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const title = e.target.value;
       setLocalTitle(title);
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
       saveTimeoutRef.current = setTimeout(() => {
         txQueue.enqueue(
           `mutation DocumentUpdate($id: ID!, $input: DocumentUpdateInput!) {
@@ -75,7 +81,9 @@ export const DocumentEditor = observer(function DocumentEditor({
 
   useEffect(() => {
     return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
     };
   }, []);
 

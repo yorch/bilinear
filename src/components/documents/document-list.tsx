@@ -5,7 +5,7 @@ import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
-import { gql } from '@/lib/graphql';
+import { createDocument } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { useStore } from '@/providers/store-provider';
 
@@ -37,21 +37,11 @@ export const DocumentList = observer(function DocumentList({
   const handleNewDocument = async () => {
     setCreating(true);
     try {
-      const result = await gql(
-        `mutation DocumentCreate($input: DocumentCreateInput!) {
-          documentCreate(input: $input) {
-            success
-            document { id }
-          }
-        }`,
-        {
-          input: {
-            projectId: projectId ?? null,
-            teamId: teamId ?? null,
-            title: 'Untitled',
-          },
-        },
-      );
+      const result = await createDocument({
+        projectId: projectId ?? undefined,
+        teamId: teamId ?? undefined,
+        title: 'Untitled',
+      });
       const id = (
         result.data as { documentCreate?: { document?: { id: string } } }
       )?.documentCreate?.document?.id;

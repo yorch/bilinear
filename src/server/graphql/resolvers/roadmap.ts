@@ -149,9 +149,9 @@ export const roadmapResolvers = {
       }
 
       try {
+        // Password already verified above; omit it to skip the redundant scrypt in getRoadmapProjects
         const projects = await ctx.services.roadmap.getRoadmapProjects(
           roadmap.organizationId,
-          password,
         );
         return {
           projects,

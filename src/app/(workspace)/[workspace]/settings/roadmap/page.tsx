@@ -8,10 +8,6 @@ import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { useStore } from '@/providers/store-provider';
 
-// ---------------------------------------------------------------------------
-// GraphQL
-// ---------------------------------------------------------------------------
-
 const PUBLIC_ROADMAP_QUERY = `
   query PublicRoadmap {
     publicRoadmap {
@@ -51,10 +47,6 @@ const SET_ROADMAP_VISIBLE_MUTATION = `
   }
 `;
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 interface RoadmapSettings {
   description: string | null;
   enabled: boolean;
@@ -63,10 +55,6 @@ interface RoadmapSettings {
   slug: string;
   title: string;
 }
-
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
 
 const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
   const { projectStore } = useStore();

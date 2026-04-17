@@ -46,7 +46,9 @@ export async function verifyRoadmapPassword(
   candidate: string,
 ): Promise<boolean> {
   const [salt, keyHex] = stored.split(':');
-  if (!salt || !keyHex) return false;
+  if (!salt || !keyHex) {
+    return false;
+  }
   const storedKey = Buffer.from(keyHex, 'hex');
   const candidateKey = (await scryptAsync(candidate, salt, KEY_LEN)) as Buffer;
   return timingSafeEqual(storedKey, candidateKey);
@@ -164,7 +166,9 @@ export class RoadmapService {
     roadmap: PublicRoadmap,
     password: string,
   ): Promise<boolean> {
-    if (!roadmap.passwordHash) return true;
+    if (!roadmap.passwordHash) {
+      return true;
+    }
     return verifyRoadmapPassword(roadmap.passwordHash, password);
   }
 }

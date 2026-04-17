@@ -133,7 +133,9 @@ export const documentResolvers = {
     ) => {
       requireAuth(ctx);
       const document = await ctx.services.document.findById(id);
-      if (!document || document.organizationId !== ctx.orgId) return null;
+      if (!document || document.organizationId !== ctx.orgId) {
+        return null;
+      }
       return document;
     },
 

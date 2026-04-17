@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { cache } from 'react';
 import { PublicRoadmapView } from '@/components/roadmap/public-roadmap-view';
 import { prisma } from '@/server/lib/prisma';
 import { verifyRoadmapPassword } from '@/server/services/roadmap.service';
@@ -9,9 +10,13 @@ interface Props {
   searchParams: Promise<{ password?: string }>;
 }
 
+const getRoadmapBySlug = cache((slug: string) =>
+  prisma.publicRoadmap.findUnique({ where: { slug } }),
+);
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const roadmap = await prisma.publicRoadmap.findUnique({ where: { slug } });
+  const roadmap = await getRoadmapBySlug(slug);
   if (!roadmap) {
     return { title: 'Roadmap not found' };
   }
@@ -25,7 +30,7 @@ export default async function PublicRoadmapPage({
   const { slug } = await params;
   const { password } = await searchParams;
 
-  const roadmap = await prisma.publicRoadmap.findUnique({ where: { slug } });
+  const roadmap = await getRoadmapBySlug(slug);
 
   if (!roadmap?.enabled) {
     notFound();
