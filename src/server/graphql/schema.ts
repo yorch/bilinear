@@ -393,6 +393,7 @@ export const typeDefs = `
     healthUpdatedAt: DateTime
     priority: Int!
     progress: Float!
+    roadmapVisible: Boolean!
     scope: Float!
     startDate: Date
     targetDate: Date
@@ -411,6 +412,58 @@ export const typeDefs = `
     members: [User!]!
     milestones: [ProjectMilestone!]!
     updates: [ProjectUpdate!]!
+  }
+
+  type PublicRoadmap {
+    id: ID!
+    organizationId: ID!
+    slug: String!
+    enabled: Boolean!
+    title: String!
+    description: String
+    hasPassword: Boolean!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+  }
+
+  type RoadmapProject {
+    id: ID!
+    name: String!
+    icon: String
+    color: String!
+    statusType: String!
+    statusName: String
+    health: String
+    targetDate: Date
+    progress: Float!
+    milestoneCount: Int!
+    completedMilestoneCount: Int!
+  }
+
+  type PublicRoadmapPage {
+    roadmap: PublicRoadmap!
+    projects: [RoadmapProject!]!
+    requiresPassword: Boolean!
+  }
+
+  type PublicRoadmapUpsertResult {
+    success: Boolean!
+    roadmap: PublicRoadmap
+    lastSyncId: String!
+  }
+
+  input PublicRoadmapUpsertInput {
+    slug: String
+    enabled: Boolean
+    title: String
+    description: String
+    password: String
+  }
+
+  type ProjectMutationResult {
+    success: Boolean!
+    project: Project
+    lastSyncId: String!
   }
 
   type ProjectMilestone {
@@ -633,6 +686,46 @@ export const typeDefs = `
     description: String
     startsAt: DateTime
     endsAt: DateTime
+  }
+
+  type Document {
+    id: ID!
+    organizationId: ID!
+    teamId: ID
+    projectId: ID
+    creatorId: ID
+    parentId: ID
+    title: String!
+    content: String
+    icon: String
+    sortOrder: Float!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    archivedAt: DateTime
+  }
+
+  input DocumentCreateInput {
+    id: ID
+    teamId: ID
+    projectId: ID
+    parentId: ID
+    title: String!
+    content: String
+    icon: String
+  }
+
+  input DocumentUpdateInput {
+    title: String
+    content: String
+    icon: String
+    sortOrder: Float
+    parentId: ID
+  }
+
+  type DocumentMutationResult {
+    success: Boolean!
+    document: Document
+    lastSyncId: String!
   }
 
   type CustomView {
@@ -934,6 +1027,8 @@ export const typeDefs = `
     cycleBurndown(cycleId: ID!): [CycleBurndownPoint!]!
     customView(id: ID!): CustomView!
     customViews(teamId: String): [CustomView!]!
+    documents(teamId: ID, projectId: ID): [Document!]!
+    document(id: ID!): Document
     project(id: ID!): Project!
     projects(
       filter: ProjectFilter
@@ -954,6 +1049,8 @@ export const typeDefs = `
     comments(issueId: ID!, includeArchived: Boolean): [Comment!]!
     comment(id: ID!): Comment!
     issueFiles(issueId: ID!): [File!]!
+    publicRoadmap: PublicRoadmap
+    publicRoadmapPage(slug: String!, password: String): PublicRoadmapPage!
   }
 
   type Mutation {
@@ -991,6 +1088,11 @@ export const typeDefs = `
     customViewUpdate(id: ID!, input: CustomViewUpdateInput!): CustomViewPayload!
     customViewArchive(id: ID!): CustomViewPayload!
     customViewDelete(id: ID!): DeletePayload!
+
+    documentCreate(input: DocumentCreateInput!): DocumentMutationResult!
+    documentUpdate(id: ID!, input: DocumentUpdateInput!): DocumentMutationResult!
+    documentArchive(id: ID!): DocumentMutationResult!
+    documentDelete(id: ID!): DeletePayload!
 
     cycleCreate(input: CycleCreateInput!): CyclePayload!
     cycleUpdate(id: ID!, input: CycleUpdateInput!): CyclePayload!
@@ -1049,5 +1151,8 @@ export const typeDefs = `
     organizationMemberUpdateRole(userId: ID!, role: String!): DeletePayload!
 
     fileDelete(id: ID!): DeletePayload!
+
+    publicRoadmapUpsert(input: PublicRoadmapUpsertInput!): PublicRoadmapUpsertResult!
+    projectSetRoadmapVisible(id: ID!, visible: Boolean!): ProjectMutationResult!
   }
 `;

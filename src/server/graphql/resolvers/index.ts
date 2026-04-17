@@ -4,6 +4,7 @@ import { commentResolvers } from './comment';
 import { customFieldResolvers } from './custom-field';
 import { customViewResolvers } from './custom-view';
 import { cycleResolvers } from './cycle';
+import { documentResolvers } from './document';
 import { fileResolvers } from './file';
 import { issueResolvers } from './issue';
 import { issueActivityResolvers } from './issue-activity';
@@ -13,6 +14,7 @@ import { labelResolvers } from './label';
 import { notificationResolvers } from './notification';
 import { organizationResolvers } from './organization';
 import { projectResolvers } from './project';
+import { roadmapResolvers } from './roadmap';
 import { searchResolvers } from './search';
 import { teamResolvers } from './team';
 import { teamMembershipResolvers } from './team-membership';
@@ -108,6 +110,7 @@ export const resolvers = {
   Mutation: {
     ...authResolvers.Mutation,
     ...commentResolvers.Mutation,
+    ...documentResolvers.Mutation,
     ...fileResolvers.Mutation,
     ...notificationResolvers.Mutation,
     ...issueRelationResolvers.Mutation,
@@ -119,6 +122,7 @@ export const resolvers = {
     ...issueResolvers.Mutation,
     ...labelResolvers.Mutation,
     ...projectResolvers.Mutation,
+    ...roadmapResolvers.Mutation,
     ...teamResolvers.Mutation,
     ...teamMembershipResolvers.Mutation,
     ...workflowStateResolvers.Mutation,
@@ -143,6 +147,7 @@ export const resolvers = {
   Query: {
     ...userResolvers.Query,
     ...commentResolvers.Query,
+    ...documentResolvers.Query,
     ...fileResolvers.Query,
     ...issueActivityResolvers.Query,
     ...notificationResolvers.Query,
@@ -157,6 +162,7 @@ export const resolvers = {
     ...searchResolvers.Query,
     ...cycleResolvers.Query,
     ...projectResolvers.Query,
+    ...roadmapResolvers.Query,
   },
 
   Team: {

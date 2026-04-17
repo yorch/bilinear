@@ -9,6 +9,7 @@ import { CommentService } from '../services/comment.service';
 import { CustomFieldService } from '../services/custom-field.service';
 import { CustomViewService } from '../services/custom-view.service';
 import { CycleService } from '../services/cycle.service';
+import { DocumentService } from '../services/document.service';
 import { FileService } from '../services/file.service';
 import { IssueService } from '../services/issue.service';
 import { IssueActivityService } from '../services/issue-activity.service';
@@ -17,6 +18,7 @@ import { IssueTemplateService } from '../services/issue-template.service';
 import { LabelService } from '../services/label.service';
 import { NotificationService } from '../services/notification.service';
 import { ProjectService } from '../services/project.service';
+import { RoadmapService } from '../services/roadmap.service';
 import { SearchService } from '../services/search.service';
 import { SyncService } from '../services/sync.service';
 import { TeamService } from '../services/team.service';
@@ -31,6 +33,7 @@ export interface GraphQLContext extends AuthContext {
     customField: CustomFieldService;
     customView: CustomViewService;
     cycle: CycleService;
+    document: DocumentService;
     file: FileService;
     issue: IssueService;
     issueActivity: IssueActivityService;
@@ -39,6 +42,7 @@ export interface GraphQLContext extends AuthContext {
     label: LabelService;
     notification: NotificationService;
     project: ProjectService;
+    roadmap: RoadmapService;
     search: SearchService;
     sync: SyncService;
     team: TeamService;
@@ -55,6 +59,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
 
   const userService = new UserService(prisma);
   const authService = new AuthService(prisma, userService);
+  const documentService = new DocumentService(prisma);
   const fileService = new FileService(prisma);
   const commentService = new CommentService(prisma);
   const customFieldService = new CustomFieldService(prisma);
@@ -69,6 +74,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const issueTemplateService = new IssueTemplateService(prisma);
   const labelService = new LabelService(prisma);
   const projectService = new ProjectService(prisma);
+  const roadmapService = new RoadmapService(prisma);
   const syncService = new SyncService(prisma, redis);
   const searchService = new SearchService(prisma);
 
@@ -81,6 +87,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
       customField: customFieldService,
       customView: customViewService,
       cycle: cycleService,
+      document: documentService,
       file: fileService,
       issue: issueService,
       issueActivity: issueActivityService,
@@ -89,6 +96,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
       label: labelService,
       notification: notificationService,
       project: projectService,
+      roadmap: roadmapService,
       search: searchService,
       sync: syncService,
       team: teamService,

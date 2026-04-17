@@ -47,6 +47,7 @@ export class SyncService {
       issueLabels,
       labelAssignments,
       cycles,
+      documents,
       projects,
       projectMilestones,
       projectUpdates,
@@ -79,6 +80,9 @@ export class SyncService {
         },
       }),
       this.prisma.cycle.findMany({
+        where: { archivedAt: null, organizationId: orgId },
+      }),
+      this.prisma.document.findMany({
         where: { archivedAt: null, organizationId: orgId },
       }),
       this.prisma.project.findMany({
@@ -137,6 +141,7 @@ export class SyncService {
       customFieldValues,
       customViews,
       cycles,
+      documents,
       issueLabels,
       issueRelations,
       issues: issues.map(i => ({

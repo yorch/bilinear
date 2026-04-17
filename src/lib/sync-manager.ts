@@ -76,6 +76,7 @@ export class SyncManager {
       labels,
       issues,
       cycles,
+      documents,
       projects,
       projectMilestones,
       projectUpdates,
@@ -94,6 +95,7 @@ export class SyncManager {
       db.issueLabels.toArray(),
       db.issues.toArray(),
       db.cycles.toArray(),
+      db.documents.toArray(),
       db.projects.toArray(),
       db.projectMilestones.toArray(),
       db.projectUpdates.toArray(),
@@ -117,6 +119,7 @@ export class SyncManager {
       labelStore,
       issueStore,
       cycleStore,
+      documentStore,
       projectStore,
       customViewStore,
       customFieldStore,
@@ -136,6 +139,7 @@ export class SyncManager {
       labelStore.upsertMany(labels);
       issueStore.upsertMany(issues);
       cycleStore.upsertMany(cycles);
+      documentStore.upsertMany(documents);
       projectStore.upsertMany(projects);
       projectStore.upsertMilestones(projectMilestones);
       projectStore.upsertUpdates(projectUpdates);
@@ -165,6 +169,7 @@ export class SyncManager {
       labelStore,
       issueStore,
       cycleStore,
+      documentStore,
       projectStore,
       customViewStore,
       customFieldStore,
@@ -193,6 +198,7 @@ export class SyncManager {
         customFieldValues: [] as object[],
         customViews: [] as object[],
         cycles: [] as object[],
+        documents: [] as object[],
         issueLabels: [] as object[],
         issueRelations: [] as object[],
         issues: [] as object[],
@@ -240,6 +246,7 @@ export class SyncManager {
           db.issueLabels,
           db.issues,
           db.cycles,
+          db.documents,
           db.projects,
           db.projectMilestones,
           db.projectUpdates,
@@ -260,6 +267,7 @@ export class SyncManager {
             db.issueLabels.clear(),
             db.issues.clear(),
             db.cycles.clear(),
+            db.documents.clear(),
             db.projects.clear(),
             db.projectMilestones.clear(),
             db.projectUpdates.clear(),
@@ -297,6 +305,9 @@ export class SyncManager {
             ),
             db.cycles.bulkPut(
               batches.cycles as Parameters<typeof db.cycles.bulkPut>[0],
+            ),
+            db.documents.bulkPut(
+              batches.documents as Parameters<typeof db.documents.bulkPut>[0],
             ),
             db.projects.bulkPut(
               batches.projects as Parameters<typeof db.projects.bulkPut>[0],
@@ -372,6 +383,9 @@ export class SyncManager {
       );
       cycleStore.upsertMany(
         batches.cycles as Parameters<typeof cycleStore.upsertMany>[0],
+      );
+      documentStore.upsertMany(
+        batches.documents as Parameters<typeof documentStore.upsertMany>[0],
       );
       projectStore.upsertMany(
         batches.projects as Parameters<typeof projectStore.upsertMany>[0],
@@ -471,6 +485,7 @@ export class SyncManager {
       labelStore,
       issueStore,
       cycleStore,
+      documentStore,
       projectStore,
       customViewStore,
       customFieldStore,
@@ -490,6 +505,7 @@ export class SyncManager {
       issueLabels: object[];
       issues: object[];
       cycles: object[];
+      documents: object[];
       organizations: object[];
       projects: object[];
       projectMilestones: object[];
@@ -505,6 +521,7 @@ export class SyncManager {
       customFieldValues: [],
       customViews: [],
       cycles: [],
+      documents: [],
       issueLabels: [],
       issueRelations: [],
       issues: [],
@@ -526,6 +543,7 @@ export class SyncManager {
         | 'issueLabels'
         | 'issues'
         | 'cycles'
+        | 'documents'
         | 'projects'
         | 'projectMilestones'
         | 'projectUpdates'
@@ -734,6 +752,18 @@ export class SyncManager {
             dexieUpserts.issueTemplates.push(data);
           }
           break;
+        case 'Document':
+          documentStore.applySyncAction(
+            act,
+            modelId,
+            data as Parameters<typeof documentStore.applySyncAction>[2],
+          );
+          if (act === 'D') {
+            dexieDeletes.push({ id: modelId, table: 'documents' });
+          } else if (data) {
+            dexieUpserts.documents.push(data);
+          }
+          break;
         case 'IssueActivity':
           // IssueActivity is queried per-issue via GraphQL when the detail panel opens;
           // we only persist it to Dexie for offline reads, no MobX store needed.
@@ -765,6 +795,7 @@ export class SyncManager {
         db.issueLabels,
         db.issues,
         db.cycles,
+        db.documents,
         db.projects,
         db.projectMilestones,
         db.projectUpdates,
@@ -805,6 +836,12 @@ export class SyncManager {
           dexieUpserts.cycles.length > 0 &&
             db.cycles.bulkPut(
               dexieUpserts.cycles as Parameters<typeof db.cycles.bulkPut>[0],
+            ),
+          dexieUpserts.documents.length > 0 &&
+            db.documents.bulkPut(
+              dexieUpserts.documents as Parameters<
+                typeof db.documents.bulkPut
+              >[0],
             ),
           dexieUpserts.projects.length > 0 &&
             db.projects.bulkPut(

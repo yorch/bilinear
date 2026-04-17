@@ -28,15 +28,17 @@ model Organization {
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   archivedAt DateTime? @map("archived_at") @db.Timestamptz
 
-  members       OrganizationMember[]
-  teams         Team[]
-  issues        Issue[]
-  labels        IssueLabel[]
-  notifications Notification[]
-  syncActions   SyncAction[]
-  projects      Project[]
-  cycles        Cycle[]
-  customViews   CustomView[]
+  members        OrganizationMember[]
+  teams          Team[]
+  issues         Issue[]
+  labels         IssueLabel[]
+  notifications  Notification[]
+  syncActions    SyncAction[]
+  projects       Project[]
+  cycles         Cycle[]
+  customViews    CustomView[]
+  documents      Document[]
+  publicRoadmap  PublicRoadmap?
 
   @@map("organizations")
 }
@@ -80,6 +82,7 @@ model User {
   notificationSubscriptions NotificationSubscription[]
   receivedNotifications     Notification[]             @relation("ReceivedNotifications")
   sentNotifications         Notification[]             @relation("SentNotifications")
+  createdDocuments          Document[]                 @relation("CreatedDocuments")
   createdTemplates          IssueTemplate[]            @relation("CreatedTemplates")
   comments                  Comment[]                  @relation("AuthoredComments")
   resolvedComments          Comment[]                  @relation("ResolvedComments")
@@ -200,6 +203,7 @@ model Team {
   issueTemplates         IssueTemplate[]
   memberRoles            TeamMemberRole[]
   customFieldDefinitions CustomFieldDefinition[]
+  documents              Document[]
 
   // Unique on (organizationId, key) is enforced via a partial index in the DB
   // (WHERE archived_at IS NULL) so archived teams don't block key reuse.
@@ -437,6 +441,7 @@ model Project {
   canceledAt     DateTime? @map("canceled_at") @db.Timestamptz
   autoArchivedAt DateTime? @map("auto_archived_at") @db.Timestamptz
   trashed        Boolean   @default(false)
+  roadmapVisible Boolean   @default(false) @map("roadmap_visible")
 
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
@@ -450,6 +455,7 @@ model Project {
   issues       Issue[]
   milestones   ProjectMilestone[]
   updates      ProjectUpdate[]
+  documents    Document[]
 
   @@unique([organizationId, slugId])
   @@index([organizationId])
@@ -846,4 +852,52 @@ model TeamMemberRole {
   @@index([teamId])
   @@index([userId])
   @@map("team_member_roles")
+}
+
+model PublicRoadmap {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @unique @map("organization_id") @db.Uuid
+  slug           String  @unique @db.VarChar(63)
+  enabled        Boolean @default(false)
+  title          String  @db.VarChar(255)
+  description    String?
+  passwordHash   String? @map("password_hash")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([slug])
+  @@map("public_roadmaps")
+}
+
+model Document {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  teamId         String?   @map("team_id") @db.Uuid
+  projectId      String?   @map("project_id") @db.Uuid
+  creatorId      String?   @map("creator_id") @db.Uuid
+  parentId       String?   @map("parent_id") @db.Uuid
+  title          String    @db.VarChar(255)
+  content        String?
+  contentData    Json?     @map("content_data")
+  icon           String?   @db.VarChar(255)
+  sortOrder      Float     @default(0) @map("sort_order")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt     DateTime? @map("archived_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team         Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  creator      User?        @relation("CreatedDocuments", fields: [creatorId], references: [id], onDelete: SetNull)
+  parent       Document?    @relation("DocumentHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Document[]   @relation("DocumentHierarchy")
+
+  @@index([organizationId])
+  @@index([teamId])
+  @@index([projectId])
+  @@index([parentId])
+  @@map("documents")
 }
