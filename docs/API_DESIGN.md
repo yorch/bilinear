@@ -2,107 +2,91 @@
 
 ## Issue Tracker — Linear Rebuild
 
-**Version:** 1.0
-**Date:** April 2026
-**Protocol:** GraphQL over HTTP + WebSocket
+**Version:** 2.0
+**Date:** 2026-04-17
+**Protocol:** GraphQL over HTTP + REST sync + WebSocket push
+**Source of truth:** `src/server/graphql/schema.ts` — this document describes
+the same API but with prose and grouping. When the two disagree, trust the
+code. A section at the end lists planned-but-unshipped surface.
 
 ---
 
 ## 1. API Overview
 
-| Aspect     | Design                                                    |
-| ---------- | --------------------------------------------------------- |
-| Protocol   | GraphQL                                                   |
-| Endpoint   | `POST /api/graphql`                                       |
-| Auth       | Bearer token (JWT) or API key                             |
-| Pagination | Relay cursor-based                                        |
-| Real-time  | WebSocket (`/ws`)                                         |
-| Sync       | REST endpoints (`/api/sync/bootstrap`, `/api/sync/delta`) |
-| Rate Limit | 5,000 req/hr + 250,000 complexity points/hr               |
+| Aspect         | Implementation                                                         |
+| -------------- | ---------------------------------------------------------------------- |
+| GraphQL        | `POST /api/graphql` (Apollo Server v4 on a Next.js route handler)      |
+| Auth           | HTTP-only cookie pair (`access_token`, `refresh_token`) set by auth mutations. The WebSocket reads `access_token` from the query string. |
+| Pagination     | Relay-style `Connection` / `Edge` / `PageInfo` on `IssueConnection`, `IssueLabelConnection`, `ProjectConnection` only. All other list queries return plain `[T!]!`. |
+| Sync bootstrap | `GET /api/sync/bootstrap` (REST) — returns all entities the signed-in user can see, plus the current `lastSyncId`. |
+| Sync delta     | `GET /api/sync/delta?lastSyncId=<n>` (REST) — catches up missed SyncActions. |
+| Real-time push | `ws://<host>:3001?token=<accessToken>` — server pushes `SyncAction` events; clients do **not** subscribe via GraphQL. |
+| File upload    | `POST /api/upload` (multipart) — returns a `File` record; served via `/api/uploads/<key>`. |
+| Rate limit     | Enforced at middleware level on `/api/graphql` and `/api/auth/*`. See §12. |
+
+> **No GraphQL subscriptions.** Real-time delivery is a side-channel over
+> WebSocket, not `subscription` operations. Client mutations go via `fetch` to
+> `/api/graphql` — there is no Apollo Client on the browser.
 
 ---
 
 ## 2. Authentication
 
-### Headers
-
-```text
-Authorization: Bearer <jwt_token>
-Authorization: lin_api_<api_key>
-```
-
-### Auth Mutations
+### Magic link + Google OAuth
 
 ```graphql
 type Mutation {
-  # Email magic link login
-  emailLogin(input: EmailLoginInput!): EmailLoginPayload!
-
-  # Verify magic link code
-  emailVerify(input: EmailVerifyInput!): AuthPayload!
-
-  # Google OAuth exchange
+  emailLogin(input: EmailLoginInput!): EmailLoginPayload!   # send magic code
+  emailVerify(input: EmailVerifyInput!): AuthPayload!       # verify 6-digit code
   googleAuthExchange(code: String!, redirectUri: String!): AuthPayload!
-
-  # Refresh access token
   tokenRefresh(refreshToken: String!): AuthPayload!
-
-  # Logout (revoke tokens)
   logout: LogoutPayload!
 
-  # API key management
-  apiKeyCreate(input: ApiKeyCreateInput!): ApiKeyPayload!
-  apiKeyDelete(id: ID!): DeletePayload!
+  organizationCreate(input: OrganizationCreateInput!): OrganizationCreatePayload!
 }
 
-input EmailLoginInput {
-  email: String!
-}
-
-input EmailVerifyInput {
-  email: String!
-  code: String!
-}
+input EmailLoginInput { email: String! }
+input EmailVerifyInput { email: String!, code: String! }
+input OrganizationCreateInput { name: String!, urlKey: String! }
 
 type AuthPayload {
   success: Boolean!
   accessToken: String!
   refreshToken: String!
-  expiresIn: Int!  # seconds (86400 = 24h)
+  expiresIn: Int!         # seconds; 86400 (24h) today
   user: User!
 }
+
+type OrganizationCreatePayload {
+  success: Boolean!
+  organization: Organization!
+  accessToken: String!
+  refreshToken: String!
+  expiresIn: Int!
+}
+
+type EmailLoginPayload { success: Boolean! }
+type LogoutPayload { success: Boolean! }
 ```
+
+The server also sets HTTP-only cookies on every auth mutation so browser
+sessions don't need to re-attach the tokens on every request; the `accessToken`
+in the payload is there for the WebSocket handshake.
+
+> **API keys, SSO, and SCIM are design targets, not shipped.** See §14.
 
 ---
 
-## 3. Core Schema Types
-
-### 3.1 Interfaces
+## 3. Scalars and Shared Types
 
 ```graphql
-interface Node {
-  id: ID!
-}
-
-interface Entity implements Node {
-  id: ID!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  archivedAt: DateTime
-}
+scalar DateTime  # ISO 8601
+scalar UUID      # UUID v4 string
+scalar Date      # YYYY-MM-DD
+scalar JSON      # arbitrary JSON for *Data fields and filters
 ```
 
-### 3.2 Scalars
-
-```graphql
-scalar DateTime      # ISO 8601 (2026-04-06T12:00:00.000Z)
-scalar TimelessDate  # YYYY-MM-DD
-scalar JSON
-scalar JSONObject
-scalar UUID
-```
-
-### 3.3 Pagination Types
+Pagination helpers (from `src/server/graphql/types/pagination.ts`):
 
 ```graphql
 type PageInfo {
@@ -111,68 +95,91 @@ type PageInfo {
   startCursor: String
   endCursor: String
 }
-
-enum PaginationOrderBy {
-  createdAt
-  updatedAt
-}
-
-# Example connection (pattern repeated for all entities)
-type IssueConnection {
-  edges: [IssueEdge!]!
-  nodes: [Issue!]!
-  pageInfo: PageInfo!
-  totalCount: Int!
-}
-
-type IssueEdge {
-  cursor: String!
-  node: Issue!
-}
 ```
+
+### Mutation payload convention
+
+Every mutation returns `{ success, <entity>?, lastSyncId }`. The `lastSyncId`
+is the stringified `BIGINT` id of the freshly-written `SyncAction` — clients
+feed it back into `/api/sync/delta` to catch up other tabs or devices.
+
+Payloads in the live schema:
+
+| Payload type                 | Entity field        |
+|------------------------------|---------------------|
+| `IssuePayload`               | `issue`             |
+| `IssueLabelPayload`          | `issueLabel`        |
+| `TeamPayload`                | `team`              |
+| `TeamMembershipPayload`      | `teamMembership`    |
+| `WorkflowStatePayload`       | `workflowState`     |
+| `ProjectPayload`             | `project`           |
+| `ProjectMilestonePayload`    | `projectMilestone`  |
+| `ProjectUpdatePayload`       | `projectUpdate`     |
+| `CyclePayload`               | `cycle`             |
+| `CustomViewPayload`          | `customView`        |
+| `DocumentMutationResult`     | `document`          |
+| `CommentPayload`             | `comment`           |
+| `CommentReactionPayload`     | `reaction`          |
+| `NotificationPayload`        | `notification`      |
+| `IssueRelationPayload`       | `issueRelation`     |
+| `IssueTemplatePayload`       | `issueTemplate`     |
+| `CustomFieldDefinitionPayload` | `customFieldDefinition` |
+| `CustomFieldValuesPayload`   | `values: [CustomFieldValue!]!` |
+| `PublicRoadmapUpsertResult`  | `roadmap`           |
+| `ProjectMutationResult`      | `project`           |
+| `CycleRolloverPayload`       | `lastSyncId`, `movedCount`, `nextCycleId` |
+| `DeletePayload`              | (no entity; `success` + `lastSyncId`) |
+
+### Error discriminator
+
+Errors are thrown as `GraphQLError` with `extensions.code`. The resolver layer
+catches service-layer exceptions and remaps them:
+
+| Code              | When                                                      |
+|-------------------|-----------------------------------------------------------|
+| `UNAUTHENTICATED` | Missing / invalid access token                            |
+| `FORBIDDEN`       | Authenticated but not authorized (wrong org, wrong role)  |
+| `NOT_FOUND`       | Entity doesn't exist, or user can't see it                |
+| `BAD_USER_INPUT`  | Validation failure (service-level errors, Zod parse miss) |
+| `INVALID_CODE`    | Magic link code wrong / expired                           |
+| `INVALID_TOKEN`   | Refresh token invalid / reused                            |
+| `RATELIMITED`     | Over the rate-limit budget (§12)                          |
+
+Clients key off `extensions.code`, not the human-readable message.
 
 ---
 
 ## 4. Entity Types
 
+All types are defined **inline** with their fields — there is no `Node` or
+`Entity` interface today. Timestamps (`createdAt`, `updatedAt`, `archivedAt`)
+are duplicated per type.
+
 ### 4.1 Organization
 
 ```graphql
-type Organization implements Entity & Node {
+type Organization {
   id: ID!
   name: String!
   urlKey: String!
   logoUrl: String
   dataRegion: String!
-  userCount: Int!
-  createdIssueCount: Int!
-
-  # Feature flags
   roadmapEnabled: Boolean!
-  customersEnabled: Boolean!
-  initiativesEnabled: Boolean!
-
-  # Settings
-  projectUpdateFrequencyWeeks: Int
-  fiscalYearStartMonth: Int!
-
-  # Connections
-  teams(first: Int, after: String): TeamConnection!
-  users(first: Int, after: String): UserConnection!
-  labels(first: Int, after: String): IssueLabelConnection!
-  templates(first: Int, after: String): TemplateConnection!
-  integrations(first: Int, after: String): IntegrationConnection!
-
   createdAt: DateTime!
   updatedAt: DateTime!
   archivedAt: DateTime
 }
+
+type OrganizationMemberEntry { userId: ID!, role: String! }
 ```
+
+Feature flags (`customersEnabled`, `initiativesEnabled`) live on the DB row
+but aren't exposed via GraphQL yet.
 
 ### 4.2 User
 
 ```graphql
-type User implements Entity & Node {
+type User {
   id: ID!
   name: String!
   displayName: String!
@@ -180,38 +187,24 @@ type User implements Entity & Node {
   initials: String!
   avatarUrl: String
   avatarBackgroundColor: String!
-
   active: Boolean!
-  admin: Boolean!
-  guest: Boolean!
-  owner: Boolean!
   isMe: Boolean!
-
   timezone: String
   lastSeen: DateTime
   statusEmoji: String
   statusLabel: String
   statusUntilAt: DateTime
-
-  createdIssueCount: Int!
-  organization: Organization!
-
-  # Connections
-  assignedIssues(filter: IssueFilter, first: Int, after: String): IssueConnection!
-  createdIssues(filter: IssueFilter, first: Int, after: String): IssueConnection!
-  teams(first: Int, after: String): TeamConnection!
-  teamMemberships(first: Int, after: String): TeamMembershipConnection!
-
   createdAt: DateTime!
   updatedAt: DateTime!
 }
 ```
 
-### 4.3 Team
+### 4.3 Team + TeamMembership + WorkflowState
 
 ```graphql
-type Team implements Entity & Node {
+type Team {
   id: ID!
+  organizationId: ID!
   name: String!
   key: String!
   displayName: String!
@@ -220,527 +213,423 @@ type Team implements Entity & Node {
   color: String
   private: Boolean!
   timezone: String!
-
+  cyclesEnabled: Boolean!
+  issueEstimationType: String!
+  triageEnabled: Boolean!
+  issueCount: Int!
+  defaultIssueStateId: ID
+  parentId: ID
   organization: Organization!
   parent: Team
   children: [Team!]!
+  states: [WorkflowState!]!
+  members: [TeamMembership!]!
+  issues: [Issue!]!   # plain array, not a connection
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+}
 
-  # Cycle config
-  cyclesEnabled: Boolean!
-  cycleDuration: Int
-  cycleCooldownTime: Int
-  cycleStartDay: Int
+enum TeamMemberRole { admin, member, guest }
 
-  # Estimation config
-  issueEstimationType: String!
-  issueEstimationExtended: Boolean!
-  issueEstimationAllowZero: Boolean!
+type TeamMembership {
+  id: ID!
+  team: Team!
+  user: User!
+  owner: Boolean!
+  role: TeamMemberRole!
+  sortOrder: Float!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
 
-  # Triage
-  triageEnabled: Boolean!
-
-  # Defaults
-  defaultIssueState: WorkflowState
-  issueCount: Int!
-
-  # Active cycle
-  activeCycle: Cycle
-
-  # Connections
-  issues(filter: IssueFilter, first: Int, after: String, orderBy: PaginationOrderBy, includeArchived: Boolean): IssueConnection!
-  states(first: Int, after: String): WorkflowStateConnection!
-  labels(first: Int, after: String): IssueLabelConnection!
-  members(first: Int, after: String): UserConnection!
-  memberships(first: Int, after: String): TeamMembershipConnection!
-  cycles(filter: CycleFilter, first: Int, after: String): CycleConnection!
-  projects(filter: ProjectFilter, first: Int, after: String): ProjectConnection!
-  templates(first: Int, after: String): TemplateConnection!
-  webhooks(first: Int, after: String): WebhookConnection!
-
+type WorkflowState {
+  id: ID!
+  name: String!
+  color: String!
+  description: String
+  type: String!       # 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled' | 'triage'
+  position: Float!
+  team: Team!
   createdAt: DateTime!
   updatedAt: DateTime!
   archivedAt: DateTime
 }
 ```
 
-### 4.4 Issue
+### 4.4 Issue + IssueLabel + IssueRelation + IssueActivity
 
 ```graphql
-type Issue implements Entity & Node {
+type Issue {
   id: ID!
-
-  # Identity
-  identifier: String!       # "ENG-123"
   number: Int!
-  url: String!
-  previousIdentifiers: [String!]!
-  branchName: String!
-
-  # Content
+  identifier: String!           # e.g. ENG-123
   title: String!
   description: String
-  descriptionState: String   # YJS base64
-
-  # Properties
-  priority: Int!             # 0=None, 1=Urgent, 2=High, 3=Medium, 4=Low
-  priorityLabel: String!     # "Urgent", "High", etc.
+  priority: Int!
   estimate: Float
-  dueDate: TimelessDate
+  dueDate: Date
   sortOrder: Float!
-  prioritySortOrder: Float!
-  subIssueSortOrder: Float
-
-  # Relationships
+  trashed: Boolean!
+  teamId: ID!
+  stateId: ID!
+  assigneeId: ID
+  creatorId: ID
+  parentId: ID
+  projectId: ID
+  projectMilestoneId: ID
+  cycleId: ID
+  organizationId: ID!
+  branchName: String
+  cycle: Cycle
+  startedAt: DateTime
+  completedAt: DateTime
+  canceledAt: DateTime
+  archivedAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
   team: Team!
   state: WorkflowState!
   assignee: User
   creator: User
   parent: Issue
+  children: [Issue!]!
+  labels: [IssueLabel!]!
   project: Project
-  projectMilestone: ProjectMilestone
-  cycle: Cycle
-
-  # Label IDs (denormalized for performance)
-  labelIds: [String!]!
-
-  # SLA
-  slaBreachesAt: DateTime
-  slaStartedAt: DateTime
-  slaType: String
-
-  # Lifecycle
-  startedAt: DateTime
-  completedAt: DateTime
-  canceledAt: DateTime
-  trashed: Boolean!
-  snoozedUntilAt: DateTime
-  snoozedBy: User
-
-  customerTicketCount: Int!
-
-  # Connections
-  labels(first: Int, after: String): IssueLabelConnection!
-  children(filter: IssueFilter, first: Int, after: String): IssueConnection!
-  comments(first: Int, after: String): CommentConnection!
-  attachments(first: Int, after: String): AttachmentConnection!
-  relations(first: Int, after: String): IssueRelationConnection!
-  inverseRelations(first: Int, after: String): IssueRelationConnection!
-  history(first: Int, after: String): IssueHistoryConnection!
-  subscribers(first: Int, after: String): UserConnection!
-  reactions: [Reaction!]!
-
-  # Favorites
-  favorite: Favorite
-
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  archivedAt: DateTime
-}
-```
-
-### 4.5 WorkflowState
-
-```graphql
-type WorkflowState implements Entity & Node {
-  id: ID!
-  name: String!
-  color: String!
-  description: String
-  type: String!      # "triage" | "backlog" | "unstarted" | "started" | "completed" | "canceled"
-  position: Float!
-  team: Team!
-
-  issues(filter: IssueFilter, first: Int, after: String): IssueConnection!
-
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  archivedAt: DateTime
-}
-```
-
-### 4.6 Project
-
-```graphql
-type Project implements Entity & Node {
-  id: ID!
-  name: String!
-  slugId: String!
-  url: String!
-  description: String!
-  content: String
-  icon: String
-  color: String!
-
-  # Status & Health
-  status: ProjectStatus!
-  health: String           # "onTrack" | "atRisk" | "offTrack"
-  healthUpdatedAt: DateTime
-
-  # Priority
-  priority: Int!
-  priorityLabel: String!
-
-  # Progress
-  progress: Float!
-  scope: Float!
-
-  # Dates
-  startDate: TimelessDate
-  targetDate: TimelessDate
-  startDateResolution: String
-  targetDateResolution: String
-
-  # People
-  lead: User
-  creator: User
-
-  # Lifecycle
-  startedAt: DateTime
-  completedAt: DateTime
-  canceledAt: DateTime
-  trashed: Boolean!
-
-  # History data (for charts)
-  completedIssueCountHistory: JSON!
-  completedScopeHistory: JSON!
-  issueCountHistory: JSON!
-  scopeHistory: JSON!
-
-  # Connections
-  issues(filter: IssueFilter, first: Int, after: String): IssueConnection!
-  members(first: Int, after: String): UserConnection!
-  teams(first: Int, after: String): TeamConnection!
-  milestones(first: Int, after: String): ProjectMilestoneConnection!
-  projectUpdates(first: Int, after: String): ProjectUpdateConnection!
-  documents(first: Int, after: String): DocumentConnection!
-  labels(first: Int, after: String): IssueLabelConnection!
-
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  archivedAt: DateTime
-}
-```
-
-### 4.7 Other Entity Types (abbreviated)
-
-```graphql
-type Cycle implements Entity & Node {
-  id: ID!
-  name: String
-  number: Int!
-  description: String
-  startsAt: DateTime!
-  endsAt: DateTime!
-  completedAt: DateTime
-  isActive: Boolean!
-  isFuture: Boolean!
-  isPast: Boolean!
-  progress: Float!
-  scope: Float!
-  team: Team!
-  issues(filter: IssueFilter, first: Int, after: String): IssueConnection!
-  # ... history fields
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  archivedAt: DateTime
+  customFieldValues: [CustomFieldValue!]!
+  files: [File!]!
 }
 
-type Comment implements Entity & Node {
-  id: ID!
-  body: String!
-  bodyData: JSONObject
-  user: User
-  botActor: JSONObject
-  issue: Issue
-  project: Project
-  parent: Comment
-  children(first: Int, after: String): CommentConnection!
-  resolvedAt: DateTime
-  resolvingUser: User
-  quotedText: String
-  reactions: [Reaction!]!
-  editedAt: DateTime
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  archivedAt: DateTime
+type IssueEdge { node: Issue!, cursor: String! }
+type IssueConnection {
+  edges: [IssueEdge!]!
+  nodes: [Issue!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
 }
 
-type IssueRelation implements Entity & Node {
-  id: ID!
-  issue: Issue!
-  relatedIssue: Issue!
-  type: String!  # "related" | "blocks" | "duplicate"
-  createdAt: DateTime!
-  updatedAt: DateTime!
-}
-
-type IssueLabel implements Entity & Node {
+type IssueLabel {
   id: ID!
   name: String!
   color: String!
   description: String
   isGroup: Boolean!
+  organizationId: ID!
+  teamId: ID
+  parentId: ID
   parent: IssueLabel
-  children(first: Int, after: String): IssueLabelConnection!
-  team: Team
-  creator: User
-  issues(first: Int, after: String): IssueConnection!
+  children: [IssueLabel!]!
   createdAt: DateTime!
   updatedAt: DateTime!
   archivedAt: DateTime
 }
 
-type Attachment implements Entity & Node {
+type IssueLabelEdge { node: IssueLabel!, cursor: String! }
+type IssueLabelConnection {
+  edges: [IssueLabelEdge!]!
+  nodes: [IssueLabel!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+enum IssueRelationType { related, blocks, blocked_by, duplicate }
+
+type IssueRelation {
   id: ID!
-  title: String!
-  subtitle: String
-  url: String!
-  sourceType: String
-  source: JSONObject
-  metadata: JSONObject
+  issueId: ID!
+  relatedIssueId: ID!
+  type: IssueRelationType!
   issue: Issue!
-  creator: User
+  relatedIssue: Issue!
   createdAt: DateTime!
-  updatedAt: DateTime!
-  archivedAt: DateTime
 }
 
-type Notification implements Entity & Node {
+type IssueActivity {
   id: ID!
-  type: String!
-  user: User!
+  issueId: ID!
+  actorId: ID
+  field: String!      # 'status', 'assignee', 'priority', 'labels', ...
+  oldValue: String
+  newValue: String
   actor: User
-  issue: Issue
-  comment: Comment
-  project: Project
-  readAt: DateTime
-  snoozedUntilAt: DateTime
-  emailedAt: DateTime
   createdAt: DateTime!
-  updatedAt: DateTime!
-  archivedAt: DateTime
 }
 
-type Favorite implements Entity & Node {
+type IssueTemplate {
   id: ID!
-  type: String!
-  title: String!
-  sortOrder: Float!
-  icon: String
-  color: String
-  owner: User!
-  parent: Favorite
-  children(first: Int, after: String): FavoriteConnection!
-  folderName: String
-  issue: Issue
-  project: Project
-  cycle: Cycle
-  customView: CustomView
-  label: IssueLabel
-  predefinedViewType: String
-  predefinedViewTeam: Team
-  createdAt: DateTime!
-  updatedAt: DateTime!
-}
-
-type CustomView implements Entity & Node {
-  id: ID!
+  teamId: ID!
+  creatorId: ID
   name: String!
   description: String
-  icon: String
-  color: String
-  filterData: JSONObject!
-  displayType: String!     # "list" | "board" | "timeline"
-  groupBy: String
-  sortBy: JSONObject
-  columns: [String!]
-  creator: User!
-  owner: User!
-  team: Team
-  shared: Boolean!
+  templateData: JSON!      # prefilled issue payload
+  isDefault: Boolean!
+  team: Team!
+  creator: User
   createdAt: DateTime!
   updatedAt: DateTime!
   archivedAt: DateTime
 }
+```
 
-type IssueHistory implements Node {
-  id: ID!
-  issue: Issue!
-  actor: User
-  fromState: WorkflowState
-  toState: WorkflowState
-  fromAssignee: User
-  toAssignee: User
-  fromPriority: Int
-  toPriority: Int
-  fromEstimate: Float
-  toEstimate: Float
-  fromDueDate: TimelessDate
-  toDueDate: TimelessDate
-  fromTitle: String
-  toTitle: String
-  fromProject: Project
-  toProject: Project
-  fromCycle: Cycle
-  toCycle: Cycle
-  fromParent: Issue
-  toParent: Issue
-  fromTeam: Team
-  toTeam: Team
-  addedLabelIds: [String!]
-  removedLabelIds: [String!]
-  archived: Boolean
-  trashed: Boolean
-  createdAt: DateTime!
-}
+Issues carry **no** `url`, `priorityLabel`, `subIssueSortOrder`,
+`snoozedUntilAt`, `previousIdentifiers`, or SLA fields in GraphQL today —
+those live on the DB row but aren't exposed yet.
 
-type Initiative implements Entity & Node {
+### 4.5 Project, ProjectMilestone, ProjectUpdate
+
+```graphql
+type Project {
   id: ID!
   name: String!
   slugId: String!
-  url: String!
-  description: String
+  description: String!
   content: String
   icon: String
-  color: String
-  status: String!          # "planned" | "active" | "completed"
-  health: String
-  targetDate: TimelessDate
-  owner: User
-  creator: User
-  parent: Initiative
-  projects(first: Int, after: String): ProjectConnection!
-  documents(first: Int, after: String): DocumentConnection!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  archivedAt: DateTime
-}
-
-type Document implements Entity & Node {
-  id: ID!
-  title: String!
-  slugId: String!
-  url: String!
-  content: String
-  icon: String
-  color: String
-  creator: User
-  updatedBy: User
-  project: Project
-  initiative: Initiative
-  issue: Issue
-  team: Team
-  trashed: Boolean!
-  comments(first: Int, after: String): CommentConnection!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  archivedAt: DateTime
-}
-
-type Template implements Entity & Node {
-  id: ID!
-  name: String!
-  type: String!
-  description: String
-  icon: String
-  color: String
-  templateData: JSON!
-  hasFormFields: Boolean!
-  team: Team
-  creator: User
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  archivedAt: DateTime
-}
-
-type Webhook implements Entity & Node {
-  id: ID!
-  url: String!
-  label: String
-  enabled: Boolean!
-  allPublicTeams: Boolean!
-  resourceTypes: [String!]!
-  team: Team
-  creator: User
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  archivedAt: DateTime
-}
-
-type ProjectStatus {
-  id: ID!
-  name: String!
   color: String!
-  type: String!     # "backlog" | "planned" | "started" | "paused" | "completed" | "canceled"
-  position: Float!
-  description: String
+  statusType: String!     # 'planned' | 'started' | 'paused' | 'completed' | 'canceled'
+  statusName: String
+  health: String
+  healthUpdatedAt: DateTime
+  priority: Int!
+  progress: Float!
+  roadmapVisible: Boolean!
+  scope: Float!
+  startDate: Date
+  targetDate: Date
+  startDateResolution: String
+  targetDateResolution: String
+  lead: User
+  creator: User
+  startedAt: DateTime
+  completedAt: DateTime
+  canceledAt: DateTime
+  archivedAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  issues: [Issue!]!
+  teams: [Team!]!
+  members: [User!]!
+  milestones: [ProjectMilestone!]!
+  updates: [ProjectUpdate!]!
 }
 
-type ProjectMilestone implements Entity & Node {
+type ProjectEdge { node: Project!, cursor: String! }
+type ProjectConnection {
+  edges: [ProjectEdge!]!
+  nodes: [Project!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type ProjectMilestone {
   id: ID!
+  projectId: ID!
   name: String!
   description: String
-  targetDate: TimelessDate
+  targetDate: Date
   sortOrder: Float!
-  progress: Float!
-  project: Project!
-  issues(first: Int, after: String): IssueConnection!
   createdAt: DateTime!
   updatedAt: DateTime!
   archivedAt: DateTime
 }
 
-type ProjectUpdate implements Entity & Node {
+type ProjectUpdate {
   id: ID!
+  projectId: ID!
   body: String!
-  bodyData: JSONObject!
-  health: String!    # "onTrack" | "atRisk" | "offTrack"
-  project: Project!
+  bodyData: JSON!
+  health: String!
   user: User!
   editedAt: DateTime
-  diff: JSONObject
-  diffMarkdown: String
-  reactions: [Reaction!]!
-  comments(first: Int, after: String): CommentConnection!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+}
+```
+
+### 4.6 Cycle
+
+```graphql
+type Cycle {
+  id: ID!
+  number: Int!
+  name: String
+  description: String
+  startsAt: DateTime!
+  endsAt: DateTime!
+  completedAt: DateTime
+  progress: Float!
+  scope: Float!
+  teamId: ID!
+  organizationId: ID!
+  team: Team!
+  issues: [Issue!]!
+  archivedAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type CycleVelocityResult {
+  averageIssues: Float!
+  cycles: [CycleVelocityCycle!]!
+}
+type CycleVelocityCycle { cycleId: ID!, cycleNumber: Int!, completedIssues: Int! }
+type CycleBurndownPoint { date: String!, remaining: Int!, completed: Int! }
+
+type CycleRolloverPayload {
+  success: Boolean!
+  lastSyncId: String!
+  movedCount: Int!
+  nextCycleId: ID
+}
+```
+
+### 4.7 Comment + CommentReaction
+
+```graphql
+type Comment {
+  id: ID!
+  issueId: ID!
+  authorId: ID!
+  body: String!         # plain / markdown text used by search
+  bodyData: JSON        # TipTap JSON representation
+  parentId: ID
+  resolvedAt: DateTime
+  resolvedById: ID
+  editedAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+  author: User!
+  parent: Comment
+  replies: [Comment!]!
+  resolvedBy: User
+  reactions: [CommentReaction!]!
+  replyCount: Int!
+}
+
+type CommentReaction {
+  id: ID!
+  commentId: ID!
+  userId: ID!
+  emoji: String!
+  user: User!
+  createdAt: DateTime!
+}
+```
+
+### 4.8 CustomView, Document, File, Notification
+
+```graphql
+type CustomView {
+  id: ID!
+  organizationId: ID!
+  teamId: ID                 # null = workspace-level
+  creatorId: ID!
+  name: String!
+  description: String
+  icon: String
+  color: String
+  filters: JSON!             # IssueFilter + column picker state
+  sort: JSON!                # [{ field, direction }]
+  groupBy: String
+  layout: String!            # 'list' | 'board'
+  shared: Boolean!
+  sortOrder: Float!
+  creator: User!
+  team: Team
   createdAt: DateTime!
   updatedAt: DateTime!
   archivedAt: DateTime
 }
 
-type Reaction {
+type Document {
   id: ID!
-  emoji: String!
-  user: User
+  organizationId: ID!
+  teamId: ID
+  projectId: ID
+  creatorId: ID
+  parentId: ID               # self-referential hierarchy
+  title: String!
+  content: String            # markdown for search
+  icon: String
+  sortOrder: Float!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+}
+
+type File {
+  id: ID!
+  name: String!
+  key: String!
+  size: Int!
+  mimeType: String!
+  url: String!
+  issueId: ID
+  projectId: ID
+  uploaderId: ID
   createdAt: DateTime!
 }
 
-type TeamMembership implements Entity & Node {
+type Notification {
   id: ID!
-  team: Team!
-  user: User!
-  owner: Boolean!
-  sortOrder: Float!
+  organizationId: ID!
+  userId: ID!
+  issueId: ID
+  actorId: ID
+  type: String!              # ISSUE_ASSIGNED, ISSUE_MENTIONED, ISSUE_COMMENTED, ISSUE_STATUS_CHANGED, ...
+  data: JSON!                # denormalized payload the UI renders directly
+  read: Boolean!
+  readAt: DateTime
+  snoozedUntilAt: DateTime
+  actor: User
+  issue: Issue
   createdAt: DateTime!
   updatedAt: DateTime!
 }
 ```
 
-### 4.8 Custom Fields (Sprint 23-24)
-
-Team-scoped definitions with per-issue values. Select / multi_select options
-are stored as JSON on the definition (`[{ value, label, color? }]`); other
-types accept primitive values. See §9.x for mutation payloads.
+### 4.9 Public Roadmap
 
 ```graphql
-enum CustomFieldType {
-  text
-  number
-  date
-  select
-  multi_select
-  url
-  checkbox
+type PublicRoadmap {
+  id: ID!
+  organizationId: ID!
+  slug: String!
+  enabled: Boolean!
+  title: String!
+  description: String
+  hasPassword: Boolean!        # never exposes the hash itself
+  createdAt: DateTime!
+  updatedAt: DateTime!
 }
+
+type RoadmapProject {
+  id: ID!
+  name: String!
+  icon: String
+  color: String!
+  statusType: String!
+  statusName: String
+  health: String
+  targetDate: Date
+  progress: Float!
+  milestoneCount: Int!
+  completedMilestoneCount: Int!
+}
+
+type PublicRoadmapPage {
+  roadmap: PublicRoadmap!
+  projects: [RoadmapProject!]!
+  requiresPassword: Boolean!
+}
+```
+
+### 4.10 Custom Fields
+
+```graphql
+enum CustomFieldType { text, number, date, select, multi_select, url, checkbox }
 
 type CustomFieldDefinition {
   id: ID!
@@ -749,7 +638,7 @@ type CustomFieldDefinition {
   type: CustomFieldType!
   description: String
   required: Boolean!
-  options: JSON
+  options: JSON             # [{ value, label, color? }] for select/multi_select; null otherwise
   sortOrder: Float!
   createdAt: DateTime!
   updatedAt: DateTime!
@@ -761,14 +650,11 @@ type CustomFieldValue {
   id: ID!
   issueId: ID!
   definitionId: ID!
-  value: JSON!
+  value: JSON!              # shape depends on type; see §4.11 of DATABASE_SCHEMA.md
   createdAt: DateTime!
   updatedAt: DateTime!
   definition: CustomFieldDefinition!
 }
-
-# Exposed on Issue:
-# extend type Issue { customFieldValues: [CustomFieldValue!]! }
 ```
 
 ---
@@ -777,232 +663,181 @@ type CustomFieldValue {
 
 ```graphql
 type Query {
-  # Viewer (authenticated user)
+  # Current session
   viewer: User!
   organization: Organization!
+  organizationMembers: [OrganizationMemberEntry!]!
 
-  # Single entity lookups (support both UUID and identifier like "ENG-123")
-  issue(id: ID!): Issue!
-  project(id: ID!): Project!
+  # Teams
   team(id: ID!): Team!
-  cycle(id: ID!): Cycle!
-  comment(id: ID!): Comment!
-  customView(id: ID!): CustomView!
-  document(id: ID!): Document!
-  initiative(id: ID!): Initiative!
-  template(id: ID!): Template!
+  teams: [Team!]!
 
-  # Paginated lists with filters
+  # Issues
+  issue(id: ID!): Issue!
   issues(
     filter: IssueFilter
     first: Int
     after: String
     last: Int
     before: String
-    orderBy: PaginationOrderBy
     includeArchived: Boolean
   ): IssueConnection!
+  searchIssues(query: String!, first: Int, includeArchived: Boolean): IssueConnection!
+  issueActivities(issueId: ID!, limit: Int): [IssueActivity!]!
+  issueRelations(issueId: ID!): [IssueRelation!]!
+  issueTemplates(teamId: String!, includeArchived: Boolean): [IssueTemplate!]!
+  issueTemplate(id: ID!): IssueTemplate!
+  issueFiles(issueId: ID!): [File!]!
 
-  projects(
-    filter: ProjectFilter
-    first: Int
-    after: String
-    orderBy: PaginationOrderBy
-    includeArchived: Boolean
-  ): ProjectConnection!
+  # Labels (cursor-paginated)
+  labels(teamId: String): IssueLabelConnection!
 
-  teams(first: Int, after: String): TeamConnection!
-  cycles(filter: CycleFilter, first: Int, after: String): CycleConnection!
-  users(filter: UserFilter, first: Int, after: String): UserConnection!
-  labels(filter: LabelFilter, first: Int, after: String): IssueLabelConnection!
-  templates(first: Int, after: String): TemplateConnection!
-  customViews(first: Int, after: String): CustomViewConnection!
-  favorites(first: Int, after: String): FavoriteConnection!
-  notifications(first: Int, after: String): NotificationConnection!
-  documents(first: Int, after: String): DocumentConnection!
-  initiatives(first: Int, after: String): InitiativeConnection!
-  webhooks(first: Int, after: String): WebhookConnection!
+  # Projects
+  project(id: ID!): Project!
+  projects(filter: ProjectFilter, first: Int, after: String, includeArchived: Boolean): ProjectConnection!
 
-  # Custom fields (Sprint 23-24)
+  # Cycles
+  cycle(id: ID!): Cycle!
+  cycles(teamId: String!, includeArchived: Boolean): [Cycle!]!
+  cycleVelocity(teamId: ID!, cycleCount: Int): CycleVelocityResult!
+  cycleBurndown(cycleId: ID!): [CycleBurndownPoint!]!
+
+  # Views & documents
+  customView(id: ID!): CustomView!
+  customViews(teamId: String): [CustomView!]!
+  documents(teamId: ID, projectId: ID): [Document!]!
+  document(id: ID!): Document
+
+  # Comments
+  comments(issueId: ID!, includeArchived: Boolean): [Comment!]!
+  comment(id: ID!): Comment!
+
+  # Notifications
+  notifications(limit: Int): [Notification!]!
+  notificationUnreadCount: Int!
+  notificationIsSubscribed(issueId: ID!): Boolean!
+
+  # Custom fields
   customFieldDefinitions(teamId: String!, includeArchived: Boolean): [CustomFieldDefinition!]!
   customFieldDefinition(id: ID!): CustomFieldDefinition!
   customFieldValuesForIssue(issueId: ID!): [CustomFieldValue!]!
 
-  # Search
-  searchIssues(query: String!, first: Int, includeArchived: Boolean): IssueConnection!
-  searchProjects(query: String!, first: Int): ProjectConnection!
-  searchDocuments(query: String!, first: Int): DocumentConnection!
-
-  # Audit (Enterprise)
-  auditEntries(
-    filter: AuditEntryFilter
-    first: Int
-    after: String
-  ): AuditEntryConnection!
+  # Public roadmap
+  publicRoadmap: PublicRoadmap                              # authed; current org's config
+  publicRoadmapPage(slug: String!, password: String): PublicRoadmapPage!  # unauthenticated
 }
 ```
+
+> Most list queries return plain `[T!]!` arrays — only `issues`, `searchIssues`,
+> `labels`, and `projects` are paginated. Pools are small enough that the
+> client keeps all cycles / documents / custom views / templates / comments in
+> MobX stores.
 
 ---
 
 ## 6. Mutations
 
-```graphql
-type Mutation {
-  # Issues
-  issueCreate(input: IssueCreateInput!): IssuePayload!
-  issueUpdate(id: ID!, input: IssueUpdateInput!): IssuePayload!
-  issueArchive(id: ID!): IssuePayload!
-  issueUnarchive(id: ID!): IssuePayload!
-  issueDelete(id: ID!): DeletePayload!
+Grouped for readability; see `schema.ts` L1056 onward for the authoritative
+source.
 
-  # Comments
-  commentCreate(input: CommentCreateInput!): CommentPayload!
-  commentUpdate(id: ID!, input: CommentUpdateInput!): CommentPayload!
-  commentDelete(id: ID!): DeletePayload!
+### Auth (§2)
 
-  # Issue Relations
-  issueRelationCreate(input: IssueRelationCreateInput!): IssueRelationPayload!
-  issueRelationDelete(id: ID!): DeletePayload!
+```
+emailLogin, emailVerify, googleAuthExchange, tokenRefresh, logout
+organizationCreate
+```
 
-  # Labels
-  issueLabelCreate(input: IssueLabelCreateInput!): IssueLabelPayload!
-  issueLabelUpdate(id: ID!, input: IssueLabelUpdateInput!): IssueLabelPayload!
-  issueLabelArchive(id: ID!): IssueLabelPayload!
+### Teams
 
-  # Projects
-  projectCreate(input: ProjectCreateInput!): ProjectPayload!
-  projectUpdate(id: ID!, input: ProjectUpdateInput!): ProjectPayload!
-  projectArchive(id: ID!): ProjectPayload!
-  projectDelete(id: ID!): DeletePayload!
+```
+teamCreate, teamUpdate, teamDelete         # teamDelete requires TeamDeleteInput (MOVE|DELETE issues)
+teamMembershipCreate, teamMembershipUpdate, teamMembershipDelete
+workflowStateCreate, workflowStateUpdate, workflowStateArchive
+```
 
-  # Project Milestones
-  projectMilestoneCreate(input: ProjectMilestoneCreateInput!): ProjectMilestonePayload!
-  projectMilestoneUpdate(id: ID!, input: ProjectMilestoneUpdateInput!): ProjectMilestonePayload!
-  projectMilestoneDelete(id: ID!): DeletePayload!
+### Issues
 
-  # Project Updates
-  projectUpdateCreate(input: ProjectUpdateCreateInput!): ProjectUpdatePayload!
-  projectUpdateUpdate(id: ID!, input: ProjectUpdateUpdateInput!): ProjectUpdatePayload!
-  projectUpdateDelete(id: ID!): DeletePayload!
+```
+issueCreate, issueUpdate, issueArchive, issueUnarchive, issueDelete
+issueLabelCreate, issueLabelUpdate, issueLabelArchive
+issueRelationCreate, issueRelationDelete
+issueTemplateCreate, issueTemplateUpdate, issueTemplateArchive, issueTemplateDelete
+```
 
-  # Cycles
-  cycleCreate(input: CycleCreateInput!): CyclePayload!
-  cycleUpdate(id: ID!, input: CycleUpdateInput!): CyclePayload!
-  cycleArchive(id: ID!): CyclePayload!
+### Projects / Cycles
 
-  # Teams
-  teamCreate(input: TeamCreateInput!): TeamPayload!
-  teamUpdate(id: ID!, input: TeamUpdateInput!): TeamPayload!
-  teamDelete(id: ID!): DeletePayload!
+```
+projectCreate, projectUpdate, projectArchive, projectDelete
+projectAddTeam, projectRemoveTeam, projectAddMember, projectRemoveMember
+projectMilestoneCreate, projectMilestoneUpdate, projectMilestoneDelete
+projectUpdateCreate, projectUpdateUpdate, projectUpdateDelete
+projectSetRoadmapVisible        # toggles public roadmap exposure
 
-  # Team Membership
-  teamMembershipCreate(input: TeamMembershipCreateInput!): TeamMembershipPayload!
-  teamMembershipUpdate(id: ID!, input: TeamMembershipUpdateInput!): TeamMembershipPayload!
-  teamMembershipDelete(id: ID!): DeletePayload!
+cycleCreate, cycleUpdate, cycleArchive, cycleDelete
+cycleAddIssue, cycleRemoveIssue, cycleRollover
+```
 
-  # Workflow States
-  workflowStateCreate(input: WorkflowStateCreateInput!): WorkflowStatePayload!
-  workflowStateUpdate(id: ID!, input: WorkflowStateUpdateInput!): WorkflowStatePayload!
-  workflowStateArchive(id: ID!): WorkflowStatePayload!
+### Views / Documents / Files
 
-  # Initiatives
-  initiativeCreate(input: InitiativeCreateInput!): InitiativePayload!
-  initiativeUpdate(id: ID!, input: InitiativeUpdateInput!): InitiativePayload!
-  initiativeArchive(id: ID!): InitiativePayload!
+```
+customViewCreate, customViewUpdate, customViewArchive, customViewDelete
+documentCreate, documentUpdate, documentArchive, documentDelete
+fileDelete                       # upload goes through REST POST /api/upload
+```
 
-  # Documents
-  documentCreate(input: DocumentCreateInput!): DocumentPayload!
-  documentUpdate(id: ID!, input: DocumentUpdateInput!): DocumentPayload!
-  documentDelete(id: ID!): DeletePayload!
+### Comments / Reactions
 
-  # Templates
-  templateCreate(input: TemplateCreateInput!): TemplatePayload!
-  templateUpdate(id: ID!, input: TemplateUpdateInput!): TemplatePayload!
-  templateDelete(id: ID!): DeletePayload!
+```
+commentCreate, commentUpdate, commentDelete
+commentResolve, commentUnresolve
+commentReactionAdd, commentReactionRemove
+```
 
-  # Custom Views
-  customViewCreate(input: CustomViewCreateInput!): CustomViewPayload!
-  customViewUpdate(id: ID!, input: CustomViewUpdateInput!): CustomViewPayload!
-  customViewDelete(id: ID!): DeletePayload!
+### Notifications
 
-  # Custom Fields (Sprint 23-24)
-  customFieldDefinitionCreate(input: CustomFieldDefinitionCreateInput!): CustomFieldDefinitionPayload!
-  customFieldDefinitionUpdate(id: ID!, input: CustomFieldDefinitionUpdateInput!): CustomFieldDefinitionPayload!
-  customFieldDefinitionArchive(id: ID!): CustomFieldDefinitionPayload!
-  customFieldDefinitionDelete(id: ID!): DeletePayload!
-  # Bulk upsert of values for one issue. Passing a null `value` for a
-  # definition removes that row. Emits an Issue SyncAction carrying
-  # `{ customFieldValues }` so the WebSocket stream updates every client.
-  customFieldValuesSet(issueId: ID!, values: [CustomFieldValueInput!]!): CustomFieldValuesPayload!
+```
+notificationMarkRead, notificationMarkAllRead
+notificationSnooze(id, until)
+notificationSubscribe(issueId), notificationUnsubscribe(issueId)
+```
 
-  # Favorites
-  favoriteCreate(input: FavoriteCreateInput!): FavoritePayload!
-  favoriteUpdate(id: ID!, input: FavoriteUpdateInput!): FavoritePayload!
-  favoriteDelete(id: ID!): DeletePayload!
+### Custom Fields
 
-  # Notifications
-  notificationUpdate(id: ID!, input: NotificationUpdateInput!): NotificationPayload!
-  notificationArchive(id: ID!): NotificationPayload!
-  notificationMarkAllRead: NotificationBatchPayload!
-  notificationSnooze(id: ID!, snoozedUntilAt: DateTime!): NotificationPayload!
+```
+customFieldDefinitionCreate / Update / Archive / Delete
+customFieldValuesSet(issueId, values: [CustomFieldValueInput!]!)   # upsert + delete absent values in one call
+```
 
-  # Reactions
-  reactionCreate(input: ReactionCreateInput!): ReactionPayload!
-  reactionDelete(id: ID!): DeletePayload!
+### Org admin
 
-  # Attachments
-  attachmentCreate(input: AttachmentCreateInput!): AttachmentPayload!
-  attachmentUpdate(id: ID!, input: AttachmentUpdateInput!): AttachmentPayload!
-  attachmentDelete(id: ID!): DeletePayload!
-
-  # File upload
-  fileUpload(contentType: String!, filename: String!, size: Int!): UploadPayload!
-
-  # Webhooks
-  webhookCreate(input: WebhookCreateInput!): WebhookPayload!
-  webhookUpdate(id: ID!, input: WebhookUpdateInput!): WebhookPayload!
-  webhookDelete(id: ID!): DeletePayload!
-
-  # Organization
-  organizationUpdate(input: OrganizationUpdateInput!): OrganizationPayload!
-
-  # User
-  userUpdate(id: ID!, input: UserUpdateInput!): UserPayload!
-  userSettingsUpdate(input: UserSettingsUpdateInput!): UserSettingsPayload!
-
-  # Auth (see Section 2)
-  emailLogin(input: EmailLoginInput!): EmailLoginPayload!
-  emailVerify(input: EmailVerifyInput!): AuthPayload!
-  googleAuthExchange(code: String!, redirectUri: String!): AuthPayload!
-  tokenRefresh(refreshToken: String!): AuthPayload!
-  logout: LogoutPayload!
-  apiKeyCreate(input: ApiKeyCreateInput!): ApiKeyPayload!
-  apiKeyDelete(id: ID!): DeletePayload!
-}
+```
+organizationMemberUpdateRole(userId, role)
+publicRoadmapUpsert(input: PublicRoadmapUpsertInput!)   # manages current org's PublicRoadmap row
 ```
 
 ---
 
-## 7. Input Types (Key Examples)
+## 7. Key Input Types
+
+### IssueCreateInput / IssueUpdateInput
 
 ```graphql
 input IssueCreateInput {
-  id: String              # Client-generated UUID (for offline-first)
+  id: String                    # client-supplied UUID for offline-first
   title: String!
   description: String
   teamId: String!
-  stateId: String
+  stateId: String               # optional; service falls back to team default
   assigneeId: String
   priority: Int
   estimate: Float
-  dueDate: TimelessDate
+  dueDate: Date
   labelIds: [String!]
+  parentId: String              # enables sub-issue inheritance of project/cycle
+  sortOrder: Float
   projectId: String
   projectMilestoneId: String
   cycleId: String
-  parentId: String
-  templateId: String
-  sortOrder: Float
 }
 
 input IssueUpdateInput {
@@ -1012,312 +847,271 @@ input IssueUpdateInput {
   assigneeId: String
   priority: Int
   estimate: Float
-  dueDate: TimelessDate
+  dueDate: Date
   labelIds: [String!]
-  projectId: String
-  projectMilestoneId: String
-  cycleId: String
   parentId: String
   sortOrder: Float
   prioritySortOrder: Float
-  subIssueSortOrder: Float
   trashed: Boolean
-  snoozedUntilAt: DateTime
-  snoozedById: String
-}
-
-input CommentCreateInput {
-  id: String
-  body: String!
-  bodyData: JSONObject
-  issueId: String
   projectId: String
-  projectUpdateId: String
-  parentId: String
+  projectMilestoneId: String
+  cycleId: String
 }
+```
 
-input ProjectCreateInput {
+### IssueFilter (current minimal surface)
+
+```graphql
+input IssueFilter {
+  teamId: String
+  stateId: String
+  assigneeId: String
+  priority: Int
+  trashed: Boolean
+}
+```
+
+> The client-side `FilterComposition` structure (AND/OR trees, comparator
+> operators, label / project / cycle predicates) lives in the `filters` JSONB
+> of `CustomView` and is applied **client-side** in MobX. GraphQL does not
+> accept those richer filters today.
+
+### CustomViewCreateInput / UpdateInput
+
+```graphql
+input CustomViewCreateInput {
   id: String
   name: String!
   description: String
   icon: String
   color: String
-  statusType: String
-  leadId: String
-  startDate: TimelessDate
-  targetDate: TimelessDate
-  teamIds: [String!]!
-  memberIds: [String!]
+  filters: JSON
+  sort: JSON
+  groupBy: String
+  layout: String
+  shared: Boolean
+  teamId: String
+  sortOrder: Float
 }
 ```
 
----
-
-## 8. Filter System
+### Comment / Document / Cycle inputs
 
 ```graphql
-# String comparators
-input StringComparator {
-  eq: String
-  neq: String
-  in: [String!]
-  nin: [String!]
-  contains: String
-  notContains: String
-  startsWith: String
-  endsWith: String
-  containsIgnoreCase: String
+input CommentCreateInput {
+  id: String
+  issueId: String!
+  body: String!
+  bodyData: JSON
+  parentId: String
 }
 
-# Number comparators
-input NumberComparator {
-  eq: Float
-  neq: Float
-  in: [Float!]
-  nin: [Float!]
-  lt: Float
-  lte: Float
-  gt: Float
-  gte: Float
+input DocumentCreateInput {
+  id: ID
+  teamId: ID
+  projectId: ID
+  parentId: ID
+  title: String!
+  content: String
+  icon: String
 }
 
-# Date comparators
-input DateComparator {
-  eq: DateTime
-  neq: DateTime
-  lt: DateTime
-  lte: DateTime
-  gt: DateTime
-  gte: DateTime
-}
-
-# Nullable filter
-input NullableFilter {
-  null: Boolean
-}
-
-# Issue filter (composable with AND/OR)
-input IssueFilter {
-  # Entity filters
-  id: StringComparator
-  title: StringComparator
-  description: StringComparator
-  number: NumberComparator
-
-  # Relationship filters (nested)
-  team: TeamFilter
-  state: WorkflowStateFilter
-  assignee: UserFilter
-  creator: UserFilter
-  project: ProjectFilter
-  cycle: CycleFilter
-  parent: IssueFilter
-  labels: IssueLabelFilter
-
-  # Property filters
-  priority: NumberComparator
-  estimate: NumberComparator
-  dueDate: DateComparator
-
-  # Timestamp filters
-  createdAt: DateComparator
-  updatedAt: DateComparator
-  completedAt: DateComparator
-  canceledAt: DateComparator
-  startedAt: DateComparator
-
-  # Boolean filters
-  trashed: Boolean
-
-  # SLA
-  slaStatus: StringComparator
-
-  # Relation existence
-  hasBlockedByRelations: Boolean
-  hasBlockingRelations: Boolean
-  hasDuplicateRelations: Boolean
-
-  # Content search
-  searchableContent: StringComparator
-
-  # Composition
-  and: [IssueFilter!]
-  or: [IssueFilter!]
-}
-
-input WorkflowStateFilter {
-  id: StringComparator
-  name: StringComparator
-  type: StringComparator
-}
-
-input TeamFilter {
-  id: StringComparator
-  name: StringComparator
-  key: StringComparator
-}
-
-input UserFilter {
-  id: StringComparator
-  name: StringComparator
-  email: StringComparator
-  active: Boolean
-  isMe: Boolean
-}
-
-input ProjectFilter {
-  id: StringComparator
-  name: StringComparator
-  statusType: StringComparator
-  health: StringComparator
-  leadId: StringComparator
-  startDate: DateComparator
-  targetDate: DateComparator
-}
-
-input CycleFilter {
-  id: StringComparator
-  name: StringComparator
-  isActive: Boolean
-  isFuture: Boolean
-  isPast: Boolean
-  startsAt: DateComparator
-  endsAt: DateComparator
-}
-
-input IssueLabelFilter {
-  id: StringComparator
-  name: StringComparator
-}
-
-input LabelFilter {
-  id: StringComparator
-  name: StringComparator
-  teamId: StringComparator
+input CycleCreateInput {
+  id: String
+  teamId: String!
+  name: String
+  description: String
+  startsAt: DateTime!
+  endsAt: DateTime!
 }
 ```
 
----
-
-## 9. Mutation Payloads
+### PublicRoadmapUpsertInput
 
 ```graphql
-# Standard payload pattern
-type IssuePayload {
-  success: Boolean!
-  issue: Issue
-  lastSyncId: String!  # For sync engine; String to avoid 32-bit int overflow
+input PublicRoadmapUpsertInput {
+  slug: String        # unique per org; changing it rekeys the public URL
+  enabled: Boolean
+  title: String
+  description: String
+  password: String    # plaintext; server hashes before storing. "" clears password.
 }
+```
 
-type DeletePayload {
-  success: Boolean!
-  lastSyncId: String!
+### CustomFieldValueInput
+
+```graphql
+input CustomFieldValueInput {
+  definitionId: String!
+  value: JSON          # null clears the value (row is deleted)
 }
-
-# Pattern repeated for all entities:
-type CommentPayload { success: Boolean!, comment: Comment, lastSyncId: String! }
-type ProjectPayload { success: Boolean!, project: Project, lastSyncId: String! }
-type CyclePayload { success: Boolean!, cycle: Cycle, lastSyncId: String! }
-type TeamPayload { success: Boolean!, team: Team, lastSyncId: String! }
-type WorkflowStatePayload { success: Boolean!, workflowState: WorkflowState, lastSyncId: String! }
-type IssueLabelPayload { success: Boolean!, issueLabel: IssueLabel, lastSyncId: String! }
-type FavoritePayload { success: Boolean!, favorite: Favorite, lastSyncId: String! }
-type NotificationPayload { success: Boolean!, notification: Notification, lastSyncId: String! }
-type NotificationBatchPayload { success: Boolean!, lastSyncId: String! }
-type CustomViewPayload { success: Boolean!, customView: CustomView, lastSyncId: String! }
-# ... etc.
 ```
 
 ---
 
-## 10. Sync Endpoints (REST)
+## 8. Sync Endpoints (REST)
 
-These complement the GraphQL API for the sync engine:
+These are plain Next.js route handlers, not GraphQL.
 
+### `GET /api/sync/bootstrap`
+
+Returns every entity the current user can see in their org, plus the current
+`lastSyncId`. Response shape:
+
+```jsonc
+{
+  "lastSyncId": "1237",
+  "users": [...],
+  "organization": {...},
+  "teams": [...],
+  "workflowStates": [...],
+  "issues": [...],
+  "issueLabels": [...],
+  "labelAssignments": [...],
+  "projects": [...],
+  "projectMilestones": [...],
+  "projectUpdates": [...],
+  "projectTeams": [...],
+  "projectMembers": [...],
+  "cycles": [...],
+  "customViews": [...],
+  "notifications": [...],
+  "issueRelations": [...],
+  "issueTemplates": [...],
+  "customFieldDefinitions": [...],
+  "customFieldValues": [...],
+  "documents": [...],
+  "publicRoadmap": null | {...},
+  "comments": [...],
+  "commentReactions": [...],
+  "files": [...]
+}
 ```
-GET /sync/bootstrap?type=full&onlyModels=Issue,Team,User,...
-  → Content-Type: text/plain
-  → Body: line-delimited ModelName=<JSON>\n
-  → Last line: _metadata_={"lastSyncId": 12345, "method": "postgres"}
 
-GET /sync/bootstrap?type=partial&onlyModels=Comment,IssueHistory
-  → Same format as full
+Clients populate IndexedDB (Dexie) from this payload, then hydrate MobX pools
+from IndexedDB on subsequent boots to keep first paint fast.
 
-GET /sync/delta?lastSyncId=12300&toSyncId=12345
-  → Content-Type: application/json
-  → Body: { "actions": [SyncAction, ...], "lastSyncId": 12345 }
-```
+### `GET /api/sync/delta?lastSyncId=<n>`
+
+Returns all `SyncAction` rows with `id > n`, ordered ascending. Each entry is
+`{ id, action: 'I'|'U'|'D'|'A', modelName, modelId, data }` with `data` being
+the serialized entity for `I`/`U` and `null` for `D`. The client walks the
+list, applies each action to the matching MobX pool, and persists the new
+`lastSyncId`.
+
+Delta sync is the recovery path for missed WebSocket pushes (tab-sleep,
+offline, auth refresh).
 
 ---
 
-## 11. WebSocket Protocol
+## 9. WebSocket Protocol
 
 ```
-Connection: wss://api.example.com/ws
-  Headers: Authorization: Bearer <token>
-
-Server → Client messages:
-  { "cmd": "sync", "sync": [SyncAction, ...], "lastSyncId": N }
-  { "cmd": "ping" }
-
-Client → Server messages:
-  { "cmd": "pong" }
-  { "cmd": "subscribe", "channels": ["org:<orgId>"] }
+ws://<host>:3001?token=<accessToken>
 ```
+
+- Run separately from Next.js (`yarn ws:server` on port 3001 in dev).
+- Token is validated on the query string; there is no `Authorization` header.
+- Server pushes frames that mirror the `SyncAction` shape:
+
+  ```jsonc
+  {
+    "type": "sync",
+    "payload": {
+      "id": "1245",
+      "action": "U",
+      "modelName": "Issue",
+      "modelId": "...",
+      "data": { /* serialized entity */ }
+    }
+  }
+  ```
+
+- The server subscribes to the org's Redis Pub/Sub channel (`org:{orgId}`) and
+  fans out to every connected socket for that org.
+- Clients ignore their own echoes by comparing the `X-Client-Id` header set on
+  the GraphQL mutation to a field stamped into the action. Reconnects trigger
+  a `GET /api/sync/delta` catch-up.
+
+---
+
+## 10. File Uploads
+
+`POST /api/upload` (multipart/form-data, authed cookie). Body contains the
+file plus `issueId` or `projectId`. Response is the resulting `File` row:
+
+```jsonc
+{ "file": { "id": "...", "name": "...", "key": "...", "url": "/api/uploads/<key>", ... } }
+```
+
+Storage backend is swappable: dev uses local disk (`data/uploads/`) served
+through the `/api/uploads/[...path]` route; production is expected to swap in
+S3-compatible storage via the `FileService`.
+
+---
+
+## 11. TipTap JSON in bodyData
+
+`Comment.bodyData`, `ProjectUpdate.bodyData`, and `Document.contentData` carry
+the TipTap ProseMirror document tree as `JSON`. The TipTap extension set is
+aligned between client and server (see `src/lib/editor/` and
+`src/server/lib/tiptap-schema.ts`) so the server can render to markdown for
+search indexing.
 
 ---
 
 ## 12. Rate Limiting
 
-```text
-Response headers:
-  X-RateLimit-Requests-Limit: 5000
-  X-RateLimit-Requests-Remaining: 4999
-  X-RateLimit-Requests-Reset: 1712400000
-  X-Complexity: 14
-  X-RateLimit-Complexity-Limit: 250000
-  X-RateLimit-Complexity-Remaining: 249986
-  X-RateLimit-Complexity-Reset: 1712400000
+Enforced as Next.js middleware, backed by Redis:
 
-Complexity calculation:
-  - Each property: 0.1 points
-  - Each object: 1 point
-  - Connections: multiply child complexity by `first` argument (default 50)
-  - Max single query: 10,000 points
+| Surface         | Budget                                   |
+|-----------------|------------------------------------------|
+| `/api/graphql`  | 5,000 req / hour / user                  |
+| `/api/auth/*`   | Stricter per-IP caps on login + verify   |
 
-Rate limit exceeded → HTTP 400 with:
-  { "errors": [{ "extensions": { "code": "RATELIMITED" } }] }
-```
+Responses over the budget throw `GraphQLError` with `extensions.code =
+RATELIMITED`. Cost-based complexity limits (operation-weighted points) are a
+design target.
 
 ---
 
-## 13. Webhook Payloads
+## 13. Conventions Summary
 
-```json
-{
-  "action": "create",      // "create" | "update" | "remove"
-  "type": "Issue",
-  "actor": {
-    "id": "uuid",
-    "type": "user"
-  },
-  "createdAt": "2026-04-06T12:00:00.000Z",
-  "data": { /* full serialized entity */ },
-  "url": "https://app.example.com/team/issue/ENG-123",
-  "updatedFrom": { /* previous values for changed fields (update only) */ },
-  "webhookTimestamp": 1712404800000,
-  "webhookId": "uuid"
-}
-```
+- **Every write returns `lastSyncId`.** Client feeds it back into delta sync
+  for catch-up after reconnect.
+- **Every write emits a SyncAction.** Services call
+  `ctx.services.sync.createSyncAction(orgId, action, modelName, modelId, data)`
+  inside the same Prisma transaction.
+- **Services own the business logic, resolvers stay thin.** Resolver =
+  `requireAuth(ctx)` → service call → remap service errors to `GraphQLError`.
+- **Clients generate UUIDs.** `*CreateInput.id` is client-supplied to keep
+  offline-first writes idempotent.
+- **Servers trust snake_case in the DB, camelCase everywhere else.** Prisma
+  `@map` bridges the two.
 
-**Headers:**
+---
 
-```
-Linear-Delivery: <uuid>
-Linear-Event: Issue
-Linear-Signature: <hmac-sha256-hex>
-Content-Type: application/json; charset=utf-8
-User-Agent: IssueTracker-Webhook
-```
+## 14. Planned / Not Yet in the Schema
 
-**Retry policy:** 3 attempts at 1min, 1hr, 6hr. Must respond 200 within 5s.
+The following types / operations appeared in earlier versions of this doc as
+design targets; they are **not** in `schema.ts` today. When a sprint lands
+one, delete its row here and add a §4 entry above.
+
+| Surface                               | Status | Notes |
+|---------------------------------------|--------|-------|
+| `Attachment`, `attachmentCreate/...`  | 📋 | Linked external resources (Figma, Google Doc). `File` covers raw uploads only. |
+| `Favorite`, `favoriteCreate/...`      | 📋 | Sidebar pinning (Sprint 43-44). |
+| `Initiative`, `initiativeCreate/...`  | 📋 | Enterprise roadmap tier (P2). |
+| `Template` (polymorphic)              | 📋 | Project / document templates. Issue-only today via `IssueTemplate`. |
+| `Webhook`, `webhookCreate/...`        | 📋 | Outbound HMAC-signed webhooks (Sprint 49-50). |
+| `apiKeyCreate / apiKeyDelete`         | 📋 | Personal API keys. |
+| `Reaction` on issues / project updates | 📋 | Only comment reactions shipped. |
+| Rich `IssueFilter` comparators (AND/OR trees, string/number/date comparators) | 📋 | Client-side only today; server accepts the minimal filter above. |
+| `subscription` GraphQL operations     | 📋 | Real-time is over a dedicated WS side-channel. |
+| User-visible audit log (`auditEntries`) | 📋 | Enterprise feature. |
+| SAML / SCIM auth flows                | 📋 | Enterprise tier. |
+| SLA / snooze fields on `Issue`        | ⚠️ | DB columns exist; GraphQL exposure pending. |
+
+The REST sync endpoints, WebSocket protocol, and rate-limit surface may also
+pick up enhancements (HTTP/2, operation cost limits, per-org WS quotas). These
+are tracked in `IMPLEMENTATION_PLAN.md`.

@@ -2,9 +2,12 @@
 
 ## Issue Tracker — Linear Rebuild
 
-**Version:** 1.0
-**Date:** April 2026
+**Version:** 1.4
+**Date:** 2026-04-17
 **Database:** PostgreSQL 18
+**Source of truth:** `prisma/schema.prisma` — this document describes both the
+implemented schema and design targets for unbuilt features. Read the Prisma
+schema when the two disagree.
 
 ---
 
@@ -17,6 +20,51 @@
 - **JSONB** for extensible metadata where appropriate
 - **GIN indexes** for array and full-text search columns
 - **Row-level security** via organization/team scoping
+
+---
+
+## 1.1 Schema Implementation Status
+
+Every subsection of §2 carries one of these tags. When a tag is missing assume
+✅. The goal is to distinguish what actually exists in Prisma today from what
+remains a design target.
+
+| Tag | Meaning |
+|-----|---------|
+| ✅ | Shipped — exists in `prisma/schema.prisma` and matches this doc |
+| ⚠️ | Partial drift — model exists in Prisma but column set differs; this doc has been aligned below |
+| 📋 | Future — table described here but **not** in Prisma yet |
+
+| Section | Status | Notes |
+|---------|--------|-------|
+| 2.1 Organizations & Users | ✅ | |
+| 2.2 Teams | ✅ | |
+| 2.3 Workflow States | ✅ | |
+| 2.4 Issues | ✅ | |
+| 2.5 Labels | ✅ | |
+| 2.6 Comments | ✅ | |
+| 2.7 Issue Relations | ✅ | |
+| 2.8 Issue Activity | ⚠️ | Real model is simpler than Linear-style history |
+| 2.9 Projects | ✅ | |
+| 2.10 Project Milestones | ✅ | |
+| 2.11 Project Updates | ✅ | |
+| 2.12 Cycles | ⚠️ | `organization_id` was missing from doc |
+| 2.13 Initiatives | 📋 | Feature-flagged off; no table yet |
+| 2.14 Attachments | 📋 | Superseded by §2.25 Files |
+| 2.15 Comment Reactions | ✅ | |
+| 2.16 Notifications | ⚠️ | Doc listed polymorphic FKs that were never added |
+| 2.17 Custom Views | ⚠️ | Real columns use `filters/sort/layout`, not `filter_data/sort_by/columns` |
+| 2.18 Favorites | 📋 | |
+| 2.19 Documents | ⚠️ | Real model uses JSONB `content_data`, parent hierarchy; no YJS yet |
+| 2.20 Issue Templates | ⚠️ | Real model is issue-only (not polymorphic) |
+| 2.21 Webhooks | 📋 | |
+| 2.22 Sync Actions | ✅ | |
+| 2.23 Auth Tokens | ✅ | |
+| 2.24 Audit Log | 📋 | |
+| 2.25 Files | ✅ | |
+| 2.26 Team Member Roles | ✅ | |
+| 2.27 Custom Fields | ✅ | |
+| 2.28 Public Roadmaps | ✅ | |
 
 ---
 
@@ -381,53 +429,33 @@ CREATE INDEX idx_relations_issue ON issue_relations(issue_id);
 CREATE INDEX idx_relations_related ON issue_relations(related_issue_id);
 ```
 
-### 2.8 Issue History (Activity Log)
+### 2.8 Issue Activity ⚠️
+
+The actual implementation uses a much simpler change log than the fat Linear-
+style `issue_history` originally planned. Each row describes **one** field
+change with plain string old/new values.
 
 ```sql
-CREATE TABLE issue_history (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    issue_id        UUID NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
-    actor_id        UUID REFERENCES users(id),
-    bot_actor       JSONB,
-
-    -- Change tracking (from/to pairs)
-    from_state_id       UUID REFERENCES workflow_states(id),
-    to_state_id         UUID REFERENCES workflow_states(id),
-    from_assignee_id    UUID REFERENCES users(id),
-    to_assignee_id      UUID REFERENCES users(id),
-    from_priority       SMALLINT,
-    to_priority         SMALLINT,
-    from_estimate       FLOAT,
-    to_estimate         FLOAT,
-    from_due_date       DATE,
-    to_due_date         DATE,
-    from_title          TEXT,
-    to_title            TEXT,
-    from_project_id     UUID,
-    to_project_id       UUID,
-    from_cycle_id       UUID,
-    to_cycle_id         UUID,
-    from_parent_id      UUID,
-    to_parent_id        UUID,
-    from_team_id        UUID REFERENCES teams(id),
-    to_team_id          UUID REFERENCES teams(id),
-
-    added_label_ids     UUID[],
-    removed_label_ids   UUID[],
-
-    -- Metadata
-    archived        BOOLEAN,
-    auto_archived   BOOLEAN,
-    auto_closed     BOOLEAN,
-    trashed         BOOLEAN,
-    relation_changes JSONB,
-    attachment_id   UUID,
-
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+CREATE TABLE issue_activities (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    issue_id    UUID NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+    actor_id    UUID REFERENCES users(id) ON DELETE SET NULL,
+    -- 'status', 'assignee', 'priority', 'estimate', 'title',
+    -- 'project', 'cycle', 'parent', 'labels', 'archived', 'trashed', etc.
+    field       VARCHAR(50) NOT NULL,
+    old_value   TEXT,
+    new_value   TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_issue_history_issue ON issue_history(issue_id);
-CREATE INDEX idx_issue_history_created ON issue_history(issue_id, created_at);
+CREATE INDEX idx_issue_activities_issue_created ON issue_activities(issue_id, created_at);
+CREATE INDEX idx_issue_activities_actor ON issue_activities(actor_id);
 ```
+
+Rationale: the IDs and labels that UI wants are resolved client-side by
+joining against the MobX entity pools, so the activity row only needs to carry
+the scalar that changed. The schema is additive — a future migration can
+introduce the structured-diff columns if we find cases where plain strings
+can't encode the change.
 
 ### 2.9 Projects
 
@@ -563,37 +591,49 @@ CREATE INDEX idx_project_updates_project ON project_updates(project_id);
 ```sql
 CREATE TABLE cycles (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     team_id         UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
-    name            VARCHAR(255),
     number          INT NOT NULL,
+    name            VARCHAR(255),
     description     TEXT,
 
     starts_at       TIMESTAMPTZ NOT NULL,
     ends_at         TIMESTAMPTZ NOT NULL,
-    completed_at    TIMESTAMPTZ,
+
+    completed_at     TIMESTAMPTZ,
+    auto_archived_at TIMESTAMPTZ,
 
     -- Progress
     progress        FLOAT NOT NULL DEFAULT 0,
     scope           FLOAT NOT NULL DEFAULT 0,
 
-    -- History (for charts)
-    completed_issue_count_history JSONB NOT NULL DEFAULT '[]',
+    -- History (drives burndown / burnup charts)
+    scope_history                 JSONB NOT NULL DEFAULT '[]',
     completed_scope_history       JSONB NOT NULL DEFAULT '[]',
     issue_count_history           JSONB NOT NULL DEFAULT '[]',
-    scope_history                 JSONB NOT NULL DEFAULT '[]',
+    completed_issue_count_history JSONB NOT NULL DEFAULT '[]',
 
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    archived_at     TIMESTAMPTZ
+    archived_at     TIMESTAMPTZ,
+
+    UNIQUE(team_id, number)
 );
+CREATE INDEX idx_cycles_organization ON cycles(organization_id);
 CREATE INDEX idx_cycles_team ON cycles(team_id);
-CREATE INDEX idx_cycles_dates ON cycles(team_id, starts_at, ends_at);
+CREATE INDEX idx_cycles_team_starts_at ON cycles(team_id, starts_at);
 
 ALTER TABLE issues ADD CONSTRAINT fk_issues_cycle
     FOREIGN KEY (cycle_id) REFERENCES cycles(id) ON DELETE SET NULL;
 ```
 
-### 2.13 Initiatives
+`organization_id` is denormalized onto the cycle so bootstrap / delta sync can
+scope by org without a join through teams.
+
+### 2.13 Initiatives 📋
+
+> **Not yet in Prisma.** `Organization.initiativesEnabled` is a feature flag only.
+> This design remains the reference for when the sprint lands.
 
 ```sql
 CREATE TABLE initiatives (
@@ -635,7 +675,11 @@ CREATE TABLE initiative_projects (
 );
 ```
 
-### 2.14 Attachments
+### 2.14 Attachments 📋
+
+> **Not implemented.** Superseded by §2.25 Files for image / document uploads.
+> The Linear-style "linked resource" attachment (Figma, Google Doc, etc.) is
+> still a design target.
 
 ```sql
 CREATE TABLE attachments (
@@ -675,92 +719,97 @@ CREATE INDEX idx_comment_reactions_comment ON comment_reactions(comment_id);
 CREATE INDEX idx_comment_reactions_user ON comment_reactions(user_id);
 ```
 
-### 2.16 Notifications
+### 2.16 Notifications ⚠️
+
+Notifications today are issue-scoped only. The `data` JSONB column holds any
+denormalized payload the UI needs (comment excerpt, old/new state name, etc.),
+so no polymorphic FKs are required.
 
 ```sql
 CREATE TABLE notifications (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    type            VARCHAR(50) NOT NULL,  -- 'issueAssignment', 'issueMention', 'issueComment', 'projectUpdate', etc.
-
-    -- Polymorphic source
     issue_id        UUID REFERENCES issues(id) ON DELETE CASCADE,
-    comment_id      UUID REFERENCES comments(id) ON DELETE CASCADE,
-    project_id      UUID,
-    project_update_id UUID,
+    actor_id        UUID REFERENCES users(id) ON DELETE SET NULL,
 
-    actor_id        UUID REFERENCES users(id),
+    -- ISSUE_ASSIGNED, ISSUE_MENTIONED, ISSUE_COMMENTED, ISSUE_STATUS_CHANGED, ...
+    type            VARCHAR(50) NOT NULL,
+    data            JSONB NOT NULL DEFAULT '{}',
 
     -- State
-    read_at         TIMESTAMPTZ,
-    snoozed_until_at TIMESTAMPTZ,
-
-    -- Email tracking
-    emailed_at      TIMESTAMPTZ,
-
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    archived_at     TIMESTAMPTZ
-);
-CREATE INDEX idx_notifications_user ON notifications(user_id);
-CREATE INDEX idx_notifications_unread ON notifications(user_id, read_at) WHERE read_at IS NULL;
-CREATE INDEX idx_notifications_created ON notifications(user_id, created_at DESC);
-
--- Notification subscriptions
-CREATE TABLE notification_subscriptions (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-
-    -- Polymorphic target
-    issue_id        UUID REFERENCES issues(id) ON DELETE CASCADE,
-    project_id      UUID,
-    team_id         UUID REFERENCES teams(id) ON DELETE CASCADE,
-    custom_view_id  UUID,
-
-    -- Settings
-    notification_types TEXT[] NOT NULL DEFAULT '{}',
+    read              BOOLEAN NOT NULL DEFAULT false,
+    read_at           TIMESTAMPTZ,
+    snoozed_until_at  TIMESTAMPTZ,
 
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE INDEX idx_notifications_user_read ON notifications(user_id, read);
+CREATE INDEX idx_notifications_user_created ON notifications(user_id, created_at);
+CREATE INDEX idx_notifications_organization ON notifications(organization_id);
+CREATE INDEX idx_notifications_issue ON notifications(issue_id);
+
+-- Per-user subscription toggle, issue-scoped
+CREATE TABLE notification_subscriptions (
+    id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    issue_id  UUID NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+    active    BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    UNIQUE(user_id, issue_id)
+);
 CREATE INDEX idx_notif_subs_user ON notification_subscriptions(user_id);
-CREATE INDEX idx_notif_subs_issue ON notification_subscriptions(issue_id) WHERE issue_id IS NOT NULL;
+CREATE INDEX idx_notif_subs_issue ON notification_subscriptions(issue_id);
 ```
 
-### 2.17 Custom Views
+> **Project / team-level subscriptions and e-mail delivery tracking
+> (`emailed_at`) are design targets, not yet in Prisma.**
+
+### 2.17 Custom Views ⚠️
+
+The implemented columns are `filters / sort / layout / group_by`, not the
+Linear-style `filter_data / display_type / sort_by / columns / owner_id`
+originally sketched here. Per-column list config lives inside the `filters`
+JSONB blob under `columns`.
 
 ```sql
 CREATE TABLE custom_views (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID NOT NULL REFERENCES organizations(id),
-    team_id         UUID REFERENCES teams(id),  -- null = workspace-level
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    team_id         UUID REFERENCES teams(id) ON DELETE SET NULL,  -- null = workspace-level
+    creator_id      UUID NOT NULL REFERENCES users(id),
     name            VARCHAR(255) NOT NULL,
     description     TEXT,
     icon            VARCHAR(255),
     color           VARCHAR(7),
 
     -- View config
-    filter_data     JSONB NOT NULL DEFAULT '{}',
-    display_type    VARCHAR(20) NOT NULL DEFAULT 'list',  -- 'list', 'board', 'timeline'
-    group_by        VARCHAR(50),
-    sort_by         JSONB,
-    columns         TEXT[],
+    filters     JSONB NOT NULL DEFAULT '{}',           -- IssueFilter + optional column picker state
+    sort        JSONB NOT NULL DEFAULT '[]',           -- [{ field, direction }]
+    group_by    VARCHAR(50),
+    layout      VARCHAR(10) NOT NULL DEFAULT 'list',   -- 'list' | 'board'
 
-    -- Ownership
-    creator_id      UUID NOT NULL REFERENCES users(id),
-    owner_id        UUID NOT NULL REFERENCES users(id),
-    shared          BOOLEAN NOT NULL DEFAULT false,
+    shared      BOOLEAN NOT NULL DEFAULT false,
+    sort_order  FLOAT   NOT NULL DEFAULT 0,
 
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    archived_at     TIMESTAMPTZ
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    archived_at TIMESTAMPTZ
 );
-CREATE INDEX idx_custom_views_org ON custom_views(organization_id);
+CREATE INDEX idx_custom_views_organization ON custom_views(organization_id);
 CREATE INDEX idx_custom_views_team ON custom_views(team_id);
 CREATE INDEX idx_custom_views_creator ON custom_views(creator_id);
 ```
 
-### 2.18 Favorites
+> Ownership today is "creator only" (`creator_id` + `shared` flag). A separate
+> `owner_id` / transfer-of-ownership flow is a design target, not shipped.
+
+### 2.18 Favorites 📋
+
+> **Not yet in Prisma.** Favorites / sidebar pinning is planned; no table exists.
 
 ```sql
 CREATE TABLE favorites (
@@ -796,70 +845,72 @@ CREATE INDEX idx_favorites_owner ON favorites(owner_id);
 CREATE INDEX idx_favorites_parent ON favorites(parent_id);
 ```
 
-### 2.19 Documents
+### 2.19 Documents ⚠️
+
+Shipped in Sprint 35-36 (PR #28) as a workspace-wide rich-text documents
+system with nested hierarchy. `content` is markdown (for search), `content_data`
+is the TipTap JSON representation used by the editor. No YJS / collaborative
+editing yet.
 
 ```sql
 CREATE TABLE documents (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID NOT NULL REFERENCES organizations(id),
-    title           VARCHAR(500) NOT NULL,
-    slug_id         VARCHAR(255) NOT NULL UNIQUE,
-    content         TEXT,
-    content_state   BYTEA,  -- YJS state for collaborative editing
-    icon            VARCHAR(255),
-    color           VARCHAR(7),
-
-    creator_id      UUID REFERENCES users(id),
-    updated_by_id   UUID REFERENCES users(id),
-
-    -- Polymorphic association
-    project_id      UUID,
-    initiative_id   UUID,
-    issue_id        UUID REFERENCES issues(id) ON DELETE SET NULL,
-    cycle_id        UUID,
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     team_id         UUID REFERENCES teams(id) ON DELETE SET NULL,
+    project_id      UUID REFERENCES projects(id) ON DELETE SET NULL,
+    creator_id      UUID REFERENCES users(id) ON DELETE SET NULL,
+    parent_id       UUID REFERENCES documents(id) ON DELETE SET NULL,
 
+    title           VARCHAR(255) NOT NULL,
+    content         TEXT,         -- markdown / plain text fallback
+    content_data    JSONB,        -- TipTap doc JSON
+    icon            VARCHAR(255),
     sort_order      FLOAT NOT NULL DEFAULT 0,
-    trashed         BOOLEAN NOT NULL DEFAULT false,
-    hidden_at       TIMESTAMPTZ,
 
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     archived_at     TIMESTAMPTZ
 );
-CREATE INDEX idx_documents_org ON documents(organization_id);
+CREATE INDEX idx_documents_organization ON documents(organization_id);
+CREATE INDEX idx_documents_team ON documents(team_id);
 CREATE INDEX idx_documents_project ON documents(project_id);
+CREATE INDEX idx_documents_parent ON documents(parent_id);
 ```
 
-### 2.20 Templates
+> **Design targets not yet implemented:** `slug_id`, per-document color, YJS
+> `content_state` (`BYTEA`) for real-time collab, issue / cycle / initiative
+> associations, `trashed` / `hidden_at`, separate `updated_by_id`.
+
+### 2.20 Issue Templates ⚠️
+
+Only issue templates are implemented; project / document templates remain a
+design target. The real table is team-scoped (no workspace-level templates)
+and stores the prefilled issue payload as JSONB.
 
 ```sql
-CREATE TABLE templates (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID NOT NULL REFERENCES organizations(id),
-    team_id         UUID REFERENCES teams(id),  -- null = workspace-level
-    name            VARCHAR(255) NOT NULL,
-    type            VARCHAR(50) NOT NULL,  -- 'issue', 'project', 'document'
-    description     TEXT,
-    icon            VARCHAR(255),
-    color           VARCHAR(7),
+CREATE TABLE issue_templates (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    team_id       UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    creator_id    UUID REFERENCES users(id) ON DELETE SET NULL,
+    name          VARCHAR(255) NOT NULL,
+    description   TEXT,
+    template_data JSONB NOT NULL DEFAULT '{}',  -- { title, description, priority, labelIds, ... }
+    is_default    BOOLEAN NOT NULL DEFAULT false,
 
-    template_data   JSONB NOT NULL DEFAULT '{}',
-    has_form_fields BOOLEAN NOT NULL DEFAULT false,
-
-    creator_id      UUID REFERENCES users(id),
-    last_updated_by_id UUID REFERENCES users(id),
-    last_applied_at TIMESTAMPTZ,
-
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    archived_at     TIMESTAMPTZ
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    archived_at   TIMESTAMPTZ
 );
-CREATE INDEX idx_templates_org ON templates(organization_id);
-CREATE INDEX idx_templates_team ON templates(team_id);
+CREATE INDEX idx_issue_templates_team ON issue_templates(team_id);
+CREATE INDEX idx_issue_templates_creator ON issue_templates(creator_id);
 ```
 
-### 2.21 Webhooks
+> A generic polymorphic `templates` table (with `type`, `has_form_fields`, etc.)
+> remains a design target for when project / document templates ship.
+
+### 2.21 Webhooks 📋
+
+> **Not yet in Prisma.** Outbound webhooks with HMAC signing are planned.
 
 ```sql
 CREATE TABLE webhooks (
@@ -931,7 +982,11 @@ CREATE INDEX idx_auth_tokens_hash ON auth_tokens(token_hash);
 
 > **Implementation note:** Raw codes and tokens are never stored in the database. All lookups use SHA-256 hashes (`token_hash`). For magic links, the 6-digit code is generated with `crypto.randomInt`, hashed, stored, and the raw code is only ever in the email. The `id` is pre-generated as a UUID so the JWT can be signed and the record created in a single write (no two-step update).
 
-### 2.24 Audit Log
+### 2.24 Audit Log 📋
+
+> **Not yet in Prisma.** Enterprise audit log is a design target; today the
+> closest thing is `sync_actions` (§2.22), which records every mutation but
+> scoped to change-replication, not compliance.
 
 ```sql
 CREATE TABLE audit_entries (
@@ -1050,52 +1105,93 @@ CREATE INDEX idx_custom_field_values_definition ON custom_field_values(definitio
 - Non-select types reject options
 - Value type and allowed-option membership are validated before upsert
 
+### 2.28 Public Roadmaps
+
+Shipped in Sprint 53-54 (PR #28). One row per organization; `enabled`
+gates the public `/r/:slug` page. A SHA-256 password hash guards private
+roadmaps; null means open to the public.
+
+```sql
+CREATE TABLE public_roadmaps (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL UNIQUE REFERENCES organizations(id) ON DELETE CASCADE,
+    slug            VARCHAR(63) NOT NULL UNIQUE,
+    enabled         BOOLEAN NOT NULL DEFAULT false,
+    title           VARCHAR(255) NOT NULL,
+    description     TEXT,
+    password_hash   TEXT,          -- nullable; null = public, non-null = password-gated
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_public_roadmaps_slug ON public_roadmaps(slug);
+```
+
+Per-project exposure is controlled by `projects.roadmap_visible` (§2.9). The
+public endpoint joins the two: roadmap row must be `enabled`, project row must
+have `roadmap_visible = true` and not be archived / trashed.
+
 ---
 
 ## 3. Entity Relationship Summary
+
+Only shipped relationships are shown here. 📋 tables from §2 are omitted.
 
 ```
 organizations 1──* teams
 organizations 1──* users (via organization_members)
 organizations 1──* projects
-organizations 1──* initiatives
+organizations 1──* cycles
 organizations 1──* issue_labels
-organizations 1──* templates
 organizations 1──* custom_views
-organizations 1──* webhooks
+organizations 1──* documents
+organizations 1──1 public_roadmaps
+organizations 1──* notifications
+organizations 1──* sync_actions
 
 teams 1──* issues
 teams 1──* workflow_states
 teams 1──* cycles
 teams 1──* team_memberships
+teams 1──* team_member_roles
+teams 1──* issue_templates
 teams 1──* custom_field_definitions
+teams 0..1──* documents
 teams *──* projects (via project_teams)
 teams 0..1──* teams (parent/child)
 
 issues *──1 workflow_states (state)
-issues *──0..1 users (assignee)
+issues *──0..1 users (assignee / creator / snoozed_by)
 issues *──0..1 projects
+issues *──0..1 project_milestones
 issues *──0..1 cycles
 issues *──0..1 issues (parent)
 issues *──* issue_labels (via issue_label_assignments)
 issues 1──* comments
-issues 1──* attachments
+issues 1──* files
 issues 1──* issue_relations
-issues 1──* issue_history
+issues 1──* issue_activities
 issues 1──* notifications
 issues 1──* custom_field_values
+issues 1──* notification_subscriptions
+
+comments 1──* comment_reactions
+comments 0..1──* comments (parent → replies)
+
 custom_field_definitions 1──* custom_field_values
 
 projects 1──* project_milestones
 projects 1──* project_updates
 projects *──* users (via project_members)
+projects 0..1──* documents
 
-initiatives *──* projects (via initiative_projects)
-initiatives 0..1──* initiatives (parent/child)
+documents 0..1──* documents (parent/child)
 
-users 1──* favorites
 users 1──* notifications
+users 1──* notification_subscriptions
 users 1──* auth_tokens
+users 1──* custom_views (creator)
+users 1──* issue_templates (creator)
+users 1──* documents (creator)
 ```
 
 ---
@@ -1125,11 +1221,17 @@ additive migrations on top of it.
 ```
 prisma/
 ├── schema.prisma
-├── prisma.config.ts
+├── prisma.config.ts            -- CLI datasource url (Prisma 7)
 └── migrations/
-    ├── 20260407000000_init/            -- consolidated baseline: all pre-sprint-23 tables,
-    │                                   --   the FTS GIN index, and the partial unique index on teams(org, key)
-    └── 20260416120000_custom_fields/   -- custom_field_definitions, custom_field_values, custom_field_type enum
+    ├── 20260407000000_init/                -- consolidated baseline: all pre-Sprint-23 tables,
+    │                                       --   the FTS GIN index, and the partial unique index
+    │                                       --   on teams(organization_id, key) WHERE archived_at IS NULL
+    ├── 20260416120000_custom_fields/       -- custom_field_definitions, custom_field_values,
+    │                                       --   custom_field_type enum (Sprint 23-24)
+    ├── 20260417000001_documents/           -- documents table w/ parent hierarchy (Sprint 35-36)
+    └── 20260417000002_public_roadmaps/     -- public_roadmaps + projects.roadmap_visible (Sprint 53-54)
 ```
 
-Many of the tables described in section 2 (Favorites, Documents, Templates, Webhooks, Audit Log, Initiatives, Attachments) are **design targets** that exist in this schema document but are not yet implemented in migrations or the Prisma schema. Sections for unbuilt tables are kept here as the canonical design reference for future sprints.
+Tables tagged 📋 in §1.1 (Favorites, Initiatives, Attachments as linked
+resources, Webhooks, Audit Log) are **design targets** — kept in §2 as the
+canonical design reference for when those sprints land.
