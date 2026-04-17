@@ -13,7 +13,7 @@ export interface SlashCommandItem {
 }
 
 // Pre-load to avoid async race when the user types and immediately presses a key.
-const _slashCommandListModule = import('./slash-command-list');
+const slashCommandListModule = import('./slash-command-list');
 
 export const SLASH_COMMANDS: SlashCommandItem[] = [
   {
@@ -214,7 +214,7 @@ export const SlashCommands = Extension.create({
               command: (item: SlashCommandItem) => void;
               clientRect?: (() => DOMRect | null) | null;
             }) {
-              const { SlashCommandList } = await _slashCommandListModule;
+              const { SlashCommandList } = await slashCommandListModule;
               popup = document.createElement('div');
               popup.style.cssText =
                 'position:fixed;z-index:9999;pointer-events:auto;';

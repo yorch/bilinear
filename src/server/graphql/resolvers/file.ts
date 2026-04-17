@@ -3,6 +3,10 @@ import { join } from 'node:path';
 import { GraphQLError } from 'graphql';
 import { getUploadDir } from '../../lib/upload-dir';
 import { requireAuth } from '../../middleware/auth';
+import {
+  FileForbiddenError,
+  FileNotFoundError,
+} from '../../services/file.service';
 import type { GraphQLContext } from '../context';
 
 export const fileResolvers = {
@@ -21,23 +25,22 @@ export const fileResolvers = {
     ) => {
       requireAuth(ctx);
 
-      const file = await ctx.prisma.file.findUnique({
-        where: { id: args.id },
-      });
-      if (!file) {
-        throw new GraphQLError('File not found', {
-          extensions: { code: 'NOT_FOUND' },
+      // deleteFile checks existence and ownership; returns the deleted record.
+      const file = await ctx.services.file
+        .deleteFile(args.id, ctx.userId)
+        .catch(err => {
+          if (err instanceof FileNotFoundError) {
+            throw new GraphQLError('File not found', {
+              extensions: { code: 'NOT_FOUND' },
+            });
+          }
+          if (err instanceof FileForbiddenError) {
+            throw new GraphQLError('Forbidden', {
+              extensions: { code: 'FORBIDDEN' },
+            });
+          }
+          throw err;
         });
-      }
-      if (file.uploaderId !== ctx.userId) {
-        throw new GraphQLError('Forbidden', {
-          extensions: { code: 'FORBIDDEN' },
-        });
-      }
-
-      // Delete from DB before creating the sync action so state stays consistent
-      // if the sync action write fails.
-      await ctx.services.file.deleteFile(args.id, ctx.userId);
 
       const lastSyncId = await ctx.services.sync.createSyncAction(
         ctx.orgId,

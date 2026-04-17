@@ -6,15 +6,22 @@ import type { NodeViewProps } from '@tiptap/react';
 import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import { useEffect, useRef, useState } from 'react';
 
-let mermaidInitialized = false;
-
 // Mermaid is large — lazy-load it only when a diagram is first rendered.
+// Cache the promise so initialize() only runs once even under concurrent renders.
+let mermaidReady: ReturnType<typeof loadMermaid> | null = null;
+
+function loadMermaid() {
+  return import('mermaid').then(m => {
+    m.default.initialize({ startOnLoad: false, theme: 'neutral' });
+    return m.default;
+  });
+}
+
 async function renderMermaid(code: string, id: string): Promise<string> {
-  const mermaid = (await import('mermaid')).default;
-  if (!mermaidInitialized) {
-    mermaid.initialize({ startOnLoad: false, theme: 'neutral' });
-    mermaidInitialized = true;
+  if (!mermaidReady) {
+    mermaidReady = loadMermaid();
   }
+  const mermaid = await mermaidReady;
   const { svg } = await mermaid.render(id, code);
   return svg;
 }

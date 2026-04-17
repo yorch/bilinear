@@ -12,6 +12,10 @@ import { FileService } from '@/server/services/file.service';
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 
+// Ensure the directory exists once at module load rather than on every request.
+const uploadDir = getUploadDir();
+mkdirSync(uploadDir, { recursive: true });
+
 function getAppUrl(): string {
   return (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 }
@@ -66,32 +70,33 @@ export async function POST(req: NextRequest) {
   const issueId = formData.get('issueId');
   const projectId = formData.get('projectId');
 
-  // Verify the caller can attach to the given issue/project.
-  if (typeof issueId === 'string') {
-    const issue = await prisma.issue.findUnique({
-      select: { organizationId: true },
-      where: { id: issueId },
-    });
-    if (!issue || issue.organizationId !== orgId) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-  }
-  if (typeof projectId === 'string') {
-    const project = await prisma.project.findUnique({
-      select: { organizationId: true },
-      where: { id: projectId },
-    });
-    if (!project || project.organizationId !== orgId) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+  // Verify the caller can attach to the given issue/project (parallel lookups).
+  const [issueOk, projectOk] = await Promise.all([
+    typeof issueId === 'string'
+      ? prisma.issue
+          .findUnique({
+            select: { organizationId: true },
+            where: { id: issueId },
+          })
+          .then(r => r?.organizationId === orgId)
+      : true,
+    typeof projectId === 'string'
+      ? prisma.project
+          .findUnique({
+            select: { organizationId: true },
+            where: { id: projectId },
+          })
+          .then(r => r?.organizationId === orgId)
+      : true,
+  ]);
+
+  if (!issueOk || !projectOk) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const id = randomUUID();
   const ext = file.name.includes('.') ? `.${file.name.split('.').pop()}` : '';
   const key = `${id}${ext}`;
-
-  const uploadDir = getUploadDir();
-  mkdirSync(uploadDir, { recursive: true });
   const filePath = join(uploadDir, key);
 
   try {
