@@ -1,23 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { createWriteStream, mkdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { verifyAccessToken } from '@/server/lib/jwt';
 import { prisma } from '@/server/lib/prisma';
+import { getUploadDir } from '@/server/lib/upload-dir';
 import { FileService } from '@/server/services/file.service';
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
-
-function getUploadDir(): string {
-  const dir = process.env.UPLOAD_DIR
-    ? resolve(process.env.UPLOAD_DIR)
-    : resolve(process.cwd(), 'uploads');
-  mkdirSync(dir, { recursive: true });
-  return dir;
-}
 
 function getAppUrl(): string {
   return (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
@@ -44,8 +37,9 @@ export async function POST(req: NextRequest) {
   }
 
   let userId: string;
+  let orgId: string;
   try {
-    ({ userId } = await verifyAccessToken(token));
+    ({ userId, orgId } = await verifyAccessToken(token));
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -72,16 +66,38 @@ export async function POST(req: NextRequest) {
   const issueId = formData.get('issueId');
   const projectId = formData.get('projectId');
 
+  // Verify the caller can attach to the given issue/project.
+  if (typeof issueId === 'string') {
+    const issue = await prisma.issue.findUnique({
+      select: { organizationId: true },
+      where: { id: issueId },
+    });
+    if (!issue || issue.organizationId !== orgId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+  }
+  if (typeof projectId === 'string') {
+    const project = await prisma.project.findUnique({
+      select: { organizationId: true },
+      where: { id: projectId },
+    });
+    if (!project || project.organizationId !== orgId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+  }
+
   const id = randomUUID();
   const ext = file.name.includes('.') ? `.${file.name.split('.').pop()}` : '';
   const key = `${id}${ext}`;
 
   const uploadDir = getUploadDir();
+  mkdirSync(uploadDir, { recursive: true });
   const filePath = join(uploadDir, key);
 
   try {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const readable = Readable.from(buffer);
+    const readable = Readable.fromWeb(
+      file.stream() as Parameters<typeof Readable.fromWeb>[0],
+    );
     const writable = createWriteStream(filePath);
     await pipeline(readable, writable);
   } catch {

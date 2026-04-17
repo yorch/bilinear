@@ -51,7 +51,9 @@ export const SlashCommandList = forwardRef<
         }
         if (event.key === 'Enter') {
           const item = items[selectedIndex];
-          if (item) command(item);
+          if (item) {
+            command(item);
+          }
           return true;
         }
         return false;
@@ -74,7 +76,7 @@ export const SlashCommandList = forwardRef<
       className="slash-popup max-h-72 w-64 overflow-y-auto rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
     >
       {items.map((item, index) => (
-        <li key={item.title}>
+        <li key={item.id}>
           <button
             type="button"
             onMouseDown={e => {

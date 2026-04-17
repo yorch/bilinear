@@ -34,7 +34,7 @@ export const Details = Node.create({
                 content: [{ text: 'Summary', type: 'text' }],
                 type: 'detailsSummary',
               },
-              { content: [{ type: 'paragraph' }], type: 'blockquote' },
+              { type: 'paragraph' },
             ],
             type: this.name,
           });

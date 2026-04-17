@@ -1,23 +1,15 @@
 import { unlink } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { GraphQLError } from 'graphql';
+import { getUploadDir } from '../../lib/upload-dir';
 import { requireAuth } from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
-
-function getUploadDir(): string {
-  return process.env.UPLOAD_DIR
-    ? resolve(process.env.UPLOAD_DIR)
-    : resolve(process.cwd(), 'uploads');
-}
 
 export const fileResolvers = {
   Issue: {
     files: (parent: { id: string }, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
-      return ctx.prisma.file.findMany({
-        orderBy: { createdAt: 'asc' },
-        where: { issueId: parent.id },
-      });
+      return ctx.services.file.getIssueFiles(parent.id);
     },
   },
 
@@ -43,6 +35,10 @@ export const fileResolvers = {
         });
       }
 
+      // Delete from DB before creating the sync action so state stays consistent
+      // if the sync action write fails.
+      await ctx.services.file.deleteFile(args.id, ctx.userId);
+
       const lastSyncId = await ctx.services.sync.createSyncAction(
         ctx.orgId,
         'D',
@@ -50,8 +46,6 @@ export const fileResolvers = {
         file.id,
         {},
       );
-
-      await ctx.prisma.file.delete({ where: { id: args.id } });
 
       // Best-effort: delete the physical file (ignore errors if already gone).
       try {
@@ -69,10 +63,7 @@ export const fileResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      return ctx.prisma.file.findMany({
-        orderBy: { createdAt: 'asc' },
-        where: { issueId: args.issueId },
-      });
+      return ctx.services.file.getIssueFiles(args.issueId);
     },
   },
 };

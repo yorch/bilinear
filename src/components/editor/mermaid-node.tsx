@@ -3,17 +3,18 @@
 import type { CommandProps } from '@tiptap/core';
 import { mergeAttributes, Node } from '@tiptap/core';
 import type { NodeViewProps } from '@tiptap/react';
-import {
-  NodeViewContent,
-  NodeViewWrapper,
-  ReactNodeViewRenderer,
-} from '@tiptap/react';
+import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import { useEffect, useRef, useState } from 'react';
+
+let mermaidInitialized = false;
 
 // Mermaid is large — lazy-load it only when a diagram is first rendered.
 async function renderMermaid(code: string, id: string): Promise<string> {
   const mermaid = (await import('mermaid')).default;
-  mermaid.initialize({ startOnLoad: false, theme: 'neutral' });
+  if (!mermaidInitialized) {
+    mermaid.initialize({ startOnLoad: false, theme: 'neutral' });
+    mermaidInitialized = true;
+  }
   const { svg } = await mermaid.render(id, code);
   return svg;
 }
@@ -26,7 +27,9 @@ function MermaidView({ node, updateAttributes, selected }: NodeViewProps) {
   const idRef = useRef(`mermaid-${Math.random().toString(36).slice(2)}`);
 
   useEffect(() => {
-    if (!code) return;
+    if (!code) {
+      return;
+    }
     renderMermaid(code, idRef.current)
       .then(result => {
         setSvg(result);
@@ -52,9 +55,10 @@ function MermaidView({ node, updateAttributes, selected }: NodeViewProps) {
             placeholder={'graph TD\n  A --> B'}
             onBlur={e => {
               updateAttributes({ code: e.target.value });
-              if (e.target.value) setEditing(false);
+              if (e.target.value) {
+                setEditing(false);
+              }
             }}
-            autoFocus
           />
         </div>
       </NodeViewWrapper>
@@ -82,8 +86,6 @@ function MermaidView({ node, updateAttributes, selected }: NodeViewProps) {
           <div dangerouslySetInnerHTML={{ __html: svg }} />
         )}
       </button>
-      {/* Hidden content node keeps ProseMirror happy */}
-      <NodeViewContent className="hidden" />
     </NodeViewWrapper>
   );
 }
@@ -112,7 +114,6 @@ export const MermaidNode = Node.create({
     return ReactNodeViewRenderer(MermaidView);
   },
   atom: true,
-  content: 'text*',
   defining: true,
   group: 'block',
   marks: '',

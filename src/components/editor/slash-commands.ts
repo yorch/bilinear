@@ -5,59 +5,71 @@ import Suggestion from '@tiptap/suggestion';
 import type { SlashCommandListHandle } from './slash-command-list';
 
 export interface SlashCommandItem {
+  id: string;
   title: string;
   description: string;
   icon: string;
   command: (editor: Editor) => void;
 }
 
+// Pre-load to avoid async race when the user types and immediately presses a key.
+const _slashCommandListModule = import('./slash-command-list');
+
 export const SLASH_COMMANDS: SlashCommandItem[] = [
   {
     command: editor => editor.chain().focus().toggleHeading({ level: 1 }).run(),
     description: 'Large section heading',
     icon: 'H1',
+    id: 'heading1',
     title: 'Heading 1',
   },
   {
     command: editor => editor.chain().focus().toggleHeading({ level: 2 }).run(),
     description: 'Medium section heading',
     icon: 'H2',
+    id: 'heading2',
     title: 'Heading 2',
   },
   {
     command: editor => editor.chain().focus().toggleHeading({ level: 3 }).run(),
     description: 'Small section heading',
     icon: 'H3',
+    id: 'heading3',
     title: 'Heading 3',
   },
   {
     command: editor => editor.chain().focus().toggleBulletList().run(),
     description: 'Unordered list',
     icon: '•',
+    id: 'bullet-list',
     title: 'Bullet List',
   },
   {
     command: editor => editor.chain().focus().toggleOrderedList().run(),
     description: 'Ordered list',
     icon: '1.',
+    id: 'numbered-list',
     title: 'Numbered List',
   },
   {
     command: editor => editor.chain().focus().toggleTaskList().run(),
     description: 'Todo list with checkboxes',
     icon: '☐',
+    id: 'task-list',
     title: 'Task List',
   },
   {
     command: editor => editor.chain().focus().toggleCodeBlock().run(),
     description: 'Code block with syntax highlighting',
     icon: '</>',
+    id: 'code-block',
     title: 'Code Block',
   },
   {
     command: editor => editor.chain().focus().toggleBlockquote().run(),
     description: 'Highlight a quote',
     icon: '❝',
+    id: 'blockquote',
     title: 'Blockquote',
   },
   {
@@ -69,12 +81,14 @@ export const SLASH_COMMANDS: SlashCommandItem[] = [
         .run(),
     description: 'Insert a table',
     icon: '⊞',
+    id: 'table',
     title: 'Table',
   },
   {
     command: editor => editor.chain().focus().setHorizontalRule().run(),
     description: 'Horizontal divider line',
     icon: '—',
+    id: 'divider',
     title: 'Divider',
   },
   {
@@ -89,6 +103,7 @@ export const SLASH_COMMANDS: SlashCommandItem[] = [
         .run(),
     description: 'Collapsible section',
     icon: '▶',
+    id: 'toggle',
     title: 'Toggle',
   },
   {
@@ -102,6 +117,7 @@ export const SLASH_COMMANDS: SlashCommandItem[] = [
         .run(),
     description: 'Embed a YouTube or Loom video',
     icon: '▷',
+    id: 'embed',
     title: 'Embed',
   },
   {
@@ -115,6 +131,7 @@ export const SLASH_COMMANDS: SlashCommandItem[] = [
         .run(),
     description: 'Mermaid diagram block',
     icon: '⬡',
+    id: 'diagram',
     title: 'Diagram',
   },
 ];
@@ -129,12 +146,16 @@ function positionPopup(
   clientRect: (() => DOMRect | null) | null | undefined,
 ) {
   const rect = clientRect?.();
-  if (!rect) return;
+  if (!rect) {
+    return;
+  }
   const vw = window.innerWidth;
   const vh = window.innerHeight;
 
   let top = rect.bottom + POPUP_GAP;
-  if (top + POPUP_H > vh) top = rect.top - POPUP_H - POPUP_GAP;
+  if (top + POPUP_H > vh) {
+    top = rect.top - POPUP_H - POPUP_GAP;
+  }
   const left = Math.min(rect.left, vw - POPUP_W - POPUP_GAP);
 
   popup.style.top = `${Math.max(0, top)}px`;
@@ -170,14 +191,6 @@ export const SlashCommands = Extension.create({
           let component: ReactRenderer<SlashCommandListHandle> | null = null;
           let popup: HTMLDivElement | null = null;
 
-          // Lazy-import to avoid a circular dep at module evaluation time.
-          // The component module is already bundled — this just defers the
-          // require() call until the first keystroke.
-          const getListComponent = async () => {
-            const mod = await import('./slash-command-list');
-            return mod.SlashCommandList;
-          };
-
           return {
             onExit() {
               component?.destroy();
@@ -201,7 +214,7 @@ export const SlashCommands = Extension.create({
               command: (item: SlashCommandItem) => void;
               clientRect?: (() => DOMRect | null) | null;
             }) {
-              const SlashCommandList = await getListComponent();
+              const { SlashCommandList } = await _slashCommandListModule;
               popup = document.createElement('div');
               popup.style.cssText =
                 'position:fixed;z-index:9999;pointer-events:auto;';
@@ -223,7 +236,9 @@ export const SlashCommands = Extension.create({
                 command: props.command,
                 items: props.items,
               });
-              if (popup) positionPopup(popup, props.clientRect);
+              if (popup) {
+                positionPopup(popup, props.clientRect);
+              }
             },
           };
         },
