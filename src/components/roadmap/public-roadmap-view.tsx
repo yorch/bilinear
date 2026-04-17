@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useRef } from 'react';
+import { Suspense, useRef } from 'react';
 
 interface RoadmapProject {
   color: string;
@@ -122,7 +122,15 @@ export function PublicRoadmapView({
   roadmap,
 }: Props) {
   if (requiresPassword) {
-    return <PasswordForm slug={roadmap.slug} />;
+    return (
+      <Suspense
+        fallback={
+          <div className="flex min-h-screen items-center justify-center" />
+        }
+      >
+        <PasswordForm slug={roadmap.slug} />
+      </Suspense>
+    );
   }
 
   return (

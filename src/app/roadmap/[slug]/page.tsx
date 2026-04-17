@@ -1,8 +1,8 @@
-import crypto from 'node:crypto';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { PublicRoadmapView } from '@/components/roadmap/public-roadmap-view';
 import { prisma } from '@/server/lib/prisma';
+import { verifyRoadmapPassword } from '@/server/services/roadmap.service';
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -16,10 +16,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return { title: 'Roadmap not found' };
   }
   return { title: roadmap.title };
-}
-
-function hashPassword(value: string): string {
-  return crypto.createHash('sha256').update(value).digest('hex');
 }
 
 export default async function PublicRoadmapPage({
@@ -51,7 +47,7 @@ export default async function PublicRoadmapPage({
 
   if (!requiresPassword) {
     if (roadmap.passwordHash && password) {
-      const valid = hashPassword(password) === roadmap.passwordHash;
+      const valid = await verifyRoadmapPassword(roadmap.passwordHash, password);
       if (!valid) {
         return (
           <PublicRoadmapView

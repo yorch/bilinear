@@ -3,9 +3,10 @@
 import { FileText, Plus } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { useMemo } from 'react';
-import { TransactionQueue } from '@/lib/transaction-queue';
+import { useParams, useRouter } from 'next/navigation';
+import { useMemo, useState } from 'react';
+import { gql } from '@/lib/graphql';
+import { toast } from '@/lib/toast';
 import { useStore } from '@/providers/store-provider';
 
 interface DocumentListProps {
@@ -18,9 +19,9 @@ export const DocumentList = observer(function DocumentList({
   projectId,
 }: DocumentListProps) {
   const { workspace } = useParams<{ workspace: string }>();
+  const router = useRouter();
   const { documentStore } = useStore();
-
-  const txQueue = useMemo(() => new TransactionQueue(), []);
+  const [creating, setCreating] = useState(false);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: MobX pool.size triggers re-computation when documents change
   const documents = useMemo(() => {
@@ -33,25 +34,35 @@ export const DocumentList = observer(function DocumentList({
     return documentStore.all;
   }, [documentStore, teamId, projectId, documentStore.pool.size]);
 
-  const handleNewDocument = () => {
-    txQueue.enqueue(
-      `mutation DocumentCreate($input: DocumentCreateInput!) {
-        documentCreate(input: $input) {
-          success
-          lastSyncId
-          document { id title }
-        }
-      }`,
-      {
-        input: {
-          icon: null,
-          projectId: projectId ?? null,
-          teamId: teamId ?? null,
-          title: 'Untitled',
+  const handleNewDocument = async () => {
+    setCreating(true);
+    try {
+      const result = await gql(
+        `mutation DocumentCreate($input: DocumentCreateInput!) {
+          documentCreate(input: $input) {
+            success
+            document { id }
+          }
+        }`,
+        {
+          input: {
+            projectId: projectId ?? null,
+            teamId: teamId ?? null,
+            title: 'Untitled',
+          },
         },
-      },
-      {},
-    );
+      );
+      const id = (
+        result.data as { documentCreate?: { document?: { id: string } } }
+      )?.documentCreate?.document?.id;
+      if (id) {
+        router.push(`/${workspace}/docs/${id}`);
+      }
+    } catch {
+      toast.error('Failed to create document');
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -62,11 +73,12 @@ export const DocumentList = observer(function DocumentList({
         </h2>
         <button
           type="button"
+          disabled={creating}
           onClick={handleNewDocument}
-          className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+          className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
         >
           <Plus className="h-3 w-3" />
-          New Document
+          {creating ? 'Creating…' : 'New Document'}
         </button>
       </div>
 
@@ -76,10 +88,11 @@ export const DocumentList = observer(function DocumentList({
           <p className="text-sm">No documents yet</p>
           <button
             type="button"
+            disabled={creating}
             onClick={handleNewDocument}
-            className="text-xs text-indigo-500 hover:text-indigo-600"
+            className="text-xs text-indigo-500 hover:text-indigo-600 disabled:opacity-50"
           >
-            Create your first document
+            {creating ? 'Creating…' : 'Create your first document'}
           </button>
         </div>
       ) : (

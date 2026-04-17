@@ -1,4 +1,5 @@
-import crypto from 'node:crypto';
+import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
 import type { PrismaClient, PublicRoadmap } from '../../generated/prisma';
 
 export interface RoadmapUpsertInput {
@@ -30,8 +31,25 @@ export class RoadmapSlugConflictError extends Error {
   }
 }
 
-function hashPassword(value: string): string {
-  return crypto.createHash('sha256').update(value).digest('hex');
+const scryptAsync = promisify(scrypt);
+const KEY_LEN = 64;
+
+// Stores as "salt:derivedKeyHex" using scrypt (memory-hard, timing-safe)
+export async function hashRoadmapPassword(password: string): Promise<string> {
+  const salt = randomBytes(16).toString('hex');
+  const key = (await scryptAsync(password, salt, KEY_LEN)) as Buffer;
+  return `${salt}:${key.toString('hex')}`;
+}
+
+export async function verifyRoadmapPassword(
+  stored: string,
+  candidate: string,
+): Promise<boolean> {
+  const [salt, keyHex] = stored.split(':');
+  if (!salt || !keyHex) return false;
+  const storedKey = Buffer.from(keyHex, 'hex');
+  const candidateKey = (await scryptAsync(candidate, salt, KEY_LEN)) as Buffer;
+  return timingSafeEqual(storedKey, candidateKey);
 }
 
 export class RoadmapService {
@@ -54,7 +72,7 @@ export class RoadmapService {
     }
 
     if (roadmap.passwordHash && password) {
-      const valid = this.verifyPasswordHash(roadmap.passwordHash, password);
+      const valid = await verifyRoadmapPassword(roadmap.passwordHash, password);
       if (!valid) {
         throw new RoadmapPasswordError();
       }
@@ -107,7 +125,9 @@ export class RoadmapService {
     let passwordHash: string | null | undefined;
     if (input.password !== undefined) {
       passwordHash =
-        input.password === '' ? null : hashPassword(input.password);
+        input.password === ''
+          ? null
+          : await hashRoadmapPassword(input.password);
     }
 
     const existing = await this.findByOrgId(orgId);
@@ -140,14 +160,11 @@ export class RoadmapService {
     });
   }
 
-  verifyPassword(roadmap: PublicRoadmap, password: string): boolean {
-    if (!roadmap.passwordHash) {
-      return true;
-    }
-    return this.verifyPasswordHash(roadmap.passwordHash, password);
-  }
-
-  private verifyPasswordHash(hash: string, password: string): boolean {
-    return hashPassword(password) === hash;
+  async verifyPassword(
+    roadmap: PublicRoadmap,
+    password: string,
+  ): Promise<boolean> {
+    if (!roadmap.passwordHash) return true;
+    return verifyRoadmapPassword(roadmap.passwordHash, password);
   }
 }

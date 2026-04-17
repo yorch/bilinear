@@ -1,7 +1,7 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TipTapEditor } from '@/components/editor/tiptap-editor';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
@@ -18,18 +18,22 @@ export const DocumentEditor = observer(function DocumentEditor({
 
   const doc = documentStore.findById(documentId);
 
+  // Controlled local title — initialised from store, updated on remote sync via key reset
+  const [localTitle, setLocalTitle] = useState(doc?.title ?? '');
+
+  // Sync title from store when a remote update arrives (different doc or external edit)
+  useEffect(() => {
+    if (doc?.title !== undefined) {
+      setLocalTitle(doc.title);
+    }
+  }, [doc?.title]);
+
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleContentChange = useCallback(
     (html: string) => {
-      if (!doc) {
-        return;
-      }
-
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-
+      if (!doc) return;
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(() => {
         txQueue.enqueue(
           `mutation DocumentUpdate($id: ID!, $input: DocumentUpdateInput!) {
@@ -50,11 +54,8 @@ export const DocumentEditor = observer(function DocumentEditor({
   const handleTitleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const title = e.target.value;
-
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-
+      setLocalTitle(title);
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(() => {
         txQueue.enqueue(
           `mutation DocumentUpdate($id: ID!, $input: DocumentUpdateInput!) {
@@ -74,9 +75,7 @@ export const DocumentEditor = observer(function DocumentEditor({
 
   useEffect(() => {
     return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, []);
 
@@ -93,7 +92,7 @@ export const DocumentEditor = observer(function DocumentEditor({
       <div className="border-b border-zinc-200 px-8 py-4 dark:border-zinc-800">
         <input
           type="text"
-          defaultValue={doc.title}
+          value={localTitle}
           onChange={handleTitleChange}
           placeholder="Untitled"
           className="w-full bg-transparent text-2xl font-bold text-zinc-900 placeholder-zinc-300 outline-none dark:text-zinc-100 dark:placeholder-zinc-600"

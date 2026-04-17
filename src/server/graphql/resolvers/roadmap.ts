@@ -77,15 +77,11 @@ export const roadmapResolvers = {
           org?.urlKey ?? ctx.orgId,
           input,
         );
-        const sync = await ctx.services.sync.createSyncAction(
-          ctx.orgId,
-          'U',
-          'PublicRoadmap',
-          roadmap.id,
-          roadmap,
-        );
+        // PublicRoadmap is a workspace-only setting — no client-side sync store.
+        // Return the current lastSyncId without creating a spurious sync action.
+        const lastSyncId = await ctx.services.sync.getLastSyncId(ctx.orgId);
         return {
-          lastSyncId: sync.id.toString(),
+          lastSyncId: lastSyncId.toString(),
           roadmap: { ...roadmap, hasPassword: !!roadmap.passwordHash },
           success: true,
         };
@@ -133,7 +129,10 @@ export const roadmapResolvers = {
       const requiresPassword = !!roadmap.passwordHash && !password;
 
       if (roadmap.passwordHash && password) {
-        const valid = ctx.services.roadmap.verifyPassword(roadmap, password);
+        const valid = await ctx.services.roadmap.verifyPassword(
+          roadmap,
+          password,
+        );
         if (!valid) {
           throw new GraphQLError('Invalid password', {
             extensions: { code: 'FORBIDDEN' },

@@ -132,14 +132,8 @@ export const documentResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-
       const document = await ctx.services.document.findById(id);
-      if (!document || document.organizationId !== ctx.orgId) {
-        throw new GraphQLError('Document not found', {
-          extensions: { code: 'NOT_FOUND' },
-        });
-      }
-
+      if (!document || document.organizationId !== ctx.orgId) return null;
       return document;
     },
 
