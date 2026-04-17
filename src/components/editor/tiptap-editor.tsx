@@ -233,6 +233,7 @@ export function TipTapEditor({
       },
     },
     extensions,
+    immediatelyRender: false,
     onBlur: () => onBlur?.(),
     onUpdate: ({ editor: ed }) => {
       onChangeRef.current?.(ed.getHTML());

@@ -127,6 +127,11 @@ export function GroupSection({
             renderItem={renderItem}
             itemHeight={itemHeight}
           />
+        ) : items !== undefined && renderItem !== undefined ? (
+          items.map((item, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: items are stable within a group; no stable key available at this layer
+            <div key={i}>{renderItem(item, i)}</div>
+          ))
         ) : (
           children
         ))}

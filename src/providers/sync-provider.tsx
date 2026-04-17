@@ -18,6 +18,9 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    // Keep a local ref so cleanup can stop the manager even if the ref
+    // assignment races with StrictMode's unmount/remount cycle.
+    let localManager: SyncManager | null = null;
 
     async function init() {
       // Fetch the current access token from the session endpoint
@@ -37,6 +40,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
       const wsClient = new WsClient();
       const syncManager = new SyncManager(store, wsClient);
+      localManager = syncManager;
       syncManagerRef.current = syncManager;
 
       await syncManager.start(data.token);
@@ -48,7 +52,10 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       cancelled = true;
-      syncManagerRef.current?.stop();
+      // Stop via local ref to handle the race where cleanup fires before
+      // syncManagerRef.current is assigned (React StrictMode double-invoke).
+      (localManager ?? syncManagerRef.current)?.stop();
+      localManager = null;
     };
   }, [store]);
 

@@ -24,7 +24,7 @@
     "db:reset": "prisma migrate reset",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
-    "ws:server": "tsx src/server/ws/index.ts",
+    "ws:server": "tsx --env-file=.env src/server/ws/index.ts",
     "analyze": "ANALYZE=true next build",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
