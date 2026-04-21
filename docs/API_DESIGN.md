@@ -17,6 +17,7 @@ code. A section at the end lists planned-but-unshipped surface.
 | -------------- | ---------------------------------------------------------------------- |
 | GraphQL        | `POST /api/graphql` (Apollo Server v4 on a Next.js route handler)      |
 | Auth           | HTTP-only cookie pair (`access_token`, `refresh_token`) set by auth mutations. The WebSocket reads `access_token` from the query string. |
+| Session cookies | `POST /api/auth/session` installs the cookie pair from a GraphQL auth result; `GET` returns the current access token (for the WS handshake); `DELETE` clears both cookies (logout). |
 | Pagination     | Relay-style `Connection` / `Edge` / `PageInfo` on `IssueConnection`, `IssueLabelConnection`, `ProjectConnection` only. All other list queries return plain `[T!]!`. |
 | Sync bootstrap | `GET /api/sync/bootstrap` (REST) — returns all entities the signed-in user can see, plus the current `lastSyncId`. |
 | Sync delta     | `GET /api/sync/delta?lastSyncId=<n>` (REST) — catches up missed SyncActions. |
@@ -143,6 +144,7 @@ catches service-layer exceptions and remaps them:
 | `BAD_USER_INPUT`  | Validation failure (service-level errors, Zod parse miss) |
 | `INVALID_CODE`    | Magic link code wrong / expired                           |
 | `INVALID_TOKEN`   | Refresh token invalid / reused                            |
+| `OAUTH_ERROR`     | Google OAuth token exchange failed or returned no identity |
 | `RATELIMITED`     | Over the rate-limit budget (§12)                          |
 
 Clients key off `extensions.code`, not the human-readable message.
@@ -1052,11 +1054,12 @@ S3-compatible storage via the `FileService`.
 
 ## 11. TipTap JSON in bodyData
 
-`Comment.bodyData`, `ProjectUpdate.bodyData`, and `Document.contentData` carry
-the TipTap ProseMirror document tree as `JSON`. The TipTap extension set is
-aligned between client and server (see `src/lib/editor/` and
-`src/server/lib/tiptap-schema.ts`) so the server can render to markdown for
-search indexing.
+`Comment.bodyData` and `ProjectUpdate.bodyData` carry the TipTap ProseMirror
+document tree as `JSON`. The TipTap extension set is aligned between client
+and server (see `src/lib/editor/` and `src/server/lib/tiptap-schema.ts`) so
+the server can render to markdown for search indexing. `Document.content` is
+stored as a single opaque string today — a structured JSON column existed
+briefly but was unused and has been dropped (see DATABASE_SCHEMA §2.19).
 
 ---
 

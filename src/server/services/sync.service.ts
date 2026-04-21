@@ -1,5 +1,8 @@
 import type { Redis } from 'ioredis';
 import type { PrismaClient, SyncAction } from '../../generated/prisma';
+import { childLogger } from '../lib/logger';
+
+const log = childLogger({ module: 'sync' });
 
 export type SyncActionType = 'I' | 'U' | 'D' | 'A';
 
@@ -31,7 +34,7 @@ export class SyncService {
       .publish(`sync:${orgId}`, JSON.stringify(serializeSyncAction(syncAction)))
       .catch(err => {
         // Non-fatal: Redis publish failure should not break the mutation
-        console.error('[SyncService] Redis publish error:', err);
+        log.error({ err, orgId }, 'Redis publish error');
       });
 
     return syncAction;

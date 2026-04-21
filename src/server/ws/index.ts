@@ -14,7 +14,10 @@ import { createServer } from 'node:http';
 import Redis from 'ioredis';
 import { type WebSocket, WebSocketServer } from 'ws';
 import { verifyAccessToken } from '@/server/lib/jwt';
+import { childLogger } from '@/server/lib/logger';
 import { ConnectionManager } from './connection-manager';
+
+const log = childLogger({ module: 'ws' });
 
 const PORT = Number(process.env.WS_PORT ?? 3001);
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
@@ -22,7 +25,7 @@ const PING_INTERVAL_MS = 30_000;
 
 // verifyAccessToken() reads JWT_SECRET via getSecret() and throws if unset
 if (!process.env.JWT_SECRET) {
-  console.error('[ws] JWT_SECRET is not set — cannot verify tokens');
+  log.fatal('JWT_SECRET is not set — cannot verify tokens');
   process.exit(1);
 }
 
@@ -41,7 +44,7 @@ async function ensureOrgSubscription(orgId: string) {
   // Add to set only after a successful subscribe to avoid masking future retries
   await redisSubscriber.subscribe(`sync:${orgId}`);
   subscribedOrgs.add(orgId);
-  console.log(`[ws] Subscribed to Redis channel sync:${orgId}`);
+  log.info({ orgId }, 'Subscribed to Redis channel');
 }
 
 redisSubscriber.on('message', (channel: string, message: string) => {
@@ -52,7 +55,7 @@ redisSubscriber.on('message', (channel: string, message: string) => {
 });
 
 redisSubscriber.on('error', (err: Error) => {
-  console.error('[ws] Redis subscriber error:', err);
+  log.error({ err }, 'Redis subscriber error');
 });
 
 // ─── HTTP + WS server ────────────────────────────────────────────────────────
@@ -91,8 +94,9 @@ wss.on('connection', async (ws: WebSocket, req) => {
   const clientInfo = connectionManager.add(orgId, userId, ws);
   await ensureOrgSubscription(orgId);
 
-  console.log(
-    `[ws] Client connected — org:${orgId} user:${userId} total:${connectionManager.clientCount()}`,
+  log.info(
+    { orgId, total: connectionManager.clientCount(), userId },
+    'Client connected',
   );
 
   // Send initial connection ack
@@ -119,27 +123,25 @@ wss.on('connection', async (ws: WebSocket, req) => {
   ws.on('close', () => {
     clearInterval(pingTimer);
     const orgEmpty = connectionManager.remove(clientInfo);
-    console.log(
-      `[ws] Client disconnected — org:${orgId} user:${userId} total:${connectionManager.clientCount()}`,
+    log.info(
+      { orgId, total: connectionManager.clientCount(), userId },
+      'Client disconnected',
     );
     if (orgEmpty) {
       subscribedOrgs.delete(orgId);
       redisSubscriber.unsubscribe(`sync:${orgId}`).catch((err: Error) => {
-        console.error(
-          `[ws] Failed to unsubscribe from sync:${orgId}:`,
-          err.message,
-        );
+        log.error({ err, orgId }, 'Failed to unsubscribe from Redis channel');
       });
     }
   });
 
   ws.on('error', (err: Error) => {
-    console.error(`[ws] Client error — org:${orgId}:`, err.message);
+    log.error({ err, orgId }, 'Client error');
   });
 });
 
 httpServer.listen(PORT, () => {
-  console.log(`[ws] WebSocket server listening on port ${PORT}`);
+  log.info({ port: PORT }, 'WebSocket server listening');
 });
 
 // Graceful shutdown

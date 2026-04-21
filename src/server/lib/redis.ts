@@ -1,4 +1,7 @@
 import Redis from 'ioredis';
+import { childLogger } from './logger';
+
+const log = childLogger({ module: 'redis' });
 
 const globalForRedis = globalThis as unknown as {
   redis: Redis | undefined;
@@ -12,7 +15,7 @@ function createRedisClient() {
   });
 
   client.on('error', err => {
-    console.error('[Redis] Connection error:', err);
+    log.error({ err }, 'Connection error');
   });
 
   return client;

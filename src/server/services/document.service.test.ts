@@ -15,7 +15,6 @@ const DOC_ID = '00000000-0000-0000-0000-000000000200';
 const TEST_DOC = {
   archivedAt: null,
   content: null,
-  contentData: null,
   createdAt: new Date('2026-04-17T00:00:00Z'),
   creatorId: USER_ID,
   icon: null,
