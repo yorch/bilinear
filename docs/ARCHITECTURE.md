@@ -483,7 +483,7 @@ type Mutation {
   # Auth
   emailLogin(input: EmailLoginInput!): EmailLoginPayload!
   emailVerify(input: EmailVerifyInput!): AuthPayload!
-  googleAuthExchange(code: String!, redirectUri: String!): AuthPayload!
+  googleAuthExchange(code: String!, state: String!): AuthPayload!
   tokenRefresh(refreshToken: String!): AuthPayload!
   logout: LogoutPayload!
 
@@ -629,11 +629,13 @@ Email Magic Link:
   7. Client POSTs tokens to /api/auth/session → server sets httpOnly cookies
 
 Google OAuth:
-  1. Client redirects to Google OAuth consent screen
-  2. Google redirects to /auth/google/callback with authorization code
-  3. googleAuthExchange GraphQL mutation — server exchanges code for Google tokens
-  4. Server creates or links user account
-  5. Returns access + refresh tokens (same cookie flow as above)
+  1. Client calls googleAuthStart query — server returns the consent URL
+     (with server-controlled redirect_uri) and a signed `state` CSRF token
+  2. Client persists state in sessionStorage and redirects browser to url
+  3. Google redirects to /auth/google/callback with code + state
+  4. googleAuthExchange GraphQL mutation — server verifies state JWT, then
+     exchanges code with Google using the same server-controlled redirect_uri
+  5. Server creates or links user account and returns access + refresh tokens
 
 Token Refresh:
   1. Client detects 401 or token expiry approaching

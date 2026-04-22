@@ -88,11 +88,11 @@ export const authResolvers = {
 
     googleAuthExchange: async (
       _parent: unknown,
-      { code, redirectUri }: { code: string; redirectUri: string },
+      { code, state }: { code: string; state: string },
       ctx: GraphQLContext,
     ) => {
       try {
-        return await ctx.services.auth.exchangeGoogleCode(code, redirectUri);
+        return await ctx.services.auth.exchangeGoogleCode(code, state);
       } catch (err) {
         const error = err as Error;
         if (err instanceof OAuthError) {
@@ -123,6 +123,25 @@ export const authResolvers = {
         if (error.name === 'InvalidTokenError') {
           throw new GraphQLError('Invalid or expired refresh token', {
             extensions: { code: 'INVALID_TOKEN' },
+          });
+        }
+        throw err;
+      }
+    },
+  },
+
+  Query: {
+    googleAuthStart: async (
+      _parent: unknown,
+      _args: unknown,
+      ctx: GraphQLContext,
+    ) => {
+      try {
+        return await ctx.services.auth.startGoogleAuth();
+      } catch (err) {
+        if (err instanceof OAuthError) {
+          throw new GraphQLError(err.message, {
+            extensions: { code: 'OAUTH_ERROR' },
           });
         }
         throw err;

@@ -1051,12 +1051,30 @@ export const typeDefs = `
     issueFiles(issueId: ID!): [File!]!
     publicRoadmap: PublicRoadmap
     publicRoadmapPage(slug: String!, password: String): PublicRoadmapPage!
+
+    """
+    Begin a Google OAuth flow. Returns the consent URL (with
+    server-controlled redirect_uri and a signed CSRF state) that the client
+    should redirect the browser to. The returned state must be stored and
+    passed to googleAuthExchange when the callback fires.
+    """
+    googleAuthStart: GoogleAuthStartPayload!
+  }
+
+  type GoogleAuthStartPayload {
+    url: String!
+    state: String!
   }
 
   type Mutation {
     emailLogin(input: EmailLoginInput!): EmailLoginPayload!
     emailVerify(input: EmailVerifyInput!): AuthPayload!
-    googleAuthExchange(code: String!, redirectUri: String!): AuthPayload!
+    """
+    Exchange a Google OAuth authorization code for a session. The state
+    token must match the one returned by googleAuthStart or the request
+    is rejected as CSRF.
+    """
+    googleAuthExchange(code: String!, state: String!): AuthPayload!
     tokenRefresh(refreshToken: String!): AuthPayload!
     logout: LogoutPayload!
 

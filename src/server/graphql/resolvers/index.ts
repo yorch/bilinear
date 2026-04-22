@@ -145,6 +145,7 @@ export const resolvers = {
   },
 
   Query: {
+    ...authResolvers.Query,
     ...userResolvers.Query,
     ...commentResolvers.Query,
     ...documentResolvers.Query,

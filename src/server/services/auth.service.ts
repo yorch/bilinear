@@ -4,7 +4,9 @@ import { sendMagicLinkEmail } from '../lib/email';
 import {
   ACCESS_TOKEN_EXPIRY_SECONDS,
   signAccessToken,
+  signOAuthState,
   signRefreshToken,
+  verifyOAuthState,
   verifyRefreshToken,
 } from '../lib/jwt';
 import type { UserService } from './user.service';
@@ -133,11 +135,40 @@ export class AuthService {
     return this.issueTokenPair(user.id);
   }
 
-  async exchangeGoogleCode(
-    code: string,
-    redirectUri: string,
-  ): Promise<AuthPayload> {
-    const profile = await fetchGoogleProfile(code, redirectUri);
+  /**
+   * Returns the Google OAuth consent URL plus a signed `state` token that
+   * the callback page must send back to `exchangeGoogleCode`. The redirect
+   * URI is server-controlled — the client cannot influence where Google
+   * returns the code, which closes the "attacker-chosen redirect_uri"
+   * exchange path.
+   */
+  async startGoogleAuth(): Promise<{ url: string; state: string }> {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      throw new OAuthError('Google OAuth is not configured');
+    }
+    const { state } = await signOAuthState('google');
+    const params = new URLSearchParams({
+      access_type: 'offline',
+      client_id: clientId,
+      prompt: 'consent',
+      redirect_uri: getGoogleRedirectUri(),
+      response_type: 'code',
+      scope: 'openid email profile',
+      state,
+    });
+    const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+    return { state, url };
+  }
+
+  async exchangeGoogleCode(code: string, state: string): Promise<AuthPayload> {
+    try {
+      await verifyOAuthState(state, 'google');
+    } catch {
+      throw new OAuthError('Invalid or expired OAuth state');
+    }
+
+    const profile = await fetchGoogleProfile(code, getGoogleRedirectUri());
 
     const user = await this.userService.findOrCreate({
       avatarUrl: profile.picture,
@@ -273,6 +304,23 @@ export class OAuthError extends Error {
     super(message);
     this.name = 'OAuthError';
   }
+}
+
+/**
+ * Resolve the server-authoritative Google OAuth redirect URI. Prefers the
+ * explicit `GOOGLE_REDIRECT_URI` env (so prod/preview/dev can each register
+ * their own) and falls back to `APP_URL + /auth/google/callback`.
+ */
+function getGoogleRedirectUri(): string {
+  const explicit = process.env.GOOGLE_REDIRECT_URI;
+  if (explicit) {
+    return explicit;
+  }
+  const appUrl = (process.env.APP_URL ?? 'http://localhost:3000').replace(
+    /\/$/,
+    '',
+  );
+  return `${appUrl}/auth/google/callback`;
 }
 
 async function fetchGoogleProfile(code: string, redirectUri: string) {

@@ -101,17 +101,11 @@ describe('authResolvers', () => {
   });
 
   describe('Mutation.googleAuthExchange', () => {
-    it('throws OAUTH_ERROR when Google token exchange fails', async () => {
-      // fetchGoogleProfile throws OAuthError on failed HTTP response
-      global.fetch = async () => ({ ok: false }) as Response;
-
+    it('throws OAUTH_ERROR when the state token is invalid', async () => {
       try {
         await authResolvers.Mutation.googleAuthExchange(
           null,
-          {
-            code: 'bad-code',
-            redirectUri: 'http://localhost:3000/auth/google',
-          },
+          { code: 'bad-code', state: 'not-a-jwt' },
           ctx as never,
         );
         expect.unreachable('Should have thrown');

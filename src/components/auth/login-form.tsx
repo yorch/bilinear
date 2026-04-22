@@ -4,12 +4,19 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { gql } from '@/lib/graphql';
+import { gqlError } from '@/lib/utils';
 
 const EMAIL_LOGIN_MUTATION = `
   mutation EmailLogin($input: EmailLoginInput!) {
     emailLogin(input: $input) {
       success
     }
+  }
+`;
+
+const GOOGLE_AUTH_START_QUERY = `
+  query GoogleAuthStart {
+    googleAuthStart { url state }
   }
 `;
 
@@ -86,16 +93,26 @@ export function LoginForm() {
         type="button"
         variant="outline"
         className="w-full"
-        onClick={() => {
-          const params = new URLSearchParams({
-            access_type: 'offline',
-            client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? '',
-            prompt: 'consent',
-            redirect_uri: `${window.location.origin}/auth/google/callback`,
-            response_type: 'code',
-            scope: 'openid email profile',
-          });
-          window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+        onClick={async () => {
+          // Let the server own the OAuth URL (including redirect_uri and
+          // CSRF state). Persist state to sessionStorage so the callback
+          // page can replay it to googleAuthExchange.
+          try {
+            const result = await gql(GOOGLE_AUTH_START_QUERY);
+            const payload = (
+              result.data as {
+                googleAuthStart?: { url: string; state: string };
+              }
+            )?.googleAuthStart;
+            if (!payload) {
+              setError(gqlError(result, 'Failed to start Google sign-in'));
+              return;
+            }
+            sessionStorage.setItem('google_oauth_state', payload.state);
+            window.location.href = payload.url;
+          } catch {
+            setError('Something went wrong. Please try again.');
+          }
         }}
       >
         Continue with Google

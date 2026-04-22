@@ -36,10 +36,14 @@ code. A section at the end lists planned-but-unshipped surface.
 ### Magic link + Google OAuth
 
 ```graphql
+type Query {
+  googleAuthStart: GoogleAuthStartPayload!  # returns { url, state } — client redirects browser to url
+}
+
 type Mutation {
   emailLogin(input: EmailLoginInput!): EmailLoginPayload!   # send magic code
   emailVerify(input: EmailVerifyInput!): AuthPayload!       # verify 6-digit code
-  googleAuthExchange(code: String!, redirectUri: String!): AuthPayload!
+  googleAuthExchange(code: String!, state: String!): AuthPayload!  # state returned by googleAuthStart
   tokenRefresh(refreshToken: String!): AuthPayload!
   logout: LogoutPayload!
 
@@ -745,7 +749,7 @@ source.
 ### Auth (§2)
 
 ```
-emailLogin, emailVerify, googleAuthExchange, tokenRefresh, logout
+emailLogin, emailVerify, googleAuthStart (Query), googleAuthExchange, tokenRefresh, logout
 organizationCreate
 ```
 
