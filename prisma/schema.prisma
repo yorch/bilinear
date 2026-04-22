@@ -120,6 +120,13 @@ model AuthToken {
   // 6-digit code for magic link
   code      String? @db.VarChar(6)
 
+  // Groups refresh tokens issued from a single initial login. If any token
+  // in the family is replayed after revocation (outside the rotation grace
+  // window), the entire family is revoked — classic refresh-token reuse
+  // detection. Nullable so tokens issued before the 2026-04-22 migration
+  // continue to refresh individually until they naturally expire.
+  familyId  String? @map("family_id") @db.Uuid
+
   expiresAt  DateTime  @map("expires_at") @db.Timestamptz
   lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz
   revokedAt  DateTime? @map("revoked_at") @db.Timestamptz
@@ -134,6 +141,7 @@ model AuthToken {
 
   @@index([userId])
   @@index([tokenHash])
+  @@index([familyId])
   @@map("auth_tokens")
 }
 

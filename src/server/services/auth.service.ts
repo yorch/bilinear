@@ -190,10 +190,12 @@ export class AuthService {
 
     const tokenHash = hashToken(rawRefreshToken);
 
+    // Look up by (id, hash, userId) WITHOUT filtering on revokedAt so we can
+    // distinguish "never-issued / wrong token" (404) from "revoked token
+    // replay" (reuse detection).
     const token = await this.prisma.authToken.findFirst({
       where: {
         id: payload.tokenId,
-        revokedAt: null,
         tokenHash,
         type: 'refresh',
         userId: payload.userId,
@@ -204,16 +206,35 @@ export class AuthService {
       throw new InvalidTokenError();
     }
 
+    const now = new Date();
+    // revokedAt is set by rotation with a future timestamp (the grace window).
+    // If revokedAt is in the past, this token was rotated more than the grace
+    // period ago AND is being presented again — classic reuse. Kill the family.
+    if (token.revokedAt && token.revokedAt < now) {
+      if (token.familyId) {
+        await this.prisma.authToken.updateMany({
+          data: { revokedAt: now },
+          where: {
+            familyId: token.familyId,
+            revokedAt: null,
+            type: 'refresh',
+          },
+        });
+      }
+      throw new InvalidTokenError();
+    }
+
     // Revoke old refresh token (with grace period to handle concurrent requests)
     const graceEnd = new Date(
-      Date.now() + REFRESH_GRACE_PERIOD_MINUTES * 60 * 1000,
+      now.getTime() + REFRESH_GRACE_PERIOD_MINUTES * 60 * 1000,
     );
     await this.prisma.authToken.update({
-      data: { lastUsedAt: new Date(), revokedAt: graceEnd },
+      data: { lastUsedAt: now, revokedAt: graceEnd },
       where: { id: token.id },
     });
 
-    return this.issueTokenPair(payload.userId);
+    // Rotate within the same family so a future replay can be traced back.
+    return this.issueTokenPair(payload.userId, undefined, token.familyId);
   }
 
   async logout(userId: string, rawRefreshToken?: string): Promise<void> {
@@ -240,6 +261,7 @@ export class AuthService {
   private async issueTokenPair(
     userId: string,
     knownOrgId?: string,
+    existingFamilyId?: string | null,
   ): Promise<AuthPayload> {
     let orgId = knownOrgId;
     if (!orgId) {
@@ -251,6 +273,9 @@ export class AuthService {
     // DB record. This avoids a two-step create → update with a 'pending' hash
     // placeholder that could be left dangling on server crash.
     const tokenId = crypto.randomUUID();
+    // New session → new family. Rotation → inherit parent's family so reuse
+    // detection can revoke every descendant at once.
+    const familyId = existingFamilyId ?? crypto.randomUUID();
     const expiresAt = new Date(
       Date.now() + REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000,
     );
@@ -264,6 +289,7 @@ export class AuthService {
     await this.prisma.authToken.create({
       data: {
         expiresAt,
+        familyId,
         id: tokenId,
         tokenHash: hashToken(refreshToken),
         type: 'refresh',
