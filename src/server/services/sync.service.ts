@@ -4,6 +4,10 @@ import { childLogger } from '../lib/logger';
 
 const log = childLogger({ module: 'sync' });
 
+// Maximum SyncAction rows returned per delta request. Keeps the server
+// memory footprint bounded even when a client has been offline for weeks.
+const DELTA_PAGE_SIZE = 5000;
+
 export type SyncActionType = 'I' | 'U' | 'D' | 'A';
 
 export class SyncService {
@@ -166,13 +170,23 @@ export class SyncService {
     };
   }
 
+  /**
+   * Fetch up to `limit` SyncActions strictly after `lastSyncId`. Capped so a
+   * long-offline client (days/weeks) cannot request a multi-million-row
+   * response that OOMs the server. Callers paginate by resubmitting with the
+   * last returned id until `hasMore` is false.
+   */
   async getDeltaSyncActions(
     orgId: string,
     lastSyncId: bigint,
     toSyncId?: bigint,
-  ): Promise<SyncAction[]> {
-    return this.prisma.syncAction.findMany({
+    limit = DELTA_PAGE_SIZE,
+  ): Promise<{ actions: SyncAction[]; hasMore: boolean }> {
+    // Request one extra row to cheaply detect whether the caller needs
+    // another page, without a separate count query.
+    const rows = await this.prisma.syncAction.findMany({
       orderBy: { id: 'asc' },
+      take: limit + 1,
       where: {
         id: {
           gt: lastSyncId,
@@ -181,6 +195,8 @@ export class SyncService {
         organizationId: orgId,
       },
     });
+    const hasMore = rows.length > limit;
+    return { actions: hasMore ? rows.slice(0, limit) : rows, hasMore };
   }
 
   async getLastSyncId(orgId: string): Promise<bigint> {

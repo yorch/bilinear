@@ -2,6 +2,12 @@ import type { RootStore } from '@/stores/root-store';
 import { db } from './db';
 import type { SerializedSyncAction, WsClient } from './ws-client';
 
+// Upper bound on delta pages consumed per deltaSync call. Server returns
+// 5,000 rows/page, so this covers a 1M-row backlog — far more than any
+// realistic offline gap. A finite loop prevents a malformed server
+// response (always returning hasMore=true) from spinning forever.
+const MAX_DELTA_PAGES = 200;
+
 /**
  * SyncManager orchestrates the full sync lifecycle:
  *
@@ -446,23 +452,38 @@ export class SyncManager {
     this.isDeltaSyncing = true;
 
     const { syncStore } = this.stores;
-    const lastSyncId = syncStore.lastSyncId;
 
     try {
-      const res = await fetch(
-        `/api/sync/delta?lastSyncId=${encodeURIComponent(lastSyncId)}`,
-        { credentials: 'include' },
-      );
+      // Server caps each delta response; loop until hasMore=false so a
+      // long-offline client catches up fully. `syncStore.lastSyncId`
+      // advances inside applyActions, so each iteration sends the fresh
+      // cursor.
+      for (let page = 0; page < MAX_DELTA_PAGES; page++) {
+        const cursor = syncStore.lastSyncId;
+        const res = await fetch(
+          `/api/sync/delta?lastSyncId=${encodeURIComponent(cursor)}`,
+          { credentials: 'include' },
+        );
 
-      if (!res.ok) {
-        // Delta failed — fall back to full bootstrap
-        this.isDeltaSyncing = false;
-        await this.fullBootstrap();
-        return;
+        if (!res.ok) {
+          // Delta failed — fall back to full bootstrap
+          this.isDeltaSyncing = false;
+          await this.fullBootstrap();
+          return;
+        }
+
+        const body = (await res.json()) as {
+          actions: SerializedSyncAction[];
+          hasMore: boolean;
+        };
+        if (body.actions.length === 0) {
+          break;
+        }
+        await this.applyActions(body.actions);
+        if (!body.hasMore) {
+          break;
+        }
       }
-
-      const actions = (await res.json()) as SerializedSyncAction[];
-      await this.applyActions(actions);
       syncStore.setStatus('connected');
     } catch (err) {
       console.error('[SyncManager] Delta sync error:', err);

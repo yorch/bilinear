@@ -58,14 +58,15 @@ export async function GET(req: NextRequest) {
   const syncService = new SyncService(prisma, redis);
 
   try {
-    const actions = await syncService.getDeltaSyncActions(
+    const { actions, hasMore } = await syncService.getDeltaSyncActions(
       orgId,
       lastSyncId,
       toSyncId,
     );
-    return NextResponse.json(actions.map(serializeSyncAction), {
-      headers: { 'Cache-Control': 'no-store' },
-    });
+    return NextResponse.json(
+      { actions: actions.map(serializeSyncAction), hasMore },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
   } catch (err) {
     logger.error({ err }, '[sync/delta] Error');
     return NextResponse.json(
