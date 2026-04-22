@@ -29,11 +29,14 @@ export class SyncService {
       },
     });
 
-    // Publish to Redis so WebSocket server can broadcast to connected clients
-    await this.redis
+    // Publish to Redis so the WebSocket server can broadcast to connected
+    // clients. Detached from the mutation hot path — the DB write is the
+    // source of truth, and delta sync will fill any gap caused by a failed
+    // publish. Awaiting here adds ~1-50ms (plus tail-latency spikes) to
+    // every mutation for no correctness benefit.
+    void this.redis
       .publish(`sync:${orgId}`, JSON.stringify(serializeSyncAction(syncAction)))
       .catch(err => {
-        // Non-fatal: Redis publish failure should not break the mutation
         log.error({ err, orgId }, 'Redis publish error');
       });
 

@@ -338,9 +338,11 @@ describe('issueResolvers', () => {
       );
 
       await vi.waitFor(() =>
-        expect(ctx.prisma.notification.create).toHaveBeenCalledWith(
+        expect(ctx.prisma.notification.createMany).toHaveBeenCalledWith(
           expect.objectContaining({
-            data: expect.objectContaining({ type: 'ISSUE_STATUS_CHANGED' }),
+            data: expect.arrayContaining([
+              expect.objectContaining({ type: 'ISSUE_STATUS_CHANGED' }),
+            ]),
           }),
         ),
       );
