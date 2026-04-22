@@ -47,8 +47,13 @@ export interface IssueFilter {
   includeArchived?: boolean;
 }
 
+// List-view queries omit the descriptionState YJS blob (see findMany/
+// findByTeamId). Callers that need to render/edit the rich description
+// re-fetch via findById / findByIdentifier.
+export type IssueListRow = Omit<Issue, 'descriptionState'>;
+
 export interface IssuePage {
-  nodes: Issue[];
+  nodes: IssueListRow[];
   pageInfo: {
     hasNextPage: boolean;
     hasPreviousPage: boolean;
@@ -181,6 +186,11 @@ export class IssueService {
       this.prisma.issue.findMany({
         cursor: cursorId ? { id: cursorId } : undefined,
         include: { labelAssignments: { include: { label: true } } },
+        // descriptionState is a YJS binary blob used only by the detail
+        // panel's collaborative editor; it's not exposed in the GraphQL
+        // Issue type. Loading it for every row on a list page is pure
+        // over-fetch. findById keeps it.
+        omit: { descriptionState: true },
         orderBy: { sortOrder: 'asc' },
         skip: cursorId ? 1 : 0,
         take: pagination.last ? -take : take,
@@ -207,9 +217,11 @@ export class IssueService {
   async findByTeamId(
     teamId: string,
     includeArchived = false,
-  ): Promise<Issue[]> {
+  ): Promise<IssueListRow[]> {
     return this.prisma.issue.findMany({
       include: { labelAssignments: { include: { label: true } } },
+      // See findMany: descriptionState is never rendered in lists.
+      omit: { descriptionState: true },
       orderBy: { sortOrder: 'asc' },
       where: {
         archivedAt: includeArchived ? undefined : null,
