@@ -27,6 +27,8 @@ import { WorkflowStateService } from '../services/workflow-state.service';
 
 export interface GraphQLContext extends AuthContext {
   prisma: PrismaClient;
+  /** Best-effort client IP for abuse tracking (X-Forwarded-For / X-Real-IP). */
+  clientIp: string | null;
   services: {
     auth: AuthService;
     comment: CommentService;
@@ -51,11 +53,26 @@ export interface GraphQLContext extends AuthContext {
   };
 }
 
+function extractClientIp(req: NextRequest): string | null {
+  // X-Forwarded-For may be a comma-separated chain — the left-most entry is
+  // the original client. Behind Vercel/Cloudflare/etc. this is the trusted
+  // value. In local dev it'll be absent and we fall back to null.
+  const xff = req.headers.get('x-forwarded-for');
+  if (xff) {
+    const first = xff.split(',')[0]?.trim();
+    if (first) {
+      return first;
+    }
+  }
+  return req.headers.get('x-real-ip');
+}
+
 export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('access_token')?.value ?? null;
 
   const auth = await extractAuthContext(authHeader, cookieToken);
+  const clientIp = extractClientIp(req);
 
   const userService = new UserService(prisma);
   const authService = new AuthService(prisma, userService);
@@ -80,6 +97,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
 
   return {
     ...auth,
+    clientIp,
     prisma,
     services: {
       auth: authService,

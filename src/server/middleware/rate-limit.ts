@@ -133,3 +133,69 @@ export function withRateLimitHeaders(
   }
   return clone;
 }
+
+/**
+ * Simple fixed-window INCR-based limiter.
+ *
+ * Returns `{ exceeded }` — `true` when the counter exceeded `limit` within
+ * the current window. Fails open on Redis errors (same policy as the
+ * authenticated GraphQL limiter above) so a Redis outage doesn't block login.
+ *
+ * The bucket key is namespaced by the caller (e.g. `auth:login:email:foo@…`).
+ */
+export async function checkFixedWindow(
+  bucketKey: string,
+  limit: number,
+  windowSeconds: number,
+): Promise<{ exceeded: boolean; count: number }> {
+  const bucket = Math.floor(Date.now() / 1000 / windowSeconds);
+  const key = `${bucketKey}:${bucket}`;
+  try {
+    const pipeline = redis.multi().incr(key).expire(key, windowSeconds);
+    const result = await pipeline.exec();
+
+    if (!result) {
+      throw new Error('Redis pipeline returned null');
+    }
+    const [incrRes] = result as Array<[Error | null, number]>;
+    if (incrRes[0]) {
+      throw incrRes[0];
+    }
+    const count = incrRes[1];
+    return { count, exceeded: count > limit };
+  } catch (err) {
+    logger.error({ err, key }, 'Rate limit check failed — allowing request');
+    return { count: 0, exceeded: false };
+  }
+}
+
+/**
+ * Enforce per-email + per-IP limits on an unauthenticated auth mutation.
+ *
+ * - login:  5 req / hour / email, 20 req / hour / IP
+ * - verify: 10 attempts / 15 min / email
+ *
+ * IP is best-effort — requests without a forwarded IP only trip the
+ * per-email limit.
+ */
+export async function checkAuthMutationLimit(
+  kind: 'login' | 'verify',
+  email: string,
+  clientIp: string | null,
+): Promise<{ exceeded: boolean }> {
+  const emailKey = `rl:auth:${kind}:email:${email.toLowerCase()}`;
+  const ipKey = clientIp ? `rl:auth:${kind}:ip:${clientIp}` : null;
+
+  if (kind === 'login') {
+    const [byEmail, byIp] = await Promise.all([
+      checkFixedWindow(emailKey, 5, 60 * 60),
+      ipKey
+        ? checkFixedWindow(ipKey, 20, 60 * 60)
+        : Promise.resolve({ count: 0, exceeded: false }),
+    ]);
+    return { exceeded: byEmail.exceeded || byIp.exceeded };
+  }
+
+  const byEmail = await checkFixedWindow(emailKey, 10, 15 * 60);
+  return { exceeded: byEmail.exceeded };
+}
