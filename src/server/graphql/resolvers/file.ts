@@ -13,7 +13,7 @@ export const fileResolvers = {
   Issue: {
     files: (parent: { id: string }, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
-      return ctx.services.file.getIssueFiles(parent.id);
+      return ctx.services.file.getIssueFiles(parent.id, ctx.orgId);
     },
   },
 
@@ -66,7 +66,7 @@ export const fileResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      return ctx.services.file.getIssueFiles(args.issueId);
+      return ctx.services.file.getIssueFiles(args.issueId, ctx.orgId);
     },
   },
 };
