@@ -1,4 +1,7 @@
 import nodemailer from 'nodemailer';
+import { childLogger } from './logger';
+
+const log = childLogger({ module: 'email' });
 
 function createTransport() {
   const host = process.env.SMTP_HOST;
@@ -59,16 +62,9 @@ export async function sendMagicLinkEmail(
   });
 
   if (process.env.NODE_ENV !== 'production') {
-    console.log(
-      '[Email] Magic link for',
-      email,
-      '- Code:',
-      code,
-      '- URL:',
-      verifyUrl,
-    );
+    log.info({ code, email, verifyUrl }, 'Magic link (dev)');
     if ((info as { message?: string }).message) {
-      console.log('[Email] (dev mode — not actually sent)');
+      log.info('Magic link (dev mode — not actually sent)');
     }
   }
 }

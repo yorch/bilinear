@@ -38,7 +38,7 @@ remains a design target.
 | Section | Status | Notes |
 |---------|--------|-------|
 | 2.1 Organizations & Users | ✅ | |
-| 2.2 Teams | ✅ | |
+| 2.2 Teams | ✅ | Covers `teams`, `team_memberships`, and the paired `team_member_roles` (also cross-linked from §2.26) |
 | 2.3 Workflow States | ✅ | |
 | 2.4 Issues | ✅ | |
 | 2.5 Labels | ✅ | |
@@ -55,7 +55,7 @@ remains a design target.
 | 2.16 Notifications | ⚠️ | Doc listed polymorphic FKs that were never added |
 | 2.17 Custom Views | ⚠️ | Real columns use `filters/sort/layout`, not `filter_data/sort_by/columns` |
 | 2.18 Favorites | 📋 | |
-| 2.19 Documents | ⚠️ | Real model uses JSONB `content_data`, parent hierarchy; no YJS yet |
+| 2.19 Documents | ✅ | Parent hierarchy, editor output in `content` TEXT; no YJS yet |
 | 2.20 Issue Templates | ⚠️ | Real model is issue-only (not polymorphic) |
 | 2.21 Webhooks | 📋 | |
 | 2.22 Sync Actions | ✅ | |
@@ -211,7 +211,7 @@ CREATE TABLE teams (
 CREATE INDEX idx_teams_org ON teams(organization_id);
 CREATE INDEX idx_teams_parent ON teams(parent_id);
 
--- Team membership
+-- Team membership (who is on the team)
 CREATE TABLE team_memberships (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     team_id         UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
@@ -225,7 +225,30 @@ CREATE TABLE team_memberships (
 );
 CREATE INDEX idx_team_members_team ON team_memberships(team_id);
 CREATE INDEX idx_team_members_user ON team_memberships(user_id);
+
+-- Team-scoped role assignment (what the member can do on this team)
+CREATE TABLE team_member_roles (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    team_id         UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role            VARCHAR(20) NOT NULL DEFAULT 'member',  -- 'admin' | 'member' | 'guest'
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    UNIQUE(team_id, user_id)
+);
+CREATE INDEX idx_team_member_roles_team ON team_member_roles(team_id);
+CREATE INDEX idx_team_member_roles_user ON team_member_roles(user_id);
 ```
+
+> **Membership vs. role.** `team_memberships` says *who* is on a team (and who
+> the owner is); `team_member_roles` says *what* they can do on that team. A
+> user can be a member without a role row — in that case the API treats them
+> as `"member"` by default. The two tables are deliberately separate so that
+> (a) role mutations don't rewrite the membership row and bump timestamps, and
+> (b) a future invite / pre-assign flow can create a role before the user has
+> actually joined. GraphQL exposes the effective role as
+> `TeamMembership.role: TeamMemberRole!` (see `src/server/graphql/schema.ts`).
 
 ### 2.3 Workflow States
 
@@ -845,12 +868,12 @@ CREATE INDEX idx_favorites_owner ON favorites(owner_id);
 CREATE INDEX idx_favorites_parent ON favorites(parent_id);
 ```
 
-### 2.19 Documents ⚠️
+### 2.19 Documents ✅
 
 Shipped in Sprint 35-36 (PR #28) as a workspace-wide rich-text documents
-system with nested hierarchy. `content` is markdown (for search), `content_data`
-is the TipTap JSON representation used by the editor. No YJS / collaborative
-editing yet.
+system with nested hierarchy. `content` stores the editor output as a string
+(HTML today; markdown is fine too — the service treats it as an opaque
+payload). No YJS / collaborative editing yet.
 
 ```sql
 CREATE TABLE documents (
@@ -862,8 +885,7 @@ CREATE TABLE documents (
     parent_id       UUID REFERENCES documents(id) ON DELETE SET NULL,
 
     title           VARCHAR(255) NOT NULL,
-    content         TEXT,         -- markdown / plain text fallback
-    content_data    JSONB,        -- TipTap doc JSON
+    content         TEXT,         -- editor output (opaque string)
     icon            VARCHAR(255),
     sort_order      FLOAT NOT NULL DEFAULT 0,
 
@@ -876,6 +898,11 @@ CREATE INDEX idx_documents_team ON documents(team_id);
 CREATE INDEX idx_documents_project ON documents(project_id);
 CREATE INDEX idx_documents_parent ON documents(parent_id);
 ```
+
+> **Historical note:** a `content_data JSONB` column was created alongside
+> `content` as a forward-looking slot for structured TipTap JSON, but nothing
+> ever read or wrote it. It was dropped in migration
+> `20260421000000_drop_document_content_data`.
 
 > **Design targets not yet implemented:** `slug_id`, per-document color, YJS
 > `content_state` (`BYTEA`) for real-time collab, issue / cycle / initiative
@@ -1031,6 +1058,11 @@ CREATE INDEX idx_files_uploader ON files(uploader_id);
 ```
 
 ### 2.26 Team Member Roles
+
+> Paired with `team_memberships` (§2.2). Membership says *who* is on a team;
+> this table says *what* they can do. GraphQL surfaces the effective value as
+> `TeamMembership.role: TeamMemberRole!`; rows missing here default to
+> `member` at the resolver layer.
 
 ```sql
 -- Stores explicit per-team roles for team members.

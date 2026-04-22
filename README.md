@@ -65,7 +65,7 @@ Generate secrets with:
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-### 3. Generate the Prisma client
+### 4. Generate the Prisma client
 
 `src/generated/` is gitignored. Run this after every fresh checkout and after any schema change:
 
@@ -73,13 +73,13 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 yarn prisma generate
 ```
 
-### 4. Run database migrations
+### 5. Run database migrations
 
 ```bash
 yarn prisma migrate dev
 ```
 
-### 5. Start the development server and WebSocket server
+### 6. Start the development server and WebSocket server
 
 In two separate terminals:
 
