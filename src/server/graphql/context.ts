@@ -54,9 +54,14 @@ export interface GraphQLContext extends AuthContext {
 }
 
 function extractClientIp(req: NextRequest): string | null {
-  // X-Forwarded-For may be a comma-separated chain — the left-most entry is
-  // the original client. Behind Vercel/Cloudflare/etc. this is the trusted
-  // value. In local dev it'll be absent and we fall back to null.
+  // Only trust forwarded-IP headers when explicitly opted in — otherwise a
+  // client can spoof `X-Forwarded-For` to bypass the per-IP rate-limit
+  // bucket. Set `TRUST_PROXY_HEADERS=1` in deployments that sit behind a
+  // proxy that strips/overwrites client-supplied forwarding headers
+  // (Vercel, Cloudflare, reverse-proxy with trust_forwarded, etc.).
+  if (process.env.TRUST_PROXY_HEADERS !== '1') {
+    return null;
+  }
   const xff = req.headers.get('x-forwarded-for');
   if (xff) {
     const first = xff.split(',')[0]?.trim();

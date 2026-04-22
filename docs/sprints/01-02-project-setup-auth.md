@@ -306,10 +306,14 @@ type Query {
 ### Mutations
 
 ```graphql
+type Query {
+  googleAuthStart: GoogleAuthStartPayload!   # returns { url, state } — client redirects browser to url
+}
+
 type Mutation {
   emailLogin(input: EmailLoginInput!): EmailLoginPayload!
   emailVerify(input: EmailVerifyInput!): AuthPayload!
-  googleAuthExchange(code: String!, redirectUri: String!): AuthPayload!
+  googleAuthExchange(code: String!, state: String!): AuthPayload!  # state returned by googleAuthStart
   tokenRefresh(refreshToken: String!): AuthPayload!
   logout: LogoutPayload!
 }
@@ -396,11 +400,15 @@ type Organization {
 
 ### Google OAuth
 
-1. Client redirects to Google OAuth consent screen
-2. Google redirects to `/auth/google/callback` with authorization code
-3. `googleAuthExchange` mutation → exchange code for Google tokens → get user profile
-4. Create or link user account
-5. Return access + refresh tokens
+1. Client calls `googleAuthStart` query — server returns consent URL (with
+   server-controlled `redirect_uri`) plus a signed `state` CSRF token
+2. Client persists state in `sessionStorage` and redirects browser to url
+3. Google redirects to `/auth/google/callback` with `code` + `state`
+4. Callback reads state from `sessionStorage`, verifies it matches, then
+   calls `googleAuthExchange(code, state)` — server validates the state
+   JWT and exchanges code with Google using the same server-controlled
+   redirect_uri
+5. Create or link user account, return access + refresh tokens
 
 ### Token Lifecycle
 
