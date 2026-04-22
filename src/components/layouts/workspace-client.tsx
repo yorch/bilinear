@@ -1,9 +1,9 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
+import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback } from 'react';
-import { CommandPalette } from '@/components/command-palette/command-palette';
 import { CreateTeamModal } from '@/components/teams/create-team-modal';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useRecentItems } from '@/hooks/use-recent-items';
@@ -11,6 +11,17 @@ import type { DBTeam, DBWorkflowState } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { gqlError } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
+
+// Lazy-load CommandPalette: cmdk + fuzzy-search only ship to the browser
+// after the user first opens the palette (Cmd+K). ssr:false because it has
+// no meaningful server rendering — it's a popover gated by uiStore state.
+const CommandPalette = dynamic(
+  () =>
+    import('@/components/command-palette/command-palette').then(m => ({
+      default: m.CommandPalette,
+    })),
+  { ssr: false },
+);
 
 const TEAM_CREATE_MUTATION = `
   mutation TeamCreate($input: TeamCreateInput!) {

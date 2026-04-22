@@ -1,6 +1,7 @@
 'use client';
 
 import { ChevronDown, Plus, Trash2, X } from 'lucide-react';
+import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -81,7 +82,9 @@ interface RelationsSectionProps {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function RelationsSection({ issueId }: RelationsSectionProps) {
+export const RelationsSection = observer(function RelationsSection({
+  issueId,
+}: RelationsSectionProps) {
   const store = useStore();
   const [relations, setRelations] = useState<IssueRelation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -262,7 +265,7 @@ export function RelationsSection({ issueId }: RelationsSectionProps) {
       )}
     </div>
   );
-}
+});
 
 // ─── Add relation form ────────────────────────────────────────────────────────
 

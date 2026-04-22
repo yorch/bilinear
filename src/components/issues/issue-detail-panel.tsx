@@ -1,6 +1,7 @@
 'use client';
 
 import { Bell, BellOff } from 'lucide-react';
+import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { gql } from '@/lib/graphql';
@@ -62,7 +63,7 @@ interface IssueDetailPanelProps {
   onUpdate: (id: string, patch: Record<string, unknown>) => void;
 }
 
-export function IssueDetailPanel({
+export const IssueDetailPanel = observer(function IssueDetailPanel({
   issue,
   states,
   users,
@@ -410,4 +411,4 @@ export function IssueDetailPanel({
       </div>
     </>
   );
-}
+});
