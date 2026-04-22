@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { verifyAccessToken } from '@/server/lib/jwt';
+import { logger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { redis } from '@/server/lib/redis';
 import {
@@ -66,7 +67,7 @@ export async function GET(req: NextRequest) {
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (err) {
-    console.error('[sync/delta] Error:', err);
+    logger.error({ err }, '[sync/delta] Error');
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 },

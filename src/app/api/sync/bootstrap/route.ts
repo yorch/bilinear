@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { verifyAccessToken } from '@/server/lib/jwt';
+import { logger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { redis } from '@/server/lib/redis';
 import { SyncService } from '@/server/services/sync.service';
@@ -92,7 +93,7 @@ export async function GET(req: NextRequest) {
       status: 200,
     });
   } catch (err) {
-    console.error('[sync/bootstrap] Error:', err);
+    logger.error({ err }, '[sync/bootstrap] Error');
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 },

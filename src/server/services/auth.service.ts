@@ -88,11 +88,11 @@ export class AuthService {
 
   async verifyMagicLink(email: string, code: string): Promise<AuthPayload> {
     // Test mode bypass: accept TEST_AUTH_CODE without a real DB token.
-    // Active when NODE_ENV is not 'production' and the env var is set.
-    // Note: Next.js dev server overrides NODE_ENV to 'development', so we
-    // check !== 'production' rather than === 'test'.
+    // Strictly gated to NODE_ENV === 'test' so misconfigured staging/preview
+    // deployments (which may run with NODE_ENV=development) cannot accept a
+    // static login code. Playwright sets NODE_ENV=test explicitly.
     if (
-      process.env.NODE_ENV !== 'production' &&
+      process.env.NODE_ENV === 'test' &&
       process.env.TEST_AUTH_CODE &&
       code === process.env.TEST_AUTH_CODE
     ) {

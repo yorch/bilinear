@@ -3,12 +3,24 @@ import { jwtVerify, SignJWT } from 'jose';
 const ACCESS_TOKEN_EXPIRY = '24h';
 const REFRESH_TOKEN_EXPIRY = '30d';
 
+// HS256 (HMAC-SHA256) recommends secrets >= 32 bytes per RFC 7518 §3.2.
+// `jose` does not enforce this itself, so we validate at boot to fail fast
+// on weak/placeholder secrets.
+const MIN_SECRET_BYTES = 32;
+
 function getSecret(key: string): Uint8Array {
   const secret = process.env[key];
   if (!secret) {
     throw new Error(`Missing environment variable: ${key}`);
   }
-  return new TextEncoder().encode(secret);
+  const encoded = new TextEncoder().encode(secret);
+  if (encoded.byteLength < MIN_SECRET_BYTES) {
+    throw new Error(
+      `${key} must be at least ${MIN_SECRET_BYTES} bytes for HS256. ` +
+        'Generate one with: openssl rand -base64 48',
+    );
+  }
+  return encoded;
 }
 
 export interface AccessTokenPayload {
