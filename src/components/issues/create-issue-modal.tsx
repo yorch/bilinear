@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { gql } from '@/lib/graphql';
 import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
-import { TipTapEditor } from '../editor/tiptap-editor';
+import { TipTapEditor } from '../editor/tiptap-editor.lazy';
 import { AssigneeSelect } from '../properties/assignee-select';
 import { DueDatePicker } from '../properties/due-date-picker';
 import { LabelSelect } from '../properties/label-select';

@@ -19,7 +19,10 @@ import { TextStyle } from '@tiptap/extension-text-style';
 import { Underline } from '@tiptap/extension-underline';
 import { EditorContent, ReactRenderer, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { all, createLowlight } from 'lowlight';
+// `common` ships the ~35 most popular grammars (js/ts/py/go/rust/sql/etc)
+// rather than `all` (~190 grammars, multi-MB). Covers realistic code-block
+// usage in an issue tracker and trims the editor bundle significantly.
+import { common, createLowlight } from 'lowlight';
 import { ImageIcon, Link2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { cn } from '@/lib/utils';
@@ -31,7 +34,7 @@ import { MermaidNode } from './mermaid-node';
 import { SlashCommands } from './slash-commands';
 import './tiptap-editor.css';
 
-const lowlight = createLowlight(all);
+const lowlight = createLowlight(common);
 
 export interface TipTapEditorProps {
   content?: string;

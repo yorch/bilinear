@@ -2,7 +2,7 @@
 
 import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { TipTapEditor } from '@/components/editor/tiptap-editor';
+import { TipTapEditor } from '@/components/editor/tiptap-editor.lazy';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
 

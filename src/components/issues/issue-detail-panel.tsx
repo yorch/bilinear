@@ -20,7 +20,7 @@ import type {
   WorkflowState,
 } from '@/types/issues';
 import { CustomFieldsEditor } from '../custom-fields/custom-fields-editor';
-import { TipTapEditor } from '../editor/tiptap-editor';
+import { TipTapEditor } from '../editor/tiptap-editor.lazy';
 import { AssigneeSelect } from '../properties/assignee-select';
 import { DueDatePicker } from '../properties/due-date-picker';
 import { EstimatePicker } from '../properties/estimate-picker';

@@ -11,7 +11,7 @@ import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import type { MentionItem } from '../editor/mention-list';
-import { TipTapEditor } from '../editor/tiptap-editor';
+import { TipTapEditor } from '../editor/tiptap-editor.lazy';
 import { UserAvatar } from '../properties/assignee-select';
 
 interface CommentAuthor {
