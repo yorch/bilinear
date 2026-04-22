@@ -905,9 +905,14 @@ For the `IssueDetailPanel`, use the `LazyIssueDetailPanel` wrapper from `src/com
 
 ## 28. Rate Limiting Pattern (Sprint 11-12)
 
-All authenticated GraphQL requests (queries and mutations) are rate-limited via Redis fixed-window counters. The logic lives in `src/server/middleware/rate-limit.ts` and is applied in `src/app/api/graphql/route.ts`.
+Two layers defend the GraphQL endpoint:
 
-**Limits:** 5,000 requests / hour, 250,000 complexity points / hour per user.
+1. **Hard caps via GraphQL validation rules** (rejected before resolvers run):
+   - Query depth ≤ 10 (`graphql-depth-limit`)
+   - Query complexity ≤ 1000 (`graphql-query-complexity`, `simpleEstimator` — 1 point per field)
+2. **Per-user Redis fixed-window budget** — 5,000 requests / hour and 250,000 complexity points / hour. Logic lives in `src/server/middleware/rate-limit.ts` and is applied in `src/app/api/graphql/route.ts`.
+
+Unauthenticated auth mutations (`emailLogin`, `emailVerify`) have dedicated per-email + per-IP limits in the same module.
 
 **Response headers** (present on every authenticated GraphQL response):
 
