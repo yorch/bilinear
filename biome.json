@@ -1,9 +1,11 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.11/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.4.13/schema.json",
   "assist": {
     "actions": {
       "source": {
         "organizeImports": "on",
+        "useSortedAttributes": "on",
+        "useSortedInterfaceMembers": "on",
         "useSortedKeys": "on",
         "useSortedProperties": "on"
       }
@@ -39,12 +41,20 @@
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
-    "indentWidth": 2
+    "indentWidth": 2,
+    "lineWidth": 100
   },
   "javascript": {
     "formatter": {
       "arrowParentheses": "asNeeded",
-      "quoteStyle": "single"
+      "quoteStyle": "single",
+      "semicolons": "always",
+      "trailingCommas": "all"
+    }
+  },
+  "json": {
+    "formatter": {
+      "trailingCommas": "none"
     }
   },
   "linter": {
@@ -52,7 +62,9 @@
     "rules": {
       "recommended": true,
       "style": {
-        "useBlockStatements": "error"
+        "useBlockStatements": "error",
+        "useConsistentArrowReturn": "error",
+        "useImportType": "warn"
       }
     }
   },
@@ -65,7 +77,7 @@
           }
         }
       },
-      "includes": ["package.json"]
+      "includes": ["**/package.json"]
     },
     {
       "includes": ["vitest.config.ts"]
@@ -73,6 +85,7 @@
   ],
   "vcs": {
     "clientKind": "git",
+    "defaultBranch": "main",
     "enabled": true,
     "useIgnoreFile": true
   }
