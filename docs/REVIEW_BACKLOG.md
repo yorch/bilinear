@@ -2,196 +2,596 @@
 
 Tracking remaining items from the multi-angle code/architecture review
 (security, sync correctness, performance, pattern drift, DB schema,
-frontend, tests). Items already shipped live in git history under the
-`fix(security)`, `fix(sync)`, `perf(*)`, `refactor(server)`,
-`fix(ui)`, and `test(*)` prefixes from 2026-04-22 onward.
+frontend, tests).
 
-Each item has:
+> Items already shipped live in git history under the `fix(security)`,
+> `fix(sync)`, `perf(*)`, `refactor(server)`, `fix(ui)`, `feat(app)`,
+> `test(*)`, and `docs(*)` prefixes from 2026-04-22 onward. See the
+> "Already shipped" section at the bottom for a quick summary.
 
-- **Effort** — rough working-session cost
-- **Risk** — deploy/rollback risk
+Each remaining item carries:
+
+- **Effort** — rough working-session cost (Small / Medium / Large)
+- **Risk** — deploy/rollback risk (Low / Medium / High)
 - **Why it's deferred** — what design or coordination work has to happen first
 - **First-touch** — concrete starting move when picked up
+- **Acceptance signal** — how we know it's done
 
 ---
 
-## Sync correctness — heavy items
+## 1. Sync correctness — heavy items
 
-### #18 — Atomic `SyncAction` + business write
+These touch the heart of the offline-first model. Each warrants its own
+PR with a brainstorming pass before code.
 
-The mutation hot path performs `prisma.<model>.<op>(...)` then
-`ctx.services.sync.createSyncAction(...)` as two independent statements.
-A crash between them leaves the row persisted but unpublished — other
-clients never see it until something coincidentally re-touches the row.
+### 1.1 — Atomic `SyncAction` + business write (#18)
 
-- **Effort:** Large. 73 `createSyncAction` call sites across 18 resolver
-  files. Either thread a Prisma `$transaction` through every mutation or
-  introduce an outbox table + reconciliation worker.
-- **Risk:** High. Touches every mutation path; also has a knock-on for
-  the per-mutation Redis publish (currently fire-and-forget after the
-  DB write).
-- **Why deferred:** Cross-cutting refactor with a real design decision
-  (`$transaction` everywhere vs. outbox table). Warrants its own PR
-  with brainstorming up front.
-- **First-touch:** Add `createSyncAction(orgId, action, modelName,
-  modelId, data, tx?)` overload accepting a transaction client; migrate
-  one high-traffic resolver (issue.ts) first, then expand.
+**File entry points:**
+- `src/server/services/sync.service.ts:14-44` — `createSyncAction`
+- 73 call sites across 18 resolver files (`createSyncAction(`) — every
+  mutation in `src/server/graphql/resolvers/*.ts`
 
-### #21 — TransactionQueue rollback (LIFO + stacking)
+**Problem.** The mutation hot path runs
 
-Call sites already pass `onError` callbacks that manually restore a
-captured snapshot. Two known holes: (1) `{...existing, ...patch}` merge
-in `optimisticUpdate` can't LIFO-roll-back across overlapping ops on the
-same entity; (2) every call site reimplements snapshot capture.
+```ts
+const issue = await this.prisma.issue.create({ data });
+const sync = await ctx.services.sync.createSyncAction(orgId, 'I', 'Issue', issue.id, issue);
+```
 
-- **Effort:** Large. Introduce `pool.applyOptimistic(id, patch) =>
-  rollback` on each pool store, sweep ~15 call sites, add LIFO tests
-  for stacked optimistic updates and partial failure.
-- **Risk:** High. Optimistic UI semantics are subtle; concurrency tests
-  needed before rollout.
-- **Why deferred:** Clean fix needs a concurrent-ops design plus tests
-  that simulate stacked rollback.
-- **First-touch:** Add the `applyOptimistic` API to one pool store
-  (`issueStore`), migrate one call site (drag-drop in
-  `team/[key]/page.tsx`), prove the LIFO model under tests.
+as two independent statements. A crash, OOM, or pod kill between them
+leaves the row persisted but unpublished. Other clients never see it
+until something coincidentally re-touches the row (label add, status
+change, etc.). On a busy org the silent gap can persist indefinitely
+because delta sync only ships rows that *do* have a SyncAction.
 
-### Bootstrap ↔ WS race + self-echo filter
+The Redis publish is a separate write and was made fire-and-forget in
+commit `e954ce2` — that's correct for latency but means the broadcast
+is lossy by design and depends on delta sync to recover. If the
+SyncAction itself is missing, delta sync has nothing to ship.
 
-`fullBootstrap()` fetches the snapshot at `lastSyncId = N`. If a WS
-message for action `N+1` arrives during the bootstrap, the in-memory
-store sees `N+1`, then `upsertMany` from the bootstrap clobbers it
-back. Separately, a client receives its own mutation echo over WS while
-`onSuccess` is still in flight; the echo can overwrite local state with
-a slightly stale server view.
+**Two competing designs.**
 
-- **Effort:** Medium-Large. Buffer incoming WS actions until bootstrap
-  finishes, then apply only `id > bootstrapLastSyncId`. Add a
-  client-generated `txId` so the server SyncAction echoes it back and
-  the client skips self-originated rows.
-- **Risk:** High. Touches the heart of the offline-first sync model.
-- **First-touch:** Add `txId` to `TransactionQueue.enqueue` payload and
-  thread it through `createSyncAction`; client filters by `txId`.
+1. **Thread `$transaction` through every mutation.** Add a
+   `createSyncAction(orgId, action, modelName, modelId, data, tx?)`
+   overload accepting the Prisma transaction client. Callers wrap the
+   business write + sync write in `prisma.$transaction(async tx => ...)`.
+   Pro: bullet-proof atomicity. Con: 73 call sites; some mutations
+   already have nested `$transaction` (Cycle rollover, Project create)
+   so we'd need careful nesting.
+2. **Outbox pattern.** Keep mutations as-is, but write a `sync_outbox`
+   row inside the same business transaction (cheap, just an INSERT).
+   A background reconciliation worker reads outbox rows and produces
+   the SyncAction + Redis publish. Pro: minimal resolver churn. Con:
+   adds a worker process + retry/dedupe logic; non-zero replication lag.
 
-### Optimistic placeholder collision
+- **Effort:** Large (either path).
+- **Risk:** High. Touches every mutation; subtle in `$transaction`
+  nesting cases.
+- **First-touch (option 1):** Add the `tx?` overload to
+  `createSyncAction`; migrate `IssueService.create` + `issueResolvers
+  .Mutation.issueCreate` first. Run the existing `issue.test.ts` and
+  e2e `tests/e2e/sync.spec.ts` to verify the SyncAction still emits.
+- **First-touch (option 2):** Schema migration adds `sync_outbox`
+  table; new background worker module under `src/server/lib/`; one
+  resolver wired to write to outbox instead of `createSyncAction`.
+- **Acceptance signal:** Resolver tests (`issue.test.ts:120-200` style)
+  prove that throwing inside the resolver after the business write
+  leaves no Issue row in the DB; chaos test (kill -9 between the two
+  writes) leaves the system consistent.
 
-`IssueStore.upsertMany` de-dups optimistic placeholders by
-`title + teamId`. Two rapid `Create issue "Fix bug"` calls collide —
-the second's server echo deletes the first's optimistic row.
+### 1.2 — TransactionQueue rollback (LIFO + stacking) (#21)
+
+**File entry points:**
+- `src/lib/transaction-queue.ts` (84 LOC, 0 tests)
+- 15 call sites: `src/components/issues/sub-issue-list.tsx:240`,
+  `src/components/issues/relations-section.tsx:133,162`,
+  `src/components/cycles/cycle-detail-view.tsx:381,481`,
+  `src/app/(workspace)/[workspace]/team/[key]/page.tsx:223,326,349`,
+  `src/app/(workspace)/[workspace]/team/[key]/backlog/page.tsx:344,403`,
+  + a few more in `tests/`.
+- `src/stores/issue-store.ts` (and other pool stores) — `optimisticUpdate`
+
+**Problem.** Today every call site captures a snapshot manually:
+
+```ts
+const snapshot = issueStore.findById(id);
+issueStore.optimisticUpdate(id, patch);
+tq.enqueue(MUTATION, vars, {
+  onError: () => snapshot && issueStore.optimisticUpdate(id, snapshot),
+});
+```
+
+Two real holes:
+
+1. **No LIFO stacking.** Two overlapping optimistic ops on the same
+   entity (drag-drop while title edit is still in flight) merge via
+   `{...existing, ...patch}` — the second `onError` restores to a
+   snapshot taken *after* the first patch already applied, which means
+   later success keeps the older patch live.
+2. **Boilerplate per call site.** Easy to forget. Easy to capture the
+   wrong field. Already inconsistent across the 15 sites.
+
+**Design.** Promote the snapshot dance into the store:
+
+```ts
+// Returned closure rolls back to the entity state at the moment of call.
+const rollback = issueStore.applyOptimistic(id, patch);
+tq.enqueue(MUTATION, vars, {
+  onSuccess: rollback.commit,   // discard the snapshot
+  onError: rollback.revert,     // restore the snapshot
+});
+```
+
+Pool store internally maintains a per-entity stack of `(patch, before)`
+tuples. `revert()` removes its tuple from the stack and re-derives the
+entity by replaying remaining stack tuples on top of the current
+authoritative state. `commit()` pops without re-deriving.
+
+- **Effort:** Large. New API on the pool base store + 15-site sweep +
+  concurrency tests for stacked ops.
+- **Risk:** High. Optimistic UI semantics are subtle; need fake-timer
+  tests that simulate two enqueued mutations failing in different
+  orders.
+- **Why deferred:** Concurrent-ops design needs to be locked in (and
+  agreed on) before code.
+- **First-touch:** Implement `applyOptimistic` on `BasePoolStore`;
+  migrate `sub-issue-list.tsx:240` (a single onError site); add a
+  test that two stacked optimistic patches roll back in LIFO order.
+- **Acceptance signal:** A new vitest suite `transaction-queue.test
+  .ts` that drives 3 stacked optimistic ops on the same entity, fails
+  the middle one, and asserts the post-state matches what would have
+  happened if only the first and third had run.
+
+### 1.3 — Bootstrap ↔ WS race + self-echo filter
+
+**File entry points:**
+- `src/lib/sync-manager.ts:223-468` — `fullBootstrap`
+- `src/lib/sync-manager.ts:947-957` — WS message handler (after
+  `5b9c22e` it now handles `'resync'` too)
+- `src/server/services/sync.service.ts:14-44` — where the SyncAction
+  is created (would need a `txId` echo)
+- `src/lib/transaction-queue.ts:24-41` — where a client `txId` would
+  be generated
+
+**Problem.** Two distinct races:
+
+1. **Bootstrap clobbers fresh WS data.** `fullBootstrap()` fetches
+   `/api/sync/bootstrap` at `lastSyncId = N`. While that response is
+   in flight, a WS message for `lastSyncId = N+1` arrives, applies to
+   MobX. Then bootstrap finishes and `upsertMany()` overwrites the
+   newer state with the older snapshot. Client never sees `N+1`'s
+   change until something else touches that row.
+2. **Self-echo overwrites in-flight optimistic state.** A mutation is
+   optimistically applied (good UX), the queue fires it, the server
+   broadcasts the resulting SyncAction over WS, and the *originating*
+   client receives its own echo while `onSuccess` of the queue is
+   still mid-flight. The echo wins, overwriting any client-only
+   patches.
+
+**Design.**
+- Race 1: open the WS *before* bootstrap fetches but **buffer**
+  incoming actions until the bootstrap response is fully applied. Then
+  drain the buffer keeping only entries with `id > bootstrapLastSyncId`.
+- Race 2: client generates a `txId` in `TransactionQueue.enqueue`,
+  threads it through the GraphQL mutation; server stores it on the
+  resulting `SyncAction` (new column) and echoes it. Client filters
+  WS messages by `txId` and skips its own.
+
+- **Effort:** Medium-Large.
+- **Risk:** High. This is the heart of the sync model.
+- **Why deferred:** Schema change (`sync_actions.tx_id` column) + a
+  cross-cutting buffering refactor of `sync-manager.ts` need a clean
+  test plan first.
+- **First-touch:** Schema migration adding `tx_id text NULL` to
+  `sync_actions`; thread it through `createSyncAction`; smallest
+  client change is to skip echoes whose `txId` matches a recently
+  enqueued tx (kept in a small ring buffer for ~30s).
+- **Acceptance signal:** Manual flow — drag an issue card; observe
+  network tab shows `issueUpdate` mutation, then a WS message — and
+  the issue position doesn't snap-back during the brief moment
+  between the two.
+
+### 1.4 — Optimistic placeholder collision
+
+**File entry points:**
+- `src/stores/issue-store.ts:120-134` — `upsertMany` placeholder
+  matching
+- `src/components/issues/create-issue-modal.tsx` — issue creation
+  optimistic write site
+
+**Problem.** When a create-issue mutation is enqueued, the client
+inserts a placeholder Issue with a synthesized id. Later, when the
+server's `IssueCreate` SyncAction lands over WS, the store de-dups by
+matching `(title, teamId)` — if the placeholder matches, swap real id
+for synthetic. Two rapid creates with identical title+team collide:
+the first placeholder gets matched against the second's server echo.
+
+**Design.** Pass a client-issued `clientId` (UUID) through the
+`issueCreate` mutation. Server stores it transiently (or just echoes
+it back in the SyncAction `data` payload). Client matches placeholders
+by `clientId` instead of `(title, teamId)`. Couples nicely with the
+`txId` work above — both want a client-issued correlation id.
 
 - **Effort:** Small-Medium.
-- **First-touch:** Pass a client-issued `clientId` through the create
-  mutation; match by clientId on echo.
+- **Risk:** Low.
+- **First-touch:** Add `clientId` field to `IssueCreateInput`; have
+  `IssueService.create` echo it back in the SyncAction `data` blob;
+  update `issue-store.ts:upsertMany` to prefer `clientId`-keyed
+  matching.
+- **Acceptance signal:** New e2e test creates two issues with
+  identical titles in <100ms; both end up in the list with their
+  server-assigned ids.
 
 ---
 
-## DB hardening (one migration PR)
+## 2. DB hardening (one additive migration PR)
 
-All low-risk, high-leverage. Ship as a single additive migration.
+All low-risk, high-leverage. Ship as a single migration named
+`<date>_db_hardening`. None of the changes destroy data; all are pure
+adds (indexes, FKs, enum types, unique constraints).
 
-- **Compound indexes:**
-  - `Notification(userId, read, createdAt DESC)` — inbox unread feed
-  - `Issue(organizationId, updatedAt DESC)` — feeds, sort
-  - `Issue(assigneeId, stateId)` — "my issues"
-  - Partial indexes `WHERE archived_at IS NULL` for hot list paths
-- **Explicit `onDelete`:** `Issue` / `IssueLabel` FKs to `Organization`
-  and `Team` currently default to `Restrict`/`NoAction` and conflict
-  with `Project`/`Cycle` which `Cascade`. Make them explicit.
-- **Promote string enums to Prisma enums:** `OrganizationMember.role`,
-  `Team*Type`, `IssueRelation.type`, `Notification.type`. DB-level
-  enforcement + DataLoader-friendly types. Already follows the pattern
-  set by `CustomFieldType`.
-- **Add `@unique`:** `AuthToken.tokenHash`, `User.googleId`.
-- **`File` ↔ `Project` relation:** Currently a raw UUID with no FK.
-- **GIN index** on `Issue.previousIdentifiers` for rename-history
-  lookup.
-- **Team self-references:** `defaultIssueStateId` and `autoCloseStateId`
-  are UUIDs without FKs; add relations with `onDelete: SetNull`.
-- **`SyncAction` retention:** Add `(organizationId, modelName, modelId)`
-  index; consider `pg_partman` partitioning by `createdAt` once volume
-  warrants.
+> Run `EXPLAIN (ANALYZE, BUFFERS)` on a representative dataset
+> before/after each index addition to capture wins for the PR
+> description.
 
-**Effort:** Medium. **Risk:** Low (additive migration, no destructive
-changes). **Why deferred:** Migration coordination + benchmarking
-before/after on a representative dataset.
+### 2.1 Compound + partial indexes
+
+| Index | Hot path it serves | Replaces |
+| --- | --- | --- |
+| `notifications(user_id, read, created_at DESC)` | Inbox unread feed (`NotificationService.findByUserId`) | Two single-col indexes |
+| `issues(organization_id, updated_at DESC)` | Recent feeds, "since I last saw" | un-anchored `(updated_at)` |
+| `issues(assignee_id, state_id)` | "My issues" view | nothing |
+| `issues(team_id, state_id) WHERE archived_at IS NULL AND trashed = false` | Active list view per team | nothing |
+| `issues(project_id, archived_at, trashed)` | `Project.issues` resolver | `(project_id)` only |
+| `sync_actions(organization_id, model_name, model_id)` | Targeted SyncAction replay/debug | nothing |
+
+### 2.2 Explicit `onDelete` on Issue / IssueLabel FKs
+
+`prisma/schema.prisma` Issue model FKs to `Organization` and `Team`
+omit `onDelete`. Prisma defaults to `Restrict`/`NoAction`, while peer
+models (`Project`, `Cycle`) Cascade. Result: deleting an org with
+issues errors out, but deleting an org with projects+issues has
+inconsistent semantics.
+
+**Fix.** Set `onDelete: Cascade` on `Issue.organization` and
+`Issue.team`. Same for `IssueLabel.organization` / `IssueLabel.team`.
+Document the choice in the schema.
+
+### 2.3 Promote string enums to Prisma enums
+
+| Field | Current | Allowed values |
+| --- | --- | --- |
+| `OrganizationMember.role` | `String @db.VarChar(20)` | `owner / admin / member / guest` |
+| `Team.issueEstimationType` | `String @db.VarChar(20)` | `notUsed / exponential / fibonacci / linear / tShirt` |
+| `IssueRelation.type` | `String @db.VarChar(20)` | `blocks / blocked_by / related / duplicate` |
+| `Notification.type` | `String @db.VarChar(40)` | `ISSUE_ASSIGNED / ISSUE_STATUS_CHANGED / ISSUE_COMMENT / …` |
+| `WorkflowState.type` | `String @db.VarChar(20)` | `triage / backlog / unstarted / started / completed / canceled` |
+| `Project.statusType` | `String @db.VarChar(20)` | `backlog / planned / started / paused / completed / canceled` |
+
+Pattern already exists for `CustomFieldType`. Each promotion is
+`enum + ALTER TABLE … TYPE … USING …` and a Prisma schema swap. Update
+service-layer string literals to typed enum values; update GraphQL
+schema to expose enum types.
+
+### 2.4 Misc additive constraints
+
+- `auth_tokens.token_hash` — currently has `@@index([tokenHash])`,
+  promote to `@unique` (the field is a SHA-256 hash, collisions in
+  practice = 0).
+- `users.google_id` — add `@unique`. Prevents two accounts from
+  pointing at the same Google identity.
+- `Issue.previousIdentifiers String[]` — add `@@index([previousIdentifiers], type: Gin)`
+  for rename-history lookups.
+- `Team.defaultIssueStateId` / `Team.autoCloseStateId` — currently
+  raw UUID columns with no FK. Add `@relation` with `onDelete: SetNull`
+  pointing at `WorkflowState`.
+- `File.projectId` — currently a raw UUID. Add `project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)`.
+  (`File.issueId` already has the relation.)
+
+### 2.5 SyncAction retention
+
+Not in this PR — flag for follow-up. Once volume warrants, partition
+`sync_actions` by `created_at` via `pg_partman` and add a daily job
+that drops partitions older than ~30d. Delta sync won't fetch them
+(clients past 30d offline get a full bootstrap regardless).
+
+- **Effort:** Medium (one migration, schema edits across ~10 models).
+- **Risk:** Low. Migration is additive; no row rewrites except enum
+  type swaps which run as `USING role::"OrgRole"`-style casts.
+- **Why deferred:** Wants a benchmark step (capture a baseline
+  EXPLAIN ANALYZE pre-migration) before merging, and coordination
+  with downstream tooling (CSV export, custom-field editor) that
+  consume the string enum values.
+- **First-touch:** Run `prisma migrate diff` with the proposed schema
+  changes, save the SQL to `prisma/migrations/<date>_db_hardening
+  /migration.sql`, eyeball every `ALTER TYPE` for safety.
+- **Acceptance signal:** All existing 380 unit tests still pass
+  unchanged; e2e suite still passes; benchmark numbers in PR
+  description show ≥2× improvement on the inbox-unread query for an
+  org with ≥10k notifications.
 
 ---
 
-## Performance — bigger items
+## 3. Performance — bigger items
 
-### Bootstrap pagination + streaming
+### 3.1 Bootstrap pagination + streaming
 
-`/api/sync/bootstrap` ships every issue / label / cycle / etc. for the
-org in one buffered NDJSON response. On a 10k-issue org this is
-multi-MB and blocks app boot. The response is buffered into
-`lines.join('\n')` instead of streamed.
+**File entry points:**
+- `src/server/services/sync.service.ts:43-132` — `getBootstrapData`
+- `src/app/api/sync/bootstrap/route.ts:38-95` — NDJSON serializer
+  buffered into `lines.join('\n')`
+- `src/lib/sync-manager.ts:218-410` — `fullBootstrap` reader
 
-- **Effort:** Large. Cap each table at a sensible page size, stream via
-  `ReadableStream` so the client parses incrementally, omit
-  `description`/`descriptionState` from issues, and let the client lazy
-  load remaining pages.
-- **Risk:** Medium. Client SyncManager + Dexie persistence both need
-  awareness of partial bootstrap.
+**Problem.** Bootstrap returns every issue / label / cycle / etc. for
+the org in a single buffered NDJSON response. For a 10k-issue org this
+is multi-MB and gates app boot for the entire request duration. The
+current `descriptionState` omit (commit `4ea91b1`) trims the worst of
+it for issue *list* queries but not for bootstrap.
 
-### WebSocket fan-out batching + back-pressure
+**Design.**
+- Per-table `take` caps (e.g. issues 5000, labels 500, cycles 100)
+  with a follow-up paginated fetch for the rest.
+- Stream the response via `ReadableStream` so the client can start
+  hydrating the first batches while later batches are still being
+  serialized server-side.
+- Drop `description` and `descriptionState` from the bootstrap issues
+  payload (already done for list queries); the detail panel re-fetches
+  on demand.
+- Add a `nextCursor` envelope per table so the client can lazy-load
+  the rest in the background after the WebSocket is open.
 
-`broadcastToOrgAll` calls `ws.send` synchronously per client per
-SyncAction with no batching, no `bufferedAmount` checks. At 1000 users
+- **Effort:** Large. Both server (streaming NDJSON, per-table cursor)
+  and client (`SyncManager.fullBootstrap` + Dexie write loop need
+  awareness of partial bootstrap) change.
+- **Risk:** Medium. The first-page experience must still be usable on
+  its own; partial bootstrap with a slow tail breaks invariants like
+  "every Issue's `assigneeId` resolves to a User in the User store"
+  unless we order tables so referenced rows arrive first.
+- **First-touch:** Ship streaming + per-table caps first while keeping
+  bootstrap effectively-complete (caps high enough that nothing is
+  truncated for typical orgs). Add the `nextCursor` background-load
+  in a follow-up.
 
-- 10 mut/s = 10k sends/s on a single Node process.
+### 3.2 WebSocket fan-out batching + back-pressure
 
-- **Effort:** Medium. Coalesce per-org with a 50ms flush window into a
-  single `{sync: [...]}` message; track `ws.bufferedAmount` and close
-  slow sockets.
-- **Risk:** Medium.
+**File entry points:**
+- `src/server/ws/connection-manager.ts:42-52` — per-client `ws.send`
+- `src/server/ws/index.ts:50-55` — Redis `message` → broadcast
 
-### Smaller perf wins
+**Problem.** `broadcastToOrgAll` calls `ws.send` synchronously per
+client per SyncAction. No batching, no `bufferedAmount` checks. At
+1000 users + 10 mut/s = 10k sends/s on a single Node process. Slow
+clients block the loop for the org because there's no backpressure
+handling.
 
-- WS server uses app-level JSON pings; switch to native `ws.ping()` +
-  `pong`-driven terminate timer so dead connections close on a TCP
-  reset.
-- `IssueService.maybeCloseParent` / `maybeCloseChildren` always reads
-  the team row, even when neither auto-close flag is set.
-- MobX stores rebuild filters with `Array.from(pool.values()).filter`
-  on every render. Add secondary indexes (`Map<teamId, Set<id>>`) into
-  the base pool store.
+**Design.**
+- Coalesce per-org with a 50ms flush window. Buffer SyncActions in a
+  per-org array; flush as a single `{ cmd: 'sync', sync: [...] }`
+  message. The client already accepts arrays — this is purely a
+  server change.
+- Track `ws.bufferedAmount` per connection. If it exceeds a threshold
+  (~1MB), close the socket with a "slow client" code; the client
+  reconnects and re-runs delta.
+
+- **Effort:** Medium.
+- **Risk:** Medium. Latency-sensitive UX (drag-drop) will see ~25ms
+  more median delivery time.
+
+### 3.3 Smaller perf wins
+
+| Item | File / line | Estimated impact |
+| --- | --- | --- |
+| Native `ws.ping()` + pong-driven terminate timer (vs. app-level JSON pings) | `src/server/ws/index.ts:106-121` | Closes dead connections that survived TCP reset |
+| `IssueService.maybeCloseParent` / `maybeCloseChildren` skip team read when neither auto-close flag is set | `src/server/services/issue.service.ts:289-295, 335-438` | -5–30ms on every `issueUpdate` with state change |
+| MobX secondary indexes (`Map<teamId, Set<id>>`) on base pool store | `src/stores/issue-store.ts:18-29, 52-79` | Eliminates `Array.from(pool.values()).filter` in observer components — material on 10k-issue stores |
+| TipTap further code-split inside the lazy editor module | `src/components/editor/tiptap-editor.tsx` | Probably a no-op now that the editor is dynamically imported; verify with bundle inspector before doing more work |
 
 ---
 
-## Frontend polish
+## 4. Frontend polish
 
-- **MobX secondary indexes** (paired with the perf section above).
-- **`StatusSelect` / a11y polish** — keyboard nav and aria-label
-  audit on custom comboboxes (post-#11 follow-up).
+### 4.1 MobX secondary indexes
+
+Paired with §3.3 — same code change, same payoff (perf for filter
+selectors). Listed under both because it improves both bundle CPU
+work *and* perceived UI responsiveness.
+
+### 4.2 `StatusSelect` and combobox a11y audit
+
+**File entry points:**
+- `src/components/properties/status-select.tsx`
+- `src/components/properties/assignee-select.tsx`
+- `src/components/properties/priority-select.tsx`
+- `src/components/properties/label-select.tsx`
+- `src/components/properties/project-select.tsx`
+- `src/components/properties/cycle-select.tsx`
+
+**Audit checklist.**
+- All combobox buttons have `aria-haspopup="listbox"` and
+  `aria-expanded`.
+- Listbox items have `role="option"` and `aria-selected`.
+- Keyboard navigation: Up/Down moves focus, Enter commits, Esc closes,
+  Home/End jump.
+- Type-ahead search announces the filtered result count via a
+  visually-hidden live region.
+- Color-coded state pills don't carry semantic meaning by color alone
+  (already mostly OK — they include text labels).
+
+**Effort:** Small per component, ~30min × 6 components.
 
 ---
 
-## Test coverage gaps
+## 5. Test coverage gaps
 
 Locking in the parts of the system most likely to hide regressions.
+Listed in priority order.
 
-| File / area                 | Current state                                  | What to add                                                                                                                                                  |
-| --------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `auth.service.ts`           | Refresh-token reuse covered (commit `e826638`) | Magic-link expiry / wrong-code / replay; `TEST_AUTH_CODE` only honored when `NODE_ENV === 'test'`; JWT entropy boot guard                                    |
-| `sync-manager.ts` (950 LOC) | 0 tests                                        | Extract a pure `applyActions(actions, stores)` and unit-test the dispatch + `maxId` math; integration test via `fake-indexeddb`                              |
-| `transaction-queue.ts`      | 0 tests                                        | Retry/backoff (3 retries with 1s/3s/10s delays), permanent-error short-circuit, processing flag re-entrance                                                  |
-| WebSocket handshake         | 0 tests                                        | Spin a `ws` test server; assert JWT-rejected handshake, org-scoped delivery (user A doesn't get user B's org actions)                                        |
-| Resolver auth guards        | 7 of 20 covered                                | Parameterized `[mutation, serviceError, expectedCode]` table per resolver — guarantees error-code mapping stays in sync with `extensions.code` discriminator |
-| MobX stores                 | 2 of 17 covered                                | Shared `createPoolStoreTests(store)` helper exercising `applySyncAction` dispatch + `optimisticUpdate` rollback semantics across stores                      |
-| `e2e/issue-crud.spec.ts`    | empty file                                     | CRUD spec: create / edit title+description / change state / assign / archive / delete                                                                        |
-| E2E flow gaps               | Lightweight                                    | Drag-drop reorder, offline → reconnect → reload persistence, multi-user cross-org isolation, magic-link signup (vs. existing `loginAs` shortcut)             |
+### 5.1 `auth.service.ts`
+
+**Currently covered (commit `e826638`):** refresh-token reuse / rotation.
+
+**Gaps.**
+- Magic-link expiry — `verifyMagicLink` rejects tokens whose
+  `expiresAt < now`.
+- Wrong-code rejection without leaking which case failed
+  (no-such-user vs. wrong-code).
+- Replay — same token submitted twice rejected on second use because
+  `revokedAt` is set on first.
+- `TEST_AUTH_CODE` only honored when `NODE_ENV === 'test'` (boundary
+  test in `auth.service.test.ts`).
+
+### 5.2 `sync-manager.ts` (950 LOC, 0 tests)
+
+Approach: extract the pure dispatch portion of `applyActions` into a
+new `apply-actions.ts` helper that takes `(actions, stores)` and has
+no `db` / `fetch` / `WebSocket` side effects. Then unit-test:
+- I/U/D/A action dispatch per model
+- `lastSyncId` advance via `BigInt` max-of comparison
+- duplicate-id idempotency
+
+Integration test under `fake-indexeddb` for the bootstrap → load →
+delta sequence.
+
+### 5.3 `transaction-queue.ts` (84 LOC, 0 tests)
+
+Pairs with §1.2. Test cases under `vi.useFakeTimers`:
+- One enqueued tx → mutation fires once → `onSuccess` called.
+- Mutation throws → retried after 1s, 3s, 10s.
+- After 3 retries → `onError` called once, queue moves on.
+- `permanent: true` error → `onError` immediately, no retry.
+- Two enqueued mutations process sequentially (the second waits for
+  the first to resolve).
+- Queue drains FIFO when both succeed.
+
+### 5.4 WebSocket handshake + delivery
+
+Spin a real `ws` server in test (the production module is small enough
+to import). Cases:
+- Missing token → `4001 Missing token`.
+- Invalid token (bad signature, expired, wrong type) → `4001 Invalid
+  token`.
+- Valid token → `connected` ack; subscribed to `sync:<orgId>`.
+- Org A's broadcast doesn't reach Org B's connections.
+- `resync` hint after Redis reconnect (commit `5b9c22e`) — exercise
+  the reconnect path with a flaky Redis mock.
+
+### 5.5 Resolver auth-guard sweep
+
+Currently: 7 of 20 resolver files have any test coverage. Build a
+parameterized helper:
+
+```ts
+testAuthGuard({
+  resolver: issueResolvers.Mutation.issueArchive,
+  args: { id: 'x' },
+  serviceError: new IssueNotFoundError(),
+  expectedCode: 'NOT_FOUND',
+});
+```
+
+Run the table for every mutation. Catches drift between service-layer
+typed errors and the GraphQL `extensions.code` discriminator.
+
+### 5.6 MobX store coverage
+
+Currently: 2 of 17 store files have tests. Build a shared
+`createPoolStoreTests(store, fixtureRow)` helper that exercises:
+- `applySyncAction('I')` adds the row.
+- `applySyncAction('U')` merges the patch.
+- `applySyncAction('D')` removes the row.
+- `applySyncAction('A')` archives in place.
+- `optimisticUpdate(id, patch)` followed by `applySyncAction('U')`
+  with a different patch — the server-truth patch wins.
+- Idempotency: applying the same `'I'` twice doesn't double-insert.
+
+Run the helper across all 17 stores.
+
+### 5.7 E2E gaps
+
+| Spec | Status | What to add |
+| --- | --- | --- |
+| `tests/e2e/issue-crud.spec.ts` | empty file | create / edit title / edit description / change state / assign / archive / delete |
+| `tests/e2e/drag-drop.spec.ts` | missing | drag a card across columns; verify position persists after reload |
+| `tests/e2e/offline-reload.spec.ts` | missing | offline → create issue → reconnect → reload page → issue persists |
+| `tests/e2e/multi-user.spec.ts` | missing | two browser contexts in different orgs; org A's actions invisible to org B |
+| `tests/e2e/magic-link-signup.spec.ts` | missing | full magic-link signup flow (vs. existing `loginAs` shortcut) |
 
 ---
 
-## How to use this doc
+## 6. Already shipped (since 2026-04-22)
+
+A condensed history of what landed in main. See `git log` for full
+details.
+
+### Security (7 commits — all 13 audit items closed)
+
+- Test-auth gate, JWT entropy boot guard, structured logger in sync
+  routes (`f6f6bde`).
+- File IDOR scoping; SVG/HTML attachments forced to download
+  (`4062538`).
+- Email format validation; per-email + per-IP auth-mutation rate
+  limits (`3a76b9e`).
+- Server-controlled Google OAuth redirect; signed `state` JWT for
+  CSRF (`b0e10b0`).
+- Hard caps on GraphQL query depth + complexity (`3f0b297`).
+- Refresh-token family + reuse detection (`76d38d7`).
+- Plus follow-ups: `TRUST_PROXY_HEADERS` gate on XFF, dead OAuth env
+  removed (`0563e6f`); refresh-token reuse tests (`e826638`).
+
+### Performance
+
+- Detached Redis publish; batched notification inserts via
+  `createMany` (`e954ce2`).
+- Lazy-load TipTap editor; trim `lowlight` to common grammars
+  (`2c193f1`).
+- Omit `descriptionState` on issue list queries (`4ea91b1`).
+- DataLoaders for GraphQL parent relations (`fb6a8a4`).
+
+### Sync
+
+- Paginate delta sync to bound server memory (`f33c3a3`).
+- Wipe Dexie cache on schema-bump upgrade (`dffa094`).
+- Redis subscriber catch-up via `resync` hint after disconnect
+  (`5b9c22e`).
+- Wipe IndexedDB cache when JWT orgId differs from cached
+  (`a2cb094`).
+
+### Pattern drift
+
+- Extract `OrganizationService` from resolver (`bfcbbfb`).
+- Move 5 resolver-level Prisma calls into services (`fedf6ce`).
+- Hex colors → semantic CSS tokens (`85bc140`).
+
+### Frontend
+
+- `observer()` on `IssueDetailPanel` + `RelationsSection`; lazy
+  `CommandPalette`; `Toaster` re-exported via `@/lib/toast`
+  (`720addb`).
+- App Router `error.tsx` + `loading.tsx` boundaries (`b331724`).
+
+### Tests
+
+- 343 → 380. New suites for rate-limit, file IDOR, delta pagination,
+  OAuth state JWT, OrganizationService (`71e7e04`).
+
+### Docs
+
+- This file (`4f1936c`); follow-up prune (`25f4f08`).
+
+---
+
+## 7. How to use this doc
 
 When picking the next thing up:
 
-1. Read the entry's *First-touch* line — it's the smallest committable
-   step that proves the design works.
-2. Spawn a brainstorm before the heavy ones (#18, #21, bootstrap
-   streaming) — they need a real design decision before code.
-3. Quality gates (`yarn lint && yarn typecheck && yarn test --run &&
-   yarn build`) and a sub-agent review run **per commit**, per the
+1. Read the entry's *First-touch* line — the smallest committable
+   step that proves the design works. If "First-touch" is missing or
+   unclear, brainstorm before writing code.
+2. Items marked **Risk: High** want a brainstorming pass (the
+   `superpowers:brainstorming` skill or a `Plan` dispatch) before
+   touching code.
+3. Quality gates run **per commit**:
+   `yarn lint && yarn typecheck && yarn test --run && yarn build`.
+4. Sub-agent code review (`code-reviewer`) per commit, per the
    established session pattern.
-4. Move the entry to a Done section in this file (or delete it) once
-   the work lands.
+5. Move the entry from §1-§5 into §6 once the work lands.
