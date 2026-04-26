@@ -58,6 +58,37 @@ redisSubscriber.on('error', (err: Error) => {
   log.error({ err }, 'Redis subscriber error');
 });
 
+// Track whether the pubsub channel has been disrupted at least once.
+// ioredis emits `ready` on initial connect and again after every reconnect;
+// only reconnects need a catch-up broadcast. Messages published while the
+// subscriber was disconnected are gone — the safe response is to ask
+// every connected client to re-run deltaSync(), which will pull anything
+// the WS missed via the HTTP catch-up endpoint.
+//
+// `reconnecting` covers the auto-retry path; `end` covers the case where
+// retryStrategy gives up and an operator (or ioredis user code) later
+// reconnects manually — without setting the flag in both places, a hard
+// outage followed by a successful reconnect would silently skip the
+// resync hint.
+let pubsubWasDisrupted = false;
+redisSubscriber.on('reconnecting', () => {
+  pubsubWasDisrupted = true;
+});
+redisSubscriber.on('end', () => {
+  pubsubWasDisrupted = true;
+});
+redisSubscriber.on('ready', () => {
+  if (!pubsubWasDisrupted) {
+    return;
+  }
+  pubsubWasDisrupted = false;
+  log.warn('Redis subscriber reconnected — broadcasting resync hint');
+  const payload = JSON.stringify({ cmd: 'resync' });
+  for (const orgId of subscribedOrgs) {
+    connectionManager.broadcastToOrgAll(orgId, payload);
+  }
+});
+
 // ─── HTTP + WS server ────────────────────────────────────────────────────────
 
 const httpServer = createServer((_req, res) => {

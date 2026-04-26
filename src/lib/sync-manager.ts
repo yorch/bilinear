@@ -945,6 +945,15 @@ export class SyncManager {
     const unsub1 = this.wsClient.onMessage(async msg => {
       if (msg.cmd === 'sync') {
         await this.applyActions(msg.sync);
+      } else if (msg.cmd === 'resync') {
+        // Server lost messages (typically after a Redis subscriber blip).
+        // Re-run delta from our cursor to pull whatever the WS dropped.
+        // Stagger the request with a small jitter so a fleet-wide hint
+        // doesn't trigger a thundering herd against /api/sync/delta.
+        const jitterMs = Math.floor(Math.random() * 500);
+        setTimeout(() => {
+          void this.deltaSync();
+        }, jitterMs);
       }
     });
 

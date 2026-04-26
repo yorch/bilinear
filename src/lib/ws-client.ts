@@ -7,7 +7,8 @@ export type WsMessage =
   | { cmd: 'connected'; orgId: string }
   | { cmd: 'sync'; sync: SerializedSyncAction[] }
   | { cmd: 'ping' }
-  | { cmd: 'pong' };
+  | { cmd: 'pong' }
+  | { cmd: 'resync' };
 
 export interface SerializedSyncAction {
   id: string;
