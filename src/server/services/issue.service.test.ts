@@ -6,10 +6,7 @@ import {
   TEST_TEAM,
   TEST_USER,
 } from '../../test/fixtures';
-import {
-  createMockPrisma,
-  type MockPrismaClient,
-} from '../../test/prisma-mock';
+import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import { IssueService, IssueStateRequiredError } from './issue.service';
 
 const COMPLETED_STATE = DEFAULT_WORKFLOW_STATES[3]; // type: 'completed'
@@ -591,11 +588,7 @@ describe('IssueService', () => {
       prisma.issue.findMany.mockResolvedValue([]);
       prisma.issue.count.mockResolvedValue(0);
 
-      await service.findMany(
-        TEST_ORG.id,
-        { teamId: TEST_TEAM.id },
-        { first: 50 },
-      );
+      await service.findMany(TEST_ORG.id, { teamId: TEST_TEAM.id }, { first: 50 });
 
       expect(prisma.issue.findMany).toHaveBeenCalledWith(
         expect.objectContaining({

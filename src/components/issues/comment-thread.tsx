@@ -1,11 +1,6 @@
 'use client';
 
-import {
-  CheckCircle,
-  CornerDownRight,
-  MoreHorizontal,
-  Smile,
-} from 'lucide-react';
+import { CheckCircle, CornerDownRight, MoreHorizontal, Smile } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -15,41 +10,41 @@ import { TipTapEditor } from '../editor/tiptap-editor.lazy';
 import { UserAvatar } from '../properties/assignee-select';
 
 interface CommentAuthor {
-  id: string;
-  displayName: string;
-  initials: string;
   avatarBackgroundColor: string;
   avatarUrl?: string | null;
+  displayName: string;
+  id: string;
+  initials: string;
 }
 
 interface CommentReaction {
-  id: string;
   emoji: string;
-  userId: string;
+  id: string;
   user: { id: string; displayName: string };
+  userId: string;
 }
 
 interface CommentItem {
-  id: string;
-  issueId: string;
+  author: CommentAuthor;
   body: string;
   bodyData: Record<string, unknown> | null;
-  parentId: string | null;
-  resolvedAt: string | null;
-  editedAt: string | null;
   createdAt: string;
-  updatedAt: string;
-  author: CommentAuthor;
-  replies: CommentItem[];
+  editedAt: string | null;
+  id: string;
+  issueId: string;
+  parentId: string | null;
   reactions: CommentReaction[];
+  replies: CommentItem[];
   replyCount: number;
+  resolvedAt: string | null;
+  updatedAt: string;
 }
 
 interface CommentThreadProps {
-  issueId: string;
-  teamId?: string;
   currentUserId?: string;
+  issueId: string;
   mentionUsers?: MentionItem[];
+  teamId?: string;
 }
 
 const COMMENTS_FRAGMENT = `
@@ -220,17 +215,14 @@ export function CommentThread({
   const toggleResolve = async (comment: CommentItem) => {
     try {
       const isResolved = !!comment.resolvedAt;
-      const mutation = isResolved
-        ? COMMENT_UNRESOLVE_MUTATION
-        : COMMENT_RESOLVE_MUTATION;
+      const mutation = isResolved ? COMMENT_UNRESOLVE_MUTATION : COMMENT_RESOLVE_MUTATION;
       const key = isResolved ? 'commentUnresolve' : 'commentResolve';
       const res = await gql(mutation, { id: comment.id });
       type ResolvePayload = {
         comment: { id: string; resolvedAt: string | null };
       };
-      const updated = (
-        res.data as Record<string, ResolvePayload | undefined> | undefined
-      )?.[key]?.comment;
+      const updated = (res.data as Record<string, ResolvePayload | undefined> | undefined)?.[key]
+        ?.comment;
       if (updated) {
         setComments(prev =>
           updateCommentInTree(prev, updated.id, c => ({
@@ -244,11 +236,7 @@ export function CommentThread({
     }
   };
 
-  const toggleReaction = async (
-    commentId: string,
-    emoji: string,
-    hasReacted: boolean,
-  ) => {
+  const toggleReaction = async (commentId: string, emoji: string, hasReacted: boolean) => {
     try {
       if (hasReacted) {
         await gql(REACTION_REMOVE_MUTATION, { commentId, emoji });
@@ -265,7 +253,7 @@ export function CommentThread({
     return (
       <div className="space-y-3 py-2">
         {[1, 2].map(i => (
-          <div key={i} className="flex gap-3">
+          <div className="flex gap-3" key={i}>
             <div className="h-7 w-7 shrink-0 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-700" />
             <div className="flex-1 space-y-2">
               <div className="h-3 w-32 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" />
@@ -282,38 +270,34 @@ export function CommentThread({
       {/* Comment list */}
       {comments.map(comment => (
         <CommentCard
-          key={comment.id}
           comment={comment}
           currentUserId={currentUserId}
-          mentionUsers={mentionUsers}
           issueId={issueId}
-          teamId={teamId}
+          key={comment.id}
+          mentionUsers={mentionUsers}
+          onConvertToSubIssue={id => setComments(prev => prev.filter(c => c.id !== id))}
           onDelete={deleteComment}
-          onToggleResolve={toggleResolve}
-          onToggleReaction={toggleReaction}
           onReply={id => setShowReplyTo(showReplyTo === id ? null : id)}
-          showReplyTo={showReplyTo}
           onSubmitReply={submitComment}
+          onToggleReaction={toggleReaction}
+          onToggleResolve={toggleResolve}
           onUpdate={updated =>
-            setComments(prev =>
-              updateCommentInTree(prev, updated.id, () => updated),
-            )
+            setComments(prev => updateCommentInTree(prev, updated.id, () => updated))
           }
-          onConvertToSubIssue={id =>
-            setComments(prev => prev.filter(c => c.id !== id))
-          }
+          showReplyTo={showReplyTo}
+          teamId={teamId}
         />
       ))}
 
       {/* New comment composer */}
       <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
         <CommentComposer
-          placeholder="Write a comment… (supports **markdown**, @mentions)"
+          mentionUsers={mentionUsers}
+          onChange={setNewComment}
           onSubmit={body => submitComment(body)}
+          placeholder="Write a comment… (supports **markdown**, @mentions)"
           submitting={submitting}
           value={newComment}
-          onChange={setNewComment}
-          mentionUsers={mentionUsers}
         />
       </div>
     </div>
@@ -344,11 +328,7 @@ function CommentCard({
   depth?: number;
   onDelete: (id: string) => void;
   onToggleResolve: (comment: CommentItem) => void;
-  onToggleReaction: (
-    commentId: string,
-    emoji: string,
-    hasReacted: boolean,
-  ) => void;
+  onToggleReaction: (commentId: string, emoji: string, hasReacted: boolean) => void;
   onReply: (id: string) => void;
   showReplyTo: string | null;
   onSubmitReply: (body: string, parentId?: string) => void;
@@ -389,9 +369,8 @@ function CommentCard({
         id: comment.id,
         input: { body: editBody },
       });
-      const updated = (
-        res.data as { commentUpdate?: { comment: CommentItem } } | undefined
-      )?.commentUpdate?.comment;
+      const updated = (res.data as { commentUpdate?: { comment: CommentItem } } | undefined)
+        ?.commentUpdate?.comment;
       if (updated) {
         onUpdate(updated);
       }
@@ -417,9 +396,7 @@ function CommentCard({
       toast.error('Cannot convert — team not resolved');
       return;
     }
-    const text =
-      new DOMParser().parseFromString(comment.body, 'text/html').body
-        .textContent ?? '';
+    const text = new DOMParser().parseFromString(comment.body, 'text/html').body.textContent ?? '';
     const title = text.trim().slice(0, 255) || 'Sub-issue from comment';
     try {
       await gql(CONVERT_TO_SUB_ISSUE_MUTATION, {
@@ -463,16 +440,12 @@ function CommentCard({
         {/* Header */}
         <div className="mb-2 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <UserAvatar user={comment.author} size="md" />
+            <UserAvatar size="md" user={comment.author} />
             <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
               {comment.author.displayName}
             </span>
-            <span className="text-xs text-zinc-400">
-              {formatRelativeTime(comment.createdAt)}
-            </span>
-            {comment.editedAt && (
-              <span className="text-xs italic text-zinc-400">(edited)</span>
-            )}
+            <span className="text-xs text-zinc-400">{formatRelativeTime(comment.createdAt)}</span>
+            {comment.editedAt && <span className="text-xs italic text-zinc-400">(edited)</span>}
             {isResolved && (
               <span className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700 dark:bg-green-900/30 dark:text-green-400">
                 <CheckCircle className="h-3 w-3" />
@@ -484,12 +457,12 @@ function CommentCard({
           {/* Actions */}
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             {/* Emoji reaction */}
-            <div ref={emojiRef} className="relative">
+            <div className="relative" ref={emojiRef}>
               <button
-                type="button"
-                onClick={() => setShowEmojiPicker(v => !v)}
                 className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
+                onClick={() => setShowEmojiPicker(v => !v)}
                 title="React"
+                type="button"
               >
                 <Smile className="h-3.5 w-3.5" />
               </button>
@@ -499,21 +472,16 @@ function CommentCard({
                     const info = reactionCounts[emoji];
                     return (
                       <button
-                        key={emoji}
-                        type="button"
-                        onClick={() => {
-                          onToggleReaction(
-                            comment.id,
-                            emoji,
-                            info?.reacted ?? false,
-                          );
-                          setShowEmojiPicker(false);
-                        }}
                         className={cn(
                           'rounded px-1 py-0.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700',
-                          info?.reacted &&
-                            'bg-indigo-100 dark:bg-indigo-900/30',
+                          info?.reacted && 'bg-indigo-100 dark:bg-indigo-900/30',
                         )}
+                        key={emoji}
+                        onClick={() => {
+                          onToggleReaction(comment.id, emoji, info?.reacted ?? false);
+                          setShowEmojiPicker(false);
+                        }}
+                        type="button"
                       >
                         {emoji}
                       </button>
@@ -526,10 +494,10 @@ function CommentCard({
             {/* Quote reply */}
             {depth === 0 && (
               <button
-                type="button"
-                onClick={handleQuoteReply}
                 className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
+                onClick={handleQuoteReply}
                 title="Quote reply"
+                type="button"
               >
                 <CornerDownRight className="h-3.5 w-3.5" />
               </button>
@@ -537,25 +505,25 @@ function CommentCard({
 
             {/* Resolve */}
             <button
-              type="button"
-              onClick={() => onToggleResolve(comment)}
               className={cn(
                 'rounded p-1 transition-colors',
                 isResolved
                   ? 'text-green-600 hover:bg-green-100 dark:hover:bg-green-900/20'
                   : 'text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700',
               )}
+              onClick={() => onToggleResolve(comment)}
               title={isResolved ? 'Unresolve' : 'Resolve'}
+              type="button"
             >
               <CheckCircle className="h-3.5 w-3.5" />
             </button>
 
             {/* More menu (edit/delete/convert) */}
-            <div ref={menuRef} className="relative">
+            <div className="relative" ref={menuRef}>
               <button
-                type="button"
-                onClick={() => setShowMenu(v => !v)}
                 className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
+                onClick={() => setShowMenu(v => !v)}
+                type="button"
               >
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </button>
@@ -563,12 +531,12 @@ function CommentCard({
                 <div className="absolute right-0 top-6 z-50 min-w-[160px] rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
                   {isOwn && (
                     <button
-                      type="button"
+                      className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
                       onClick={() => {
                         setEditing(true);
                         setShowMenu(false);
                       }}
-                      className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                      type="button"
                     >
                       Edit
                     </button>
@@ -576,21 +544,21 @@ function CommentCard({
                   {/* Convert to sub-issue — only on top-level comments */}
                   {depth === 0 && (
                     <button
-                      type="button"
-                      onClick={handleConvertToSubIssue}
                       className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                      onClick={handleConvertToSubIssue}
+                      type="button"
                     >
                       Convert to sub-issue
                     </button>
                   )}
                   {isOwn && (
                     <button
-                      type="button"
+                      className="w-full px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
                       onClick={() => {
                         onDelete(comment.id);
                         setShowMenu(false);
                       }}
-                      className="w-full px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                      type="button"
                     >
                       Delete
                     </button>
@@ -605,24 +573,24 @@ function CommentCard({
         {editing ? (
           <div className="space-y-2">
             <TipTapEditor
+              autofocus
+              className="rounded border border-indigo-400 p-1 text-sm"
               content={editBody}
               onChange={setEditBody}
               showToolbar
-              autofocus
-              className="rounded border border-indigo-400 p-1 text-sm"
             />
             <div className="flex gap-2">
               <button
-                type="button"
-                onClick={saveEdit}
                 className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700"
+                onClick={saveEdit}
+                type="button"
               >
                 Save
               </button>
               <button
-                type="button"
-                onClick={() => setEditing(false)}
                 className="rounded-md px-3 py-1 text-xs text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                onClick={() => setEditing(false)}
+                type="button"
               >
                 Cancel
               </button>
@@ -630,33 +598,31 @@ function CommentCard({
           </div>
         ) : (
           <TipTapEditor
+            className="prose prose-sm dark:prose-invert max-w-none text-zinc-700 dark:text-zinc-300"
             content={comment.body}
             readOnly
-            className="prose prose-sm dark:prose-invert max-w-none text-zinc-700 dark:text-zinc-300"
           />
         )}
 
         {/* Reaction summary */}
         {Object.keys(reactionCounts).length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
-            {Object.entries(reactionCounts).map(
-              ([emoji, { count, reacted }]) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => onToggleReaction(comment.id, emoji, reacted)}
-                  className={cn(
-                    'flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors',
-                    reacted
-                      ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-                      : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700',
-                  )}
-                >
-                  <span>{emoji}</span>
-                  <span>{count}</span>
-                </button>
-              ),
-            )}
+            {Object.entries(reactionCounts).map(([emoji, { count, reacted }]) => (
+              <button
+                className={cn(
+                  'flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors',
+                  reacted
+                    ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
+                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700',
+                )}
+                key={emoji}
+                onClick={() => onToggleReaction(comment.id, emoji, reacted)}
+                type="button"
+              >
+                <span>{emoji}</span>
+                <span>{count}</span>
+              </button>
+            ))}
           </div>
         )}
       </div>
@@ -666,21 +632,21 @@ function CommentCard({
         <div className="ml-4 mt-1 space-y-1 border-l-2 border-zinc-200 pl-4 dark:border-zinc-700">
           {comment.replies.map(reply => (
             <CommentCard
-              key={reply.id}
               comment={reply}
               currentUserId={currentUserId}
-              mentionUsers={mentionUsers}
-              issueId={issueId}
-              teamId={teamId}
               depth={1}
-              onDelete={onDelete}
-              onToggleResolve={onToggleResolve}
-              onToggleReaction={onToggleReaction}
-              onReply={onReply}
-              showReplyTo={showReplyTo}
-              onSubmitReply={onSubmitReply}
-              onUpdate={onUpdate}
+              issueId={issueId}
+              key={reply.id}
+              mentionUsers={mentionUsers}
               onConvertToSubIssue={onConvertToSubIssue}
+              onDelete={onDelete}
+              onReply={onReply}
+              onSubmitReply={onSubmitReply}
+              onToggleReaction={onToggleReaction}
+              onToggleResolve={onToggleResolve}
+              onUpdate={onUpdate}
+              showReplyTo={showReplyTo}
+              teamId={teamId}
             />
           ))}
         </div>
@@ -690,16 +656,16 @@ function CommentCard({
       {showReplyTo === comment.id && (
         <div className="ml-4 mt-2 border-l-2 border-zinc-200 pl-4 dark:border-zinc-700">
           <CommentComposer
-            placeholder="Reply…"
+            compact
+            mentionUsers={mentionUsers}
+            onChange={setReplyBody}
             onSubmit={body => {
               onSubmitReply(body, comment.id);
               setReplyBody('');
             }}
+            placeholder="Reply…"
             submitting={false}
             value={replyBody}
-            onChange={setReplyBody}
-            mentionUsers={mentionUsers}
-            compact
           />
         </div>
       )}
@@ -734,23 +700,23 @@ function CommentComposer({
       )}
     >
       <TipTapEditor
-        content={value}
-        placeholder={placeholder}
-        onChange={onChange}
-        showToolbar={!compact}
-        mentionUsers={mentionUsers}
         className={cn('text-sm', compact ? 'min-h-[40px]' : 'min-h-[80px]')}
+        content={value}
+        mentionUsers={mentionUsers}
+        onChange={onChange}
+        placeholder={placeholder}
+        showToolbar={!compact}
       />
       <div className="mt-2 flex justify-end">
         <button
-          type="button"
-          onClick={() => onSubmit(value)}
-          disabled={isEmpty || submitting}
           className={cn(
             'rounded-md px-3 py-1.5 text-xs font-medium text-white transition-colors',
             'bg-indigo-600 hover:bg-indigo-700',
             'disabled:cursor-not-allowed disabled:opacity-40',
           )}
+          disabled={isEmpty || submitting}
+          onClick={() => onSubmit(value)}
+          type="button"
         >
           {submitting ? 'Posting…' : 'Comment'}
         </button>

@@ -6,10 +6,7 @@ import Link from 'next/link';
 import { ProjectUpdatesSection } from '@/components/projects/project-updates-section';
 import { SimpleSelect } from '@/components/ui/select';
 import { gql } from '@/lib/graphql';
-import {
-  PROJECT_HEALTH_OPTIONS,
-  PROJECT_STATUS_CONFIG,
-} from '@/lib/project-constants';
+import { PROJECT_HEALTH_OPTIONS, PROJECT_STATUS_CONFIG } from '@/lib/project-constants';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -23,8 +20,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
   projectSlugId,
   workspaceKey,
 }: ProjectDetailViewProps) {
-  const { projectStore, issueStore, userStore, teamStore, workflowStateStore } =
-    useStore();
+  const { projectStore, issueStore, userStore, teamStore, workflowStateStore } = useStore();
   const viewerId = userStore.currentUserId ?? '';
   const project = projectStore.findBySlugId(projectSlugId);
 
@@ -36,8 +32,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
     );
   }
 
-  const status =
-    PROJECT_STATUS_CONFIG[project.statusType] ?? PROJECT_STATUS_CONFIG.planned;
+  const status = PROJECT_STATUS_CONFIG[project.statusType] ?? PROJECT_STATUS_CONFIG.planned;
   const lead = project.leadId ? userStore.findById(project.leadId) : null;
 
   const projectIssues = issueStore.findByProjectId(project.id);
@@ -79,8 +74,8 @@ export const ProjectDetailView = observer(function ProjectDetailView({
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex h-12 items-center gap-3 border-b border-zinc-200 px-4 dark:border-zinc-800">
         <Link
-          href={`/${workspaceKey}/projects`}
           className="flex h-6 w-6 items-center justify-center rounded text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          href={`/${workspaceKey}/projects`}
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
@@ -93,9 +88,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
         >
           {project.icon ?? ''}
         </span>
-        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          {project.name}
-        </h1>
+        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{project.name}</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -104,12 +97,13 @@ export const ProjectDetailView = observer(function ProjectDetailView({
             <div className="flex items-center gap-2">
               <CircleDot className={cn('h-4 w-4', status.color)} />
               <SimpleSelect
-                variant="ghost"
-                options={Object.entries(PROJECT_STATUS_CONFIG).map(
-                  ([value, cfg]) => ({ label: cfg.label, value }),
-                )}
-                value={project.statusType}
                 onChange={handleStatusChange}
+                options={Object.entries(PROJECT_STATUS_CONFIG).map(([value, cfg]) => ({
+                  label: cfg.label,
+                  value,
+                }))}
+                value={project.statusType}
+                variant="ghost"
               />
             </div>
             <div className="flex items-center gap-2">
@@ -117,15 +111,15 @@ export const ProjectDetailView = observer(function ProjectDetailView({
               <div className="flex gap-1">
                 {PROJECT_HEALTH_OPTIONS.map(h => (
                   <button
-                    key={h.value}
-                    type="button"
-                    onClick={() => handleHealthChange(h.value)}
                     className={cn(
                       'rounded px-2 py-0.5 text-xs font-medium transition-colors',
                       project.health === h.value
                         ? `${h.color} text-white`
                         : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700',
                     )}
+                    key={h.value}
+                    onClick={() => handleHealthChange(h.value)}
+                    type="button"
                   >
                     {h.label}
                   </button>
@@ -135,9 +129,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
             {lead && (
               <div className="flex items-center gap-1.5">
                 <User className="h-3.5 w-3.5 text-zinc-400" />
-                <span className="text-xs text-zinc-600 dark:text-zinc-400">
-                  {lead.displayName}
-                </span>
+                <span className="text-xs text-zinc-600 dark:text-zinc-400">{lead.displayName}</span>
               </div>
             )}
             {(project.startDate || project.targetDate) && (
@@ -150,18 +142,13 @@ export const ProjectDetailView = observer(function ProjectDetailView({
             )}
           </div>
           {project.description && (
-            <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
-              {project.description}
-            </p>
+            <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">{project.description}</p>
           )}
           <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                Progress
-              </span>
+              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Progress</span>
               <span className="text-xs tabular-nums text-zinc-500">
-                {completedIssues.length} / {projectIssues.length} issues (
-                {progress}%)
+                {completedIssues.length} / {projectIssues.length} issues ({progress}%)
               </span>
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
@@ -179,18 +166,14 @@ export const ProjectDetailView = observer(function ProjectDetailView({
               <div className="mt-2 flex flex-col gap-2">
                 {milestones.map(m => (
                   <div
-                    key={m.id}
                     className="flex items-center gap-3 rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-800"
+                    key={m.id}
                   >
                     <Target className="h-4 w-4 shrink-0 text-zinc-400" />
                     <span className="flex-1 text-sm text-zinc-900 dark:text-zinc-100">
                       {m.name}
                     </span>
-                    {m.targetDate && (
-                      <span className="text-xs text-zinc-400">
-                        {m.targetDate}
-                      </span>
-                    )}
+                    {m.targetDate && <span className="text-xs text-zinc-400">{m.targetDate}</span>}
                   </div>
                 ))}
               </div>
@@ -205,8 +188,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
             <div className="mt-2 flex flex-col gap-0.5">
               {projectIssues.length === 0 ? (
                 <p className="py-8 text-center text-xs text-zinc-400">
-                  No issues assigned to this project yet. Use Shift+P on any
-                  issue to assign it.
+                  No issues assigned to this project yet. Use Shift+P on any issue to assign it.
                 </p>
               ) : (
                 projectIssues.map(issue => {
@@ -214,9 +196,9 @@ export const ProjectDetailView = observer(function ProjectDetailView({
                   const team = teamStore.findById(issue.teamId);
                   return (
                     <Link
-                      key={issue.id}
-                      href={`/${workspaceKey}/team/${team?.key ?? ''}`}
                       className="flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                      href={`/${workspaceKey}/team/${team?.key ?? ''}`}
+                      key={issue.id}
                     >
                       {state && (
                         <span

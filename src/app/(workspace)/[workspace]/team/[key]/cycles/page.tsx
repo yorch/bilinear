@@ -14,8 +14,7 @@ const TeamCyclesPage = observer(function TeamCyclesPage() {
 
   const team = teamStore.findByKey(teamKey);
 
-  const isLoading =
-    syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
+  const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
   const hasError = syncStore.status === 'error';
 
   if (isLoading) {
@@ -42,13 +41,7 @@ const TeamCyclesPage = observer(function TeamCyclesPage() {
     );
   }
 
-  return (
-    <CycleListView
-      teamId={team.id}
-      teamKey={teamKey}
-      workspaceKey={workspace}
-    />
-  );
+  return <CycleListView teamId={team.id} teamKey={teamKey} workspaceKey={workspace} />;
 });
 
 export default TeamCyclesPage;

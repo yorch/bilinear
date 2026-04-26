@@ -13,16 +13,16 @@ import { PrioritySelect } from '../properties/priority-select';
 import { StatusSelect } from '../properties/status-select';
 
 export interface IssueRowData {
-  id: string;
-  identifier: string;
-  title: string;
-  priority: number;
-  stateId: string;
-  estimate?: number | null;
   assigneeId?: string | null;
   cycleId?: string | null;
   dueDate?: string | null;
+  estimate?: number | null;
+  id: string;
+  identifier: string;
   labels: IssueLabel[];
+  priority: number;
+  stateId: string;
+  title: string;
 }
 
 /** Which property popover to open programmatically (e.g., via keyboard shortcut). */
@@ -38,38 +38,35 @@ export type OpenProperty =
   | null;
 
 interface IssueRowProps {
-  issue: IssueRowData;
-  states: WorkflowState[];
-  users: IssueUser[];
   allLabels: IssueLabel[];
-  teamId?: string;
+  /** Active custom-field definitions; only those whose column is visible render. */
+  customFields?: DBCustomFieldDefinition[];
   estimationType?: string;
-  selected: boolean;
-  onSelect: () => void;
-  onOpen: () => void;
-  onUpdate: (id: string, patch: Record<string, unknown>) => void;
-  onContextMenu?: (e: React.MouseEvent) => void;
-  /** Open a specific property popover immediately (keyboard shortcut support). */
-  openProperty?: OpenProperty;
-  /** Called when the forced-open property popover closes. */
-  onPropertyClosed?: () => void;
+  /** Look up a custom-field value for this issue. */
+  getCustomFieldValue?: (definitionId: string) => unknown;
   /**
    * Column visibility. When omitted the row renders every built-in column
    * (legacy behaviour) and no custom-field columns.
    */
   isColumnVisible?: (key: ColumnKey) => boolean;
-  /** Active custom-field definitions; only those whose column is visible render. */
-  customFields?: DBCustomFieldDefinition[];
-  /** Look up a custom-field value for this issue. */
-  getCustomFieldValue?: (definitionId: string) => unknown;
+  issue: IssueRowData;
+  onContextMenu?: (e: React.MouseEvent) => void;
+  onOpen: () => void;
+  /** Called when the forced-open property popover closes. */
+  onPropertyClosed?: () => void;
+  onSelect: () => void;
+  onUpdate: (id: string, patch: Record<string, unknown>) => void;
+  /** Open a specific property popover immediately (keyboard shortcut support). */
+  openProperty?: OpenProperty;
+  selected: boolean;
+  states: WorkflowState[];
   style?: React.CSSProperties;
+  teamId?: string;
+  users: IssueUser[];
 }
 
 /** Single-line read-only rendering of a custom-field value for the list row. */
-function renderCustomFieldValue(
-  def: DBCustomFieldDefinition,
-  value: unknown,
-): string {
+function renderCustomFieldValue(def: DBCustomFieldDefinition, value: unknown): string {
   if (value === null || value === undefined || value === '') {
     return '—';
   }
@@ -84,9 +81,7 @@ function renderCustomFieldValue(
       if (!Array.isArray(value)) {
         return '—';
       }
-      return value
-        .map(v => def.options?.find(o => o.value === v)?.label ?? String(v))
-        .join(', ');
+      return value.map(v => def.options?.find(o => o.value === v)?.label ?? String(v)).join(', ');
     }
     case 'number':
       return typeof value === 'number' ? String(value) : '—';
@@ -121,42 +116,40 @@ export function IssueRow({
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: presentational row container; interactive children (checkbox, button, selects) provide all a11y. onContextMenu is the only handler.
     <div
-      style={style}
-      data-testid="issue-row"
-      data-selected={selected ? 'true' : undefined}
       className={cn(
         'group flex items-center gap-2 border-b border-zinc-100 px-4 py-0 h-9 select-none hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900',
         selected && 'bg-zinc-100 dark:bg-zinc-800',
       )}
+      data-selected={selected ? 'true' : undefined}
+      data-testid="issue-row"
       onContextMenu={onContextMenu}
+      style={style}
     >
       {/* Checkbox */}
       <input
-        type="checkbox"
         checked={selected}
+        className="h-3.5 w-3.5 flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
         onChange={onSelect}
         onClick={e => e.stopPropagation()}
-        className="h-3.5 w-3.5 flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+        type="checkbox"
       />
 
       {/* Priority */}
       <PrioritySelect
-        value={issue.priority}
-        onChange={priority => onUpdate(issue.id, { priority })}
         forceOpen={openProperty === 'priority'}
+        onChange={priority => onUpdate(issue.id, { priority })}
         onClose={onPropertyClosed}
+        value={issue.priority}
       />
 
       {/* Identifier */}
-      <span className="w-16 flex-shrink-0 font-mono text-xs text-zinc-400">
-        {issue.identifier}
-      </span>
+      <span className="w-16 flex-shrink-0 font-mono text-xs text-zinc-400">{issue.identifier}</span>
 
       {/* Title — clicking anywhere in this area opens the issue */}
       <button
-        type="button"
         className="flex-1 truncate cursor-pointer text-left text-sm text-zinc-900 dark:text-zinc-100"
         onClick={onOpen}
+        type="button"
       >
         {issue.title}
       </button>
@@ -164,60 +157,56 @@ export function IssueRow({
       {/* Labels */}
       {visible('labels') && (
         <LabelSelect
-          value={issue.labels.map(l => l.id)}
+          forceOpen={openProperty === 'label'}
           labels={allLabels}
           onChange={labelIds => onUpdate(issue.id, { labelIds })}
-          forceOpen={openProperty === 'label'}
           onClose={onPropertyClosed}
+          value={issue.labels.map(l => l.id)}
         />
       )}
 
       {/* Due date */}
       {visible('dueDate') && (
         <DueDatePicker
-          value={issue.dueDate}
-          onChange={dueDate => onUpdate(issue.id, { dueDate })}
           forceOpen={openProperty === 'dueDate'}
+          onChange={dueDate => onUpdate(issue.id, { dueDate })}
           onClose={onPropertyClosed}
+          value={issue.dueDate}
         />
       )}
 
       {/* Assignee */}
       {visible('assignee') && (
         <AssigneeSelect
-          value={issue.assigneeId}
-          users={users}
-          onChange={assigneeId => onUpdate(issue.id, { assigneeId })}
           forceOpen={openProperty === 'assignee'}
+          onChange={assigneeId => onUpdate(issue.id, { assigneeId })}
           onClose={onPropertyClosed}
+          users={users}
+          value={issue.assigneeId}
         />
       )}
 
       {/* Cycle */}
       {teamId && visible('cycle') && (
         <CycleSelect
-          value={issue.cycleId ?? null}
-          teamId={teamId}
           onChange={cycleId => onUpdate(issue.id, { cycleId })}
-          open={openProperty === 'cycle'}
           onClose={onPropertyClosed}
+          open={openProperty === 'cycle'}
+          teamId={teamId}
+          value={issue.cycleId ?? null}
         />
       )}
 
       {/* Estimate — only when team has estimation enabled */}
-      {estimationType &&
-        estimationType !== 'notUsed' &&
-        visible('estimate') && (
-          <EstimatePicker
-            value={issue.estimate}
-            estimationType={estimationType}
-            forceOpen={openProperty === 'estimate'}
-            onClose={onPropertyClosed}
-            onChange={estimate =>
-              onUpdate(issue.id, { estimate: estimate ?? undefined })
-            }
-          />
-        )}
+      {estimationType && estimationType !== 'notUsed' && visible('estimate') && (
+        <EstimatePicker
+          estimationType={estimationType}
+          forceOpen={openProperty === 'estimate'}
+          onChange={estimate => onUpdate(issue.id, { estimate: estimate ?? undefined })}
+          onClose={onPropertyClosed}
+          value={issue.estimate}
+        />
+      )}
 
       {/* Custom field columns (read-only cells — edit via detail panel) */}
       {customFields?.map(def => {
@@ -227,9 +216,9 @@ export function IssueRow({
         const raw = getCustomFieldValue?.(def.id);
         return (
           <span
+            className="max-w-[10rem] shrink-0 truncate text-xs text-zinc-500 dark:text-zinc-400"
             key={def.id}
             title={def.name}
-            className="max-w-[10rem] shrink-0 truncate text-xs text-zinc-500 dark:text-zinc-400"
           >
             {renderCustomFieldValue(def, raw)}
           </span>
@@ -238,11 +227,11 @@ export function IssueRow({
 
       {/* Status */}
       <StatusSelect
-        value={issue.stateId}
-        states={states}
-        onChange={stateId => onUpdate(issue.id, { stateId })}
         forceOpen={openProperty === 'status'}
+        onChange={stateId => onUpdate(issue.id, { stateId })}
         onClose={onPropertyClosed}
+        states={states}
+        value={issue.stateId}
       />
     </div>
   );

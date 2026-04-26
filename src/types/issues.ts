@@ -5,41 +5,41 @@
  */
 
 export interface WorkflowState {
+  color: string;
   id: string;
   name: string;
-  color: string;
   type: string;
 }
 
 export interface IssueUser {
-  id: string;
-  displayName: string;
-  initials: string;
-  avatarUrl?: string | null;
   avatarBackgroundColor: string;
+  avatarUrl?: string | null;
+  displayName: string;
+  id: string;
+  initials: string;
 }
 
 export interface IssueLabel {
+  color: string;
   id: string;
   name: string;
-  color: string;
 }
 
 export interface IssueBase {
-  id: string;
-  identifier: string;
-  title: string;
-  priority: number;
-  stateId: string;
   assigneeId?: string | null;
   dueDate?: string | null;
+  id: string;
+  identifier: string;
   labels: IssueLabel[];
+  priority: number;
+  stateId: string;
+  title: string;
 }
 
 export interface IssueDetail extends IssueBase {
-  teamId: string;
-  estimate?: number | null;
-  description?: string | null;
   createdAt: string;
+  description?: string | null;
+  estimate?: number | null;
+  teamId: string;
   updatedAt: string;
 }

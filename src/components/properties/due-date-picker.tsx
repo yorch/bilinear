@@ -5,11 +5,11 @@ import { formatDueDate, getDueDateColor } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
 
 interface DueDatePickerProps {
-  value: string | null | undefined;
-  onChange: (date: string | null) => void;
   className?: string;
   forceOpen?: boolean;
+  onChange: (date: string | null) => void;
   onClose?: () => void;
+  value: string | null | undefined;
 }
 
 export function DueDatePicker({
@@ -42,18 +42,18 @@ export function DueDatePicker({
   const colorClass = getDueDateColor(value);
 
   return (
-    <div ref={ref} className={cn('relative', className)}>
+    <div className={cn('relative', className)} ref={ref}>
       <button
-        type="button"
-        onClick={e => {
-          e.stopPropagation();
-          setOpen(o => !o);
-        }}
         className={cn(
           'flex items-center rounded px-1.5 py-1 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800',
           value ? colorClass : 'text-zinc-400',
         )}
+        onClick={e => {
+          e.stopPropagation();
+          setOpen(o => !o);
+        }}
         title={value ? `Due ${formatDueDate(value)}` : 'No due date'}
+        type="button"
       >
         {value ? formatDueDate(value) : 'Due date'}
       </button>
@@ -61,24 +61,24 @@ export function DueDatePicker({
       {open && (
         <div className="absolute right-0 top-full z-50 mt-1 rounded-md border border-zinc-200 bg-white p-2 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
           <input
-            type="date"
             className="rounded border border-zinc-200 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-            value={value ?? ''}
             onChange={e => {
               onChange(e.target.value || null);
               setOpen(false);
               onClose?.();
             }}
+            type="date"
+            value={value ?? ''}
           />
           {value && (
             <button
-              type="button"
+              className="mt-1 block w-full rounded px-2 py-1 text-center text-xs text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
               onClick={() => {
                 onChange(null);
                 setOpen(false);
                 onClose?.();
               }}
-              className="mt-1 block w-full rounded px-2 py-1 text-center text-xs text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              type="button"
             >
               Clear date
             </button>

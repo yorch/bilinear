@@ -26,13 +26,7 @@ export const roadmapResolvers = {
 
       const updated = await ctx.services.project.setRoadmapVisible(id, visible);
 
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'U',
-        'Project',
-        id,
-        updated,
-      );
+      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Project', id, updated);
       return {
         lastSyncId: sync.id.toString(),
         project: updated,
@@ -47,28 +41,17 @@ export const roadmapResolvers = {
     ) => {
       requireAuth(ctx);
 
-      const role = await ctx.services.organization.getMemberRole(
-        ctx.orgId,
-        ctx.userId,
-      );
+      const role = await ctx.services.organization.getMemberRole(ctx.orgId, ctx.userId);
       if (!role || !['admin', 'owner'].includes(role)) {
-        throw new GraphQLError(
-          'Only organization admins can manage the public roadmap',
-          {
-            extensions: { code: 'FORBIDDEN' },
-          },
-        );
+        throw new GraphQLError('Only organization admins can manage the public roadmap', {
+          extensions: { code: 'FORBIDDEN' },
+        });
       }
 
-      const urlKey =
-        (await ctx.services.organization.getUrlKey(ctx.orgId)) ?? ctx.orgId;
+      const urlKey = (await ctx.services.organization.getUrlKey(ctx.orgId)) ?? ctx.orgId;
 
       try {
-        const roadmap = await ctx.services.roadmap.upsert(
-          ctx.orgId,
-          urlKey,
-          input,
-        );
+        const roadmap = await ctx.services.roadmap.upsert(ctx.orgId, urlKey, input);
         // PublicRoadmap is a workspace-only setting — no client-side sync store.
         // Return the current lastSyncId without creating a spurious sync action.
         const lastSyncId = await ctx.services.sync.getLastSyncId(ctx.orgId);
@@ -89,11 +72,7 @@ export const roadmapResolvers = {
   },
 
   Query: {
-    publicRoadmap: async (
-      _parent: unknown,
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => {
+    publicRoadmap: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
       const roadmap = await ctx.services.roadmap.findByOrgId(ctx.orgId);
       if (!roadmap) {
@@ -119,10 +98,7 @@ export const roadmapResolvers = {
       const requiresPassword = !!roadmap.passwordHash && !password;
 
       if (roadmap.passwordHash && password) {
-        const valid = await ctx.services.roadmap.verifyPassword(
-          roadmap,
-          password,
-        );
+        const valid = await ctx.services.roadmap.verifyPassword(roadmap, password);
         if (!valid) {
           throw new GraphQLError('Invalid password', {
             extensions: { code: 'FORBIDDEN' },
@@ -140,19 +116,14 @@ export const roadmapResolvers = {
 
       try {
         // Password already verified above; omit it to skip the redundant scrypt in getRoadmapProjects
-        const projects = await ctx.services.roadmap.getRoadmapProjects(
-          roadmap.organizationId,
-        );
+        const projects = await ctx.services.roadmap.getRoadmapProjects(roadmap.organizationId);
         return {
           projects,
           requiresPassword: false,
           roadmap: { ...roadmap, hasPassword: !!roadmap.passwordHash },
         };
       } catch (err) {
-        if (
-          err instanceof RoadmapNotFoundError ||
-          err instanceof RoadmapPasswordError
-        ) {
+        if (err instanceof RoadmapNotFoundError || err instanceof RoadmapPasswordError) {
           throw new GraphQLError(err.message, {
             extensions: { code: 'FORBIDDEN' },
           });

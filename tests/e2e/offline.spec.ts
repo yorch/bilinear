@@ -5,10 +5,7 @@ import { loginAs } from '../fixtures/auth';
  * Offline support: go offline → create issue → go online → verify synced.
  */
 test.describe('Offline Support', () => {
-  test('issues can be created while offline and sync on reconnect', async ({
-    page,
-    context,
-  }) => {
+  test('issues can be created while offline and sync on reconnect', async ({ page, context }) => {
     await loginAs(page, 'e2e@test.local');
 
     // Wait for initial bootstrap

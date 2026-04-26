@@ -6,19 +6,19 @@ import { gql } from '@/lib/graphql';
 import { cn, formatRelativeTime } from '@/lib/utils';
 
 interface ActivityActor {
-  id: string;
-  displayName: string;
-  initials: string;
   avatarBgColor: string | null;
+  displayName: string;
+  id: string;
+  initials: string;
 }
 
 interface IssueActivity {
-  id: string;
-  field: string;
-  oldValue: string | null;
-  newValue: string | null;
-  createdAt: string;
   actor: ActivityActor | null;
+  createdAt: string;
+  field: string;
+  id: string;
+  newValue: string | null;
+  oldValue: string | null;
 }
 
 interface ActivityTimelineProps {
@@ -77,10 +77,7 @@ function formatActivityDescription(activity: IssueActivity): string {
 
 const COLLAPSE_THRESHOLD = 5;
 
-export function ActivityTimeline({
-  issueId,
-  refetchKey,
-}: ActivityTimelineProps) {
+export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps) {
   const [activities, setActivities] = useState<IssueActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
@@ -101,13 +98,10 @@ export function ActivityTimeline({
           limit: 50,
         });
         if (!cancelled) {
-          const data = res.data as
-            | { issueActivities?: IssueActivity[] }
-            | undefined;
+          const data = res.data as { issueActivities?: IssueActivity[] } | undefined;
           // Newest first
           const sorted = [...(data?.issueActivities ?? [])].sort(
-            (a, b) =>
-              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
           );
           setActivities(sorted);
         }
@@ -146,21 +140,17 @@ export function ActivityTimeline({
 
   const shouldCollapse = activities.length > COLLAPSE_THRESHOLD;
   const visibleActivities =
-    shouldCollapse && !expanded
-      ? activities.slice(0, COLLAPSE_THRESHOLD)
-      : activities;
+    shouldCollapse && !expanded ? activities.slice(0, COLLAPSE_THRESHOLD) : activities;
   const hiddenCount = activities.length - COLLAPSE_THRESHOLD;
 
   return (
     <div className="flex flex-col gap-0">
       {visibleActivities.map((activity, index) => {
         const actor = activity.actor;
-        const isLast =
-          index === visibleActivities.length - 1 &&
-          (!shouldCollapse || expanded);
+        const isLast = index === visibleActivities.length - 1 && (!shouldCollapse || expanded);
 
         return (
-          <div key={activity.id} className="flex gap-3">
+          <div className="flex gap-3" key={activity.id}>
             {/* Timeline line + avatar */}
             <div className="flex flex-col items-center">
               <span
@@ -168,18 +158,12 @@ export function ActivityTimeline({
                   'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white',
                   actor?.avatarBgColor ? '' : 'bg-zinc-400 dark:bg-zinc-600',
                 )}
-                style={
-                  actor?.avatarBgColor
-                    ? { backgroundColor: actor.avatarBgColor }
-                    : undefined
-                }
+                style={actor?.avatarBgColor ? { backgroundColor: actor.avatarBgColor } : undefined}
                 title={actor?.displayName ?? 'System'}
               >
                 {actor?.initials ?? 'S'}
               </span>
-              {!isLast && (
-                <div className="my-1 w-px flex-1 bg-zinc-200 dark:bg-zinc-700" />
-              )}
+              {!isLast && <div className="my-1 w-px flex-1 bg-zinc-200 dark:bg-zinc-700" />}
             </div>
 
             {/* Content */}
@@ -197,9 +181,9 @@ export function ActivityTimeline({
 
       {shouldCollapse && (
         <button
-          type="button"
-          onClick={() => setExpanded(e => !e)}
           className="mt-1 text-xs text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+          onClick={() => setExpanded(e => !e)}
+          type="button"
         >
           {expanded ? 'Show less' : `Show ${hiddenCount} more`}
         </button>

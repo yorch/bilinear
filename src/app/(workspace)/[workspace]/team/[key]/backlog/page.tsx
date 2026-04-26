@@ -7,11 +7,7 @@ import { FilterBuilder } from '@/components/issues/filter-builder';
 import { PriorityIcon } from '@/components/properties/priority-icon';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import type { DBIssue, DBIssueLabel } from '@/lib/db';
-import {
-  applyFilters,
-  createEmptyFilterSet,
-  type FilterSet,
-} from '@/lib/filter-engine';
+import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -88,24 +84,24 @@ function StalenessIndicator({ updatedAt }: { updatedAt: string }) {
 // ─── Backlog row ────────────────────────────────────────────────────────────
 
 interface BacklogIssue {
+  assigneeId?: string | null;
+  createdAt: string;
+  dueDate?: string | null;
+  estimate?: number | null;
   id: string;
   identifier: string;
-  title: string;
+  labels: IssueLabel[];
   priority: number;
   stateId: string;
-  assigneeId?: string | null;
-  dueDate?: string | null;
-  labels: IssueLabel[];
-  estimate?: number | null;
+  title: string;
   updatedAt: string;
-  createdAt: string;
 }
 
 interface BacklogRowProps {
   issue: BacklogIssue;
-  selected: boolean;
   onSelect: () => void;
   onUpdate: (id: string, patch: Record<string, unknown>) => void;
+  selected: boolean;
 }
 
 function BacklogRow({ issue, selected, onSelect, onUpdate }: BacklogRowProps) {
@@ -123,16 +119,16 @@ function BacklogRow({ issue, selected, onSelect, onUpdate }: BacklogRowProps) {
     >
       {/* Priority */}
       <button
-        type="button"
+        className="flex-shrink-0"
         onClick={e => {
           e.stopPropagation();
           const next = issue.priority >= 4 ? 0 : issue.priority + 1;
           onUpdate(issue.id, { priority: next });
         }}
         title={PRIORITY_LABELS[issue.priority]}
-        className="flex-shrink-0"
+        type="button"
       >
-        <PriorityIcon priority={issue.priority} className="h-3.5 w-3.5" />
+        <PriorityIcon className="h-3.5 w-3.5" priority={issue.priority} />
       </button>
 
       {/* Identifier */}
@@ -147,7 +143,7 @@ function BacklogRow({ issue, selected, onSelect, onUpdate }: BacklogRowProps) {
 
       {/* Estimate — inline editable */}
       <button
-        type="button"
+        className="w-8 flex-shrink-0 text-center text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
         onClick={e => {
           e.stopPropagation();
           const val = prompt('Estimate:', String(issue.estimate ?? ''));
@@ -156,8 +152,8 @@ function BacklogRow({ issue, selected, onSelect, onUpdate }: BacklogRowProps) {
             onUpdate(issue.id, { estimate: num });
           }
         }}
-        className="w-8 flex-shrink-0 text-center text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
         title="Set estimate"
+        type="button"
       >
         {issue.estimate ?? '—'}
       </button>
@@ -166,8 +162,8 @@ function BacklogRow({ issue, selected, onSelect, onUpdate }: BacklogRowProps) {
       <div className="flex flex-shrink-0 gap-0.5">
         {issue.labels.slice(0, 3).map(label => (
           <span
-            key={label.id}
             className="inline-block h-2 w-2 rounded-full"
+            key={label.id}
             style={{ backgroundColor: label.color }}
             title={label.name}
           />
@@ -202,28 +198,24 @@ function PriorityGroup({
   return (
     <div>
       <button
-        type="button"
-        onClick={() => setCollapsed(!collapsed)}
         className="flex w-full items-center gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-1.5 text-left dark:border-zinc-800 dark:bg-zinc-900"
+        onClick={() => setCollapsed(!collapsed)}
+        type="button"
       >
         <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
           {PRIORITY_LABELS[priority] ?? `Priority ${priority}`}
         </span>
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">
-          {issues.length}
-        </span>
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">
-          {collapsed ? '▸' : '▾'}
-        </span>
+        <span className="text-xs text-zinc-400 dark:text-zinc-500">{issues.length}</span>
+        <span className="text-xs text-zinc-400 dark:text-zinc-500">{collapsed ? '▸' : '▾'}</span>
       </button>
       {!collapsed &&
         issues.map(issue => (
           <BacklogRow
-            key={issue.id}
             issue={issue}
-            selected={selectedIds.has(issue.id)}
+            key={issue.id}
             onSelect={() => onToggleSelect(issue.id)}
             onUpdate={onUpdate}
+            selected={selectedIds.has(issue.id)}
           />
         ))}
     </div>
@@ -257,13 +249,11 @@ const BacklogPage = observer(function BacklogPage() {
   const rawStates = teamId ? workflowStateStore.findByTeamId(teamId) : [];
 
   // Backlog shows only Backlog + Unstarted state categories
-  const backlogStateIds = useMemo(() => {
-    return new Set(
-      rawStates
-        .filter(s => s.type === 'backlog' || s.type === 'unstarted')
-        .map(s => s.id),
-    );
-  }, [rawStates]);
+  const backlogStateIds = useMemo(
+    () =>
+      new Set(rawStates.filter(s => s.type === 'backlog' || s.type === 'unstarted').map(s => s.id)),
+    [rawStates],
+  );
 
   const allBacklogIssues = useMemo(() => {
     if (!teamId) {
@@ -291,9 +281,11 @@ const BacklogPage = observer(function BacklogPage() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: MobX observables — values.size change triggers re-filter
   const filteredIssues = useMemo(
     () =>
-      applyFilters(allBacklogIssues, filterSet, (issueId, definitionId) => {
-        return customFieldStore.findValue(issueId, definitionId)?.value ?? null;
-      }),
+      applyFilters(
+        allBacklogIssues,
+        filterSet,
+        (issueId, definitionId) => customFieldStore.findValue(issueId, definitionId)?.value ?? null,
+      ),
     [allBacklogIssues, filterSet, customFieldStore.values.size],
   );
 
@@ -327,8 +319,7 @@ const BacklogPage = observer(function BacklogPage() {
 
   const states = rawStates;
 
-  const isLoading =
-    syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
+  const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
 
   // ── Mutations ───────────────────────────────────────────────────────────
 
@@ -347,8 +338,7 @@ const BacklogPage = observer(function BacklogPage() {
             }
           },
           onSuccess: data => {
-            const updated = (data as { issueUpdate?: { issue?: DBIssue } })
-              ?.issueUpdate?.issue;
+            const updated = (data as { issueUpdate?: { issue?: DBIssue } })?.issueUpdate?.issue;
             if (updated) {
               issueStore.applySyncAction('U', id, updated);
             }
@@ -446,12 +436,12 @@ const BacklogPage = observer(function BacklogPage() {
       {/* Filter bar */}
       <div className="border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
         <FilterBuilder
+          customFields={customFieldDefs}
           filterSet={filterSet}
+          labels={labels}
           onChange={setFilterSet}
           states={states}
           users={users}
-          labels={labels}
-          customFields={customFieldDefs}
         />
       </div>
 
@@ -464,18 +454,18 @@ const BacklogPage = observer(function BacklogPage() {
           <div className="flex items-center gap-1">
             {[1, 2, 3, 4].map(p => (
               <button
-                key={p}
-                type="button"
-                onClick={() => handleBulkSetPriority(p)}
                 className="rounded px-1.5 py-0.5 text-xs text-zinc-600 hover:bg-indigo-100 dark:text-zinc-400 dark:hover:bg-indigo-900"
+                key={p}
+                onClick={() => handleBulkSetPriority(p)}
                 title={`Set ${PRIORITY_LABELS[p]}`}
+                type="button"
               >
-                <PriorityIcon priority={p} className="h-3 w-3" />
+                <PriorityIcon className="h-3 w-3" priority={p} />
               </button>
             ))}
           </div>
           <button
-            type="button"
+            className="rounded px-2 py-0.5 text-xs text-zinc-600 hover:bg-indigo-100 dark:text-zinc-400 dark:hover:bg-indigo-900"
             onClick={() => {
               const val = prompt('Set estimate for selected issues:');
               if (val !== null) {
@@ -483,21 +473,21 @@ const BacklogPage = observer(function BacklogPage() {
                 handleBulkSetEstimate(num);
               }
             }}
-            className="rounded px-2 py-0.5 text-xs text-zinc-600 hover:bg-indigo-100 dark:text-zinc-400 dark:hover:bg-indigo-900"
+            type="button"
           >
             Estimate
           </button>
           <button
-            type="button"
-            onClick={handleBulkArchive}
             className="rounded px-2 py-0.5 text-xs text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/30"
+            onClick={handleBulkArchive}
+            type="button"
           >
             Archive
           </button>
           <button
-            type="button"
-            onClick={() => setSelectedIds(new Set())}
             className="ml-auto text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+            onClick={() => setSelectedIds(new Set())}
+            type="button"
           >
             Clear
           </button>
@@ -513,12 +503,12 @@ const BacklogPage = observer(function BacklogPage() {
         ) : (
           priorityGroups.map(({ priority, issues: groupIssues }) => (
             <PriorityGroup
-              key={priority}
-              priority={priority}
               issues={groupIssues}
-              selectedIds={selectedIds}
+              key={priority}
               onToggleSelect={handleToggleSelect}
               onUpdate={handleUpdate}
+              priority={priority}
+              selectedIds={selectedIds}
             />
           ))
         )}

@@ -1,9 +1,6 @@
 import { GraphQLError } from 'graphql';
 import { beforeEach, describe, expect, it } from 'vitest';
-import {
-  createMockContext,
-  type MockGraphQLContext,
-} from '../../../test/context-mock';
+import { createMockContext, type MockGraphQLContext } from '../../../test/context-mock';
 import {
   DEFAULT_WORKFLOW_STATES,
   TEST_ORG,
@@ -24,11 +21,7 @@ describe('teamResolvers', () => {
     it('returns a team by id', async () => {
       ctx.prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
 
-      const result = await teamResolvers.Query.team(
-        null,
-        { id: TEST_TEAM.id },
-        ctx as never,
-      );
+      const result = await teamResolvers.Query.team(null, { id: TEST_TEAM.id }, ctx as never);
 
       expect(result).toEqual(TEST_TEAM);
     });
@@ -52,11 +45,7 @@ describe('teamResolvers', () => {
       });
 
       try {
-        await teamResolvers.Query.team(
-          null,
-          { id: TEST_TEAM.id },
-          ctx as never,
-        );
+        await teamResolvers.Query.team(null, { id: TEST_TEAM.id }, ctx as never);
         expect.unreachable('Should have thrown');
       } catch (e) {
         expect(e).toBeInstanceOf(GraphQLError);
@@ -68,11 +57,7 @@ describe('teamResolvers', () => {
       ctx = createMockContext({ userId: null });
 
       try {
-        await teamResolvers.Query.team(
-          null,
-          { id: TEST_TEAM.id },
-          ctx as never,
-        );
+        await teamResolvers.Query.team(null, { id: TEST_TEAM.id }, ctx as never);
         expect.unreachable('Should have thrown');
       } catch (e) {
         expect(e).toBeInstanceOf(GraphQLError);
@@ -105,9 +90,7 @@ describe('teamResolvers', () => {
         userId: TEST_USER.id,
       });
       // User is only a member of TEST_TEAM, not the private team
-      ctx.prisma.teamMembership.findMany.mockResolvedValue([
-        { teamId: TEST_TEAM.id },
-      ]);
+      ctx.prisma.teamMembership.findMany.mockResolvedValue([{ teamId: TEST_TEAM.id }]);
 
       const result = await teamResolvers.Query.teams(null, {}, ctx as never);
       expect(result).toEqual([TEST_TEAM]);
@@ -259,9 +242,7 @@ describe('teamResolvers', () => {
   describe('Mutation.teamUpdate', () => {
     it('updates a team when user is a team member', async () => {
       // requireTeamMember check
-      ctx.prisma.teamMembership.findUnique.mockResolvedValue(
-        TEST_TEAM_MEMBERSHIP,
-      );
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue(TEST_TEAM_MEMBERSHIP);
       // org-scope check via findById
       ctx.prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
       const updated = { ...TEST_TEAM, name: 'New Name' };
@@ -278,9 +259,7 @@ describe('teamResolvers', () => {
     });
 
     it('throws NOT_FOUND when team belongs to different org', async () => {
-      ctx.prisma.teamMembership.findUnique.mockResolvedValue(
-        TEST_TEAM_MEMBERSHIP,
-      );
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue(TEST_TEAM_MEMBERSHIP);
       ctx.prisma.team.findUnique.mockResolvedValue({
         ...TEST_TEAM,
         organizationId: 'different-org-id',
@@ -302,39 +281,23 @@ describe('teamResolvers', () => {
 
   describe('Team field resolvers', () => {
     it('resolves states for a team', async () => {
-      ctx.prisma.workflowState.findMany.mockResolvedValue(
-        DEFAULT_WORKFLOW_STATES,
-      );
+      ctx.prisma.workflowState.findMany.mockResolvedValue(DEFAULT_WORKFLOW_STATES);
 
-      const result = await teamResolvers.Team.states(
-        TEST_TEAM as never,
-        {},
-        ctx as never,
-      );
+      const result = await teamResolvers.Team.states(TEST_TEAM as never, {}, ctx as never);
 
       expect(result).toEqual(DEFAULT_WORKFLOW_STATES);
     });
 
     it('resolves members for a team', async () => {
-      ctx.prisma.teamMembership.findMany.mockResolvedValue([
-        TEST_TEAM_MEMBERSHIP,
-      ]);
+      ctx.prisma.teamMembership.findMany.mockResolvedValue([TEST_TEAM_MEMBERSHIP]);
 
-      const result = await teamResolvers.Team.members(
-        TEST_TEAM as never,
-        {},
-        ctx as never,
-      );
+      const result = await teamResolvers.Team.members(TEST_TEAM as never, {}, ctx as never);
 
       expect(result).toEqual([TEST_TEAM_MEMBERSHIP]);
     });
 
     it('resolves parent as null when no parentId', async () => {
-      const result = await teamResolvers.Team.parent(
-        TEST_TEAM as never,
-        {},
-        ctx as never,
-      );
+      const result = await teamResolvers.Team.parent(TEST_TEAM as never, {}, ctx as never);
 
       expect(result).toBeNull();
     });
@@ -342,11 +305,7 @@ describe('teamResolvers', () => {
     it('resolves children teams', async () => {
       ctx.prisma.team.findMany.mockResolvedValue([]);
 
-      const result = await teamResolvers.Team.children(
-        TEST_TEAM as never,
-        {},
-        ctx as never,
-      );
+      const result = await teamResolvers.Team.children(TEST_TEAM as never, {}, ctx as never);
 
       expect(result).toEqual([]);
     });
@@ -354,9 +313,7 @@ describe('teamResolvers', () => {
 
   describe('TeamMembership field resolvers', () => {
     it('maps isOwner to owner field', () => {
-      const result = teamResolvers.TeamMembership.owner(
-        TEST_TEAM_MEMBERSHIP as never,
-      );
+      const result = teamResolvers.TeamMembership.owner(TEST_TEAM_MEMBERSHIP as never);
       expect(result).toBe(true);
     });
   });

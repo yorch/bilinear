@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TEST_ORG } from '../../test/fixtures';
-import {
-  createMockPrisma,
-  type MockPrismaClient,
-} from '../../test/prisma-mock';
+import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import { SyncService } from './sync.service';
 
 // Minimal stand-in for the ioredis Redis instance — only `publish` is
@@ -35,26 +32,15 @@ describe('SyncService.getDeltaSyncActions — pagination', () => {
   });
 
   it('returns the page and reports hasMore=false when fewer than the cap exist', async () => {
-    const rows = [
-      makeAction(BigInt(1)),
-      makeAction(BigInt(2)),
-      makeAction(BigInt(3)),
-    ];
+    const rows = [makeAction(BigInt(1)), makeAction(BigInt(2)), makeAction(BigInt(3))];
     prisma.syncAction.findMany.mockResolvedValue(rows);
 
-    const result = await svc.getDeltaSyncActions(
-      TEST_ORG.id,
-      BigInt(0),
-      undefined,
-      5,
-    );
+    const result = await svc.getDeltaSyncActions(TEST_ORG.id, BigInt(0), undefined, 5);
 
     expect(result.actions).toHaveLength(3);
     expect(result.hasMore).toBe(false);
     // Asks for limit + 1 to detect overflow without a separate count query.
-    expect(prisma.syncAction.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ take: 6 }),
-    );
+    expect(prisma.syncAction.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 6 }));
   });
 
   it('truncates to the cap and reports hasMore=true when overflow is detected', async () => {
@@ -69,12 +55,7 @@ describe('SyncService.getDeltaSyncActions — pagination', () => {
     ];
     prisma.syncAction.findMany.mockResolvedValue(rows);
 
-    const result = await svc.getDeltaSyncActions(
-      TEST_ORG.id,
-      BigInt(0),
-      undefined,
-      5,
-    );
+    const result = await svc.getDeltaSyncActions(TEST_ORG.id, BigInt(0), undefined, 5);
 
     expect(result.actions).toHaveLength(5);
     expect(result.hasMore).toBe(true);

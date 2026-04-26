@@ -45,10 +45,7 @@ export async function POST(req: NextRequest) {
   try {
     await verifyAccessToken(accessToken);
   } catch {
-    return NextResponse.json(
-      { error: 'Invalid access token' },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: 'Invalid access token' }, { status: 400 });
   }
 
   const res = NextResponse.json({ success: true });

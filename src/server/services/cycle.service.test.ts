@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { TEST_ORG, TEST_TEAM } from '../../test/fixtures';
-import {
-  createMockPrisma,
-  type MockPrismaClient,
-} from '../../test/prisma-mock';
+import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
   CycleInvalidDatesError,
   CycleNotFoundError,
@@ -225,9 +222,9 @@ describe('CycleService', () => {
     it('throws CycleNotFoundError when cycle not in org', async () => {
       prisma.cycle.findFirst.mockResolvedValue(null);
 
-      await expect(
-        service.rollover('wrong-org-id', TEST_CYCLE.id),
-      ).rejects.toThrow(CycleNotFoundError);
+      await expect(service.rollover('wrong-org-id', TEST_CYCLE.id)).rejects.toThrow(
+        CycleNotFoundError,
+      );
     });
 
     it('marks cycle completed and moves incomplete issues to next cycle', async () => {

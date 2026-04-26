@@ -37,10 +37,7 @@ const SAFE_MIME: Record<string, string> = {
  * caller belongs to the org that owns the file (via attached issue/project),
  * so a leaked URL cannot be used to download another org's attachments.
  */
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> },
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const token =
     req.cookies.get('access_token')?.value ??
     req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ??

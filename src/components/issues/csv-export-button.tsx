@@ -7,19 +7,19 @@ import { toast } from '@/lib/toast';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 
 export interface CsvIssue {
+  assigneeId?: string | null;
+  createdAt?: string;
+  creatorId?: string | null;
+  cycleId?: string | null;
+  dueDate?: string | null;
+  estimate?: number | null;
   id: string;
   identifier: string;
-  title: string;
-  priority: number;
-  estimate?: number | null;
-  dueDate?: string | null;
-  stateId: string;
-  assigneeId?: string | null;
-  creatorId?: string | null;
-  projectId?: string | null;
-  cycleId?: string | null;
   labels: IssueLabel[];
-  createdAt?: string;
+  priority: number;
+  projectId?: string | null;
+  stateId: string;
+  title: string;
   updatedAt?: string;
 }
 
@@ -80,13 +80,9 @@ export function CsvExportButton({
 
     const rows: unknown[][] = issues.map(issue => {
       const state = statesById.get(issue.stateId);
-      const assignee = issue.assigneeId
-        ? usersById.get(issue.assigneeId)
-        : null;
+      const assignee = issue.assigneeId ? usersById.get(issue.assigneeId) : null;
       const cycle = issue.cycleId ? cyclesById.get(issue.cycleId) : null;
-      const project = issue.projectId
-        ? projectsById.get(issue.projectId)
-        : null;
+      const project = issue.projectId ? projectsById.get(issue.projectId) : null;
 
       const base: unknown[] = [
         issue.identifier,
@@ -112,9 +108,7 @@ export function CsvExportButton({
           return def.options?.find(o => o.value === raw)?.label ?? raw;
         }
         if (def.type === 'multi_select' && Array.isArray(raw)) {
-          return raw.map(
-            v => def.options?.find(o => o.value === v)?.label ?? v,
-          );
+          return raw.map(v => def.options?.find(o => o.value === v)?.label ?? v);
         }
         return raw;
       });
@@ -127,10 +121,10 @@ export function CsvExportButton({
 
   return (
     <button
-      type="button"
-      onClick={handleExport}
       aria-label="Export CSV"
       className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+      onClick={handleExport}
+      type="button"
     >
       <Download className="h-3.5 w-3.5" />
       Export CSV

@@ -26,9 +26,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function coerceDate(value: unknown): string {
   if (typeof value !== 'string' || !DATE_RE.test(value)) {
-    throw new Error(
-      `Date must be a YYYY-MM-DD string, got: ${JSON.stringify(value)}`,
-    );
+    throw new Error(`Date must be a YYYY-MM-DD string, got: ${JSON.stringify(value)}`);
   }
   return value;
 }

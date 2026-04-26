@@ -27,13 +27,11 @@ export default function WorkspaceError({
         Couldn't load this workspace view
       </h2>
       <p className="max-w-md text-sm text-zinc-600 dark:text-zinc-400">
-        Something went wrong inside the app. Retrying re-mounts just this
-        section without losing the rest of your session.
+        Something went wrong inside the app. Retrying re-mounts just this section without losing the
+        rest of your session.
       </p>
       {error.digest ? (
-        <p className="font-mono text-xs text-zinc-500">
-          Error ref: {error.digest}
-        </p>
+        <p className="font-mono text-xs text-zinc-500">Error ref: {error.digest}</p>
       ) : null}
       <Button onClick={() => reset()}>Retry</Button>
     </div>

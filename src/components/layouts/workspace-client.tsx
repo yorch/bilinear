@@ -57,23 +57,13 @@ export const WorkspaceClient = observer(function WorkspaceClient({
   const { items: recentItems } = useRecentItems(workspaceKey);
   const router = useRouter();
 
-  useHotkeys(
-    ['meta+k', 'ctrl+k'],
-    () => uiStore.toggleCommandPalette(),
-    { allowInInput: true },
-    [uiStore],
-  );
-  useHotkeys(['meta+b', 'ctrl+b'], () => uiStore.toggleSidebarCollapsed(), {}, [
+  useHotkeys(['meta+k', 'ctrl+k'], () => uiStore.toggleCommandPalette(), { allowInInput: true }, [
     uiStore,
   ]);
+  useHotkeys(['meta+b', 'ctrl+b'], () => uiStore.toggleSidebarCollapsed(), {}, [uiStore]);
 
   const handleCreateTeam = useCallback(
-    async (input: {
-      name: string;
-      key: string;
-      description?: string;
-      private: boolean;
-    }) => {
+    async (input: { name: string; key: string; description?: string; private: boolean }) => {
       const result = await gql(TEAM_CREATE_MUTATION, { input });
       if (result.errors?.length) {
         throw new Error(gqlError(result, 'Failed to create team'));
@@ -101,13 +91,11 @@ export const WorkspaceClient = observer(function WorkspaceClient({
   return (
     <>
       {children}
-      {uiStore.commandPaletteOpen && (
-        <CommandPalette recentItems={recentItems} />
-      )}
+      {uiStore.commandPaletteOpen && <CommandPalette recentItems={recentItems} />}
       <CreateTeamModal
-        open={uiStore.createTeamModalOpen}
         onClose={() => uiStore.closeCreateTeamModal()}
         onSubmit={handleCreateTeam}
+        open={uiStore.createTeamModalOpen}
       />
     </>
   );

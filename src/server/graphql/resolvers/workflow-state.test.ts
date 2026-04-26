@@ -1,14 +1,7 @@
 import { GraphQLError } from 'graphql';
 import { beforeEach, describe, expect, it } from 'vitest';
-import {
-  createMockContext,
-  type MockGraphQLContext,
-} from '../../../test/context-mock';
-import {
-  DEFAULT_WORKFLOW_STATES,
-  TEST_TEAM,
-  TEST_TEAM_MEMBERSHIP,
-} from '../../../test/fixtures';
+import { createMockContext, type MockGraphQLContext } from '../../../test/context-mock';
+import { DEFAULT_WORKFLOW_STATES, TEST_TEAM, TEST_TEAM_MEMBERSHIP } from '../../../test/fixtures';
 import { workflowStateResolvers } from './workflow-state';
 
 describe('workflowStateResolvers', () => {
@@ -17,9 +10,7 @@ describe('workflowStateResolvers', () => {
   beforeEach(() => {
     ctx = createMockContext();
     // Default: user is a team member (for auth checks)
-    ctx.prisma.teamMembership.findUnique.mockResolvedValue(
-      TEST_TEAM_MEMBERSHIP,
-    );
+    ctx.prisma.teamMembership.findUnique.mockResolvedValue(TEST_TEAM_MEMBERSHIP);
   });
 
   describe('Mutation.workflowStateCreate', () => {

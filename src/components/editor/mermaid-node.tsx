@@ -52,20 +52,18 @@ function MermaidView({ node, updateAttributes, selected }: NodeViewProps) {
     return (
       <NodeViewWrapper>
         <div className="mermaid-editor my-2 rounded-md border border-zinc-300 bg-zinc-50 p-2 dark:border-zinc-700 dark:bg-zinc-900">
-          <p className="mb-1 text-xs font-medium text-zinc-500">
-            Mermaid diagram
-          </p>
+          <p className="mb-1 text-xs font-medium text-zinc-500">Mermaid diagram</p>
           <textarea
             className="w-full rounded border border-zinc-200 bg-white p-2 font-mono text-xs text-zinc-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
-            rows={6}
             defaultValue={code}
-            placeholder={'graph TD\n  A --> B'}
             onBlur={e => {
               updateAttributes({ code: e.target.value });
               if (e.target.value) {
                 setEditing(false);
               }
             }}
+            placeholder={'graph TD\n  A --> B'}
+            rows={6}
           />
         </div>
       </NodeViewWrapper>
@@ -75,7 +73,6 @@ function MermaidView({ node, updateAttributes, selected }: NodeViewProps) {
   return (
     <NodeViewWrapper>
       <button
-        type="button"
         className={`mermaid-block relative my-2 w-full cursor-pointer rounded-md border p-3 text-left ${
           selected
             ? 'border-indigo-400 bg-indigo-50/30 dark:bg-indigo-950/20'
@@ -83,11 +80,10 @@ function MermaidView({ node, updateAttributes, selected }: NodeViewProps) {
         }`}
         onDoubleClick={() => setEditing(true)}
         title="Double-click to edit"
+        type="button"
       >
         {error ? (
-          <pre className="whitespace-pre-wrap text-xs text-red-500">
-            {error}
-          </pre>
+          <pre className="whitespace-pre-wrap text-xs text-red-500">{error}</pre>
         ) : (
           // biome-ignore lint/security/noDangerouslySetInnerHtml: mermaid-generated SVG
           <div dangerouslySetInnerHTML={{ __html: svg }} />
@@ -108,12 +104,11 @@ export const MermaidNode = Node.create({
     return {
       setMermaid:
         () =>
-        ({ commands }: CommandProps) => {
-          return commands.insertContent({
+        ({ commands }: CommandProps) =>
+          commands.insertContent({
             attrs: { code: '' },
             type: this.name,
-          });
-        },
+          }),
     } as never;
   },
 
@@ -131,10 +126,6 @@ export const MermaidNode = Node.create({
   },
 
   renderHTML({ HTMLAttributes }) {
-    return [
-      'div',
-      mergeAttributes(HTMLAttributes, { 'data-type': 'mermaid' }),
-      0,
-    ];
+    return ['div', mergeAttributes(HTMLAttributes, { 'data-type': 'mermaid' }), 0];
   },
 });

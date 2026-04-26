@@ -9,9 +9,7 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
-export const AppShell = observer(function AppShell({
-  children,
-}: AppShellProps) {
+export const AppShell = observer(function AppShell({ children }: AppShellProps) {
   const { uiStore } = useStore();
   const params = useParams<{ workspace?: string }>();
 

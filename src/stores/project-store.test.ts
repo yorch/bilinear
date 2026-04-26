@@ -9,9 +9,7 @@ const PROJECT_B = 'proj-b';
 const USER_1 = 'user-1';
 const USER_2 = 'user-2';
 
-function makeUpdate(
-  overrides: Partial<DBProjectUpdate> & { id: string },
-): DBProjectUpdate {
+function makeUpdate(overrides: Partial<DBProjectUpdate> & { id: string }): DBProjectUpdate {
   return {
     body: 'All good',
     createdAt: '2026-01-01T00:00:00Z',
@@ -120,11 +118,7 @@ describe('ProjectStore', () => {
 
     it('replaces an existing update on action U', () => {
       store.upsertUpdates([makeUpdate({ body: 'original', id: 'u1' })]);
-      store.applyUpdateSyncAction(
-        'U',
-        'u1',
-        makeUpdate({ body: 'revised', id: 'u1' }),
-      );
+      store.applyUpdateSyncAction('U', 'u1', makeUpdate({ body: 'revised', id: 'u1' }));
 
       expect(store.updatePool.get('u1')?.body).toBe('revised');
     });

@@ -6,20 +6,10 @@ import type { GraphQLContext } from '../context';
 
 export const issueRelationResolvers = {
   IssueRelation: {
-    issue: async (
-      relation: IssueRelation,
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => {
-      return ctx.services.issue.findById(relation.issueId);
-    },
-    relatedIssue: async (
-      relation: IssueRelation,
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => {
-      return ctx.services.issue.findById(relation.relatedIssueId);
-    },
+    issue: async (relation: IssueRelation, _args: unknown, ctx: GraphQLContext) =>
+      ctx.services.issue.findById(relation.issueId),
+    relatedIssue: async (relation: IssueRelation, _args: unknown, ctx: GraphQLContext) =>
+      ctx.services.issue.findById(relation.relatedIssueId),
   },
   Mutation: {
     issueRelationCreate: async (
@@ -35,9 +25,7 @@ export const issueRelationResolvers = {
         });
       }
       await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
-      const relatedIssue = await ctx.services.issue.findById(
-        input.relatedIssueId,
-      );
+      const relatedIssue = await ctx.services.issue.findById(input.relatedIssueId);
       if (!relatedIssue || relatedIssue.organizationId !== ctx.orgId) {
         throw new GraphQLError('Related issue not found', {
           extensions: { code: 'NOT_FOUND' },
@@ -73,11 +61,7 @@ export const issueRelationResolvers = {
         throw err;
       }
     },
-    issueRelationDelete: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    issueRelationDelete: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
       const relation = await ctx.services.issueRelation.findById(id);
       if (!relation) {

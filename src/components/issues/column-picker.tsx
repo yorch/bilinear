@@ -48,13 +48,13 @@ export function ColumnPicker({
   }, [open]);
 
   return (
-    <div ref={ref} className="relative">
+    <div className="relative" ref={ref}>
       <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        aria-label="Column picker"
         aria-expanded={open}
+        aria-label="Column picker"
         className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+        onClick={() => setOpen(v => !v)}
+        type="button"
       >
         <Settings2 className="h-3.5 w-3.5" />
         Columns
@@ -67,9 +67,9 @@ export function ColumnPicker({
           </p>
           {BUILT_IN_LABELS.map(({ key, label }) => (
             <CheckRow
+              checked={isVisible(key)}
               key={key}
               label={label}
-              checked={isVisible(key)}
               onToggle={() => onToggle(key)}
             />
           ))}
@@ -82,9 +82,9 @@ export function ColumnPicker({
                 const k: ColumnKey = `custom:${def.id}`;
                 return (
                   <CheckRow
+                    checked={isVisible(k)}
                     key={def.id}
                     label={def.name}
-                    checked={isVisible(k)}
                     onToggle={() => onToggle(k)}
                   />
                 );
@@ -108,7 +108,7 @@ function CheckRow({
 }) {
   return (
     <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800">
-      <input type="checkbox" checked={checked} onChange={onToggle} />
+      <input checked={checked} onChange={onToggle} type="checkbox" />
       {label}
     </label>
   );

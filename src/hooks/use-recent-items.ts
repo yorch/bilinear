@@ -5,8 +5,8 @@ import { useCallback, useEffect, useState } from 'react';
 export interface RecentItem {
   id: string;
   identifier: string;
-  title: string;
   teamKey: string;
+  title: string;
   visitedAt: number; // ms timestamp
 }
 
@@ -62,10 +62,7 @@ export function useRecentItems(workspaceKey?: string) {
       // Remove any existing entry for this issue
       const filtered = prev.filter(i => i.id !== item.id);
       // Prepend new entry and trim to MAX_RECENT
-      return [{ ...item, visitedAt: Date.now() }, ...filtered].slice(
-        0,
-        MAX_RECENT,
-      );
+      return [{ ...item, visitedAt: Date.now() }, ...filtered].slice(0, MAX_RECENT);
     });
   }, []);
 

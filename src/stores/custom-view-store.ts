@@ -20,9 +20,7 @@ export class CustomViewStore {
         if (a.sortOrder !== b.sortOrder) {
           return a.sortOrder - b.sortOrder;
         }
-        return (
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
   }
 

@@ -1,13 +1,13 @@
 import type { PrismaClient, File as PrismaFile } from '../../generated/prisma';
 
 export interface FileCreateInput {
-  name: string;
-  key: string;
-  size: number;
-  mimeType: string;
-  url: string;
   issueId?: string;
+  key: string;
+  mimeType: string;
+  name: string;
   projectId?: string;
+  size: number;
+  url: string;
 }
 
 export class FileNotFoundError extends Error {
@@ -27,10 +27,7 @@ export class FileForbiddenError extends Error {
 export class FileService {
   constructor(private prisma: PrismaClient) {}
 
-  async createFile(
-    uploaderId: string,
-    input: FileCreateInput,
-  ): Promise<PrismaFile> {
+  async createFile(uploaderId: string, input: FileCreateInput): Promise<PrismaFile> {
     return this.prisma.file.create({
       data: {
         issueId: input.issueId ?? null,

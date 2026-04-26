@@ -1,9 +1,6 @@
 import { GraphQLError } from 'graphql';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  createMockContext,
-  type MockGraphQLContext,
-} from '../../../test/context-mock';
+import { createMockContext, type MockGraphQLContext } from '../../../test/context-mock';
 import {
   DEFAULT_WORKFLOW_STATES,
   TEST_ISSUE,
@@ -183,9 +180,7 @@ describe('issueResolvers', () => {
       );
 
       // Notification should NOT have been created (self-assignment)
-      await vi.waitFor(() =>
-        expect(ctx.prisma.notification.create).not.toHaveBeenCalled(),
-      );
+      await vi.waitFor(() => expect(ctx.prisma.notification.create).not.toHaveBeenCalled());
     });
 
     it('throws UNAUTHENTICATED when not logged in', async () => {
@@ -244,9 +239,7 @@ describe('issueResolvers', () => {
         ctx as never,
       );
 
-      await vi.waitFor(() =>
-        expect(ctx.prisma.notificationSubscription.create).toHaveBeenCalled(),
-      );
+      await vi.waitFor(() => expect(ctx.prisma.notificationSubscription.create).toHaveBeenCalled());
     });
 
     it('notifies and subscribes the new assignee when assigneeId changes', async () => {
@@ -313,9 +306,7 @@ describe('issueResolvers', () => {
         userId: TEST_USER.id,
       });
       // Subscriber list (excluding the actor who made the change)
-      ctx.prisma.notificationSubscription.findMany.mockResolvedValue([
-        { userId: TEST_USER_2.id },
-      ]);
+      ctx.prisma.notificationSubscription.findMany.mockResolvedValue([{ userId: TEST_USER_2.id }]);
       ctx.prisma.notification.create.mockResolvedValue({
         actorId: TEST_USER.id,
         createdAt: new Date(),
@@ -367,11 +358,7 @@ describe('issueResolvers', () => {
       });
 
       await expect(
-        issueResolvers.Mutation.issueUpdate(
-          null,
-          { id: TEST_ISSUE.id, input: {} },
-          ctx as never,
-        ),
+        issueResolvers.Mutation.issueUpdate(null, { id: TEST_ISSUE.id, input: {} }, ctx as never),
       ).rejects.toMatchObject({ extensions: { code: 'NOT_FOUND' } });
     });
   });
@@ -452,11 +439,7 @@ describe('issueResolvers', () => {
         userId: TEST_USER.id,
       });
 
-      const result = await issueResolvers.Query.issue(
-        null,
-        { id: TEST_ISSUE.id },
-        ctx as never,
-      );
+      const result = await issueResolvers.Query.issue(null, { id: TEST_ISSUE.id }, ctx as never);
 
       expect(result).toEqual(TEST_ISSUE);
     });

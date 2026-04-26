@@ -1,8 +1,5 @@
 import { GraphQLError } from 'graphql';
-import type {
-  CustomFieldDefinition,
-  CustomFieldValue,
-} from '../../../generated/prisma';
+import type { CustomFieldDefinition, CustomFieldValue } from '../../../generated/prisma';
 import { requireAuth, requireTeamMember } from '../../middleware/auth';
 import {
   type CustomFieldDefinitionCreateInput,
@@ -56,25 +53,16 @@ async function loadDefinitionForMutation(
 
 export const customFieldResolvers = {
   CustomFieldDefinition: {
-    team: async (
-      def: CustomFieldDefinition,
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => ctx.services.team.findById(def.teamId),
+    team: async (def: CustomFieldDefinition, _args: unknown, ctx: GraphQLContext) =>
+      ctx.services.team.findById(def.teamId),
   },
   CustomFieldValue: {
-    definition: async (
-      value: CustomFieldValue,
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => ctx.services.customField.findDefinitionById(value.definitionId),
+    definition: async (value: CustomFieldValue, _args: unknown, ctx: GraphQLContext) =>
+      ctx.services.customField.findDefinitionById(value.definitionId),
   },
   Issue: {
-    customFieldValues: async (
-      issue: { id: string },
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => ctx.services.customField.findValuesByIssueIds([issue.id]),
+    customFieldValues: async (issue: { id: string }, _args: unknown, ctx: GraphQLContext) =>
+      ctx.services.customField.findValuesByIssueIds([issue.id]),
   },
   Mutation: {
     customFieldDefinitionArchive: async (
@@ -197,16 +185,10 @@ export const customFieldResolvers = {
       } catch (err) {
         throw mapServiceError(err);
       }
-      const allValues = await ctx.services.customField.findValuesByIssueIds([
-        issueId,
-      ]);
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'U',
-        'Issue',
-        issueId,
-        { customFieldValues: allValues },
-      );
+      const allValues = await ctx.services.customField.findValuesByIssueIds([issueId]);
+      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', issueId, {
+        customFieldValues: allValues,
+      });
       return {
         lastSyncId: sync.id.toString(),
         success: true,
@@ -215,28 +197,18 @@ export const customFieldResolvers = {
     },
   },
   Query: {
-    customFieldDefinition: async (
-      _p: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    customFieldDefinition: async (_p: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
       return loadDefinitionForMutation(id, ctx);
     },
     customFieldDefinitions: async (
       _p: unknown,
-      {
-        teamId,
-        includeArchived,
-      }: { teamId: string; includeArchived?: boolean },
+      { teamId, includeArchived }: { teamId: string; includeArchived?: boolean },
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
       await requireTeamMember(ctx.prisma, teamId, ctx.userId);
-      return ctx.services.customField.findDefinitionsByTeamId(
-        teamId,
-        includeArchived ?? false,
-      );
+      return ctx.services.customField.findDefinitionsByTeamId(teamId, includeArchived ?? false);
     },
     customFieldValuesForIssue: async (
       _p: unknown,

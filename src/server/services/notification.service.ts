@@ -1,11 +1,11 @@
 import type { Notification, PrismaClient } from '../../generated/prisma';
 
 export interface NotificationCreateInput {
-  userId: string;
-  issueId?: string;
   actorId?: string;
-  type: string;
   data?: Record<string, unknown>;
+  issueId?: string;
+  type: string;
+  userId: string;
 }
 
 export class NotificationNotFoundError extends Error {
@@ -18,10 +18,7 @@ export class NotificationNotFoundError extends Error {
 export class NotificationService {
   constructor(private prisma: PrismaClient) {}
 
-  async create(
-    orgId: string,
-    input: NotificationCreateInput,
-  ): Promise<Notification> {
+  async create(orgId: string, input: NotificationCreateInput): Promise<Notification> {
     return this.prisma.notification.create({
       data: {
         actorId: input.actorId ?? null,
@@ -38,11 +35,7 @@ export class NotificationService {
     return this.prisma.notification.findUnique({ where: { id } });
   }
 
-  async findByUserId(
-    userId: string,
-    orgId: string,
-    limit = 50,
-  ): Promise<Notification[]> {
+  async findByUserId(userId: string, orgId: string, limit = 50): Promise<Notification[]> {
     const now = new Date();
     return this.prisma.notification.findMany({
       orderBy: { createdAt: 'desc' },

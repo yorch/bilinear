@@ -1,13 +1,6 @@
 import type { PrismaClient, WorkflowState } from '../../generated/prisma';
 
-const VALID_TYPES = [
-  'triage',
-  'backlog',
-  'unstarted',
-  'started',
-  'completed',
-  'canceled',
-];
+const VALID_TYPES = ['triage', 'backlog', 'unstarted', 'started', 'completed', 'canceled'];
 
 const REQUIRED_TYPES = ['completed', 'canceled'];
 
@@ -58,10 +51,7 @@ export class WorkflowStateService {
     });
   }
 
-  async update(
-    id: string,
-    input: WorkflowStateUpdateInput,
-  ): Promise<WorkflowState> {
+  async update(id: string, input: WorkflowStateUpdateInput): Promise<WorkflowState> {
     return this.prisma.workflowState.update({
       data: {
         color: input.color,
@@ -104,18 +94,14 @@ export class WorkflowStateService {
 
 export class InvalidStateTypeError extends Error {
   constructor(type: string) {
-    super(
-      `Invalid workflow state type: ${type}. Must be one of: ${VALID_TYPES.join(', ')}`,
-    );
+    super(`Invalid workflow state type: ${type}. Must be one of: ${VALID_TYPES.join(', ')}`);
     this.name = 'InvalidStateTypeError';
   }
 }
 
 export class LastRequiredStateError extends Error {
   constructor(type: string) {
-    super(
-      `Cannot archive the last ${type} state. At least one ${type} state is required.`,
-    );
+    super(`Cannot archive the last ${type} state. At least one ${type} state is required.`);
     this.name = 'LastRequiredStateError';
   }
 }

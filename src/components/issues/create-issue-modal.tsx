@@ -19,24 +19,24 @@ const GET_TEMPLATES_QUERY = `
 `;
 
 interface CreateIssueInput {
-  title: string;
-  description?: string;
-  stateId?: string;
   assigneeId?: string;
-  priority: number;
-  labelIds: string[];
+  description?: string;
   dueDate?: string | null;
+  labelIds: string[];
+  priority: number;
+  stateId?: string;
+  title: string;
 }
 
 interface CreateIssueModalProps {
-  open: boolean;
+  defaultStateId?: string;
+  labels: IssueLabel[];
   onClose: () => void;
   onSubmit: (input: CreateIssueInput) => Promise<void>;
+  open: boolean;
   states: WorkflowState[];
-  users: IssueUser[];
-  labels: IssueLabel[];
-  defaultStateId?: string;
   teamId?: string;
+  users: IssueUser[];
 }
 
 export function CreateIssueModal({
@@ -166,7 +166,6 @@ export function CreateIssueModal({
 
   return (
     <dialog
-      open
       aria-label="Create issue"
       className="fixed inset-0 z-50 flex h-screen w-screen items-center justify-center bg-black/40 p-0 m-0 border-none max-w-none max-h-none"
       onClick={e => {
@@ -179,57 +178,46 @@ export function CreateIssueModal({
           onClose();
         }
       }}
+      open
     >
       <div className="w-full max-w-lg rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
-        <form onSubmit={handleSubmit} className="flex flex-col">
+        <form className="flex flex-col" onSubmit={handleSubmit}>
           {/* Title */}
           <div className="px-5 pt-5">
             <input
-              ref={titleRef}
-              type="text"
-              placeholder="Issue title"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
               className="w-full bg-transparent text-lg font-medium text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
+              onChange={e => setTitle(e.target.value)}
+              placeholder="Issue title"
+              ref={titleRef}
               required
+              type="text"
+              value={title}
             />
           </div>
 
           {/* Description */}
           <div className="px-5 pt-2">
             <TipTapEditor
-              content={description}
-              placeholder="Add description… (optional, supports **markdown**)"
-              onChange={html => setDescription(html)}
               className="text-sm text-zinc-600 dark:text-zinc-400"
+              content={description}
+              onChange={html => setDescription(html)}
+              placeholder="Add description… (optional, supports **markdown**)"
             />
           </div>
 
           {/* Properties toolbar */}
           <div className="flex flex-wrap items-center gap-1 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
-            <StatusSelect
-              value={stateId}
-              states={states}
-              onChange={setStateId}
-            />
-            <PrioritySelect value={priority} onChange={setPriority} />
-            <AssigneeSelect
-              value={assigneeId}
-              users={users}
-              onChange={setAssigneeId}
-            />
-            <LabelSelect
-              value={labelIds}
-              labels={labels}
-              onChange={setLabelIds}
-            />
-            <DueDatePicker value={dueDate} onChange={setDueDate} />
+            <StatusSelect onChange={setStateId} states={states} value={stateId} />
+            <PrioritySelect onChange={setPriority} value={priority} />
+            <AssigneeSelect onChange={setAssigneeId} users={users} value={assigneeId} />
+            <LabelSelect labels={labels} onChange={setLabelIds} value={labelIds} />
+            <DueDatePicker onChange={setDueDate} value={dueDate} />
             {teamId && (
               <TemplateSelector
-                teamId={teamId}
-                onSelect={applyTemplate}
                 forceOpen={templateOpen}
                 onClose={() => setTemplateOpen(false)}
+                onSelect={applyTemplate}
+                teamId={teamId}
               />
             )}
           </div>
@@ -237,19 +225,19 @@ export function CreateIssueModal({
           {/* Actions */}
           <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
             <button
-              type="button"
-              onClick={onClose}
               className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              onClick={onClose}
+              type="button"
             >
               Cancel
             </button>
             <button
-              type="submit"
-              disabled={!title.trim() || submitting}
               className={cn(
                 'rounded-md px-4 py-1.5 text-sm font-medium text-white transition-colors',
                 'bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed',
               )}
+              disabled={!title.trim() || submitting}
+              type="submit"
             >
               {submitting ? 'Creating…' : 'Create issue'}
             </button>

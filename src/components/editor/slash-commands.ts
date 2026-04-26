@@ -5,11 +5,11 @@ import Suggestion from '@tiptap/suggestion';
 import type { SlashCommandListHandle } from './slash-command-list';
 
 export interface SlashCommandItem {
-  id: string;
-  title: string;
+  command: (editor: Editor) => void;
   description: string;
   icon: string;
-  command: (editor: Editor) => void;
+  id: string;
+  title: string;
 }
 
 // Pre-load to avoid async race when the user types and immediately presses a key.
@@ -74,11 +74,7 @@ export const SLASH_COMMANDS: SlashCommandItem[] = [
   },
   {
     command: editor =>
-      editor
-        .chain()
-        .focus()
-        .insertTable({ cols: 3, rows: 3, withHeaderRow: true })
-        .run(),
+      editor.chain().focus().insertTable({ cols: 3, rows: 3, withHeaderRow: true }).run(),
     description: 'Insert a table',
     icon: '⊞',
     id: 'table',
@@ -183,8 +179,7 @@ export const SlashCommands = Extension.create({
           const q = query.toLowerCase();
           return SLASH_COMMANDS.filter(
             item =>
-              item.title.toLowerCase().includes(q) ||
-              item.description.toLowerCase().includes(q),
+              item.title.toLowerCase().includes(q) || item.description.toLowerCase().includes(q),
           );
         },
         render: () => {
@@ -216,8 +211,7 @@ export const SlashCommands = Extension.create({
             }) {
               const { SlashCommandList } = await slashCommandListModule;
               popup = document.createElement('div');
-              popup.style.cssText =
-                'position:fixed;z-index:9999;pointer-events:auto;';
+              popup.style.cssText = 'position:fixed;z-index:9999;pointer-events:auto;';
               document.body.appendChild(popup);
 
               component = new ReactRenderer(SlashCommandList, {

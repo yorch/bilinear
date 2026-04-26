@@ -1,13 +1,6 @@
 import { GraphQLError } from 'graphql';
-import type {
-  Organization,
-  OrganizationMember,
-} from '../../../generated/prisma';
-import {
-  requireAuth,
-  requireOrgRole,
-  requireUserId,
-} from '../../middleware/auth';
+import type { Organization, OrganizationMember } from '../../../generated/prisma';
+import { requireAuth, requireOrgRole, requireUserId } from '../../middleware/auth';
 import {
   InvalidRoleError,
   InvalidUrlKeyError,
@@ -27,15 +20,9 @@ export const organizationResolvers = {
 
       let organization: Organization;
       try {
-        organization = await ctx.services.organization.createWithOwner(
-          ctx.userId,
-          input,
-        );
+        organization = await ctx.services.organization.createWithOwner(ctx.userId, input);
       } catch (err) {
-        if (
-          err instanceof InvalidUrlKeyError ||
-          err instanceof UrlKeyTakenError
-        ) {
+        if (err instanceof InvalidUrlKeyError || err instanceof UrlKeyTakenError) {
           throw new GraphQLError(err.message, {
             extensions: { code: 'BAD_USER_INPUT' },
           });
@@ -43,10 +30,7 @@ export const organizationResolvers = {
         throw err;
       }
 
-      const tokenPair = await ctx.services.auth.reissueTokens(
-        ctx.userId,
-        organization.id,
-      );
+      const tokenPair = await ctx.services.auth.reissueTokens(ctx.userId, organization.id);
 
       return {
         accessToken: tokenPair.accessToken,
@@ -62,18 +46,11 @@ export const organizationResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, [
-        'owner',
-        'admin',
-      ]);
+      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
 
       let updated: OrganizationMember;
       try {
-        updated = await ctx.services.organization.updateMemberRole(
-          ctx.orgId,
-          userId,
-          role,
-        );
+        updated = await ctx.services.organization.updateMemberRole(ctx.orgId, userId, role);
       } catch (err) {
         if (err instanceof InvalidRoleError) {
           throw new GraphQLError(err.message, {
@@ -100,11 +77,7 @@ export const organizationResolvers = {
   },
 
   Query: {
-    organization: async (
-      _parent: unknown,
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => {
+    organization: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
       const org = await ctx.services.user.getOrganizationForUser(ctx.userId);
       if (!org) {
@@ -115,11 +88,7 @@ export const organizationResolvers = {
       return org;
     },
 
-    organizationMembers: async (
-      _parent: unknown,
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => {
+    organizationMembers: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
       return ctx.services.organization.findMembers(ctx.orgId);
     },

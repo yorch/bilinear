@@ -72,12 +72,10 @@ export type MockPrismaClient = {
 export function createMockPrisma(): MockPrismaClient {
   const mock = {
     $queryRaw: vi.fn(),
-    $transaction: vi.fn(
-      async (fn: (tx: MockPrismaClient) => Promise<unknown>) => {
-        // By default, $transaction passes itself so the callback uses the same mock
-        return fn(mock as MockPrismaClient);
-      },
-    ),
+    $transaction: vi.fn(async (fn: (tx: MockPrismaClient) => Promise<unknown>) => {
+      // By default, $transaction passes itself so the callback uses the same mock
+      return fn(mock as MockPrismaClient);
+    }),
     authToken: createMockModel(),
     comment: createMockModel(),
     commentReaction: createMockModel(),

@@ -31,10 +31,7 @@ export function estimateComplexity(body: {
   const fieldMatches = query.match(/\w+\s*[{(]/g) ?? [];
   const firstArg = (body.variables?.first as number | undefined) ?? 50;
   // Rough formula: fields * first-arg multiplier, capped at max
-  const estimate = Math.min(
-    fieldMatches.length * firstArg * 0.1,
-    MAX_SINGLE_COMPLEXITY,
-  );
+  const estimate = Math.min(fieldMatches.length * firstArg * 0.1, MAX_SINGLE_COMPLEXITY);
   return Math.max(1, Math.round(estimate));
 }
 
@@ -78,8 +75,7 @@ export async function checkRateLimit(
     return { exceeded: false, headers: {} };
   }
 
-  const resetAt =
-    Math.floor(Date.now() / 1000 / WINDOW_SECONDS + 1) * WINDOW_SECONDS;
+  const resetAt = Math.floor(Date.now() / 1000 / WINDOW_SECONDS + 1) * WINDOW_SECONDS;
   const requestsRemaining = Math.max(0, REQUEST_LIMIT - reqCount);
   const complexityRemaining = Math.max(0, COMPLEXITY_LIMIT - cmpCount);
   const exceeded = reqCount > REQUEST_LIMIT || cmpCount > COMPLEXITY_LIMIT;
@@ -99,9 +95,7 @@ export async function checkRateLimit(
 /**
  * Build a RATELIMITED GraphQL error response (HTTP 400 per spec).
  */
-export function buildRateLimitedResponse(
-  headers: Record<string, string>,
-): Response {
+export function buildRateLimitedResponse(headers: Record<string, string>): Response {
   return new Response(
     JSON.stringify({
       errors: [
@@ -189,9 +183,7 @@ export async function checkAuthMutationLimit(
   if (kind === 'login') {
     const [byEmail, byIp] = await Promise.all([
       checkFixedWindow(emailKey, 5, 60 * 60),
-      ipKey
-        ? checkFixedWindow(ipKey, 20, 60 * 60)
-        : Promise.resolve({ count: 0, exceeded: false }),
+      ipKey ? checkFixedWindow(ipKey, 20, 60 * 60) : Promise.resolve({ count: 0, exceeded: false }),
     ]);
     return { exceeded: byEmail.exceeded || byIp.exceeded };
   }

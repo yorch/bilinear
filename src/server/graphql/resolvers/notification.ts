@@ -5,11 +5,7 @@ import type { GraphQLContext } from '../context';
 
 export const notificationResolvers = {
   Mutation: {
-    notificationMarkAllRead: async (
-      _parent: unknown,
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => {
+    notificationMarkAllRead: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       await ctx.services.notification.markAllRead(ctx.userId, ctx.orgId);
@@ -21,18 +17,11 @@ export const notificationResolvers = {
       return { lastSyncId: lastSyncId.toString(), success: true };
     },
 
-    notificationMarkRead: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    notificationMarkRead: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       try {
-        const notification = await ctx.services.notification.markRead(
-          id,
-          ctx.userId,
-        );
+        const notification = await ctx.services.notification.markRead(id, ctx.userId);
 
         const sync = await ctx.services.sync.createSyncAction(
           ctx.orgId,
@@ -141,22 +130,14 @@ export const notificationResolvers = {
   },
 
   Notification: {
-    actor: async (
-      notification: Notification,
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => {
+    actor: async (notification: Notification, _args: unknown, ctx: GraphQLContext) => {
       if (!notification.actorId) {
         return null;
       }
       return ctx.services.user.findById(notification.actorId);
     },
 
-    issue: async (
-      notification: Notification,
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => {
+    issue: async (notification: Notification, _args: unknown, ctx: GraphQLContext) => {
       if (!notification.issueId) {
         return null;
       }
@@ -183,23 +164,11 @@ export const notificationResolvers = {
       return ctx.services.notification.isSubscribed(ctx.userId, issueId);
     },
 
-    notifications: async (
-      _parent: unknown,
-      { limit }: { limit?: number },
-      ctx: GraphQLContext,
-    ) => {
+    notifications: async (_parent: unknown, { limit }: { limit?: number }, ctx: GraphQLContext) => {
       requireAuth(ctx);
-      return ctx.services.notification.findByUserId(
-        ctx.userId,
-        ctx.orgId,
-        limit ?? 50,
-      );
+      return ctx.services.notification.findByUserId(ctx.userId, ctx.orgId, limit ?? 50);
     },
-    notificationUnreadCount: async (
-      _parent: unknown,
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => {
+    notificationUnreadCount: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
       return ctx.services.notification.getUnreadCount(ctx.userId, ctx.orgId);
     },

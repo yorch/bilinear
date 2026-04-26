@@ -16,8 +16,7 @@ export class IssueRelationStore {
 
   get all(): DBIssueRelation[] {
     return Array.from(this.pool.values()).sort(
-      (a, b) =>
-        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     );
   }
 
@@ -26,9 +25,7 @@ export class IssueRelationStore {
   }
 
   findByIssueId(issueId: string): DBIssueRelation[] {
-    return this.all.filter(
-      r => r.issueId === issueId || r.relatedIssueId === issueId,
-    );
+    return this.all.filter(r => r.issueId === issueId || r.relatedIssueId === issueId);
   }
 
   upsertMany(relations: DBIssueRelation[]) {
@@ -44,11 +41,7 @@ export class IssueRelationStore {
     }
   }
 
-  applySyncAction(
-    actionType: string,
-    id: string,
-    data: DBIssueRelation | null,
-  ) {
+  applySyncAction(actionType: string, id: string, data: DBIssueRelation | null) {
     if (actionType === 'I' || actionType === 'U' || actionType === 'A') {
       if (data) {
         this.pool.set(id, data);

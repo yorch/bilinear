@@ -61,10 +61,7 @@ export class UserService {
 
   // Only write to the DB if lastSeen is stale (>5 min ago or null),
   // avoiding a write on every viewer query.
-  async updateLastSeen(
-    userId: string,
-    currentLastSeen: Date | null,
-  ): Promise<void> {
+  async updateLastSeen(userId: string, currentLastSeen: Date | null): Promise<void> {
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
     if (currentLastSeen && currentLastSeen > fiveMinutesAgo) {
       return;

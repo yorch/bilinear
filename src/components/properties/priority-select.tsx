@@ -6,11 +6,11 @@ import { cn } from '@/lib/utils';
 import { PriorityIcon } from './priority-icon';
 
 interface PrioritySelectProps {
-  value: number;
-  onChange: (priority: number) => void;
   className?: string;
   forceOpen?: boolean;
+  onChange: (priority: number) => void;
   onClose?: () => void;
+  value: number;
 }
 
 const PRIORITIES = [0, 1, 2, 3, 4] as const;
@@ -43,40 +43,40 @@ export function PrioritySelect({
   }, [onClose]);
 
   return (
-    <div ref={ref} className={cn('relative', className)}>
+    <div className={cn('relative', className)} ref={ref}>
       <button
-        type="button"
+        className="flex items-center rounded px-1.5 py-1 hover:bg-zinc-100 dark:hover:bg-zinc-800"
         onClick={e => {
           e.stopPropagation();
           setOpen(o => !o);
         }}
-        className="flex items-center rounded px-1.5 py-1 hover:bg-zinc-100 dark:hover:bg-zinc-800"
         title={getPriorityConfig(value).label}
+        type="button"
       >
         <PriorityIcon priority={value} />
       </button>
 
       {open && (
         <div
-          data-testid="priority-select-popover"
           className="absolute left-0 top-full z-50 mt-1 min-w-[160px] rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+          data-testid="priority-select-popover"
         >
           {PRIORITIES.map(p => {
             const config = getPriorityConfig(p);
             return (
               <button
+                className={cn(
+                  'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800',
+                  p === value && 'font-medium',
+                )}
                 key={p}
-                type="button"
                 onClick={e => {
                   e.stopPropagation();
                   onChange(p);
                   setOpen(false);
                   onClose?.();
                 }}
-                className={cn(
-                  'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800',
-                  p === value && 'font-medium',
-                )}
+                type="button"
               >
                 <PriorityIcon priority={p} />
                 <span>{config.label}</span>

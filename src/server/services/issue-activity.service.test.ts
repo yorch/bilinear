@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import {
-  createMockPrisma,
-  type MockPrismaClient,
-} from '../../test/prisma-mock';
+import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import { IssueActivityService } from './issue-activity.service';
 
 const ISSUE_ID = '00000000-0000-0000-0000-000000000400';
@@ -85,9 +82,7 @@ describe('IssueActivityService', () => {
     it('creates all activities inside a single transaction', async () => {
       const a1 = makeActivity('act-3', 'stateId');
       const a2 = makeActivity('act-4', 'assigneeId');
-      prisma.issueActivity.create
-        .mockResolvedValueOnce(a1)
-        .mockResolvedValueOnce(a2);
+      prisma.issueActivity.create.mockResolvedValueOnce(a1).mockResolvedValueOnce(a2);
 
       const result = await service.createMany([
         {

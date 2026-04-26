@@ -9,11 +9,7 @@ import type { GraphQLContext } from '../context';
 
 export const workflowStateResolvers = {
   Mutation: {
-    workflowStateArchive: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    workflowStateArchive: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       const existing = await ctx.services.workflowState.findById(id);
@@ -25,8 +21,7 @@ export const workflowStateResolvers = {
       await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
 
       try {
-        const workflowState =
-          await ctx.services.workflowState.archive(existing);
+        const workflowState = await ctx.services.workflowState.archive(existing);
         const sync = await ctx.services.sync.createSyncAction(
           ctx.orgId,
           'A',
@@ -103,8 +98,7 @@ export const workflowStateResolvers = {
   },
 
   WorkflowState: {
-    team: async (state: WorkflowState, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.services.team.findById(state.teamId);
-    },
+    team: async (state: WorkflowState, _args: unknown, ctx: GraphQLContext) =>
+      ctx.services.team.findById(state.teamId),
   },
 };

@@ -1,14 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import {
-  TEST_LABEL,
-  TEST_ORG,
-  TEST_TEAM,
-  TEST_USER,
-} from '../../test/fixtures';
-import {
-  createMockPrisma,
-  type MockPrismaClient,
-} from '../../test/prisma-mock';
+import { TEST_LABEL, TEST_ORG, TEST_TEAM, TEST_USER } from '../../test/fixtures';
+import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import { LabelService } from './label.service';
 
 describe('LabelService', () => {

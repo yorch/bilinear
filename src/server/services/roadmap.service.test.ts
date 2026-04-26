@@ -118,9 +118,9 @@ describe('RoadmapService', () => {
         ...TEST_ROADMAP,
         organizationId: 'other',
       });
-      await expect(
-        service.upsert(ORG_ID, URL_KEY, { slug: 'taken-slug' }),
-      ).rejects.toThrow(RoadmapSlugConflictError);
+      await expect(service.upsert(ORG_ID, URL_KEY, { slug: 'taken-slug' })).rejects.toThrow(
+        RoadmapSlugConflictError,
+      );
     });
 
     it('hashes a new password on create', async () => {
@@ -169,17 +169,13 @@ describe('RoadmapService', () => {
     it('returns true for a correct password', async () => {
       const hash = await hashRoadmapPassword('correct');
       const roadmapWithPw = { ...TEST_ROADMAP, passwordHash: hash };
-      await expect(
-        service.verifyPassword(roadmapWithPw, 'correct'),
-      ).resolves.toBe(true);
+      await expect(service.verifyPassword(roadmapWithPw, 'correct')).resolves.toBe(true);
     });
 
     it('returns false for an incorrect password', async () => {
       const hash = await hashRoadmapPassword('correct');
       const roadmapWithPw = { ...TEST_ROADMAP, passwordHash: hash };
-      await expect(
-        service.verifyPassword(roadmapWithPw, 'wrong'),
-      ).resolves.toBe(false);
+      await expect(service.verifyPassword(roadmapWithPw, 'wrong')).resolves.toBe(false);
     });
   });
 
@@ -190,9 +186,7 @@ describe('RoadmapService', () => {
         enabled: false,
       });
       const { RoadmapNotFoundError } = await import('./roadmap.service');
-      await expect(service.getRoadmapProjects(ORG_ID)).rejects.toThrow(
-        RoadmapNotFoundError,
-      );
+      await expect(service.getRoadmapProjects(ORG_ID)).rejects.toThrow(RoadmapNotFoundError);
     });
 
     it('returns projects that are roadmap-visible', async () => {

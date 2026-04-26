@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TEST_USER } from '../../test/fixtures';
-import {
-  createMockPrisma,
-  type MockPrismaClient,
-} from '../../test/prisma-mock';
+import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import { signRefreshToken } from '../lib/jwt';
 import { AuthService, InvalidTokenError } from './auth.service';
 import { UserService } from './user.service';
@@ -81,9 +78,7 @@ describe('AuthService.refreshTokens — family + reuse detection', () => {
     );
     prisma.authToken.updateMany.mockResolvedValue({ count: 3 });
 
-    await expect(service.refreshTokens(rawToken)).rejects.toBeInstanceOf(
-      InvalidTokenError,
-    );
+    await expect(service.refreshTokens(rawToken)).rejects.toBeInstanceOf(InvalidTokenError);
 
     // Every active descendant of the family revoked in one sweep
     expect(prisma.authToken.updateMany).toHaveBeenCalledWith(
@@ -111,9 +106,7 @@ describe('AuthService.refreshTokens — family + reuse detection', () => {
       }),
     );
 
-    await expect(service.refreshTokens(rawToken)).rejects.toBeInstanceOf(
-      InvalidTokenError,
-    );
+    await expect(service.refreshTokens(rawToken)).rejects.toBeInstanceOf(InvalidTokenError);
 
     // Nothing to sweep — the legacy token has no family to kill
     expect(prisma.authToken.updateMany).not.toHaveBeenCalled();
@@ -130,9 +123,7 @@ describe('AuthService.refreshTokens — family + reuse detection', () => {
       }),
     );
 
-    await expect(service.refreshTokens(rawToken)).rejects.toBeInstanceOf(
-      InvalidTokenError,
-    );
+    await expect(service.refreshTokens(rawToken)).rejects.toBeInstanceOf(InvalidTokenError);
 
     // Family stays alive — natural expiry on one token isn't an attack signal
     expect(prisma.authToken.updateMany).not.toHaveBeenCalled();
@@ -143,18 +134,14 @@ describe('AuthService.refreshTokens — family + reuse detection', () => {
     const rawToken = await signValidRefreshToken();
     prisma.authToken.findFirst.mockResolvedValue(null);
 
-    await expect(service.refreshTokens(rawToken)).rejects.toBeInstanceOf(
-      InvalidTokenError,
-    );
+    await expect(service.refreshTokens(rawToken)).rejects.toBeInstanceOf(InvalidTokenError);
 
     expect(prisma.authToken.updateMany).not.toHaveBeenCalled();
     expect(prisma.authToken.create).not.toHaveBeenCalled();
   });
 
   it('rejects a malformed refresh JWT', async () => {
-    await expect(
-      service.refreshTokens('not-a-real-jwt'),
-    ).rejects.toBeInstanceOf(InvalidTokenError);
+    await expect(service.refreshTokens('not-a-real-jwt')).rejects.toBeInstanceOf(InvalidTokenError);
 
     expect(prisma.authToken.findFirst).not.toHaveBeenCalled();
     expect(prisma.authToken.updateMany).not.toHaveBeenCalled();

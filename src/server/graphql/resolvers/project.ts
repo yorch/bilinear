@@ -20,10 +20,7 @@ function getProgressCached(
 ): Promise<{ progress: number; scope: number }> {
   const ctxRecord = ctx as unknown as Record<symbol, unknown>;
   if (!ctxRecord[progressCacheKey]) {
-    ctxRecord[progressCacheKey] = new Map<
-      string,
-      Promise<{ progress: number; scope: number }>
-    >();
+    ctxRecord[progressCacheKey] = new Map<string, Promise<{ progress: number; scope: number }>>();
   }
   const cache = ctxRecord[progressCacheKey] as Map<
     string,
@@ -54,10 +51,7 @@ export const projectResolvers = {
         });
       }
 
-      const isOrgMember = await ctx.services.organization.isMember(
-        ctx.orgId,
-        userId,
-      );
+      const isOrgMember = await ctx.services.organization.isMember(ctx.orgId, userId);
       if (!isOrgMember) {
         throw new GraphQLError('User is not a member of this organization', {
           extensions: { code: 'NOT_FOUND' },
@@ -109,11 +103,7 @@ export const projectResolvers = {
       return { lastSyncId: sync.id.toString(), project, success: true };
     },
 
-    projectArchive: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    projectArchive: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       const existing = await ctx.services.project.findById(id);
@@ -124,13 +114,7 @@ export const projectResolvers = {
       }
 
       const project = await ctx.services.project.archive(id);
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'A',
-        'Project',
-        id,
-        project,
-      );
+      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'A', 'Project', id, project);
       return { lastSyncId: sync.id.toString(), project, success: true };
     },
     projectCreate: async (
@@ -159,11 +143,7 @@ export const projectResolvers = {
         }
       }
 
-      const project = await ctx.services.project.create(
-        ctx.orgId,
-        ctx.userId,
-        input,
-      );
+      const project = await ctx.services.project.create(ctx.orgId, ctx.userId, input);
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
         'I',
@@ -174,11 +154,7 @@ export const projectResolvers = {
       return { lastSyncId: sync.id.toString(), project, success: true };
     },
 
-    projectDelete: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    projectDelete: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       const existing = await ctx.services.project.findById(id);
@@ -189,13 +165,7 @@ export const projectResolvers = {
       }
 
       await ctx.services.project.delete(id);
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'D',
-        'Project',
-        id,
-        null,
-      );
+      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Project', id, null);
       return { lastSyncId: sync.id.toString(), success: true };
     },
 
@@ -244,9 +214,7 @@ export const projectResolvers = {
         });
       }
 
-      const milestoneProject = await ctx.services.project.findById(
-        existing.projectId,
-      );
+      const milestoneProject = await ctx.services.project.findById(existing.projectId);
       if (!milestoneProject || milestoneProject.organizationId !== ctx.orgId) {
         throw new GraphQLError('Milestone not found', {
           extensions: { code: 'NOT_FOUND' },
@@ -278,9 +246,7 @@ export const projectResolvers = {
         });
       }
 
-      const milestoneProject = await ctx.services.project.findById(
-        existing.projectId,
-      );
+      const milestoneProject = await ctx.services.project.findById(existing.projectId);
       if (!milestoneProject || milestoneProject.organizationId !== ctx.orgId) {
         throw new GraphQLError('Milestone not found', {
           extensions: { code: 'NOT_FOUND' },
@@ -369,13 +335,7 @@ export const projectResolvers = {
       }
 
       const project = await ctx.services.project.update(id, input);
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'U',
-        'Project',
-        id,
-        project,
-      );
+      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Project', id, project);
       return { lastSyncId: sync.id.toString(), project, success: true };
     },
 
@@ -413,11 +373,7 @@ export const projectResolvers = {
       };
     },
 
-    projectUpdateDelete: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    projectUpdateDelete: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       const existing = await ctx.services.project.findProjectUpdateById(id);
@@ -427,9 +383,7 @@ export const projectResolvers = {
         });
       }
 
-      const updateProject = await ctx.services.project.findById(
-        existing.projectId,
-      );
+      const updateProject = await ctx.services.project.findById(existing.projectId);
       if (!updateProject || updateProject.organizationId !== ctx.orgId) {
         throw new GraphQLError('Project update not found', {
           extensions: { code: 'NOT_FOUND' },
@@ -461,9 +415,7 @@ export const projectResolvers = {
         });
       }
 
-      const updateProject = await ctx.services.project.findById(
-        existing.projectId,
-      );
+      const updateProject = await ctx.services.project.findById(existing.projectId);
       if (!updateProject || updateProject.organizationId !== ctx.orgId) {
         throw new GraphQLError('Project update not found', {
           extensions: { code: 'NOT_FOUND' },
@@ -494,12 +446,11 @@ export const projectResolvers = {
       return ctx.loaders.user.load(project.creatorId);
     },
 
-    issues: async (project: Project, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.prisma.issue.findMany({
+    issues: async (project: Project, _args: unknown, ctx: GraphQLContext) =>
+      ctx.prisma.issue.findMany({
         orderBy: { sortOrder: 'asc' },
         where: { archivedAt: null, projectId: project.id, trashed: false },
-      });
-    },
+      }),
 
     lead: async (project: Project, _args: unknown, ctx: GraphQLContext) => {
       if (!project.leadId) {
@@ -508,17 +459,11 @@ export const projectResolvers = {
       return ctx.loaders.user.load(project.leadId);
     },
 
-    members: async (project: Project, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.services.project.getMembers(project.id);
-    },
+    members: async (project: Project, _args: unknown, ctx: GraphQLContext) =>
+      ctx.services.project.getMembers(project.id),
 
-    milestones: async (
-      project: Project,
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => {
-      return ctx.services.project.getMilestones(project.id);
-    },
+    milestones: async (project: Project, _args: unknown, ctx: GraphQLContext) =>
+      ctx.services.project.getMilestones(project.id),
 
     progress: async (project: Project, _args: unknown, ctx: GraphQLContext) => {
       const result = await getProgressCached(ctx, project.id);
@@ -530,33 +475,22 @@ export const projectResolvers = {
       return result.scope;
     },
 
-    teams: async (project: Project, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.services.project.getTeams(project.id);
-    },
+    teams: async (project: Project, _args: unknown, ctx: GraphQLContext) =>
+      ctx.services.project.getTeams(project.id),
 
-    updates: async (project: Project, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.services.project.getProjectUpdates(project.id);
-    },
+    updates: async (project: Project, _args: unknown, ctx: GraphQLContext) =>
+      ctx.services.project.getProjectUpdates(project.id),
   },
 
   ProjectMilestone: {},
 
   ProjectUpdate: {
-    user: async (
-      update: ProjectUpdate,
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => {
-      return ctx.loaders.user.load(update.userId);
-    },
+    user: async (update: ProjectUpdate, _args: unknown, ctx: GraphQLContext) =>
+      ctx.loaders.user.load(update.userId),
   },
 
   Query: {
-    project: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    project: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       const project = await ctx.services.project.findById(id);

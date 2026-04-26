@@ -4,8 +4,8 @@ import { getPriorityConfig } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
 
 interface PriorityIconProps {
-  priority: number;
   className?: string;
+  priority: number;
 }
 
 export function PriorityIcon({ priority, className }: PriorityIconProps) {

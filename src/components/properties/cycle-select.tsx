@@ -8,11 +8,11 @@ import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 interface CycleSelectProps {
-  value: string | null;
-  teamId: string;
   onChange: (cycleId: string | null) => void;
-  open?: boolean;
   onClose?: () => void;
+  open?: boolean;
+  teamId: string;
+  value: string | null;
 }
 
 function getCycleDisplayName(cycle: DBCycle): string {
@@ -38,9 +38,7 @@ export const CycleSelect = observer(function CycleSelect({
   const current = value ? cycleStore.findById(value) : null;
 
   const filtered = search.trim()
-    ? cycles.filter(c =>
-        getCycleDisplayName(c).toLowerCase().includes(search.toLowerCase()),
-      )
+    ? cycles.filter(c => getCycleDisplayName(c).toLowerCase().includes(search.toLowerCase()))
     : cycles;
 
   useEffect(() => {
@@ -55,10 +53,7 @@ export const CycleSelect = observer(function CycleSelect({
       return;
     }
     const handleClickOutside = (e: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setInternalOpen(false);
         onClose?.();
       }
@@ -74,9 +69,9 @@ export const CycleSelect = observer(function CycleSelect({
   };
 
   return (
-    <div ref={containerRef} className="relative">
+    <div className="relative" ref={containerRef}>
       <button
-        type="button"
+        className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
         onClick={() => {
           if (isOpen) {
             setInternalOpen(false);
@@ -85,14 +80,12 @@ export const CycleSelect = observer(function CycleSelect({
             setInternalOpen(true);
           }
         }}
-        className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
         title="Set cycle (Q)"
+        type="button"
       >
         <RefreshCw className="h-3 w-3" />
         {current ? (
-          <span className="max-w-[100px] truncate">
-            {getCycleDisplayName(current)}
-          </span>
+          <span className="max-w-[100px] truncate">{getCycleDisplayName(current)}</span>
         ) : (
           <span className="text-zinc-400">Cycle</span>
         )}
@@ -101,10 +94,7 @@ export const CycleSelect = observer(function CycleSelect({
       {isOpen && (
         <div className="absolute left-0 top-full z-50 mt-1 w-56 rounded-lg border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
           <input
-            ref={inputRef}
-            type="text"
-            placeholder="Search cycles..."
-            value={search}
+            className="mb-1 w-full rounded-md border border-zinc-200 bg-transparent px-2 py-1 text-xs outline-none placeholder:text-zinc-400 focus:border-indigo-500 dark:border-zinc-700"
             onChange={e => setSearch(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Escape') {
@@ -112,14 +102,17 @@ export const CycleSelect = observer(function CycleSelect({
                 onClose?.();
               }
             }}
-            className="mb-1 w-full rounded-md border border-zinc-200 bg-transparent px-2 py-1 text-xs outline-none placeholder:text-zinc-400 focus:border-indigo-500 dark:border-zinc-700"
+            placeholder="Search cycles..."
+            ref={inputRef}
+            type="text"
+            value={search}
           />
 
           {value && (
             <button
-              type="button"
-              onClick={() => handleSelect(null)}
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              onClick={() => handleSelect(null)}
+              type="button"
             >
               <X className="h-3 w-3" />
               Remove from cycle
@@ -128,28 +121,25 @@ export const CycleSelect = observer(function CycleSelect({
 
           <div className="max-h-48 overflow-y-auto">
             {filtered.length === 0 ? (
-              <p className="px-2 py-3 text-center text-xs text-zinc-400">
-                No cycles found
-              </p>
+              <p className="px-2 py-3 text-center text-xs text-zinc-400">No cycles found</p>
             ) : (
               filtered.map(cycle => {
                 const now = Date.now();
                 const startsAtMs = new Date(cycle.startsAt).getTime();
                 const endsAtMs = new Date(cycle.endsAt).getTime();
-                const isActive =
-                  !cycle.completedAt && startsAtMs <= now && endsAtMs > now;
+                const isActive = !cycle.completedAt && startsAtMs <= now && endsAtMs > now;
 
                 return (
                   <button
-                    key={cycle.id}
-                    type="button"
-                    onClick={() => handleSelect(cycle.id)}
                     className={cn(
                       'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800',
                       cycle.id === value
                         ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
                         : 'text-zinc-700 dark:text-zinc-300',
                     )}
+                    key={cycle.id}
+                    onClick={() => handleSelect(cycle.id)}
+                    type="button"
                   >
                     <RefreshCw className="h-3 w-3 shrink-0 text-zinc-400" />
                     <span className="min-w-0 flex-1 truncate text-left">

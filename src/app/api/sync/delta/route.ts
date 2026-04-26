@@ -4,10 +4,7 @@ import { verifyAccessToken } from '@/server/lib/jwt';
 import { logger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { redis } from '@/server/lib/redis';
-import {
-  SyncService,
-  serializeSyncAction,
-} from '@/server/services/sync.service';
+import { SyncService, serializeSyncAction } from '@/server/services/sync.service';
 
 /**
  * GET /api/sync/delta?lastSyncId=<N>&toSyncId=<N>
@@ -37,10 +34,7 @@ export async function GET(req: NextRequest) {
   const toSyncIdParam = url.searchParams.get('toSyncId');
 
   if (!lastSyncIdParam) {
-    return NextResponse.json(
-      { error: 'lastSyncId query parameter is required' },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: 'lastSyncId query parameter is required' }, { status: 400 });
   }
 
   let lastSyncId: bigint;
@@ -49,29 +43,19 @@ export async function GET(req: NextRequest) {
     lastSyncId = BigInt(lastSyncIdParam);
     toSyncId = toSyncIdParam ? BigInt(toSyncIdParam) : undefined;
   } catch {
-    return NextResponse.json(
-      { error: 'Invalid lastSyncId or toSyncId value' },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: 'Invalid lastSyncId or toSyncId value' }, { status: 400 });
   }
 
   const syncService = new SyncService(prisma, redis);
 
   try {
-    const { actions, hasMore } = await syncService.getDeltaSyncActions(
-      orgId,
-      lastSyncId,
-      toSyncId,
-    );
+    const { actions, hasMore } = await syncService.getDeltaSyncActions(orgId, lastSyncId, toSyncId);
     return NextResponse.json(
       { actions: actions.map(serializeSyncAction), hasMore },
       { headers: { 'Cache-Control': 'no-store' } },
     );
   } catch (err) {
     logger.error({ err }, '[sync/delta] Error');
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

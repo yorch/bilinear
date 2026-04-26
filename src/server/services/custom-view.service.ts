@@ -1,30 +1,30 @@
 import type { CustomView, PrismaClient } from '../../generated/prisma';
 
 export interface CustomViewCreateInput {
-  id?: string;
-  name: string;
-  description?: string;
-  icon?: string;
   color?: string;
+  description?: string;
   filters?: object;
-  sort?: object;
   groupBy?: string;
+  icon?: string;
+  id?: string;
   layout?: string;
+  name: string;
   shared?: boolean;
-  teamId?: string;
+  sort?: object;
   sortOrder?: number;
+  teamId?: string;
 }
 
 export interface CustomViewUpdateInput {
-  name?: string;
-  description?: string | null;
-  icon?: string | null;
   color?: string | null;
+  description?: string | null;
   filters?: object;
-  sort?: object;
   groupBy?: string | null;
+  icon?: string | null;
   layout?: string;
+  name?: string;
   shared?: boolean;
+  sort?: object;
   sortOrder?: number;
 }
 
@@ -60,11 +60,7 @@ export class CustomViewService {
     return this.prisma.customView.findUnique({ where: { id } });
   }
 
-  async findByOrgId(
-    orgId: string,
-    userId: string,
-    teamId?: string,
-  ): Promise<CustomView[]> {
+  async findByOrgId(orgId: string, userId: string, teamId?: string): Promise<CustomView[]> {
     return this.prisma.customView.findMany({
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
       where: {

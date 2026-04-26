@@ -125,10 +125,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
   const clientInfo = connectionManager.add(orgId, userId, ws);
   await ensureOrgSubscription(orgId);
 
-  log.info(
-    { orgId, total: connectionManager.clientCount(), userId },
-    'Client connected',
-  );
+  log.info({ orgId, total: connectionManager.clientCount(), userId }, 'Client connected');
 
   // Send initial connection ack
   ws.send(JSON.stringify({ cmd: 'connected', orgId }));
@@ -154,10 +151,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
   ws.on('close', () => {
     clearInterval(pingTimer);
     const orgEmpty = connectionManager.remove(clientInfo);
-    log.info(
-      { orgId, total: connectionManager.clientCount(), userId },
-      'Client disconnected',
-    );
+    log.info({ orgId, total: connectionManager.clientCount(), userId }, 'Client disconnected');
     if (orgEmpty) {
       subscribedOrgs.delete(orgId);
       redisSubscriber.unsubscribe(`sync:${orgId}`).catch((err: Error) => {

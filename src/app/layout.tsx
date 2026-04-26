@@ -14,16 +14,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
+    <html className="h-full antialiased" lang="en" suppressHydrationWarning>
       <body className="h-full">
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
-          enableSystem
           disableTransitionOnChange
+          enableSystem
         >
           {children}
-          <Toaster richColors closeButton position="bottom-right" />
+          <Toaster closeButton position="bottom-right" richColors />
         </ThemeProvider>
       </body>
     </html>

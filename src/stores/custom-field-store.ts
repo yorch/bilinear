@@ -43,9 +43,7 @@ export class CustomFieldStore {
   }
 
   findValue(issueId: string, definitionId: string): DBCustomFieldValue | null {
-    return (
-      this.values.get(CustomFieldStore.valueKey(issueId, definitionId)) ?? null
-    );
+    return this.values.get(CustomFieldStore.valueKey(issueId, definitionId)) ?? null;
   }
 
   findValuesForIssue(issueId: string): DBCustomFieldValue[] {
@@ -78,11 +76,7 @@ export class CustomFieldStore {
     }
   }
 
-  applyDefinitionSyncAction(
-    actionType: string,
-    id: string,
-    data: DBCustomFieldDefinition | null,
-  ) {
+  applyDefinitionSyncAction(actionType: string, id: string, data: DBCustomFieldDefinition | null) {
     if (actionType === 'I' || actionType === 'U' || actionType === 'A') {
       if (data) {
         this.definitions.set(id, data);

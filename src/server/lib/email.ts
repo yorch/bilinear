@@ -20,10 +20,7 @@ function createTransport() {
   // Support unauthenticated SMTP (e.g. Mailpit in local dev)
   // SMTP_SECURE overrides the default; falls back to true only for port 465
   const secureEnv = process.env.SMTP_SECURE;
-  const secure =
-    secureEnv !== undefined && secureEnv !== ''
-      ? secureEnv === 'true'
-      : port === 465;
+  const secure = secureEnv !== undefined && secureEnv !== '' ? secureEnv === 'true' : port === 465;
 
   return nodemailer.createTransport({
     host,
@@ -33,10 +30,7 @@ function createTransport() {
   });
 }
 
-export async function sendMagicLinkEmail(
-  email: string,
-  code: string,
-): Promise<void> {
+export async function sendMagicLinkEmail(email: string, code: string): Promise<void> {
   const transport = createTransport();
   // APP_URL defaults to localhost in non-production; required in production
   const appUrl = process.env.APP_URL;

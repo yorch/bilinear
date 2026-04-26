@@ -7,17 +7,13 @@ const runPipeline = vi.fn();
 const expire = vi.fn().mockReturnThis();
 const incr = vi.fn().mockReturnThis();
 const incrby = vi.fn().mockReturnThis();
-const multi = vi
-  .fn()
-  .mockReturnValue({ exec: runPipeline, expire, incr, incrby });
+const multi = vi.fn().mockReturnValue({ exec: runPipeline, expire, incr, incrby });
 
 vi.mock('../lib/redis', () => ({
   redis: { multi },
 }));
 
-const { checkAuthMutationLimit, checkFixedWindow } = await import(
-  './rate-limit'
-);
+const { checkAuthMutationLimit, checkFixedWindow } = await import('./rate-limit');
 
 describe('checkFixedWindow', () => {
   beforeEach(() => {
@@ -86,11 +82,7 @@ describe('checkAuthMutationLimit', () => {
         [null, 1],
       ]); // ip bucket
 
-    const result = await checkAuthMutationLimit(
-      'login',
-      'attacker@example.com',
-      '1.2.3.4',
-    );
+    const result = await checkAuthMutationLimit('login', 'attacker@example.com', '1.2.3.4');
 
     expect(result.exceeded).toBe(true);
   });
@@ -106,11 +98,7 @@ describe('checkAuthMutationLimit', () => {
         [null, 1],
       ]);
 
-    const result = await checkAuthMutationLimit(
-      'login',
-      'user@example.com',
-      '1.2.3.4',
-    );
+    const result = await checkAuthMutationLimit('login', 'user@example.com', '1.2.3.4');
 
     expect(result.exceeded).toBe(false);
   });
@@ -121,11 +109,7 @@ describe('checkAuthMutationLimit', () => {
       [null, 1],
     ]);
 
-    const result = await checkAuthMutationLimit(
-      'login',
-      'user@example.com',
-      null,
-    );
+    const result = await checkAuthMutationLimit('login', 'user@example.com', null);
 
     expect(result.exceeded).toBe(false);
     // Only one pipeline ran (email) — the IP path was short-circuited.
@@ -138,11 +122,7 @@ describe('checkAuthMutationLimit', () => {
       [null, 1],
     ]);
 
-    const result = await checkAuthMutationLimit(
-      'verify',
-      'target@example.com',
-      '1.2.3.4',
-    );
+    const result = await checkAuthMutationLimit('verify', 'target@example.com', '1.2.3.4');
 
     expect(result.exceeded).toBe(true);
   });
@@ -156,9 +136,7 @@ describe('checkAuthMutationLimit', () => {
     await checkAuthMutationLimit('login', 'User@EXAMPLE.com', '1.2.3.4');
 
     const incrCalls = incr.mock.calls;
-    const sawLowercased = incrCalls.some(args =>
-      String(args[0]).includes('user@example.com'),
-    );
+    const sawLowercased = incrCalls.some(args => String(args[0]).includes('user@example.com'));
     expect(sawLowercased).toBe(true);
   });
 });

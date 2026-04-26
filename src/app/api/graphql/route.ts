@@ -1,10 +1,7 @@
 import { ApolloServer } from '@apollo/server';
 import { startServerAndCreateNextHandler } from '@as-integrations/next';
 import depthLimit from 'graphql-depth-limit';
-import {
-  createComplexityRule,
-  simpleEstimator,
-} from 'graphql-query-complexity';
+import { createComplexityRule, simpleEstimator } from 'graphql-query-complexity';
 import type { NextRequest } from 'next/server';
 import type { GraphQLContext } from '../../../server/graphql/context';
 import { createContext } from '../../../server/graphql/context';
@@ -52,16 +49,13 @@ const server = new ApolloServer<GraphQLContext>({
   ],
 });
 
-const handler = startServerAndCreateNextHandler<NextRequest, GraphQLContext>(
-  server,
-  {
-    context: async req => {
-      // Return the already-built context from the WeakMap if present;
-      // fall back to creating one (handles edge cases like Apollo playground).
-      return requestContextCache.get(req) ?? createContext(req);
-    },
+const handler = startServerAndCreateNextHandler<NextRequest, GraphQLContext>(server, {
+  context: async req => {
+    // Return the already-built context from the WeakMap if present;
+    // fall back to creating one (handles edge cases like Apollo playground).
+    return requestContextCache.get(req) ?? createContext(req);
   },
-);
+});
 
 async function handleRequest(req: NextRequest): Promise<Response> {
   // Build context once and cache it so Apollo doesn't rebuild it.
@@ -86,10 +80,7 @@ async function handleRequest(req: NextRequest): Promise<Response> {
     }
 
     const response = await handler(req);
-    logger.info(
-      { complexity, method: req.method, userId: ctx.userId },
-      'GraphQL request',
-    );
+    logger.info({ complexity, method: req.method, userId: ctx.userId }, 'GraphQL request');
     // Return a cloned response with rate-limit headers (Response is immutable).
     return withRateLimitHeaders(response, headers);
   }

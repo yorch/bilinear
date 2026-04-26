@@ -48,21 +48,14 @@ const PRIORITY_OPTIONS = [
 
 interface FilterPillProps {
   condition: FilterCondition;
+  customFields?: DBCustomFieldDefinition[];
+  labels: IssueLabel[];
+  onRemove: () => void;
   states: DBWorkflowState[];
   users: IssueUser[];
-  labels: IssueLabel[];
-  customFields?: DBCustomFieldDefinition[];
-  onRemove: () => void;
 }
 
-function FilterPill({
-  condition,
-  states,
-  users,
-  labels,
-  customFields,
-  onRemove,
-}: FilterPillProps) {
+function FilterPill({ condition, states, users, labels, customFields, onRemove }: FilterPillProps) {
   const customDef =
     condition.field === 'custom' && condition.customFieldId
       ? customFields?.find(d => d.id === condition.customFieldId)
@@ -71,30 +64,20 @@ function FilterPill({
     customDef?.name ??
     FILTER_FIELDS.find(f => f.value === condition.field)?.label ??
     condition.field;
-  const opLabel =
-    OPERATORS.find(o => o.value === condition.operator)?.label ??
-    condition.operator;
+  const opLabel = OPERATORS.find(o => o.value === condition.operator)?.label ?? condition.operator;
 
   let valueLabel = '';
   if (condition.operator === 'is_set' || condition.operator === 'is_not_set') {
     valueLabel = '';
   } else if (condition.field === 'status') {
-    valueLabel =
-      states.find(s => s.id === condition.value)?.name ??
-      String(condition.value);
+    valueLabel = states.find(s => s.id === condition.value)?.name ?? String(condition.value);
   } else if (condition.field === 'assignee' || condition.field === 'creator') {
-    valueLabel =
-      users.find(u => u.id === condition.value)?.displayName ??
-      String(condition.value);
+    valueLabel = users.find(u => u.id === condition.value)?.displayName ?? String(condition.value);
   } else if (condition.field === 'label') {
     if (Array.isArray(condition.value)) {
-      valueLabel = condition.value
-        .map(v => labels.find(l => l.id === v)?.name ?? v)
-        .join(', ');
+      valueLabel = condition.value.map(v => labels.find(l => l.id === v)?.name ?? v).join(', ');
     } else {
-      valueLabel =
-        labels.find(l => l.id === condition.value)?.name ??
-        String(condition.value);
+      valueLabel = labels.find(l => l.id === condition.value)?.name ?? String(condition.value);
     }
   } else if (condition.field === 'priority') {
     valueLabel =
@@ -103,9 +86,7 @@ function FilterPill({
   } else if (condition.field === 'custom' && customDef) {
     if (Array.isArray(condition.value)) {
       valueLabel = condition.value
-        .map(
-          v => customDef.options?.find(o => o.value === v)?.label ?? String(v),
-        )
+        .map(v => customDef.options?.find(o => o.value === v)?.label ?? String(v))
         .join(', ');
     } else if (customDef.type === 'checkbox') {
       valueLabel = condition.value ? 'true' : 'false';
@@ -124,9 +105,9 @@ function FilterPill({
       <span className="text-zinc-400 dark:text-zinc-500">{opLabel}</span>
       {valueLabel && <span>{valueLabel}</span>}
       <button
-        type="button"
-        onClick={onRemove}
         className="ml-0.5 text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+        onClick={onRemove}
+        type="button"
       >
         <X className="h-3 w-3" />
       </button>
@@ -137,12 +118,12 @@ function FilterPill({
 // ─── Add Filter Popover ─────────────────────────────────────────────────────
 
 interface AddFilterFormProps {
-  states: DBWorkflowState[];
-  users: IssueUser[];
-  labels: IssueLabel[];
   customFields?: DBCustomFieldDefinition[];
+  labels: IssueLabel[];
   onAdd: (condition: FilterCondition) => void;
   onCancel: () => void;
+  states: DBWorkflowState[];
+  users: IssueUser[];
 }
 
 /**
@@ -150,8 +131,8 @@ interface AddFilterFormProps {
  * entries use `custom:<uuid>` to carry the definition id through the select.
  */
 interface FieldOption {
-  value: string;
   label: string;
+  value: string;
 }
 
 function AddFilterForm({
@@ -169,12 +150,8 @@ function AddFilterForm({
   const customFieldId = fieldValue.startsWith('custom:')
     ? fieldValue.slice('custom:'.length)
     : undefined;
-  const customDef = customFieldId
-    ? customFields?.find(d => d.id === customFieldId)
-    : undefined;
-  const field: FilterField = customFieldId
-    ? 'custom'
-    : (fieldValue as FilterField);
+  const customDef = customFieldId ? customFields?.find(d => d.id === customFieldId) : undefined;
+  const field: FilterField = customFieldId ? 'custom' : (fieldValue as FilterField);
 
   const fieldOptions: FieldOption[] = [
     ...FILTER_FIELDS.map(f => ({ label: f.label, value: f.value })),
@@ -202,9 +179,7 @@ function AddFilterForm({
     }
     switch (field) {
       case 'status':
-        return states
-          .filter(s => !s.archivedAt)
-          .map(s => ({ label: s.name, value: s.id }));
+        return states.filter(s => !s.archivedAt).map(s => ({ label: s.name, value: s.id }));
       case 'assignee':
       case 'creator':
         return users.map(u => ({ label: u.displayName, value: u.id }));
@@ -222,12 +197,12 @@ function AddFilterForm({
   return (
     <div className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white p-2 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
       <select
-        value={fieldValue}
+        className="rounded border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
         onChange={e => {
           setFieldValue(e.target.value);
           setValue('');
         }}
-        className="rounded border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+        value={fieldValue}
       >
         {fieldOptions.map(f => (
           <option key={f.value} value={f.value}>
@@ -237,9 +212,9 @@ function AddFilterForm({
       </select>
 
       <select
-        value={operator}
-        onChange={e => setOperator(e.target.value as FilterOperator)}
         className="rounded border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+        onChange={e => setOperator(e.target.value as FilterOperator)}
+        value={operator}
       >
         {OPERATORS.map(o => (
           <option key={o.value} value={o.value}>
@@ -251,9 +226,9 @@ function AddFilterForm({
       {needsValue &&
         (getValueOptions().length > 0 ? (
           <select
-            value={value}
-            onChange={e => setValue(e.target.value)}
             className="rounded border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+            onChange={e => setValue(e.target.value)}
+            value={value}
           >
             <option value="">Select...</option>
             {getValueOptions().map(opt => (
@@ -264,16 +239,17 @@ function AddFilterForm({
           </select>
         ) : (
           <input
-            type="text"
-            value={value}
+            className="w-28 rounded border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
             onChange={e => setValue(e.target.value)}
             placeholder="Value..."
-            className="w-28 rounded border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+            type="text"
+            value={value}
           />
         ))}
 
       <button
-        type="button"
+        className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+        disabled={needsValue && !value}
         onClick={() => {
           let resolvedValue: string | number | boolean = value;
           if (field === 'priority') {
@@ -290,15 +266,14 @@ function AddFilterForm({
             ...(needsValue ? { value: resolvedValue } : {}),
           });
         }}
-        disabled={needsValue && !value}
-        className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+        type="button"
       >
         Add
       </button>
       <button
-        type="button"
-        onClick={onCancel}
         className="px-1 text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+        onClick={onCancel}
+        type="button"
       >
         Cancel
       </button>
@@ -309,12 +284,12 @@ function AddFilterForm({
 // ─── Main Filter Builder ────────────────────────────────────────────────────
 
 interface FilterBuilderProps {
+  customFields?: DBCustomFieldDefinition[];
   filterSet: FilterSet;
+  labels: IssueLabel[];
   onChange: (filterSet: FilterSet) => void;
   states: DBWorkflowState[];
   users: IssueUser[];
-  labels: IssueLabel[];
-  customFields?: DBCustomFieldDefinition[];
 }
 
 export function FilterBuilder({
@@ -341,17 +316,16 @@ export function FilterBuilder({
   };
 
   const toggleComposition = () => {
-    const composition: FilterComposition =
-      filterSet.composition === 'and' ? 'or' : 'and';
+    const composition: FilterComposition = filterSet.composition === 'and' ? 'or' : 'and';
     onChange({ ...filterSet, composition });
   };
 
   if (filterSet.conditions.length === 0 && !showAddForm) {
     return (
       <button
-        type="button"
-        onClick={() => setShowAddForm(true)}
         className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+        onClick={() => setShowAddForm(true)}
+        type="button"
       >
         <Plus className="h-3 w-3" />
         Filter
@@ -363,14 +337,14 @@ export function FilterBuilder({
     <div className="flex flex-wrap items-center gap-2">
       {filterSet.conditions.length > 1 && (
         <button
-          type="button"
-          onClick={toggleComposition}
           className={cn(
             'rounded-full px-2 py-0.5 text-xs font-medium transition-colors',
             filterSet.composition === 'and'
               ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
               : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
           )}
+          onClick={toggleComposition}
+          type="button"
         >
           {filterSet.composition === 'and' ? 'AND' : 'OR'}
         </button>
@@ -378,30 +352,30 @@ export function FilterBuilder({
 
       {filterSet.conditions.map((condition, index) => (
         <FilterPill
-          key={`${condition.field}-${condition.customFieldId ?? ''}-${condition.operator}-${String(condition.value)}`}
           condition={condition}
+          customFields={customFields}
+          key={`${condition.field}-${condition.customFieldId ?? ''}-${condition.operator}-${String(condition.value)}`}
+          labels={labels}
+          onRemove={() => handleRemove(index)}
           states={states}
           users={users}
-          labels={labels}
-          customFields={customFields}
-          onRemove={() => handleRemove(index)}
         />
       ))}
 
       {showAddForm ? (
         <AddFilterForm
-          states={states}
-          users={users}
-          labels={labels}
           customFields={customFields}
+          labels={labels}
           onAdd={handleAdd}
           onCancel={() => setShowAddForm(false)}
+          states={states}
+          users={users}
         />
       ) : (
         <button
-          type="button"
-          onClick={() => setShowAddForm(true)}
           className="flex items-center gap-0.5 text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+          onClick={() => setShowAddForm(true)}
+          type="button"
         >
           <Plus className="h-3 w-3" />
         </button>
@@ -409,9 +383,9 @@ export function FilterBuilder({
 
       {filterSet.conditions.length > 0 && (
         <button
-          type="button"
-          onClick={() => onChange({ composition: 'and', conditions: [] })}
           className="text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+          onClick={() => onChange({ composition: 'and', conditions: [] })}
+          type="button"
         >
           Clear all
         </button>

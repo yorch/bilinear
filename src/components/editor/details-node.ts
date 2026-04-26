@@ -27,8 +27,8 @@ export const Details = Node.create({
     return {
       setDetails:
         () =>
-        ({ commands }: CommandProps) => {
-          return commands.insertContent({
+        ({ commands }: CommandProps) =>
+          commands.insertContent({
             content: [
               {
                 content: [{ text: 'Summary', type: 'text' }],
@@ -37,8 +37,7 @@ export const Details = Node.create({
               { type: 'paragraph' },
             ],
             type: this.name,
-          });
-        },
+          }),
     } as never;
   },
   content: 'detailsSummary block+',

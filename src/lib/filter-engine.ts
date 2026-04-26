@@ -30,11 +30,11 @@ export type FilterField =
   | 'custom';
 
 export interface FilterCondition {
+  /** Set when `field === 'custom'` — identifies which custom field to match. */
+  customFieldId?: string;
   field: FilterField;
   operator: FilterOperator;
   value?: string | string[] | number | boolean | null;
-  /** Set when `field === 'custom'` — identifies which custom field to match. */
-  customFieldId?: string;
 }
 
 export type FilterComposition = 'and' | 'or';
@@ -45,45 +45,35 @@ export interface FilterSet {
 }
 
 export interface SortField {
-  field:
-    | 'priority'
-    | 'status'
-    | 'assignee'
-    | 'created'
-    | 'updated'
-    | 'dueDate'
-    | 'manual';
   direction: 'asc' | 'desc';
+  field: 'priority' | 'status' | 'assignee' | 'created' | 'updated' | 'dueDate' | 'manual';
 }
 
 export interface ViewConfig {
   filters: FilterSet;
-  sort: SortField[];
   groupBy?: string;
   layout?: 'list' | 'board';
+  sort: SortField[];
 }
 
 export interface FilterableIssue {
-  id: string;
-  stateId: string;
   assigneeId?: string | null;
-  creatorId?: string | null;
-  priority: number;
-  estimate?: number | null;
-  dueDate?: string | null;
-  projectId?: string | null;
-  cycleId?: string | null;
-  labelIds?: string[];
-  sortOrder?: number;
   createdAt?: string;
+  creatorId?: string | null;
+  cycleId?: string | null;
+  dueDate?: string | null;
+  estimate?: number | null;
+  id: string;
+  labelIds?: string[];
+  priority: number;
+  projectId?: string | null;
+  sortOrder?: number;
+  stateId: string;
   updatedAt?: string;
 }
 
 /** Resolves an issue's value for a given custom-field definition id. */
-export type CustomFieldValueResolver = (
-  issueId: string,
-  definitionId: string,
-) => unknown;
+export type CustomFieldValueResolver = (issueId: string, definitionId: string) => unknown;
 
 function matchCondition(
   issue: FilterableIssue,
@@ -197,13 +187,9 @@ export function applyFilters<T extends FilterableIssue>(
 
   return issues.filter(issue => {
     if (filterSet.composition === 'and') {
-      return filterSet.conditions.every(c =>
-        matchCondition(issue, c, customFieldResolver),
-      );
+      return filterSet.conditions.every(c => matchCondition(issue, c, customFieldResolver));
     }
-    return filterSet.conditions.some(c =>
-      matchCondition(issue, c, customFieldResolver),
-    );
+    return filterSet.conditions.some(c => matchCondition(issue, c, customFieldResolver));
   });
 }
 
@@ -226,9 +212,7 @@ export function applySorting<T extends FilterableIssue>(
           cmp = a.priority - b.priority;
           break;
         case 'status':
-          cmp =
-            (statePositionMap?.get(a.stateId) ?? 0) -
-            (statePositionMap?.get(b.stateId) ?? 0);
+          cmp = (statePositionMap?.get(a.stateId) ?? 0) - (statePositionMap?.get(b.stateId) ?? 0);
           break;
         case 'created':
           cmp = (a.createdAt ?? '').localeCompare(b.createdAt ?? '');

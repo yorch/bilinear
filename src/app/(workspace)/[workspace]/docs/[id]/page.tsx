@@ -9,8 +9,7 @@ const DocumentPage = observer(function DocumentPage() {
   const { id } = useParams<{ id: string; workspace: string }>();
   const { syncStore } = useStore();
 
-  const isLoading =
-    syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
+  const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
 
   if (isLoading) {
     return (

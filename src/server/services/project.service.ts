@@ -6,60 +6,60 @@ import type {
 } from '../../generated/prisma';
 
 export interface ProjectCreateInput {
-  id?: string;
-  name: string;
+  color?: string;
   description?: string;
   icon?: string;
-  color?: string;
-  statusType?: string;
+  id?: string;
   leadId?: string;
+  memberIds?: string[];
+  name: string;
   startDate?: string;
-  targetDate?: string;
   startDateResolution?: string;
+  statusType?: string;
+  targetDate?: string;
   targetDateResolution?: string;
   teamIds: string[];
-  memberIds?: string[];
 }
 
 export interface ProjectUpdateInput {
-  name?: string;
-  description?: string;
-  content?: string | null;
-  icon?: string | null;
   color?: string;
-  statusType?: string;
+  content?: string | null;
+  description?: string;
   health?: string | null;
+  icon?: string | null;
   leadId?: string | null;
-  startDate?: string | null;
-  targetDate?: string | null;
-  startDateResolution?: string | null;
-  targetDateResolution?: string | null;
+  name?: string;
   priority?: number;
+  startDate?: string | null;
+  startDateResolution?: string | null;
+  statusType?: string;
+  targetDate?: string | null;
+  targetDateResolution?: string | null;
 }
 
 export interface ProjectMilestoneCreateInput {
-  id?: string;
-  projectId: string;
-  name: string;
   description?: string;
-  targetDate?: string;
+  id?: string;
+  name: string;
+  projectId: string;
   sortOrder?: number;
+  targetDate?: string;
 }
 
 export interface ProjectMilestoneUpdateInput {
-  name?: string;
   description?: string;
-  targetDate?: string | null;
+  name?: string;
   sortOrder?: number;
+  targetDate?: string | null;
 }
 
 export interface ProjectUpdateCreateInput {
-  id?: string;
-  projectId: string;
-  userId: string;
   body: string;
   bodyData: object;
   health: string;
+  id?: string;
+  projectId: string;
+  userId: string;
 }
 
 export interface ProjectUpdateUpdateInput {
@@ -71,11 +71,7 @@ export interface ProjectUpdateUpdateInput {
 export class ProjectService {
   constructor(private prisma: PrismaClient) {}
 
-  async create(
-    orgId: string,
-    creatorId: string,
-    input: ProjectCreateInput,
-  ): Promise<Project> {
+  async create(orgId: string, creatorId: string, input: ProjectCreateInput): Promise<Project> {
     return this.prisma.$transaction(async tx => {
       const slugId = await this.generateUniqueSlugId(
         tx as unknown as PrismaClient,
@@ -272,9 +268,7 @@ export class ProjectService {
     return relations.map(r => r.user);
   }
 
-  async getProgress(
-    projectId: string,
-  ): Promise<{ progress: number; scope: number }> {
+  async getProgress(projectId: string): Promise<{ progress: number; scope: number }> {
     const [total, completed] = await Promise.all([
       this.prisma.issue.count({
         where: { archivedAt: null, projectId, trashed: false },
@@ -293,9 +287,7 @@ export class ProjectService {
 
   // ─── Milestones ──────────────────────────────────────────────────────────────
 
-  async createMilestone(
-    input: ProjectMilestoneCreateInput,
-  ): Promise<ProjectMilestone> {
+  async createMilestone(input: ProjectMilestoneCreateInput): Promise<ProjectMilestone> {
     return this.prisma.projectMilestone.create({
       data: {
         description: input.description,
@@ -319,10 +311,7 @@ export class ProjectService {
     });
   }
 
-  async updateMilestone(
-    id: string,
-    input: ProjectMilestoneUpdateInput,
-  ): Promise<ProjectMilestone> {
+  async updateMilestone(id: string, input: ProjectMilestoneUpdateInput): Promise<ProjectMilestone> {
     const data: Record<string, unknown> = {};
     if (input.name !== undefined) {
       data.name = input.name;
@@ -349,9 +338,7 @@ export class ProjectService {
 
   // ─── Project Updates ─────────────────────────────────────────────────────────
 
-  async createProjectUpdate(
-    input: ProjectUpdateCreateInput,
-  ): Promise<ProjectUpdate> {
+  async createProjectUpdate(input: ProjectUpdateCreateInput): Promise<ProjectUpdate> {
     const update = await this.prisma.projectUpdate.create({
       data: {
         body: input.body,
@@ -384,10 +371,7 @@ export class ProjectService {
     });
   }
 
-  async updateProjectUpdate(
-    id: string,
-    input: ProjectUpdateUpdateInput,
-  ): Promise<ProjectUpdate> {
+  async updateProjectUpdate(id: string, input: ProjectUpdateUpdateInput): Promise<ProjectUpdate> {
     const data: Record<string, unknown> = { editedAt: new Date() };
     if (input.body !== undefined) {
       data.body = input.body;

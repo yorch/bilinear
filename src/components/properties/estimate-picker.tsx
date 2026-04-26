@@ -39,12 +39,12 @@ const SCALE_OPTIONS: Record<string, Array<{ label: string; value: number }>> = {
 };
 
 interface EstimatePickerProps {
-  value?: number | null;
   estimationType?: string;
   forceOpen?: boolean;
-  onClose?: () => void;
   /** onChange receives null to clear the estimate */
   onChange: (estimate: number | null) => void;
+  onClose?: () => void;
+  value?: number | null;
 }
 
 /** Render a compact estimate badge/button showing the current value. */
@@ -113,14 +113,14 @@ export function EstimatePicker({
   };
 
   return (
-    <div ref={containerRef} className="relative inline-block">
+    <div className="relative inline-block" ref={containerRef}>
       <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"
         aria-label="Set estimate"
+        className="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+        onClick={() => setOpen(v => !v)}
+        type="button"
       >
-        <EstimateBadge value={value} estimationType={estimationType} />
+        <EstimateBadge estimationType={estimationType} value={value} />
       </button>
 
       {open && (
@@ -128,9 +128,9 @@ export function EstimatePicker({
           {/* Clear estimate */}
           {value != null && (
             <button
-              type="button"
-              onClick={() => handleSelect(null)}
               className="w-full px-3 py-1.5 text-left text-xs text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              onClick={() => handleSelect(null)}
+              type="button"
             >
               No estimate
             </button>
@@ -139,25 +139,22 @@ export function EstimatePicker({
           {scale ? (
             scale.map(opt => (
               <button
-                key={opt.value}
-                type="button"
-                onClick={() => handleSelect(opt.value)}
                 className={cn(
                   'w-full px-3 py-1.5 text-left text-sm transition-colors',
                   value === opt.value
                     ? 'bg-indigo-50 font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
                     : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800',
                 )}
+                key={opt.value}
+                onClick={() => handleSelect(opt.value)}
+                type="button"
               >
                 {opt.label}
               </button>
             ))
           ) : (
             /* estimationType === 'notUsed' or unknown — free-form number */
-            <NumericInput
-              value={value ?? undefined}
-              onSubmit={v => handleSelect(v)}
-            />
+            <NumericInput onSubmit={v => handleSelect(v)} value={value ?? undefined} />
           )}
         </div>
       )}
@@ -182,13 +179,9 @@ function NumericInput({
   return (
     <div className="px-3 py-2 flex items-center gap-2">
       <input
-        ref={inputRef}
-        type="number"
+        className="w-20 rounded border border-zinc-200 bg-transparent px-2 py-1 text-sm text-zinc-900 outline-none focus:border-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
         min={0}
-        step={1}
-        value={draft}
         onChange={e => setDraft(e.target.value)}
-        placeholder="0"
         onKeyDown={e => {
           if (e.key === 'Enter') {
             const n = Number(draft);
@@ -198,15 +191,19 @@ function NumericInput({
             onSubmit(value ?? null);
           }
         }}
-        className="w-20 rounded border border-zinc-200 bg-transparent px-2 py-1 text-sm text-zinc-900 outline-none focus:border-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+        placeholder="0"
+        ref={inputRef}
+        step={1}
+        type="number"
+        value={draft}
       />
       <button
-        type="button"
+        className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700"
         onClick={() => {
           const n = Number(draft);
           onSubmit(draft === '' ? null : Number.isFinite(n) ? n : null);
         }}
-        className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700"
+        type="button"
       >
         Set
       </button>

@@ -45,12 +45,7 @@ const DELETE_ISSUE_RELATION = `
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-const RELATION_TYPES = [
-  'blocks',
-  'blocked_by',
-  'related',
-  'duplicate',
-] as const;
+const RELATION_TYPES = ['blocks', 'blocked_by', 'related', 'duplicate'] as const;
 
 type RelationType = (typeof RELATION_TYPES)[number];
 
@@ -69,11 +64,11 @@ interface RelatedIssueRef {
 
 interface IssueRelation {
   id: string;
-  type: string;
-  issueId: string;
-  relatedIssueId: string;
   issue: RelatedIssueRef;
+  issueId: string;
   relatedIssue: RelatedIssueRef;
+  relatedIssueId: string;
+  type: string;
 }
 
 interface RelationsSectionProps {
@@ -139,10 +134,7 @@ export const RelationsSection = observer(function RelationsSection({
     }
   };
 
-  const handleCreate = async (
-    type: RelationType,
-    relatedIdentifier: string,
-  ) => {
+  const handleCreate = async (type: RelationType, relatedIdentifier: string) => {
     const normalized = relatedIdentifier.trim().toUpperCase();
 
     // Resolve identifier → UUID using the local issue store
@@ -195,9 +187,9 @@ export const RelationsSection = observer(function RelationsSection({
         </h3>
         {!showAddForm && (
           <button
-            type="button"
-            onClick={() => setShowAddForm(true)}
             className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            onClick={() => setShowAddForm(true)}
+            type="button"
           >
             <Plus className="h-3.5 w-3.5" />
             Add relation
@@ -226,12 +218,11 @@ export const RelationsSection = observer(function RelationsSection({
                 <ul className="space-y-0.5">
                   {items.map(rel => {
                     // Show the "other" side of the relation relative to current issue
-                    const other =
-                      rel.issueId === issueId ? rel.relatedIssue : rel.issue;
+                    const other = rel.issueId === issueId ? rel.relatedIssue : rel.issue;
                     return (
                       <li
-                        key={rel.id}
                         className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                        key={rel.id}
                       >
                         <span className="shrink-0 font-mono text-xs text-zinc-400">
                           {other?.identifier ?? '—'}
@@ -240,10 +231,10 @@ export const RelationsSection = observer(function RelationsSection({
                           {other?.title ?? 'Unknown issue'}
                         </span>
                         <button
-                          type="button"
-                          onClick={() => handleDelete(rel.id)}
-                          className="hidden items-center rounded p-0.5 text-zinc-400 hover:text-red-500 group-hover:flex"
                           aria-label="Remove relation"
+                          className="hidden items-center rounded p-0.5 text-zinc-400 hover:text-red-500 group-hover:flex"
+                          onClick={() => handleDelete(rel.id)}
+                          type="button"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -258,10 +249,7 @@ export const RelationsSection = observer(function RelationsSection({
       )}
 
       {showAddForm && (
-        <AddRelationForm
-          onSubmit={handleCreate}
-          onClose={() => setShowAddForm(false)}
-        />
+        <AddRelationForm onClose={() => setShowAddForm(false)} onSubmit={handleCreate} />
       )}
     </div>
   );
@@ -270,8 +258,8 @@ export const RelationsSection = observer(function RelationsSection({
 // ─── Add relation form ────────────────────────────────────────────────────────
 
 interface AddRelationFormProps {
-  onSubmit: (type: RelationType, identifier: string) => Promise<void>;
   onClose: () => void;
+  onSubmit: (type: RelationType, identifier: string) => Promise<void>;
 }
 
 function AddRelationForm({ onSubmit, onClose }: AddRelationFormProps) {
@@ -310,16 +298,16 @@ function AddRelationForm({ onSubmit, onClose }: AddRelationFormProps) {
 
   return (
     <form
-      onSubmit={handleSubmit}
       className="mt-2 rounded-md border border-zinc-200 p-3 dark:border-zinc-700"
+      onSubmit={handleSubmit}
     >
       <div className="flex items-center gap-2">
         {/* Type selector */}
-        <div ref={typeDropdownRef} className="relative">
+        <div className="relative" ref={typeDropdownRef}>
           <button
-            type="button"
-            onClick={() => setTypeOpen(o => !o)}
             className="flex items-center gap-1 rounded border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+            onClick={() => setTypeOpen(o => !o)}
+            type="button"
           >
             {RELATION_TYPE_LABELS[type]}
             <ChevronDown className="h-3 w-3" />
@@ -328,18 +316,18 @@ function AddRelationForm({ onSubmit, onClose }: AddRelationFormProps) {
             <div className="absolute left-0 top-full z-10 mt-1 w-36 rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
               {RELATION_TYPES.map(t => (
                 <button
-                  key={t}
-                  type="button"
-                  onClick={() => {
-                    setType(t);
-                    setTypeOpen(false);
-                  }}
                   className={cn(
                     'w-full px-3 py-1.5 text-left text-xs hover:bg-zinc-50 dark:hover:bg-zinc-800',
                     t === type
                       ? 'text-indigo-600 dark:text-indigo-400'
                       : 'text-zinc-700 dark:text-zinc-300',
                   )}
+                  key={t}
+                  onClick={() => {
+                    setType(t);
+                    setTypeOpen(false);
+                  }}
+                  type="button"
                 >
                   {RELATION_TYPE_LABELS[t]}
                 </button>
@@ -350,23 +338,23 @@ function AddRelationForm({ onSubmit, onClose }: AddRelationFormProps) {
 
         {/* Issue identifier input */}
         <input
-          type="text"
-          placeholder="Issue identifier (e.g. ENG-123)"
-          value={identifier}
+          className="flex-1 rounded border border-zinc-200 bg-transparent px-2 py-1 text-xs text-zinc-900 placeholder-zinc-400 outline-none focus:border-indigo-400 dark:border-zinc-700 dark:text-zinc-100"
           onChange={e => setIdentifier(e.target.value)}
           onKeyDown={e => {
             if (e.key === 'Escape') {
               onClose();
             }
           }}
-          className="flex-1 rounded border border-zinc-200 bg-transparent px-2 py-1 text-xs text-zinc-900 placeholder-zinc-400 outline-none focus:border-indigo-400 dark:border-zinc-700 dark:text-zinc-100"
+          placeholder="Issue identifier (e.g. ENG-123)"
+          type="text"
+          value={identifier}
         />
 
         <button
-          type="button"
-          onClick={onClose}
-          className="rounded p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
           aria-label="Cancel"
+          className="rounded p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+          onClick={onClose}
+          type="button"
         >
           <X className="h-3.5 w-3.5" />
         </button>
@@ -374,16 +362,16 @@ function AddRelationForm({ onSubmit, onClose }: AddRelationFormProps) {
 
       <div className="mt-2 flex justify-end gap-2">
         <button
-          type="button"
-          onClick={onClose}
           className="rounded px-3 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          onClick={onClose}
+          type="button"
         >
           Cancel
         </button>
         <button
-          type="submit"
-          disabled={!identifier.trim() || submitting}
           className="rounded bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+          disabled={!identifier.trim() || submitting}
+          type="submit"
         >
           {submitting ? 'Adding…' : 'Add'}
         </button>

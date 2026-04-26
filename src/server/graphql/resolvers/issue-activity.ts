@@ -5,11 +5,7 @@ import type { GraphQLContext } from '../context';
 
 export const issueActivityResolvers = {
   IssueActivity: {
-    actor: async (
-      activity: IssueActivity,
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => {
+    actor: async (activity: IssueActivity, _args: unknown, ctx: GraphQLContext) => {
       if (!activity.actorId) {
         return null;
       }

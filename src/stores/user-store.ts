@@ -22,9 +22,7 @@ export class UserStore {
   }
 
   get currentUser(): DBUser | null {
-    return this.currentUserId
-      ? (this.pool.get(this.currentUserId) ?? null)
-      : null;
+    return this.currentUserId ? (this.pool.get(this.currentUserId) ?? null) : null;
   }
 
   findById(id: string): DBUser | null {

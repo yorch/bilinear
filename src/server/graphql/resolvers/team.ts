@@ -1,10 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { Team, TeamMembership } from '../../../generated/prisma';
-import {
-  requireAuth,
-  requireOrgRole,
-  requireTeamMember,
-} from '../../middleware/auth';
+import { requireAuth, requireOrgRole, requireTeamMember } from '../../middleware/auth';
 import type {
   TeamCreateInput,
   TeamDeleteInput,
@@ -32,17 +28,10 @@ export const teamResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, [
-        'owner',
-        'admin',
-      ]);
+      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
 
       try {
-        const result = await ctx.services.team.create(
-          ctx.orgId,
-          ctx.userId,
-          input,
-        );
+        const result = await ctx.services.team.create(ctx.orgId, ctx.userId, input);
 
         // Emit sync actions for the workflow states so clients receive them
         for (const state of result.states) {
@@ -75,10 +64,9 @@ export const teamResolvers = {
           });
         }
         if (error.code === 'P2002') {
-          throw new GraphQLError(
-            'A team with this key already exists in the organization',
-            { extensions: { code: 'BAD_USER_INPUT' } },
-          );
+          throw new GraphQLError('A team with this key already exists in the organization', {
+            extensions: { code: 'BAD_USER_INPUT' },
+          });
         }
         throw err;
       }
@@ -90,10 +78,7 @@ export const teamResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, [
-        'owner',
-        'admin',
-      ]);
+      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
 
       const team = await ctx.services.team.findById(id);
       if (!team || team.organizationId !== ctx.orgId) {
@@ -117,22 +102,10 @@ export const teamResolvers = {
 
         // Create sync actions for moved issues
         for (const issue of result.movedIssues) {
-          await ctx.services.sync.createSyncAction(
-            ctx.orgId,
-            'U',
-            'Issue',
-            issue.id,
-            issue,
-          );
+          await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', issue.id, issue);
         }
 
-        const sync = await ctx.services.sync.createSyncAction(
-          ctx.orgId,
-          'D',
-          'Team',
-          id,
-          null,
-        );
+        const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Team', id, null);
         return { lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         const error = err as Error;
@@ -166,23 +139,13 @@ export const teamResolvers = {
       }
 
       const team = await ctx.services.team.update(id, input);
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'U',
-        'Team',
-        id,
-        team,
-      );
+      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Team', id, team);
       return { lastSyncId: sync.id.toString(), success: true, team };
     },
   },
 
   Query: {
-    team: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    team: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
       const team = await ctx.services.team.findById(id);
       if (!team || team.organizationId !== ctx.orgId) {
@@ -190,10 +153,7 @@ export const teamResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      if (
-        team.private &&
-        !(await isOrgAdmin(ctx.prisma, ctx.orgId, ctx.userId))
-      ) {
+      if (team.private && !(await isOrgAdmin(ctx.prisma, ctx.orgId, ctx.userId))) {
         const isMember = await ctx.services.team.isTeamMember(id, ctx.userId);
         if (!isMember) {
           throw new GraphQLError('Team not found', {
@@ -223,9 +183,8 @@ export const teamResolvers = {
   },
 
   Team: {
-    children: async (team: Team, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.services.team.findChildren(team.id);
-    },
+    children: async (team: Team, _args: unknown, ctx: GraphQLContext) =>
+      ctx.services.team.findChildren(team.id),
 
     issues: async (team: Team, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
@@ -233,16 +192,14 @@ export const teamResolvers = {
       return ctx.services.issue.findByTeamId(team.id);
     },
 
-    members: async (team: Team, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.services.team.getMembers(team.id);
-    },
+    members: async (team: Team, _args: unknown, ctx: GraphQLContext) =>
+      ctx.services.team.getMembers(team.id),
 
     // TODO(Sprint 5+): move to OrganizationService once org business logic exists
-    organization: async (team: Team, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.prisma.organization.findUnique({
+    organization: async (team: Team, _args: unknown, ctx: GraphQLContext) =>
+      ctx.prisma.organization.findUnique({
         where: { id: team.organizationId },
-      });
-    },
+      }),
 
     parent: async (team: Team, _args: unknown, ctx: GraphQLContext) => {
       if (!team.parentId) {
@@ -251,18 +208,13 @@ export const teamResolvers = {
       return ctx.services.team.findById(team.parentId);
     },
 
-    states: async (team: Team, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.services.workflowState.findByTeamId(team.id);
-    },
+    states: async (team: Team, _args: unknown, ctx: GraphQLContext) =>
+      ctx.services.workflowState.findByTeamId(team.id),
   },
 
   TeamMembership: {
     owner: (membership: TeamMembership) => membership.isOwner,
-    role: async (
-      membership: TeamMembership,
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => {
+    role: async (membership: TeamMembership, _args: unknown, ctx: GraphQLContext) => {
       const tmr = await ctx.prisma.teamMemberRole.findUnique({
         select: { role: true },
         where: {
@@ -275,20 +227,10 @@ export const teamResolvers = {
       return tmr?.role ?? 'member';
     },
 
-    team: async (
-      membership: TeamMembership,
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => {
-      return ctx.services.team.findById(membership.teamId);
-    },
+    team: async (membership: TeamMembership, _args: unknown, ctx: GraphQLContext) =>
+      ctx.services.team.findById(membership.teamId),
 
-    user: async (
-      membership: TeamMembership,
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => {
-      return ctx.services.user.findById(membership.userId);
-    },
+    user: async (membership: TeamMembership, _args: unknown, ctx: GraphQLContext) =>
+      ctx.services.user.findById(membership.userId),
   },
 };

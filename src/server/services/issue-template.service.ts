@@ -1,18 +1,18 @@
 import type { IssueTemplate, PrismaClient } from '../../generated/prisma';
 
 export interface IssueTemplateCreateInput {
-  teamId: string;
-  name: string;
   description?: string;
-  templateData?: object;
   isDefault?: boolean;
+  name: string;
+  teamId: string;
+  templateData?: object;
 }
 
 export interface IssueTemplateUpdateInput {
-  name?: string;
   description?: string | null;
-  templateData?: object;
   isDefault?: boolean;
+  name?: string;
+  templateData?: object;
 }
 
 export class IssueTemplateNotFoundError extends Error {
@@ -25,10 +25,7 @@ export class IssueTemplateNotFoundError extends Error {
 export class IssueTemplateService {
   constructor(private prisma: PrismaClient) {}
 
-  async create(
-    input: IssueTemplateCreateInput,
-    creatorId: string,
-  ): Promise<IssueTemplate> {
+  async create(input: IssueTemplateCreateInput, creatorId: string): Promise<IssueTemplate> {
     const { teamId, name, description, templateData, isDefault } = input;
 
     return this.prisma.$transaction(async tx => {
@@ -53,10 +50,7 @@ export class IssueTemplateService {
     });
   }
 
-  async update(
-    id: string,
-    input: IssueTemplateUpdateInput,
-  ): Promise<IssueTemplate> {
+  async update(id: string, input: IssueTemplateUpdateInput): Promise<IssueTemplate> {
     const existing = await this.prisma.issueTemplate.findUnique({
       where: { id },
     });
@@ -126,10 +120,7 @@ export class IssueTemplateService {
     return this.prisma.issueTemplate.findUnique({ where: { id } });
   }
 
-  async findByTeamId(
-    teamId: string,
-    includeArchived = false,
-  ): Promise<IssueTemplate[]> {
+  async findByTeamId(teamId: string, includeArchived = false): Promise<IssueTemplate[]> {
     return this.prisma.issueTemplate.findMany({
       orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
       where: {

@@ -149,9 +149,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
   const [description, setDescription] = useState(team?.description ?? '');
   const [isPrivate, setIsPrivate] = useState(team?.private ?? false);
   const [parentId, setParentId] = useState(team?.parentId ?? '');
-  const [triageEnabled, setTriageEnabled] = useState(
-    team?.triageEnabled ?? false,
-  );
+  const [triageEnabled, setTriageEnabled] = useState(team?.triageEnabled ?? false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
@@ -179,9 +177,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
   const [issueAction, setIssueAction] = useState<'DELETE' | 'MOVE'>('DELETE');
   const [moveToTeamId, setMoveToTeamId] = useState('');
 
-  const otherTeams = teamStore.all.filter(
-    t => t.id !== team?.id && !t.archivedAt,
-  );
+  const otherTeams = teamStore.all.filter(t => t.id !== team?.id && !t.archivedAt);
 
   // Sync form when team loads from store
   useEffect(() => {
@@ -216,8 +212,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         }
 
         const rawMembers =
-          (membersResult.data?.team as { members?: RawMembership[] })
-            ?.members ?? [];
+          (membersResult.data?.team as { members?: RawMembership[] })?.members ?? [];
 
         setMembers(rawMembers.map(rawToMember));
       } catch {
@@ -273,16 +268,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
     } finally {
       setSaving(false);
     }
-  }, [
-    team,
-    name,
-    description,
-    isPrivate,
-    parentId,
-    triageEnabled,
-    saving,
-    teamStore,
-  ]);
+  }, [team, name, description, isPrivate, parentId, triageEnabled, saving, teamStore]);
 
   const handleAddMember = useCallback(
     async (userId: string) => {
@@ -295,9 +281,8 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
       if (result.errors?.length) {
         throw new Error(gqlError(result, 'Failed to add member'));
       }
-      const raw = (
-        result.data?.teamMembershipCreate as { teamMembership?: RawMembership }
-      )?.teamMembership;
+      const raw = (result.data?.teamMembershipCreate as { teamMembership?: RawMembership })
+        ?.teamMembership;
       if (raw) {
         setMembers(prev => [...prev, rawToMember(raw)]);
         toast.success(`${raw.user.displayName} added to team`);
@@ -326,41 +311,29 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
     [members, currentUserId, workspace, teamKey, router],
   );
 
-  const handleToggleOwner = useCallback(
-    async (membershipId: string, isOwner: boolean) => {
-      const result = await gql(MEMBERSHIP_UPDATE_MUTATION, {
-        id: membershipId,
-        input: { isOwner },
-      });
-      if (result.errors?.length) {
-        throw new Error(gqlError(result, 'Failed to update role'));
-      }
-      setMembers(prev =>
-        prev.map(m =>
-          m.membershipId === membershipId ? { ...m, isOwner } : m,
-        ),
-      );
-      toast.success(isOwner ? 'Owner role granted' : 'Owner role removed');
-    },
-    [],
-  );
+  const handleToggleOwner = useCallback(async (membershipId: string, isOwner: boolean) => {
+    const result = await gql(MEMBERSHIP_UPDATE_MUTATION, {
+      id: membershipId,
+      input: { isOwner },
+    });
+    if (result.errors?.length) {
+      throw new Error(gqlError(result, 'Failed to update role'));
+    }
+    setMembers(prev => prev.map(m => (m.membershipId === membershipId ? { ...m, isOwner } : m)));
+    toast.success(isOwner ? 'Owner role granted' : 'Owner role removed');
+  }, []);
 
-  const handleUpdateRole = useCallback(
-    async (membershipId: string, role: TeamRole) => {
-      const result = await gql(MEMBERSHIP_UPDATE_MUTATION, {
-        id: membershipId,
-        input: { role },
-      });
-      if (result.errors?.length) {
-        throw new Error(gqlError(result, 'Failed to update role'));
-      }
-      setMembers(prev =>
-        prev.map(m => (m.membershipId === membershipId ? { ...m, role } : m)),
-      );
-      toast.success('Role updated');
-    },
-    [],
-  );
+  const handleUpdateRole = useCallback(async (membershipId: string, role: TeamRole) => {
+    const result = await gql(MEMBERSHIP_UPDATE_MUTATION, {
+      id: membershipId,
+      input: { role },
+    });
+    if (result.errors?.length) {
+      throw new Error(gqlError(result, 'Failed to update role'));
+    }
+    setMembers(prev => prev.map(m => (m.membershipId === membershipId ? { ...m, role } : m)));
+    toast.success('Role updated');
+  }, []);
 
   const handleDelete = useCallback(async () => {
     if (!team || deleting) {
@@ -407,8 +380,8 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
     <div className="flex flex-1 flex-col overflow-y-auto">
       <div className="flex items-center gap-3 border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
         <Link
-          href={`/${workspace}/team/${teamKey}`}
           className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+          href={`/${workspace}/team/${teamKey}`}
         >
           <ArrowLeft className="h-4 w-4" />
           Back
@@ -427,41 +400,39 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
           <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900 flex flex-col gap-4">
             <div className="flex flex-col gap-1">
               <label
-                htmlFor="settings-name"
                 className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+                htmlFor="settings-name"
               >
                 Team name
               </label>
               <input
+                className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
                 id="settings-name"
+                onChange={e => setName(e.target.value)}
                 type="text"
                 value={name}
-                onChange={e => setName(e.target.value)}
-                className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
               />
             </div>
 
             <div className="flex flex-col gap-1">
               <label
-                htmlFor="settings-description"
                 className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+                htmlFor="settings-description"
               >
                 Description
               </label>
               <textarea
-                id="settings-description"
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                rows={2}
-                placeholder="What does this team work on?"
                 className="resize-none rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-600 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-400"
+                id="settings-description"
+                onChange={e => setDescription(e.target.value)}
+                placeholder="What does this team work on?"
+                rows={2}
+                value={description}
               />
             </div>
 
             <div className="flex flex-col gap-1">
-              <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                Identifier
-              </p>
+              <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Identifier</p>
               <div className="flex items-center gap-2">
                 <span className="font-mono text-sm text-zinc-700 dark:text-zinc-300 rounded-md border border-zinc-200 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 dark:border-zinc-700">
                   {team.key}
@@ -475,16 +446,16 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
             {/* Parent team */}
             <div className="flex flex-col gap-1">
               <label
-                htmlFor="settings-parent"
                 className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+                htmlFor="settings-parent"
               >
                 Parent team
               </label>
               <select
-                id="settings-parent"
-                value={parentId}
-                onChange={e => setParentId(e.target.value)}
                 className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100 dark:bg-zinc-900"
+                id="settings-parent"
+                onChange={e => setParentId(e.target.value)}
+                value={parentId}
               >
                 <option value="">None (top-level team)</option>
                 {parentTeamOptions.map(t => (
@@ -508,22 +479,20 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
             {/* Private team toggle */}
             <label className="flex cursor-pointer items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Private team
-                </p>
+                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Private team</p>
                 <p className="text-xs text-zinc-400">
                   Only team members can see this team and its issues
                 </p>
               </div>
               <button
-                type="button"
-                role="switch"
                 aria-checked={isPrivate}
-                onClick={() => setIsPrivate(v => !v)}
                 className={cn(
                   'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
                   isPrivate ? 'bg-indigo-600' : 'bg-zinc-200 dark:bg-zinc-700',
                 )}
+                onClick={() => setIsPrivate(v => !v)}
+                role="switch"
+                type="button"
               >
                 <span
                   className={cn(
@@ -537,25 +506,20 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
             {/* Triage toggle */}
             <label className="flex cursor-pointer items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Triage
-                </p>
+                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Triage</p>
                 <p className="text-xs text-zinc-400">
-                  New issues start in Triage and must be reviewed before
-                  entering the backlog
+                  New issues start in Triage and must be reviewed before entering the backlog
                 </p>
               </div>
               <button
-                type="button"
-                role="switch"
                 aria-checked={triageEnabled}
-                onClick={() => setTriageEnabled(v => !v)}
                 className={cn(
                   'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
-                  triageEnabled
-                    ? 'bg-indigo-600'
-                    : 'bg-zinc-200 dark:bg-zinc-700',
+                  triageEnabled ? 'bg-indigo-600' : 'bg-zinc-200 dark:bg-zinc-700',
                 )}
+                onClick={() => setTriageEnabled(v => !v)}
+                role="switch"
+                type="button"
               >
                 <span
                   className={cn(
@@ -570,13 +534,13 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
 
         <div className="flex items-center gap-3">
           <button
-            type="button"
-            disabled={saving || !name.trim()}
-            onClick={handleSave}
             className={cn(
               'rounded-md px-4 py-1.5 text-sm font-medium text-white transition-colors',
               'bg-indigo-600 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50',
             )}
+            disabled={saving || !name.trim()}
+            onClick={handleSave}
+            type="button"
           >
             {saving ? 'Saving…' : 'Save changes'}
           </button>
@@ -594,13 +558,13 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
               </div>
             ) : (
               <TeamMemberManagement
-                members={members}
-                orgUsers={orgUsers}
                 currentUserId={currentUserId}
+                members={members}
                 onAddMember={handleAddMember}
                 onRemoveMember={handleRemoveMember}
                 onToggleOwner={handleToggleOwner}
                 onUpdateRole={handleUpdateRole}
+                orgUsers={orgUsers}
               />
             )}
           </div>
@@ -627,9 +591,9 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                 </div>
                 {!deleteConfirm && (
                   <button
-                    type="button"
-                    onClick={() => setDeleteConfirm(true)}
                     className="flex shrink-0 items-center gap-1.5 rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+                    onClick={() => setDeleteConfirm(true)}
+                    type="button"
                   >
                     <Trash2 className="h-4 w-4" />
                     Delete team
@@ -645,17 +609,15 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
 
                   <label className="flex items-start gap-2 cursor-pointer">
                     <input
-                      type="radio"
-                      name="issueAction"
-                      value="DELETE"
                       checked={issueAction === 'DELETE'}
-                      onChange={() => setIssueAction('DELETE')}
                       className="mt-0.5 accent-red-600"
+                      name="issueAction"
+                      onChange={() => setIssueAction('DELETE')}
+                      type="radio"
+                      value="DELETE"
                     />
                     <div>
-                      <p className="text-sm text-zinc-700 dark:text-zinc-300">
-                        Delete all issues
-                      </p>
+                      <p className="text-sm text-zinc-700 dark:text-zinc-300">Delete all issues</p>
                       <p className="text-xs text-zinc-400">
                         Issues will be archived along with the team
                       </p>
@@ -665,19 +627,17 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                   <label
                     className={cn(
                       'flex items-start gap-2',
-                      otherTeams.length > 0
-                        ? 'cursor-pointer'
-                        : 'opacity-50 cursor-not-allowed',
+                      otherTeams.length > 0 ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed',
                     )}
                   >
                     <input
-                      type="radio"
-                      name="issueAction"
-                      value="MOVE"
                       checked={issueAction === 'MOVE'}
-                      onChange={() => setIssueAction('MOVE')}
-                      disabled={otherTeams.length === 0}
                       className="mt-0.5 accent-red-600"
+                      disabled={otherTeams.length === 0}
+                      name="issueAction"
+                      onChange={() => setIssueAction('MOVE')}
+                      type="radio"
+                      value="MOVE"
                     />
                     <div className="flex-1">
                       <p className="text-sm text-zinc-700 dark:text-zinc-300">
@@ -692,36 +652,34 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                   {issueAction === 'MOVE' && otherTeams.length > 0 && (
                     <SimpleSelect
                       className="ml-6"
-                      placement="top"
+                      onChange={setMoveToTeamId}
                       options={otherTeams.map(t => ({
                         label: `${t.displayName || t.name} (${t.key})`,
                         value: t.id,
                       }))}
-                      value={moveToTeamId}
-                      onChange={setMoveToTeamId}
                       placeholder="Select a team…"
+                      placement="top"
+                      value={moveToTeamId}
                     />
                   )}
 
                   <div className="flex items-center gap-2 pt-1">
                     <button
-                      type="button"
+                      className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                       onClick={() => {
                         setDeleteConfirm(false);
                         setIssueAction('DELETE');
                         setMoveToTeamId('');
                       }}
-                      className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      type="button"
                     >
                       Cancel
                     </button>
                     <button
-                      type="button"
-                      disabled={
-                        deleting || (issueAction === 'MOVE' && !moveToTeamId)
-                      }
-                      onClick={handleDelete}
                       className="rounded bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={deleting || (issueAction === 'MOVE' && !moveToTeamId)}
+                      onClick={handleDelete}
+                      type="button"
                     >
                       {deleting ? 'Deleting…' : 'Delete team'}
                     </button>

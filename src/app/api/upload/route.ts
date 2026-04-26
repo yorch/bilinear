@@ -100,9 +100,7 @@ export async function POST(req: NextRequest) {
   const filePath = join(uploadDir, key);
 
   try {
-    const readable = Readable.fromWeb(
-      file.stream() as Parameters<typeof Readable.fromWeb>[0],
-    );
+    const readable = Readable.fromWeb(file.stream() as Parameters<typeof Readable.fromWeb>[0]);
     const writable = createWriteStream(filePath);
     await pipeline(readable, writable);
   } catch {

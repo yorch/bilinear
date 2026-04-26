@@ -41,10 +41,7 @@ export async function hashRoadmapPassword(password: string): Promise<string> {
   return `${salt}:${key.toString('hex')}`;
 }
 
-export async function verifyRoadmapPassword(
-  stored: string,
-  candidate: string,
-): Promise<boolean> {
+export async function verifyRoadmapPassword(stored: string, candidate: string): Promise<boolean> {
   const [salt, keyHex] = stored.split(':');
   if (!salt || !keyHex) {
     return false;
@@ -109,11 +106,7 @@ export class RoadmapService {
     }));
   }
 
-  async upsert(
-    orgId: string,
-    urlKey: string,
-    input: RoadmapUpsertInput,
-  ): Promise<PublicRoadmap> {
+  async upsert(orgId: string, urlKey: string, input: RoadmapUpsertInput): Promise<PublicRoadmap> {
     // Check slug uniqueness if provided
     if (input.slug) {
       const conflict = await this.prisma.publicRoadmap.findFirst({
@@ -126,10 +119,7 @@ export class RoadmapService {
 
     let passwordHash: string | null | undefined;
     if (input.password !== undefined) {
-      passwordHash =
-        input.password === ''
-          ? null
-          : await hashRoadmapPassword(input.password);
+      passwordHash = input.password === '' ? null : await hashRoadmapPassword(input.password);
     }
 
     const existing = await this.findByOrgId(orgId);
@@ -137,9 +127,7 @@ export class RoadmapService {
     if (existing) {
       return this.prisma.publicRoadmap.update({
         data: {
-          ...(input.description !== undefined
-            ? { description: input.description }
-            : {}),
+          ...(input.description !== undefined ? { description: input.description } : {}),
           ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
           ...(passwordHash !== undefined ? { passwordHash } : {}),
           ...(input.slug !== undefined ? { slug: input.slug } : {}),
@@ -162,10 +150,7 @@ export class RoadmapService {
     });
   }
 
-  async verifyPassword(
-    roadmap: PublicRoadmap,
-    password: string,
-  ): Promise<boolean> {
+  async verifyPassword(roadmap: PublicRoadmap, password: string): Promise<boolean> {
     if (!roadmap.passwordHash) {
       return true;
     }

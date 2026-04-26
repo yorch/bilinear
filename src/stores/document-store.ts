@@ -16,9 +16,7 @@ export class DocumentStore {
   get all(): DBDocument[] {
     return Array.from(this.pool.values())
       .filter(d => !d.archivedAt)
-      .sort(
-        (a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title),
-      );
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title));
   }
 
   findById(id: string): DBDocument | null {

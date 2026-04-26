@@ -1,10 +1,6 @@
 import type { IssueRelation, PrismaClient } from '../../generated/prisma';
 
-export type IssueRelationType =
-  | 'related'
-  | 'blocks'
-  | 'blocked_by'
-  | 'duplicate';
+export type IssueRelationType = 'related' | 'blocks' | 'blocked_by' | 'duplicate';
 
 export interface IssueRelationCreateInput {
   issueId: string;
@@ -157,10 +153,7 @@ export class IssueRelationService {
     return this.prisma.issueRelation.findMany({
       orderBy: { createdAt: 'asc' },
       where: {
-        OR: [
-          { issueId: { in: issueIds } },
-          { relatedIssueId: { in: issueIds } },
-        ],
+        OR: [{ issueId: { in: issueIds } }, { relatedIssueId: { in: issueIds } }],
       },
     });
   }

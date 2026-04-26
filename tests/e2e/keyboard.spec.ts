@@ -33,16 +33,12 @@ test.describe('Keyboard Shortcuts', () => {
     await page.keyboard.press('j');
     // Press S to open status selector
     await page.keyboard.press('s');
-    await expect(
-      page.locator('[data-testid="status-select-popover"]'),
-    ).toBeVisible();
+    await expect(page.locator('[data-testid="status-select-popover"]')).toBeVisible();
   });
 
   test('P opens priority selector when issue is selected', async ({ page }) => {
     await page.keyboard.press('j');
     await page.keyboard.press('p');
-    await expect(
-      page.locator('[data-testid="priority-select-popover"]'),
-    ).toBeVisible();
+    await expect(page.locator('[data-testid="priority-select-popover"]')).toBeVisible();
   });
 });

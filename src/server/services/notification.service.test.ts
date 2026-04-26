@@ -1,18 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import {
-  TEST_ISSUE,
-  TEST_ORG,
-  TEST_USER,
-  TEST_USER_2,
-} from '../../test/fixtures';
-import {
-  createMockPrisma,
-  type MockPrismaClient,
-} from '../../test/prisma-mock';
-import {
-  NotificationNotFoundError,
-  NotificationService,
-} from './notification.service';
+import { TEST_ISSUE, TEST_ORG, TEST_USER, TEST_USER_2 } from '../../test/fixtures';
+import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
+import { NotificationNotFoundError, NotificationService } from './notification.service';
 
 const TEST_NOTIFICATION = {
   actorId: TEST_USER_2.id,
@@ -103,9 +92,9 @@ describe('NotificationService', () => {
     it('throws NotificationNotFoundError when notification belongs to different user', async () => {
       prisma.notification.findUnique.mockResolvedValue(TEST_NOTIFICATION);
 
-      await expect(
-        service.markRead(TEST_NOTIFICATION.id, TEST_USER_2.id),
-      ).rejects.toThrow(NotificationNotFoundError);
+      await expect(service.markRead(TEST_NOTIFICATION.id, TEST_USER_2.id)).rejects.toThrow(
+        NotificationNotFoundError,
+      );
     });
   });
 
@@ -134,11 +123,7 @@ describe('NotificationService', () => {
       prisma.notification.findUnique.mockResolvedValue(TEST_NOTIFICATION);
       prisma.notification.update.mockResolvedValue(snoozed);
 
-      const result = await service.snooze(
-        TEST_NOTIFICATION.id,
-        TEST_USER.id,
-        until,
-      );
+      const result = await service.snooze(TEST_NOTIFICATION.id, TEST_USER.id, until);
 
       expect(result.snoozedUntilAt).toEqual(until);
       expect(prisma.notification.update).toHaveBeenCalledWith({
@@ -157,10 +142,7 @@ describe('NotificationService', () => {
       expect(result).toBe(3);
       expect(prisma.notification.count).toHaveBeenCalledWith({
         where: {
-          OR: [
-            { snoozedUntilAt: null },
-            { snoozedUntilAt: { lte: expect.any(Date) } },
-          ],
+          OR: [{ snoozedUntilAt: null }, { snoozedUntilAt: { lte: expect.any(Date) } }],
           organizationId: TEST_ORG.id,
           read: false,
           userId: TEST_USER.id,

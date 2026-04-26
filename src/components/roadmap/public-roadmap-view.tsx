@@ -96,17 +96,17 @@ function PasswordForm({ slug }: { slug: string }) {
         <p className="mb-6 text-sm text-zinc-500 dark:text-zinc-400">
           This roadmap is password protected.
         </p>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
           <input
+            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-indigo-500 dark:focus:ring-indigo-800/40"
+            placeholder="Enter password"
             ref={inputRef}
             required
             type="password"
-            placeholder="Enter password"
-            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-indigo-500 dark:focus:ring-indigo-800/40"
           />
           <button
-            type="submit"
             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 dark:focus:ring-offset-zinc-900"
+            type="submit"
           >
             Continue
           </button>
@@ -116,18 +116,10 @@ function PasswordForm({ slug }: { slug: string }) {
   );
 }
 
-export function PublicRoadmapView({
-  projects,
-  requiresPassword,
-  roadmap,
-}: Props) {
+export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props) {
   if (requiresPassword) {
     return (
-      <Suspense
-        fallback={
-          <div className="flex min-h-screen items-center justify-center" />
-        }
-      >
+      <Suspense fallback={<div className="flex min-h-screen items-center justify-center" />}>
         <PasswordForm slug={roadmap.slug} />
       </Suspense>
     );
@@ -142,41 +134,32 @@ export function PublicRoadmapView({
             {roadmap.title}
           </h1>
           {roadmap.description && (
-            <p className="mt-3 text-base text-zinc-500 dark:text-zinc-400">
-              {roadmap.description}
-            </p>
+            <p className="mt-3 text-base text-zinc-500 dark:text-zinc-400">{roadmap.description}</p>
           )}
         </div>
 
         {/* Project grid */}
         {projects.length === 0 ? (
           <div className="rounded-xl border border-zinc-200 bg-white p-10 text-center dark:border-zinc-700 dark:bg-zinc-900">
-            <p className="text-sm text-zinc-400">
-              No projects on this roadmap yet.
-            </p>
+            <p className="text-sm text-zinc-400">No projects on this roadmap yet.</p>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {projects.map(project => {
-              const statusInfo =
-                STATUS_BADGES[project.statusType] ?? STATUS_BADGES.planned;
-              const healthDot = project.health
-                ? HEALTH_DOTS[project.health]
-                : null;
+              const statusInfo = STATUS_BADGES[project.statusType] ?? STATUS_BADGES.planned;
+              const healthDot = project.health ? HEALTH_DOTS[project.health] : null;
               const targetDateStr = formatDate(project.targetDate);
               const progressPct = Math.round(project.progress * 100);
 
               return (
                 <div
-                  key={project.id}
                   className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-5 shadow-xs dark:border-zinc-700 dark:bg-zinc-900"
+                  key={project.id}
                 >
                   {/* Title row */}
                   <div className="flex items-center gap-2">
                     {project.icon ? (
-                      <span className="text-lg leading-none">
-                        {project.icon}
-                      </span>
+                      <span className="text-lg leading-none">{project.icon}</span>
                     ) : (
                       <span
                         className="h-3 w-3 shrink-0 rounded-full"
@@ -211,9 +194,7 @@ export function PublicRoadmapView({
                   {/* Progress bar */}
                   <div>
                     <div className="mb-1 flex items-center justify-between">
-                      <span className="text-xs text-zinc-400 dark:text-zinc-500">
-                        Progress
-                      </span>
+                      <span className="text-xs text-zinc-400 dark:text-zinc-500">Progress</span>
                       <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
                         {progressPct}%
                       </span>
@@ -230,9 +211,7 @@ export function PublicRoadmapView({
                   {project.milestoneCount > 0 && (
                     <p className="text-xs text-zinc-400 dark:text-zinc-500">
                       {project.milestoneCount}{' '}
-                      {project.milestoneCount === 1
-                        ? 'milestone'
-                        : 'milestones'}
+                      {project.milestoneCount === 1 ? 'milestone' : 'milestones'}
                     </p>
                   )}
                 </div>

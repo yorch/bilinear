@@ -1,14 +1,6 @@
 'use client';
 
-import {
-  Bell,
-  Check,
-  CheckCheck,
-  Clock,
-  MessageSquare,
-  RefreshCw,
-  User,
-} from 'lucide-react';
+import { Bell, Check, CheckCheck, Clock, MessageSquare, RefreshCw, User } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
 import type { DBNotification } from '@/lib/db';
@@ -67,8 +59,8 @@ const SNOOZE_MUTATION = `
 // ─── Snooze helpers ───────────────────────────────────────────────────────────
 
 interface SnoozePreset {
-  label: string;
   getUntil: () => Date;
+  label: string;
 }
 
 const SNOOZE_PRESETS: SnoozePreset[] = [
@@ -142,10 +134,10 @@ function getNotificationLabel(type: string): string {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 interface NotificationItemProps {
+  markingId: string | null;
   notification: DBNotification;
   onMarkRead: (id: string) => void;
   onSnooze: (id: string, until: Date) => void;
-  markingId: string | null;
   snoozingId: string | null;
 }
 
@@ -203,9 +195,7 @@ function NotificationItem({
           <span
             className={cn(
               'font-medium',
-              read
-                ? 'text-zinc-600 dark:text-zinc-400'
-                : 'text-zinc-900 dark:text-zinc-100',
+              read ? 'text-zinc-600 dark:text-zinc-400' : 'text-zinc-900 dark:text-zinc-100',
             )}
           >
             {getNotificationLabel(type)}
@@ -221,13 +211,13 @@ function NotificationItem({
       {!read && (
         <div className="flex shrink-0 items-center gap-1">
           {/* Snooze button with dropdown */}
-          <div ref={snoozeRef} className="relative">
+          <div className="relative" ref={snoozeRef}>
             <button
-              type="button"
-              onClick={() => setSnoozeOpen(o => !o)}
-              disabled={isSnoozingThis}
               className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300 disabled:opacity-50"
+              disabled={isSnoozingThis}
+              onClick={() => setSnoozeOpen(o => !o)}
               title="Snooze"
+              type="button"
             >
               <Clock className="h-3.5 w-3.5" />
             </button>
@@ -236,13 +226,13 @@ function NotificationItem({
               <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
                 {SNOOZE_PRESETS.map(preset => (
                   <button
+                    className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
                     key={preset.label}
-                    type="button"
                     onClick={() => {
                       setSnoozeOpen(false);
                       onSnooze(id, preset.getUntil());
                     }}
-                    className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    type="button"
                   >
                     {preset.label}
                   </button>
@@ -253,11 +243,11 @@ function NotificationItem({
 
           {/* Mark read button */}
           <button
-            type="button"
-            onClick={() => onMarkRead(id)}
-            disabled={isMarkingThis}
             className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-indigo-600 dark:hover:bg-zinc-800 dark:hover:text-indigo-400 disabled:opacity-50"
+            disabled={isMarkingThis}
+            onClick={() => onMarkRead(id)}
             title="Mark as read"
+            type="button"
           >
             <Check className="h-3.5 w-3.5" />
           </button>
@@ -289,8 +279,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
           return;
         }
         const data =
-          (res.data as { notifications?: DBNotification[] } | undefined)
-            ?.notifications ?? [];
+          (res.data as { notifications?: DBNotification[] } | undefined)?.notifications ?? [];
         notificationStore.upsertMany(data);
         setLoading(false);
       })
@@ -378,9 +367,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Bell className="h-5 w-5 text-zinc-500" />
-          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-            Inbox
-          </h1>
+          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Inbox</h1>
           {hasUnread && (
             <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-xs font-medium text-white">
               {unread.length}
@@ -390,10 +377,10 @@ export const NotificationInbox = observer(function NotificationInbox() {
 
         {hasUnread && (
           <button
-            type="button"
-            onClick={handleMarkAllRead}
-            disabled={markingAll}
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 disabled:opacity-50"
+            disabled={markingAll}
+            onClick={handleMarkAllRead}
+            type="button"
           >
             <CheckCheck className="h-3.5 w-3.5" />
             {markingAll ? 'Marking…' : 'Mark all read'}
@@ -414,12 +401,9 @@ export const NotificationInbox = observer(function NotificationInbox() {
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
             <Bell className="h-6 w-6 text-zinc-400" />
           </div>
-          <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
-            All caught up
-          </p>
+          <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">All caught up</p>
           <p className="text-xs text-zinc-400 dark:text-zinc-500">
-            No notifications yet. You'll be notified when something needs your
-            attention.
+            No notifications yet. You'll be notified when something needs your attention.
           </p>
         </div>
       )}
@@ -434,10 +418,10 @@ export const NotificationInbox = observer(function NotificationInbox() {
             {unread.map(notification => (
               <NotificationItem
                 key={notification.id}
+                markingId={markingId}
                 notification={notification}
                 onMarkRead={handleMarkRead}
                 onSnooze={handleSnooze}
-                markingId={markingId}
                 snoozingId={snoozingId}
               />
             ))}
@@ -455,10 +439,10 @@ export const NotificationInbox = observer(function NotificationInbox() {
             {read.map(notification => (
               <NotificationItem
                 key={notification.id}
+                markingId={markingId}
                 notification={notification}
                 onMarkRead={handleMarkRead}
                 onSnooze={handleSnooze}
-                markingId={markingId}
                 snoozingId={snoozingId}
               />
             ))}

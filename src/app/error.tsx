@@ -30,21 +30,19 @@ export default function GlobalError({
         Something went wrong
       </h1>
       <p className="max-w-md text-sm text-zinc-600 dark:text-zinc-400">
-        The page hit an unexpected error. Try again — if it keeps happening,
-        reload or come back in a minute.
+        The page hit an unexpected error. Try again — if it keeps happening, reload or come back in
+        a minute.
       </p>
       {error.digest ? (
-        <p className="font-mono text-xs text-zinc-500">
-          Error ref: {error.digest}
-        </p>
+        <p className="font-mono text-xs text-zinc-500">Error ref: {error.digest}</p>
       ) : null}
       <div className="flex gap-2">
         <Button onClick={() => reset()}>Try again</Button>
         <Button
-          variant="outline"
           onClick={() => {
             window.location.href = '/';
           }}
+          variant="outline"
         >
           Go home
         </Button>

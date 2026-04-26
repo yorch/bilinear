@@ -40,11 +40,7 @@ async function enforceAuthLimit(
 // into the `user: User!` field declared in the GraphQL schema.
 export const authResolvers = {
   AuthPayload: {
-    user: async (
-      parent: { userId: string },
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => {
+    user: async (parent: { userId: string }, _args: unknown, ctx: GraphQLContext) => {
       const user = await ctx.services.user.findById(parent.userId);
       if (!user) {
         throw new GraphQLError('User not found', {
@@ -131,11 +127,7 @@ export const authResolvers = {
   },
 
   Query: {
-    googleAuthStart: async (
-      _parent: unknown,
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => {
+    googleAuthStart: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
       try {
         return await ctx.services.auth.startGoogleAuth();
       } catch (err) {

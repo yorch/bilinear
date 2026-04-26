@@ -5,23 +5,23 @@ import { useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 
 interface IssueContextMenuProps {
-  issueId: string;
   identifier: string;
+  issueId: string;
+  onArchive: () => void;
+  onClose: () => void;
+  onDelete: () => void;
+  onOpen: () => void;
   title: string;
   x: number;
   y: number;
-  onClose: () => void;
-  onOpen: () => void;
-  onArchive: () => void;
-  onDelete: () => void;
 }
 
 interface MenuItem {
-  label: string;
-  shortcut?: string;
-  onClick: () => void;
   danger?: boolean;
+  label: string;
+  onClick: () => void;
   separator?: false;
+  shortcut?: string;
 }
 
 interface MenuSeparator {
@@ -122,45 +122,41 @@ export function IssueContextMenu({
 
   return (
     <div
+      aria-label={`Actions for ${title}`}
+      className="min-w-[200px] overflow-hidden rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
       ref={menuRef}
       role="menu"
-      aria-label={`Actions for ${title}`}
       style={{
         left: x,
         position: 'fixed',
         top: y,
         zIndex: 9999,
       }}
-      className="min-w-[200px] overflow-hidden rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
     >
       {items.map((entry, i) => {
         if ('separator' in entry && entry.separator) {
           return (
             <div
+              className="my-1 border-t border-zinc-100 dark:border-zinc-800"
               // biome-ignore lint/suspicious/noArrayIndexKey: separator items have no stable id
               key={`sep-${i}`}
-              className="my-1 border-t border-zinc-100 dark:border-zinc-800"
             />
           );
         }
         const item = entry as MenuItem;
         return (
           <button
-            key={item.label}
-            type="button"
-            role="menuitem"
-            onClick={item.onClick}
             className={cn(
               'flex w-full items-center justify-between px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800',
               item.danger && 'text-red-600 dark:text-red-400',
             )}
+            key={item.label}
+            onClick={item.onClick}
+            role="menuitem"
+            type="button"
           >
             <span>{item.label}</span>
-            {item.shortcut && (
-              <kbd className="ml-4 text-[10px] text-zinc-400">
-                {item.shortcut}
-              </kbd>
-            )}
+            {item.shortcut && <kbd className="ml-4 text-[10px] text-zinc-400">{item.shortcut}</kbd>}
           </button>
         );
       })}

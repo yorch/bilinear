@@ -47,14 +47,14 @@ export const CustomFieldsEditor = observer(
             const current = customFieldStore.findValue(issueId, def.id);
             return (
               <ValueRow
+                currentValue={current?.value}
+                definitionId={def.id}
+                issueId={issueId}
                 key={def.id}
                 label={def.name}
-                required={def.required}
-                issueId={issueId}
-                definitionId={def.id}
-                type={def.type}
-                currentValue={current?.value}
                 onSave={v => handleSave(def.id, v)}
+                required={def.required}
+                type={def.type}
               />
             );
           })}
@@ -97,11 +97,7 @@ const ValueRow = observer(
           {required && <span className="ml-0.5 text-amber-500">*</span>}
         </span>
         <div className="flex items-center">
-          <CustomFieldValueInput
-            definition={def}
-            value={currentValue}
-            onSave={onSave}
-          />
+          <CustomFieldValueInput definition={def} onSave={onSave} value={currentValue} />
         </div>
       </>
     );

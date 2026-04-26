@@ -4,10 +4,7 @@ import { MessageSquare, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
 import { gql } from '@/lib/graphql';
-import {
-  PROJECT_HEALTH_CONFIG,
-  PROJECT_HEALTH_OPTIONS,
-} from '@/lib/project-constants';
+import { PROJECT_HEALTH_CONFIG, PROJECT_HEALTH_OPTIONS } from '@/lib/project-constants';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -45,9 +42,9 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
         </h3>
         {!creating && !editingId && (
           <button
-            type="button"
-            onClick={openCreate}
             className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            onClick={openCreate}
+            type="button"
           >
             <Plus className="h-3.5 w-3.5" />
             Add update
@@ -55,12 +52,7 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
         )}
       </div>
 
-      {creating && (
-        <CreateUpdateForm
-          projectId={projectId}
-          onClose={() => setCreating(false)}
-        />
-      )}
+      {creating && <CreateUpdateForm onClose={() => setCreating(false)} projectId={projectId} />}
 
       {updates.length === 0 && !creating ? (
         <p className="py-6 text-center text-xs text-zinc-400">
@@ -71,26 +63,24 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
           {updates.map(update => {
             const author = userStore.findById(update.userId);
             const isOwner = update.userId === viewerId;
-            const health = update.health
-              ? PROJECT_HEALTH_CONFIG[update.health]
-              : null;
+            const health = update.health ? PROJECT_HEALTH_CONFIG[update.health] : null;
 
             if (editingId === update.id) {
               return (
                 <EditUpdateForm
-                  key={update.id}
-                  updateId={update.id}
                   initialBody={update.body}
                   initialHealth={update.health ?? ''}
+                  key={update.id}
                   onClose={() => setEditingId(null)}
+                  updateId={update.id}
                 />
               );
             }
 
             return (
               <div
-                key={update.id}
                 className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800"
+                key={update.id}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
@@ -128,10 +118,10 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
                   {isOwner && (
                     <div className="flex shrink-0 items-center gap-1">
                       <button
-                        type="button"
-                        onClick={() => openEdit(update.id)}
                         className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+                        onClick={() => openEdit(update.id)}
                         title="Edit"
+                        type="button"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
@@ -171,32 +161,30 @@ function UpdateFormFields({
   return (
     <>
       <div className="mb-3 flex gap-1">
-        <span className="mr-1 self-center text-xs text-zinc-500 dark:text-zinc-400">
-          Health:
-        </span>
+        <span className="mr-1 self-center text-xs text-zinc-500 dark:text-zinc-400">Health:</span>
         <button
-          type="button"
-          onClick={() => onHealthChange('')}
           className={cn(
             'rounded px-2 py-0.5 text-xs font-medium transition-colors',
             health === ''
               ? 'bg-zinc-300 text-zinc-700 dark:bg-zinc-600 dark:text-zinc-100'
               : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700',
           )}
+          onClick={() => onHealthChange('')}
+          type="button"
         >
           None
         </button>
         {PROJECT_HEALTH_OPTIONS.map(h => (
           <button
-            key={h.value}
-            type="button"
-            onClick={() => onHealthChange(h.value)}
             className={cn(
               'rounded px-2 py-0.5 text-xs font-medium transition-colors',
               health === h.value
                 ? `${h.color} text-white`
                 : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700',
             )}
+            key={h.value}
+            onClick={() => onHealthChange(h.value)}
+            type="button"
           >
             {h.label}
           </button>
@@ -204,10 +192,10 @@ function UpdateFormFields({
       </div>
       <textarea
         className="w-full resize-none rounded border border-zinc-200 bg-transparent px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 dark:border-zinc-700 dark:text-zinc-100 dark:focus:border-indigo-500 dark:focus:ring-indigo-500"
-        rows={4}
-        placeholder={placeholder}
-        value={body}
         onChange={e => onBodyChange(e.target.value)}
+        placeholder={placeholder}
+        rows={4}
+        value={body}
       />
     </>
   );
@@ -216,8 +204,8 @@ function UpdateFormFields({
 // ─── Create form ─────────────────────────────────────────────────────────────
 
 interface CreateUpdateFormProps {
-  projectId: string;
   onClose: () => void;
+  projectId: string;
 }
 
 function CreateUpdateForm({ projectId, onClose }: CreateUpdateFormProps) {
@@ -249,13 +237,11 @@ function CreateUpdateForm({ projectId, onClose }: CreateUpdateFormProps) {
     <div className="mt-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
       <div className="flex items-center gap-2 pb-2">
         <MessageSquare className="h-4 w-4 text-zinc-400" />
-        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-          New update
-        </span>
+        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">New update</span>
         <button
-          type="button"
-          onClick={onClose}
           className="ml-auto rounded p-0.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+          onClick={onClose}
+          type="button"
         >
           <X className="h-3.5 w-3.5" />
         </button>
@@ -269,17 +255,17 @@ function CreateUpdateForm({ projectId, onClose }: CreateUpdateFormProps) {
       />
       <div className="mt-2 flex justify-end gap-2">
         <button
-          type="button"
-          onClick={onClose}
           className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          onClick={onClose}
+          type="button"
         >
           Cancel
         </button>
         <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={!body.trim() || submitting}
           className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+          disabled={!body.trim() || submitting}
+          onClick={handleSubmit}
+          type="button"
         >
           {submitting ? 'Posting...' : 'Post update'}
         </button>
@@ -291,18 +277,13 @@ function CreateUpdateForm({ projectId, onClose }: CreateUpdateFormProps) {
 // ─── Edit form ────────────────────────────────────────────────────────────────
 
 interface EditUpdateFormProps {
-  updateId: string;
   initialBody: string;
   initialHealth: string;
   onClose: () => void;
+  updateId: string;
 }
 
-function EditUpdateForm({
-  updateId,
-  initialBody,
-  initialHealth,
-  onClose,
-}: EditUpdateFormProps) {
+function EditUpdateForm({ updateId, initialBody, initialHealth, onClose }: EditUpdateFormProps) {
   const [body, setBody] = useState(initialBody);
   const [health, setHealth] = useState(initialHealth);
   const [submitting, setSubmitting] = useState(false);
@@ -337,17 +318,17 @@ function EditUpdateForm({
       />
       <div className="mt-2 flex justify-end gap-2">
         <button
-          type="button"
-          onClick={onClose}
           className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          onClick={onClose}
+          type="button"
         >
           Cancel
         </button>
         <button
-          type="button"
-          onClick={handleSave}
-          disabled={!body.trim() || submitting}
           className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+          disabled={!body.trim() || submitting}
+          onClick={handleSave}
+          type="button"
         >
           {submitting ? 'Saving...' : 'Save'}
         </button>
@@ -383,17 +364,17 @@ function DeleteUpdateButton({ updateId }: { updateId: string }) {
       <div className="flex items-center gap-1">
         <span className="text-xs text-zinc-500">Delete?</span>
         <button
-          type="button"
-          onClick={handleDelete}
-          disabled={deleting}
           className="rounded px-1.5 py-0.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+          disabled={deleting}
+          onClick={handleDelete}
+          type="button"
         >
           {deleting ? '...' : 'Yes'}
         </button>
         <button
-          type="button"
-          onClick={() => setConfirming(false)}
           className="rounded px-1.5 py-0.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          onClick={() => setConfirming(false)}
+          type="button"
         >
           No
         </button>
@@ -403,10 +384,10 @@ function DeleteUpdateButton({ updateId }: { updateId: string }) {
 
   return (
     <button
-      type="button"
-      onClick={() => setConfirming(true)}
       className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-red-500 dark:hover:bg-zinc-800"
+      onClick={() => setConfirming(true)}
       title="Delete"
+      type="button"
     >
       <Trash2 className="h-3.5 w-3.5" />
     </button>

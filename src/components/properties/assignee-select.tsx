@@ -4,30 +4,27 @@ import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 
 interface User {
-  id: string;
-  displayName: string;
-  initials: string;
-  avatarUrl?: string | null;
   avatarBackgroundColor: string;
+  avatarUrl?: string | null;
+  displayName: string;
+  id: string;
+  initials: string;
 }
 
 interface AssigneeSelectProps {
-  value: string | null | undefined;
-  users: User[];
-  onChange: (userId: string | null) => void;
   className?: string;
   forceOpen?: boolean;
+  onChange: (userId: string | null) => void;
   onClose?: () => void;
+  users: User[];
+  value: string | null | undefined;
 }
 
 export function UserAvatar({
   user,
   size = 'sm',
 }: {
-  user: Pick<
-    User,
-    'initials' | 'avatarUrl' | 'avatarBackgroundColor' | 'displayName'
-  >;
+  user: Pick<User, 'initials' | 'avatarUrl' | 'avatarBackgroundColor' | 'displayName'>;
   size?: 'xs' | 'sm' | 'md';
 }) {
   const sizeClass =
@@ -40,9 +37,9 @@ export function UserAvatar({
     return (
       // biome-ignore lint/performance/noImgElement: avatar URL is external, size unknown at build time
       <img
-        src={user.avatarUrl}
         alt={user.displayName}
         className={cn('rounded-full object-cover', sizeClass)}
+        src={user.avatarUrl}
       />
     );
   }
@@ -89,18 +86,18 @@ export function AssigneeSelect({
   }, [onClose]);
 
   return (
-    <div ref={ref} className={cn('relative', className)}>
+    <div className={cn('relative', className)} ref={ref}>
       <button
-        type="button"
+        className="flex items-center rounded px-1 py-1 hover:bg-zinc-100 dark:hover:bg-zinc-800"
         onClick={e => {
           e.stopPropagation();
           setOpen(o => !o);
         }}
-        className="flex items-center rounded px-1 py-1 hover:bg-zinc-100 dark:hover:bg-zinc-800"
         title={current?.displayName ?? 'No assignee'}
+        type="button"
       >
         {current ? (
-          <UserAvatar user={current} size="xs" />
+          <UserAvatar size="xs" user={current} />
         ) : (
           <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border-2 border-dashed border-zinc-300 dark:border-zinc-600" />
         )}
@@ -109,33 +106,33 @@ export function AssigneeSelect({
       {open && (
         <div className="absolute right-0 top-full z-50 mt-1 min-w-[200px] rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
           <button
-            type="button"
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
             onClick={e => {
               e.stopPropagation();
               onChange(null);
               setOpen(false);
               onClose?.();
             }}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+            type="button"
           >
             No assignee
           </button>
           {users.map(user => (
             <button
+              className={cn(
+                'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800',
+                user.id === value && 'font-medium',
+              )}
               key={user.id}
-              type="button"
               onClick={e => {
                 e.stopPropagation();
                 onChange(user.id);
                 setOpen(false);
                 onClose?.();
               }}
-              className={cn(
-                'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800',
-                user.id === value && 'font-medium',
-              )}
+              type="button"
             >
-              <UserAvatar user={user} size="xs" />
+              <UserAvatar size="xs" user={user} />
               {user.displayName}
             </button>
           ))}

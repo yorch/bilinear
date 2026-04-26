@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import {
-  createMockPrisma,
-  type MockPrismaClient,
-} from '../../test/prisma-mock';
+import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
   IssueRelationAlreadyExistsError,
   IssueRelationCircularError,
@@ -181,9 +178,7 @@ describe('IssueRelationService', () => {
     it('throws IssueRelationNotFoundError when not found', async () => {
       prisma.issueRelation.findUnique.mockResolvedValue(null);
 
-      await expect(service.delete(TEST_RELATION.id)).rejects.toThrow(
-        IssueRelationNotFoundError,
-      );
+      await expect(service.delete(TEST_RELATION.id)).rejects.toThrow(IssueRelationNotFoundError);
     });
   });
 
@@ -195,10 +190,7 @@ describe('IssueRelationService', () => {
         issueId: TEST_RELATION.relatedIssueId,
         relatedIssueId: TEST_RELATION.issueId,
       };
-      prisma.issueRelation.findMany.mockResolvedValue([
-        TEST_RELATION,
-        inverseRelation,
-      ]);
+      prisma.issueRelation.findMany.mockResolvedValue([TEST_RELATION, inverseRelation]);
 
       const result = await service.findByIssueId(TEST_RELATION.issueId);
 
@@ -206,10 +198,7 @@ describe('IssueRelationService', () => {
       expect(prisma.issueRelation.findMany).toHaveBeenCalledWith({
         orderBy: { createdAt: 'asc' },
         where: {
-          OR: [
-            { issueId: TEST_RELATION.issueId },
-            { relatedIssueId: TEST_RELATION.issueId },
-          ],
+          OR: [{ issueId: TEST_RELATION.issueId }, { relatedIssueId: TEST_RELATION.issueId }],
         },
       });
     });

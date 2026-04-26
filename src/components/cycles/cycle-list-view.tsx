@@ -10,8 +10,8 @@ import { useStore } from '@/providers/store-provider';
 
 interface CycleListViewProps {
   teamId: string;
-  workspaceKey: string;
   teamKey: string;
+  workspaceKey: string;
 }
 
 function formatDate(iso: string): string {
@@ -29,20 +29,17 @@ function getCycleStatusBadge(status: CycleStatus) {
   switch (status) {
     case 'active':
       return {
-        className:
-          'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
+        className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
         label: 'Active',
       };
     case 'completed':
       return {
-        className:
-          'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400',
+        className: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400',
         label: 'Completed',
       };
     case 'upcoming':
       return {
-        className:
-          'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400',
+        className: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400',
         label: 'Upcoming',
       };
   }
@@ -61,16 +58,12 @@ export const CycleListView = observer(function CycleListView({
 
   const activeCycles = activeCycle ? [activeCycle] : [];
   const hasNoCycles =
-    activeCycles.length === 0 &&
-    upcomingCycles.length === 0 &&
-    completedCycles.length === 0;
+    activeCycles.length === 0 && upcomingCycles.length === 0 && completedCycles.length === 0;
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex h-12 items-center justify-between border-b border-zinc-200 px-4 dark:border-zinc-800">
-        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          Cycles
-        </h1>
+        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Cycles</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
@@ -80,9 +73,7 @@ export const CycleListView = observer(function CycleListView({
               <RefreshCw className="h-6 w-6 text-zinc-400" />
             </div>
             <div>
-              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                No cycles yet
-              </p>
+              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">No cycles yet</p>
               <p className="mt-1 text-xs text-zinc-500">
                 Cycles help you plan and track work in time-boxed iterations.
               </p>
@@ -148,23 +139,20 @@ const CycleGroup = observer(function CycleGroup({
   return (
     <div>
       <button
-        type="button"
-        onClick={() => setCollapsed(!collapsed)}
         className="flex items-center gap-2 px-1 py-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+        onClick={() => setCollapsed(!collapsed)}
+        type="button"
       >
         <svg
-          className={cn(
-            'h-3 w-3 transition-transform',
-            collapsed ? '' : 'rotate-90',
-          )}
+          aria-hidden="true"
+          className={cn('h-3 w-3 transition-transform', collapsed ? '' : 'rotate-90')}
           fill="currentColor"
           viewBox="0 0 20 20"
-          aria-hidden="true"
         >
           <path
-            fillRule="evenodd"
-            d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
             clipRule="evenodd"
+            d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+            fillRule="evenodd"
           />
         </svg>
         {title}
@@ -178,16 +166,14 @@ const CycleGroup = observer(function CycleGroup({
             const completedIssues = cycleIssues.filter(i => i.completedAt);
             const progress =
               cycleIssues.length > 0
-                ? Math.round(
-                    (completedIssues.length / cycleIssues.length) * 100,
-                  )
+                ? Math.round((completedIssues.length / cycleIssues.length) * 100)
                 : 0;
 
             return (
               <Link
-                key={cycle.id}
-                href={`/${workspaceKey}/team/${teamKey}/cycles/${cycle.id}`}
                 className="group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 transition-colors hover:border-zinc-200 hover:bg-zinc-50 dark:hover:border-zinc-700 dark:hover:bg-zinc-900"
+                href={`/${workspaceKey}/team/${teamKey}/cycles/${cycle.id}`}
+                key={cycle.id}
               >
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
                   <RefreshCw className="h-3.5 w-3.5" />
@@ -200,8 +186,7 @@ const CycleGroup = observer(function CycleGroup({
                   <div className="mt-0.5 flex items-center gap-2">
                     <span className="flex items-center gap-1 text-xs text-zinc-500">
                       <Calendar className="h-3 w-3" />
-                      {formatDate(cycle.startsAt)} &ndash;{' '}
-                      {formatDate(cycle.endsAt)}
+                      {formatDate(cycle.startsAt)} &ndash; {formatDate(cycle.endsAt)}
                     </span>
                   </div>
                 </div>

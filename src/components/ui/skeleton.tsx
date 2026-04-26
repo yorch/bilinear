@@ -3,16 +3,10 @@ import { cn } from '@/lib/utils';
 /**
  * Base shimmer element. Compose into entity-specific skeletons below.
  */
-function Skeleton({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
+function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn(
-        'animate-pulse rounded-md bg-zinc-200 dark:bg-zinc-800',
-        className,
-      )}
+      className={cn('animate-pulse rounded-md bg-zinc-200 dark:bg-zinc-800', className)}
       {...props}
     />
   );
@@ -62,7 +56,7 @@ function SidebarSkeleton() {
     <div className="flex flex-col gap-1 px-2 py-2">
       {Array.from({ length: 5 }).map((_, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton list
-        <Skeleton key={i} className="h-7 w-full rounded-md" />
+        <Skeleton className="h-7 w-full rounded-md" key={i} />
       ))}
     </div>
   );
@@ -79,7 +73,7 @@ function DetailPanelSkeleton() {
       <div className="flex flex-col gap-2 mt-2">
         {Array.from({ length: 5 }).map((_, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton list
-          <div key={i} className="flex items-center gap-3">
+          <div className="flex items-center gap-3" key={i}>
             <Skeleton className="h-4 w-24 shrink-0" />
             <Skeleton className="h-4 w-32" />
           </div>
@@ -94,10 +88,4 @@ function DetailPanelSkeleton() {
   );
 }
 
-export {
-  DetailPanelSkeleton,
-  IssueListSkeleton,
-  IssueSkeleton,
-  SidebarSkeleton,
-  Skeleton,
-};
+export { DetailPanelSkeleton, IssueListSkeleton, IssueSkeleton, SidebarSkeleton, Skeleton };

@@ -9,30 +9,17 @@ import type { GraphQLContext } from '../context';
 
 export const issueTemplateResolvers = {
   IssueTemplate: {
-    creator: async (
-      template: IssueTemplate,
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => {
+    creator: async (template: IssueTemplate, _args: unknown, ctx: GraphQLContext) => {
       if (!template.creatorId) {
         return null;
       }
       return ctx.services.user.findById(template.creatorId);
     },
-    team: async (
-      template: IssueTemplate,
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => {
-      return ctx.services.team.findById(template.teamId);
-    },
+    team: async (template: IssueTemplate, _args: unknown, ctx: GraphQLContext) =>
+      ctx.services.team.findById(template.teamId),
   },
   Mutation: {
-    issueTemplateArchive: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    issueTemplateArchive: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
       const existing = await ctx.services.issueTemplate.findById(id);
       if (!existing) {
@@ -74,10 +61,7 @@ export const issueTemplateResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      const template = await ctx.services.issueTemplate.create(
-        input,
-        ctx.userId,
-      );
+      const template = await ctx.services.issueTemplate.create(input, ctx.userId);
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
         'I',
@@ -91,11 +75,7 @@ export const issueTemplateResolvers = {
         success: true,
       };
     },
-    issueTemplateDelete: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    issueTemplateDelete: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
       const existing = await ctx.services.issueTemplate.findById(id);
       if (!existing) {
@@ -155,11 +135,7 @@ export const issueTemplateResolvers = {
     },
   },
   Query: {
-    issueTemplate: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    issueTemplate: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
       const template = await ctx.services.issueTemplate.findById(id);
       if (!template) {
@@ -178,18 +154,12 @@ export const issueTemplateResolvers = {
     },
     issueTemplates: async (
       _parent: unknown,
-      {
-        teamId,
-        includeArchived,
-      }: { teamId: string; includeArchived?: boolean },
+      { teamId, includeArchived }: { teamId: string; includeArchived?: boolean },
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
       await requireTeamMember(ctx.prisma, teamId, ctx.userId);
-      return ctx.services.issueTemplate.findByTeamId(
-        teamId,
-        includeArchived ?? false,
-      );
+      return ctx.services.issueTemplate.findByTeamId(teamId, includeArchived ?? false);
     },
   },
 };

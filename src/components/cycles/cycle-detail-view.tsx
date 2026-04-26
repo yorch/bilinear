@@ -12,8 +12,8 @@ import { useStore } from '@/providers/store-provider';
 
 interface CycleDetailViewProps {
   cycleId: string;
-  workspaceKey: string;
   teamKey: string;
+  workspaceKey: string;
 }
 
 function formatDate(iso: string): string {
@@ -55,15 +55,15 @@ const CYCLE_VELOCITY_QUERY = `
 // ---------------------------------------------------------------------------
 
 interface BurndownPoint {
+  completed: number;
   date: string;
   remaining: number;
-  completed: number;
 }
 
 interface VelocityCycle {
+  completedIssues: number;
   cycleId: string;
   cycleNumber: number;
-  completedIssues: number;
 }
 
 interface VelocityResult {
@@ -98,16 +98,11 @@ function BurndownChart({ data }: BurndownChartProps) {
   const chartWidth = width - paddingLeft - paddingRight;
   const chartHeight = height - paddingTop - paddingBottom;
 
-  const maxY = Math.max(
-    ...data.map(d => Math.max(d.remaining, d.completed)),
-    1,
-  );
+  const maxY = Math.max(...data.map(d => Math.max(d.remaining, d.completed)), 1);
   const n = data.length;
 
-  const xScale = (i: number) =>
-    paddingLeft + (n > 1 ? (i / (n - 1)) * chartWidth : chartWidth / 2);
-  const yScale = (v: number) =>
-    paddingTop + chartHeight - (v / maxY) * chartHeight;
+  const xScale = (i: number) => paddingLeft + (n > 1 ? (i / (n - 1)) * chartWidth : chartWidth / 2);
+  const yScale = (v: number) => paddingTop + chartHeight - (v / maxY) * chartHeight;
 
   // Ideal burndown: linear from total issues (first remaining + first completed) down to 0
   const totalIssues = data[0].remaining + data[0].completed;
@@ -117,18 +112,10 @@ function BurndownChart({ data }: BurndownChartProps) {
   }));
 
   const toPath = (pts: Array<{ x: number; y: number }>) =>
-    pts
-      .map(
-        (p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`,
-      )
-      .join(' ');
+    pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
 
-  const remainingPath = toPath(
-    data.map((d, i) => ({ x: xScale(i), y: yScale(d.remaining) })),
-  );
-  const completedPath = toPath(
-    data.map((d, i) => ({ x: xScale(i), y: yScale(d.completed) })),
-  );
+  const remainingPath = toPath(data.map((d, i) => ({ x: xScale(i), y: yScale(d.remaining) })));
+  const completedPath = toPath(data.map((d, i) => ({ x: xScale(i), y: yScale(d.completed) })));
   const idealPath = toPath(idealPoints);
 
   // Y-axis ticks
@@ -148,10 +135,10 @@ function BurndownChart({ data }: BurndownChartProps) {
   return (
     <div className="w-full overflow-x-auto">
       <svg
-        viewBox={`0 0 ${width} ${height}`}
+        aria-label="Burndown chart"
         className="w-full"
         style={{ height: 300 }}
-        aria-label="Burndown chart"
+        viewBox={`0 0 ${width} ${height}`}
       >
         {/* Y-axis grid lines + labels */}
         {yTicks.map(v => {
@@ -159,21 +146,21 @@ function BurndownChart({ data }: BurndownChartProps) {
           return (
             <g key={v}>
               <line
-                x1={paddingLeft}
-                y1={y}
-                x2={width - paddingRight}
-                y2={y}
                 stroke="currentColor"
                 strokeOpacity={0.08}
                 strokeWidth={1}
+                x1={paddingLeft}
+                x2={width - paddingRight}
+                y1={y}
+                y2={y}
               />
               <text
+                fill="currentColor"
+                fontSize={10}
+                opacity={0.45}
+                textAnchor="end"
                 x={paddingLeft - 4}
                 y={y + 4}
-                textAnchor="end"
-                fontSize={10}
-                fill="currentColor"
-                opacity={0.45}
               >
                 {v}
               </text>
@@ -186,36 +173,26 @@ function BurndownChart({ data }: BurndownChartProps) {
           d={idealPath}
           fill="none"
           stroke="var(--chart-grid)"
-          strokeWidth={1.5}
           strokeDasharray="5,3"
+          strokeWidth={1.5}
         />
 
         {/* Completed (green) */}
-        <path
-          d={completedPath}
-          fill="none"
-          stroke="var(--chart-actual)"
-          strokeWidth={2}
-        />
+        <path d={completedPath} fill="none" stroke="var(--chart-actual)" strokeWidth={2} />
 
         {/* Remaining (blue) */}
-        <path
-          d={remainingPath}
-          fill="none"
-          stroke="var(--chart-ideal)"
-          strokeWidth={2}
-        />
+        <path d={remainingPath} fill="none" stroke="var(--chart-ideal)" strokeWidth={2} />
 
         {/* X-axis labels */}
         {xLabels.map(({ i, label }) => (
           <text
+            fill="currentColor"
+            fontSize={9}
             key={i}
+            opacity={0.45}
+            textAnchor="middle"
             x={xScale(i)}
             y={height - 6}
-            textAnchor="middle"
-            fontSize={9}
-            fill="currentColor"
-            opacity={0.45}
           >
             {label}
           </text>
@@ -223,41 +200,27 @@ function BurndownChart({ data }: BurndownChartProps) {
 
         {/* Legend — each non-first item in its own <g> so offsets are self-contained */}
         <g transform={`translate(${paddingLeft + 4}, ${paddingTop + 4})`}>
-          <line
-            x1={0}
-            y1={6}
-            x2={16}
-            y2={6}
-            stroke="var(--chart-ideal)"
-            strokeWidth={2}
-          />
-          <text x={20} y={10} fontSize={9} fill="currentColor" opacity={0.7}>
+          <line stroke="var(--chart-ideal)" strokeWidth={2} x1={0} x2={16} y1={6} y2={6} />
+          <text fill="currentColor" fontSize={9} opacity={0.7} x={20} y={10}>
             Remaining
           </text>
           <g transform="translate(78, 0)">
-            <line
-              x1={0}
-              y1={6}
-              x2={16}
-              y2={6}
-              stroke="var(--chart-actual)"
-              strokeWidth={2}
-            />
-            <text x={20} y={10} fontSize={9} fill="currentColor" opacity={0.7}>
+            <line stroke="var(--chart-actual)" strokeWidth={2} x1={0} x2={16} y1={6} y2={6} />
+            <text fill="currentColor" fontSize={9} opacity={0.7} x={20} y={10}>
               Completed
             </text>
           </g>
           <g transform="translate(158, 0)">
             <line
-              x1={0}
-              y1={6}
-              x2={16}
-              y2={6}
               stroke="var(--chart-grid)"
-              strokeWidth={1.5}
               strokeDasharray="5,3"
+              strokeWidth={1.5}
+              x1={0}
+              x2={16}
+              y1={6}
+              y2={6}
             />
-            <text x={20} y={10} fontSize={9} fill="currentColor" opacity={0.7}>
+            <text fill="currentColor" fontSize={9} opacity={0.7} x={20} y={10}>
               Ideal
             </text>
           </g>
@@ -279,11 +242,7 @@ function VelocityBarChart({ cycles }: VelocityBarChartProps) {
   const max = Math.max(...cycles.map(c => c.completedIssues), 1);
 
   if (cycles.length === 0) {
-    return (
-      <p className="py-4 text-center text-xs text-zinc-400">
-        No velocity data yet.
-      </p>
-    );
+    return <p className="py-4 text-center text-xs text-zinc-400">No velocity data yet.</p>;
   }
 
   return (
@@ -291,10 +250,7 @@ function VelocityBarChart({ cycles }: VelocityBarChartProps) {
       {cycles.map(c => {
         const pct = max > 0 ? (c.completedIssues / max) * 100 : 0;
         return (
-          <div
-            key={c.cycleId}
-            className="flex flex-1 flex-col items-center gap-1"
-          >
+          <div className="flex flex-1 flex-col items-center gap-1" key={c.cycleId}>
             <span className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400">
               {c.completedIssues > 0 ? c.completedIssues : ''}
             </span>
@@ -454,9 +410,7 @@ export const CycleDetailView = observer(function CycleDetailView({
   const cycleIssues = issueStore.findByCycleId(cycle.id);
   const completedIssues = cycleIssues.filter(i => i.completedAt);
   const progress =
-    cycleIssues.length > 0
-      ? Math.round((completedIssues.length / cycleIssues.length) * 100)
-      : 0;
+    cycleIssues.length > 0 ? Math.round((completedIssues.length / cycleIssues.length) * 100) : 0;
 
   const now = Date.now();
   const startsAtMs = new Date(cycle.startsAt).getTime();
@@ -468,11 +422,7 @@ export const CycleDetailView = observer(function CycleDetailView({
   // Show rollover button for active cycles or cycles whose end date has passed
   const showRollover = isActive || endsAtMs <= now;
 
-  const statusLabel = isActive
-    ? 'Active'
-    : isUpcoming
-      ? 'Upcoming'
-      : 'Completed';
+  const statusLabel = isActive ? 'Active' : isUpcoming ? 'Upcoming' : 'Completed';
   const statusColor = isActive
     ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
     : isUpcoming
@@ -507,19 +457,17 @@ export const CycleDetailView = observer(function CycleDetailView({
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex h-12 items-center gap-3 border-b border-zinc-200 px-4 dark:border-zinc-800">
         <Link
-          href={`/${workspaceKey}/team/${teamKey}/cycles`}
           className="flex h-6 w-6 items-center justify-center rounded text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          href={`/${workspaceKey}/team/${teamKey}/cycles`}
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <RefreshCw className="h-4 w-4 text-zinc-400" />
         {editingName ? (
           <input
-            ref={nameInputRef}
-            type="text"
-            value={nameValue}
-            onChange={e => setNameValue(e.target.value)}
+            className="flex-1 rounded border border-indigo-500 bg-transparent px-1 text-sm font-semibold text-zinc-900 outline-none dark:text-zinc-100"
             onBlur={handleSaveName}
+            onChange={e => setNameValue(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter') {
                 handleSaveName();
@@ -528,17 +476,19 @@ export const CycleDetailView = observer(function CycleDetailView({
                 setEditingName(false);
               }
             }}
-            className="flex-1 rounded border border-indigo-500 bg-transparent px-1 text-sm font-semibold text-zinc-900 outline-none dark:text-zinc-100"
+            ref={nameInputRef}
+            type="text"
+            value={nameValue}
           />
         ) : (
           <button
-            type="button"
+            className="text-sm font-semibold text-zinc-900 hover:text-indigo-600 dark:text-zinc-100 dark:hover:text-indigo-400"
             onClick={() => {
               setNameValue(cycle.name ?? '');
               setEditingName(true);
             }}
-            className="text-sm font-semibold text-zinc-900 hover:text-indigo-600 dark:text-zinc-100 dark:hover:text-indigo-400"
             title="Click to edit name"
+            type="button"
           >
             {displayName}
           </button>
@@ -547,10 +497,10 @@ export const CycleDetailView = observer(function CycleDetailView({
         {/* Roll over button — only for active / past cycles */}
         {showRollover && (
           <button
-            type="button"
-            onClick={handleRollover}
-            disabled={rollingOver}
             className="ml-auto flex items-center gap-1.5 rounded border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800"
+            disabled={rollingOver}
+            onClick={handleRollover}
+            type="button"
           >
             <RotateCcw className="h-3.5 w-3.5" />
             {rollingOver ? 'Rolling over…' : 'Roll over'}
@@ -562,12 +512,7 @@ export const CycleDetailView = observer(function CycleDetailView({
         <div className="mx-auto max-w-4xl px-6 py-6">
           {/* Meta info */}
           <div className="flex flex-wrap items-center gap-4 text-sm">
-            <span
-              className={cn(
-                'rounded-full px-2.5 py-0.5 text-xs font-medium',
-                statusColor,
-              )}
-            >
+            <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', statusColor)}>
               {statusLabel}
             </span>
             <div className="flex items-center gap-1.5">
@@ -579,20 +524,15 @@ export const CycleDetailView = observer(function CycleDetailView({
           </div>
 
           {cycle.description && (
-            <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
-              {cycle.description}
-            </p>
+            <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">{cycle.description}</p>
           )}
 
           {/* Progress */}
           <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                Progress
-              </span>
+              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Progress</span>
               <span className="text-xs tabular-nums text-zinc-500">
-                {completedIssues.length} / {cycleIssues.length} issues (
-                {progress}%)
+                {completedIssues.length} / {cycleIssues.length} issues ({progress}%)
               </span>
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
@@ -639,9 +579,7 @@ export const CycleDetailView = observer(function CycleDetailView({
                   </span>
                 </p>
               )}
-              {velocity.cycles.length > 0 && (
-                <VelocityBarChart cycles={velocity.cycles} />
-              )}
+              {velocity.cycles.length > 0 && <VelocityBarChart cycles={velocity.cycles} />}
             </div>
           )}
 
@@ -656,10 +594,8 @@ export const CycleDetailView = observer(function CycleDetailView({
               {cycleIssues.length === 0 ? (
                 <p className="py-8 text-center text-xs text-zinc-400">
                   No issues in this cycle yet. Use{' '}
-                  <kbd className="mx-0.5 rounded border px-1 font-mono text-[10px]">
-                    Q
-                  </kbd>{' '}
-                  on any issue to assign it to a cycle.
+                  <kbd className="mx-0.5 rounded border px-1 font-mono text-[10px]">Q</kbd> on any
+                  issue to assign it to a cycle.
                 </p>
               ) : (
                 cycleIssues.map(issue => {
@@ -667,8 +603,8 @@ export const CycleDetailView = observer(function CycleDetailView({
                   const team = teamStore.findById(issue.teamId);
                   return (
                     <div
-                      key={issue.id}
                       className="group flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                      key={issue.id}
                     >
                       {state && (
                         <span
@@ -680,16 +616,16 @@ export const CycleDetailView = observer(function CycleDetailView({
                         {issue.identifier}
                       </span>
                       <Link
-                        href={`/${workspaceKey}/team/${team?.key ?? teamKey}`}
                         className="min-w-0 flex-1 truncate text-zinc-900 hover:text-indigo-600 dark:text-zinc-100 dark:hover:text-indigo-400"
+                        href={`/${workspaceKey}/team/${team?.key ?? teamKey}`}
                       >
                         {issue.title}
                       </Link>
                       <button
-                        type="button"
-                        onClick={() => handleRemoveIssue(issue.id)}
                         className="hidden rounded px-1.5 py-0.5 text-[10px] text-zinc-400 transition-colors hover:bg-zinc-200 hover:text-zinc-600 group-hover:block dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
+                        onClick={() => handleRemoveIssue(issue.id)}
                         title="Remove from cycle"
+                        type="button"
                       >
                         Remove
                       </button>

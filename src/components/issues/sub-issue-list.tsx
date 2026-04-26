@@ -10,13 +10,7 @@ import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 // State type categories in display order
-const STATE_CATEGORY_ORDER = [
-  'started',
-  'unstarted',
-  'backlog',
-  'completed',
-  'cancelled',
-] as const;
+const STATE_CATEGORY_ORDER = ['started', 'unstarted', 'backlog', 'completed', 'cancelled'] as const;
 
 const STATE_CATEGORY_LABELS: Record<string, string> = {
   backlog: 'Backlog',
@@ -40,9 +34,7 @@ interface SubIssueListProps {
   parentIssueId: string;
 }
 
-export const SubIssueList = observer(function SubIssueList({
-  parentIssueId,
-}: SubIssueListProps) {
+export const SubIssueList = observer(function SubIssueList({ parentIssueId }: SubIssueListProps) {
   const { issueStore, workflowStateStore } = useStore();
 
   // Resolve the parent issue's teamId, projectId, and cycleId so sub-issue
@@ -85,9 +77,9 @@ export const SubIssueList = observer(function SubIssueList({
     <div className="mt-6">
       <div className="flex items-center justify-between">
         <button
-          type="button"
-          onClick={() => setCollapsed(c => !c)}
           className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+          onClick={() => setCollapsed(c => !c)}
+          type="button"
         >
           {collapsed ? (
             <ChevronRight className="h-3.5 w-3.5" />
@@ -98,9 +90,9 @@ export const SubIssueList = observer(function SubIssueList({
         </button>
         {!showCreateForm && (
           <button
-            type="button"
-            onClick={() => setShowCreateForm(true)}
             className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            onClick={() => setShowCreateForm(true)}
+            type="button"
           >
             <Plus className="h-3.5 w-3.5" />
             Add sub-issue
@@ -110,12 +102,12 @@ export const SubIssueList = observer(function SubIssueList({
 
       {showCreateForm && (
         <CreateSubIssueForm
+          onClose={() => setShowCreateForm(false)}
+          parentCycleId={parentCycleId}
           parentIssueId={parentIssueId}
+          parentProjectId={parentProjectId}
           teamId={teamId}
           tq={tq}
-          onClose={() => setShowCreateForm(false)}
-          parentProjectId={parentProjectId}
-          parentCycleId={parentCycleId}
         />
       )}
 
@@ -137,8 +129,8 @@ export const SubIssueList = observer(function SubIssueList({
                     const state = workflowStateStore.findById(issue.stateId);
                     return (
                       <li
-                        key={issue.id}
                         className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                        key={issue.id}
                       >
                         {/* Priority dot */}
                         <span
@@ -151,8 +143,7 @@ export const SubIssueList = observer(function SubIssueList({
                           className="h-3 w-3 shrink-0 rounded-sm border"
                           style={{
                             backgroundColor:
-                              state?.type === 'completed' ||
-                              state?.type === 'cancelled'
+                              state?.type === 'completed' || state?.type === 'cancelled'
                                 ? (state.color ?? 'var(--state-default)')
                                 : 'transparent',
                             borderColor: state?.color ?? 'var(--state-default)',
@@ -167,8 +158,7 @@ export const SubIssueList = observer(function SubIssueList({
                         <span
                           className={cn(
                             'flex-1 truncate text-zinc-700 dark:text-zinc-300',
-                            (state?.type === 'completed' ||
-                              state?.type === 'cancelled') &&
+                            (state?.type === 'completed' || state?.type === 'cancelled') &&
                               'line-through text-zinc-400',
                           )}
                         >
@@ -183,9 +173,7 @@ export const SubIssueList = observer(function SubIssueList({
           })}
 
           {subIssues.length === 0 && !showCreateForm && (
-            <p className="py-2 text-center text-xs text-zinc-400 italic">
-              No sub-issues yet.
-            </p>
+            <p className="py-2 text-center text-xs text-zinc-400 italic">No sub-issues yet.</p>
           )}
         </div>
       )}
@@ -196,12 +184,12 @@ export const SubIssueList = observer(function SubIssueList({
 // ─── Create sub-issue form ────────────────────────────────────────────────────
 
 interface CreateSubIssueFormProps {
+  onClose: () => void;
+  parentCycleId: string | null;
   parentIssueId: string;
+  parentProjectId: string | null;
   teamId: string;
   tq: TransactionQueue;
-  onClose: () => void;
-  parentProjectId: string | null;
-  parentCycleId: string | null;
 }
 
 function CreateSubIssueForm({
@@ -251,33 +239,33 @@ function CreateSubIssueForm({
 
   return (
     <form
-      onSubmit={handleSubmit}
       className="mt-2 flex items-center gap-2 rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-700"
+      onSubmit={handleSubmit}
     >
       <input
-        ref={inputRef}
-        type="text"
-        placeholder="Sub-issue title…"
-        value={title}
+        className="flex-1 bg-transparent text-sm text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
         onChange={e => setTitle(e.target.value)}
         onKeyDown={e => {
           if (e.key === 'Escape') {
             onClose();
           }
         }}
-        className="flex-1 bg-transparent text-sm text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
+        placeholder="Sub-issue title…"
+        ref={inputRef}
+        type="text"
+        value={title}
       />
       <button
-        type="button"
-        onClick={onClose}
         className="rounded px-2 py-1 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+        onClick={onClose}
+        type="button"
       >
         Cancel
       </button>
       <button
-        type="submit"
-        disabled={!title.trim() || submitting}
         className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+        disabled={!title.trim() || submitting}
+        type="submit"
       >
         {submitting ? 'Adding…' : 'Add'}
       </button>

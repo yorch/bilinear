@@ -7,10 +7,10 @@ import { formatFileSize } from '@/lib/utils';
 
 interface Attachment {
   id: string;
+  mimeType: string;
   name: string;
   size: number;
   url: string;
-  mimeType: string;
 }
 
 interface FileAttachmentsProps {
@@ -79,9 +79,7 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
 
         const res = await fetch('/api/upload', { body: form, method: 'POST' });
         if (!res.ok) {
-          const err = await res
-            .json()
-            .catch(() => ({ error: 'Upload failed' }));
+          const err = await res.json().catch(() => ({ error: 'Upload failed' }));
           toast.error(err.error ?? 'Upload failed');
           continue;
         }
@@ -108,10 +106,10 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
       <div className="mb-2 flex items-center justify-between">
         <p className="text-xs font-medium text-zinc-500">Attachments</p>
         <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={uploading}
           className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700 disabled:opacity-50 dark:hover:text-zinc-300"
+          disabled={uploading}
+          onClick={() => inputRef.current?.click()}
+          type="button"
         >
           {uploading ? (
             <Loader2 className="h-3 w-3 animate-spin" />
@@ -122,37 +120,35 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
         </button>
       </div>
       <input
+        aria-label="Attach file"
+        className="hidden"
+        multiple
+        onChange={handleFileSelect}
         ref={inputRef}
         type="file"
-        multiple
-        className="hidden"
-        onChange={handleFileSelect}
-        aria-label="Attach file"
       />
       {attachments.length > 0 ? (
         <ul className="space-y-1">
           {attachments.map(att => (
             <li
-              key={att.id}
               className="flex items-center gap-2 rounded-md border border-zinc-200 p-2 text-xs dark:border-zinc-700"
+              key={att.id}
             >
               <FileText className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
               <a
-                href={att.url}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="flex-1 truncate text-zinc-700 hover:text-indigo-600 dark:text-zinc-300"
+                href={att.url}
+                rel="noopener noreferrer"
+                target="_blank"
               >
                 {att.name}
               </a>
-              <span className="shrink-0 text-zinc-400">
-                {formatFileSize(att.size)}
-              </span>
+              <span className="shrink-0 text-zinc-400">{formatFileSize(att.size)}</span>
               <button
-                type="button"
-                onClick={() => handleDelete(att)}
-                className="text-zinc-400 hover:text-red-500"
                 aria-label="Remove attachment"
+                className="text-zinc-400 hover:text-red-500"
+                onClick={() => handleDelete(att)}
+                type="button"
               >
                 <Trash2 className="h-3 w-3" />
               </button>

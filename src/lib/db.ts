@@ -4,296 +4,289 @@ import Dexie, { type Table } from 'dexie';
 // These are plain objects (no Prisma relations — just scalar fields + FKs).
 
 export interface DBOrganization {
-  id: string;
-  name: string;
-  urlKey: string;
-  logoUrl?: string | null;
-  dataRegion: string;
-  roadmapEnabled: boolean;
-  createdAt: string;
-  updatedAt: string;
   archivedAt?: string | null;
+  createdAt: string;
+  dataRegion: string;
+  id: string;
+  logoUrl?: string | null;
+  name: string;
+  roadmapEnabled: boolean;
+  updatedAt: string;
+  urlKey: string;
 }
 
 export interface DBUser {
-  id: string;
-  name: string;
+  active: boolean;
+  avatarBgColor: string;
+  avatarUrl?: string | null;
+  createdAt: string;
   displayName: string;
   email: string;
+  id: string;
   initials: string;
-  avatarUrl?: string | null;
-  avatarBgColor: string;
-  active: boolean;
   lastSeen?: string | null;
-  timezone?: string | null;
+  name: string;
   statusEmoji?: string | null;
   statusLabel?: string | null;
-  createdAt: string;
+  timezone?: string | null;
   updatedAt: string;
 }
 
 export interface DBTeam {
-  id: string;
-  organizationId: string;
-  name: string;
-  key: string;
-  displayName: string;
-  description?: string | null;
-  icon?: string | null;
+  archivedAt?: string | null;
   color?: string | null;
+  createdAt: string;
+  cyclesEnabled: boolean;
+  description?: string | null;
+  displayName: string;
+  icon?: string | null;
+  id: string;
+  issueCount: number;
+  issueEstimationType: string;
+  key: string;
+  name: string;
+  organizationId: string;
+  parentId?: string | null;
   private: boolean;
   timezone: string;
-  cyclesEnabled: boolean;
-  issueEstimationType: string;
   triageEnabled: boolean;
-  issueCount: number;
-  parentId?: string | null;
-  createdAt: string;
   updatedAt: string;
-  archivedAt?: string | null;
 }
 
 export interface DBWorkflowState {
-  id: string;
-  teamId: string;
-  name: string;
-  color: string;
-  description?: string | null;
-  type: string;
-  position: number;
-  createdAt: string;
-  updatedAt: string;
   archivedAt?: string | null;
+  color: string;
+  createdAt: string;
+  description?: string | null;
+  id: string;
+  name: string;
+  position: number;
+  teamId: string;
+  type: string;
+  updatedAt: string;
 }
 
 export interface DBIssue {
-  id: string;
-  organizationId: string;
-  teamId: string;
-  number: number;
-  identifier: string;
-  title: string;
-  description?: string | null;
-  priority: number;
-  estimate?: number | null;
-  dueDate?: string | null;
-  sortOrder: number;
-  prioritySortOrder: number;
-  stateId: string;
-  assigneeId?: string | null;
-  creatorId?: string | null;
-  parentId?: string | null;
-  projectId?: string | null;
-  cycleId?: string | null;
-  branchName?: string | null;
-  trashed: boolean;
-  labelIds: string[];
-  startedAt?: string | null;
-  completedAt?: string | null;
-  canceledAt?: string | null;
   archivedAt?: string | null;
+  assigneeId?: string | null;
+  branchName?: string | null;
+  canceledAt?: string | null;
+  completedAt?: string | null;
   createdAt: string;
+  creatorId?: string | null;
+  cycleId?: string | null;
+  description?: string | null;
+  dueDate?: string | null;
+  estimate?: number | null;
+  id: string;
+  identifier: string;
+  labelIds: string[];
+  number: number;
+  organizationId: string;
+  parentId?: string | null;
+  priority: number;
+  prioritySortOrder: number;
+  projectId?: string | null;
+  sortOrder: number;
+  startedAt?: string | null;
+  stateId: string;
+  teamId: string;
+  title: string;
+  trashed: boolean;
   updatedAt: string;
 }
 
 export interface DBIssueLabel {
-  id: string;
-  organizationId: string;
-  teamId?: string | null;
-  name: string;
-  color: string;
-  description?: string | null;
-  isGroup: boolean;
-  parentId?: string | null;
-  creatorId?: string | null;
-  createdAt: string;
-  updatedAt: string;
   archivedAt?: string | null;
+  color: string;
+  createdAt: string;
+  creatorId?: string | null;
+  description?: string | null;
+  id: string;
+  isGroup: boolean;
+  name: string;
+  organizationId: string;
+  parentId?: string | null;
+  teamId?: string | null;
+  updatedAt: string;
 }
 
 export interface DBProject {
-  id: string;
-  organizationId: string;
-  name: string;
-  slugId: string;
-  description: string;
-  content?: string | null;
-  icon?: string | null;
+  archivedAt?: string | null;
+  canceledAt?: string | null;
   color: string;
-  statusType: string;
-  statusName?: string | null;
+  completedAt?: string | null;
+  content?: string | null;
+  createdAt: string;
+  creatorId?: string | null;
+  description: string;
   health?: string | null;
   healthUpdatedAt?: string | null;
+  icon?: string | null;
+  id: string;
+  leadId?: string | null;
+  name: string;
+  organizationId: string;
   priority: number;
   prioritySortOrder: number;
   progress: number;
-  scope: number;
-  startDate?: string | null;
-  targetDate?: string | null;
-  startDateResolution?: string | null;
-  targetDateResolution?: string | null;
-  leadId?: string | null;
-  creatorId?: string | null;
-  startedAt?: string | null;
-  completedAt?: string | null;
-  canceledAt?: string | null;
   roadmapVisible: boolean;
+  scope: number;
+  slugId: string;
+  startDate?: string | null;
+  startDateResolution?: string | null;
+  startedAt?: string | null;
+  statusName?: string | null;
+  statusType: string;
+  targetDate?: string | null;
+  targetDateResolution?: string | null;
   trashed: boolean;
-  createdAt: string;
   updatedAt: string;
-  archivedAt?: string | null;
 }
 
 export interface DBProjectMilestone {
-  id: string;
-  projectId: string;
-  name: string;
-  description?: string | null;
-  targetDate?: string | null;
-  sortOrder: number;
-  createdAt: string;
-  updatedAt: string;
   archivedAt?: string | null;
+  createdAt: string;
+  description?: string | null;
+  id: string;
+  name: string;
+  projectId: string;
+  sortOrder: number;
+  targetDate?: string | null;
+  updatedAt: string;
 }
 
 export interface DBProjectUpdate {
+  body: string;
+  createdAt: string;
+  editedAt?: string | null;
+  health?: string | null;
   id: string;
   projectId: string;
-  userId: string;
-  body: string;
-  health?: string | null;
-  editedAt?: string | null;
-  createdAt: string;
   updatedAt: string;
+  userId: string;
 }
 
 export interface DBCycle {
-  id: string;
-  organizationId: string;
-  teamId: string;
-  number: number;
-  name?: string | null;
-  description?: string | null;
-  startsAt: string;
-  endsAt: string;
+  archivedAt?: string | null;
   completedAt?: string | null;
+  createdAt: string;
+  description?: string | null;
+  endsAt: string;
+  id: string;
+  name?: string | null;
+  number: number;
+  organizationId: string;
   progress: number;
   scope: number;
-  createdAt: string;
+  startsAt: string;
+  teamId: string;
   updatedAt: string;
-  archivedAt?: string | null;
 }
 
 export interface DBCustomView {
-  id: string;
-  organizationId: string;
-  teamId?: string | null;
-  creatorId: string;
-  name: string;
-  description?: string | null;
-  icon?: string | null;
-  color?: string | null;
-  filters: object;
-  sort: object;
-  groupBy?: string | null;
-  layout: string;
-  shared: boolean;
-  sortOrder: number;
-  createdAt: string;
-  updatedAt: string;
   archivedAt?: string | null;
+  color?: string | null;
+  createdAt: string;
+  creatorId: string;
+  description?: string | null;
+  filters: object;
+  groupBy?: string | null;
+  icon?: string | null;
+  id: string;
+  layout: string;
+  name: string;
+  organizationId: string;
+  shared: boolean;
+  sort: object;
+  sortOrder: number;
+  teamId?: string | null;
+  updatedAt: string;
 }
 
 export interface DBNotification {
-  id: string;
-  organizationId: string;
-  userId: string;
-  issueId?: string | null;
   actorId?: string | null;
-  type: string;
+  createdAt: string;
   data: object;
+  id: string;
+  issueId?: string | null;
+  organizationId: string;
   read: boolean;
   readAt?: string | null;
   snoozedUntilAt?: string | null;
-  createdAt: string;
+  type: string;
   updatedAt: string;
+  userId: string;
 }
 
 export interface DBIssueActivity {
+  actorId?: string | null;
+  createdAt: string;
+  field: string;
   id: string;
   issueId: string;
-  actorId?: string | null;
-  field: string;
-  oldValue?: string | null;
   newValue?: string | null;
-  createdAt: string;
+  oldValue?: string | null;
 }
 
 export interface DBIssueRelation {
+  createdAt: string;
   id: string;
   issueId: string;
   relatedIssueId: string;
   type: string;
-  createdAt: string;
 }
 
 export interface DBIssueTemplate {
-  id: string;
-  teamId: string;
-  creatorId?: string | null;
-  name: string;
-  description?: string | null;
-  templateData: object;
-  isDefault: boolean;
-  createdAt: string;
-  updatedAt: string;
   archivedAt?: string | null;
+  createdAt: string;
+  creatorId?: string | null;
+  description?: string | null;
+  id: string;
+  isDefault: boolean;
+  name: string;
+  teamId: string;
+  templateData: object;
+  updatedAt: string;
 }
 
 export interface DBCustomFieldDefinition {
-  id: string;
-  teamId: string;
-  name: string;
-  type:
-    | 'text'
-    | 'number'
-    | 'date'
-    | 'select'
-    | 'multi_select'
-    | 'url'
-    | 'checkbox';
-  description?: string | null;
-  required: boolean;
-  options?: Array<{ value: string; label: string; color?: string }> | null;
-  sortOrder: number;
-  createdAt: string;
-  updatedAt: string;
   archivedAt?: string | null;
+  createdAt: string;
+  description?: string | null;
+  id: string;
+  name: string;
+  options?: Array<{ value: string; label: string; color?: string }> | null;
+  required: boolean;
+  sortOrder: number;
+  teamId: string;
+  type: 'text' | 'number' | 'date' | 'select' | 'multi_select' | 'url' | 'checkbox';
+  updatedAt: string;
 }
 
 export interface DBCustomFieldValue {
+  createdAt: string;
+  definitionId: string;
   id: string;
   issueId: string;
-  definitionId: string;
-  value: unknown;
-  createdAt: string;
   updatedAt: string;
+  value: unknown;
 }
 
 export interface DBDocument {
+  archivedAt?: string | null;
+  content?: string | null;
+  createdAt: string;
+  creatorId?: string | null;
+  icon?: string | null;
   id: string;
   organizationId: string;
-  teamId?: string | null;
-  projectId?: string | null;
-  creatorId?: string | null;
   parentId?: string | null;
-  title: string;
-  content?: string | null;
-  icon?: string | null;
+  projectId?: string | null;
   sortOrder: number;
-  createdAt: string;
+  teamId?: string | null;
+  title: string;
   updatedAt: string;
-  archivedAt?: string | null;
 }
 
 export interface DBSyncMetadata {
@@ -337,8 +330,7 @@ export class AppDatabase extends Dexie {
     });
     this.version(2).stores({
       issueLabels: 'id, organizationId, teamId, parentId',
-      issues:
-        'id, teamId, stateId, assigneeId, organizationId, identifier, projectId',
+      issues: 'id, teamId, stateId, assigneeId, organizationId, identifier, projectId',
       organizations: 'id',
       projectMilestones: 'id, projectId',
       projects: 'id, organizationId, statusType, leadId',
@@ -349,8 +341,7 @@ export class AppDatabase extends Dexie {
     });
     this.version(3).stores({
       issueLabels: 'id, organizationId, teamId, parentId',
-      issues:
-        'id, teamId, stateId, assigneeId, organizationId, identifier, projectId',
+      issues: 'id, teamId, stateId, assigneeId, organizationId, identifier, projectId',
       organizations: 'id',
       projectMilestones: 'id, projectId',
       projects: 'id, organizationId, statusType, leadId',
@@ -363,8 +354,7 @@ export class AppDatabase extends Dexie {
     this.version(4).stores({
       cycles: 'id, teamId, organizationId',
       issueLabels: 'id, organizationId, teamId, parentId',
-      issues:
-        'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
+      issues: 'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
       organizations: 'id',
       projectMilestones: 'id, projectId',
       projects: 'id, organizationId, statusType, leadId',
@@ -378,8 +368,7 @@ export class AppDatabase extends Dexie {
       customViews: 'id, organizationId, teamId, creatorId',
       cycles: 'id, teamId, organizationId',
       issueLabels: 'id, organizationId, teamId, parentId',
-      issues:
-        'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
+      issues: 'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
       organizations: 'id',
       projectMilestones: 'id, projectId',
       projects: 'id, organizationId, statusType, leadId',
@@ -395,8 +384,7 @@ export class AppDatabase extends Dexie {
       issueActivities: 'id, issueId',
       issueLabels: 'id, organizationId, teamId, parentId',
       issueRelations: 'id, issueId, relatedIssueId',
-      issues:
-        'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
+      issues: 'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
       issueTemplates: 'id, teamId, creatorId',
       notifications: 'id, userId, organizationId, issueId, read',
       organizations: 'id',
@@ -416,8 +404,7 @@ export class AppDatabase extends Dexie {
       issueActivities: 'id, issueId',
       issueLabels: 'id, organizationId, teamId, parentId',
       issueRelations: 'id, issueId, relatedIssueId',
-      issues:
-        'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
+      issues: 'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
       issueTemplates: 'id, teamId, creatorId',
       notifications: 'id, userId, organizationId, issueId, read',
       organizations: 'id',
@@ -439,8 +426,7 @@ export class AppDatabase extends Dexie {
         issueActivities: 'id, issueId',
         issueLabels: 'id, organizationId, teamId, parentId',
         issueRelations: 'id, issueId, relatedIssueId',
-        issues:
-          'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
+        issues: 'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
         issueTemplates: 'id, teamId, creatorId',
         notifications: 'id, userId, organizationId, issueId, read',
         organizations: 'id',

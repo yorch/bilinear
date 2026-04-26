@@ -23,28 +23,23 @@ const GET_ISSUE_TEMPLATES = `
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface IssueTemplate {
-  id: string;
-  name: string;
   description?: string | null;
-  templateData: object;
+  id: string;
   isDefault: boolean;
+  name: string;
+  templateData: object;
 }
 
 interface TemplateSelectorProps {
-  teamId: string;
-  onSelect: (templateData: object) => void;
   forceOpen?: boolean;
   onClose?: () => void;
+  onSelect: (templateData: object) => void;
+  teamId: string;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function TemplateSelector({
-  teamId,
-  onSelect,
-  forceOpen,
-  onClose,
-}: TemplateSelectorProps) {
+export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: TemplateSelectorProps) {
   const [templates, setTemplates] = useState<IssueTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -84,10 +79,7 @@ export function TemplateSelector({
       return;
     }
     const handleClickOutside = (e: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
-      ) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setOpen(false);
         onClose?.();
       }
@@ -138,31 +130,29 @@ export function TemplateSelector({
   }
 
   return (
-    <div ref={dropdownRef} className="relative">
+    <div className="relative" ref={dropdownRef}>
       <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
         className={cn(
           'flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors',
           open
             ? 'border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-600 dark:bg-indigo-950 dark:text-indigo-300'
             : 'border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700',
         )}
-        aria-expanded={open}
-        aria-haspopup="listbox"
+        onClick={() => setOpen(o => !o)}
+        type="button"
       >
         <FileText className="h-3.5 w-3.5" />
         Apply template
-        <ChevronDown
-          className={cn('h-3 w-3 transition-transform', open && 'rotate-180')}
-        />
+        <ChevronDown className={cn('h-3 w-3 transition-transform', open && 'rotate-180')} />
       </button>
 
       {open && (
         <div
-          role="listbox"
           aria-label="Issue templates"
           className="absolute left-0 top-full z-20 mt-1 w-72 rounded-lg border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+          role="listbox"
         >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-zinc-100 px-3 py-2 dark:border-zinc-800">
@@ -170,19 +160,17 @@ export function TemplateSelector({
               Templates
             </span>
             <button
-              type="button"
-              onClick={closeDropdown}
-              className="rounded p-0.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
               aria-label="Close"
+              className="rounded p-0.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+              onClick={closeDropdown}
+              type="button"
             >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
 
           {loading ? (
-            <p className="px-3 py-4 text-center text-xs text-zinc-400">
-              Loading templates…
-            </p>
+            <p className="px-3 py-4 text-center text-xs text-zinc-400">Loading templates…</p>
           ) : sorted.length === 0 ? (
             <p className="px-3 py-4 text-center text-xs text-zinc-400 italic">
               No templates for this team.
@@ -192,11 +180,11 @@ export function TemplateSelector({
               {sorted.map(template => (
                 <li key={template.id}>
                   <button
-                    type="button"
-                    role="option"
                     aria-selected={false}
-                    onClick={() => handleSelect(template)}
                     className="w-full px-3 py-2 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                    onClick={() => handleSelect(template)}
+                    role="option"
+                    type="button"
                   >
                     <div className="flex items-center gap-2">
                       <span className="flex-1 truncate text-sm font-medium text-zinc-800 dark:text-zinc-200">

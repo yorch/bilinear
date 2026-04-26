@@ -1,21 +1,21 @@
 import type { Document, PrismaClient } from '../../generated/prisma';
 
 export interface DocumentCreateInput {
-  id?: string;
-  teamId?: string;
-  projectId?: string;
-  parentId?: string;
-  title: string;
   content?: string;
   icon?: string;
+  id?: string;
+  parentId?: string;
+  projectId?: string;
+  teamId?: string;
+  title: string;
 }
 
 export interface DocumentUpdateInput {
-  title?: string;
   content?: string;
   icon?: string;
-  sortOrder?: number;
   parentId?: string | null;
+  sortOrder?: number;
+  title?: string;
 }
 
 export class DocumentNotFoundError extends Error {
@@ -54,11 +54,7 @@ export class DocumentService {
     });
   }
 
-  async create(
-    orgId: string,
-    creatorId: string,
-    input: DocumentCreateInput,
-  ): Promise<Document> {
+  async create(orgId: string, creatorId: string, input: DocumentCreateInput): Promise<Document> {
     return this.prisma.document.create({
       data: {
         content: input.content,

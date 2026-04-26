@@ -1,9 +1,6 @@
 import { GraphQLError } from 'graphql';
 import { beforeEach, describe, expect, it } from 'vitest';
-import {
-  createMockContext,
-  type MockGraphQLContext,
-} from '../../../test/context-mock';
+import { createMockContext, type MockGraphQLContext } from '../../../test/context-mock';
 import { TEST_USER } from '../../../test/fixtures';
 import { authResolvers } from './auth';
 
@@ -120,11 +117,7 @@ describe('authResolvers', () => {
     it('revokes tokens and returns success when authenticated', async () => {
       ctx.prisma.authToken.updateMany.mockResolvedValue({ count: 1 });
 
-      const result = await authResolvers.Mutation.logout(
-        null,
-        {},
-        ctx as never,
-      );
+      const result = await authResolvers.Mutation.logout(null, {}, ctx as never);
 
       expect(result.success).toBe(true);
       expect(ctx.prisma.authToken.updateMany).toHaveBeenCalled();
@@ -133,11 +126,7 @@ describe('authResolvers', () => {
     it('returns success without DB call when not authenticated', async () => {
       ctx = createMockContext({ userId: null });
 
-      const result = await authResolvers.Mutation.logout(
-        null,
-        {},
-        ctx as never,
-      );
+      const result = await authResolvers.Mutation.logout(null, {}, ctx as never);
 
       expect(result.success).toBe(true);
       expect(ctx.prisma.authToken.updateMany).not.toHaveBeenCalled();
@@ -161,11 +150,7 @@ describe('authResolvers', () => {
       ctx.prisma.user.findUnique.mockResolvedValue(null);
 
       try {
-        await authResolvers.AuthPayload.user(
-          { userId: 'nonexistent-id' },
-          {},
-          ctx as never,
-        );
+        await authResolvers.AuthPayload.user({ userId: 'nonexistent-id' }, {}, ctx as never);
         expect.unreachable('Should have thrown');
       } catch (e) {
         expect(e).toBeInstanceOf(GraphQLError);

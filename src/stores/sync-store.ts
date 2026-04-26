@@ -1,12 +1,6 @@
 import { action, makeObservable, observable } from 'mobx';
 
-export type SyncStatus =
-  | 'idle'
-  | 'bootstrapping'
-  | 'syncing'
-  | 'connected'
-  | 'offline'
-  | 'error';
+export type SyncStatus = 'idle' | 'bootstrapping' | 'syncing' | 'connected' | 'offline' | 'error';
 
 export class SyncStore {
   lastSyncId = '0';

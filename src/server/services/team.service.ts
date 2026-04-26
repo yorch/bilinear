@@ -8,10 +8,7 @@ import type {
 
 // Prisma's $transaction callback receives a lighter client (without $connect, etc.)
 // This type alias works with both PrismaClient and the transaction client.
-type PrismaLike = Pick<
-  PrismaClient,
-  'issue' | 'team' | 'teamMembership' | 'workflowState'
->;
+type PrismaLike = Pick<PrismaClient, 'issue' | 'team' | 'teamMembership' | 'workflowState'>;
 
 const TEAM_KEY_PATTERN = /^[A-Z]{1,10}$/;
 
@@ -92,11 +89,7 @@ export class TeamService {
         },
       });
 
-      const states = await this.seedDefaultStates(
-        tx,
-        team.id,
-        input.triageEnabled ?? false,
-      );
+      const states = await this.seedDefaultStates(tx, team.id, input.triageEnabled ?? false);
 
       // Add creator as team owner
       await tx.teamMembership.create({
@@ -147,10 +140,7 @@ export class TeamService {
     });
   }
 
-  async delete(
-    id: string,
-    input: TeamDeleteInput,
-  ): Promise<{ movedIssues: Issue[]; team: Team }> {
+  async delete(id: string, input: TeamDeleteInput): Promise<{ movedIssues: Issue[]; team: Team }> {
     if (input.issueAction === 'MOVE' && !input.moveToTeamId) {
       throw new TeamDeleteMoveTargetRequiredError();
     }
@@ -318,9 +308,7 @@ export class TeamService {
     });
   }
 
-  async findMembershipWithTeam(
-    id: string,
-  ): Promise<(TeamMembership & { team: Team }) | null> {
+  async findMembershipWithTeam(id: string): Promise<(TeamMembership & { team: Team }) | null> {
     return this.prisma.teamMembership.findUnique({
       include: { team: true },
       where: { id },
@@ -366,10 +354,7 @@ export class TeamService {
   /** For each id in `teamIds` that `userId` is a member of, returns the id.
    *  Lets the caller filter a set of teams down to the ones the user can
    *  actually see, in a single round-trip. */
-  async findMemberTeamIds(
-    teamIds: string[],
-    userId: string,
-  ): Promise<Set<string>> {
+  async findMemberTeamIds(teamIds: string[], userId: string): Promise<Set<string>> {
     if (teamIds.length === 0) {
       return new Set();
     }

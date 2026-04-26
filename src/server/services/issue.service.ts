@@ -3,48 +3,48 @@ import type { Issue, IssueLabel, PrismaClient } from '../../generated/prisma';
 type PrismaLike = Pick<PrismaClient, 'issue' | 'issueLabelAssignment' | 'team'>;
 
 export interface IssueCreateInput {
-  id?: string;
-  title: string;
-  description?: string;
-  teamId: string;
-  stateId?: string;
   assigneeId?: string;
-  priority?: number;
-  estimate?: number;
+  cycleId?: string;
+  description?: string;
   dueDate?: string; // ISO date string YYYY-MM-DD
+  estimate?: number;
+  id?: string;
   labelIds?: string[];
   parentId?: string;
-  sortOrder?: number;
+  priority?: number;
   projectId?: string;
   projectMilestoneId?: string;
-  cycleId?: string;
+  sortOrder?: number;
+  stateId?: string;
+  teamId: string;
+  title: string;
 }
 
 export interface IssueUpdateInput {
-  title?: string;
-  description?: string;
-  stateId?: string;
   assigneeId?: string | null;
-  priority?: number;
-  estimate?: number | null;
+  cycleId?: string | null;
+  description?: string;
   dueDate?: string | null;
+  estimate?: number | null;
   labelIds?: string[];
   parentId?: string | null;
-  sortOrder?: number;
+  priority?: number;
   prioritySortOrder?: number;
-  trashed?: boolean;
   projectId?: string | null;
   projectMilestoneId?: string | null;
-  cycleId?: string | null;
+  sortOrder?: number;
+  stateId?: string;
+  title?: string;
+  trashed?: boolean;
 }
 
 export interface IssueFilter {
-  teamId?: string;
-  stateId?: string;
   assigneeId?: string | null;
-  priority?: number;
-  trashed?: boolean;
   includeArchived?: boolean;
+  priority?: number;
+  stateId?: string;
+  teamId?: string;
+  trashed?: boolean;
 }
 
 // List-view queries omit the descriptionState YJS blob (see findMany/
@@ -66,11 +66,7 @@ export interface IssuePage {
 export class IssueService {
   constructor(private prisma: PrismaClient) {}
 
-  async create(
-    orgId: string,
-    creatorId: string,
-    input: IssueCreateInput,
-  ): Promise<Issue> {
+  async create(orgId: string, creatorId: string, input: IssueCreateInput): Promise<Issue> {
     return this.prisma.$transaction(async tx => {
       // Atomically increment issueCount and use it as the issue number
       const team = await tx.team.update({
@@ -111,8 +107,7 @@ export class IssueService {
             // Only inherit the milestone if we're also on the parent's project
             inheritedProjectId === parent.projectId
           ) {
-            inheritedProjectMilestoneId =
-              parent.projectMilestoneId ?? undefined;
+            inheritedProjectMilestoneId = parent.projectMilestoneId ?? undefined;
           }
           if (inheritedCycleId === undefined) {
             inheritedCycleId = parent.cycleId ?? undefined;
@@ -214,10 +209,7 @@ export class IssueService {
     };
   }
 
-  async findByTeamId(
-    teamId: string,
-    includeArchived = false,
-  ): Promise<IssueListRow[]> {
+  async findByTeamId(teamId: string, includeArchived = false): Promise<IssueListRow[]> {
     return this.prisma.issue.findMany({
       include: { labelAssignments: { include: { label: true } } },
       // See findMany: descriptionState is never rendered in lists.
@@ -364,10 +356,7 @@ export class IssueService {
     return assignments.map(a => a.label);
   }
 
-  private async maybeCloseParent(
-    parentId: string,
-    teamId: string,
-  ): Promise<void> {
+  private async maybeCloseParent(parentId: string, teamId: string): Promise<void> {
     // Get all non-archived children of this parent
     const siblings = await this.prisma.issue.findMany({
       include: { state: { select: { type: true } } },
@@ -390,11 +379,7 @@ export class IssueService {
       include: { state: { select: { type: true } } },
       where: { id: parentId },
     });
-    if (
-      !parent ||
-      parent.state.type === 'completed' ||
-      parent.state.type === 'canceled'
-    ) {
+    if (!parent || parent.state.type === 'completed' || parent.state.type === 'canceled') {
       return;
     }
 
@@ -427,10 +412,7 @@ export class IssueService {
       select: { type: true },
       where: { id: parentStateId },
     });
-    if (
-      !parentState ||
-      (parentState.type !== 'completed' && parentState.type !== 'canceled')
-    ) {
+    if (!parentState || (parentState.type !== 'completed' && parentState.type !== 'canceled')) {
       return;
     }
 
@@ -470,11 +452,7 @@ export class IssueService {
     });
   }
 
-  private async syncLabels(
-    tx: PrismaLike,
-    issueId: string,
-    labelIds: string[],
-  ): Promise<void> {
+  private async syncLabels(tx: PrismaLike, issueId: string, labelIds: string[]): Promise<void> {
     // Remove all existing label assignments
     await tx.issueLabelAssignment.deleteMany({ where: { issueId } });
 
@@ -486,11 +464,7 @@ export class IssueService {
     }
   }
 
-  private buildWhere(
-    orgId: string,
-    filter: IssueFilter,
-    includeArchived: boolean,
-  ) {
+  private buildWhere(orgId: string, filter: IssueFilter, includeArchived: boolean) {
     const where: Record<string, unknown> = {
       organizationId: orgId,
       trashed: filter.trashed ?? false,

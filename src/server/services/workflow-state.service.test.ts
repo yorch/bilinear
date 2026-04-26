@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_WORKFLOW_STATES, TEST_TEAM } from '../../test/fixtures';
-import {
-  createMockPrisma,
-  type MockPrismaClient,
-} from '../../test/prisma-mock';
+import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
   InvalidStateTypeError,
   LastRequiredStateError,
@@ -57,14 +54,7 @@ describe('WorkflowStateService', () => {
     });
 
     it('accepts all valid state types', async () => {
-      const validTypes = [
-        'triage',
-        'backlog',
-        'unstarted',
-        'started',
-        'completed',
-        'canceled',
-      ];
+      const validTypes = ['triage', 'backlog', 'unstarted', 'started', 'completed', 'canceled'];
 
       for (const type of validTypes) {
         prisma.workflowState.create.mockResolvedValue({
@@ -143,18 +133,14 @@ describe('WorkflowStateService', () => {
       const completedState = DEFAULT_WORKFLOW_STATES[3];
       prisma.workflowState.count.mockResolvedValue(0); // no other completed states
 
-      await expect(service.archive(completedState)).rejects.toThrow(
-        LastRequiredStateError,
-      );
+      await expect(service.archive(completedState)).rejects.toThrow(LastRequiredStateError);
     });
 
     it('throws LastRequiredStateError when archiving the only canceled state', async () => {
       const canceledState = DEFAULT_WORKFLOW_STATES[4];
       prisma.workflowState.count.mockResolvedValue(0);
 
-      await expect(service.archive(canceledState)).rejects.toThrow(
-        LastRequiredStateError,
-      );
+      await expect(service.archive(canceledState)).rejects.toThrow(LastRequiredStateError);
     });
   });
 });

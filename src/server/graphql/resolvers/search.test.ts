@@ -9,11 +9,7 @@ describe('searchResolvers', () => {
       const ctx = createMockContext({ orgId: null, userId: null });
 
       await expect(
-        searchResolvers.Query.searchIssues(
-          null,
-          { query: 'bug' },
-          ctx as never,
-        ),
+        searchResolvers.Query.searchIssues(null, { query: 'bug' }, ctx as never),
       ).rejects.toMatchObject({ extensions: { code: 'UNAUTHENTICATED' } });
     });
 

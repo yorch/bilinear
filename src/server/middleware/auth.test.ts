@@ -1,12 +1,7 @@
 import { GraphQLError } from 'graphql';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createMockPrisma } from '../../test/prisma-mock';
-import {
-  requireAuth,
-  requireOrgRole,
-  requireTeamMember,
-  requireTeamOwner,
-} from './auth';
+import { requireAuth, requireOrgRole, requireTeamMember, requireTeamOwner } from './auth';
 
 describe('requireAuth', () => {
   it('throws UNAUTHENTICATED when both userId and orgId are null', () => {
@@ -76,10 +71,7 @@ describe('requireOrgRole', () => {
     });
 
     try {
-      await requireOrgRole(prisma as never, 'org-1', 'user-1', [
-        'owner',
-        'admin',
-      ]);
+      await requireOrgRole(prisma as never, 'org-1', 'user-1', ['owner', 'admin']);
       expect.unreachable('Should have thrown');
     } catch (e) {
       expect(e).toBeInstanceOf(GraphQLError);
@@ -91,10 +83,7 @@ describe('requireOrgRole', () => {
     prisma.organizationMember.findUnique.mockResolvedValue(null);
 
     try {
-      await requireOrgRole(prisma as never, 'org-1', 'user-1', [
-        'owner',
-        'admin',
-      ]);
+      await requireOrgRole(prisma as never, 'org-1', 'user-1', ['owner', 'admin']);
       expect.unreachable('Should have thrown');
     } catch (e) {
       expect(e).toBeInstanceOf(GraphQLError);
@@ -118,9 +107,7 @@ describe('requireTeamMember', () => {
       userId: 'user-1',
     });
 
-    await expect(
-      requireTeamMember(prisma as never, 'team-1', 'user-1'),
-    ).resolves.toBeUndefined();
+    await expect(requireTeamMember(prisma as never, 'team-1', 'user-1')).resolves.toBeUndefined();
   });
 
   it('throws FORBIDDEN when user is not a member', async () => {
@@ -151,9 +138,7 @@ describe('requireTeamOwner', () => {
       userId: 'user-1',
     });
 
-    await expect(
-      requireTeamOwner(prisma as never, 'team-1', 'user-1'),
-    ).resolves.toBeUndefined();
+    await expect(requireTeamOwner(prisma as never, 'team-1', 'user-1')).resolves.toBeUndefined();
   });
 
   it('throws FORBIDDEN when user is a member but not owner', async () => {

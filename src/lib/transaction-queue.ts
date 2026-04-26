@@ -2,12 +2,12 @@ import { gql } from './graphql';
 
 export interface Transaction {
   id: string;
-  mutation: string;
-  variables: Record<string, unknown>;
-  onSuccess?: (result: unknown) => void;
-  onError?: (err: Error) => void;
-  retryCount: number;
   maxRetries: number;
+  mutation: string;
+  onError?: (err: Error) => void;
+  onSuccess?: (result: unknown) => void;
+  retryCount: number;
+  variables: Record<string, unknown>;
 }
 
 const MAX_RETRIES = 3;

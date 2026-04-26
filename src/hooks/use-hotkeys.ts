@@ -106,11 +106,7 @@ export function useChord(
 
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.isContentEditable
-      ) {
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
         awaitingSecond = false;
         if (timer) {
           clearTimeout(timer);

@@ -1,24 +1,16 @@
 import { GraphQLError } from 'graphql';
 import type { IssueLabel } from '../../../generated/prisma';
 import { requireAuth, requireTeamMember } from '../../middleware/auth';
-import type {
-  LabelCreateInput,
-  LabelUpdateInput,
-} from '../../services/label.service';
+import type { LabelCreateInput, LabelUpdateInput } from '../../services/label.service';
 import type { GraphQLContext } from '../context';
 
 export const labelResolvers = {
   IssueLabel: {
-    children: async (
-      label: IssueLabel,
-      _args: unknown,
-      ctx: GraphQLContext,
-    ) => {
-      return ctx.prisma.issueLabel.findMany({
+    children: async (label: IssueLabel, _args: unknown, ctx: GraphQLContext) =>
+      ctx.prisma.issueLabel.findMany({
         orderBy: { name: 'asc' },
         where: { archivedAt: null, parentId: label.id },
-      });
-    },
+      }),
     parent: async (label: IssueLabel, _args: unknown, ctx: GraphQLContext) => {
       if (!label.parentId) {
         return null;
@@ -27,11 +19,7 @@ export const labelResolvers = {
     },
   },
   Mutation: {
-    issueLabelArchive: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    issueLabelArchive: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       const existing = await ctx.services.label.findById(id);
@@ -69,11 +57,7 @@ export const labelResolvers = {
         await requireTeamMember(ctx.prisma, input.teamId, ctx.userId);
       }
 
-      const label = await ctx.services.label.create(
-        ctx.orgId,
-        ctx.userId,
-        input,
-      );
+      const label = await ctx.services.label.create(ctx.orgId, ctx.userId, input);
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
         'I',
@@ -122,17 +106,10 @@ export const labelResolvers = {
   },
 
   Query: {
-    labels: async (
-      _parent: unknown,
-      args: { teamId?: string },
-      ctx: GraphQLContext,
-    ) => {
+    labels: async (_parent: unknown, args: { teamId?: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
-      const labels = await ctx.services.label.findByOrgId(
-        ctx.orgId,
-        args.teamId,
-      );
+      const labels = await ctx.services.label.findByOrgId(ctx.orgId, args.teamId);
       const edges = labels.map(node => ({ cursor: node.id, node }));
 
       return {

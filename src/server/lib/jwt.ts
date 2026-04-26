@@ -26,18 +26,16 @@ function getSecret(key: string): Uint8Array {
 }
 
 export interface AccessTokenPayload {
-  userId: string;
   orgId: string;
+  userId: string;
 }
 
 export interface RefreshTokenPayload {
-  userId: string;
   tokenId: string;
+  userId: string;
 }
 
-export async function signAccessToken(
-  payload: AccessTokenPayload,
-): Promise<string> {
+export async function signAccessToken(payload: AccessTokenPayload): Promise<string> {
   return new SignJWT({ ...payload, type: 'access' })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -45,9 +43,7 @@ export async function signAccessToken(
     .sign(getSecret('JWT_SECRET'));
 }
 
-export async function signRefreshToken(
-  payload: RefreshTokenPayload,
-): Promise<string> {
+export async function signRefreshToken(payload: RefreshTokenPayload): Promise<string> {
   return new SignJWT({ ...payload, type: 'refresh' })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -55,9 +51,7 @@ export async function signRefreshToken(
     .sign(getSecret('JWT_REFRESH_SECRET'));
 }
 
-export async function verifyAccessToken(
-  token: string,
-): Promise<AccessTokenPayload> {
+export async function verifyAccessToken(token: string): Promise<AccessTokenPayload> {
   const { payload } = await jwtVerify(token, getSecret('JWT_SECRET'));
 
   if (payload.type !== 'access') {
@@ -70,9 +64,7 @@ export async function verifyAccessToken(
   };
 }
 
-export async function verifyRefreshToken(
-  token: string,
-): Promise<RefreshTokenPayload> {
+export async function verifyRefreshToken(token: string): Promise<RefreshTokenPayload> {
   const { payload } = await jwtVerify(token, getSecret('JWT_REFRESH_SECRET'));
 
   if (payload.type !== 'refresh') {
@@ -107,10 +99,7 @@ export async function signOAuthState(
   return { nonce, state };
 }
 
-export async function verifyOAuthState(
-  state: string,
-  provider: 'google',
-): Promise<void> {
+export async function verifyOAuthState(state: string, provider: 'google'): Promise<void> {
   const { payload } = await jwtVerify(state, getSecret('JWT_SECRET'));
   if (payload.type !== 'oauth_state' || payload.provider !== provider) {
     throw new Error('Invalid OAuth state token');

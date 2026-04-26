@@ -4,8 +4,8 @@ import type { AccessTokenPayload } from '../lib/jwt';
 import { verifyAccessToken } from '../lib/jwt';
 
 export interface AuthContext {
-  userId: string | null;
   orgId: string | null;
+  userId: string | null;
 }
 
 export async function extractAuthContext(
@@ -26,9 +26,7 @@ export async function extractAuthContext(
   }
 }
 
-export function requireAuth(
-  ctx: AuthContext,
-): asserts ctx is { userId: string; orgId: string } {
+export function requireAuth(ctx: AuthContext): asserts ctx is { userId: string; orgId: string } {
   if (!ctx.userId || !ctx.orgId) {
     throw new GraphQLError('Not authenticated', {
       extensions: { code: 'UNAUTHENTICATED' },
@@ -37,9 +35,7 @@ export function requireAuth(
 }
 
 /** Like requireAuth but only checks userId — for mutations before org exists (e.g. onboarding). */
-export function requireUserId(
-  ctx: AuthContext,
-): asserts ctx is AuthContext & { userId: string } {
+export function requireUserId(ctx: AuthContext): asserts ctx is AuthContext & { userId: string } {
   if (!ctx.userId) {
     throw new GraphQLError('Not authenticated', {
       extensions: { code: 'UNAUTHENTICATED' },

@@ -5,15 +5,15 @@ import { useCallback, useEffect, useState } from 'react';
 import { gql } from '@/lib/graphql';
 
 interface AuthUser {
-  id: string;
   displayName: string;
   email: string;
+  id: string;
 }
 
 interface AuthState {
-  user: AuthUser | null;
-  loading: boolean;
   error: string | null;
+  loading: boolean;
+  user: AuthUser | null;
 }
 
 const VIEWER_QUERY = `

@@ -11,8 +11,7 @@ const TeamDocsPage = observer(function TeamDocsPage() {
 
   const team = teamStore.findByKey(teamKey);
 
-  const isLoading =
-    syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
+  const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
   const hasError = syncStore.status === 'error';
 
   if (isLoading) {

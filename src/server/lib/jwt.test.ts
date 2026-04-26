@@ -32,9 +32,7 @@ describe('signOAuthState / verifyOAuthState', () => {
       .setExpirationTime('5m')
       .sign(secret);
 
-    await expect(
-      verifyOAuthState(otherProviderToken, 'google'),
-    ).rejects.toThrow();
+    await expect(verifyOAuthState(otherProviderToken, 'google')).rejects.toThrow();
   });
 
   it('rejects an access token presented as a state token', async () => {

@@ -22,9 +22,7 @@ export class LabelStore {
   }
 
   findByOrgId(orgId: string): DBIssueLabel[] {
-    return Array.from(this.pool.values()).filter(
-      l => l.organizationId === orgId && !l.archivedAt,
-    );
+    return Array.from(this.pool.values()).filter(l => l.organizationId === orgId && !l.archivedAt);
   }
 
   upsertMany(labels: DBIssueLabel[]) {

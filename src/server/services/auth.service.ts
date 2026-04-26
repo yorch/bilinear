@@ -20,10 +20,10 @@ export interface EmailLoginPayload {
 }
 
 export interface AuthPayload {
-  success: boolean;
   accessToken: string;
-  refreshToken: string;
   expiresIn: number;
+  refreshToken: string;
+  success: boolean;
   userId: string;
 }
 
@@ -38,9 +38,7 @@ export class AuthService {
     const code = String(crypto.randomInt(100000, 1000000));
     // Store a hash of the code so a DB compromise doesn't yield valid codes.
     const tokenHash = hashToken(code);
-    const expiresAt = new Date(
-      Date.now() + MAGIC_LINK_EXPIRY_MINUTES * 60 * 1000,
-    );
+    const expiresAt = new Date(Date.now() + MAGIC_LINK_EXPIRY_MINUTES * 60 * 1000);
 
     // Revoke any existing unused magic link tokens for this email
     const user = await this.userService.findByEmail(email);
@@ -225,9 +223,7 @@ export class AuthService {
     }
 
     // Revoke old refresh token (with grace period to handle concurrent requests)
-    const graceEnd = new Date(
-      now.getTime() + REFRESH_GRACE_PERIOD_MINUTES * 60 * 1000,
-    );
+    const graceEnd = new Date(now.getTime() + REFRESH_GRACE_PERIOD_MINUTES * 60 * 1000);
     await this.prisma.authToken.update({
       data: { lastUsedAt: now, revokedAt: graceEnd },
       where: { id: token.id },
@@ -276,9 +272,7 @@ export class AuthService {
     // New session → new family. Rotation → inherit parent's family so reuse
     // detection can revoke every descendant at once.
     const familyId = existingFamilyId ?? crypto.randomUUID();
-    const expiresAt = new Date(
-      Date.now() + REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000,
-    );
+    const expiresAt = new Date(Date.now() + REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000);
 
     const [accessToken, refreshToken] = await Promise.all([
       signAccessToken({ orgId, userId }),
@@ -342,10 +336,7 @@ function getGoogleRedirectUri(): string {
   if (explicit) {
     return explicit;
   }
-  const appUrl = (process.env.APP_URL ?? 'http://localhost:3000').replace(
-    /\/$/,
-    '',
-  );
+  const appUrl = (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
   return `${appUrl}/auth/google/callback`;
 }
 
@@ -368,12 +359,9 @@ async function fetchGoogleProfile(code: string, redirectUri: string) {
 
   const tokenData = (await tokenRes.json()) as { access_token: string };
 
-  const profileRes = await fetch(
-    'https://www.googleapis.com/oauth2/v2/userinfo',
-    {
-      headers: { Authorization: `Bearer ${tokenData.access_token}` },
-    },
-  );
+  const profileRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+    headers: { Authorization: `Bearer ${tokenData.access_token}` },
+  });
 
   if (!profileRes.ok) {
     throw new OAuthError('Failed to fetch Google user profile');

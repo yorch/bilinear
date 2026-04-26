@@ -1,30 +1,26 @@
 import type { IssueLabel, PrismaClient } from '../../generated/prisma';
 
 export interface LabelCreateInput {
-  id?: string;
-  name: string;
   color: string;
   description?: string;
-  teamId?: string;
-  parentId?: string;
+  id?: string;
   isGroup?: boolean;
+  name: string;
+  parentId?: string;
+  teamId?: string;
 }
 
 export interface LabelUpdateInput {
-  name?: string;
   color?: string;
   description?: string;
+  name?: string;
   parentId?: string | null;
 }
 
 export class LabelService {
   constructor(private prisma: PrismaClient) {}
 
-  async create(
-    orgId: string,
-    creatorId: string,
-    input: LabelCreateInput,
-  ): Promise<IssueLabel> {
+  async create(orgId: string, creatorId: string, input: LabelCreateInput): Promise<IssueLabel> {
     return this.prisma.issueLabel.create({
       data: {
         color: input.color,

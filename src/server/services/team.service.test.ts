@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { TEST_ORG, TEST_TEAM, TEST_USER } from '../../test/fixtures';
-import {
-  createMockPrisma,
-  type MockPrismaClient,
-} from '../../test/prisma-mock';
+import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import { TeamKeyInvalidError, TeamService } from './team.service';
 
 describe('TeamService', () => {
@@ -65,10 +62,7 @@ describe('TeamService', () => {
         triageEnabled: true,
       });
       prisma.teamMembership.create.mockResolvedValue({});
-      const triageMockStates = [
-        { id: 'ws-triage', type: 'triage' },
-        ...mockStates,
-      ];
+      const triageMockStates = [{ id: 'ws-triage', type: 'triage' }, ...mockStates];
       for (const state of triageMockStates) {
         prisma.workflowState.create.mockResolvedValueOnce(state);
       }
@@ -191,9 +185,9 @@ describe('TeamService', () => {
     });
 
     it('throws when issueAction is MOVE but moveToTeamId is missing', async () => {
-      await expect(
-        service.delete(TEST_TEAM.id, { issueAction: 'MOVE' }),
-      ).rejects.toThrow('moveToTeamId is required');
+      await expect(service.delete(TEST_TEAM.id, { issueAction: 'MOVE' })).rejects.toThrow(
+        'moveToTeamId is required',
+      );
     });
 
     it('throws when moveToTeamId is the same as the team being deleted', async () => {

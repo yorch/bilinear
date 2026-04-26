@@ -1,19 +1,19 @@
 import type { Cycle, PrismaClient } from '../../generated/prisma';
 
 export interface CycleCreateInput {
-  id?: string;
-  teamId: string;
-  name?: string;
   description?: string;
-  startsAt: string;
   endsAt: string;
+  id?: string;
+  name?: string;
+  startsAt: string;
+  teamId: string;
 }
 
 export interface CycleUpdateInput {
-  name?: string | null;
   description?: string | null;
-  startsAt?: string;
   endsAt?: string;
+  name?: string | null;
+  startsAt?: string;
 }
 
 export class CycleNotFoundError extends Error {
@@ -155,10 +155,7 @@ export class CycleService {
     return this.prisma.cycle.findUnique({ where: { id } });
   }
 
-  async findByTeamId(
-    teamId: string,
-    includeArchived = false,
-  ): Promise<Cycle[]> {
+  async findByTeamId(teamId: string, includeArchived = false): Promise<Cycle[]> {
     return this.prisma.cycle.findMany({
       orderBy: { startsAt: 'desc' },
       where: {
@@ -334,9 +331,7 @@ export class CycleService {
     );
 
     const averageIssues =
-      cycles.length > 0
-        ? cycles.reduce((sum, c) => sum + c.completedIssues, 0) / cycles.length
-        : 0;
+      cycles.length > 0 ? cycles.reduce((sum, c) => sum + c.completedIssues, 0) / cycles.length : 0;
 
     return { averageIssues, cycles };
   }
@@ -388,10 +383,7 @@ export class CycleService {
       const dayEnd = new Date(current);
       dayEnd.setUTCHours(23, 59, 59, 999);
 
-      while (
-        completedIdx < completedDates.length &&
-        completedDates[completedIdx] <= dayEnd
-      ) {
+      while (completedIdx < completedDates.length && completedDates[completedIdx] <= dayEnd) {
         completedIdx++;
       }
 
@@ -421,9 +413,7 @@ export class CycleService {
     });
   }
 
-  async getProgress(
-    cycleId: string,
-  ): Promise<{ progress: number; scope: number }> {
+  async getProgress(cycleId: string): Promise<{ progress: number; scope: number }> {
     const issues = await this.prisma.issue.findMany({
       include: { state: { select: { type: true } } },
       where: { archivedAt: null, cycleId, trashed: false },
@@ -444,11 +434,7 @@ export class CycleService {
    * Auto-create upcoming cycles for a team based on its cycle configuration.
    * Creates cycles up to the specified count into the future.
    */
-  async autoCreateUpcomingCycles(
-    orgId: string,
-    teamId: string,
-    count = 15,
-  ): Promise<Cycle[]> {
+  async autoCreateUpcomingCycles(orgId: string, teamId: string, count = 15): Promise<Cycle[]> {
     const team = await this.prisma.team.findUnique({
       select: {
         cycleCooldownTime: true,

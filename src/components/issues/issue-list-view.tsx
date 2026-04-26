@@ -10,33 +10,33 @@ import type { IssueRowData, OpenProperty } from './issue-row';
 import { IssueRow } from './issue-row';
 
 interface IssueListViewProps {
-  issues: IssueRowData[];
-  states: WorkflowState[];
-  users: IssueUser[];
-  labels: IssueLabel[];
-  teamId?: string;
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  onOpen: (id: string) => void;
-  onUpdate: (id: string, patch: Record<string, unknown>) => void;
-  onArchive?: (id: string) => void;
-  onDelete?: (id: string) => void;
-  /** Which property popover to force-open on the selected issue (keyboard shortcut). */
-  openProperty?: OpenProperty;
-  onPropertyClosed?: () => void;
-  isColumnVisible?: (key: ColumnKey) => boolean;
   customFields?: DBCustomFieldDefinition[];
   getCustomFieldValue?: (issueId: string, definitionId: string) => unknown;
+  isColumnVisible?: (key: ColumnKey) => boolean;
+  issues: IssueRowData[];
+  labels: IssueLabel[];
+  onArchive?: (id: string) => void;
+  onDelete?: (id: string) => void;
+  onOpen: (id: string) => void;
+  onPropertyClosed?: () => void;
+  onSelect: (id: string) => void;
+  onUpdate: (id: string, patch: Record<string, unknown>) => void;
+  /** Which property popover to force-open on the selected issue (keyboard shortcut). */
+  openProperty?: OpenProperty;
+  selectedId: string | null;
+  states: WorkflowState[];
+  teamId?: string;
+  users: IssueUser[];
 }
 
 interface Group {
-  state: WorkflowState;
   issues: IssueRowData[];
+  state: WorkflowState;
 }
 
 interface ContextMenuState {
-  issueId: string;
   identifier: string;
+  issueId: string;
   title: string;
   x: number;
   y: number;
@@ -89,48 +89,36 @@ export function IssueListView({
   if (issues.length === 0) {
     return (
       <div
-        data-testid="empty-state"
         className="flex flex-1 items-center justify-center py-20 text-sm text-zinc-400"
+        data-testid="empty-state"
       >
-        No issues found. Press{' '}
-        <kbd className="mx-1 rounded border px-1 font-mono text-xs">C</kbd> to
-        create one.
+        No issues found. Press <kbd className="mx-1 rounded border px-1 font-mono text-xs">C</kbd>{' '}
+        to create one.
       </div>
     );
   }
 
   return (
-    <div data-testid="issue-list-view" className="flex flex-col">
+    <div className="flex flex-col" data-testid="issue-list-view">
       {groups.map(({ state, issues: groupIssues }) => (
         <GroupSection
-          key={state.id}
-          name={state.name}
           color={state.color}
           count={groupIssues.length}
           items={groupIssues}
+          key={state.id}
+          name={state.name}
           renderItem={(item, _idx) => {
             const issue = item as IssueRowData;
             return (
               <IssueRow
-                key={issue.id}
-                issue={issue}
-                states={states}
-                users={users}
                 allLabels={labels}
-                teamId={teamId}
-                selected={issue.id === selectedId}
-                onSelect={() => onSelect(issue.id)}
-                onOpen={() => onOpen(issue.id)}
-                onUpdate={onUpdate}
-                openProperty={issue.id === selectedId ? openProperty : null}
-                onPropertyClosed={onPropertyClosed}
-                isColumnVisible={isColumnVisible}
                 customFields={customFields}
                 getCustomFieldValue={
-                  getCustomFieldValue
-                    ? defId => getCustomFieldValue(issue.id, defId)
-                    : undefined
+                  getCustomFieldValue ? defId => getCustomFieldValue(issue.id, defId) : undefined
                 }
+                isColumnVisible={isColumnVisible}
+                issue={issue}
+                key={issue.id}
                 onContextMenu={e => {
                   e.preventDefault();
                   setCtxMenu({
@@ -141,6 +129,15 @@ export function IssueListView({
                     y: e.clientY,
                   });
                 }}
+                onOpen={() => onOpen(issue.id)}
+                onPropertyClosed={onPropertyClosed}
+                onSelect={() => onSelect(issue.id)}
+                onUpdate={onUpdate}
+                openProperty={issue.id === selectedId ? openProperty : null}
+                selected={issue.id === selectedId}
+                states={states}
+                teamId={teamId}
+                users={users}
               />
             );
           }}
@@ -149,15 +146,15 @@ export function IssueListView({
 
       {ctxMenu && (
         <IssueContextMenu
-          issueId={ctxMenu.issueId}
           identifier={ctxMenu.identifier}
+          issueId={ctxMenu.issueId}
+          onArchive={() => onArchive?.(ctxMenu.issueId)}
+          onClose={() => setCtxMenu(null)}
+          onDelete={() => onDelete?.(ctxMenu.issueId)}
+          onOpen={() => onOpen(ctxMenu.issueId)}
           title={ctxMenu.title}
           x={ctxMenu.x}
           y={ctxMenu.y}
-          onClose={() => setCtxMenu(null)}
-          onOpen={() => onOpen(ctxMenu.issueId)}
-          onArchive={() => onArchive?.(ctxMenu.issueId)}
-          onDelete={() => onDelete?.(ctxMenu.issueId)}
         />
       )}
     </div>

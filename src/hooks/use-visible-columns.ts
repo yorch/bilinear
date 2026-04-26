@@ -3,12 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 /** Fixed issue-row columns that can be hidden. */
-export type BuiltInColumn =
-  | 'labels'
-  | 'dueDate'
-  | 'assignee'
-  | 'cycle'
-  | 'estimate';
+export type BuiltInColumn = 'labels' | 'dueDate' | 'assignee' | 'cycle' | 'estimate';
 
 /**
  * ColumnKey is a BuiltInColumn or `custom:<definitionId>`. Using a prefixed
@@ -17,13 +12,7 @@ export type BuiltInColumn =
  */
 export type ColumnKey = BuiltInColumn | `custom:${string}`;
 
-const DEFAULT_BUILT_INS: BuiltInColumn[] = [
-  'labels',
-  'dueDate',
-  'assignee',
-  'cycle',
-  'estimate',
-];
+const DEFAULT_BUILT_INS: BuiltInColumn[] = ['labels', 'dueDate', 'assignee', 'cycle', 'estimate'];
 
 const STORAGE_PREFIX = 'issue-tracker:visibleColumns:v1:';
 
@@ -82,10 +71,7 @@ export function useVisibleColumns(scope: string): {
         return;
       }
       try {
-        window.localStorage.setItem(
-          storageKey(scope),
-          JSON.stringify(Array.from(next)),
-        );
+        window.localStorage.setItem(storageKey(scope), JSON.stringify(Array.from(next)));
       } catch {
         // Storage may be full or disabled — the in-memory state still wins.
       }
@@ -123,10 +109,7 @@ export function useVisibleColumns(scope: string): {
     [persist],
   );
 
-  const isVisible = useCallback(
-    (key: ColumnKey) => visible.has(key),
-    [visible],
-  );
+  const isVisible = useCallback((key: ColumnKey) => visible.has(key), [visible]);
 
   return { isVisible, showAll, toggle, visible };
 }

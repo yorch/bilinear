@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Prisma } from '../../generated/prisma';
 import { TEST_ORG, TEST_USER } from '../../test/fixtures';
-import {
-  createMockPrisma,
-  type MockPrismaClient,
-} from '../../test/prisma-mock';
+import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
   InvalidRoleError,
   InvalidUrlKeyError,
@@ -55,13 +52,10 @@ describe('OrganizationService.createWithOwner', () => {
   });
 
   it('translates Prisma P2002 unique-constraint into UrlKeyTakenError', async () => {
-    const p2002 = Object.assign(
-      Object.create(Prisma.PrismaClientKnownRequestError.prototype),
-      {
-        code: 'P2002',
-        message: 'Unique constraint failed',
-      },
-    ) as Prisma.PrismaClientKnownRequestError;
+    const p2002 = Object.assign(Object.create(Prisma.PrismaClientKnownRequestError.prototype), {
+      code: 'P2002',
+      message: 'Unique constraint failed',
+    }) as Prisma.PrismaClientKnownRequestError;
 
     prisma.$transaction.mockRejectedValue(p2002);
 
@@ -74,9 +68,9 @@ describe('OrganizationService.createWithOwner', () => {
     const other = new Error('connection lost');
     prisma.$transaction.mockRejectedValue(other);
 
-    await expect(
-      svc.createWithOwner(TEST_USER.id, { name: 'Acme', urlKey: 'acme' }),
-    ).rejects.toBe(other);
+    await expect(svc.createWithOwner(TEST_USER.id, { name: 'Acme', urlKey: 'acme' })).rejects.toBe(
+      other,
+    );
   });
 });
 
@@ -103,11 +97,7 @@ describe('OrganizationService.updateMemberRole', () => {
       userId: TEST_USER.id,
     });
 
-    const result = await svc.updateMemberRole(
-      TEST_ORG.id,
-      TEST_USER.id,
-      'admin',
-    );
+    const result = await svc.updateMemberRole(TEST_ORG.id, TEST_USER.id, 'admin');
 
     expect(result.role).toBe('admin');
   });
@@ -123,9 +113,9 @@ describe('OrganizationService.updateMemberRole', () => {
   it('throws MemberNotFoundError when the user is not in the org', async () => {
     prisma.organizationMember.findUnique.mockResolvedValue(null);
 
-    await expect(
-      svc.updateMemberRole(TEST_ORG.id, 'unknown-user', 'admin'),
-    ).rejects.toBeInstanceOf(MemberNotFoundError);
+    await expect(svc.updateMemberRole(TEST_ORG.id, 'unknown-user', 'admin')).rejects.toBeInstanceOf(
+      MemberNotFoundError,
+    );
 
     expect(prisma.organizationMember.update).not.toHaveBeenCalled();
   });
@@ -152,9 +142,7 @@ describe('OrganizationService — small finders', () => {
 
   it('getMemberRole returns the role string for a member', async () => {
     prisma.organizationMember.findUnique.mockResolvedValue({ role: 'admin' });
-    await expect(svc.getMemberRole(TEST_ORG.id, TEST_USER.id)).resolves.toBe(
-      'admin',
-    );
+    await expect(svc.getMemberRole(TEST_ORG.id, TEST_USER.id)).resolves.toBe('admin');
   });
 
   it('getMemberRole returns null for a non-member', async () => {

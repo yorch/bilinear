@@ -31,23 +31,16 @@ function fmtShort(date: Date): string {
 
 interface BarChartProps {
   data: Array<{ label: string; value: number; color?: string }>;
+  emptyMessage?: string;
   maxValue?: number;
   unit?: string;
-  emptyMessage?: string;
 }
 
-function BarChart({
-  data,
-  maxValue,
-  unit = '',
-  emptyMessage = 'No data',
-}: BarChartProps) {
+function BarChart({ data, maxValue, unit = '', emptyMessage = 'No data' }: BarChartProps) {
   const max = maxValue ?? Math.max(...data.map(d => d.value), 1);
 
   if (data.length === 0 || data.every(d => d.value === 0)) {
-    return (
-      <p className="py-8 text-center text-sm text-zinc-400">{emptyMessage}</p>
-    );
+    return <p className="py-8 text-center text-sm text-zinc-400">{emptyMessage}</p>;
   }
 
   return (
@@ -55,10 +48,7 @@ function BarChart({
       {data.map(item => {
         const pct = max > 0 ? (item.value / max) * 100 : 0;
         return (
-          <div
-            key={item.label}
-            className="flex flex-1 flex-col items-center gap-1"
-          >
+          <div className="flex flex-1 flex-col items-center gap-1" key={item.label}>
             <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
               {item.value > 0 ? `${item.value}${unit}` : ''}
             </span>
@@ -70,10 +60,7 @@ function BarChart({
                 minHeight: item.value > 0 ? '4px' : '0',
               }}
             />
-            <span
-              className="max-w-full truncate text-[10px] text-zinc-400"
-              title={item.label}
-            >
+            <span className="max-w-full truncate text-[10px] text-zinc-400" title={item.label}>
               {item.label}
             </span>
           </div>
@@ -94,21 +81,15 @@ interface HBarChartProps {
     sublabel?: string;
     color?: string;
   }>;
-  maxValue?: number;
   emptyMessage?: string;
+  maxValue?: number;
 }
 
-function HBarChart({
-  data,
-  maxValue,
-  emptyMessage = 'No data',
-}: HBarChartProps) {
+function HBarChart({ data, maxValue, emptyMessage = 'No data' }: HBarChartProps) {
   const max = maxValue ?? Math.max(...data.map(d => d.value), 1);
 
   if (data.length === 0) {
-    return (
-      <p className="py-8 text-center text-sm text-zinc-400">{emptyMessage}</p>
-    );
+    return <p className="py-8 text-center text-sm text-zinc-400">{emptyMessage}</p>;
   }
 
   return (
@@ -116,11 +97,8 @@ function HBarChart({
       {data.map(item => {
         const pct = max > 0 ? (item.value / max) * 100 : 0;
         return (
-          <div key={item.label} className="flex items-center gap-2">
-            <span
-              className="w-28 shrink-0 truncate text-xs text-zinc-500"
-              title={item.label}
-            >
+          <div className="flex items-center gap-2" key={item.label}>
+            <span className="w-28 shrink-0 truncate text-xs text-zinc-500" title={item.label}>
               {item.label}
             </span>
             <div className="flex-1 rounded bg-zinc-100 dark:bg-zinc-800">
@@ -148,19 +126,15 @@ function HBarChart({
 
 interface StatCardProps {
   label: string;
-  value: string | number;
   sub?: string;
+  value: string | number;
 }
 
 function StatCard({ label, value, sub }: StatCardProps) {
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
-        {label}
-      </p>
-      <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-        {value}
-      </p>
+      <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">{label}</p>
+      <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{value}</p>
       {sub && <p className="mt-0.5 text-xs text-zinc-400">{sub}</p>}
     </div>
   );
@@ -170,18 +144,10 @@ function StatCard({ label, value, sub }: StatCardProps) {
 // Section card wrapper
 // ---------------------------------------------------------------------------
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-      <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">
-        {title}
-      </h3>
+      <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">{title}</h3>
       {children}
     </div>
   );
@@ -193,11 +159,9 @@ function Section({
 
 const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
   const { key: teamKey } = useParams<{ workspace: string; key: string }>();
-  const { issueStore, teamStore, workflowStateStore, userStore, syncStore } =
-    useStore();
+  const { issueStore, teamStore, workflowStateStore, userStore, syncStore } = useStore();
 
-  const isLoading =
-    syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
+  const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
 
   const team = teamStore.findByKey(teamKey);
   const teamId = team?.id ?? null;
@@ -242,46 +206,40 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
 
   const { completedStateIds, canceledStateIds } = useMemo(
     () => ({
-      canceledStateIds: new Set(
-        states.filter(s => s.type === 'cancelled').map(s => s.id),
-      ),
-      completedStateIds: new Set(
-        states.filter(s => s.type === 'completed').map(s => s.id),
-      ),
+      canceledStateIds: new Set(states.filter(s => s.type === 'cancelled').map(s => s.id)),
+      completedStateIds: new Set(states.filter(s => s.type === 'completed').map(s => s.id)),
     }),
     [states],
   );
 
-  const { completedCount, inProgressCount, openCount, canceledCount } =
-    useMemo(() => {
-      let completed = 0;
-      let inProgress = 0;
-      let open = 0;
-      let canceled = 0;
-      for (const i of issues) {
-        if (completedStateIds.has(i.stateId)) {
-          completed++;
-        } else if (canceledStateIds.has(i.stateId)) {
-          canceled++;
+  const { completedCount, inProgressCount, openCount, canceledCount } = useMemo(() => {
+    let completed = 0;
+    let inProgress = 0;
+    let open = 0;
+    let canceled = 0;
+    for (const i of issues) {
+      if (completedStateIds.has(i.stateId)) {
+        completed++;
+      } else if (canceledStateIds.has(i.stateId)) {
+        canceled++;
+      } else {
+        const state = states.find(s => s.id === i.stateId);
+        if (state?.type === 'started') {
+          inProgress++;
         } else {
-          const state = states.find(s => s.id === i.stateId);
-          if (state?.type === 'started') {
-            inProgress++;
-          } else {
-            open++;
-          }
+          open++;
         }
       }
-      return {
-        canceledCount: canceled,
-        completedCount: completed,
-        inProgressCount: inProgress,
-        openCount: open,
-      };
-    }, [issues, completedStateIds, canceledStateIds, states]);
+    }
+    return {
+      canceledCount: canceled,
+      completedCount: completed,
+      inProgressCount: inProgress,
+      openCount: open,
+    };
+  }, [issues, completedStateIds, canceledStateIds, states]);
 
-  const completionRate =
-    issues.length > 0 ? Math.round((completedCount / issues.length) * 100) : 0;
+  const completionRate = issues.length > 0 ? Math.round((completedCount / issues.length) * 100) : 0;
 
   // ── Velocity: closed per week (last 8 weeks) ───────────────────────────────
 
@@ -317,9 +275,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
     if (nonZero.length === 0) {
       return 0;
     }
-    return Math.round(
-      nonZero.reduce((s, w) => s + w.value, 0) / nonZero.length,
-    );
+    return Math.round(nonZero.reduce((s, w) => s + w.value, 0) / nonZero.length);
   }, [velocityData]);
 
   // ── Assignee workload (open issues) ───────────────────────────────────────
@@ -328,10 +284,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
     const counts = new Map<string, number>();
     let unassigned = 0;
     for (const issue of issues) {
-      if (
-        completedStateIds.has(issue.stateId) ||
-        canceledStateIds.has(issue.stateId)
-      ) {
+      if (completedStateIds.has(issue.stateId) || canceledStateIds.has(issue.stateId)) {
         continue;
       }
       if (issue.assigneeId) {
@@ -363,9 +316,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
     const durations: number[] = [];
     for (const issue of issues) {
       if (issue.startedAt && issue.completedAt) {
-        const ms =
-          new Date(issue.completedAt).getTime() -
-          new Date(issue.startedAt).getTime();
+        const ms = new Date(issue.completedAt).getTime() - new Date(issue.startedAt).getTime();
         if (ms > 0) {
           durations.push(ms / 86_400_000);
         }
@@ -399,9 +350,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
     <div className="flex flex-1 flex-col overflow-y-auto">
       {/* Page header */}
       <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
-        <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
-          Analytics
-        </h1>
+        <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Analytics</h1>
         <p className="mt-0.5 text-xs text-zinc-400">
           {team.displayName || team.name} · all-time data from local store
         </p>
@@ -413,18 +362,18 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
           <StatCard label="Total issues" value={issues.length} />
           <StatCard
             label="Completion rate"
-            value={`${completionRate}%`}
             sub={`${completedCount} of ${issues.length} closed`}
+            value={`${completionRate}%`}
           />
           <StatCard
             label="Avg velocity"
-            value={avgVelocity === 0 ? '—' : `${avgVelocity}/wk`}
             sub="over active weeks"
+            value={avgVelocity === 0 ? '—' : `${avgVelocity}/wk`}
           />
           <StatCard
             label="Avg cycle time"
-            value={avgCycleTimeDays !== null ? `${avgCycleTimeDays}d` : '—'}
             sub="started → completed"
+            value={avgCycleTimeDays !== null ? `${avgCycleTimeDays}d` : '—'}
           />
         </div>
 
@@ -445,15 +394,13 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
             { color: 'text-zinc-400', label: 'Canceled', value: canceledCount },
           ].map(item => (
             <div
-              key={item.label}
               className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
+              key={item.label}
             >
               <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
                 {item.label}
               </p>
-              <p className={cn('mt-1 text-2xl font-semibold', item.color)}>
-                {item.value}
-              </p>
+              <p className={cn('mt-1 text-2xl font-semibold', item.color)}>{item.value}</p>
             </div>
           ))}
         </div>
@@ -465,17 +412,11 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
           </Section>
 
           <Section title="Velocity (issues completed per week)">
-            <BarChart
-              data={velocityData}
-              emptyMessage="No completed issues yet"
-            />
+            <BarChart data={velocityData} emptyMessage="No completed issues yet" />
           </Section>
 
           <Section title="Assignee workload (open issues)">
-            <HBarChart
-              data={workloadData}
-              emptyMessage="No open issues assigned"
-            />
+            <HBarChart data={workloadData} emptyMessage="No open issues assigned" />
           </Section>
 
           <Section title="Issue breakdown">
@@ -485,11 +426,9 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
               ) : (
                 byStateData.map(item => {
                   const pct =
-                    issues.length > 0
-                      ? Math.round((item.value / issues.length) * 100)
-                      : 0;
+                    issues.length > 0 ? Math.round((item.value / issues.length) * 100) : 0;
                   return (
-                    <div key={item.label} className="flex flex-col gap-1">
+                    <div className="flex flex-col gap-1" key={item.label}>
                       <div className="flex items-center justify-between text-xs">
                         <span className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-300">
                           <span

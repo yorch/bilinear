@@ -1,11 +1,11 @@
 import type { IssueActivity, PrismaClient } from '../../generated/prisma';
 
 export interface IssueActivityCreateInput {
-  issueId: string;
   actorId?: string;
   field: string;
-  oldValue?: string;
+  issueId: string;
   newValue?: string;
+  oldValue?: string;
 }
 
 export class IssueActivityService {
@@ -31,9 +31,7 @@ export class IssueActivityService {
     });
   }
 
-  async createMany(
-    activities: IssueActivityCreateInput[],
-  ): Promise<IssueActivity[]> {
+  async createMany(activities: IssueActivityCreateInput[]): Promise<IssueActivity[]> {
     if (activities.length === 0) {
       return [];
     }

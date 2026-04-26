@@ -50,11 +50,7 @@ export class IssueTemplateStore {
     }
   }
 
-  applySyncAction(
-    actionType: string,
-    id: string,
-    data: DBIssueTemplate | null,
-  ) {
+  applySyncAction(actionType: string, id: string, data: DBIssueTemplate | null) {
     if (actionType === 'I' || actionType === 'U' || actionType === 'A') {
       if (data) {
         this.pool.set(id, data);

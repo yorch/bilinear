@@ -2,11 +2,7 @@ import { GraphQLError } from 'graphql';
 import type { Issue } from '../../../generated/prisma';
 import { logger } from '../../lib/logger';
 import { requireAuth, requireTeamMember } from '../../middleware/auth';
-import type {
-  IssueCreateInput,
-  IssueFilter,
-  IssueUpdateInput,
-} from '../../services/issue.service';
+import type { IssueCreateInput, IssueFilter, IssueUpdateInput } from '../../services/issue.service';
 import type { IssueActivityCreateInput } from '../../services/issue-activity.service';
 import type { GraphQLContext } from '../context';
 
@@ -44,12 +40,11 @@ export const issueResolvers = {
       return ctx.loaders.user.load(issue.assigneeId);
     },
 
-    children: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.prisma.issue.findMany({
+    children: async (issue: Issue, _args: unknown, ctx: GraphQLContext) =>
+      ctx.prisma.issue.findMany({
         orderBy: { subIssueSortOrder: 'asc' },
         where: { parentId: issue.id, trashed: false },
-      });
-    },
+      }),
 
     creator: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
       if (!issue.creatorId) {
@@ -69,13 +64,10 @@ export const issueResolvers = {
       return cycle;
     },
 
-    dueDate: (issue: Issue) => {
-      return issue.dueDate ? issue.dueDate.toISOString().split('T')[0] : null;
-    },
+    dueDate: (issue: Issue) => (issue.dueDate ? issue.dueDate.toISOString().split('T')[0] : null),
 
-    labels: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.loaders.labelsByIssueId.load(issue.id);
-    },
+    labels: async (issue: Issue, _args: unknown, ctx: GraphQLContext) =>
+      ctx.loaders.labelsByIssueId.load(issue.id),
 
     parent: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
       if (!issue.parentId) {
@@ -95,19 +87,13 @@ export const issueResolvers = {
       return project;
     },
 
-    state: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.loaders.workflowState.load(issue.stateId);
-    },
-    team: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.loaders.team.load(issue.teamId);
-    },
+    state: async (issue: Issue, _args: unknown, ctx: GraphQLContext) =>
+      ctx.loaders.workflowState.load(issue.stateId),
+    team: async (issue: Issue, _args: unknown, ctx: GraphQLContext) =>
+      ctx.loaders.team.load(issue.teamId),
   },
   Mutation: {
-    issueArchive: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    issueArchive: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       const existing = await ctx.services.issue.findById(id);
@@ -119,13 +105,7 @@ export const issueResolvers = {
       await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
 
       const issue = await ctx.services.issue.archive(id);
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'A',
-        'Issue',
-        id,
-        issue,
-      );
+      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'A', 'Issue', id, issue);
       return { issue, lastSyncId: sync.id.toString(), success: true };
     },
     issueCreate: async (
@@ -137,38 +117,20 @@ export const issueResolvers = {
       await requireTeamMember(ctx.prisma, input.teamId, ctx.userId);
 
       try {
-        const issue = await ctx.services.issue.create(
-          ctx.orgId,
-          ctx.userId,
-          input,
-        );
+        const issue = await ctx.services.issue.create(ctx.orgId, ctx.userId, input);
 
         // Auto-subscribe creator and notify assignee (fire-and-forget — don't
         // block the response on notification delivery)
         void ctx.services.notification
           .autoSubscribe(ctx.userId, issue.id)
-          .catch(err =>
-            logger.error({ err }, 'Failed to auto-subscribe issue creator'),
-          );
+          .catch(err => logger.error({ err }, 'Failed to auto-subscribe issue creator'));
         if (input.assigneeId && input.assigneeId !== ctx.userId) {
           void ctx.services.notification
             .autoSubscribe(input.assigneeId, issue.id)
-            .catch(err =>
-              logger.error({ err }, 'Failed to auto-subscribe issue assignee'),
-            );
+            .catch(err => logger.error({ err }, 'Failed to auto-subscribe issue assignee'));
           void ctx.services.notification
-            .createForIssueAssignment(
-              ctx.orgId,
-              issue.id,
-              input.assigneeId,
-              ctx.userId,
-            )
-            .catch(err =>
-              logger.error(
-                { err },
-                'Failed to create issue assignment notification',
-              ),
-            );
+            .createForIssueAssignment(ctx.orgId, issue.id, input.assigneeId, ctx.userId)
+            .catch(err => logger.error({ err }, 'Failed to create issue assignment notification'));
         }
 
         const sync = await ctx.services.sync.createSyncAction(
@@ -190,11 +152,7 @@ export const issueResolvers = {
       }
     },
 
-    issueDelete: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    issueDelete: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       const existing = await ctx.services.issue.findById(id);
@@ -206,21 +164,11 @@ export const issueResolvers = {
       await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
 
       await ctx.services.issue.delete(id);
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'D',
-        'Issue',
-        id,
-        null,
-      );
+      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Issue', id, null);
       return { lastSyncId: sync.id.toString(), success: true };
     },
 
-    issueUnarchive: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    issueUnarchive: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       const existing = await ctx.services.issue.findById(id);
@@ -232,13 +180,7 @@ export const issueResolvers = {
       await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
 
       const issue = await ctx.services.issue.unarchive(id);
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'U',
-        'Issue',
-        id,
-        issue,
-      );
+      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', id, issue);
       return { issue, lastSyncId: sync.id.toString(), success: true };
     },
 
@@ -262,10 +204,7 @@ export const issueResolvers = {
       // Record an activity entry for each changed tracked field
       const activities: IssueActivityCreateInput[] = [];
       for (const field of TRACKED_ACTIVITY_FIELDS) {
-        if (
-          !(field in input) ||
-          (input as Record<string, unknown>)[field] === undefined
-        ) {
+        if (!(field in input) || (input as Record<string, unknown>)[field] === undefined) {
           continue;
         }
         const oldStr = issueFieldToString(existing, field);
@@ -299,32 +238,16 @@ export const issueResolvers = {
           // Auto-subscribe new assignee and notify them
           void ctx.services.notification
             .autoSubscribe(input.assigneeId, issue.id)
-            .catch(err =>
-              logger.error({ err }, 'Failed to auto-subscribe issue assignee'),
-            );
+            .catch(err => logger.error({ err }, 'Failed to auto-subscribe issue assignee'));
           void ctx.services.notification
-            .createForIssueAssignment(
-              ctx.orgId,
-              issue.id,
-              input.assigneeId,
-              ctx.userId,
-            )
-            .catch(err =>
-              logger.error(
-                { err },
-                'Failed to create issue assignment notification',
-              ),
-            );
+            .createForIssueAssignment(ctx.orgId, issue.id, input.assigneeId, ctx.userId)
+            .catch(err => logger.error({ err }, 'Failed to create issue assignment notification'));
         }
       }
 
       // Notifications: status change — oldStatus/newStatus are workflow-state UUIDs;
       // human-readable names are resolved in the notification UI via the state store.
-      if (
-        'stateId' in input &&
-        input.stateId &&
-        input.stateId !== existing.stateId
-      ) {
+      if ('stateId' in input && input.stateId && input.stateId !== existing.stateId) {
         void ctx.services.notification.createForStatusChange(
           ctx.orgId,
           issue.id,
@@ -334,23 +257,13 @@ export const issueResolvers = {
         );
       }
 
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'U',
-        'Issue',
-        id,
-        issue,
-      );
+      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', id, issue);
       return { issue, lastSyncId: sync.id.toString(), success: true };
     },
   },
 
   Query: {
-    issue: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    issue: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       const issue = await ctx.services.issue.findById(id);
@@ -377,14 +290,7 @@ export const issueResolvers = {
     ) => {
       requireAuth(ctx);
 
-      const {
-        filter = {},
-        first,
-        after,
-        last,
-        before,
-        includeArchived = false,
-      } = args;
+      const { filter = {}, first, after, last, before, includeArchived = false } = args;
 
       if (!filter.teamId) {
         throw new GraphQLError(

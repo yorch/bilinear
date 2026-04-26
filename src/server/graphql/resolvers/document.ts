@@ -1,22 +1,12 @@
 import { GraphQLError } from 'graphql';
 import { requireAuth } from '../../middleware/auth';
-import type {
-  DocumentCreateInput,
-  DocumentUpdateInput,
-} from '../../services/document.service';
-import {
-  DocumentForbiddenError,
-  DocumentNotFoundError,
-} from '../../services/document.service';
+import type { DocumentCreateInput, DocumentUpdateInput } from '../../services/document.service';
+import { DocumentForbiddenError, DocumentNotFoundError } from '../../services/document.service';
 import type { GraphQLContext } from '../context';
 
 export const documentResolvers = {
   Mutation: {
-    documentArchive: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    documentArchive: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       const existing = await ctx.services.document.findById(id);
@@ -44,11 +34,7 @@ export const documentResolvers = {
     ) => {
       requireAuth(ctx);
 
-      const document = await ctx.services.document.create(
-        ctx.orgId,
-        ctx.userId,
-        input,
-      );
+      const document = await ctx.services.document.create(ctx.orgId, ctx.userId, input);
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
         'I',
@@ -59,11 +45,7 @@ export const documentResolvers = {
       return { document, lastSyncId: sync.id.toString(), success: true };
     },
 
-    documentDelete: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    documentDelete: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       const existing = await ctx.services.document.findById(id);
@@ -89,13 +71,7 @@ export const documentResolvers = {
         throw err;
       }
 
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'D',
-        'Document',
-        id,
-        null,
-      );
+      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Document', id, null);
       return { lastSyncId: sync.id.toString(), success: true };
     },
 
@@ -126,11 +102,7 @@ export const documentResolvers = {
   },
 
   Query: {
-    document: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    document: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
       const document = await ctx.services.document.findById(id);
       if (!document || document.organizationId !== ctx.orgId) {

@@ -79,13 +79,14 @@ export const DocumentEditor = observer(function DocumentEditor({
     [documentId, txQueue],
   );
 
-  useEffect(() => {
-    return () => {
+  useEffect(
+    () => () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
-    };
-  }, []);
+    },
+    [],
+  );
 
   if (!doc) {
     return (
@@ -99,11 +100,11 @@ export const DocumentEditor = observer(function DocumentEditor({
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="border-b border-zinc-200 px-8 py-4 dark:border-zinc-800">
         <input
-          type="text"
-          value={localTitle}
+          className="w-full bg-transparent text-2xl font-bold text-zinc-900 placeholder-zinc-300 outline-none dark:text-zinc-100 dark:placeholder-zinc-600"
           onChange={handleTitleChange}
           placeholder="Untitled"
-          className="w-full bg-transparent text-2xl font-bold text-zinc-900 placeholder-zinc-300 outline-none dark:text-zinc-100 dark:placeholder-zinc-600"
+          type="text"
+          value={localTitle}
         />
       </div>
       <div className="flex-1 overflow-y-auto px-8 py-4">

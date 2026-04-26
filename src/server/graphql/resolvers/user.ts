@@ -20,7 +20,6 @@ export const userResolvers = {
 
   User: {
     avatarBackgroundColor: (user: User) => user.avatarBgColor,
-    isMe: (user: User, _args: unknown, ctx: GraphQLContext) =>
-      user.id === ctx.userId,
+    isMe: (user: User, _args: unknown, ctx: GraphQLContext) => user.id === ctx.userId,
   },
 };

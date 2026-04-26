@@ -23,24 +23,22 @@ export function CustomFieldValueInput({
     case 'text':
       return (
         <TextInput
-          value={typeof value === 'string' ? value : ''}
           onSave={v => onSave(v.length > 0 ? v : null)}
+          value={typeof value === 'string' ? value : ''}
         />
       );
     case 'url':
       return (
         <TextInput
-          type="url"
-          value={typeof value === 'string' ? value : ''}
           onSave={v => onSave(v.length > 0 ? v : null)}
           placeholder="https://…"
+          type="url"
+          value={typeof value === 'string' ? value : ''}
         />
       );
     case 'number':
       return (
         <TextInput
-          type="number"
-          value={value == null ? '' : String(value)}
           onSave={v => {
             if (v === '') {
               onSave(null);
@@ -51,42 +49,40 @@ export function CustomFieldValueInput({
               onSave(n);
             }
           }}
+          type="number"
+          value={value == null ? '' : String(value)}
         />
       );
     case 'date':
       return (
         <input
+          className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+          onChange={e => onSave(e.target.value || null)}
           type="date"
           value={typeof value === 'string' ? value : ''}
-          onChange={e => onSave(e.target.value || null)}
-          className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
         />
       );
     case 'checkbox':
       return (
-        <input
-          type="checkbox"
-          checked={value === true}
-          onChange={e => onSave(e.target.checked)}
-        />
+        <input checked={value === true} onChange={e => onSave(e.target.checked)} type="checkbox" />
       );
     case 'select':
       return (
         <SimpleSelect
-          value={typeof value === 'string' ? value : ''}
           onChange={v => onSave(v || null)}
           options={[
             { label: '—', value: '' },
             ...options.map(o => ({ label: o.label, value: o.value })),
           ]}
+          value={typeof value === 'string' ? value : ''}
         />
       );
     case 'multi_select':
       return (
         <MultiSelect
-          values={Array.isArray(value) ? (value as string[]) : []}
-          options={options}
           onSave={next => onSave(next.length > 0 ? next : null)}
+          options={options}
+          values={Array.isArray(value) ? (value as string[]) : []}
         />
       );
     default:
@@ -114,21 +110,21 @@ function TextInput({
 
   return (
     <input
-      type={type}
-      value={draft}
-      placeholder={placeholder}
-      onChange={e => setDraft(e.target.value)}
+      className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
       onBlur={() => {
         if (draft !== value) {
           onSave(draft);
         }
       }}
+      onChange={e => setDraft(e.target.value)}
       onKeyDown={e => {
         if (e.key === 'Enter') {
           e.currentTarget.blur();
         }
       }}
-      className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+      placeholder={placeholder}
+      type={type}
+      value={draft}
     />
   );
 }
@@ -157,14 +153,14 @@ function MultiSelect({
         const selected = values.includes(o.value);
         return (
           <button
-            key={o.value}
-            type="button"
-            onClick={() => toggle(o.value)}
             className={
               selected
                 ? 'rounded-full bg-indigo-100 px-2 py-0.5 text-xs text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
                 : 'rounded-full border border-zinc-200 px-2 py-0.5 text-xs text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800'
             }
+            key={o.value}
+            onClick={() => toggle(o.value)}
+            type="button"
           >
             {o.label}
           </button>

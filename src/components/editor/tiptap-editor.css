@@ -41,12 +41,7 @@
   user-select: none;
 }
 
-.tiptap-wrapper
-  .ProseMirror
-  ul[data-type="taskList"]
-  li
-  > label
-  input[type="checkbox"] {
+.tiptap-wrapper .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"] {
   accent-color: #6366f1; /* indigo-500 */
   cursor: pointer; /* indigo-500 */
 }

@@ -18,9 +18,7 @@ test.describe('Command Palette', () => {
     await page.keyboard.press('Meta+k');
     await expect(page.locator('[data-testid="command-palette"]')).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(
-      page.locator('[data-testid="command-palette"]'),
-    ).not.toBeVisible();
+    await expect(page.locator('[data-testid="command-palette"]')).not.toBeVisible();
   });
 
   test('typing filters results', async ({ page }) => {
@@ -34,18 +32,14 @@ test.describe('Command Palette', () => {
   test('shows recent items on open with empty query', async ({ page }) => {
     await page.keyboard.press('Meta+k');
     // Recent section or results list is visible
-    await expect(
-      page.locator('[data-testid="command-palette-results"]'),
-    ).toBeVisible();
+    await expect(page.locator('[data-testid="command-palette-results"]')).toBeVisible();
   });
 
   test('arrow keys navigate results', async ({ page }) => {
     await page.keyboard.press('Meta+k');
     await page.keyboard.press('ArrowDown');
     // First item should be highlighted
-    const firstItem = page
-      .locator('[data-testid="command-palette-item"]')
-      .first();
+    const firstItem = page.locator('[data-testid="command-palette-item"]').first();
     await expect(firstItem).toHaveAttribute('data-highlighted', 'true');
   });
 });

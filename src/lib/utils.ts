@@ -6,10 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /** Extract the first error message from a GraphQL response, with a fallback. */
-export function gqlError(
-  result: { errors?: unknown[] },
-  fallback: string,
-): string {
+export function gqlError(result: { errors?: unknown[] }, fallback: string): string {
   return (result.errors?.[0] as { message?: string })?.message ?? fallback;
 }
 

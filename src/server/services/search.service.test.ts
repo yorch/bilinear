@@ -149,12 +149,7 @@ describe('SearchService', () => {
       prisma.issue.findMany.mockResolvedValue([TEST_ISSUE]);
       const service = new SearchService(prisma as never);
 
-      const result = await service.searchIssues(
-        TEST_ORG.id,
-        'broken login',
-        20,
-        true,
-      );
+      const result = await service.searchIssues(TEST_ORG.id, 'broken login', 20, true);
 
       expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
       expect(result).toEqual([TEST_ISSUE]);

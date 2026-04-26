@@ -11,11 +11,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
@@ -31,23 +27,23 @@ export type BoardGroupBy = 'status' | 'assignee' | 'priority';
 export type BoardSwimlaneBy = 'assignee' | 'priority' | 'none';
 
 interface BoardViewProps {
-  issues: IssueRowData[];
-  states: DBWorkflowState[];
-  users: IssueUser[];
-  labels: IssueLabel[];
   groupBy: BoardGroupBy;
-  swimlaneBy?: BoardSwimlaneBy;
-  selectedId: string | null;
-  onSelect: (id: string) => void;
+  issues: IssueRowData[];
+  labels: IssueLabel[];
   onOpen: (id: string) => void;
+  onSelect: (id: string) => void;
   onUpdate: (id: string, patch: Record<string, unknown>) => void;
+  selectedId: string | null;
+  states: DBWorkflowState[];
+  swimlaneBy?: BoardSwimlaneBy;
+  users: IssueUser[];
 }
 
 interface Column {
-  id: string;
-  label: string;
   color?: string;
+  id: string;
   issues: IssueRowData[];
+  label: string;
 }
 
 // ─── Priority labels ────────────────────────────────────────────────────────
@@ -63,13 +59,13 @@ const PRIORITY_LABELS: Record<number, string> = {
 // ─── Card component ─────────────────────────────────────────────────────────
 
 interface BoardCardProps {
-  issue: IssueRowData;
-  users: IssueUser[];
-  selected: boolean;
-  multiSelected: boolean;
-  onSelect: () => void;
-  onOpen: () => void;
   isDragging?: boolean;
+  issue: IssueRowData;
+  multiSelected: boolean;
+  onOpen: () => void;
+  onSelect: () => void;
+  selected: boolean;
+  users: IssueUser[];
 }
 
 function BoardCardInner({
@@ -81,13 +77,10 @@ function BoardCardInner({
   onOpen,
   isDragging,
 }: BoardCardProps) {
-  const assignee = issue.assigneeId
-    ? users.find(u => u.id === issue.assigneeId)
-    : null;
+  const assignee = issue.assigneeId ? users.find(u => u.id === issue.assigneeId) : null;
 
   return (
     <button
-      type="button"
       className={cn(
         'w-full cursor-pointer rounded-lg border bg-white p-3 text-left shadow-sm transition-shadow hover:shadow-md dark:bg-zinc-900',
         selected
@@ -99,13 +92,12 @@ function BoardCardInner({
       )}
       onClick={onSelect}
       onDoubleClick={onOpen}
+      type="button"
     >
       {/* Issue identifier & priority */}
       <div className="mb-1.5 flex items-center gap-1.5">
-        <PriorityIcon priority={issue.priority} className="h-3.5 w-3.5" />
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">
-          {issue.identifier}
-        </span>
+        <PriorityIcon className="h-3.5 w-3.5" priority={issue.priority} />
+        <span className="text-xs text-zinc-400 dark:text-zinc-500">{issue.identifier}</span>
       </div>
 
       {/* Title */}
@@ -118,8 +110,8 @@ function BoardCardInner({
         <div className="flex flex-wrap gap-1">
           {issue.labels.slice(0, 3).map(label => (
             <span
-              key={label.id}
               className="inline-block h-1.5 w-1.5 rounded-full"
+              key={label.id}
               style={{ backgroundColor: label.color }}
               title={label.name}
             />
@@ -139,9 +131,7 @@ function BoardCardInner({
 
       {/* Due date */}
       {issue.dueDate && (
-        <div className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-500">
-          {issue.dueDate}
-        </div>
+        <div className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-500">{issue.dueDate}</div>
       )}
     </button>
   );
@@ -150,12 +140,8 @@ function BoardCardInner({
 // ─── Sortable card (drag handle) ────────────────────────────────────────────
 
 interface SortableCardProps extends Omit<BoardCardProps, 'isDragging'> {
-  onMultiSelect: (
-    e: React.MouseEvent,
-    issueId: string,
-    columnIssueIds: string[],
-  ) => void;
   columnIssueIds: string[];
+  onMultiSelect: (e: React.MouseEvent, issueId: string, columnIssueIds: string[]) => void;
 }
 
 function SortableCard({
@@ -168,14 +154,9 @@ function SortableCard({
   onMultiSelect,
   columnIssueIds,
 }: SortableCardProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: issue.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: issue.id,
+  });
 
   const style = {
     opacity: isDragging ? 0.4 : 1,
@@ -195,21 +176,21 @@ function SortableCard({
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
       <BoardCardInner
-        issue={issue}
-        users={users}
-        selected={selected}
-        multiSelected={multiSelected}
-        onSelect={() => {}} // handled via wrapper click
-        onOpen={onOpen}
         isDragging={isDragging}
+        issue={issue}
+        multiSelected={multiSelected}
+        onOpen={onOpen}
+        onSelect={() => {}} // handled via wrapper click
+        selected={selected}
+        users={users}
       />
       {/* Invisible overlay to intercept clicks without interfering with DnD listeners */}
       <button
-        type="button"
         aria-label="Open issue"
         className="absolute inset-0 cursor-pointer bg-transparent"
         onClick={handleClick}
         onDoubleClick={onOpen}
+        type="button"
       />
     </div>
   );
@@ -232,11 +213,7 @@ function BoardColumn({
   selectedIds: Set<string>;
   onSelect: (id: string) => void;
   onOpen: (id: string) => void;
-  onMultiSelect: (
-    e: React.MouseEvent,
-    issueId: string,
-    columnIssueIds: string[],
-  ) => void;
+  onMultiSelect: (e: React.MouseEvent, issueId: string, columnIssueIds: string[]) => void;
 }) {
   const { setNodeRef } = useDroppable({ id: column.id });
   const columnIssueIds = column.issues.map(i => i.id);
@@ -251,34 +228,27 @@ function BoardColumn({
             style={{ backgroundColor: column.color }}
           />
         )}
-        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-          {column.label}
-        </span>
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">
-          {column.issues.length}
-        </span>
+        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{column.label}</span>
+        <span className="text-xs text-zinc-400 dark:text-zinc-500">{column.issues.length}</span>
       </div>
 
       {/* Cards — column is a droppable area so empty columns accept drops */}
       <div
-        ref={setNodeRef}
         className="flex flex-1 flex-col gap-2 overflow-y-auto rounded-lg bg-zinc-50 p-2 dark:bg-zinc-900/50"
+        ref={setNodeRef}
       >
-        <SortableContext
-          items={columnIssueIds}
-          strategy={verticalListSortingStrategy}
-        >
+        <SortableContext items={columnIssueIds} strategy={verticalListSortingStrategy}>
           {column.issues.map(issue => (
-            <div key={issue.id} className="relative">
+            <div className="relative" key={issue.id}>
               <SortableCard
-                issue={issue}
-                users={users}
-                selected={issue.id === selectedId}
-                multiSelected={selectedIds.has(issue.id)}
-                onSelect={() => onSelect(issue.id)}
-                onOpen={() => onOpen(issue.id)}
-                onMultiSelect={onMultiSelect}
                 columnIssueIds={columnIssueIds}
+                issue={issue}
+                multiSelected={selectedIds.has(issue.id)}
+                onMultiSelect={onMultiSelect}
+                onOpen={() => onOpen(issue.id)}
+                onSelect={() => onSelect(issue.id)}
+                selected={issue.id === selectedId}
+                users={users}
               />
             </div>
           ))}
@@ -297,20 +267,16 @@ function BoardColumn({
 // ─── Swimlane component ──────────────────────────────────────────────────────
 
 interface BoardSwimlaneProps {
-  label: string;
-  issues: IssueRowData[];
   columns: Omit<Column, 'issues'>[];
   groupBy: BoardGroupBy;
-  users: IssueUser[];
+  issues: IssueRowData[];
+  label: string;
+  onMultiSelect: (e: React.MouseEvent, issueId: string, columnIssueIds: string[]) => void;
+  onOpen: (id: string) => void;
+  onSelect: (id: string) => void;
   selectedId: string | null;
   selectedIds: Set<string>;
-  onSelect: (id: string) => void;
-  onOpen: (id: string) => void;
-  onMultiSelect: (
-    e: React.MouseEvent,
-    issueId: string,
-    columnIssueIds: string[],
-  ) => void;
+  users: IssueUser[];
 }
 
 function BoardSwimlane({
@@ -335,35 +301,31 @@ function BoardSwimlane({
     <div className="mb-4">
       {/* Swimlane header */}
       <button
-        type="button"
-        onClick={() => setCollapsed(c => !c)}
         className="mb-2 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
+        onClick={() => setCollapsed(c => !c)}
+        type="button"
       >
         {collapsed ? (
           <ChevronRight className="h-4 w-4 text-zinc-400" />
         ) : (
           <ChevronDown className="h-4 w-4 text-zinc-400" />
         )}
-        <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-          {label}
-        </span>
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">
-          ({issues.length})
-        </span>
+        <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{label}</span>
+        <span className="text-xs text-zinc-400 dark:text-zinc-500">({issues.length})</span>
       </button>
 
       {!collapsed && (
         <div className="flex gap-4 overflow-x-auto pb-4 pl-6">
           {swimlaneColumns.map(col => (
             <BoardColumn
-              key={col.id}
               column={col}
-              users={users}
+              key={col.id}
+              onMultiSelect={onMultiSelect}
+              onOpen={onOpen}
+              onSelect={onSelect}
               selectedId={selectedId}
               selectedIds={selectedIds}
-              onSelect={onSelect}
-              onOpen={onOpen}
-              onMultiSelect={onMultiSelect}
+              users={users}
             />
           ))}
         </div>
@@ -391,9 +353,7 @@ function buildColumnDefs(
         }));
 
     case 'assignee': {
-      const cols: Omit<Column, 'issues'>[] = [
-        { id: 'unassigned', label: 'Unassigned' },
-      ];
+      const cols: Omit<Column, 'issues'>[] = [{ id: 'unassigned', label: 'Unassigned' }];
       for (const user of users) {
         cols.push({ id: user.id, label: user.displayName });
       }
@@ -475,8 +435,7 @@ export function BoardView({
   const columns: Column[] = assignIssuesToColumns(colDefs, issues, groupBy);
 
   // Determine if swimlanes should be active
-  const useSwimlanes =
-    swimlaneBy != null && swimlaneBy !== 'none' && swimlaneBy !== groupBy;
+  const useSwimlanes = swimlaneBy != null && swimlaneBy !== 'none' && swimlaneBy !== groupBy;
 
   // Build swimlane groups when needed
   const swimlaneGroups: {
@@ -524,11 +483,7 @@ export function BoardView({
 
   // ── Multi-select handlers ────────────────────────────────────────────────
 
-  const handleMultiSelect = (
-    e: React.MouseEvent,
-    issueId: string,
-    columnIssueIds: string[],
-  ) => {
+  const handleMultiSelect = (e: React.MouseEvent, issueId: string, columnIssueIds: string[]) => {
     if (e.shiftKey && lastClickedId) {
       // Range select within the column
       const start = columnIssueIds.indexOf(lastClickedId);
@@ -596,16 +551,12 @@ export function BoardView({
       if (groupBy === 'status' && issue.stateId !== targetColumn.id) {
         patch.stateId = targetColumn.id;
       } else if (groupBy === 'assignee') {
-        const newAssigneeId =
-          targetColumn.id === 'unassigned' ? null : targetColumn.id;
+        const newAssigneeId = targetColumn.id === 'unassigned' ? null : targetColumn.id;
         if ((issue.assigneeId ?? null) !== newAssigneeId) {
           patch.assigneeId = newAssigneeId;
         }
       } else if (groupBy === 'priority') {
-        const newPriority = parseInt(
-          targetColumn.id.replace('priority-', ''),
-          10,
-        );
+        const newPriority = parseInt(targetColumn.id.replace('priority-', ''), 10);
         if (issue.priority !== newPriority) {
           patch.priority = newPriority;
         }
@@ -636,8 +587,7 @@ export function BoardView({
           const prev = colIssues[overIndex - 1];
           const next = colIssues[overIndex];
           const prevOrder = (prev as { sortOrder?: number })?.sortOrder ?? 0;
-          const nextOrder =
-            (next as { sortOrder?: number })?.sortOrder ?? prevOrder + 1;
+          const nextOrder = (next as { sortOrder?: number })?.sortOrder ?? prevOrder + 1;
           patch.sortOrder = (prevOrder + nextOrder) / 2;
         }
       }
@@ -649,8 +599,7 @@ export function BoardView({
   };
 
   const activeIssue = activeId ? issues.find(i => i.id === activeId) : null;
-  const isDraggingMultiple =
-    activeId != null && selectedIds.has(activeId) && selectedIds.size > 1;
+  const isDraggingMultiple = activeId != null && selectedIds.has(activeId) && selectedIds.size > 1;
 
   if (issues.length === 0) {
     return (
@@ -661,26 +610,22 @@ export function BoardView({
   }
 
   return (
-    <DndContext
-      sensors={sensors}
-      onDragEnd={handleDragEnd}
-      onDragStart={handleDragStart}
-    >
+    <DndContext onDragEnd={handleDragEnd} onDragStart={handleDragStart} sensors={sensors}>
       {useSwimlanes ? (
         <div className="p-4">
           {swimlaneGroups.map(group => (
             <BoardSwimlane
-              key={group.id}
-              label={group.label}
-              issues={group.issues}
               columns={colDefs}
               groupBy={groupBy}
-              users={users}
+              issues={group.issues}
+              key={group.id}
+              label={group.label}
+              onMultiSelect={handleMultiSelect}
+              onOpen={onOpen}
+              onSelect={onSelect}
               selectedId={selectedId}
               selectedIds={selectedIds}
-              onSelect={onSelect}
-              onOpen={onOpen}
-              onMultiSelect={handleMultiSelect}
+              users={users}
             />
           ))}
         </div>
@@ -688,14 +633,14 @@ export function BoardView({
         <div className="flex gap-4 overflow-x-auto p-4">
           {columns.map(column => (
             <BoardColumn
-              key={column.id}
               column={column}
-              users={users}
+              key={column.id}
+              onMultiSelect={handleMultiSelect}
+              onOpen={onOpen}
+              onSelect={onSelect}
               selectedId={selectedId}
               selectedIds={selectedIds}
-              onSelect={onSelect}
-              onOpen={onOpen}
-              onMultiSelect={handleMultiSelect}
+              users={users}
             />
           ))}
         </div>
@@ -711,13 +656,13 @@ export function BoardView({
             </div>
           ) : (
             <BoardCardInner
-              issue={activeIssue}
-              users={users}
-              selected={false}
-              multiSelected={false}
-              onSelect={() => {}}
-              onOpen={() => {}}
               isDragging
+              issue={activeIssue}
+              multiSelected={false}
+              onOpen={() => {}}
+              onSelect={() => {}}
+              selected={false}
+              users={users}
             />
           ))}
       </DragOverlay>

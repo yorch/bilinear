@@ -1,15 +1,10 @@
-import type {
-  Comment,
-  CommentReaction,
-  Prisma,
-  PrismaClient,
-} from '../../generated/prisma';
+import type { Comment, CommentReaction, Prisma, PrismaClient } from '../../generated/prisma';
 
 export interface CommentCreateInput {
-  id?: string;
-  issueId: string;
   body: string;
   bodyData?: Record<string, unknown>;
+  id?: string;
+  issueId: string;
   parentId?: string;
 }
 
@@ -80,10 +75,7 @@ export class CommentService {
    * resolvers translate null into NOT_FOUND and chain a requireTeamMember
    * check against the returned teamId.
    */
-  async findAccessTarget(
-    commentId: string,
-    orgId: string,
-  ): Promise<CommentAccessTarget | null> {
+  async findAccessTarget(commentId: string, orgId: string): Promise<CommentAccessTarget | null> {
     const row = await this.prisma.comment.findUnique({
       select: { issue: { select: { organizationId: true, teamId: true } } },
       where: { id: commentId },
@@ -97,10 +89,7 @@ export class CommentService {
 
   async findById(
     id: string,
-  ): Promise<
-    | (Comment & { author: unknown; reactions: unknown[]; replies: unknown[] })
-    | null
-  > {
+  ): Promise<(Comment & { author: unknown; reactions: unknown[]; replies: unknown[] }) | null> {
     return this.prisma.comment.findUnique({
       include: COMMENT_INCLUDE,
       where: { id },
@@ -114,10 +103,7 @@ export class CommentService {
     >;
   }
 
-  async findByIssueId(
-    issueId: string,
-    includeArchived = false,
-  ): Promise<Comment[]> {
+  async findByIssueId(issueId: string, includeArchived = false): Promise<Comment[]> {
     return this.prisma.comment.findMany({
       include: COMMENT_INCLUDE,
       orderBy: { createdAt: 'asc' },
@@ -132,9 +118,7 @@ export class CommentService {
   async create(
     authorId: string,
     input: CommentCreateInput,
-  ): Promise<
-    Comment & { author: unknown; reactions: unknown[]; replies: unknown[] }
-  > {
+  ): Promise<Comment & { author: unknown; reactions: unknown[]; replies: unknown[] }> {
     if (input.parentId) {
       const parent = await this.prisma.comment.findUnique({
         select: { archivedAt: true, issueId: true },
@@ -149,9 +133,7 @@ export class CommentService {
       data: {
         authorId,
         body: input.body,
-        bodyData: (input.bodyData ?? undefined) as
-          | Prisma.InputJsonValue
-          | undefined,
+        bodyData: (input.bodyData ?? undefined) as Prisma.InputJsonValue | undefined,
         id: input.id ?? undefined,
         issueId: input.issueId,
         parentId: input.parentId ?? null,
@@ -168,9 +150,7 @@ export class CommentService {
     id: string,
     userId: string,
     input: CommentUpdateInput,
-  ): Promise<
-    Comment & { author: unknown; reactions: unknown[]; replies: unknown[] }
-  > {
+  ): Promise<Comment & { author: unknown; reactions: unknown[]; replies: unknown[] }> {
     const existing = await this.prisma.comment.findUnique({ where: { id } });
     if (!existing) {
       throw new CommentNotFoundError();
@@ -182,9 +162,7 @@ export class CommentService {
     return this.prisma.comment.update({
       data: {
         body: input.body ?? undefined,
-        bodyData: (input.bodyData ?? undefined) as
-          | Prisma.InputJsonValue
-          | undefined,
+        bodyData: (input.bodyData ?? undefined) as Prisma.InputJsonValue | undefined,
         editedAt: new Date(),
       },
       include: COMMENT_INCLUDE,
@@ -215,9 +193,7 @@ export class CommentService {
   async resolve(
     id: string,
     userId: string,
-  ): Promise<
-    Comment & { author: unknown; reactions: unknown[]; replies: unknown[] }
-  > {
+  ): Promise<Comment & { author: unknown; reactions: unknown[]; replies: unknown[] }> {
     const existing = await this.prisma.comment.findUnique({ where: { id } });
     if (!existing) {
       throw new CommentNotFoundError();
@@ -236,9 +212,7 @@ export class CommentService {
 
   async unresolve(
     id: string,
-  ): Promise<
-    Comment & { author: unknown; reactions: unknown[]; replies: unknown[] }
-  > {
+  ): Promise<Comment & { author: unknown; reactions: unknown[]; replies: unknown[] }> {
     const existing = await this.prisma.comment.findUnique({ where: { id } });
     if (!existing) {
       throw new CommentNotFoundError();
@@ -275,11 +249,7 @@ export class CommentService {
     }) as unknown as CommentReaction & { user: unknown };
   }
 
-  async removeReaction(
-    commentId: string,
-    userId: string,
-    emoji: string,
-  ): Promise<{ id: string }> {
+  async removeReaction(commentId: string, userId: string, emoji: string): Promise<{ id: string }> {
     const reaction = await this.prisma.commentReaction.findUnique({
       where: { commentId_userId_emoji: { commentId, emoji, userId } },
     });

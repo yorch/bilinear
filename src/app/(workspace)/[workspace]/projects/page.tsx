@@ -40,8 +40,7 @@ export default observer(function ProjectsPage() {
       const res = await gql(PROJECT_CREATE_MUTATION, { input });
       if (res.errors?.length) {
         throw new Error(
-          (res.errors[0] as { message: string }).message ??
-            'Failed to create project',
+          (res.errors[0] as { message: string }).message ?? 'Failed to create project',
         );
       }
       toast.success('Project created');
@@ -53,9 +52,9 @@ export default observer(function ProjectsPage() {
     <>
       <ProjectListView workspaceKey={workspace} />
       <CreateProjectModal
-        open={uiStore.createProjectModalOpen}
         onClose={() => uiStore.closeCreateProjectModal()}
         onSubmit={handleCreateProject}
+        open={uiStore.createProjectModalOpen}
       />
     </>
   );

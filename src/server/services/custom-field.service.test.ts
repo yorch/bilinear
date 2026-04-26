@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { TEST_TEAM } from '../../test/fixtures';
-import {
-  createMockPrisma,
-  type MockPrismaClient,
-} from '../../test/prisma-mock';
+import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
   CustomFieldDefinitionNotFoundError,
   CustomFieldInvalidOptionsError,
@@ -111,9 +108,7 @@ describe('CustomFieldService', () => {
     });
 
     it('throws when team already has max fields', async () => {
-      prisma.customFieldDefinition.count.mockResolvedValue(
-        MAX_CUSTOM_FIELDS_PER_TEAM,
-      );
+      prisma.customFieldDefinition.count.mockResolvedValue(MAX_CUSTOM_FIELDS_PER_TEAM);
       await expect(
         service.createDefinition({
           name: 'X',
@@ -145,9 +140,9 @@ describe('CustomFieldService', () => {
 
     it('throws NotFound when missing', async () => {
       prisma.customFieldDefinition.findUnique.mockResolvedValue(null);
-      await expect(
-        service.updateDefinition('missing', { name: 'X' }),
-      ).rejects.toBeInstanceOf(CustomFieldDefinitionNotFoundError);
+      await expect(service.updateDefinition('missing', { name: 'X' })).rejects.toBeInstanceOf(
+        CustomFieldDefinitionNotFoundError,
+      );
     });
 
     it('validates options against existing type on update', async () => {
@@ -192,9 +187,7 @@ describe('CustomFieldService', () => {
       prisma.customFieldDefinition.findMany.mockResolvedValue([TEST_DEF]);
       prisma.customFieldValue.upsert.mockResolvedValue({});
 
-      await service.setValuesForIssue('issue-1', [
-        { definitionId: TEST_DEF.id, value: 'low' },
-      ]);
+      await service.setValuesForIssue('issue-1', [{ definitionId: TEST_DEF.id, value: 'low' }]);
 
       expect(prisma.customFieldValue.upsert).toHaveBeenCalledWith({
         create: {
@@ -216,9 +209,7 @@ describe('CustomFieldService', () => {
       prisma.customFieldDefinition.findMany.mockResolvedValue([TEST_DEF]);
       prisma.customFieldValue.deleteMany.mockResolvedValue({ count: 1 });
 
-      await service.setValuesForIssue('issue-1', [
-        { definitionId: TEST_DEF.id, value: null },
-      ]);
+      await service.setValuesForIssue('issue-1', [{ definitionId: TEST_DEF.id, value: null }]);
 
       expect(prisma.customFieldValue.deleteMany).toHaveBeenCalledWith({
         where: { definitionId: TEST_DEF.id, issueId: 'issue-1' },
@@ -237,18 +228,14 @@ describe('CustomFieldService', () => {
     it('rejects unknown definition', async () => {
       prisma.customFieldDefinition.findMany.mockResolvedValue([]);
       await expect(
-        service.setValuesForIssue('issue-1', [
-          { definitionId: 'nope', value: 'x' },
-        ]),
+        service.setValuesForIssue('issue-1', [{ definitionId: 'nope', value: 'x' }]),
       ).rejects.toBeInstanceOf(CustomFieldDefinitionNotFoundError);
     });
   });
 
   describe('validateValueForType', () => {
     it('accepts valid URL', () => {
-      expect(() =>
-        validateValueForType('url', 'https://example.com', null),
-      ).not.toThrow();
+      expect(() => validateValueForType('url', 'https://example.com', null)).not.toThrow();
     });
 
     it('rejects non-URL string for url type', () => {
@@ -258,9 +245,7 @@ describe('CustomFieldService', () => {
     });
 
     it('accepts ISO date', () => {
-      expect(() =>
-        validateValueForType('date', '2026-04-16', null),
-      ).not.toThrow();
+      expect(() => validateValueForType('date', '2026-04-16', null)).not.toThrow();
     });
 
     it('rejects bad date string', () => {
@@ -274,12 +259,10 @@ describe('CustomFieldService', () => {
         { label: 'A', value: 'a' },
         { label: 'B', value: 'b' },
       ];
-      expect(() =>
-        validateValueForType('multi_select', ['a', 'b'], opts),
-      ).not.toThrow();
-      expect(() =>
-        validateValueForType('multi_select', ['a', 'c'], opts),
-      ).toThrow(CustomFieldInvalidValueError);
+      expect(() => validateValueForType('multi_select', ['a', 'b'], opts)).not.toThrow();
+      expect(() => validateValueForType('multi_select', ['a', 'c'], opts)).toThrow(
+        CustomFieldInvalidValueError,
+      );
     });
 
     it('accepts boolean for checkbox', () => {

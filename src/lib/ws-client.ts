@@ -11,13 +11,13 @@ export type WsMessage =
   | { cmd: 'resync' };
 
 export interface SerializedSyncAction {
-  id: string;
-  organizationId: string;
   action: string;
-  modelName: string;
-  modelId: string;
-  data: object | null;
   createdAt: string;
+  data: object | null;
+  id: string;
+  modelId: string;
+  modelName: string;
+  organizationId: string;
 }
 
 type MessageHandler = (msg: WsMessage) => void;
@@ -121,10 +121,7 @@ export class WsClient {
       return;
     }
     this.reconnectTimer = setTimeout(() => {
-      this.reconnectDelay = Math.min(
-        this.reconnectDelay * 2,
-        MAX_RECONNECT_DELAY_MS,
-      );
+      this.reconnectDelay = Math.min(this.reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
       this.openSocket();
     }, this.reconnectDelay);
   }

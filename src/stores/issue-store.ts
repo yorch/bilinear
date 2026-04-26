@@ -16,9 +16,7 @@ export class IssueStore {
   }
 
   get all(): DBIssue[] {
-    return Array.from(this.pool.values()).filter(
-      i => !i.trashed && !i.archivedAt,
-    );
+    return Array.from(this.pool.values()).filter(i => !i.trashed && !i.archivedAt);
   }
 
   findById(id: string): DBIssue | null {
@@ -53,9 +51,7 @@ export class IssueStore {
       .filter(i => !i.trashed && !i.archivedAt)
       .map(issue => ({
         issue,
-        score:
-          fuzzyScore(issue.identifier, trimmed) * 1.2 +
-          fuzzyScore(issue.title, trimmed),
+        score: fuzzyScore(issue.identifier, trimmed) * 1.2 + fuzzyScore(issue.title, trimmed),
       }))
       .filter(m => m.score > 0)
       .sort((a, b) => b.score - a.score)

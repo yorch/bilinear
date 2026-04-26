@@ -24,10 +24,7 @@ export function csvCell(value: unknown): string {
 }
 
 /** Build a CSV string from a header row plus rows of matching arity. */
-export function rowsToCsv(
-  headers: string[],
-  rows: ReadonlyArray<ReadonlyArray<unknown>>,
-): string {
+export function rowsToCsv(headers: string[], rows: ReadonlyArray<ReadonlyArray<unknown>>): string {
   const lines: string[] = [];
   lines.push(headers.map(csvCell).join(','));
   for (const row of rows) {

@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { TEST_TEAM, TEST_USER } from '../../test/fixtures';
-import {
-  createMockPrisma,
-  type MockPrismaClient,
-} from '../../test/prisma-mock';
+import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import { IssueTemplateService } from './issue-template.service';
 
 const TEST_TEMPLATE = {

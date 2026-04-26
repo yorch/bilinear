@@ -6,11 +6,7 @@ import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
-import {
-  type BoardGroupBy,
-  type BoardSwimlaneBy,
-  BoardView,
-} from '@/components/issues/board-view';
+import { type BoardGroupBy, type BoardSwimlaneBy, BoardView } from '@/components/issues/board-view';
 import { ColumnPicker } from '@/components/issues/column-picker';
 import { CreateIssueModal } from '@/components/issues/create-issue-modal';
 import { CsvExportButton } from '@/components/issues/csv-export-button';
@@ -23,11 +19,7 @@ import { useChord, useHotkeys } from '@/hooks/use-hotkeys';
 import { useRecentItems } from '@/hooks/use-recent-items';
 import { useVisibleColumns } from '@/hooks/use-visible-columns';
 import type { DBIssue, DBIssueLabel } from '@/lib/db';
-import {
-  applyFilters,
-  createEmptyFilterSet,
-  type FilterSet,
-} from '@/lib/filter-engine';
+import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
@@ -164,15 +156,18 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   );
 
   // Column visibility is per-team so switching teams gives a fresh pick.
-  const { isVisible: isColumnVisible, toggle: toggleColumn } =
-    useVisibleColumns(teamId ?? 'no-team');
+  const { isVisible: isColumnVisible, toggle: toggleColumn } = useVisibleColumns(
+    teamId ?? 'no-team',
+  );
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: MobX observables — values.size change triggers re-filter on value updates
   const issues = useMemo(
     () =>
-      applyFilters(allIssues, filterSet, (issueId, definitionId) => {
-        return customFieldStore.findValue(issueId, definitionId)?.value ?? null;
-      }),
+      applyFilters(
+        allIssues,
+        filterSet,
+        (issueId, definitionId) => customFieldStore.findValue(issueId, definitionId)?.value ?? null,
+      ),
     [allIssues, filterSet, customFieldStore.values.size],
   );
 
@@ -190,8 +185,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     name: l.name,
   }));
 
-  const isLoading =
-    syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
+  const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
   const hasError = syncStore.status === 'error';
 
   const detailIssue: IssueDetail | null = (() => {
@@ -226,8 +220,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
             }
           },
           onSuccess: data => {
-            const updated = (data as { issueUpdate?: { issue?: DBIssue } })
-              ?.issueUpdate?.issue;
+            const updated = (data as { issueUpdate?: { issue?: DBIssue } })?.issueUpdate?.issue;
             if (updated) {
               issueStore.applySyncAction('U', id, updated);
             }
@@ -256,10 +249,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
       const tempId = `temp-${crypto.randomUUID()}`;
       const now = new Date().toISOString();
       const effectiveStateId =
-        input.stateId ??
-        states.find(s => s.type === 'backlog')?.id ??
-        states[0]?.id ??
-        '';
+        input.stateId ?? states.find(s => s.type === 'backlog')?.id ?? states[0]?.id ?? '';
       issueStore.applySyncAction('I', tempId, {
         archivedAt: null,
         assigneeId: input.assigneeId ?? null,
@@ -301,8 +291,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
             });
           },
           onSuccess: data => {
-            const created = (data as { issueCreate?: { issue?: DBIssue } })
-              ?.issueCreate?.issue;
+            const created = (data as { issueCreate?: { issue?: DBIssue } })?.issueCreate?.issue;
             runInAction(() => {
               issueStore.pool.delete(tempId);
               if (created) {
@@ -429,42 +418,18 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   );
 
   // Issue context shortcuts — only active when an issue is selected
-  useHotkeys('s', () => setOpenProperty('status'), { enabled: hasSelection }, [
+  useHotkeys('s', () => setOpenProperty('status'), { enabled: hasSelection }, [hasSelection]);
+  useHotkeys('a', () => setOpenProperty('assignee'), { enabled: hasSelection }, [hasSelection]);
+  useHotkeys('p', () => setOpenProperty('priority'), { enabled: hasSelection }, [hasSelection]);
+  useHotkeys('l', () => setOpenProperty('label'), { enabled: hasSelection }, [hasSelection]);
+  useHotkeys('d', () => setOpenProperty('dueDate'), { enabled: hasSelection }, [hasSelection]);
+  useHotkeys('shift+p', () => setOpenProperty('project'), { enabled: hasSelection }, [
     hasSelection,
   ]);
-  useHotkeys(
-    'a',
-    () => setOpenProperty('assignee'),
-    { enabled: hasSelection },
-    [hasSelection],
-  );
-  useHotkeys(
-    'p',
-    () => setOpenProperty('priority'),
-    { enabled: hasSelection },
-    [hasSelection],
-  );
-  useHotkeys('l', () => setOpenProperty('label'), { enabled: hasSelection }, [
+  useHotkeys('q', () => setOpenProperty('cycle'), { enabled: hasSelection }, [hasSelection]);
+  useHotkeys('shift+e', () => setOpenProperty('estimate'), { enabled: hasSelection }, [
     hasSelection,
   ]);
-  useHotkeys('d', () => setOpenProperty('dueDate'), { enabled: hasSelection }, [
-    hasSelection,
-  ]);
-  useHotkeys(
-    'shift+p',
-    () => setOpenProperty('project'),
-    { enabled: hasSelection },
-    [hasSelection],
-  );
-  useHotkeys('q', () => setOpenProperty('cycle'), { enabled: hasSelection }, [
-    hasSelection,
-  ]);
-  useHotkeys(
-    'shift+e',
-    () => setOpenProperty('estimate'),
-    { enabled: hasSelection },
-    [hasSelection],
-  );
 
   // Backspace / Delete — archive selected issue
   useHotkeys(
@@ -521,9 +486,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Loading…
-      </div>
+      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">Loading…</div>
     );
   }
 
@@ -543,8 +506,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     );
   }
 
-  const defaultStateId =
-    states.find(s => s.type === 'backlog')?.id ?? states[0]?.id;
+  const defaultStateId = states.find(s => s.type === 'backlog')?.id ?? states[0]?.id;
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -557,18 +519,18 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
           {viewMode === 'board' && (
             <>
               <select
-                value={boardGroupBy}
-                onChange={e => setBoardGroupBy(e.target.value as BoardGroupBy)}
                 className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                onChange={e => setBoardGroupBy(e.target.value as BoardGroupBy)}
+                value={boardGroupBy}
               >
                 <option value="status">Group by status</option>
                 <option value="assignee">Group by assignee</option>
                 <option value="priority">Group by priority</option>
               </select>
               <select
-                value={swimlaneBy}
-                onChange={e => setSwimlaneBy(e.target.value as BoardSwimlaneBy)}
                 className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                onChange={e => setSwimlaneBy(e.target.value as BoardSwimlaneBy)}
+                value={swimlaneBy}
               >
                 <option value="none">No swimlanes</option>
                 <option value="assignee">Swimlane by assignee</option>
@@ -578,16 +540,16 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
           )}
           <ViewToggle mode={viewMode} onChange={setViewMode} />
           <Link
+            className="flex items-center justify-center rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
             href={`/${workspace}/team/${teamKey}/settings`}
             title="Team settings"
-            className="flex items-center justify-center rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
           >
             <Settings className="h-4 w-4" />
           </Link>
           <button
-            type="button"
-            onClick={() => setCreateOpen(true)}
             className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+            onClick={() => setCreateOpen(true)}
+            type="button"
           >
             New issue
           </button>
@@ -597,27 +559,17 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
       {/* Filter bar */}
       <div className="flex items-center justify-between gap-2 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
         <FilterBuilder
+          customFields={customFieldDefs}
           filterSet={filterSet}
+          labels={labels}
           onChange={setFilterSet}
           states={states}
           users={users}
-          labels={labels}
-          customFields={customFieldDefs}
         />
         {viewMode === 'list' && (
           <div className="flex items-center gap-1">
             <CsvExportButton
-              issues={issues}
-              states={states}
-              users={users}
-              projectsById={
-                new Map(
-                  Array.from(projectStore.pool.values()).map(p => [
-                    p.id,
-                    { name: p.name },
-                  ]),
-                )
-              }
+              customFields={customFieldDefs}
               cyclesById={
                 new Map(
                   Array.from(cycleStore.pool.values()).map(c => [
@@ -626,16 +578,21 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
                   ]),
                 )
               }
-              customFields={customFieldDefs}
               getCustomFieldValue={(issueId, definitionId) =>
                 customFieldStore.findValue(issueId, definitionId)?.value ?? null
               }
+              issues={issues}
+              projectsById={
+                new Map(Array.from(projectStore.pool.values()).map(p => [p.id, { name: p.name }]))
+              }
+              states={states}
               stem={`team-${team?.key ?? 'issues'}-issues`}
+              users={users}
             />
             <ColumnPicker
+              customFields={customFieldDefs}
               isVisible={isColumnVisible}
               onToggle={toggleColumn}
-              customFields={customFieldDefs}
             />
           </div>
         )}
@@ -645,37 +602,37 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
       <div className="flex-1 overflow-y-auto">
         {viewMode === 'list' ? (
           <IssueListView
-            issues={issues}
-            states={states}
-            users={users}
-            labels={labels}
-            teamId={teamId ?? undefined}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            onOpen={handleOpen}
-            onUpdate={handleUpdate}
-            onArchive={handleArchive}
-            onDelete={handleDelete}
-            openProperty={openProperty}
-            onPropertyClosed={() => setOpenProperty(null)}
-            isColumnVisible={isColumnVisible}
             customFields={customFieldDefs}
             getCustomFieldValue={(issueId, definitionId) =>
               customFieldStore.findValue(issueId, definitionId)?.value ?? null
             }
+            isColumnVisible={isColumnVisible}
+            issues={issues}
+            labels={labels}
+            onArchive={handleArchive}
+            onDelete={handleDelete}
+            onOpen={handleOpen}
+            onPropertyClosed={() => setOpenProperty(null)}
+            onSelect={setSelectedId}
+            onUpdate={handleUpdate}
+            openProperty={openProperty}
+            selectedId={selectedId}
+            states={states}
+            teamId={teamId ?? undefined}
+            users={users}
           />
         ) : (
           <BoardView
-            issues={issues}
-            states={states}
-            users={users}
-            labels={labels}
             groupBy={boardGroupBy}
-            swimlaneBy={swimlaneBy}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
+            issues={issues}
+            labels={labels}
             onOpen={handleOpen}
+            onSelect={setSelectedId}
             onUpdate={handleUpdate}
+            selectedId={selectedId}
+            states={states}
+            swimlaneBy={swimlaneBy}
+            users={users}
           />
         )}
       </div>
@@ -683,26 +640,26 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
       {/* Detail panel (lazy-loaded) */}
       <LazyIssueDetailPanel
         issue={detailIssue}
-        states={states}
-        users={users}
         labels={labels}
         onClose={() => {
           setDetailIssueId(null);
           router.replace(`/${workspace}/team/${teamKey}`, { scroll: false });
         }}
         onUpdate={handleUpdate}
+        states={states}
+        users={users}
       />
 
       {/* Create modal */}
       <CreateIssueModal
-        open={createOpen}
+        defaultStateId={defaultStateId}
+        labels={labels}
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreate}
+        open={createOpen}
         states={states}
-        users={users}
-        labels={labels}
-        defaultStateId={defaultStateId}
         teamId={teamId ?? undefined}
+        users={users}
       />
     </div>
   );

@@ -1,9 +1,5 @@
 import { GraphQLError } from 'graphql';
-import {
-  requireAuth,
-  requireTeamMember,
-  requireTeamOwner,
-} from '../../middleware/auth';
+import { requireAuth, requireTeamMember, requireTeamOwner } from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
 
 export const teamMembershipResolvers = {
@@ -63,11 +59,7 @@ export const teamMembershipResolvers = {
       }
     },
 
-    teamMembershipDelete: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    teamMembershipDelete: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       const membership = await ctx.services.team.findMembershipWithTeam(id);
@@ -119,10 +111,7 @@ export const teamMembershipResolvers = {
         await requireTeamMember(ctx.prisma, membership.teamId, ctx.userId);
       }
 
-      const teamMembership = await ctx.services.team.updateMembership(
-        id,
-        input,
-      );
+      const teamMembership = await ctx.services.team.updateMembership(id, input);
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
         'U',

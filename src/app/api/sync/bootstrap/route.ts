@@ -94,9 +94,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (err) {
     logger.error({ err }, '[sync/bootstrap] Error');
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

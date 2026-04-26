@@ -29,9 +29,7 @@ export class ProjectStore {
         if (b.prioritySortOrder !== a.prioritySortOrder) {
           return b.prioritySortOrder - a.prioritySortOrder;
         }
-        return (
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
   }
 
@@ -96,11 +94,7 @@ export class ProjectStore {
     }
   }
 
-  applyMilestoneSyncAction(
-    actionType: string,
-    id: string,
-    data: DBProjectMilestone | null,
-  ) {
+  applyMilestoneSyncAction(actionType: string, id: string, data: DBProjectMilestone | null) {
     if (actionType === 'I' || actionType === 'U' || actionType === 'A') {
       if (data) {
         this.milestonePool.set(id, data);
@@ -110,11 +104,7 @@ export class ProjectStore {
     }
   }
 
-  applyUpdateSyncAction(
-    actionType: string,
-    id: string,
-    data: DBProjectUpdate | null,
-  ) {
+  applyUpdateSyncAction(actionType: string, id: string, data: DBProjectUpdate | null) {
     if (actionType === 'I' || actionType === 'U' || actionType === 'A') {
       if (data) {
         this.updatePool.set(id, data);

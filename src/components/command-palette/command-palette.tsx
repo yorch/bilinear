@@ -2,13 +2,7 @@
 
 import { observer } from 'mobx-react-lite';
 import { useParams, useRouter } from 'next/navigation';
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { RecentItem } from '@/hooks/use-recent-items';
 import type { DBIssue } from '@/lib/db';
 import { getPriorityConfig } from '@/lib/issue-utils';
@@ -64,14 +58,7 @@ interface CommandPaletteProps {
 export const CommandPalette = observer(function CommandPalette({
   recentItems = [],
 }: CommandPaletteProps) {
-  const {
-    uiStore,
-    issueStore,
-    workflowStateStore,
-    userStore,
-    labelStore,
-    teamStore,
-  } = useStore();
+  const { uiStore, issueStore, workflowStateStore, userStore, labelStore, teamStore } = useStore();
   const router = useRouter();
   // Read workspace key from URL — works in any nested route under [workspace]
   const params = useParams<{ workspace?: string }>();
@@ -95,16 +82,13 @@ export const CommandPalette = observer(function CommandPalette({
 
   // Ensure active index stays in bounds
   const clampIndex = useCallback(
-    (items: unknown[], idx: number) =>
-      Math.max(0, Math.min(idx, items.length - 1)),
+    (items: unknown[], idx: number) => Math.max(0, Math.min(idx, items.length - 1)),
     [],
   );
 
   // Scroll active item into view
   useEffect(() => {
-    const el = listRef.current?.querySelector(
-      `[data-idx="${activeIndex}"]`,
-    ) as HTMLElement | null;
+    const el = listRef.current?.querySelector(`[data-idx="${activeIndex}"]`) as HTMLElement | null;
     el?.scrollIntoView({ block: 'nearest' });
   }, [activeIndex]);
 
@@ -160,9 +144,7 @@ export const CommandPalette = observer(function CommandPalette({
 
     const q = query.toLowerCase();
     return actions.filter(
-      a =>
-        a.label.toLowerCase().includes(q) ||
-        a.keywords.some(k => k.includes(q)),
+      a => a.label.toLowerCase().includes(q) || a.keywords.some(k => k.includes(q)),
     );
   }, [query, uiStore, router, workspaceKey]);
 
@@ -348,75 +330,75 @@ export const CommandPalette = observer(function CommandPalette({
     <>
       {/* Backdrop */}
       <div
+        aria-hidden="true"
         className="fixed inset-0 z-50 bg-black/30"
         onClick={() => uiStore.closeCommandPalette()}
-        aria-hidden="true"
       />
 
       {/* Dialog */}
       <div
-        role="dialog"
-        aria-modal="true"
         aria-label="Command palette"
-        data-testid="command-palette"
+        aria-modal="true"
         className="fixed left-1/2 top-[20%] z-50 w-full max-w-xl -translate-x-1/2 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900"
+        data-testid="command-palette"
+        role="dialog"
       >
         {/* Search input */}
         <div className="flex items-center gap-2 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
           {inSubMenu && (
             <button
-              type="button"
+              aria-label="Back"
+              className="flex-shrink-0 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
               onClick={() => {
                 setSubMenu({ type: 'none' });
                 setActiveIndex(0);
               }}
-              className="flex-shrink-0 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-              aria-label="Back"
+              type="button"
             >
               ← Back
             </button>
           )}
           <svg
+            aria-hidden="true"
             className="h-4 w-4 flex-shrink-0 text-zinc-400"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
-            aria-hidden="true"
           >
             <path
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth={2}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
             />
           </svg>
           <input
-            ref={inputRef}
-            type="text"
-            value={query}
+            aria-label={
+              inSubMenu
+                ? (SUBMENU_PLACEHOLDERS[subMenu.type] ?? 'Search')
+                : 'Search issues and commands'
+            }
+            autoComplete="off"
+            className="flex-1 bg-transparent text-sm text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
             onChange={e => setQuery(e.target.value)}
             placeholder={
               inSubMenu
                 ? (SUBMENU_PLACEHOLDERS[subMenu.type] ?? 'Search…')
                 : 'Search issues, commands…'
             }
-            aria-label={
-              inSubMenu
-                ? (SUBMENU_PLACEHOLDERS[subMenu.type] ?? 'Search')
-                : 'Search issues and commands'
-            }
-            className="flex-1 bg-transparent text-sm text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
-            autoComplete="off"
+            ref={inputRef}
             spellCheck={false}
+            type="text"
+            value={query}
           />
         </div>
 
         {/* Results */}
         <div
-          ref={listRef}
           className="max-h-80 overflow-y-auto py-1"
-          role="listbox"
           data-testid="command-palette-results"
+          ref={listRef}
+          role="listbox"
         >
           {inSubMenu ? (
             <>
@@ -425,22 +407,20 @@ export const CommandPalette = observer(function CommandPalette({
               )}
               {subItems.map((item, i) => (
                 <button
-                  key={item.label}
-                  type="button"
-                  role="option"
                   aria-selected={i === activeIndex}
-                  data-idx={i}
-                  onClick={item.onSelect}
                   className={cn(
                     'flex w-full items-center gap-3 px-4 py-2 text-sm',
                     i === activeIndex
                       ? 'bg-zinc-100 dark:bg-zinc-800'
                       : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
                   )}
+                  data-idx={i}
+                  key={item.label}
+                  onClick={item.onSelect}
+                  role="option"
+                  type="button"
                 >
-                  <span className="text-zinc-900 dark:text-zinc-100">
-                    {item.label}
-                  </span>
+                  <span className="text-zinc-900 dark:text-zinc-100">{item.label}</span>
                 </button>
               ))}
             </>
@@ -465,22 +445,20 @@ export const CommandPalette = observer(function CommandPalette({
                     const globalIdx = i;
                     return (
                       <button
-                        key={item.issue.id}
-                        type="button"
-                        role="option"
                         aria-selected={globalIdx === activeIndex}
-                        data-idx={globalIdx}
-                        data-testid="command-palette-item"
-                        data-highlighted={
-                          globalIdx === activeIndex ? 'true' : undefined
-                        }
-                        onClick={() => selectItem(item)}
                         className={cn(
                           'flex w-full items-center gap-3 px-4 py-2 text-sm',
                           globalIdx === activeIndex
                             ? 'bg-zinc-100 dark:bg-zinc-800'
                             : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
                         )}
+                        data-highlighted={globalIdx === activeIndex ? 'true' : undefined}
+                        data-idx={globalIdx}
+                        data-testid="command-palette-item"
+                        key={item.issue.id}
+                        onClick={() => selectItem(item)}
+                        role="option"
+                        type="button"
                       >
                         {item.stateColor && (
                           <span
@@ -518,22 +496,20 @@ export const CommandPalette = observer(function CommandPalette({
                     const globalIdx = issueItems.length + i;
                     return (
                       <button
-                        key={item.id}
-                        type="button"
-                        role="option"
                         aria-selected={globalIdx === activeIndex}
-                        data-idx={globalIdx}
-                        data-testid="command-palette-item"
-                        data-highlighted={
-                          globalIdx === activeIndex ? 'true' : undefined
-                        }
-                        onClick={() => selectItem(item)}
                         className={cn(
                           'flex w-full items-center gap-3 px-4 py-2 text-sm',
                           globalIdx === activeIndex
                             ? 'bg-zinc-100 dark:bg-zinc-800'
                             : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
                         )}
+                        data-highlighted={globalIdx === activeIndex ? 'true' : undefined}
+                        data-idx={globalIdx}
+                        data-testid="command-palette-item"
+                        key={item.id}
+                        onClick={() => selectItem(item)}
+                        role="option"
+                        type="button"
                       >
                         <span className="flex-1 truncate text-zinc-900 dark:text-zinc-100">
                           {item.label}
@@ -555,21 +531,14 @@ export const CommandPalette = observer(function CommandPalette({
         {/* Footer */}
         <div className="flex items-center gap-4 border-t border-zinc-100 px-4 py-2 dark:border-zinc-800">
           <span className="text-[10px] text-zinc-400">
-            <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">
-              ↑↓
-            </kbd>{' '}
+            <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">↑↓</kbd>{' '}
             Navigate
           </span>
           <span className="text-[10px] text-zinc-400">
-            <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">
-              ↵
-            </kbd>{' '}
-            Select
+            <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">↵</kbd> Select
           </span>
           <span className="text-[10px] text-zinc-400">
-            <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">
-              Esc
-            </kbd>{' '}
+            <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">Esc</kbd>{' '}
             {inSubMenu ? 'Back' : 'Close'}
           </span>
         </div>

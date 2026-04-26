@@ -28,11 +28,11 @@ import { WorkflowStateService } from '../services/workflow-state.service';
 import { createLoaders, type Loaders } from './loaders';
 
 export interface GraphQLContext extends AuthContext {
-  prisma: PrismaClient;
   /** Best-effort client IP for abuse tracking (X-Forwarded-For / X-Real-IP). */
   clientIp: string | null;
   /** Per-request DataLoader bundle batching N+1 lookups. See ./loaders. */
   loaders: Loaders;
+  prisma: PrismaClient;
   services: {
     auth: AuthService;
     comment: CommentService;

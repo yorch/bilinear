@@ -16,9 +16,7 @@ export interface OrganizationCreateInput {
 
 export class InvalidUrlKeyError extends Error {
   constructor() {
-    super(
-      'URL key must be 3-63 characters, lowercase alphanumeric and hyphens only',
-    );
+    super('URL key must be 3-63 characters, lowercase alphanumeric and hyphens only');
     this.name = 'InvalidUrlKeyError';
   }
 }
@@ -53,10 +51,7 @@ export class OrganizationService {
    * constraint violation to a typed UrlKeyTakenError so resolvers do not
    * have to know about Prisma errors.
    */
-  async createWithOwner(
-    userId: string,
-    input: OrganizationCreateInput,
-  ): Promise<Organization> {
+  async createWithOwner(userId: string, input: OrganizationCreateInput): Promise<Organization> {
     if (!URL_KEY_RE.test(input.urlKey)) {
       throw new InvalidUrlKeyError();
     }
@@ -78,10 +73,7 @@ export class OrganizationService {
         return org;
       });
     } catch (err) {
-      if (
-        err instanceof Prisma.PrismaClientKnownRequestError &&
-        err.code === 'P2002'
-      ) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         throw new UrlKeyTakenError();
       }
       throw err;
@@ -94,11 +86,7 @@ export class OrganizationService {
    * "admin"])). Returns the updated membership row so resolvers can emit a
    * SyncAction without re-querying.
    */
-  async updateMemberRole(
-    orgId: string,
-    userId: string,
-    role: string,
-  ): Promise<OrganizationMember> {
+  async updateMemberRole(orgId: string, userId: string, role: string): Promise<OrganizationMember> {
     if (!VALID_ROLES.includes(role as OrgRole)) {
       throw new InvalidRoleError();
     }
@@ -116,9 +104,7 @@ export class OrganizationService {
     });
   }
 
-  async findMembers(
-    orgId: string,
-  ): Promise<Array<{ userId: string; role: string }>> {
+  async findMembers(orgId: string): Promise<Array<{ userId: string; role: string }>> {
     return this.prisma.organizationMember.findMany({
       select: { role: true, userId: true },
       where: { organizationId: orgId },

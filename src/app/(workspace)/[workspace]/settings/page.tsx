@@ -44,11 +44,11 @@ const UPDATE_ORG_MEMBER_ROLE_MUTATION = `
 // ---------------------------------------------------------------------------
 
 interface OrgInfo {
+  createdAt: string;
+  dataRegion: string;
   id: string;
   name: string;
   urlKey: string;
-  dataRegion: string;
-  createdAt: string;
 }
 
 const ORG_ROLES = ['owner', 'admin', 'member', 'guest'] as const;
@@ -129,18 +129,15 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const allTeams = teamStore.all;
   const teams = useMemo(() => {
     const rootTeams = allTeams.filter(t => !t.parentId);
-    const childTeamsByParent = allTeams.reduce<Record<string, typeof allTeams>>(
-      (acc, t) => {
-        if (t.parentId) {
-          if (!acc[t.parentId]) {
-            acc[t.parentId] = [];
-          }
-          acc[t.parentId].push(t);
+    const childTeamsByParent = allTeams.reduce<Record<string, typeof allTeams>>((acc, t) => {
+      if (t.parentId) {
+        if (!acc[t.parentId]) {
+          acc[t.parentId] = [];
         }
-        return acc;
-      },
-      {},
-    );
+        acc[t.parentId].push(t);
+      }
+      return acc;
+    }, {});
     return rootTeams.flatMap(t => [t, ...(childTeamsByParent[t.id] ?? [])]);
   }, [allTeams]);
 
@@ -216,9 +213,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                 </div>
               </dl>
             ) : (
-              <p className="text-sm text-zinc-400">
-                Could not load organization details.
-              </p>
+              <p className="text-sm text-zinc-400">Could not load organization details.</p>
             )}
           </div>
         </section>
@@ -241,19 +236,16 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   const isChild = !!team.parentId;
                   return (
                     <li
-                      key={team.id}
                       className={cn(
-                        isChild &&
-                          'border-l-2 border-indigo-200 dark:border-indigo-800 ml-4',
+                        isChild && 'border-l-2 border-indigo-200 dark:border-indigo-800 ml-4',
                       )}
+                      key={team.id}
                     >
                       <Link
-                        href={`/${workspace}/team/${team.key}/settings`}
                         className="flex items-center gap-3 px-5 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
+                        href={`/${workspace}/team/${team.key}/settings`}
                       >
-                        {isChild && (
-                          <ChevronRight className="h-3 w-3 shrink-0 text-zinc-400" />
-                        )}
+                        {isChild && <ChevronRight className="h-3 w-3 shrink-0 text-zinc-400" />}
                         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-sm dark:bg-zinc-800">
                           {team.icon ? (
                             <span>{team.icon}</span>
@@ -266,9 +258,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                             {team.displayName || team.name}
                           </p>
                           {team.description && (
-                            <p className="text-xs text-zinc-400 truncate">
-                              {team.description}
-                            </p>
+                            <p className="text-xs text-zinc-400 truncate">{team.description}</p>
                           )}
                         </div>
                         <span className="shrink-0 font-mono text-xs text-zinc-400 dark:text-zinc-500">
@@ -298,29 +288,23 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
           </h2>
           <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 overflow-hidden">
             {members.length === 0 ? (
-              <p className="px-5 py-4 text-sm text-zinc-400">
-                No members found.
-              </p>
+              <p className="px-5 py-4 text-sm text-zinc-400">No members found.</p>
             ) : (
               <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {members.map(user => {
-                  const currentRole = (memberRoles[user.id] ??
-                    'member') as OrgRole;
+                  const currentRole = (memberRoles[user.id] ?? 'member') as OrgRole;
                   const roleBadge = ROLE_BADGES[currentRole];
                   const isUpdating = updatingRole === user.id;
                   return (
-                    <li
-                      key={user.id}
-                      className="flex items-center gap-3 px-5 py-3"
-                    >
+                    <li className="flex items-center gap-3 px-5 py-3" key={user.id}>
                       {user.avatarUrl ? (
                         <Image
-                          src={user.avatarUrl}
                           alt={user.displayName}
-                          width={28}
-                          height={28}
-                          unoptimized
                           className="h-7 w-7 rounded-full object-cover shrink-0"
+                          height={28}
+                          src={user.avatarUrl}
+                          unoptimized
+                          width={28}
                         />
                       ) : (
                         <span
@@ -334,9 +318,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                         <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
                           {user.displayName}
                         </p>
-                        <p className="text-xs text-zinc-400 truncate">
-                          {user.email}
-                        </p>
+                        <p className="text-xs text-zinc-400 truncate">{user.email}</p>
                       </div>
                       {!user.active && (
                         <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-400 dark:bg-zinc-800">
@@ -346,17 +328,15 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                       {/* Role badge + dropdown */}
                       <div className="relative shrink-0">
                         <select
-                          value={currentRole}
-                          disabled={isUpdating}
-                          onChange={e =>
-                            updateMemberRole(user.id, e.target.value as OrgRole)
-                          }
                           className={cn(
                             'appearance-none rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer',
                             'border border-transparent focus:outline-none focus:ring-1 focus:ring-indigo-400',
                             'disabled:opacity-50 disabled:cursor-not-allowed',
                             roleBadge.cls,
                           )}
+                          disabled={isUpdating}
+                          onChange={e => updateMemberRole(user.id, e.target.value as OrgRole)}
+                          value={currentRole}
                         >
                           {ORG_ROLES.map(r => (
                             <option key={r} value={r}>

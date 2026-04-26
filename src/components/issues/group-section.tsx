@@ -23,13 +23,13 @@ const VIRTUAL_THRESHOLD = 20;
  * the component decide.
  */
 interface GroupSectionProps {
-  name: string;
+  children?: React.ReactNode;
   color: string;
   count: number;
-  children?: React.ReactNode;
-  items?: unknown[];
-  renderItem?: (item: unknown, index: number) => React.ReactNode;
   itemHeight?: number;
+  items?: unknown[];
+  name: string;
+  renderItem?: (item: unknown, index: number) => React.ReactNode;
 }
 
 function VirtualizedList({
@@ -51,11 +51,7 @@ function VirtualizedList({
   });
 
   return (
-    <div
-      ref={parentRef}
-      className="overflow-y-auto"
-      style={{ maxHeight: 'min(600px, 60vh)' }}
-    >
+    <div className="overflow-y-auto" ref={parentRef} style={{ maxHeight: 'min(600px, 60vh)' }}>
       <div
         style={{
           height: `${rowVirtualizer.getTotalSize()}px`,
@@ -93,24 +89,19 @@ export function GroupSection({
   const [collapsed, setCollapsed] = useState(false);
 
   const useVirtual =
-    items !== undefined &&
-    renderItem !== undefined &&
-    items.length > VIRTUAL_THRESHOLD;
+    items !== undefined && renderItem !== undefined && items.length > VIRTUAL_THRESHOLD;
 
   return (
     <div data-testid="group-section">
       {/* Group header */}
       <button
-        type="button"
-        data-testid="group-header"
         className="flex w-full items-center gap-2 px-4 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+        data-testid="group-header"
         onClick={() => setCollapsed(c => !c)}
+        type="button"
       >
         <span
-          className={cn(
-            'inline-block transition-transform',
-            collapsed ? '-rotate-90' : 'rotate-0',
-          )}
+          className={cn('inline-block transition-transform', collapsed ? '-rotate-90' : 'rotate-0')}
         >
           ▾
         </span>
@@ -122,11 +113,7 @@ export function GroupSection({
       {/* Issues */}
       {!collapsed &&
         (useVirtual ? (
-          <VirtualizedList
-            items={items}
-            renderItem={renderItem}
-            itemHeight={itemHeight}
-          />
+          <VirtualizedList itemHeight={itemHeight} items={items} renderItem={renderItem} />
         ) : items !== undefined && renderItem !== undefined ? (
           items.map((item, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: items are stable within a group; no stable key available at this layer

@@ -13,7 +13,6 @@ const STATUS_OPTIONS = [
 ] as const;
 
 interface CreateProjectModalProps {
-  open: boolean;
   onClose: () => void;
   onSubmit: (input: {
     name: string;
@@ -24,6 +23,7 @@ interface CreateProjectModalProps {
     startDate?: string;
     targetDate?: string;
   }) => Promise<void>;
+  open: boolean;
 }
 
 export const CreateProjectModal = observer(function CreateProjectModal({
@@ -60,9 +60,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
 
   const toggleTeam = (teamId: string) => {
     setSelectedTeamIds(prev =>
-      prev.includes(teamId)
-        ? prev.filter(id => id !== teamId)
-        : [...prev, teamId],
+      prev.includes(teamId) ? prev.filter(id => id !== teamId) : [...prev, teamId],
     );
   };
 
@@ -95,12 +93,10 @@ export const CreateProjectModal = observer(function CreateProjectModal({
     return null;
   }
 
-  const canSubmit =
-    name.trim().length > 0 && selectedTeamIds.length > 0 && !submitting;
+  const canSubmit = name.trim().length > 0 && selectedTeamIds.length > 0 && !submitting;
 
   return (
     <dialog
-      open
       aria-label="Create project"
       className="fixed inset-0 z-50 flex h-screen w-screen items-center justify-center bg-black/40 p-0 m-0 border-none max-w-none max-h-none"
       onClick={e => {
@@ -113,9 +109,10 @@ export const CreateProjectModal = observer(function CreateProjectModal({
           onClose();
         }
       }}
+      open
     >
       <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
-        <form onSubmit={handleSubmit} className="flex flex-col">
+        <form className="flex flex-col" onSubmit={handleSubmit}>
           <div className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               Create project
@@ -125,72 +122,69 @@ export const CreateProjectModal = observer(function CreateProjectModal({
           <div className="flex flex-col gap-4 px-5 py-4">
             <div className="flex flex-col gap-1">
               <label
-                htmlFor="project-name"
                 className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+                htmlFor="project-name"
               >
                 Name
               </label>
               <input
-                id="project-name"
-                ref={nameRef}
-                type="text"
-                placeholder="e.g. Q2 Launch"
-                value={name}
-                onChange={e => setName(e.target.value)}
                 className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+                id="project-name"
+                onChange={e => setName(e.target.value)}
+                placeholder="e.g. Q2 Launch"
+                ref={nameRef}
                 required
+                type="text"
+                value={name}
               />
             </div>
 
             <div className="flex flex-col gap-1">
               <label
-                htmlFor="project-description"
                 className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+                htmlFor="project-description"
               >
-                Description{' '}
-                <span className="font-normal text-zinc-400">(optional)</span>
+                Description <span className="font-normal text-zinc-400">(optional)</span>
               </label>
               <textarea
-                id="project-description"
-                placeholder="What is this project about?"
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                rows={2}
                 className="resize-none rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-600 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-400"
+                id="project-description"
+                onChange={e => setDescription(e.target.value)}
+                placeholder="What is this project about?"
+                rows={2}
+                value={description}
               />
             </div>
 
             <div className="flex flex-col gap-1">
               <label
-                htmlFor="project-status"
                 className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+                htmlFor="project-status"
               >
                 Status
               </label>
               <SimpleSelect
                 id="project-status"
+                onChange={setStatusType}
                 options={STATUS_OPTIONS}
                 value={statusType}
-                onChange={setStatusType}
               />
             </div>
 
             <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                Teams
-              </span>
+              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Teams</span>
               <div className="flex flex-wrap gap-2">
                 {teams.map(team => (
                   <button
-                    key={team.id}
-                    type="button"
-                    onClick={() => toggleTeam(team.id)}
                     className={cn(
                       'rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
                       selectedTeamIds.includes(team.id)
                         ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
                         : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800',
                     )}
+                    key={team.id}
+                    onClick={() => toggleTeam(team.id)}
+                    type="button"
                   >
                     {team.icon ? `${team.icon} ` : ''}
                     {team.name}
@@ -198,66 +192,60 @@ export const CreateProjectModal = observer(function CreateProjectModal({
                 ))}
               </div>
               {teams.length === 0 && (
-                <p className="text-xs text-zinc-400">
-                  No teams available. Create a team first.
-                </p>
+                <p className="text-xs text-zinc-400">No teams available. Create a team first.</p>
               )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1">
                 <label
-                  htmlFor="project-start"
                   className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+                  htmlFor="project-start"
                 >
-                  Start date{' '}
-                  <span className="font-normal text-zinc-400">(optional)</span>
+                  Start date <span className="font-normal text-zinc-400">(optional)</span>
                 </label>
                 <input
+                  className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
                   id="project-start"
+                  onChange={e => setStartDate(e.target.value)}
                   type="date"
                   value={startDate}
-                  onChange={e => setStartDate(e.target.value)}
-                  className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
                 />
               </div>
               <div className="flex flex-col gap-1">
                 <label
-                  htmlFor="project-target"
                   className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+                  htmlFor="project-target"
                 >
-                  Target date{' '}
-                  <span className="font-normal text-zinc-400">(optional)</span>
+                  Target date <span className="font-normal text-zinc-400">(optional)</span>
                 </label>
                 <input
+                  className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
                   id="project-target"
+                  onChange={e => setTargetDate(e.target.value)}
                   type="date"
                   value={targetDate}
-                  onChange={e => setTargetDate(e.target.value)}
-                  className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
                 />
               </div>
             </div>
           </div>
 
           <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
-            {submitError && (
-              <p className="flex-1 text-xs text-red-500">{submitError}</p>
-            )}
+            {submitError && <p className="flex-1 text-xs text-red-500">{submitError}</p>}
             <button
-              type="button"
-              onClick={onClose}
               className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              onClick={onClose}
+              type="button"
             >
               Cancel
             </button>
             <button
-              type="submit"
-              disabled={!canSubmit}
               className={cn(
                 'rounded-md px-4 py-1.5 text-sm font-medium text-white transition-colors',
                 'bg-indigo-600 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50',
               )}
+              disabled={!canSubmit}
+              type="submit"
             >
               {submitting ? 'Creating...' : 'Create project'}
             </button>

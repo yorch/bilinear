@@ -1,21 +1,16 @@
 import { GraphQLError } from 'graphql';
 import type { Cycle } from '../../../generated/prisma';
 import { requireAuth, requireTeamMember } from '../../middleware/auth';
-import type {
-  CycleCreateInput,
-  CycleUpdateInput,
-} from '../../services/cycle.service';
+import type { CycleCreateInput, CycleUpdateInput } from '../../services/cycle.service';
 import type { GraphQLContext } from '../context';
 
 export const cycleResolvers = {
   Cycle: {
-    issues: async (cycle: Cycle, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.services.issue.findActiveByCycleId(cycle.id);
-    },
+    issues: async (cycle: Cycle, _args: unknown, ctx: GraphQLContext) =>
+      ctx.services.issue.findActiveByCycleId(cycle.id),
 
-    team: async (cycle: Cycle, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.loaders.team.load(cycle.teamId);
-    },
+    team: async (cycle: Cycle, _args: unknown, ctx: GraphQLContext) =>
+      ctx.loaders.team.load(cycle.teamId),
   },
 
   Mutation: {
@@ -57,11 +52,7 @@ export const cycleResolvers = {
       };
     },
 
-    cycleArchive: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    cycleArchive: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       const existing = await ctx.services.cycle.findById(id);
@@ -73,13 +64,7 @@ export const cycleResolvers = {
       await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
 
       const cycle = await ctx.services.cycle.archive(id);
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'A',
-        'Cycle',
-        id,
-        cycle,
-      );
+      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'A', 'Cycle', id, cycle);
       return { cycle, lastSyncId: sync.id.toString(), success: true };
     },
 
@@ -111,10 +96,7 @@ export const cycleResolvers = {
         return { cycle, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         const error = err as Error;
-        if (
-          error.name === 'CycleOverlapError' ||
-          error.name === 'CycleInvalidDatesError'
-        ) {
+        if (error.name === 'CycleOverlapError' || error.name === 'CycleInvalidDatesError') {
           throw new GraphQLError(error.message, {
             extensions: { code: 'BAD_USER_INPUT' },
           });
@@ -123,11 +105,7 @@ export const cycleResolvers = {
       }
     },
 
-    cycleDelete: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    cycleDelete: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       const existing = await ctx.services.cycle.findById(id);
@@ -139,13 +117,7 @@ export const cycleResolvers = {
       await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
 
       await ctx.services.cycle.delete(id);
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'D',
-        'Cycle',
-        id,
-        null,
-      );
+      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Cycle', id, null);
       return { lastSyncId: sync.id.toString(), success: true };
     },
 
@@ -199,13 +171,10 @@ export const cycleResolvers = {
         const result = await ctx.services.cycle.rollover(ctx.orgId, cycleId);
 
         // Broadcast cycle completion
-        let lastSync = await ctx.services.sync.createSyncAction(
-          ctx.orgId,
-          'U',
-          'Cycle',
-          cycleId,
-          { completedAt: new Date().toISOString(), id: cycleId },
-        );
+        let lastSync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Cycle', cycleId, {
+          completedAt: new Date().toISOString(),
+          id: cycleId,
+        });
 
         // Broadcast each moved issue so connected clients update their cycle view
         if (result.movedIssueIds.length > 0) {
@@ -258,13 +227,7 @@ export const cycleResolvers = {
 
       try {
         const cycle = await ctx.services.cycle.update(id, input);
-        const sync = await ctx.services.sync.createSyncAction(
-          ctx.orgId,
-          'U',
-          'Cycle',
-          id,
-          cycle,
-        );
+        const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Cycle', id, cycle);
         return { cycle, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         const error = err as Error;
@@ -283,11 +246,7 @@ export const cycleResolvers = {
   },
 
   Query: {
-    cycle: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    cycle: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       const cycle = await ctx.services.cycle.findById(id);
@@ -329,10 +288,7 @@ export const cycleResolvers = {
       requireAuth(ctx);
       await requireTeamMember(ctx.prisma, args.teamId, ctx.userId);
 
-      return ctx.services.cycle.findByTeamId(
-        args.teamId,
-        args.includeArchived ?? false,
-      );
+      return ctx.services.cycle.findByTeamId(args.teamId, args.includeArchived ?? false);
     },
 
     cycleVelocity: async (

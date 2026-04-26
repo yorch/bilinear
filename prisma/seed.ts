@@ -222,9 +222,7 @@ async function main() {
   console.log(
     `\nSkip the login form — go directly to:\n  http://localhost:3000/verify?email=${encodeURIComponent(DEMO_EMAIL)}&code=${DEMO_CODE}`,
   );
-  console.log(
-    '(Going through /login will revoke the seeded token by sending a new code.)',
-  );
+  console.log('(Going through /login will revoke the seeded token by sending a new code.)');
 }
 
 main()

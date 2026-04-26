@@ -93,10 +93,7 @@ export class SyncManager {
         return null;
       }
       const normalized = payloadB64.replace(/-/g, '+').replace(/_/g, '/');
-      const padded = normalized.padEnd(
-        Math.ceil(normalized.length / 4) * 4,
-        '=',
-      );
+      const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
       const payload = JSON.parse(atob(padded)) as { orgId?: string };
       return payload.orgId ?? null;
     } catch {
@@ -343,67 +340,37 @@ export class SyncManager {
           ]);
           await Promise.all([
             db.organizations.bulkPut(
-              batches.organizations as Parameters<
-                typeof db.organizations.bulkPut
-              >[0],
+              batches.organizations as Parameters<typeof db.organizations.bulkPut>[0],
             ),
-            db.teams.bulkPut(
-              batches.teams as Parameters<typeof db.teams.bulkPut>[0],
-            ),
-            db.users.bulkPut(
-              batches.users as Parameters<typeof db.users.bulkPut>[0],
-            ),
+            db.teams.bulkPut(batches.teams as Parameters<typeof db.teams.bulkPut>[0]),
+            db.users.bulkPut(batches.users as Parameters<typeof db.users.bulkPut>[0]),
             db.workflowStates.bulkPut(
-              batches.workflowStates as Parameters<
-                typeof db.workflowStates.bulkPut
-              >[0],
+              batches.workflowStates as Parameters<typeof db.workflowStates.bulkPut>[0],
             ),
             db.issueLabels.bulkPut(
-              batches.issueLabels as Parameters<
-                typeof db.issueLabels.bulkPut
-              >[0],
+              batches.issueLabels as Parameters<typeof db.issueLabels.bulkPut>[0],
             ),
-            db.issues.bulkPut(
-              batches.issues as Parameters<typeof db.issues.bulkPut>[0],
-            ),
-            db.cycles.bulkPut(
-              batches.cycles as Parameters<typeof db.cycles.bulkPut>[0],
-            ),
-            db.documents.bulkPut(
-              batches.documents as Parameters<typeof db.documents.bulkPut>[0],
-            ),
-            db.projects.bulkPut(
-              batches.projects as Parameters<typeof db.projects.bulkPut>[0],
-            ),
+            db.issues.bulkPut(batches.issues as Parameters<typeof db.issues.bulkPut>[0]),
+            db.cycles.bulkPut(batches.cycles as Parameters<typeof db.cycles.bulkPut>[0]),
+            db.documents.bulkPut(batches.documents as Parameters<typeof db.documents.bulkPut>[0]),
+            db.projects.bulkPut(batches.projects as Parameters<typeof db.projects.bulkPut>[0]),
             db.projectMilestones.bulkPut(
-              batches.projectMilestones as Parameters<
-                typeof db.projectMilestones.bulkPut
-              >[0],
+              batches.projectMilestones as Parameters<typeof db.projectMilestones.bulkPut>[0],
             ),
             db.projectUpdates.bulkPut(
-              batches.projectUpdates as Parameters<
-                typeof db.projectUpdates.bulkPut
-              >[0],
+              batches.projectUpdates as Parameters<typeof db.projectUpdates.bulkPut>[0],
             ),
             db.customViews.bulkPut(
-              batches.customViews as Parameters<
-                typeof db.customViews.bulkPut
-              >[0],
+              batches.customViews as Parameters<typeof db.customViews.bulkPut>[0],
             ),
             db.notifications.bulkPut(
-              batches.notifications as Parameters<
-                typeof db.notifications.bulkPut
-              >[0],
+              batches.notifications as Parameters<typeof db.notifications.bulkPut>[0],
             ),
             db.issueRelations.bulkPut(
-              batches.issueRelations as Parameters<
-                typeof db.issueRelations.bulkPut
-              >[0],
+              batches.issueRelations as Parameters<typeof db.issueRelations.bulkPut>[0],
             ),
             db.issueTemplates.bulkPut(
-              batches.issueTemplates as Parameters<
-                typeof db.issueTemplates.bulkPut
-              >[0],
+              batches.issueTemplates as Parameters<typeof db.issueTemplates.bulkPut>[0],
             ),
             db.customFieldDefinitions.bulkPut(
               batches.customFieldDefinitions as Parameters<
@@ -411,9 +378,7 @@ export class SyncManager {
               >[0],
             ),
             db.customFieldValues.bulkPut(
-              batches.customFieldValues as Parameters<
-                typeof db.customFieldValues.bulkPut
-              >[0],
+              batches.customFieldValues as Parameters<typeof db.customFieldValues.bulkPut>[0],
             ),
             db.syncMetadata.put({ key: 'lastSyncId', value: lastSyncId }),
           ]);
@@ -421,75 +386,43 @@ export class SyncManager {
       );
 
       // Populate MobX stores
-      const firstOrg = batches.organizations[0] as
-        | { name?: string }
-        | undefined;
+      const firstOrg = batches.organizations[0] as { name?: string } | undefined;
       if (firstOrg?.name) {
         syncStore.setOrganizationName(firstOrg.name);
       }
-      teamStore.upsertMany(
-        batches.teams as Parameters<typeof teamStore.upsertMany>[0],
-      );
-      userStore.upsertMany(
-        batches.users as Parameters<typeof userStore.upsertMany>[0],
-      );
+      teamStore.upsertMany(batches.teams as Parameters<typeof teamStore.upsertMany>[0]);
+      userStore.upsertMany(batches.users as Parameters<typeof userStore.upsertMany>[0]);
       workflowStateStore.upsertMany(
-        batches.workflowStates as Parameters<
-          typeof workflowStateStore.upsertMany
-        >[0],
+        batches.workflowStates as Parameters<typeof workflowStateStore.upsertMany>[0],
       );
-      labelStore.upsertMany(
-        batches.issueLabels as Parameters<typeof labelStore.upsertMany>[0],
-      );
-      issueStore.upsertMany(
-        batches.issues as Parameters<typeof issueStore.upsertMany>[0],
-      );
-      cycleStore.upsertMany(
-        batches.cycles as Parameters<typeof cycleStore.upsertMany>[0],
-      );
-      documentStore.upsertMany(
-        batches.documents as Parameters<typeof documentStore.upsertMany>[0],
-      );
-      projectStore.upsertMany(
-        batches.projects as Parameters<typeof projectStore.upsertMany>[0],
-      );
+      labelStore.upsertMany(batches.issueLabels as Parameters<typeof labelStore.upsertMany>[0]);
+      issueStore.upsertMany(batches.issues as Parameters<typeof issueStore.upsertMany>[0]);
+      cycleStore.upsertMany(batches.cycles as Parameters<typeof cycleStore.upsertMany>[0]);
+      documentStore.upsertMany(batches.documents as Parameters<typeof documentStore.upsertMany>[0]);
+      projectStore.upsertMany(batches.projects as Parameters<typeof projectStore.upsertMany>[0]);
       projectStore.upsertMilestones(
-        batches.projectMilestones as Parameters<
-          typeof projectStore.upsertMilestones
-        >[0],
+        batches.projectMilestones as Parameters<typeof projectStore.upsertMilestones>[0],
       );
       projectStore.upsertUpdates(
-        batches.projectUpdates as Parameters<
-          typeof projectStore.upsertUpdates
-        >[0],
+        batches.projectUpdates as Parameters<typeof projectStore.upsertUpdates>[0],
       );
       customViewStore.upsertMany(
         batches.customViews as Parameters<typeof customViewStore.upsertMany>[0],
       );
       notificationStore.upsertMany(
-        batches.notifications as Parameters<
-          typeof notificationStore.upsertMany
-        >[0],
+        batches.notifications as Parameters<typeof notificationStore.upsertMany>[0],
       );
       issueRelationStore.upsertMany(
-        batches.issueRelations as Parameters<
-          typeof issueRelationStore.upsertMany
-        >[0],
+        batches.issueRelations as Parameters<typeof issueRelationStore.upsertMany>[0],
       );
       issueTemplateStore.upsertMany(
-        batches.issueTemplates as Parameters<
-          typeof issueTemplateStore.upsertMany
-        >[0],
+        batches.issueTemplates as Parameters<typeof issueTemplateStore.upsertMany>[0],
       );
       customFieldStore.upsertDefinitions(
-        batches.customFieldDefinitions as Parameters<
-          typeof customFieldStore.upsertDefinitions
-        >[0],
+        batches.customFieldDefinitions as Parameters<typeof customFieldStore.upsertDefinitions>[0],
       );
       customFieldStore.upsertValues(
-        batches.customFieldValues as Parameters<
-          typeof customFieldStore.upsertValues
-        >[0],
+        batches.customFieldValues as Parameters<typeof customFieldStore.upsertValues>[0],
       );
       syncStore.setLastSyncId(lastSyncId);
       syncStore.setStatus('connected');
@@ -517,10 +450,9 @@ export class SyncManager {
       // cursor.
       for (let page = 0; page < MAX_DELTA_PAGES; page++) {
         const cursor = syncStore.lastSyncId;
-        const res = await fetch(
-          `/api/sync/delta?lastSyncId=${encodeURIComponent(cursor)}`,
-          { credentials: 'include' },
-        );
+        const res = await fetch(`/api/sync/delta?lastSyncId=${encodeURIComponent(cursor)}`, {
+          credentials: 'include',
+        });
 
         if (!res.ok) {
           // Delta failed — fall back to full bootstrap
@@ -709,12 +641,9 @@ export class SyncManager {
             customFieldStore.applyValueSyncAction(
               act,
               modelId,
-              data as Parameters<
-                typeof customFieldStore.applyValueSyncAction
-              >[2],
+              data as Parameters<typeof customFieldStore.applyValueSyncAction>[2],
             );
-            const values = (data as { customFieldValues?: object[] })
-              .customFieldValues;
+            const values = (data as { customFieldValues?: object[] }).customFieldValues;
             if (values) {
               customFieldValueReplaces.set(modelId, values);
             }
@@ -724,9 +653,7 @@ export class SyncManager {
           customFieldStore.applyDefinitionSyncAction(
             act,
             modelId,
-            data as Parameters<
-              typeof customFieldStore.applyDefinitionSyncAction
-            >[2],
+            data as Parameters<typeof customFieldStore.applyDefinitionSyncAction>[2],
           );
           if (act === 'D') {
             dexieDeletes.push({ id: modelId, table: 'customFieldDefinitions' });
@@ -848,9 +775,7 @@ export class SyncManager {
           if (act === 'D') {
             await db.issueActivities.delete(modelId);
           } else if (data) {
-            await db.issueActivities.put(
-              data as Parameters<typeof db.issueActivities.put>[0],
-            );
+            await db.issueActivities.put(data as Parameters<typeof db.issueActivities.put>[0]);
           }
           break;
       }
@@ -888,80 +813,50 @@ export class SyncManager {
       async () => {
         await Promise.all([
           dexieUpserts.teams.length > 0 &&
-            db.teams.bulkPut(
-              dexieUpserts.teams as Parameters<typeof db.teams.bulkPut>[0],
-            ),
+            db.teams.bulkPut(dexieUpserts.teams as Parameters<typeof db.teams.bulkPut>[0]),
           dexieUpserts.users.length > 0 &&
-            db.users.bulkPut(
-              dexieUpserts.users as Parameters<typeof db.users.bulkPut>[0],
-            ),
+            db.users.bulkPut(dexieUpserts.users as Parameters<typeof db.users.bulkPut>[0]),
           dexieUpserts.workflowStates.length > 0 &&
             db.workflowStates.bulkPut(
-              dexieUpserts.workflowStates as Parameters<
-                typeof db.workflowStates.bulkPut
-              >[0],
+              dexieUpserts.workflowStates as Parameters<typeof db.workflowStates.bulkPut>[0],
             ),
           dexieUpserts.issueLabels.length > 0 &&
             db.issueLabels.bulkPut(
-              dexieUpserts.issueLabels as Parameters<
-                typeof db.issueLabels.bulkPut
-              >[0],
+              dexieUpserts.issueLabels as Parameters<typeof db.issueLabels.bulkPut>[0],
             ),
           dexieUpserts.issues.length > 0 &&
-            db.issues.bulkPut(
-              dexieUpserts.issues as Parameters<typeof db.issues.bulkPut>[0],
-            ),
+            db.issues.bulkPut(dexieUpserts.issues as Parameters<typeof db.issues.bulkPut>[0]),
           dexieUpserts.cycles.length > 0 &&
-            db.cycles.bulkPut(
-              dexieUpserts.cycles as Parameters<typeof db.cycles.bulkPut>[0],
-            ),
+            db.cycles.bulkPut(dexieUpserts.cycles as Parameters<typeof db.cycles.bulkPut>[0]),
           dexieUpserts.documents.length > 0 &&
             db.documents.bulkPut(
-              dexieUpserts.documents as Parameters<
-                typeof db.documents.bulkPut
-              >[0],
+              dexieUpserts.documents as Parameters<typeof db.documents.bulkPut>[0],
             ),
           dexieUpserts.projects.length > 0 &&
-            db.projects.bulkPut(
-              dexieUpserts.projects as Parameters<
-                typeof db.projects.bulkPut
-              >[0],
-            ),
+            db.projects.bulkPut(dexieUpserts.projects as Parameters<typeof db.projects.bulkPut>[0]),
           dexieUpserts.projectMilestones.length > 0 &&
             db.projectMilestones.bulkPut(
-              dexieUpserts.projectMilestones as Parameters<
-                typeof db.projectMilestones.bulkPut
-              >[0],
+              dexieUpserts.projectMilestones as Parameters<typeof db.projectMilestones.bulkPut>[0],
             ),
           dexieUpserts.projectUpdates.length > 0 &&
             db.projectUpdates.bulkPut(
-              dexieUpserts.projectUpdates as Parameters<
-                typeof db.projectUpdates.bulkPut
-              >[0],
+              dexieUpserts.projectUpdates as Parameters<typeof db.projectUpdates.bulkPut>[0],
             ),
           dexieUpserts.customViews.length > 0 &&
             db.customViews.bulkPut(
-              dexieUpserts.customViews as Parameters<
-                typeof db.customViews.bulkPut
-              >[0],
+              dexieUpserts.customViews as Parameters<typeof db.customViews.bulkPut>[0],
             ),
           dexieUpserts.notifications.length > 0 &&
             db.notifications.bulkPut(
-              dexieUpserts.notifications as Parameters<
-                typeof db.notifications.bulkPut
-              >[0],
+              dexieUpserts.notifications as Parameters<typeof db.notifications.bulkPut>[0],
             ),
           dexieUpserts.issueRelations.length > 0 &&
             db.issueRelations.bulkPut(
-              dexieUpserts.issueRelations as Parameters<
-                typeof db.issueRelations.bulkPut
-              >[0],
+              dexieUpserts.issueRelations as Parameters<typeof db.issueRelations.bulkPut>[0],
             ),
           dexieUpserts.issueTemplates.length > 0 &&
             db.issueTemplates.bulkPut(
-              dexieUpserts.issueTemplates as Parameters<
-                typeof db.issueTemplates.bulkPut
-              >[0],
+              dexieUpserts.issueTemplates as Parameters<typeof db.issueTemplates.bulkPut>[0],
             ),
           dexieUpserts.customFieldDefinitions.length > 0 &&
             db.customFieldDefinitions.bulkPut(
@@ -971,9 +866,7 @@ export class SyncManager {
             ),
           db.syncMetadata.put({ key: 'lastSyncId', value: maxId }),
         ]);
-        await Promise.all(
-          dexieDeletes.map(({ table, id }) => db[table].delete(id)),
-        );
+        await Promise.all(dexieDeletes.map(({ table, id }) => db[table].delete(id)));
         // Replace each affected issue's value rows atomically: delete the
         // stale set by issueId index, then bulkPut the fresh list.
         for (const [issueId, values] of customFieldValueReplaces) {
@@ -988,10 +881,7 @@ export class SyncManager {
         // mirror that on the client so stale rows don't linger.
         for (const del of dexieDeletes) {
           if (del.table === 'customFieldDefinitions') {
-            await db.customFieldValues
-              .where('definitionId')
-              .equals(del.id)
-              .delete();
+            await db.customFieldValues.where('definitionId').equals(del.id).delete();
           }
         }
       },

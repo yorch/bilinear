@@ -23,10 +23,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: roadmap.title };
 }
 
-export default async function PublicRoadmapPage({
-  params,
-  searchParams,
-}: Props) {
+export default async function PublicRoadmapPage({ params, searchParams }: Props) {
   const { slug } = await params;
   const { password } = await searchParams;
 

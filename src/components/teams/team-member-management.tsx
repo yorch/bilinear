@@ -9,34 +9,34 @@ import { cn, getErrorMessage } from '@/lib/utils';
 export type TeamRole = 'admin' | 'member' | 'guest';
 
 export interface TeamMember {
-  membershipId: string;
-  userId: string;
+  avatarBackgroundColor: string;
+  avatarUrl?: string | null;
   displayName: string;
   email: string;
   initials: string;
-  avatarUrl?: string | null;
-  avatarBackgroundColor: string;
   isOwner: boolean;
+  membershipId: string;
   role?: TeamRole;
+  userId: string;
 }
 
 export interface OrgUser {
-  id: string;
+  avatarBackgroundColor: string;
+  avatarUrl?: string | null;
   displayName: string;
   email: string;
+  id: string;
   initials: string;
-  avatarUrl?: string | null;
-  avatarBackgroundColor: string;
 }
 
 interface TeamMemberManagementProps {
-  members: TeamMember[];
-  orgUsers: OrgUser[];
   currentUserId: string;
+  members: TeamMember[];
   onAddMember: (userId: string) => Promise<void>;
   onRemoveMember: (membershipId: string) => Promise<void>;
   onToggleOwner: (membershipId: string, isOwner: boolean) => Promise<void>;
   onUpdateRole?: (membershipId: string, role: TeamRole) => Promise<void>;
+  orgUsers: OrgUser[];
 }
 
 const ROLE_LABELS: Record<TeamRole, string> = {
@@ -68,12 +68,12 @@ function Avatar({
   if (user.avatarUrl) {
     return (
       <Image
-        src={user.avatarUrl}
         alt={user.displayName}
-        width={px}
-        height={px}
-        unoptimized
         className={cn('rounded-full object-cover', dim)}
+        height={px}
+        src={user.avatarUrl}
+        unoptimized
+        width={px}
       />
     );
   }
@@ -102,16 +102,11 @@ export function TeamMemberManagement({
   const [addOpen, setAddOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [adding, setAdding] = useState(false);
-  const [loadingMembershipId, setLoadingMembershipId] = useState<string | null>(
-    null,
-  );
+  const [loadingMembershipId, setLoadingMembershipId] = useState<string | null>(null);
   const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const memberUserIds = useMemo(
-    () => new Set(members.map(m => m.userId)),
-    [members],
-  );
+  const memberUserIds = useMemo(() => new Set(members.map(m => m.userId)), [members]);
   const canManageMembers = useMemo(
     () => members.some(m => m.userId === currentUserId && m.isOwner),
     [members, currentUserId],
@@ -119,9 +114,7 @@ export function TeamMemberManagement({
   const availableUsers = useMemo(
     () =>
       orgUsers.filter(
-        u =>
-          !memberUserIds.has(u.id) &&
-          u.displayName.toLowerCase().includes(search.toLowerCase()),
+        u => !memberUserIds.has(u.id) && u.displayName.toLowerCase().includes(search.toLowerCase()),
       ),
     [orgUsers, memberUserIds, search],
   );
@@ -157,10 +150,7 @@ export function TeamMemberManagement({
     }
   };
 
-  const handleToggleOwner = async (
-    membershipId: string,
-    currentIsOwner: boolean,
-  ) => {
+  const handleToggleOwner = async (membershipId: string, currentIsOwner: boolean) => {
     setLoadingMembershipId(membershipId);
     try {
       await onToggleOwner(membershipId, !currentIsOwner);
@@ -192,18 +182,13 @@ export function TeamMemberManagement({
           const isLoading = loadingMembershipId === member.membershipId;
           const isSelf = member.userId === currentUserId;
           return (
-            <li
-              key={member.membershipId}
-              className="flex items-center gap-3 py-2.5"
-            >
+            <li className="flex items-center gap-3 py-2.5" key={member.membershipId}>
               <Avatar user={member} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
                     {member.displayName}
-                    {isSelf && (
-                      <span className="ml-1 text-xs text-zinc-400">(you)</span>
-                    )}
+                    {isSelf && <span className="ml-1 text-xs text-zinc-400">(you)</span>}
                   </span>
                   {member.isOwner && (
                     <span className="flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
@@ -212,27 +197,22 @@ export function TeamMemberManagement({
                     </span>
                   )}
                 </div>
-                <span className="text-xs text-zinc-400 truncate">
-                  {member.email}
-                </span>
+                <span className="text-xs text-zinc-400 truncate">{member.email}</span>
               </div>
               {/* Role badge / selector */}
               {member.role && (
                 <div className="shrink-0">
                   {canManageMembers && onUpdateRole ? (
                     <select
-                      value={member.role}
-                      disabled={isLoading}
-                      onChange={e =>
-                        handleUpdateRole(
-                          member.membershipId,
-                          e.target.value as TeamRole,
-                        )
-                      }
                       className={cn(
                         'appearance-none rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer border border-transparent focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:opacity-50',
                         ROLE_COLORS[member.role],
                       )}
+                      disabled={isLoading}
+                      onChange={e =>
+                        handleUpdateRole(member.membershipId, e.target.value as TeamRole)
+                      }
+                      value={member.role}
                     >
                       {(Object.keys(ROLE_LABELS) as TeamRole[]).map(r => (
                         <option key={r} value={r}>
@@ -259,20 +239,20 @@ export function TeamMemberManagement({
                       {isSelf ? 'Leave?' : 'Remove?'}
                     </span>
                     <button
-                      type="button"
+                      className="rounded bg-red-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
                       disabled={isLoading}
                       onClick={() => {
                         setPendingRemoveId(null);
                         handleRemove(member.membershipId);
                       }}
-                      className="rounded bg-red-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                      type="button"
                     >
                       {isLoading ? '…' : 'Yes'}
                     </button>
                     <button
-                      type="button"
-                      onClick={() => setPendingRemoveId(null)}
                       className="rounded px-2 py-0.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      onClick={() => setPendingRemoveId(null)}
+                      type="button"
                     >
                       Cancel
                     </button>
@@ -281,31 +261,27 @@ export function TeamMemberManagement({
                   <>
                     {canManageMembers && (
                       <button
-                        type="button"
-                        title={
-                          member.isOwner ? 'Remove owner role' : 'Make owner'
-                        }
-                        disabled={isLoading}
-                        onClick={() =>
-                          handleToggleOwner(member.membershipId, member.isOwner)
-                        }
                         className={cn(
                           'flex h-7 w-7 items-center justify-center rounded text-xs transition-colors disabled:opacity-50',
                           member.isOwner
                             ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
                             : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300',
                         )}
+                        disabled={isLoading}
+                        onClick={() => handleToggleOwner(member.membershipId, member.isOwner)}
+                        title={member.isOwner ? 'Remove owner role' : 'Make owner'}
+                        type="button"
                       >
                         <Crown className="h-3.5 w-3.5" />
                       </button>
                     )}
                     {(canManageMembers || isSelf) && (
                       <button
-                        type="button"
-                        title={isSelf ? 'Leave team' : 'Remove member'}
+                        className="flex h-7 w-7 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                         disabled={isLoading}
                         onClick={() => setPendingRemoveId(member.membershipId)}
-                        className="flex h-7 w-7 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                        title={isSelf ? 'Leave team' : 'Remove member'}
+                        type="button"
                       >
                         {isSelf ? (
                           <X className="h-3.5 w-3.5" />
@@ -325,37 +301,33 @@ export function TeamMemberManagement({
       {addOpen ? (
         <div className="rounded-md border border-zinc-200 bg-zinc-50 p-2 dark:border-zinc-700 dark:bg-zinc-900">
           <input
+            className="w-full bg-transparent px-2 py-1 text-sm text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search members to add…"
             ref={searchRef}
             type="text"
-            placeholder="Search members to add…"
             value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full bg-transparent px-2 py-1 text-sm text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
           />
           <ul className="mt-1 max-h-48 overflow-y-auto">
             {availableUsers.length === 0 ? (
               <li className="px-2 py-1.5 text-sm text-zinc-400">
-                {search
-                  ? 'No matches'
-                  : 'All org members are already in this team'}
+                {search ? 'No matches' : 'All org members are already in this team'}
               </li>
             ) : (
               availableUsers.map(user => (
                 <li key={user.id}>
                   <button
-                    type="button"
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"
                     disabled={adding}
                     onClick={() => handleAdd(user.id)}
-                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"
+                    type="button"
                   >
-                    <Avatar user={user} size="sm" />
+                    <Avatar size="sm" user={user} />
                     <div className="min-w-0">
                       <p className="truncate font-medium text-zinc-900 dark:text-zinc-100">
                         {user.displayName}
                       </p>
-                      <p className="truncate text-xs text-zinc-400">
-                        {user.email}
-                      </p>
+                      <p className="truncate text-xs text-zinc-400">{user.email}</p>
                     </div>
                   </button>
                 </li>
@@ -364,9 +336,9 @@ export function TeamMemberManagement({
           </ul>
           <div className="mt-2 flex justify-end">
             <button
-              type="button"
-              onClick={() => setAddOpen(false)}
               className="rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+              onClick={() => setAddOpen(false)}
+              type="button"
             >
               Cancel
             </button>
@@ -374,9 +346,9 @@ export function TeamMemberManagement({
         </div>
       ) : (
         <button
-          type="button"
-          onClick={() => setAddOpen(true)}
           className="flex items-center gap-1.5 self-start rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+          onClick={() => setAddOpen(true)}
+          type="button"
         >
           <UserPlus className="h-4 w-4" />
           Add member

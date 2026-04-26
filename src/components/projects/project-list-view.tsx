@@ -4,10 +4,7 @@ import { Calendar, Plus, Target } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useState } from 'react';
-import {
-  PROJECT_HEALTH_CONFIG,
-  PROJECT_STATUS_CONFIG,
-} from '@/lib/project-constants';
+import { PROJECT_HEALTH_CONFIG, PROJECT_STATUS_CONFIG } from '@/lib/project-constants';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -24,23 +21,17 @@ export const ProjectListView = observer(function ProjectListView({
   const activeStatuses = ['inProgress', 'planned', 'backlog'];
   const completedStatuses = ['completed', 'canceled'];
 
-  const activeProjects = projects.filter(p =>
-    activeStatuses.includes(p.statusType),
-  );
-  const completedProjects = projects.filter(p =>
-    completedStatuses.includes(p.statusType),
-  );
+  const activeProjects = projects.filter(p => activeStatuses.includes(p.statusType));
+  const completedProjects = projects.filter(p => completedStatuses.includes(p.statusType));
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex h-12 items-center justify-between border-b border-zinc-200 px-4 dark:border-zinc-800">
-        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          Projects
-        </h1>
+        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Projects</h1>
         <button
-          type="button"
-          onClick={() => uiStore.openCreateProjectModal()}
           className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-700"
+          onClick={() => uiStore.openCreateProjectModal()}
+          type="button"
         >
           <Plus className="h-3.5 w-3.5" />
           New Project
@@ -62,9 +53,9 @@ export const ProjectListView = observer(function ProjectListView({
               </p>
             </div>
             <button
-              type="button"
-              onClick={() => uiStore.openCreateProjectModal()}
               className="mt-2 flex items-center gap-1.5 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+              onClick={() => uiStore.openCreateProjectModal()}
+              type="button"
             >
               <Plus className="h-4 w-4" />
               Create project
@@ -73,19 +64,15 @@ export const ProjectListView = observer(function ProjectListView({
         ) : (
           <div className="flex flex-col gap-6">
             {activeProjects.length > 0 && (
-              <ProjectGroup
-                title="Active"
-                projects={activeProjects}
-                workspaceKey={workspaceKey}
-              />
+              <ProjectGroup projects={activeProjects} title="Active" workspaceKey={workspaceKey} />
             )}
 
             {completedProjects.length > 0 && (
               <ProjectGroup
-                title="Completed"
-                projects={completedProjects}
-                workspaceKey={workspaceKey}
                 defaultCollapsed
+                projects={completedProjects}
+                title="Completed"
+                workspaceKey={workspaceKey}
               />
             )}
           </div>
@@ -123,23 +110,20 @@ const ProjectGroup = observer(function ProjectGroup({
   return (
     <div>
       <button
-        type="button"
-        onClick={() => setCollapsed(!collapsed)}
         className="flex items-center gap-2 px-1 py-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+        onClick={() => setCollapsed(!collapsed)}
+        type="button"
       >
         <svg
-          className={cn(
-            'h-3 w-3 transition-transform',
-            collapsed ? '' : 'rotate-90',
-          )}
+          aria-hidden="true"
+          className={cn('h-3 w-3 transition-transform', collapsed ? '' : 'rotate-90')}
           fill="currentColor"
           viewBox="0 0 20 20"
-          aria-hidden="true"
         >
           <path
-            fillRule="evenodd"
-            d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
             clipRule="evenodd"
+            d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+            fillRule="evenodd"
           />
         </svg>
         {title}
@@ -149,14 +133,9 @@ const ProjectGroup = observer(function ProjectGroup({
         <div className="mt-1 flex flex-col gap-1">
           {projects.map(project => {
             const status =
-              PROJECT_STATUS_CONFIG[project.statusType] ??
-              PROJECT_STATUS_CONFIG.planned;
-            const health = project.health
-              ? PROJECT_HEALTH_CONFIG[project.health]
-              : null;
-            const lead = project.leadId
-              ? userStore.findById(project.leadId)
-              : null;
+              PROJECT_STATUS_CONFIG[project.statusType] ?? PROJECT_STATUS_CONFIG.planned;
+            const health = project.health ? PROJECT_HEALTH_CONFIG[project.health] : null;
+            const lead = project.leadId ? userStore.findById(project.leadId) : null;
 
             const allIssues = issueStore.findByProjectId(project.id);
             const completedIssues = allIssues.filter(i => i.completedAt);
@@ -167,9 +146,9 @@ const ProjectGroup = observer(function ProjectGroup({
 
             return (
               <Link
-                key={project.id}
-                href={`/${workspaceKey}/project/${project.slugId}`}
                 className="group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 transition-colors hover:border-zinc-200 hover:bg-zinc-50 dark:hover:border-zinc-700 dark:hover:bg-zinc-900"
+                href={`/${workspaceKey}/project/${project.slugId}`}
+                key={project.id}
               >
                 <span
                   className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-xs"
@@ -186,17 +165,10 @@ const ProjectGroup = observer(function ProjectGroup({
                     {project.name}
                   </span>
                   <div className="mt-0.5 flex items-center gap-2">
-                    <span className={cn('text-xs', status.color)}>
-                      {status.label}
-                    </span>
+                    <span className={cn('text-xs', status.color)}>{status.label}</span>
                     {health && (
                       <span className="flex items-center gap-1 text-xs text-zinc-500">
-                        <span
-                          className={cn(
-                            'h-1.5 w-1.5 rounded-full',
-                            health.color,
-                          )}
-                        />
+                        <span className={cn('h-1.5 w-1.5 rounded-full', health.color)} />
                         {health.label}
                       </span>
                     )}
@@ -211,9 +183,7 @@ const ProjectGroup = observer(function ProjectGroup({
                         style={{ width: `${progress}%` }}
                       />
                     </div>
-                    <span className="text-xs tabular-nums text-zinc-400">
-                      {progress}%
-                    </span>
+                    <span className="text-xs tabular-nums text-zinc-400">{progress}%</span>
                   </div>
                 )}
 

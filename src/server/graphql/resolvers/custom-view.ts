@@ -9,9 +9,8 @@ import type { GraphQLContext } from '../context';
 
 export const customViewResolvers = {
   CustomView: {
-    creator: async (view: CustomView, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.services.user.findById(view.creatorId);
-    },
+    creator: async (view: CustomView, _args: unknown, ctx: GraphQLContext) =>
+      ctx.services.user.findById(view.creatorId),
 
     team: async (view: CustomView, _args: unknown, ctx: GraphQLContext) => {
       if (!view.teamId) {
@@ -22,11 +21,7 @@ export const customViewResolvers = {
   },
 
   Mutation: {
-    customViewArchive: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    customViewArchive: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       const existing = await ctx.services.customView.findById(id);
@@ -70,11 +65,7 @@ export const customViewResolvers = {
         await requireTeamMember(ctx.prisma, input.teamId, ctx.userId);
       }
 
-      const customView = await ctx.services.customView.create(
-        ctx.orgId,
-        ctx.userId,
-        input,
-      );
+      const customView = await ctx.services.customView.create(ctx.orgId, ctx.userId, input);
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
         'I',
@@ -85,11 +76,7 @@ export const customViewResolvers = {
       return { customView, lastSyncId: sync.id.toString(), success: true };
     },
 
-    customViewDelete: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    customViewDelete: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       const existing = await ctx.services.customView.findById(id);
@@ -106,13 +93,7 @@ export const customViewResolvers = {
       }
 
       await ctx.services.customView.delete(id);
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'D',
-        'CustomView',
-        id,
-        null,
-      );
+      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'CustomView', id, null);
       return { lastSyncId: sync.id.toString(), success: true };
     },
 
@@ -149,11 +130,7 @@ export const customViewResolvers = {
   },
 
   Query: {
-    customView: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    customView: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       const customView = await ctx.services.customView.findById(id);
@@ -178,22 +155,14 @@ export const customViewResolvers = {
       return customView;
     },
 
-    customViews: async (
-      _parent: unknown,
-      { teamId }: { teamId?: string },
-      ctx: GraphQLContext,
-    ) => {
+    customViews: async (_parent: unknown, { teamId }: { teamId?: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
       if (teamId) {
         await requireTeamMember(ctx.prisma, teamId, ctx.userId);
       }
 
-      return ctx.services.customView.findByOrgId(
-        ctx.orgId,
-        ctx.userId,
-        teamId ?? undefined,
-      );
+      return ctx.services.customView.findByOrgId(ctx.orgId, ctx.userId, teamId ?? undefined);
     },
   },
 };

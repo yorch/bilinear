@@ -10,14 +10,14 @@ export interface SelectOption {
 }
 
 interface SimpleSelectProps {
-  options: readonly SelectOption[];
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
   className?: string;
   id?: string;
-  variant?: 'default' | 'ghost';
+  onChange: (value: string) => void;
+  options: readonly SelectOption[];
+  placeholder?: string;
   placement?: 'bottom' | 'top';
+  value: string;
+  variant?: 'default' | 'ghost';
 }
 
 export function SimpleSelect({
@@ -48,11 +48,8 @@ export function SimpleSelect({
   }, [open]);
 
   return (
-    <div ref={ref} className={cn('relative', className)}>
+    <div className={cn('relative', className)} ref={ref}>
       <button
-        id={id}
-        type="button"
-        onClick={() => setOpen(o => !o)}
         className={cn(
           'flex items-center gap-1.5 text-sm outline-none',
           variant === 'default' &&
@@ -60,6 +57,9 @@ export function SimpleSelect({
           variant === 'ghost' &&
             'rounded px-1.5 py-0.5 font-medium text-zinc-900 hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800',
         )}
+        id={id}
+        onClick={() => setOpen(o => !o)}
+        type="button"
       >
         <span>{current?.label ?? placeholder ?? '—'}</span>
         <ChevronDown
@@ -79,27 +79,27 @@ export function SimpleSelect({
         >
           {placeholder && (
             <button
-              type="button"
-              disabled
               className="flex w-full cursor-default items-center px-3 py-1.5 text-sm text-zinc-400"
+              disabled
+              type="button"
             >
               {placeholder}
             </button>
           )}
           {options.map(opt => (
             <button
-              key={opt.value}
-              type="button"
-              onClick={() => {
-                onChange(opt.value);
-                setOpen(false);
-              }}
               className={cn(
                 'flex w-full items-center px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800',
                 opt.value === value
                   ? 'font-medium text-zinc-900 dark:text-zinc-100'
                   : 'text-zinc-700 dark:text-zinc-300',
               )}
+              key={opt.value}
+              onClick={() => {
+                onChange(opt.value);
+                setOpen(false);
+              }}
+              type="button"
             >
               {opt.label}
             </button>

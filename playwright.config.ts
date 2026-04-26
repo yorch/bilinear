@@ -60,11 +60,9 @@ export default defineConfig({
       command: 'NODE_ENV=test TEST_AUTH_CODE=000000 yarn dev',
       env: {
         JWT_REFRESH_SECRET:
-          process.env.JWT_REFRESH_SECRET ??
-          'e2e-test-refresh-secret-for-testing-purposes-only-xyz',
+          process.env.JWT_REFRESH_SECRET ?? 'e2e-test-refresh-secret-for-testing-purposes-only-xyz',
         JWT_SECRET:
-          process.env.JWT_SECRET ??
-          'e2e-test-jwt-secret-for-testing-purposes-only-32chars',
+          process.env.JWT_SECRET ?? 'e2e-test-jwt-secret-for-testing-purposes-only-32chars',
         NODE_ENV: 'test',
         TEST_AUTH_CODE: '000000',
       },
@@ -76,8 +74,7 @@ export default defineConfig({
       command: 'yarn ws:server',
       env: {
         JWT_SECRET:
-          process.env.JWT_SECRET ??
-          'e2e-test-jwt-secret-for-testing-purposes-only-32chars',
+          process.env.JWT_SECRET ?? 'e2e-test-jwt-secret-for-testing-purposes-only-32chars',
         NODE_ENV: 'test',
         REDIS_URL: process.env.REDIS_URL ?? 'redis://localhost:6379',
       },

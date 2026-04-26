@@ -32,17 +32,13 @@ test.describe('Issue CRUD', () => {
     // Assumes at least one issue exists from seed
     const firstRow = page.locator('[data-testid="issue-row"]').first();
     await firstRow.click();
-    await expect(
-      page.locator('[data-testid="issue-detail-panel"]'),
-    ).toBeVisible();
+    await expect(page.locator('[data-testid="issue-detail-panel"]')).toBeVisible();
   });
 
   test('escape closes detail panel', async ({ page }) => {
     const firstRow = page.locator('[data-testid="issue-row"]').first();
     await firstRow.click();
     await page.keyboard.press('Escape');
-    await expect(
-      page.locator('[data-testid="issue-detail-panel"]'),
-    ).not.toBeVisible();
+    await expect(page.locator('[data-testid="issue-detail-panel"]')).not.toBeVisible();
   });
 });

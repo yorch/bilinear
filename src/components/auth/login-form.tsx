@@ -48,35 +48,25 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
       <div className="flex flex-col gap-1.5">
-        <label
-          htmlFor="email"
-          className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
-        >
+        <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="email">
           Email address
         </label>
         <input
+          className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:focus:ring-zinc-100"
           id="email"
-          type="email"
-          value={email}
           onChange={e => setEmail(e.target.value)}
           placeholder="you@example.com"
           required
-          className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:focus:ring-zinc-100"
+          type="email"
+          value={email}
         />
       </div>
 
-      {error && (
-        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-      )}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
-      <Button
-        type="submit"
-        disabled={loading}
-        className="w-full"
-        data-testid="email-submit"
-      >
+      <Button className="w-full" data-testid="email-submit" disabled={loading} type="submit">
         {loading ? 'Sending…' : 'Continue with email'}
       </Button>
 
@@ -90,8 +80,6 @@ export function LoginForm() {
       </div>
 
       <Button
-        type="button"
-        variant="outline"
         className="w-full"
         onClick={async () => {
           // Let the server own the OAuth URL (including redirect_uri and
@@ -114,6 +102,8 @@ export function LoginForm() {
             setError('Something went wrong. Please try again.');
           }
         }}
+        type="button"
+        variant="outline"
       >
         Continue with Google
       </Button>

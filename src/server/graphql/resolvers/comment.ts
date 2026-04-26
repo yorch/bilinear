@@ -1,10 +1,7 @@
 import { GraphQLError } from 'graphql';
 import type { Comment, CommentReaction } from '../../../generated/prisma';
 import { requireAuth, requireTeamMember } from '../../middleware/auth';
-import type {
-  CommentCreateInput,
-  CommentUpdateInput,
-} from '../../services/comment.service';
+import type { CommentCreateInput, CommentUpdateInput } from '../../services/comment.service';
 import type { GraphQLContext } from '../context';
 
 /** Verifies org + team access for a comment via CommentService.findAccessTarget,
@@ -14,10 +11,7 @@ async function requireCommentAccess(
   ctx: GraphQLContext & { userId: string; orgId: string },
   commentId: string,
 ): Promise<void> {
-  const target = await ctx.services.comment.findAccessTarget(
-    commentId,
-    ctx.orgId,
-  );
+  const target = await ctx.services.comment.findAccessTarget(commentId, ctx.orgId);
   if (!target) {
     throw new GraphQLError('Comment not found', {
       extensions: { code: 'NOT_FOUND' },
@@ -28,10 +22,7 @@ async function requireCommentAccess(
 
 function handleCommentError(err: unknown): never {
   const error = err as Error;
-  if (
-    error.name === 'CommentNotFoundError' ||
-    error.name === 'CommentReactionNotFoundError'
-  ) {
+  if (error.name === 'CommentNotFoundError' || error.name === 'CommentReactionNotFoundError') {
     throw new GraphQLError(error.message, {
       extensions: { code: 'NOT_FOUND' },
     });
@@ -62,8 +53,7 @@ export const commentResolvers = {
     },
     reactions: (comment: CommentWithRelations) => comment.reactions ?? [],
     replies: (comment: CommentWithRelations) => comment.replies ?? [],
-    replyCount: (comment: CommentWithRelations) =>
-      (comment.replies as unknown[])?.length ?? 0,
+    replyCount: (comment: CommentWithRelations) => (comment.replies as unknown[])?.length ?? 0,
     resolvedBy: (comment: CommentWithRelations) => comment.resolvedBy ?? null,
   },
   CommentReaction: {
@@ -95,32 +85,17 @@ export const commentResolvers = {
 
       // Notify subscribers
       await ctx.services.notification
-        .notifyCommentSubscribers(
-          ctx.orgId,
-          comment.issueId,
-          ctx.userId,
-          comment.id,
-        )
+        .notifyCommentSubscribers(ctx.orgId, comment.issueId, ctx.userId, comment.id)
         .catch(() => {}); // non-fatal
 
       return { comment, lastSyncId: sync.id.toString(), success: true };
     },
-    commentDelete: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    commentDelete: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
       await requireCommentAccess(ctx, id);
       try {
         await ctx.services.comment.delete(id, ctx.userId);
-        const sync = await ctx.services.sync.createSyncAction(
-          ctx.orgId,
-          'D',
-          'Comment',
-          id,
-          null,
-        );
+        const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Comment', id, null);
         return { lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         handleCommentError(err);
@@ -134,11 +109,7 @@ export const commentResolvers = {
       requireAuth(ctx);
       await requireCommentAccess(ctx, commentId);
       try {
-        const reaction = await ctx.services.comment.addReaction(
-          commentId,
-          ctx.userId,
-          emoji,
-        );
+        const reaction = await ctx.services.comment.addReaction(commentId, ctx.userId, emoji);
         const sync = await ctx.services.sync.createSyncAction(
           ctx.orgId,
           'I',
@@ -159,11 +130,7 @@ export const commentResolvers = {
       requireAuth(ctx);
       await requireCommentAccess(ctx, commentId);
       try {
-        const result = await ctx.services.comment.removeReaction(
-          commentId,
-          ctx.userId,
-          emoji,
-        );
+        const result = await ctx.services.comment.removeReaction(commentId, ctx.userId, emoji);
         const sync = await ctx.services.sync.createSyncAction(
           ctx.orgId,
           'D',
@@ -176,11 +143,7 @@ export const commentResolvers = {
         handleCommentError(err);
       }
     },
-    commentResolve: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    commentResolve: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
       await requireCommentAccess(ctx, id);
       try {
@@ -197,11 +160,7 @@ export const commentResolvers = {
         handleCommentError(err);
       }
     },
-    commentUnresolve: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    commentUnresolve: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
       await requireCommentAccess(ctx, id);
       try {
@@ -226,11 +185,7 @@ export const commentResolvers = {
       requireAuth(ctx);
       await requireCommentAccess(ctx, id);
       try {
-        const comment = await ctx.services.comment.update(
-          id,
-          ctx.userId,
-          input,
-        );
+        const comment = await ctx.services.comment.update(id, ctx.userId, input);
         const sync = await ctx.services.sync.createSyncAction(
           ctx.orgId,
           'U',
@@ -245,21 +200,14 @@ export const commentResolvers = {
     },
   },
   Query: {
-    comment: async (
-      _parent: unknown,
-      { id }: { id: string },
-      ctx: GraphQLContext,
-    ) => {
+    comment: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
       await requireCommentAccess(ctx, id);
       return ctx.services.comment.findById(id);
     },
     comments: async (
       _parent: unknown,
-      {
-        issueId,
-        includeArchived,
-      }: { issueId: string; includeArchived?: boolean },
+      { issueId, includeArchived }: { issueId: string; includeArchived?: boolean },
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
@@ -270,10 +218,7 @@ export const commentResolvers = {
         });
       }
       await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
-      return ctx.services.comment.findByIssueId(
-        issueId,
-        includeArchived ?? false,
-      );
+      return ctx.services.comment.findByIssueId(issueId, includeArchived ?? false);
     },
   },
 };

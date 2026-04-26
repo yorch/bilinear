@@ -6,12 +6,7 @@ import { useEffect, useState } from 'react';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
 import { gql } from '@/lib/graphql';
 import { useStore } from '@/providers/store-provider';
-import type {
-  IssueDetail,
-  IssueLabel,
-  IssueUser,
-  WorkflowState,
-} from '@/types/issues';
+import type { IssueDetail, IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 
 interface IssueWithTeam extends IssueDetail {
   team: {
@@ -54,8 +49,7 @@ const ISSUE_UPDATE_MUTATION = `
 const IssueDetailPage = observer(function IssueDetailPage() {
   const { workspace, id } = useParams<{ workspace: string; id: string }>();
   const router = useRouter();
-  const { issueStore, teamStore, workflowStateStore, labelStore, userStore } =
-    useStore();
+  const { issueStore, teamStore, workflowStateStore, labelStore, userStore } = useStore();
 
   const [issue, setIssue] = useState<IssueWithTeam | null>(null);
   const [labels, setLabels] = useState<IssueLabel[]>([]);
@@ -91,9 +85,7 @@ const IssueDetailPage = observer(function IssueDetailPage() {
           states,
         },
       });
-      setLabels(
-        labelStore.all.map(l => ({ color: l.color, id: l.id, name: l.name })),
-      );
+      setLabels(labelStore.all.map(l => ({ color: l.color, id: l.id, name: l.name })));
       setLoading(false);
       return;
     }
@@ -105,9 +97,7 @@ const IssueDetailPage = observer(function IssueDetailPage() {
         }
         if (result.data?.issue) {
           setIssue(result.data.issue as IssueWithTeam);
-          setLabels(
-            (result.data.labels as { nodes: IssueLabel[] })?.nodes ?? [],
-          );
+          setLabels((result.data.labels as { nodes: IssueLabel[] })?.nodes ?? []);
         }
       })
       .catch(err => {
@@ -116,10 +106,7 @@ const IssueDetailPage = observer(function IssueDetailPage() {
       .finally(() => setLoading(false));
   }, [id, issueStore, teamStore, workflowStateStore, labelStore, userStore]);
 
-  const handleUpdate = async (
-    issueId: string,
-    patch: Record<string, unknown>,
-  ) => {
+  const handleUpdate = async (issueId: string, patch: Record<string, unknown>) => {
     // Convert labelIds to label objects for optimistic display
     let optimisticPatch: Record<string, unknown> = patch;
     if (Array.isArray(patch.labelIds)) {
@@ -152,9 +139,7 @@ const IssueDetailPage = observer(function IssueDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Loading…
-      </div>
+      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">Loading…</div>
     );
   }
 
@@ -170,11 +155,11 @@ const IssueDetailPage = observer(function IssueDetailPage() {
     <div className="flex flex-1">
       <LazyIssueDetailPanel
         issue={issue}
-        states={issue.team.states}
-        users={issue.team.members.map(m => m.user)}
         labels={labels}
         onClose={handleClose}
         onUpdate={handleUpdate}
+        states={issue.team.states}
+        users={issue.team.members.map(m => m.user)}
       />
     </div>
   );

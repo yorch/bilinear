@@ -17,10 +17,7 @@ export class CycleStore {
   get all(): DBCycle[] {
     return Array.from(this.pool.values())
       .filter(c => !c.archivedAt)
-      .sort(
-        (a, b) =>
-          new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime(),
-      );
+      .sort((a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime());
   }
 
   findById(id: string): DBCycle | null {
@@ -47,10 +44,7 @@ export class CycleStore {
     const now = Date.now();
     return this.findByTeamId(teamId)
       .filter(c => new Date(c.startsAt).getTime() > now)
-      .sort(
-        (a, b) =>
-          new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
-      );
+      .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
   }
 
   getCompletedCycles(teamId: string): DBCycle[] {

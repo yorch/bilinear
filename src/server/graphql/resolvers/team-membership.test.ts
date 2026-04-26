@@ -1,15 +1,7 @@
 import { GraphQLError } from 'graphql';
 import { beforeEach, describe, expect, it } from 'vitest';
-import {
-  createMockContext,
-  type MockGraphQLContext,
-} from '../../../test/context-mock';
-import {
-  TEST_ORG,
-  TEST_TEAM,
-  TEST_TEAM_MEMBERSHIP,
-  TEST_USER_2,
-} from '../../../test/fixtures';
+import { createMockContext, type MockGraphQLContext } from '../../../test/context-mock';
+import { TEST_ORG, TEST_TEAM, TEST_TEAM_MEMBERSHIP, TEST_USER_2 } from '../../../test/fixtures';
 import { teamMembershipResolvers } from './team-membership';
 
 // Simulate a membership record that includes the related team (for org-scope checks)
@@ -24,9 +16,7 @@ describe('teamMembershipResolvers', () => {
   beforeEach(() => {
     ctx = createMockContext();
     // Default: caller is a team owner
-    ctx.prisma.teamMembership.findUnique.mockResolvedValue(
-      TEST_TEAM_MEMBERSHIP,
-    );
+    ctx.prisma.teamMembership.findUnique.mockResolvedValue(TEST_TEAM_MEMBERSHIP);
   });
 
   describe('Mutation.teamMembershipCreate', () => {
@@ -41,12 +31,11 @@ describe('teamMembershipResolvers', () => {
         userId: TEST_USER_2.id,
       });
 
-      const result =
-        await teamMembershipResolvers.Mutation.teamMembershipCreate(
-          null,
-          { input: { teamId: TEST_TEAM.id, userId: TEST_USER_2.id } },
-          ctx as never,
-        );
+      const result = await teamMembershipResolvers.Mutation.teamMembershipCreate(
+        null,
+        { input: { teamId: TEST_TEAM.id, userId: TEST_USER_2.id } },
+        ctx as never,
+      );
 
       expect(result.success).toBe(true);
     });
@@ -132,9 +121,7 @@ describe('teamMembershipResolvers', () => {
 
   describe('Mutation.teamMembershipDelete', () => {
     it('allows a team owner to remove any member', async () => {
-      ctx.prisma.teamMembership.findUnique.mockResolvedValueOnce(
-        MEMBERSHIP_WITH_TEAM,
-      );
+      ctx.prisma.teamMembership.findUnique.mockResolvedValueOnce(MEMBERSHIP_WITH_TEAM);
       // requireTeamOwner check
       ctx.prisma.teamMembership.findUnique.mockResolvedValueOnce({
         ...TEST_TEAM_MEMBERSHIP,
@@ -142,29 +129,25 @@ describe('teamMembershipResolvers', () => {
       });
       ctx.prisma.teamMembership.delete.mockResolvedValue(TEST_TEAM_MEMBERSHIP);
 
-      const result =
-        await teamMembershipResolvers.Mutation.teamMembershipDelete(
-          null,
-          { id: TEST_TEAM_MEMBERSHIP.id },
-          ctx as never,
-        );
+      const result = await teamMembershipResolvers.Mutation.teamMembershipDelete(
+        null,
+        { id: TEST_TEAM_MEMBERSHIP.id },
+        ctx as never,
+      );
 
       expect(result.success).toBe(true);
     });
 
     it('allows a user to remove their own membership', async () => {
       // Membership belongs to TEST_USER (same as ctx.userId)
-      ctx.prisma.teamMembership.findUnique.mockResolvedValueOnce(
-        MEMBERSHIP_WITH_TEAM,
-      );
+      ctx.prisma.teamMembership.findUnique.mockResolvedValueOnce(MEMBERSHIP_WITH_TEAM);
       ctx.prisma.teamMembership.delete.mockResolvedValue(TEST_TEAM_MEMBERSHIP);
 
-      const result =
-        await teamMembershipResolvers.Mutation.teamMembershipDelete(
-          null,
-          { id: TEST_TEAM_MEMBERSHIP.id },
-          ctx as never,
-        );
+      const result = await teamMembershipResolvers.Mutation.teamMembershipDelete(
+        null,
+        { id: TEST_TEAM_MEMBERSHIP.id },
+        ctx as never,
+      );
 
       expect(result.success).toBe(true);
     });
@@ -207,9 +190,7 @@ describe('teamMembershipResolvers', () => {
 
   describe('Mutation.teamMembershipUpdate', () => {
     it('allows a team owner to change isOwner', async () => {
-      ctx.prisma.teamMembership.findUnique.mockResolvedValueOnce(
-        MEMBERSHIP_WITH_TEAM,
-      );
+      ctx.prisma.teamMembership.findUnique.mockResolvedValueOnce(MEMBERSHIP_WITH_TEAM);
       // requireTeamOwner check
       ctx.prisma.teamMembership.findUnique.mockResolvedValueOnce({
         ...TEST_TEAM_MEMBERSHIP,
@@ -220,20 +201,17 @@ describe('teamMembershipResolvers', () => {
         isOwner: false,
       });
 
-      const result =
-        await teamMembershipResolvers.Mutation.teamMembershipUpdate(
-          null,
-          { id: TEST_TEAM_MEMBERSHIP.id, input: { isOwner: false } },
-          ctx as never,
-        );
+      const result = await teamMembershipResolvers.Mutation.teamMembershipUpdate(
+        null,
+        { id: TEST_TEAM_MEMBERSHIP.id, input: { isOwner: false } },
+        ctx as never,
+      );
 
       expect(result.success).toBe(true);
     });
 
     it('throws FORBIDDEN when non-owner tries to change isOwner', async () => {
-      ctx.prisma.teamMembership.findUnique.mockResolvedValueOnce(
-        MEMBERSHIP_WITH_TEAM,
-      );
+      ctx.prisma.teamMembership.findUnique.mockResolvedValueOnce(MEMBERSHIP_WITH_TEAM);
       // requireTeamOwner returns non-owner
       ctx.prisma.teamMembership.findUnique.mockResolvedValueOnce({
         ...TEST_TEAM_MEMBERSHIP,
@@ -254,24 +232,19 @@ describe('teamMembershipResolvers', () => {
     });
 
     it('allows any member to update their own sortOrder', async () => {
-      ctx.prisma.teamMembership.findUnique.mockResolvedValueOnce(
-        MEMBERSHIP_WITH_TEAM,
-      );
+      ctx.prisma.teamMembership.findUnique.mockResolvedValueOnce(MEMBERSHIP_WITH_TEAM);
       // requireTeamMember check
-      ctx.prisma.teamMembership.findUnique.mockResolvedValueOnce(
-        TEST_TEAM_MEMBERSHIP,
-      );
+      ctx.prisma.teamMembership.findUnique.mockResolvedValueOnce(TEST_TEAM_MEMBERSHIP);
       ctx.prisma.teamMembership.update.mockResolvedValue({
         ...TEST_TEAM_MEMBERSHIP,
         sortOrder: 5,
       });
 
-      const result =
-        await teamMembershipResolvers.Mutation.teamMembershipUpdate(
-          null,
-          { id: TEST_TEAM_MEMBERSHIP.id, input: { sortOrder: 5 } },
-          ctx as never,
-        );
+      const result = await teamMembershipResolvers.Mutation.teamMembershipUpdate(
+        null,
+        { id: TEST_TEAM_MEMBERSHIP.id, input: { sortOrder: 5 } },
+        ctx as never,
+      );
 
       expect(result.success).toBe(true);
     });

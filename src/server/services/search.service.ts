@@ -78,8 +78,6 @@ export class SearchService {
 
     // Restore FTS rank order (findMany returns unordered)
     const rankIndex = new Map(ids.map((id, i) => [id, i]));
-    return issues.sort(
-      (a, b) => (rankIndex.get(a.id) ?? 0) - (rankIndex.get(b.id) ?? 0),
-    );
+    return issues.sort((a, b) => (rankIndex.get(a.id) ?? 0) - (rankIndex.get(b.id) ?? 0));
   }
 }

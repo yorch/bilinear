@@ -23,8 +23,8 @@ const ORGANIZATION_CREATE_MUTATION = `
 
 interface OrganizationCreateResult {
   accessToken: string;
-  refreshToken: string;
   organization: { id: string; urlKey: string };
+  refreshToken: string;
 }
 
 function slugify(value: string): string {
@@ -94,29 +94,23 @@ export function OnboardingForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
       <div className="flex flex-col gap-1.5">
-        <label
-          htmlFor="org-name"
-          className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
-        >
+        <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="org-name">
           Organization name
         </label>
         <input
+          className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-600 dark:focus:ring-zinc-100"
           id="org-name"
-          type="text"
-          value={name}
           onChange={e => handleNameChange(e.target.value)}
           placeholder="Acme Inc."
-          className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-600 dark:focus:ring-zinc-100"
+          type="text"
+          value={name}
         />
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label
-          htmlFor="url-key"
-          className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
-        >
+        <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="url-key">
           Workspace URL
         </label>
         <div className="flex items-center rounded-md border border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-900 focus-within:ring-2 focus-within:ring-zinc-900 dark:focus-within:ring-zinc-100">
@@ -124,12 +118,12 @@ export function OnboardingForm() {
             issuetracker.app/
           </span>
           <input
+            className="flex-1 bg-transparent px-1 py-2 text-zinc-900 placeholder:text-zinc-400 focus:outline-none dark:text-zinc-50 dark:placeholder:text-zinc-600"
             id="url-key"
-            type="text"
-            value={urlKey}
             onChange={e => handleUrlKeyChange(e.target.value)}
             placeholder="acme"
-            className="flex-1 bg-transparent px-1 py-2 text-zinc-900 placeholder:text-zinc-400 focus:outline-none dark:text-zinc-50 dark:placeholder:text-zinc-600"
+            type="text"
+            value={urlKey}
           />
         </div>
         {urlKey.length > 0 && urlKey.length < 3 && (
@@ -139,14 +133,12 @@ export function OnboardingForm() {
         )}
       </div>
 
-      {error && (
-        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-      )}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
       <Button
-        type="submit"
-        disabled={loading || !name.trim() || urlKey.length < 3}
         className="w-full"
+        disabled={loading || !name.trim() || urlKey.length < 3}
+        type="submit"
       >
         {loading ? 'Creating workspace…' : 'Create workspace'}
       </Button>

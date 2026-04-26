@@ -26,19 +26,16 @@ import type {
  * the input id array, which is a DataLoader contract requirement.
  */
 export interface Loaders {
-  user: DataLoader<string, User | null>;
-  workflowState: DataLoader<string, WorkflowState | null>;
-  team: DataLoader<string, Team | null>;
-  project: DataLoader<string, Project | null>;
   cycle: DataLoader<string, Cycle | null>;
   /** Resolves to the IssueLabel[] currently assigned to the given issue. */
   labelsByIssueId: DataLoader<string, IssueLabel[]>;
+  project: DataLoader<string, Project | null>;
+  team: DataLoader<string, Team | null>;
+  user: DataLoader<string, User | null>;
+  workflowState: DataLoader<string, WorkflowState | null>;
 }
 
-function indexById<T extends { id: string }>(
-  rows: T[],
-  ids: readonly string[],
-): Array<T | null> {
+function indexById<T extends { id: string }>(rows: T[], ids: readonly string[]): Array<T | null> {
   const byId = new Map(rows.map(r => [r.id, r]));
   return ids.map(id => byId.get(id) ?? null);
 }

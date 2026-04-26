@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createMockPrisma } from '@/test/prisma-mock';
-import {
-  DocumentForbiddenError,
-  DocumentNotFoundError,
-  DocumentService,
-} from './document.service';
+import { DocumentForbiddenError, DocumentNotFoundError, DocumentService } from './document.service';
 
 const ORG_ID = '00000000-0000-0000-0000-000000000001';
 const USER_ID = '00000000-0000-0000-0000-000000000010';
@@ -176,16 +172,12 @@ describe('DocumentService', () => {
 
     it('throws DocumentNotFoundError when document does not exist', async () => {
       prisma.document.findUnique.mockResolvedValue(null);
-      await expect(service.delete(DOC_ID, USER_ID)).rejects.toThrow(
-        DocumentNotFoundError,
-      );
+      await expect(service.delete(DOC_ID, USER_ID)).rejects.toThrow(DocumentNotFoundError);
     });
 
     it('throws DocumentForbiddenError when called by a non-creator', async () => {
       prisma.document.findUnique.mockResolvedValue(TEST_DOC);
-      await expect(service.delete(DOC_ID, USER_2_ID)).rejects.toThrow(
-        DocumentForbiddenError,
-      );
+      await expect(service.delete(DOC_ID, USER_2_ID)).rejects.toThrow(DocumentForbiddenError);
     });
   });
 });

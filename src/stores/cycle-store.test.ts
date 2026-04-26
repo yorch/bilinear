@@ -201,11 +201,7 @@ describe('CycleStore', () => {
 
     it('Update updates cycle', () => {
       store.upsertMany([makeCycle({ id: 'c1', name: 'Sprint 1' })]);
-      store.applySyncAction(
-        'U',
-        'c1',
-        makeCycle({ id: 'c1', name: 'Sprint 1 Updated' }),
-      );
+      store.applySyncAction('U', 'c1', makeCycle({ id: 'c1', name: 'Sprint 1 Updated' }));
 
       expect(store.pool.get('c1')?.name).toBe('Sprint 1 Updated');
     });

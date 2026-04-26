@@ -27,9 +27,9 @@ class MockSyncService {
 }
 
 export interface MockGraphQLContext {
+  loaders: Loaders;
   orgId: string | null;
   prisma: MockPrismaClient;
-  loaders: Loaders;
   services: {
     auth: AuthService;
     issue: IssueService;
