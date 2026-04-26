@@ -153,9 +153,9 @@ export const SubIssueList = observer(function SubIssueList({
                             backgroundColor:
                               state?.type === 'completed' ||
                               state?.type === 'cancelled'
-                                ? (state.color ?? '#8b8c91')
+                                ? (state.color ?? 'var(--state-default)')
                                 : 'transparent',
-                            borderColor: state?.color ?? '#8b8c91',
+                            borderColor: state?.color ?? 'var(--state-default)',
                           }}
                           title={state?.name}
                         />

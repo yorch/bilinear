@@ -78,7 +78,7 @@ export function IssueListView({
     groups.push({
       issues: ungrouped,
       state: {
-        color: '#94a3b8',
+        color: 'var(--muted-foreground)',
         id: '__ungrouped__',
         name: 'Issues',
         type: 'backlog',

@@ -185,16 +185,26 @@ function BurndownChart({ data }: BurndownChartProps) {
         <path
           d={idealPath}
           fill="none"
-          stroke="#a1a1aa"
+          stroke="var(--chart-grid)"
           strokeWidth={1.5}
           strokeDasharray="5,3"
         />
 
         {/* Completed (green) */}
-        <path d={completedPath} fill="none" stroke="#22c55e" strokeWidth={2} />
+        <path
+          d={completedPath}
+          fill="none"
+          stroke="var(--chart-actual)"
+          strokeWidth={2}
+        />
 
         {/* Remaining (blue) */}
-        <path d={remainingPath} fill="none" stroke="#6366f1" strokeWidth={2} />
+        <path
+          d={remainingPath}
+          fill="none"
+          stroke="var(--chart-ideal)"
+          strokeWidth={2}
+        />
 
         {/* X-axis labels */}
         {xLabels.map(({ i, label }) => (
@@ -213,7 +223,14 @@ function BurndownChart({ data }: BurndownChartProps) {
 
         {/* Legend — each non-first item in its own <g> so offsets are self-contained */}
         <g transform={`translate(${paddingLeft + 4}, ${paddingTop + 4})`}>
-          <line x1={0} y1={6} x2={16} y2={6} stroke="#6366f1" strokeWidth={2} />
+          <line
+            x1={0}
+            y1={6}
+            x2={16}
+            y2={6}
+            stroke="var(--chart-ideal)"
+            strokeWidth={2}
+          />
           <text x={20} y={10} fontSize={9} fill="currentColor" opacity={0.7}>
             Remaining
           </text>
@@ -223,7 +240,7 @@ function BurndownChart({ data }: BurndownChartProps) {
               y1={6}
               x2={16}
               y2={6}
-              stroke="#22c55e"
+              stroke="var(--chart-actual)"
               strokeWidth={2}
             />
             <text x={20} y={10} fontSize={9} fill="currentColor" opacity={0.7}>
@@ -236,7 +253,7 @@ function BurndownChart({ data }: BurndownChartProps) {
               y1={6}
               x2={16}
               y2={6}
-              stroke="#a1a1aa"
+              stroke="var(--chart-grid)"
               strokeWidth={1.5}
               strokeDasharray="5,3"
             />

@@ -20,6 +20,10 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-ideal: var(--chart-ideal);
+  --color-chart-actual: var(--chart-actual);
+  --color-state-default: var(--state-default);
   --font-sans: ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, monospace;
   --radius-sm: calc(var(--radius) - 4px);
@@ -49,6 +53,12 @@
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
   --radius: 0.625rem;
+  /* Burndown chart + workflow-state fallbacks. Kept in sync with the
+     dark-mode block below. zinc-400 / green-500 / indigo-500 / zinc-500. */
+  --chart-grid: oklch(0.708 0.012 286);
+  --chart-actual: oklch(0.733 0.184 142);
+  --chart-ideal: oklch(0.585 0.233 277);
+  --state-default: oklch(0.585 0.012 286);
 }
 
 .dark {
@@ -71,6 +81,13 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
+  /* Slightly muted variants for dark mode so chart strokes don't blow out
+     against the near-black background. zinc-500 / green-400 / indigo-400 /
+     zinc-400. */
+  --chart-grid: oklch(0.585 0.012 286);
+  --chart-actual: oklch(0.789 0.179 144);
+  --chart-ideal: oklch(0.685 0.193 273);
+  --state-default: oklch(0.708 0.012 286);
 }
 
 body {
