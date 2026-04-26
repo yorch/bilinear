@@ -71,32 +71,6 @@ a slightly stale server view.
 - **First-touch:** Add `txId` to `TransactionQueue.enqueue` payload and
   thread it through `createSyncAction`; client filters by `txId`.
 
-### Redis subscriber catch-up after disconnect
-
-Single `redisSubscriber` in `src/server/ws/index.ts`. On reconnect,
-messages published during the gap are lost. Connected WS clients keep
-their connection alive, so the existing reconnect-triggered `deltaSync`
-on the client side never fires.
-
-- **Effort:** Small.
-- **Risk:** Medium.
-- **First-touch:** On `redisSubscriber.on('ready')` after a prior
-  `error`, broadcast a synthetic `{cmd: 'resync'}` to all WS clients;
-  the client treats it as a hint to call `deltaSync()`.
-
-### Cache validity check on org switch
-
-`SyncManager.loadFromIndexedDB` returns `true` whenever
-`orgs.length > 0 || teams.length > 0`. After a user switches org (token
-refresh with a different `orgId` claim), the prior org's cached rows
-are loaded into MobX before delta sync kicks in.
-
-- **Effort:** Small.
-- **Risk:** Medium.
-- **First-touch:** Persist the active `orgId` into `syncMetadata` at
-  bootstrap; on load, compare against the JWT's `orgId` and clear the
-  cache on mismatch (same code path as the v8 schema-bump wipe).
-
 ### Optimistic placeholder collision
 
 `IssueStore.upsertMany` de-dups optimistic placeholders by
@@ -178,18 +152,11 @@ SyncAction with no batching, no `bufferedAmount` checks. At 1000 users
 - MobX stores rebuild filters with `Array.from(pool.values()).filter`
   on every render. Add secondary indexes (`Map<teamId, Set<id>>`) into
   the base pool store.
-- TipTap further code-split: `mermaid-node.tsx` pulls mermaid eagerly;
-  lazy-load via `next/dynamic` inside the node view.
-
 ---
 
 ## Frontend polish
 
-- **App Router `loading.tsx` / `error.tsx`** at root + `(workspace)`
-  segment. Currently any thrown error or pending route falls through to
-  Next defaults.
 - **MobX secondary indexes** (paired with the perf section above).
-- **Tiptap mermaid lazy boundary** — see perf list.
 - **`StatusSelect` / a11y polish** — keyboard nav and aria-label
   audit on custom comboboxes (post-#11 follow-up).
 
