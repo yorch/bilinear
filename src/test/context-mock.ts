@@ -3,6 +3,7 @@ import { IssueService } from '../server/services/issue.service';
 import { IssueActivityService } from '../server/services/issue-activity.service';
 import { LabelService } from '../server/services/label.service';
 import { NotificationService } from '../server/services/notification.service';
+import { OrganizationService } from '../server/services/organization.service';
 import { SearchService } from '../server/services/search.service';
 import type { SyncActionType } from '../server/services/sync.service';
 import { TeamService } from '../server/services/team.service';
@@ -33,6 +34,7 @@ export interface MockGraphQLContext {
     issueActivity: IssueActivityService;
     label: LabelService;
     notification: NotificationService;
+    organization: OrganizationService;
     search: SearchService;
     sync: MockSyncService;
     team: TeamService;
@@ -57,6 +59,7 @@ export function createMockContext(
       issueActivity: new IssueActivityService(prisma as never),
       label: new LabelService(prisma as never),
       notification: new NotificationService(prisma as never),
+      organization: new OrganizationService(prisma as never),
       search: new SearchService(prisma as never),
       sync: new MockSyncService(),
       team: new TeamService(prisma as never),

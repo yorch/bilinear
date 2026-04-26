@@ -17,6 +17,7 @@ import { IssueRelationService } from '../services/issue-relation.service';
 import { IssueTemplateService } from '../services/issue-template.service';
 import { LabelService } from '../services/label.service';
 import { NotificationService } from '../services/notification.service';
+import { OrganizationService } from '../services/organization.service';
 import { ProjectService } from '../services/project.service';
 import { RoadmapService } from '../services/roadmap.service';
 import { SearchService } from '../services/search.service';
@@ -43,6 +44,7 @@ export interface GraphQLContext extends AuthContext {
     issueTemplate: IssueTemplateService;
     label: LabelService;
     notification: NotificationService;
+    organization: OrganizationService;
     project: ProjectService;
     roadmap: RoadmapService;
     search: SearchService;
@@ -88,6 +90,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const customViewService = new CustomViewService(prisma);
   const issueActivityService = new IssueActivityService(prisma);
   const notificationService = new NotificationService(prisma);
+  const organizationService = new OrganizationService(prisma);
   const teamService = new TeamService(prisma);
   const workflowStateService = new WorkflowStateService(prisma);
   const cycleService = new CycleService(prisma);
@@ -118,6 +121,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
       issueTemplate: issueTemplateService,
       label: labelService,
       notification: notificationService,
+      organization: organizationService,
       project: projectService,
       roadmap: roadmapService,
       search: searchService,

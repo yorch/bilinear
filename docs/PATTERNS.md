@@ -198,7 +198,7 @@ export class AuthService {
 - Error classes are defined in the service file that throws them (see §6)
 - **Don't create a service just to wrap a single `findUnique` call.** Create a service when there is real business logic to encapsulate (validation, transactions, constraints, seeding). A bare pass-through adds indirection with no value.
 
-> **Known exception:** `Team.organization` in `resolvers/team.ts` calls `ctx.prisma.organization.findUnique` directly because `OrganizationService` does not yet exist. Once org-level business logic is added (Sprint 13+: member invitations, settings, billing), create `OrganizationService`, move this call into it, and add the service to `GraphQLContext`.
+> **Note:** `OrganizationService` now owns org create/member-role logic (`createWithOwner`, `updateMemberRole`, `findMembers`). Field resolvers like `Team.organization` may still call `ctx.prisma.organization.findUnique` directly for simple lookups; promote into the service when business logic accretes around them.
 
 ---
 

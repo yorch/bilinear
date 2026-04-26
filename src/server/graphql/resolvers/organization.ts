@@ -1,13 +1,20 @@
 import { GraphQLError } from 'graphql';
-import { Prisma } from '../../../generated/prisma';
+import type {
+  Organization,
+  OrganizationMember,
+} from '../../../generated/prisma';
 import {
   requireAuth,
   requireOrgRole,
   requireUserId,
 } from '../../middleware/auth';
+import {
+  InvalidRoleError,
+  InvalidUrlKeyError,
+  MemberNotFoundError,
+  UrlKeyTakenError,
+} from '../../services/organization.service';
 import type { GraphQLContext } from '../context';
-
-const URL_KEY_RE = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
 
 export const organizationResolvers = {
   Mutation: {
@@ -18,14 +25,23 @@ export const organizationResolvers = {
     ) => {
       requireUserId(ctx);
 
-      if (!URL_KEY_RE.test(input.urlKey)) {
-        throw new GraphQLError(
-          'URL key must be 3-63 characters, lowercase alphanumeric and hyphens only',
-          { extensions: { code: 'BAD_USER_INPUT' } },
+      let organization: Organization;
+      try {
+        organization = await ctx.services.organization.createWithOwner(
+          ctx.userId,
+          input,
         );
+      } catch (err) {
+        if (
+          err instanceof InvalidUrlKeyError ||
+          err instanceof UrlKeyTakenError
+        ) {
+          throw new GraphQLError(err.message, {
+            extensions: { code: 'BAD_USER_INPUT' },
+          });
+        }
+        throw err;
       }
-
-      const organization = await createOrgWithOwner(ctx, input);
 
       const tokenPair = await ctx.services.auth.reissueTokens(
         ctx.userId,
@@ -51,32 +67,33 @@ export const organizationResolvers = {
         'admin',
       ]);
 
-      const VALID_ROLES = ['owner', 'admin', 'member', 'guest'];
-      if (!VALID_ROLES.includes(role)) {
-        throw new GraphQLError('Invalid role', {
-          extensions: { code: 'BAD_USER_INPUT' },
-        });
+      let updated: OrganizationMember;
+      try {
+        updated = await ctx.services.organization.updateMemberRole(
+          ctx.orgId,
+          userId,
+          role,
+        );
+      } catch (err) {
+        if (err instanceof InvalidRoleError) {
+          throw new GraphQLError(err.message, {
+            extensions: { code: 'BAD_USER_INPUT' },
+          });
+        }
+        if (err instanceof MemberNotFoundError) {
+          throw new GraphQLError(err.message, {
+            extensions: { code: 'NOT_FOUND' },
+          });
+        }
+        throw err;
       }
 
-      const membership = await ctx.prisma.organizationMember.findUnique({
-        where: { organizationId_userId: { organizationId: ctx.orgId, userId } },
-      });
-      if (!membership) {
-        throw new GraphQLError('Member not found', {
-          extensions: { code: 'NOT_FOUND' },
-        });
-      }
-
-      await ctx.prisma.organizationMember.update({
-        data: { role },
-        where: { organizationId_userId: { organizationId: ctx.orgId, userId } },
-      });
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
         'U',
         'OrganizationMember',
-        membership.id,
-        { ...membership, role },
+        updated.id,
+        updated,
       );
       return { lastSyncId: sync.id.toString(), success: true };
     },
@@ -104,43 +121,7 @@ export const organizationResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      return ctx.prisma.organizationMember.findMany({
-        select: { role: true, userId: true },
-        where: { organizationId: ctx.orgId },
-      });
+      return ctx.services.organization.findMembers(ctx.orgId);
     },
   },
 };
-
-async function createOrgWithOwner(
-  ctx: GraphQLContext & { userId: string },
-  input: { name: string; urlKey: string },
-) {
-  try {
-    return await ctx.prisma.$transaction(async tx => {
-      const org = await tx.organization.create({
-        data: { name: input.name, urlKey: input.urlKey },
-      });
-
-      await tx.organizationMember.create({
-        data: {
-          organizationId: org.id,
-          role: 'owner',
-          userId: ctx.userId,
-        },
-      });
-
-      return org;
-    });
-  } catch (err) {
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === 'P2002'
-    ) {
-      throw new GraphQLError('This URL key is already taken', {
-        extensions: { code: 'BAD_USER_INPUT' },
-      });
-    }
-    throw err;
-  }
-}
