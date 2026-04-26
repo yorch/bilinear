@@ -39,6 +39,16 @@ export class CommentReactionNotFoundError extends Error {
   }
 }
 
+/**
+ * Result of a comment access check — `commentId` is known to belong to an
+ * issue inside `orgId` on `teamId`. Resolver still owes a `requireTeamMember`
+ * call against teamId; this method does not perform that auth step itself
+ * because it doesn't know the caller userId.
+ */
+export interface CommentAccessTarget {
+  teamId: string;
+}
+
 const COMMENT_INCLUDE = {
   author: true,
   reactions: {
@@ -63,6 +73,27 @@ const COMMENT_INCLUDE = {
 
 export class CommentService {
   constructor(private prisma: PrismaClient) {}
+
+  /**
+   * Look up the (orgId, teamId) the comment belongs to via its issue. Returns
+   * null when the comment does not exist or belongs to a different org —
+   * resolvers translate null into NOT_FOUND and chain a requireTeamMember
+   * check against the returned teamId.
+   */
+  async findAccessTarget(
+    commentId: string,
+    orgId: string,
+  ): Promise<CommentAccessTarget | null> {
+    const row = await this.prisma.comment.findUnique({
+      select: { issue: { select: { organizationId: true, teamId: true } } },
+      where: { id: commentId },
+    });
+    const issue = row?.issue;
+    if (!issue || issue.organizationId !== orgId || !issue.teamId) {
+      return null;
+    }
+    return { teamId: issue.teamId };
+  }
 
   async findById(
     id: string,

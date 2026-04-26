@@ -124,4 +124,39 @@ export class OrganizationService {
       where: { organizationId: orgId },
     });
   }
+
+  async findById(orgId: string): Promise<Organization | null> {
+    return this.prisma.organization.findUnique({ where: { id: orgId } });
+  }
+
+  /** Look up just the urlKey for slug-derivation paths so callers don't
+   *  pull a full org row when they only need one column. */
+  async getUrlKey(orgId: string): Promise<string | null> {
+    const row = await this.prisma.organization.findUnique({
+      select: { urlKey: true },
+      where: { id: orgId },
+    });
+    return row?.urlKey ?? null;
+  }
+
+  /** Returns the role string for `userId` in `orgId`, or null if not a
+   *  member. Use this when the caller needs to branch on role; for plain
+   *  yes/no membership use `isMember`. */
+  async getMemberRole(orgId: string, userId: string): Promise<string | null> {
+    const row = await this.prisma.organizationMember.findUnique({
+      select: { role: true },
+      where: { organizationId_userId: { organizationId: orgId, userId } },
+    });
+    return row?.role ?? null;
+  }
+
+  /** Whether `userId` belongs to `orgId`. Used by membership-gated mutations
+   *  that need a yes/no answer without leaking the role. */
+  async isMember(orgId: string, userId: string): Promise<boolean> {
+    const row = await this.prisma.organizationMember.findUnique({
+      select: { id: true },
+      where: { organizationId_userId: { organizationId: orgId, userId } },
+    });
+    return row !== null;
+  }
 }

@@ -336,6 +336,26 @@ export class IssueService {
     return this.prisma.issue.delete({ where: { id } });
   }
 
+  /** Active issues currently scoped to a cycle, ordered for list display. */
+  async findActiveByCycleId(cycleId: string): Promise<IssueListRow[]> {
+    return this.prisma.issue.findMany({
+      omit: { descriptionState: true },
+      orderBy: { sortOrder: 'asc' },
+      where: { archivedAt: null, cycleId, trashed: false },
+    });
+  }
+
+  /** Fetch a set of issues by id, scoped to a single org. Used by the cycle
+   *  rollover broadcast to ship one SyncAction per moved issue. */
+  async findByIdsInOrg(ids: string[], orgId: string): Promise<Issue[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    return this.prisma.issue.findMany({
+      where: { id: { in: ids }, organizationId: orgId },
+    });
+  }
+
   async getLabels(issueId: string): Promise<IssueLabel[]> {
     const assignments = await this.prisma.issueLabelAssignment.findMany({
       include: { label: true },

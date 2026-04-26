@@ -333,6 +333,53 @@ export class TeamService {
     });
   }
 
+  /** Verify a list of team ids all exist and all belong to `orgId`. Throws
+   *  TeamNotFoundError if any id is missing, TeamCrossOrgError if any team
+   *  belongs to a different org. */
+  async assertAllInOrg(teamIds: string[], orgId: string): Promise<void> {
+    if (teamIds.length === 0) {
+      return;
+    }
+    const teams = await this.prisma.team.findMany({
+      select: { id: true, organizationId: true },
+      where: { id: { in: teamIds } },
+    });
+    if (teams.length !== teamIds.length) {
+      throw new TeamNotFoundError();
+    }
+    if (teams.some(t => t.organizationId !== orgId)) {
+      throw new TeamCrossOrgError();
+    }
+  }
+
+  /** Whether `userId` has a TeamMembership row on `teamId`. Used by team
+   *  visibility checks; for full ownership/role checks use the auth
+   *  middleware (`requireTeamMember`/`requireTeamOwner`). */
+  async isTeamMember(teamId: string, userId: string): Promise<boolean> {
+    const row = await this.prisma.teamMembership.findUnique({
+      select: { id: true },
+      where: { teamId_userId: { teamId, userId } },
+    });
+    return row !== null;
+  }
+
+  /** For each id in `teamIds` that `userId` is a member of, returns the id.
+   *  Lets the caller filter a set of teams down to the ones the user can
+   *  actually see, in a single round-trip. */
+  async findMemberTeamIds(
+    teamIds: string[],
+    userId: string,
+  ): Promise<Set<string>> {
+    if (teamIds.length === 0) {
+      return new Set();
+    }
+    const rows = await this.prisma.teamMembership.findMany({
+      select: { teamId: true },
+      where: { teamId: { in: teamIds }, userId },
+    });
+    return new Set(rows.map(r => r.teamId));
+  }
+
   private validateKey(key: string): void {
     if (!TEAM_KEY_PATTERN.test(key)) {
       throw new TeamKeyInvalidError();
@@ -379,6 +426,13 @@ export class TeamKeyInvalidError extends Error {
   constructor() {
     super('Team key must be 1-10 uppercase characters');
     this.name = 'TeamKeyInvalidError';
+  }
+}
+
+export class TeamCrossOrgError extends Error {
+  constructor() {
+    super('Teams must belong to the same organization');
+    this.name = 'TeamCrossOrgError';
   }
 }
 

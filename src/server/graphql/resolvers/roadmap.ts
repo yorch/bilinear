@@ -24,10 +24,7 @@ export const roadmapResolvers = {
         });
       }
 
-      const updated = await ctx.prisma.project.update({
-        data: { roadmapVisible: visible },
-        where: { id },
-      });
+      const updated = await ctx.services.project.setRoadmapVisible(id, visible);
 
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
@@ -50,15 +47,11 @@ export const roadmapResolvers = {
     ) => {
       requireAuth(ctx);
 
-      const member = await ctx.prisma.organizationMember.findUnique({
-        where: {
-          organizationId_userId: {
-            organizationId: ctx.orgId,
-            userId: ctx.userId,
-          },
-        },
-      });
-      if (!member || !['admin', 'owner'].includes(member.role)) {
+      const role = await ctx.services.organization.getMemberRole(
+        ctx.orgId,
+        ctx.userId,
+      );
+      if (!role || !['admin', 'owner'].includes(role)) {
         throw new GraphQLError(
           'Only organization admins can manage the public roadmap',
           {
@@ -67,14 +60,13 @@ export const roadmapResolvers = {
         );
       }
 
-      const org = await ctx.prisma.organization.findUnique({
-        where: { id: ctx.orgId },
-      });
+      const urlKey =
+        (await ctx.services.organization.getUrlKey(ctx.orgId)) ?? ctx.orgId;
 
       try {
         const roadmap = await ctx.services.roadmap.upsert(
           ctx.orgId,
-          org?.urlKey ?? ctx.orgId,
+          urlKey,
           input,
         );
         // PublicRoadmap is a workspace-only setting — no client-side sync store.
@@ -116,9 +108,7 @@ export const roadmapResolvers = {
       ctx: GraphQLContext,
     ) => {
       // Public query — no requireAuth
-      const roadmap = await ctx.prisma.publicRoadmap.findUnique({
-        where: { slug },
-      });
+      const roadmap = await ctx.services.roadmap.findBySlug(slug);
 
       if (!roadmap?.enabled) {
         throw new GraphQLError('Roadmap not found', {

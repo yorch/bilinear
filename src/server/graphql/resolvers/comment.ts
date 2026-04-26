@@ -7,28 +7,23 @@ import type {
 } from '../../services/comment.service';
 import type { GraphQLContext } from '../context';
 
-/** Verifies org + team access for a comment. Single DB query via include.
- *  Must be called after requireAuth(ctx) so ctx.userId and ctx.orgId are non-null. */
+/** Verifies org + team access for a comment via CommentService.findAccessTarget,
+ *  then chains the existing requireTeamMember middleware. Must be called after
+ *  requireAuth(ctx) so ctx.userId and ctx.orgId are non-null. */
 async function requireCommentAccess(
   ctx: GraphQLContext & { userId: string; orgId: string },
   commentId: string,
 ): Promise<void> {
-  const row = await ctx.prisma.comment.findUnique({
-    select: { issue: { select: { organizationId: true, teamId: true } } },
-    where: { id: commentId },
-  });
-  const issue = row?.issue;
-  if (!issue || issue.organizationId !== ctx.orgId) {
+  const target = await ctx.services.comment.findAccessTarget(
+    commentId,
+    ctx.orgId,
+  );
+  if (!target) {
     throw new GraphQLError('Comment not found', {
       extensions: { code: 'NOT_FOUND' },
     });
   }
-  if (!issue.teamId) {
-    throw new GraphQLError('Comment not found', {
-      extensions: { code: 'NOT_FOUND' },
-    });
-  }
-  await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
+  await requireTeamMember(ctx.prisma, target.teamId, ctx.userId);
 }
 
 function handleCommentError(err: unknown): never {

@@ -208,6 +208,14 @@ export class ProjectService {
     });
   }
 
+  /** Toggle whether a project appears on the org's public roadmap. */
+  async setRoadmapVisible(id: string, visible: boolean): Promise<Project> {
+    return this.prisma.project.update({
+      data: { roadmapVisible: visible },
+      where: { id },
+    });
+  }
+
   async archive(id: string): Promise<Project> {
     return this.prisma.project.update({
       data: { archivedAt: new Date() },

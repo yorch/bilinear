@@ -194,10 +194,8 @@ export const teamResolvers = {
         team.private &&
         !(await isOrgAdmin(ctx.prisma, ctx.orgId, ctx.userId))
       ) {
-        const teamMembership = await ctx.prisma.teamMembership.findUnique({
-          where: { teamId_userId: { teamId: id, userId: ctx.userId } },
-        });
-        if (!teamMembership) {
+        const isMember = await ctx.services.team.isTeamMember(id, ctx.userId);
+        if (!isMember) {
           throw new GraphQLError('Team not found', {
             extensions: { code: 'NOT_FOUND' },
           });
@@ -215,16 +213,9 @@ export const teamResolvers = {
       }
 
       // Non-admins: filter out private teams they're not members of
-      const memberTeamIds = new Set(
-        (
-          await ctx.prisma.teamMembership.findMany({
-            select: { teamId: true },
-            where: {
-              teamId: { in: allTeams.map(t => t.id) },
-              userId: ctx.userId,
-            },
-          })
-        ).map(m => m.teamId),
+      const memberTeamIds = await ctx.services.team.findMemberTeamIds(
+        allTeams.map(t => t.id),
+        ctx.userId,
       );
 
       return allTeams.filter(t => !t.private || memberTeamIds.has(t.id));

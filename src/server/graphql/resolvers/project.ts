@@ -54,12 +54,11 @@ export const projectResolvers = {
         });
       }
 
-      const orgMember = await ctx.prisma.organizationMember.findUnique({
-        where: {
-          organizationId_userId: { organizationId: ctx.orgId, userId },
-        },
-      });
-      if (!orgMember) {
+      const isOrgMember = await ctx.services.organization.isMember(
+        ctx.orgId,
+        userId,
+      );
+      if (!isOrgMember) {
         throw new GraphQLError('User is not a member of this organization', {
           extensions: { code: 'NOT_FOUND' },
         });
@@ -142,18 +141,21 @@ export const projectResolvers = {
       requireAuth(ctx);
 
       if (input.teamIds && input.teamIds.length > 0) {
-        const teams = await ctx.prisma.team.findMany({
-          where: { id: { in: input.teamIds } },
-        });
-        if (teams.length !== input.teamIds.length) {
-          throw new GraphQLError('One or more teams not found', {
-            extensions: { code: 'NOT_FOUND' },
-          });
-        }
-        if (teams.some(t => t.organizationId !== ctx.orgId)) {
-          throw new GraphQLError('Teams must belong to the same organization', {
-            extensions: { code: 'FORBIDDEN' },
-          });
+        try {
+          await ctx.services.team.assertAllInOrg(input.teamIds, ctx.orgId);
+        } catch (err) {
+          const error = err as Error;
+          if (error.name === 'TeamNotFoundError') {
+            throw new GraphQLError('One or more teams not found', {
+              extensions: { code: 'NOT_FOUND' },
+            });
+          }
+          if (error.name === 'TeamCrossOrgError') {
+            throw new GraphQLError(error.message, {
+              extensions: { code: 'FORBIDDEN' },
+            });
+          }
+          throw err;
         }
       }
 

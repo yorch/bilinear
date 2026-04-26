@@ -10,10 +10,7 @@ import type { GraphQLContext } from '../context';
 export const cycleResolvers = {
   Cycle: {
     issues: async (cycle: Cycle, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.prisma.issue.findMany({
-        orderBy: { sortOrder: 'asc' },
-        where: { archivedAt: null, cycleId: cycle.id, trashed: false },
-      });
+      return ctx.services.issue.findActiveByCycleId(cycle.id);
     },
 
     team: async (cycle: Cycle, _args: unknown, ctx: GraphQLContext) => {
@@ -212,12 +209,10 @@ export const cycleResolvers = {
 
         // Broadcast each moved issue so connected clients update their cycle view
         if (result.movedIssueIds.length > 0) {
-          const movedIssues = await ctx.prisma.issue.findMany({
-            where: {
-              id: { in: result.movedIssueIds },
-              organizationId: ctx.orgId,
-            },
-          });
+          const movedIssues = await ctx.services.issue.findByIdsInOrg(
+            result.movedIssueIds,
+            ctx.orgId,
+          );
           for (const issue of movedIssues) {
             lastSync = await ctx.services.sync.createSyncAction(
               ctx.orgId,
