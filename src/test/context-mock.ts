@@ -1,3 +1,4 @@
+import { createLoaders, type Loaders } from '../server/graphql/loaders';
 import { AuthService } from '../server/services/auth.service';
 import { IssueService } from '../server/services/issue.service';
 import { IssueActivityService } from '../server/services/issue-activity.service';
@@ -28,6 +29,7 @@ class MockSyncService {
 export interface MockGraphQLContext {
   orgId: string | null;
   prisma: MockPrismaClient;
+  loaders: Loaders;
   services: {
     auth: AuthService;
     issue: IssueService;
@@ -51,6 +53,7 @@ export function createMockContext(
   const userService = new UserService(prisma as never);
 
   return {
+    loaders: createLoaders(prisma as never),
     orgId: overrides.orgId !== undefined ? overrides.orgId : TEST_ORG.id,
     prisma,
     services: {

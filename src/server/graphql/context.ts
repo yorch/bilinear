@@ -25,11 +25,14 @@ import { SyncService } from '../services/sync.service';
 import { TeamService } from '../services/team.service';
 import { UserService } from '../services/user.service';
 import { WorkflowStateService } from '../services/workflow-state.service';
+import { createLoaders, type Loaders } from './loaders';
 
 export interface GraphQLContext extends AuthContext {
   prisma: PrismaClient;
   /** Best-effort client IP for abuse tracking (X-Forwarded-For / X-Real-IP). */
   clientIp: string | null;
+  /** Per-request DataLoader bundle batching N+1 lookups. See ./loaders. */
+  loaders: Loaders;
   services: {
     auth: AuthService;
     comment: CommentService;
@@ -106,6 +109,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   return {
     ...auth,
     clientIp,
+    loaders: createLoaders(prisma),
     prisma,
     services: {
       auth: authService,

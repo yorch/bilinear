@@ -14,7 +14,7 @@ export const cycleResolvers = {
     },
 
     team: async (cycle: Cycle, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.services.team.findById(cycle.teamId);
+      return ctx.loaders.team.load(cycle.teamId);
     },
   },
 

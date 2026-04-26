@@ -65,6 +65,7 @@
     "@tiptap/suggestion": "3.22.3",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
+    "dataloader": "2.2.3",
     "date-fns": "4.1.0",
     "dexie": "4.4.2",
     "dotenv": "17.4.1",

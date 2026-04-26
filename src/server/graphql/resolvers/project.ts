@@ -491,7 +491,7 @@ export const projectResolvers = {
       if (!project.creatorId) {
         return null;
       }
-      return ctx.services.user.findById(project.creatorId);
+      return ctx.loaders.user.load(project.creatorId);
     },
 
     issues: async (project: Project, _args: unknown, ctx: GraphQLContext) => {
@@ -505,7 +505,7 @@ export const projectResolvers = {
       if (!project.leadId) {
         return null;
       }
-      return ctx.services.user.findById(project.leadId);
+      return ctx.loaders.user.load(project.leadId);
     },
 
     members: async (project: Project, _args: unknown, ctx: GraphQLContext) => {
@@ -547,7 +547,7 @@ export const projectResolvers = {
       _args: unknown,
       ctx: GraphQLContext,
     ) => {
-      return ctx.services.user.findById(update.userId);
+      return ctx.loaders.user.load(update.userId);
     },
   },
 

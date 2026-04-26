@@ -397,6 +397,20 @@ export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 ```
 
+### DataLoader for GraphQL field resolvers
+
+Field resolvers like `Issue.assignee` fire one DB lookup per parent row. To avoid N+1, the GraphQL context exposes a per-request `loaders` bundle (`src/server/graphql/loaders.ts`) that batches `findUnique` calls within a single tick into one `findMany({ where: { id: { in: [...] } } })`.
+
+```typescript
+// Field resolver — batched
+Issue: {
+  assignee: (issue, _args, ctx) =>
+    issue.assigneeId ? ctx.loaders.user.load(issue.assigneeId) : null,
+}
+```
+
+**Use loaders in field resolvers; keep `services.<x>.findById` for mutation auth lookups** (single-shot calls don't benefit from batching). Loaders are built fresh per request inside `createContext` so there is no cross-request cache leakage.
+
 ---
 
 ## 12. Frontend Data Pattern (Sprint 7-8+)

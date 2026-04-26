@@ -41,7 +41,7 @@ export const issueResolvers = {
       if (!issue.assigneeId) {
         return null;
       }
-      return ctx.services.user.findById(issue.assigneeId);
+      return ctx.loaders.user.load(issue.assigneeId);
     },
 
     children: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
@@ -55,14 +55,14 @@ export const issueResolvers = {
       if (!issue.creatorId) {
         return null;
       }
-      return ctx.services.user.findById(issue.creatorId);
+      return ctx.loaders.user.load(issue.creatorId);
     },
 
     cycle: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
       if (!issue.cycleId) {
         return null;
       }
-      const cycle = await ctx.services.cycle.findById(issue.cycleId);
+      const cycle = await ctx.loaders.cycle.load(issue.cycleId);
       if (cycle && cycle.organizationId !== ctx.orgId) {
         return null;
       }
@@ -74,7 +74,7 @@ export const issueResolvers = {
     },
 
     labels: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.services.issue.getLabels(issue.id);
+      return ctx.loaders.labelsByIssueId.load(issue.id);
     },
 
     parent: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
@@ -88,7 +88,7 @@ export const issueResolvers = {
       if (!issue.projectId) {
         return null;
       }
-      const project = await ctx.services.project.findById(issue.projectId);
+      const project = await ctx.loaders.project.load(issue.projectId);
       if (project && project.organizationId !== ctx.orgId) {
         return null;
       }
@@ -96,10 +96,10 @@ export const issueResolvers = {
     },
 
     state: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.services.workflowState.findById(issue.stateId);
+      return ctx.loaders.workflowState.load(issue.stateId);
     },
     team: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
-      return ctx.services.team.findById(issue.teamId);
+      return ctx.loaders.team.load(issue.teamId);
     },
   },
   Mutation: {
