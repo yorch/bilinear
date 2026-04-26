@@ -484,7 +484,7 @@ teamCreate: async (_parent, { input }, ctx) => {
 
 Every entity follows the same file structure and flow:
 
-```
+```text
 src/server/
 ├── services/<entity>.service.ts     # Business logic + Prisma queries
 └── graphql/resolvers/<entity>.ts    # Thin resolver: auth → service → return
@@ -532,7 +532,7 @@ return { success: true, team, lastSyncId: sync.id.toString() };
 
 Tests use **Vitest** with mock Prisma clients. No real database is needed.
 
-```
+```text
 src/test/
 ├── setup.ts          # Environment vars + global mocks
 ├── prisma-mock.ts    # createMockPrisma() — mock models with vi.fn()
@@ -627,7 +627,7 @@ export class TeamStore {
 
 The sync lifecycle is managed by two providers wrapping the workspace layout:
 
-```
+```tsx
 <StoreProvider>          ← creates RootStore singleton, provides via React context
   <SyncProvider>         ← bootstraps data, starts WsClient, teardown on unmount
     <AppShell />
@@ -716,7 +716,7 @@ The fuzzy algorithm scores based on subsequence matching with run-length bonuses
 
 The command palette is controlled by `UIStore.commandPaletteOpen`. The `WorkspaceClient` component renders it at the workspace layout level and registers the `Cmd+K` / `Ctrl+K` global shortcut.
 
-```
+```tsx
 <StoreProvider>
   <SyncProvider>
     <WorkspaceClient>          ← registers Cmd+K, renders CommandPalette
@@ -930,7 +930,7 @@ Unauthenticated auth mutations (`emailLogin`, `emailVerify`) have dedicated per-
 
 **Response headers** (present on every authenticated GraphQL response):
 
-```
+```text
 X-RateLimit-Requests-Limit: 5000
 X-RateLimit-Requests-Remaining: 4999
 X-RateLimit-Requests-Reset: 1712534400   ← unix timestamp
@@ -977,7 +977,7 @@ Override with `LOG_LEVEL` env var. Pretty-print in dev with `LOG_PRETTY=1`.
 
 `UIStore.sidebarCollapsed` is the single source of truth for sidebar state. Toggle via `uiStore.toggleSidebarCollapsed()`.
 
-```typescript
+```tsx
 // Keyboard shortcut registered in WorkspaceClient
 useHotkeys('meta+b', () => uiStore.toggleSidebarCollapsed());
 useHotkeys('ctrl+b', () => uiStore.toggleSidebarCollapsed());
@@ -1002,7 +1002,7 @@ The `Sidebar` component uses `transition-[width]` for smooth animation: `w-56` (
 
 E2E tests use **Playwright** and live in `tests/e2e/`. Run with `yarn test:e2e`.
 
-```
+```text
 tests/
 ├── e2e/
 │   ├── auth.spec.ts           # Login → verify → workspace

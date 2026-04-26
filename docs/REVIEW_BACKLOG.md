@@ -7,6 +7,7 @@ frontend, tests). Items already shipped live in git history under the
 `fix(ui)`, and `test(*)` prefixes from 2026-04-22 onward.
 
 Each item has:
+
 - **Effort** — rough working-session cost
 - **Risk** — deploy/rollback risk
 - **Why it's deferred** — what design or coordination work has to happen first
@@ -135,7 +136,8 @@ multi-MB and blocks app boot. The response is buffered into
 
 `broadcastToOrgAll` calls `ws.send` synchronously per client per
 SyncAction with no batching, no `bufferedAmount` checks. At 1000 users
-+ 10 mut/s = 10k sends/s on a single Node process.
+
+- 10 mut/s = 10k sends/s on a single Node process.
 
 - **Effort:** Medium. Coalesce per-org with a 50ms flush window into a
   single `{sync: [...]}` message; track `ws.bufferedAmount` and close
@@ -152,6 +154,7 @@ SyncAction with no batching, no `bufferedAmount` checks. At 1000 users
 - MobX stores rebuild filters with `Array.from(pool.values()).filter`
   on every render. Add secondary indexes (`Map<teamId, Set<id>>`) into
   the base pool store.
+
 ---
 
 ## Frontend polish
@@ -166,16 +169,16 @@ SyncAction with no batching, no `bufferedAmount` checks. At 1000 users
 
 Locking in the parts of the system most likely to hide regressions.
 
-| File / area | Current state | What to add |
-|---|---|---|
-| `auth.service.ts` | Refresh-token reuse covered (commit `e826638`) | Magic-link expiry / wrong-code / replay; `TEST_AUTH_CODE` only honored when `NODE_ENV === 'test'`; JWT entropy boot guard |
-| `sync-manager.ts` (950 LOC) | 0 tests | Extract a pure `applyActions(actions, stores)` and unit-test the dispatch + `maxId` math; integration test via `fake-indexeddb` |
-| `transaction-queue.ts` | 0 tests | Retry/backoff (3 retries with 1s/3s/10s delays), permanent-error short-circuit, processing flag re-entrance |
-| WebSocket handshake | 0 tests | Spin a `ws` test server; assert JWT-rejected handshake, org-scoped delivery (user A doesn't get user B's org actions) |
-| Resolver auth guards | 7 of 20 covered | Parameterized `[mutation, serviceError, expectedCode]` table per resolver — guarantees error-code mapping stays in sync with `extensions.code` discriminator |
-| MobX stores | 2 of 17 covered | Shared `createPoolStoreTests(store)` helper exercising `applySyncAction` dispatch + `optimisticUpdate` rollback semantics across stores |
-| `e2e/issue-crud.spec.ts` | empty file | CRUD spec: create / edit title+description / change state / assign / archive / delete |
-| E2E flow gaps | Lightweight | Drag-drop reorder, offline → reconnect → reload persistence, multi-user cross-org isolation, magic-link signup (vs. existing `loginAs` shortcut) |
+| File / area                 | Current state                                  | What to add                                                                                                                                                  |
+| --------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `auth.service.ts`           | Refresh-token reuse covered (commit `e826638`) | Magic-link expiry / wrong-code / replay; `TEST_AUTH_CODE` only honored when `NODE_ENV === 'test'`; JWT entropy boot guard                                    |
+| `sync-manager.ts` (950 LOC) | 0 tests                                        | Extract a pure `applyActions(actions, stores)` and unit-test the dispatch + `maxId` math; integration test via `fake-indexeddb`                              |
+| `transaction-queue.ts`      | 0 tests                                        | Retry/backoff (3 retries with 1s/3s/10s delays), permanent-error short-circuit, processing flag re-entrance                                                  |
+| WebSocket handshake         | 0 tests                                        | Spin a `ws` test server; assert JWT-rejected handshake, org-scoped delivery (user A doesn't get user B's org actions)                                        |
+| Resolver auth guards        | 7 of 20 covered                                | Parameterized `[mutation, serviceError, expectedCode]` table per resolver — guarantees error-code mapping stays in sync with `extensions.code` discriminator |
+| MobX stores                 | 2 of 17 covered                                | Shared `createPoolStoreTests(store)` helper exercising `applySyncAction` dispatch + `optimisticUpdate` rollback semantics across stores                      |
+| `e2e/issue-crud.spec.ts`    | empty file                                     | CRUD spec: create / edit title+description / change state / assign / archive / delete                                                                        |
+| E2E flow gaps               | Lightweight                                    | Drag-drop reorder, offline → reconnect → reload persistence, multi-user cross-org isolation, magic-link signup (vs. existing `loginAs` shortcut)             |
 
 ---
 

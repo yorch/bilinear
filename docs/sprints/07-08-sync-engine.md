@@ -1,8 +1,9 @@
 # Sprint 7-8: Real-Time Sync Engine
+
 ## Issue Tracker — Linear Rebuild
 
-**Phase:** 1 (Foundation)  
-**Weeks:** 7-8  
+**Phase:** 1 (Foundation)
+**Weeks:** 7-8
 **Goal:** Local-first architecture with optimistic updates and real-time sync
 **Status:** ✅ Shipped — historical spec; current state lives in `docs/ARCHITECTURE.md` §3 and the source tree.
 
@@ -24,7 +25,7 @@ The sync engine is the most critical technical component. It enables sub-50ms in
 
 All reads come from local state. All writes are optimistic-first:
 
-```
+```text
 User Action → MobX Store (instant UI) → IndexedDB (persist) → GraphQL Mutation (async)
                                                                       ↓
 Server confirms → SyncAction created → Redis PubSub → WebSocket → all clients
@@ -107,7 +108,6 @@ interface SyncAction {
 // BigInt scalar or serialize lastSyncId as String in GraphQL payloads.
 // In TypeScript, use bigint (not number) to avoid JS safe integer limits.
 ```
-```
 
 ---
 
@@ -174,6 +174,7 @@ export class SyncService {
 ### 4.2 Modify All Existing Mutations
 
 Every mutation resolver from Sprints 1-6 must now:
+
 1. Perform the database write (existing)
 2. Create a SyncAction (new)
 3. Return `lastSyncId` in the payload (new)
@@ -191,7 +192,7 @@ issueCreate: async (_parent, { input }, ctx) => {
 
 **Ref:** `docs/API_DESIGN.md` section 10 (Sync Endpoints)
 
-```
+```text
 GET /api/sync/bootstrap?type=full&onlyModels=Issue,Team,User,...
 GET /api/sync/bootstrap?type=partial&onlyModels=Comment,IssueHistory
 GET /api/sync/delta?lastSyncId=X&toSyncId=Y
@@ -199,26 +200,26 @@ GET /api/sync/delta?lastSyncId=X&toSyncId=Y
 
 Implement as Next.js API routes:
 
-| File | Endpoint | Purpose |
-|------|----------|---------|
+| File                                  | Endpoint                  | Purpose                |
+| ------------------------------------- | ------------------------- | ---------------------- |
 | `src/app/api/sync/bootstrap/route.ts` | `GET /api/sync/bootstrap` | Full/partial bootstrap |
-| `src/app/api/sync/delta/route.ts` | `GET /api/sync/delta` | Delta sync catch-up |
+| `src/app/api/sync/delta/route.ts`     | `GET /api/sync/delta`     | Delta sync catch-up    |
 
 **Bootstrap response format:** line-delimited `ModelName=<JSON>\n`, ending with `_metadata_={"lastSyncId": N}`
 
 **Model load strategies:**
 
-| Strategy | When Loaded | Models |
-|----------|-------------|--------|
-| `instant` | Full bootstrap | Organization, Team, User, Issue, WorkflowState, IssueLabel |
-| `partial` | Partial bootstrap | Comment, IssueHistory (future sprints) |
-| `lazy` | On demand | Attachment content (future sprints) |
+| Strategy  | When Loaded       | Models                                                     |
+| --------- | ----------------- | ---------------------------------------------------------- |
+| `instant` | Full bootstrap    | Organization, Team, User, Issue, WorkflowState, IssueLabel |
+| `partial` | Partial bootstrap | Comment, IssueHistory (future sprints)                     |
+| `lazy`    | On demand         | Attachment content (future sprints)                        |
 
 ### 4.4 WebSocket Server
 
 **Ref:** `docs/API_DESIGN.md` section 11 (WebSocket Protocol)
 
-```
+```text
 Connection: ws://localhost:3000/ws
   Headers: Authorization: Bearer <token>
 
@@ -235,7 +236,7 @@ Implementation approach: use the `ws` library with a custom Next.js server or a 
 
 ### 4.5 Redis PubSub Broadcast
 
-```
+```text
 Channel: sync:<orgId>
 Payload: JSON SyncAction
 ```
@@ -298,7 +299,7 @@ class RootStore {
 
 Orchestrates the full sync lifecycle:
 
-```
+```text
 1. App loads → check IndexedDB for cached data
 2. If no cache → Full Bootstrap → store in IndexedDB + MobX
 3. If cache exists → load into MobX → Delta sync from lastSyncId
@@ -320,29 +321,29 @@ window.addEventListener('offline', () => syncManager.pause());
 
 ## 6. Files to Create/Modify
 
-| File | Action | Purpose |
-|------|--------|---------|
-| `prisma/schema.prisma` | **Modify** | Add SyncAction model |
-| `src/server/services/sync.service.ts` | **Create** | SyncAction creation + Redis broadcast |
-| `src/app/api/sync/bootstrap/route.ts` | **Create** | Bootstrap endpoint |
-| `src/app/api/sync/delta/route.ts` | **Create** | Delta sync endpoint |
-| `src/server/ws/index.ts` | **Create** | WebSocket server setup |
-| `src/server/ws/connection-manager.ts` | **Create** | Track connected clients per org |
-| `src/server/ws/sync-broadcaster.ts` | **Create** | Redis PubSub → WebSocket broadcast |
-| `src/server/graphql/resolvers/*.ts` | **Modify** | Add SyncAction creation to all mutations |
-| `src/lib/db.ts` | **Create** | Dexie.js IndexedDB schema |
-| `src/stores/root-store.ts` | **Create** | MobX root store |
-| `src/stores/sync-store.ts` | **Create** | Sync state (lastSyncId, connection status) |
-| `src/stores/issue-store.ts` | **Create** | Issue object pool + computed getters |
-| `src/stores/team-store.ts` | **Create** | Team object pool |
-| `src/stores/user-store.ts` | **Create** | User object pool |
-| `src/stores/label-store.ts` | **Create** | Label object pool |
-| `src/stores/ui-store.ts` | **Create** | UI state (sidebar, selection, active view) |
-| `src/lib/sync-manager.ts` | **Create** | Sync lifecycle orchestrator |
-| `src/lib/transaction-queue.ts` | **Create** | Optimistic mutation queue |
-| `src/lib/ws-client.ts` | **Create** | WebSocket client with reconnection |
-| `src/providers/store-provider.tsx` | **Create** | React context for MobX stores |
-| `src/providers/sync-provider.tsx` | **Create** | Bootstrap + sync lifecycle provider |
+| File                                        | Action     | Purpose                                        |
+| ------------------------------------------- | ---------- | ---------------------------------------------- |
+| `prisma/schema.prisma`                      | **Modify** | Add SyncAction model                           |
+| `src/server/services/sync.service.ts`       | **Create** | SyncAction creation + Redis broadcast          |
+| `src/app/api/sync/bootstrap/route.ts`       | **Create** | Bootstrap endpoint                             |
+| `src/app/api/sync/delta/route.ts`           | **Create** | Delta sync endpoint                            |
+| `src/server/ws/index.ts`                    | **Create** | WebSocket server setup                         |
+| `src/server/ws/connection-manager.ts`       | **Create** | Track connected clients per org                |
+| `src/server/ws/sync-broadcaster.ts`         | **Create** | Redis PubSub → WebSocket broadcast             |
+| `src/server/graphql/resolvers/*.ts`         | **Modify** | Add SyncAction creation to all mutations       |
+| `src/lib/db.ts`                             | **Create** | Dexie.js IndexedDB schema                      |
+| `src/stores/root-store.ts`                  | **Create** | MobX root store                                |
+| `src/stores/sync-store.ts`                  | **Create** | Sync state (lastSyncId, connection status)     |
+| `src/stores/issue-store.ts`                 | **Create** | Issue object pool + computed getters           |
+| `src/stores/team-store.ts`                  | **Create** | Team object pool                               |
+| `src/stores/user-store.ts`                  | **Create** | User object pool                               |
+| `src/stores/label-store.ts`                 | **Create** | Label object pool                              |
+| `src/stores/ui-store.ts`                    | **Create** | UI state (sidebar, selection, active view)     |
+| `src/lib/sync-manager.ts`                   | **Create** | Sync lifecycle orchestrator                    |
+| `src/lib/transaction-queue.ts`              | **Create** | Optimistic mutation queue                      |
+| `src/lib/ws-client.ts`                      | **Create** | WebSocket client with reconnection             |
+| `src/providers/store-provider.tsx`          | **Create** | React context for MobX stores                  |
+| `src/providers/sync-provider.tsx`           | **Create** | Bootstrap + sync lifecycle provider            |
 | `src/components/issues/issue-list-view.tsx` | **Modify** | Read from MobX store instead of direct GraphQL |
 
 ---
@@ -386,31 +387,31 @@ yarn add -D @types/ws
 
 These decisions were made during implementation and differ from the original spec:
 
-| Topic | Spec | Actual |
-|-------|------|--------|
-| WS endpoint | `/ws` path on port 3000 | Standalone process on port 3001 (`yarn ws:server`) |
-| WS auth | `Authorization: Bearer` header | `?token=<jwt>` query param (browsers can't set WS headers) |
-| `sync-broadcaster.ts` | Separate file planned | Broadcast logic lives in `ws/index.ts` + `ws/connection-manager.ts` |
-| `lastSyncId` GraphQL type | `Int!` (original schema) | Changed to `String!` — BIGSERIAL overflows 32-bit Int on long-lived systems |
-| Session token for WS | Not specified | `GET /api/auth/session` returns JWT value from httpOnly cookie for WS client use |
-| Label assignments | Not in original spec | `IssueLabelAssignment` queried during bootstrap; `labelIds: string[]` denormalized onto issues |
-| Bootstrap atomicity | Not specified | Dexie transaction wraps the clear + bulkPut to prevent partial-write data loss |
-| Concurrent guards | Not specified | `isBootstrapping` / `isDeltaSyncing` flags prevent overlapping calls from `online` event + WS reconnect |
-| Redis cleanup | Not specified | `ConnectionManager.remove()` returns `true` when org empties; WS server then unsubscribes from Redis channel |
+| Topic                     | Spec                           | Actual                                                                                                       |
+| ------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| WS endpoint               | `/ws` path on port 3000        | Standalone process on port 3001 (`yarn ws:server`)                                                           |
+| WS auth                   | `Authorization: Bearer` header | `?token=<jwt>` query param (browsers can't set WS headers)                                                   |
+| `sync-broadcaster.ts`     | Separate file planned          | Broadcast logic lives in `ws/index.ts` + `ws/connection-manager.ts`                                          |
+| `lastSyncId` GraphQL type | `Int!` (original schema)       | Changed to `String!` — BIGSERIAL overflows 32-bit Int on long-lived systems                                  |
+| Session token for WS      | Not specified                  | `GET /api/auth/session` returns JWT value from httpOnly cookie for WS client use                             |
+| Label assignments         | Not in original spec           | `IssueLabelAssignment` queried during bootstrap; `labelIds: string[]` denormalized onto issues               |
+| Bootstrap atomicity       | Not specified                  | Dexie transaction wraps the clear + bulkPut to prevent partial-write data loss                               |
+| Concurrent guards         | Not specified                  | `isBootstrapping` / `isDeltaSyncing` flags prevent overlapping calls from `online` event + WS reconnect      |
+| Redis cleanup             | Not specified                  | `ConnectionManager.remove()` returns `true` when org empties; WS server then unsubscribes from Redis channel |
 
 ---
 
 ## 9. Cross-References
 
-| Topic | Document | Section |
-|-------|----------|---------|
-| Sync engine design | `docs/ARCHITECTURE.md` | 3. Sync Engine Architecture |
-| SyncAction schema | `docs/ARCHITECTURE.md` | 3.3 SyncAction Schema |
-| Bootstrap process | `docs/ARCHITECTURE.md` | 3.4 Bootstrap Process |
-| Model load strategies | `docs/ARCHITECTURE.md` | 3.5 Model Load Strategies |
-| Conflict resolution | `docs/ARCHITECTURE.md` | 3.6 Conflict Resolution |
-| MobX state management | `docs/ARCHITECTURE.md` | 4.2 State Management |
-| Sync broadcast pipeline | `docs/ARCHITECTURE.md` | 5.3 Sync Broadcast Pipeline |
-| Sync REST endpoints | `docs/API_DESIGN.md` | 10. Sync Endpoints |
-| WebSocket protocol | `docs/API_DESIGN.md` | 11. WebSocket Protocol |
-| Mutation payloads (lastSyncId) | `docs/API_DESIGN.md` | 9. Mutation Payloads |
+| Topic                          | Document               | Section                     |
+| ------------------------------ | ---------------------- | --------------------------- |
+| Sync engine design             | `docs/ARCHITECTURE.md` | 3. Sync Engine Architecture |
+| SyncAction schema              | `docs/ARCHITECTURE.md` | 3.3 SyncAction Schema       |
+| Bootstrap process              | `docs/ARCHITECTURE.md` | 3.4 Bootstrap Process       |
+| Model load strategies          | `docs/ARCHITECTURE.md` | 3.5 Model Load Strategies   |
+| Conflict resolution            | `docs/ARCHITECTURE.md` | 3.6 Conflict Resolution     |
+| MobX state management          | `docs/ARCHITECTURE.md` | 4.2 State Management        |
+| Sync broadcast pipeline        | `docs/ARCHITECTURE.md` | 5.3 Sync Broadcast Pipeline |
+| Sync REST endpoints            | `docs/API_DESIGN.md`   | 10. Sync Endpoints          |
+| WebSocket protocol             | `docs/API_DESIGN.md`   | 11. WebSocket Protocol      |
+| Mutation payloads (lastSyncId) | `docs/API_DESIGN.md`   | 9. Mutation Payloads        |

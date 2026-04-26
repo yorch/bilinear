@@ -13,17 +13,17 @@ code. A section at the end lists planned-but-unshipped surface.
 
 ## 1. API Overview
 
-| Aspect         | Implementation                                                         |
-| -------------- | ---------------------------------------------------------------------- |
-| GraphQL        | `POST /api/graphql` (Apollo Server v4 on a Next.js route handler)      |
-| Auth           | HTTP-only cookie pair (`access_token`, `refresh_token`) set by auth mutations. The WebSocket reads `access_token` from the query string. |
+| Aspect          | Implementation                                                                                                                                                                      |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GraphQL         | `POST /api/graphql` (Apollo Server v4 on a Next.js route handler)                                                                                                                   |
+| Auth            | HTTP-only cookie pair (`access_token`, `refresh_token`) set by auth mutations. The WebSocket reads `access_token` from the query string.                                            |
 | Session cookies | `POST /api/auth/session` installs the cookie pair from a GraphQL auth result; `GET` returns the current access token (for the WS handshake); `DELETE` clears both cookies (logout). |
-| Pagination     | Relay-style `Connection` / `Edge` / `PageInfo` on `IssueConnection`, `IssueLabelConnection`, `ProjectConnection` only. All other list queries return plain `[T!]!`. |
-| Sync bootstrap | `GET /api/sync/bootstrap` (REST) — returns all entities the signed-in user can see, plus the current `lastSyncId`. |
-| Sync delta     | `GET /api/sync/delta?lastSyncId=<n>` (REST) — catches up missed SyncActions. |
-| Real-time push | `ws://<host>:3001?token=<accessToken>` — server pushes `SyncAction` events; clients do **not** subscribe via GraphQL. |
-| File upload    | `POST /api/upload` (multipart) — returns a `File` record; served via `/api/uploads/<key>`. |
-| Rate limit     | Enforced at middleware level on `/api/graphql` and `/api/auth/*`. See §12. |
+| Pagination      | Relay-style `Connection` / `Edge` / `PageInfo` on `IssueConnection`, `IssueLabelConnection`, `ProjectConnection` only. All other list queries return plain `[T!]!`.                 |
+| Sync bootstrap  | `GET /api/sync/bootstrap` (REST) — returns all entities the signed-in user can see, plus the current `lastSyncId`.                                                                  |
+| Sync delta      | `GET /api/sync/delta?lastSyncId=<n>` (REST) — catches up missed SyncActions.                                                                                                        |
+| Real-time push  | `ws://<host>:3001?token=<accessToken>` — server pushes `SyncAction` events; clients do **not** subscribe via GraphQL.                                                               |
+| File upload     | `POST /api/upload` (multipart) — returns a `File` record; served via `/api/uploads/<key>`.                                                                                          |
+| Rate limit      | Enforced at middleware level on `/api/graphql` and `/api/auth/*`. See §12.                                                                                                          |
 
 > **No GraphQL subscriptions.** Real-time delivery is a side-channel over
 > WebSocket, not `subscription` operations. Client mutations go via `fetch` to
@@ -110,46 +110,46 @@ feed it back into `/api/sync/delta` to catch up other tabs or devices.
 
 Payloads in the live schema:
 
-| Payload type                 | Entity field        |
-|------------------------------|---------------------|
-| `IssuePayload`               | `issue`             |
-| `IssueLabelPayload`          | `issueLabel`        |
-| `TeamPayload`                | `team`              |
-| `TeamMembershipPayload`      | `teamMembership`    |
-| `WorkflowStatePayload`       | `workflowState`     |
-| `ProjectPayload`             | `project`           |
-| `ProjectMilestonePayload`    | `projectMilestone`  |
-| `ProjectUpdatePayload`       | `projectUpdate`     |
-| `CyclePayload`               | `cycle`             |
-| `CustomViewPayload`          | `customView`        |
-| `DocumentMutationResult`     | `document`          |
-| `CommentPayload`             | `comment`           |
-| `CommentReactionPayload`     | `reaction`          |
-| `NotificationPayload`        | `notification`      |
-| `IssueRelationPayload`       | `issueRelation`     |
-| `IssueTemplatePayload`       | `issueTemplate`     |
-| `CustomFieldDefinitionPayload` | `customFieldDefinition` |
-| `CustomFieldValuesPayload`   | `values: [CustomFieldValue!]!` |
-| `PublicRoadmapUpsertResult`  | `roadmap`           |
-| `ProjectMutationResult`      | `project`           |
-| `CycleRolloverPayload`       | `lastSyncId`, `movedCount`, `nextCycleId` |
-| `DeletePayload`              | (no entity; `success` + `lastSyncId`) |
+| Payload type                   | Entity field                              |
+| ------------------------------ | ----------------------------------------- |
+| `IssuePayload`                 | `issue`                                   |
+| `IssueLabelPayload`            | `issueLabel`                              |
+| `TeamPayload`                  | `team`                                    |
+| `TeamMembershipPayload`        | `teamMembership`                          |
+| `WorkflowStatePayload`         | `workflowState`                           |
+| `ProjectPayload`               | `project`                                 |
+| `ProjectMilestonePayload`      | `projectMilestone`                        |
+| `ProjectUpdatePayload`         | `projectUpdate`                           |
+| `CyclePayload`                 | `cycle`                                   |
+| `CustomViewPayload`            | `customView`                              |
+| `DocumentMutationResult`       | `document`                                |
+| `CommentPayload`               | `comment`                                 |
+| `CommentReactionPayload`       | `reaction`                                |
+| `NotificationPayload`          | `notification`                            |
+| `IssueRelationPayload`         | `issueRelation`                           |
+| `IssueTemplatePayload`         | `issueTemplate`                           |
+| `CustomFieldDefinitionPayload` | `customFieldDefinition`                   |
+| `CustomFieldValuesPayload`     | `values: [CustomFieldValue!]!`            |
+| `PublicRoadmapUpsertResult`    | `roadmap`                                 |
+| `ProjectMutationResult`        | `project`                                 |
+| `CycleRolloverPayload`         | `lastSyncId`, `movedCount`, `nextCycleId` |
+| `DeletePayload`                | (no entity; `success` + `lastSyncId`)     |
 
 ### Error discriminator
 
 Errors are thrown as `GraphQLError` with `extensions.code`. The resolver layer
 catches service-layer exceptions and remaps them:
 
-| Code              | When                                                      |
-|-------------------|-----------------------------------------------------------|
-| `UNAUTHENTICATED` | Missing / invalid access token                            |
-| `FORBIDDEN`       | Authenticated but not authorized (wrong org, wrong role)  |
-| `NOT_FOUND`       | Entity doesn't exist, or user can't see it                |
-| `BAD_USER_INPUT`  | Validation failure (service-level errors, Zod parse miss) |
-| `INVALID_CODE`    | Magic link code wrong / expired                           |
-| `INVALID_TOKEN`   | Refresh token invalid / reused                            |
+| Code              | When                                                       |
+| ----------------- | ---------------------------------------------------------- |
+| `UNAUTHENTICATED` | Missing / invalid access token                             |
+| `FORBIDDEN`       | Authenticated but not authorized (wrong org, wrong role)   |
+| `NOT_FOUND`       | Entity doesn't exist, or user can't see it                 |
+| `BAD_USER_INPUT`  | Validation failure (service-level errors, Zod parse miss)  |
+| `INVALID_CODE`    | Magic link code wrong / expired                            |
+| `INVALID_TOKEN`   | Refresh token invalid / reused                             |
 | `OAUTH_ERROR`     | Google OAuth token exchange failed or returned no identity |
-| `RATELIMITED`     | Over the rate-limit budget (§12)                          |
+| `RATELIMITED`     | Over the rate-limit budget (§12)                           |
 
 Clients key off `extensions.code`, not the human-readable message.
 
@@ -1071,10 +1071,10 @@ briefly but was unused and has been dropped (see DATABASE_SCHEMA §2.19).
 
 Enforced as Next.js middleware, backed by Redis:
 
-| Surface         | Budget                                   |
-|-----------------|------------------------------------------|
-| `/api/graphql`  | 5,000 req / hour / user                  |
-| `/api/auth/*`   | Stricter per-IP caps on login + verify   |
+| Surface        | Budget                                 |
+| -------------- | -------------------------------------- |
+| `/api/graphql` | 5,000 req / hour / user                |
+| `/api/auth/*`  | Stricter per-IP caps on login + verify |
 
 Responses over the budget throw `GraphQLError` with `extensions.code =
 RATELIMITED`. Cost-based complexity limits (operation-weighted points) are a
@@ -1104,20 +1104,20 @@ The following types / operations appeared in earlier versions of this doc as
 design targets; they are **not** in `schema.ts` today. When a sprint lands
 one, delete its row here and add a §4 entry above.
 
-| Surface                               | Status | Notes |
-|---------------------------------------|--------|-------|
-| `Attachment`, `attachmentCreate/...`  | 📋 | Linked external resources (Figma, Google Doc). `File` covers raw uploads only. |
-| `Favorite`, `favoriteCreate/...`      | 📋 | Sidebar pinning (Sprint 43-44). |
-| `Initiative`, `initiativeCreate/...`  | 📋 | Enterprise roadmap tier (P2). |
-| `Template` (polymorphic)              | 📋 | Project / document templates. Issue-only today via `IssueTemplate`. |
-| `Webhook`, `webhookCreate/...`        | 📋 | Outbound HMAC-signed webhooks (Sprint 49-50). |
-| `apiKeyCreate / apiKeyDelete`         | 📋 | Personal API keys. |
-| `Reaction` on issues / project updates | 📋 | Only comment reactions shipped. |
-| Rich `IssueFilter` comparators (AND/OR trees, string/number/date comparators) | 📋 | Client-side only today; server accepts the minimal filter above. |
-| `subscription` GraphQL operations     | 📋 | Real-time is over a dedicated WS side-channel. |
-| User-visible audit log (`auditEntries`) | 📋 | Enterprise feature. |
-| SAML / SCIM auth flows                | 📋 | Enterprise tier. |
-| SLA / snooze fields on `Issue`        | ⚠️ | DB columns exist; GraphQL exposure pending. |
+| Surface                                                                       | Status | Notes                                                                          |
+| ----------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------ |
+| `Attachment`, `attachmentCreate/...`                                          | 📋      | Linked external resources (Figma, Google Doc). `File` covers raw uploads only. |
+| `Favorite`, `favoriteCreate/...`                                              | 📋      | Sidebar pinning (Sprint 43-44).                                                |
+| `Initiative`, `initiativeCreate/...`                                          | 📋      | Enterprise roadmap tier (P2).                                                  |
+| `Template` (polymorphic)                                                      | 📋      | Project / document templates. Issue-only today via `IssueTemplate`.            |
+| `Webhook`, `webhookCreate/...`                                                | 📋      | Outbound HMAC-signed webhooks (Sprint 49-50).                                  |
+| `apiKeyCreate / apiKeyDelete`                                                 | 📋      | Personal API keys.                                                             |
+| `Reaction` on issues / project updates                                        | 📋      | Only comment reactions shipped.                                                |
+| Rich `IssueFilter` comparators (AND/OR trees, string/number/date comparators) | 📋      | Client-side only today; server accepts the minimal filter above.               |
+| `subscription` GraphQL operations                                             | 📋      | Real-time is over a dedicated WS side-channel.                                 |
+| User-visible audit log (`auditEntries`)                                       | 📋      | Enterprise feature.                                                            |
+| SAML / SCIM auth flows                                                        | 📋      | Enterprise tier.                                                               |
+| SLA / snooze fields on `Issue`                                                | ⚠️      | DB columns exist; GraphQL exposure pending.                                    |
 
 The REST sync endpoints, WebSocket protocol, and rate-limit surface may also
 pick up enhancements (HTTP/2, operation cost limits, per-org WS quotas). These

@@ -29,42 +29,42 @@ Every subsection of §2 carries one of these tags. When a tag is missing assume
 ✅. The goal is to distinguish what actually exists in Prisma today from what
 remains a design target.
 
-| Tag | Meaning |
-|-----|---------|
-| ✅ | Shipped — exists in `prisma/schema.prisma` and matches this doc |
-| ⚠️ | Partial drift — model exists in Prisma but column set differs; this doc has been aligned below |
-| 📋 | Future — table described here but **not** in Prisma yet |
+| Tag | Meaning                                                                                        |
+| --- | ---------------------------------------------------------------------------------------------- |
+| ✅   | Shipped — exists in `prisma/schema.prisma` and matches this doc                                |
+| ⚠️   | Partial drift — model exists in Prisma but column set differs; this doc has been aligned below |
+| 📋   | Future — table described here but **not** in Prisma yet                                        |
 
-| Section | Status | Notes |
-|---------|--------|-------|
-| 2.1 Organizations & Users | ✅ | |
-| 2.2 Teams | ✅ | Covers `teams`, `team_memberships`, and the paired `team_member_roles` (also cross-linked from §2.26) |
-| 2.3 Workflow States | ✅ | |
-| 2.4 Issues | ✅ | |
-| 2.5 Labels | ✅ | |
-| 2.6 Comments | ✅ | |
-| 2.7 Issue Relations | ✅ | |
-| 2.8 Issue Activity | ⚠️ | Real model is simpler than Linear-style history |
-| 2.9 Projects | ✅ | |
-| 2.10 Project Milestones | ✅ | |
-| 2.11 Project Updates | ✅ | |
-| 2.12 Cycles | ⚠️ | `organization_id` was missing from doc |
-| 2.13 Initiatives | 📋 | Feature-flagged off; no table yet |
-| 2.14 Attachments | 📋 | Superseded by §2.25 Files |
-| 2.15 Comment Reactions | ✅ | |
-| 2.16 Notifications | ⚠️ | Doc listed polymorphic FKs that were never added |
-| 2.17 Custom Views | ⚠️ | Real columns use `filters/sort/layout`, not `filter_data/sort_by/columns` |
-| 2.18 Favorites | 📋 | |
-| 2.19 Documents | ✅ | Parent hierarchy, editor output in `content` TEXT; no YJS yet |
-| 2.20 Issue Templates | ⚠️ | Real model is issue-only (not polymorphic) |
-| 2.21 Webhooks | 📋 | |
-| 2.22 Sync Actions | ✅ | |
-| 2.23 Auth Tokens | ✅ | |
-| 2.24 Audit Log | 📋 | |
-| 2.25 Files | ✅ | |
-| 2.26 Team Member Roles | ✅ | |
-| 2.27 Custom Fields | ✅ | |
-| 2.28 Public Roadmaps | ✅ | |
+| Section                   | Status | Notes                                                                                                 |
+| ------------------------- | ------ | ----------------------------------------------------------------------------------------------------- |
+| 2.1 Organizations & Users | ✅      |                                                                                                       |
+| 2.2 Teams                 | ✅      | Covers `teams`, `team_memberships`, and the paired `team_member_roles` (also cross-linked from §2.26) |
+| 2.3 Workflow States       | ✅      |                                                                                                       |
+| 2.4 Issues                | ✅      |                                                                                                       |
+| 2.5 Labels                | ✅      |                                                                                                       |
+| 2.6 Comments              | ✅      |                                                                                                       |
+| 2.7 Issue Relations       | ✅      |                                                                                                       |
+| 2.8 Issue Activity        | ⚠️      | Real model is simpler than Linear-style history                                                       |
+| 2.9 Projects              | ✅      |                                                                                                       |
+| 2.10 Project Milestones   | ✅      |                                                                                                       |
+| 2.11 Project Updates      | ✅      |                                                                                                       |
+| 2.12 Cycles               | ⚠️      | `organization_id` was missing from doc                                                                |
+| 2.13 Initiatives          | 📋      | Feature-flagged off; no table yet                                                                     |
+| 2.14 Attachments          | 📋      | Superseded by §2.25 Files                                                                             |
+| 2.15 Comment Reactions    | ✅      |                                                                                                       |
+| 2.16 Notifications        | ⚠️      | Doc listed polymorphic FKs that were never added                                                      |
+| 2.17 Custom Views         | ⚠️      | Real columns use `filters/sort/layout`, not `filter_data/sort_by/columns`                             |
+| 2.18 Favorites            | 📋      |                                                                                                       |
+| 2.19 Documents            | ✅      | Parent hierarchy, editor output in `content` TEXT; no YJS yet                                         |
+| 2.20 Issue Templates      | ⚠️      | Real model is issue-only (not polymorphic)                                                            |
+| 2.21 Webhooks             | 📋      |                                                                                                       |
+| 2.22 Sync Actions         | ✅      |                                                                                                       |
+| 2.23 Auth Tokens          | ✅      |                                                                                                       |
+| 2.24 Audit Log            | 📋      |                                                                                                       |
+| 2.25 Files                | ✅      |                                                                                                       |
+| 2.26 Team Member Roles    | ✅      |                                                                                                       |
+| 2.27 Custom Fields        | ✅      |                                                                                                       |
+| 2.28 Public Roadmaps      | ✅      |                                                                                                       |
 
 ---
 
@@ -1132,6 +1132,7 @@ CREATE INDEX idx_custom_field_values_definition ON custom_field_values(definitio
 ```
 
 **Validation** is enforced at the service layer (`CustomFieldService`):
+
 - Max 20 active definitions per team
 - `select` / `multi_select` types require at least one option; option values must be unique per field
 - Non-select types reject options

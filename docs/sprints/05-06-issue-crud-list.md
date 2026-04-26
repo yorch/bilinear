@@ -1,9 +1,10 @@
 # Sprint 5-6: Issue CRUD & List View
+
 ## Issue Tracker — Linear Rebuild
 
-**Phase:** 1 (Foundation)  
-**Weeks:** 5-6  
-**Goal:** Create, view, and edit issues in a list view  
+**Phase:** 1 (Foundation)
+**Weeks:** 5-6
+**Goal:** Create, view, and edit issues in a list view
 **Status:** ✅ Complete
 
 **Prerequisites:** Sprint 3-4 (teams, workflow states)
@@ -355,13 +356,13 @@ async create(orgId: string, input: IssueCreateInput): Promise<Issue> {
 
 ### Priority System
 
-| Value | Label | Icon | Color |
-|-------|-------|------|-------|
-| 0 | No priority | — | `#8b8c91` |
-| 1 | Urgent | `!!!` | `#ef4444` |
-| 2 | High | `!!` | `#f97316` |
-| 3 | Medium | `!` | `#eab308` |
-| 4 | Low | `...` | `#6b7280` |
+| Value | Label       | Icon  | Color     |
+| ----- | ----------- | ----- | --------- |
+| 0     | No priority | —     | `#8b8c91` |
+| 1     | Urgent      | `!!!` | `#ef4444` |
+| 2     | High        | `!!`  | `#f97316` |
+| 3     | Medium      | `!`   | `#eab308` |
+| 4     | Low         | `...` | `#6b7280` |
 
 ### Due Date Color Coding
 
@@ -376,7 +377,7 @@ async create(orgId: string, input: IssueCreateInput): Promise<Issue> {
 
 ### List View Component Tree
 
-```
+```text
 TeamIssuesPage
 ├── FilterBar (placeholder — full implementation in Sprint 19-20)
 │   └── SortSelect
@@ -414,28 +415,28 @@ TeamIssuesPage
 
 ## 7. Files to Create/Modify
 
-| File | Action | Purpose |
-|------|--------|---------|
-| `prisma/schema.prisma` | **Modify** | Add Issue, IssueLabel, IssueLabelAssignment |
-| `src/server/graphql/resolvers/issue.ts` | **Create** | Issue CRUD + query resolvers |
-| `src/server/graphql/resolvers/label.ts` | **Create** | Label CRUD resolvers |
-| `src/server/services/issue.service.ts` | **Create** | Issue logic (identifier gen, label sync) |
-| `src/server/services/label.service.ts` | **Create** | Label CRUD |
-| `src/server/graphql/types/filters.ts` | **Create** | Filter input types (IssueFilter, comparators) |
-| `src/app/(workspace)/[workspace]/team/[key]/page.tsx` | **Modify** | Wire up issue list view |
-| `src/app/(workspace)/[workspace]/issue/[id]/page.tsx` | **Create** | Issue detail page |
-| `src/components/issues/issue-list-view.tsx` | **Create** | Virtualized grouped list |
-| `src/components/issues/issue-row.tsx` | **Create** | Single issue row |
-| `src/components/issues/issue-detail-panel.tsx` | **Create** | Right-panel detail view |
-| `src/components/issues/create-issue-modal.tsx` | **Create** | Issue creation dialog |
-| `src/components/issues/group-section.tsx` | **Create** | Collapsible group header |
-| `src/components/properties/status-select.tsx` | **Create** | Status popover selector |
-| `src/components/properties/priority-select.tsx` | **Create** | Priority popover selector |
-| `src/components/properties/assignee-select.tsx` | **Create** | Assignee popover selector |
-| `src/components/properties/label-select.tsx` | **Create** | Multi-label popover selector |
-| `src/components/properties/due-date-picker.tsx` | **Create** | Date picker with color coding |
-| `src/components/properties/priority-icon.tsx` | **Create** | Priority level icon |
-| `src/hooks/use-hotkeys.ts` | **Create** | Keyboard shortcut registration |
+| File                                                  | Action     | Purpose                                       |
+| ----------------------------------------------------- | ---------- | --------------------------------------------- |
+| `prisma/schema.prisma`                                | **Modify** | Add Issue, IssueLabel, IssueLabelAssignment   |
+| `src/server/graphql/resolvers/issue.ts`               | **Create** | Issue CRUD + query resolvers                  |
+| `src/server/graphql/resolvers/label.ts`               | **Create** | Label CRUD resolvers                          |
+| `src/server/services/issue.service.ts`                | **Create** | Issue logic (identifier gen, label sync)      |
+| `src/server/services/label.service.ts`                | **Create** | Label CRUD                                    |
+| `src/server/graphql/types/filters.ts`                 | **Create** | Filter input types (IssueFilter, comparators) |
+| `src/app/(workspace)/[workspace]/team/[key]/page.tsx` | **Modify** | Wire up issue list view                       |
+| `src/app/(workspace)/[workspace]/issue/[id]/page.tsx` | **Create** | Issue detail page                             |
+| `src/components/issues/issue-list-view.tsx`           | **Create** | Virtualized grouped list                      |
+| `src/components/issues/issue-row.tsx`                 | **Create** | Single issue row                              |
+| `src/components/issues/issue-detail-panel.tsx`        | **Create** | Right-panel detail view                       |
+| `src/components/issues/create-issue-modal.tsx`        | **Create** | Issue creation dialog                         |
+| `src/components/issues/group-section.tsx`             | **Create** | Collapsible group header                      |
+| `src/components/properties/status-select.tsx`         | **Create** | Status popover selector                       |
+| `src/components/properties/priority-select.tsx`       | **Create** | Priority popover selector                     |
+| `src/components/properties/assignee-select.tsx`       | **Create** | Assignee popover selector                     |
+| `src/components/properties/label-select.tsx`          | **Create** | Multi-label popover selector                  |
+| `src/components/properties/due-date-picker.tsx`       | **Create** | Date picker with color coding                 |
+| `src/components/properties/priority-icon.tsx`         | **Create** | Priority level icon                           |
+| `src/hooks/use-hotkeys.ts`                            | **Create** | Keyboard shortcut registration                |
 
 ---
 
@@ -473,17 +474,17 @@ yarn add date-fns                  # Date utilities
 
 ## 10. Cross-References
 
-| Topic | Document | Section |
-|-------|----------|---------|
-| Issues table schema | `docs/DATABASE_SCHEMA.md` | 2.4 Issues |
-| Labels table schema | `docs/DATABASE_SCHEMA.md` | 2.5 Labels |
-| Issue GraphQL type | `docs/API_DESIGN.md` | 4.4 Issue |
-| IssueLabel GraphQL type | `docs/API_DESIGN.md` | 4.7 (IssueLabel) |
-| Issue mutations | `docs/API_DESIGN.md` | 6. Mutations |
-| Issue input types | `docs/API_DESIGN.md` | 7. Input Types |
-| Filter system | `docs/API_DESIGN.md` | 8. Filter System |
-| Mutation payloads | `docs/API_DESIGN.md` | 9. Mutation Payloads |
-| Component hierarchy | `docs/ARCHITECTURE.md` | 4.1 (ListView, IssueRow) |
-| State management | `docs/ARCHITECTURE.md` | 4.2 (IssueStore) |
-| Routing | `docs/ARCHITECTURE.md` | 4.3 Routing |
-| Priority system | `docs/PRD.md` | Priority (5 levels) |
+| Topic                   | Document                  | Section                  |
+| ----------------------- | ------------------------- | ------------------------ |
+| Issues table schema     | `docs/DATABASE_SCHEMA.md` | 2.4 Issues               |
+| Labels table schema     | `docs/DATABASE_SCHEMA.md` | 2.5 Labels               |
+| Issue GraphQL type      | `docs/API_DESIGN.md`      | 4.4 Issue                |
+| IssueLabel GraphQL type | `docs/API_DESIGN.md`      | 4.7 (IssueLabel)         |
+| Issue mutations         | `docs/API_DESIGN.md`      | 6. Mutations             |
+| Issue input types       | `docs/API_DESIGN.md`      | 7. Input Types           |
+| Filter system           | `docs/API_DESIGN.md`      | 8. Filter System         |
+| Mutation payloads       | `docs/API_DESIGN.md`      | 9. Mutation Payloads     |
+| Component hierarchy     | `docs/ARCHITECTURE.md`    | 4.1 (ListView, IssueRow) |
+| State management        | `docs/ARCHITECTURE.md`    | 4.2 (IssueStore)         |
+| Routing                 | `docs/ARCHITECTURE.md`    | 4.3 Routing              |
+| Priority system         | `docs/PRD.md`             | Priority (5 levels)      |

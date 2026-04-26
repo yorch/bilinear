@@ -1,8 +1,9 @@
 # Sprint 3-4: Teams & Workflow States
+
 ## Issue Tracker — Linear Rebuild
 
-**Phase:** 1 (Foundation)  
-**Weeks:** 3-4  
+**Phase:** 1 (Foundation)
+**Weeks:** 3-4
 **Goal:** Teams with customizable workflow states
 **Status:** ✅ Shipped — historical spec; current state lives in `docs/IMPLEMENTATION_PLAN.md` and the source tree.
 
@@ -22,7 +23,7 @@ This sprint adds multi-team support with customizable workflow states. Teams are
 
 Every entity going forward follows this consistent structure. Teams are the first entity to establish it:
 
-```
+```text
 src/server/
 ├── graphql/resolvers/team.ts       # Thin resolver: auth check → service call
 ├── services/team.service.ts        # Business logic + Prisma queries
@@ -30,6 +31,7 @@ src/server/
 ```
 
 **Resolver pattern:**
+
 ```typescript
 teamCreate: async (_parent, { input }, ctx) => {
   requireAuth(ctx);
@@ -42,6 +44,7 @@ teamCreate: async (_parent, { input }, ctx) => {
 ```
 
 **Service pattern:**
+
 ```typescript
 async create(orgId: string, input: TeamCreateInput): Promise<Team> {
   return this.prisma.$transaction(async (tx) => {
@@ -57,13 +60,13 @@ async create(orgId: string, input: TeamCreateInput): Promise<Team> {
 
 When a team is created, seed these 5 default workflow states:
 
-| Name | Type | Color | Position |
-|------|------|-------|----------|
-| Backlog | backlog | `#bec2c8` | 0 |
-| Todo | unstarted | `#e2e2e2` | 1 |
-| In Progress | started | `#f2c94c` | 2 |
-| Done | completed | `#5e6ad2` | 3 |
-| Canceled | canceled | `#95a2b3` | 4 |
+| Name        | Type      | Color     | Position |
+| ----------- | --------- | --------- | -------- |
+| Backlog     | backlog   | `#bec2c8` | 0        |
+| Todo        | unstarted | `#e2e2e2` | 1        |
+| In Progress | started   | `#f2c94c` | 2        |
+| Done        | completed | `#5e6ad2` | 3        |
+| Canceled    | canceled  | `#95a2b3` | 4        |
 
 > **Triage state** is only seeded when `triageEnabled` is set to `true` on the team (added as position 0, shifting others). Triage is disabled by default. See Phase 3 Sprint 35-36 for the full triage workflow.
 
@@ -83,7 +86,7 @@ export function requireTeamOwner(ctx: GraphQLContext, teamId: string): void { ..
 
 Establish the layout pattern for settings/configuration pages:
 
-```
+```text
 src/app/(workspace)/[workspace]/settings/
 ├── layout.tsx                    # Settings layout with nav sidebar
 └── teams/
@@ -374,23 +377,23 @@ type TeamMembership {
 
 ## 6. Files to Create/Modify
 
-| File | Action | Purpose |
-|------|--------|---------|
-| `prisma/schema.prisma` | **Modify** | Add Team, TeamMembership, WorkflowState models |
-| `src/server/graphql/resolvers/team.ts` | **Create** | Team CRUD resolvers |
-| `src/server/graphql/resolvers/workflow-state.ts` | **Create** | Workflow state CRUD resolvers |
-| `src/server/graphql/resolvers/team-membership.ts` | **Create** | Membership resolvers |
-| `src/server/services/team.service.ts` | **Create** | Team business logic + default state seeding |
-| `src/server/services/workflow-state.service.ts` | **Create** | State CRUD with constraints |
-| `src/components/layouts/sidebar.tsx` | **Modify** | Add team navigation list |
-| `src/components/teams/team-create-modal.tsx` | **Create** | Team creation dialog |
-| `src/components/teams/team-switcher.tsx` | **Create** | Team dropdown in sidebar |
-| `src/components/teams/team-members-list.tsx` | **Create** | Member management UI |
-| `src/components/teams/workflow-state-list.tsx` | **Create** | Drag-sortable state list |
-| `src/app/(workspace)/[workspace]/settings/layout.tsx` | **Create** | Settings layout |
-| `src/app/(workspace)/[workspace]/settings/teams/[teamKey]/page.tsx` | **Create** | Team settings |
-| `src/app/(workspace)/[workspace]/team/[key]/layout.tsx` | **Create** | Team layout |
-| `src/app/(workspace)/[workspace]/team/[key]/page.tsx` | **Create** | Team issues (placeholder for Sprint 5-6) |
+| File                                                                | Action     | Purpose                                        |
+| ------------------------------------------------------------------- | ---------- | ---------------------------------------------- |
+| `prisma/schema.prisma`                                              | **Modify** | Add Team, TeamMembership, WorkflowState models |
+| `src/server/graphql/resolvers/team.ts`                              | **Create** | Team CRUD resolvers                            |
+| `src/server/graphql/resolvers/workflow-state.ts`                    | **Create** | Workflow state CRUD resolvers                  |
+| `src/server/graphql/resolvers/team-membership.ts`                   | **Create** | Membership resolvers                           |
+| `src/server/services/team.service.ts`                               | **Create** | Team business logic + default state seeding    |
+| `src/server/services/workflow-state.service.ts`                     | **Create** | State CRUD with constraints                    |
+| `src/components/layouts/sidebar.tsx`                                | **Modify** | Add team navigation list                       |
+| `src/components/teams/team-create-modal.tsx`                        | **Create** | Team creation dialog                           |
+| `src/components/teams/team-switcher.tsx`                            | **Create** | Team dropdown in sidebar                       |
+| `src/components/teams/team-members-list.tsx`                        | **Create** | Member management UI                           |
+| `src/components/teams/workflow-state-list.tsx`                      | **Create** | Drag-sortable state list                       |
+| `src/app/(workspace)/[workspace]/settings/layout.tsx`               | **Create** | Settings layout                                |
+| `src/app/(workspace)/[workspace]/settings/teams/[teamKey]/page.tsx` | **Create** | Team settings                                  |
+| `src/app/(workspace)/[workspace]/team/[key]/layout.tsx`             | **Create** | Team layout                                    |
+| `src/app/(workspace)/[workspace]/team/[key]/page.tsx`               | **Create** | Team issues (placeholder for Sprint 5-6)       |
 
 ---
 
@@ -431,45 +434,45 @@ yarn add @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities  # Drag-and-drop for
 
 Additional files created beyond the original plan:
 
-| File | Purpose |
-|------|---------|
-| `src/server/middleware/auth.ts` | Extended with `requireOrgRole`, `requireTeamMember`, `requireTeamOwner` |
-| `src/server/graphql/context.ts` | Updated with `prisma`, `TeamService`, `WorkflowStateService` |
-| `src/server/graphql/schema.ts` | Extended with Team, WorkflowState, TeamMembership types + mutations |
-| `src/server/graphql/resolvers/index.ts` | Updated to include new resolvers |
-| `vitest.config.ts` | Vitest test runner configuration |
-| `src/test/setup.ts` | Test environment setup |
-| `src/test/prisma-mock.ts` | Prisma client mock factory |
-| `src/test/context-mock.ts` | GraphQL context mock factory |
-| `src/test/fixtures.ts` | Shared test data |
-| `.github/workflows/ci.yml` | Added test job |
+| File                                    | Purpose                                                                 |
+| --------------------------------------- | ----------------------------------------------------------------------- |
+| `src/server/middleware/auth.ts`         | Extended with `requireOrgRole`, `requireTeamMember`, `requireTeamOwner` |
+| `src/server/graphql/context.ts`         | Updated with `prisma`, `TeamService`, `WorkflowStateService`            |
+| `src/server/graphql/schema.ts`          | Extended with Team, WorkflowState, TeamMembership types + mutations     |
+| `src/server/graphql/resolvers/index.ts` | Updated to include new resolvers                                        |
+| `vitest.config.ts`                      | Vitest test runner configuration                                        |
+| `src/test/setup.ts`                     | Test environment setup                                                  |
+| `src/test/prisma-mock.ts`               | Prisma client mock factory                                              |
+| `src/test/context-mock.ts`              | GraphQL context mock factory                                            |
+| `src/test/fixtures.ts`                  | Shared test data                                                        |
+| `.github/workflows/ci.yml`              | Added test job                                                          |
 
 ### Dependencies Added
 
-| Package | Type | Purpose |
-|---------|------|---------|
-| `vitest` | dev | Test runner |
-| `@vitest/coverage-v8` | dev | Coverage reporting |
+| Package               | Type | Purpose            |
+| --------------------- | ---- | ------------------ |
+| `vitest`              | dev  | Test runner        |
+| `@vitest/coverage-v8` | dev  | Coverage reporting |
 
 ### Test Coverage (new code)
 
-| File | Statement Coverage |
-|------|-------------------|
-| `team.service.ts` | 96% |
-| `workflow-state.service.ts` | 96% |
-| `auth.ts` (middleware) | 50% (new guards fully covered; Sprint 1-2 code not yet) |
+| File                        | Statement Coverage                                      |
+| --------------------------- | ------------------------------------------------------- |
+| `team.service.ts`           | 96%                                                     |
+| `workflow-state.service.ts` | 96%                                                     |
+| `auth.ts` (middleware)      | 50% (new guards fully covered; Sprint 1-2 code not yet) |
 
 ---
 
 ## 10. Cross-References
 
-| Topic | Document | Section |
-|-------|----------|---------|
-| Team table schema | `docs/DATABASE_SCHEMA.md` | 2.2 Teams |
-| Workflow state schema | `docs/DATABASE_SCHEMA.md` | 2.3 Workflow States |
-| Team GraphQL type | `docs/API_DESIGN.md` | 4.3 Team |
-| WorkflowState type | `docs/API_DESIGN.md` | 4.5 WorkflowState |
-| Team mutations | `docs/API_DESIGN.md` | 6. Mutations |
-| Authorization model | `docs/ARCHITECTURE.md` | 6.2 Authorization Model |
-| Component hierarchy | `docs/ARCHITECTURE.md` | 4.1 (Sidebar, TeamNav) |
-| Routing | `docs/ARCHITECTURE.md` | 4.3 Routing |
+| Topic                 | Document                  | Section                 |
+| --------------------- | ------------------------- | ----------------------- |
+| Team table schema     | `docs/DATABASE_SCHEMA.md` | 2.2 Teams               |
+| Workflow state schema | `docs/DATABASE_SCHEMA.md` | 2.3 Workflow States     |
+| Team GraphQL type     | `docs/API_DESIGN.md`      | 4.3 Team                |
+| WorkflowState type    | `docs/API_DESIGN.md`      | 4.5 WorkflowState       |
+| Team mutations        | `docs/API_DESIGN.md`      | 6. Mutations            |
+| Authorization model   | `docs/ARCHITECTURE.md`    | 6.2 Authorization Model |
+| Component hierarchy   | `docs/ARCHITECTURE.md`    | 4.1 (Sidebar, TeamNav)  |
+| Routing               | `docs/ARCHITECTURE.md`    | 4.3 Routing             |

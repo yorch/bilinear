@@ -478,13 +478,13 @@ Shipped ahead of schedule alongside the Documents feature.
 
 ## Technical Milestones
 
-| Milestone | Target   | Criteria                                                                                       | Status        |
-| --------- | -------- | ---------------------------------------------------------------------------------------------- | ------------- |
-| **Alpha** | Week 12  | Auth + Issues + Teams + List View + Sync Engine + **Docker Compose deploy**                    | ✅ Reached     |
-| **Beta**  | Week 26  | + Projects + Cycles + Board + Filters + Backlog + Notifications + **Custom Fields**            | ✅ Reached     |
-| **RC1**   | Week 40  | + Rich Editor + Comments + Sub-teams + **SAML/SCIM** + Triage + Docs + Automations + Analytics | 🟡 In progress |
+| Milestone | Target   | Criteria                                                                                       | Status                                        |
+| --------- | -------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| **Alpha** | Week 12  | Auth + Issues + Teams + List View + Sync Engine + **Docker Compose deploy**                    | ✅ Reached                                     |
+| **Beta**  | Week 26  | + Projects + Cycles + Board + Filters + Backlog + Notifications + **Custom Fields**            | ✅ Reached                                     |
+| **RC1**   | Week 40  | + Rich Editor + Comments + Sub-teams + **SAML/SCIM** + Triage + Docs + Automations + Analytics | 🟡 In progress                                 |
 | **v1.0**  | Week 54  | + GitHub + Slack + Webhooks + Import/Export + OAuth + **Public Roadmaps**                      | 🟡 In progress (Public Roadmaps shipped early) |
-| **v2.0**  | Week 68+ | + Initiatives + SLAs + AI + Mobile + Desktop                                                   | ⬜ Not started |
+| **v2.0**  | Week 68+ | + Initiatives + SLAs + AI + Mobile + Desktop                                                   | ⬜ Not started                                 |
 
 **RC1 gap analysis** (remaining work to hit RC1):
 

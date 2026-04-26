@@ -1,8 +1,9 @@
 # Sprint 13-14: Projects
+
 ## Issue Tracker — Linear Rebuild
 
-**Phase:** 2 (Essential Features)  
-**Weeks:** 13-14  
+**Phase:** 2 (Essential Features)
+**Weeks:** 13-14
 **Goal:** Project list, detail views, milestones, and project updates with real-time sync
 **Status:** ✅ Shipped — historical spec; current state lives in `docs/IMPLEMENTATION_PLAN.md` and the source tree.
 
@@ -123,6 +124,7 @@ Corresponding unit tests in `src/stores/project-store.test.ts` cover all three m
 **`src/app/api/sync/bootstrap/route.ts`** — emits `ProjectUpdate=<json>` lines in the streaming response.
 
 **`src/lib/sync-manager.ts`** — three touch points:
+
 - `loadFromIndexedDB`: reads `db.projectUpdates.toArray()` and calls `projectStore.upsertUpdates()`
 - `fullBootstrap`: clears and bulk-puts `projectUpdates` inside the Dexie transaction, then calls `projectStore.upsertUpdates()`
 - `applyActions`: handles `case 'ProjectUpdate'` in the switch, routing to `projectStore.applyUpdateSyncAction()`
@@ -172,11 +174,11 @@ const viewerId = userStore.currentUserId ?? '';
 
 All three project update mutations were already implemented server-side:
 
-| Mutation               | Input type                 | Returns                      |
-| ---------------------- | -------------------------- | ---------------------------- |
-| `projectUpdateCreate`  | `ProjectUpdateCreateInput` | `{ success }`                |
-| `projectUpdateUpdate`  | `ProjectUpdateUpdateInput` | `{ success }`                |
-| `projectUpdateDelete`  | `id: ID!`                  | `{ success }`                |
+| Mutation              | Input type                 | Returns       |
+| --------------------- | -------------------------- | ------------- |
+| `projectUpdateCreate` | `ProjectUpdateCreateInput` | `{ success }` |
+| `projectUpdateUpdate` | `ProjectUpdateUpdateInput` | `{ success }` |
+| `projectUpdateDelete` | `id: ID!`                  | `{ success }` |
 
 Each creates a SyncAction (`I`, `U`, `D` respectively) which is published to Redis and broadcast via WebSocket to all connected org clients.
 
@@ -185,6 +187,7 @@ Each creates a SyncAction (`I`, `U`, `D` respectively) which is published to Red
 ## 5. Testing
 
 **Unit tests** (`src/stores/project-store.test.ts`): 14 pure Vitest tests covering:
+
 - `upsertUpdates` — insert, overwrite, empty array
 - `getUpdates` — project filter, newest-first sort, empty pool/project, multi-user
 - `applyUpdateSyncAction` — all four action types, non-existent delete is safe, null data guard
@@ -193,9 +196,9 @@ Each creates a SyncAction (`I`, `U`, `D` respectively) which is published to Red
 
 ## 6. Deferred Items
 
-| Item                                      | Notes                                                     |
-| ----------------------------------------- | --------------------------------------------------------- |
-| Progress tracking (completed / scope)     | Requires counting linked issues per project               |
-| Assign issues to projects (Shift+P)       | Keyboard shortcut + mutation                              |
-| Project milestones UI                     | Backend + store done; detail panel UI deferred            |
-| Bootstrap pagination for project updates  | TODO comment in `sync.service.ts`; needed at ~500+ updates |
+| Item                                     | Notes                                                      |
+| ---------------------------------------- | ---------------------------------------------------------- |
+| Progress tracking (completed / scope)    | Requires counting linked issues per project                |
+| Assign issues to projects (Shift+P)      | Keyboard shortcut + mutation                               |
+| Project milestones UI                    | Backend + store done; detail panel UI deferred             |
+| Bootstrap pagination for project updates | TODO comment in `sync.service.ts`; needed at ~500+ updates |

@@ -1,8 +1,9 @@
 # Sprint 11-12: Polish & Performance
+
 ## Issue Tracker — Linear Rebuild
 
-**Phase:** 1 (Foundation)  
-**Weeks:** 11-12  
+**Phase:** 1 (Foundation)
+**Weeks:** 11-12
 **Goal:** Production-ready Alpha release with polish, theming, performance, testing, and observability
 **Status:** ✅ Shipped — historical spec; current state lives in `docs/IMPLEMENTATION_PLAN.md` and the source tree.
 
@@ -114,6 +115,7 @@ function useTheme() {
 ### 3.2 Scope
 
 Apply dark mode to:
+
 - All existing UI: sidebar, list view, detail panel, modals, popovers
 - Command palette
 - Auth pages
@@ -133,6 +135,7 @@ Apply dark mode to:
 ```
 
 Install `@next/bundle-analyzer` and identify:
+
 - Largest chunks
 - Unused imports
 - Dependencies that can be lazy-loaded
@@ -172,20 +175,20 @@ npx playwright install
 
 ### 5.2 Critical Path Tests
 
-| Test | What it validates |
-|------|-------------------|
-| `auth.spec.ts` | Email login → verify code → see workspace |
-| `team-crud.spec.ts` | Create team → verify states seeded → edit settings |
-| `issue-crud.spec.ts` | Create issue → verify in list → edit fields → archive |
-| `issue-list.spec.ts` | Group by status → expand/collapse → sort → filter |
-| `sync.spec.ts` | Create issue in tab A → appears in tab B |
-| `offline.spec.ts` | Go offline → create issue → go online → verify synced |
-| `command-palette.spec.ts` | Cmd+K → search → navigate → action commands |
-| `keyboard.spec.ts` | J/K navigation → C create → S/A/P property changes |
+| Test                      | What it validates                                     |
+| ------------------------- | ----------------------------------------------------- |
+| `auth.spec.ts`            | Email login → verify code → see workspace             |
+| `team-crud.spec.ts`       | Create team → verify states seeded → edit settings    |
+| `issue-crud.spec.ts`      | Create issue → verify in list → edit fields → archive |
+| `issue-list.spec.ts`      | Group by status → expand/collapse → sort → filter     |
+| `sync.spec.ts`            | Create issue in tab A → appears in tab B              |
+| `offline.spec.ts`         | Go offline → create issue → go online → verify synced |
+| `command-palette.spec.ts` | Cmd+K → search → navigate → action commands           |
+| `keyboard.spec.ts`        | J/K navigation → C create → S/A/P property changes    |
 
 ### 5.3 Test Structure
 
-```
+```text
 tests/
 ├── e2e/
 │   ├── auth.spec.ts
@@ -274,26 +277,26 @@ Structured JSON logging for server-side:
 
 ## 9. Files to Create/Modify
 
-| File | Action | Purpose |
-|------|--------|---------|
-| `docs/PATTERNS.md` | **Create** | Document all Phase 1 patterns for future sprints |
-| `src/app/globals.css` | **Modify** | Add CSS custom properties for light/dark theme |
-| `src/hooks/use-theme.ts` | **Create** | Theme state management |
-| `src/components/theme-toggle.tsx` | **Create** | Light/dark/system toggle |
-| `src/components/ui/skeleton.tsx` | **Create** | Skeleton shimmer component |
-| `src/components/ui/toast.tsx` | **Create** | Toast notification system |
-| `src/components/error-boundary.tsx` | **Create** | Error boundary with retry |
-| `src/components/layouts/sidebar.tsx` | **Modify** | Add collapse, dark mode, polish |
-| `src/server/middleware/rate-limit.ts` | **Create** | Redis-backed rate limiter |
-| `src/server/lib/logger.ts` | **Create** | Structured logging |
-| `src/app/layout.tsx` | **Modify** | Add Sentry, theme provider |
-| `instrumentation.ts` | **Create** | Sentry server-side init |
-| `next.config.ts` | **Modify** | Bundle analyzer, Sentry config |
-| `tests/e2e/*.spec.ts` | **Create** | All E2E test files (8 test files) |
-| `tests/fixtures/auth.ts` | **Create** | Auth test helper |
-| `tests/fixtures/seed.ts` | **Create** | DB seeding for tests |
-| `playwright.config.ts` | **Create** | Playwright configuration |
-| `package.json` | **Modify** | Add analyze, test:e2e scripts |
+| File                                  | Action     | Purpose                                          |
+| ------------------------------------- | ---------- | ------------------------------------------------ |
+| `docs/PATTERNS.md`                    | **Create** | Document all Phase 1 patterns for future sprints |
+| `src/app/globals.css`                 | **Modify** | Add CSS custom properties for light/dark theme   |
+| `src/hooks/use-theme.ts`              | **Create** | Theme state management                           |
+| `src/components/theme-toggle.tsx`     | **Create** | Light/dark/system toggle                         |
+| `src/components/ui/skeleton.tsx`      | **Create** | Skeleton shimmer component                       |
+| `src/components/ui/toast.tsx`         | **Create** | Toast notification system                        |
+| `src/components/error-boundary.tsx`   | **Create** | Error boundary with retry                        |
+| `src/components/layouts/sidebar.tsx`  | **Modify** | Add collapse, dark mode, polish                  |
+| `src/server/middleware/rate-limit.ts` | **Create** | Redis-backed rate limiter                        |
+| `src/server/lib/logger.ts`            | **Create** | Structured logging                               |
+| `src/app/layout.tsx`                  | **Modify** | Add Sentry, theme provider                       |
+| `instrumentation.ts`                  | **Create** | Sentry server-side init                          |
+| `next.config.ts`                      | **Modify** | Bundle analyzer, Sentry config                   |
+| `tests/e2e/*.spec.ts`                 | **Create** | All E2E test files (8 test files)                |
+| `tests/fixtures/auth.ts`              | **Create** | Auth test helper                                 |
+| `tests/fixtures/seed.ts`              | **Create** | DB seeding for tests                             |
+| `playwright.config.ts`                | **Create** | Playwright configuration                         |
+| `package.json`                        | **Modify** | Add analyze, test:e2e scripts                    |
 
 ---
 
@@ -319,6 +322,7 @@ npx shadcn@latest add sonner
 ## 11. Acceptance Criteria
 
 ### Polish
+
 - [ ] Dark mode toggle works (light/dark/system)
 - [ ] All existing UI renders correctly in both light and dark modes
 - [ ] Skeleton loading states show on initial load (before bootstrap completes)
@@ -327,6 +331,7 @@ npx shadcn@latest add sonner
 - [ ] Sidebar collapses on narrow screens and via keyboard shortcut
 
 ### Performance
+
 - [ ] Lighthouse performance score > 90 on the issues list page
 - [ ] Scrolling 10,000 issues at 60fps (no jank)
 - [ ] Initial bootstrap of 10,000 issues completes in < 5 seconds
@@ -334,6 +339,7 @@ npx shadcn@latest add sonner
 - [ ] Code splitting: command palette and detail panel lazy-loaded
 
 ### Testing
+
 - [ ] All 8 E2E test suites pass
 - [ ] Auth flow E2E: login → verify → workspace
 - [ ] Issue CRUD E2E: create → edit → archive
@@ -341,16 +347,19 @@ npx shadcn@latest add sonner
 - [ ] Tests run in CI (GitHub Actions)
 
 ### Rate Limiting
+
 - [ ] Rate limit headers present on all GraphQL responses
 - [ ] Exceeding 5,000 req/hr returns RATELIMITED error
 - [ ] Complexity calculation correctly counts nested connections
 
 ### Observability
+
 - [ ] Sentry captures unhandled errors (client + server)
 - [ ] Server logs are structured JSON with request context
 - [ ] GraphQL errors include query name and user context in Sentry
 
 ### Pattern Documentation
+
 - [ ] `docs/PATTERNS.md` exists and covers all 11 pattern areas listed in section 2.1
 - [ ] New sub-agents can follow PATTERNS.md to add a new entity without referencing Sprint 1-6 docs
 
@@ -358,15 +367,15 @@ npx shadcn@latest add sonner
 
 ## 12. Cross-References
 
-| Topic | Document | Section |
-|-------|----------|---------|
-| Rate limiting spec | `docs/API_DESIGN.md` | 12. Rate Limiting |
-| Complexity calculation | `docs/API_DESIGN.md` | 12 (Complexity) |
-| Component hierarchy | `docs/ARCHITECTURE.md` | 4.1 (all components) |
-| Dark mode requirement | `docs/PRD.md` | UX (dark/light mode) |
-| Performance targets | `docs/PRD.md` | <100ms interactions, <50ms sync |
-| Infrastructure | `docs/ARCHITECTURE.md` | 7. Deployment Architecture |
-| Monitoring stack | `docs/ARCHITECTURE.md` | 2.3 Infrastructure (Sentry, Prometheus) |
+| Topic                  | Document               | Section                                 |
+| ---------------------- | ---------------------- | --------------------------------------- |
+| Rate limiting spec     | `docs/API_DESIGN.md`   | 12. Rate Limiting                       |
+| Complexity calculation | `docs/API_DESIGN.md`   | 12 (Complexity)                         |
+| Component hierarchy    | `docs/ARCHITECTURE.md` | 4.1 (all components)                    |
+| Dark mode requirement  | `docs/PRD.md`          | UX (dark/light mode)                    |
+| Performance targets    | `docs/PRD.md`          | <100ms interactions, <50ms sync         |
+| Infrastructure         | `docs/ARCHITECTURE.md` | 7. Deployment Architecture              |
+| Monitoring stack       | `docs/ARCHITECTURE.md` | 2.3 Infrastructure (Sentry, Prometheus) |
 
 ---
 

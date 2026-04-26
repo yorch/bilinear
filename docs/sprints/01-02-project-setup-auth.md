@@ -1,8 +1,9 @@
 # Sprint 1-2: Project Setup & Auth
+
 ## Issue Tracker — Linear Rebuild
 
-**Phase:** 1 (Foundation)  
-**Weeks:** 1-2  
+**Phase:** 1 (Foundation)
+**Weeks:** 1-2
 **Goal:** Working app shell with authentication
 **Status:** ✅ Shipped — this file is the historical build spec. For current state see `docs/IMPLEMENTATION_PLAN.md`, `docs/PATTERNS.md`, and the source tree.
 
@@ -22,7 +23,7 @@ This sprint establishes the foundational infrastructure: database, ORM, GraphQL 
 
 ### 2.1 Project Structure Pattern
 
-```
+```text
 src/
 ├── app/                          # Next.js App Router pages
 │   ├── (auth)/                   # Auth route group (no sidebar)
@@ -421,39 +422,39 @@ type Organization {
 
 ## 6. Files Created
 
-| File | Purpose |
-|------|---------|
-| `prisma/schema.prisma` | Database schema (Organization, User, OrganizationMember, AuthToken, Team stub) |
-| `prisma.config.ts` | **Prisma 7:** datasource URL for CLI commands |
-| `.env.example` | Environment variable template |
-| `src/server/lib/prisma.ts` | Prisma client singleton (uses `@prisma/adapter-pg`) |
-| `src/server/lib/redis.ts` | Redis client singleton |
-| `src/server/lib/jwt.ts` | JWT sign/verify (access + refresh tokens) |
-| `src/server/lib/email.ts` | Email transport for magic links (dev: console log) |
-| `src/server/graphql/schema.ts` | GraphQL schema definition |
-| `src/server/graphql/context.ts` | Request context builder (auth, prisma, services) |
-| `src/server/graphql/types/scalars.ts` | Custom scalar types (DateTime, UUID) |
-| `src/server/graphql/types/pagination.ts` | Relay pagination types (PageInfo) |
-| `src/server/graphql/resolvers/auth.ts` | Auth mutations + `AuthPayload.user` resolver |
-| `src/server/graphql/resolvers/user.ts` | `viewer` query, `User` type resolvers |
-| `src/server/graphql/resolvers/organization.ts` | `organization` query |
-| `src/server/graphql/resolvers/index.ts` | Resolver map |
-| `src/server/services/auth.service.ts` | Magic link, OAuth, token lifecycle |
-| `src/server/services/user.service.ts` | User lookup/creation/lastSeen |
-| `src/server/middleware/auth.ts` | JWT extraction + `requireAuth` guard |
-| `src/app/api/graphql/route.ts` | Next.js API route for GraphQL endpoint |
-| `src/app/api/auth/session/route.ts` | **Added:** POST/DELETE httpOnly cookie management |
-| `src/app/(auth)/login/page.tsx` | Login page |
-| `src/app/(auth)/verify/page.tsx` | Magic link verification page |
-| `src/app/(auth)/layout.tsx` | Auth layout (centered, no sidebar) |
-| `src/app/(workspace)/layout.tsx` | Workspace layout (sidebar + content) |
-| `src/app/(workspace)/[workspace]/page.tsx` | Workspace home (empty state) |
-| `src/components/layouts/sidebar.tsx` | Sidebar shell (navigation placeholder) |
-| `src/components/layouts/app-shell.tsx` | Main content wrapper |
-| `src/components/auth/login-form.tsx` | Email input + submit + Google OAuth button |
-| `src/components/auth/verify-code-form.tsx` | 6-digit code input (auto-submits on URL prefill) |
-| `src/hooks/use-auth.ts` | Auth state management hook |
-| `src/middleware.ts` | Next.js middleware for protected routes |
+| File                                           | Purpose                                                                        |
+| ---------------------------------------------- | ------------------------------------------------------------------------------ |
+| `prisma/schema.prisma`                         | Database schema (Organization, User, OrganizationMember, AuthToken, Team stub) |
+| `prisma.config.ts`                             | **Prisma 7:** datasource URL for CLI commands                                  |
+| `.env.example`                                 | Environment variable template                                                  |
+| `src/server/lib/prisma.ts`                     | Prisma client singleton (uses `@prisma/adapter-pg`)                            |
+| `src/server/lib/redis.ts`                      | Redis client singleton                                                         |
+| `src/server/lib/jwt.ts`                        | JWT sign/verify (access + refresh tokens)                                      |
+| `src/server/lib/email.ts`                      | Email transport for magic links (dev: console log)                             |
+| `src/server/graphql/schema.ts`                 | GraphQL schema definition                                                      |
+| `src/server/graphql/context.ts`                | Request context builder (auth, prisma, services)                               |
+| `src/server/graphql/types/scalars.ts`          | Custom scalar types (DateTime, UUID)                                           |
+| `src/server/graphql/types/pagination.ts`       | Relay pagination types (PageInfo)                                              |
+| `src/server/graphql/resolvers/auth.ts`         | Auth mutations + `AuthPayload.user` resolver                                   |
+| `src/server/graphql/resolvers/user.ts`         | `viewer` query, `User` type resolvers                                          |
+| `src/server/graphql/resolvers/organization.ts` | `organization` query                                                           |
+| `src/server/graphql/resolvers/index.ts`        | Resolver map                                                                   |
+| `src/server/services/auth.service.ts`          | Magic link, OAuth, token lifecycle                                             |
+| `src/server/services/user.service.ts`          | User lookup/creation/lastSeen                                                  |
+| `src/server/middleware/auth.ts`                | JWT extraction + `requireAuth` guard                                           |
+| `src/app/api/graphql/route.ts`                 | Next.js API route for GraphQL endpoint                                         |
+| `src/app/api/auth/session/route.ts`            | **Added:** POST/DELETE httpOnly cookie management                              |
+| `src/app/(auth)/login/page.tsx`                | Login page                                                                     |
+| `src/app/(auth)/verify/page.tsx`               | Magic link verification page                                                   |
+| `src/app/(auth)/layout.tsx`                    | Auth layout (centered, no sidebar)                                             |
+| `src/app/(workspace)/layout.tsx`               | Workspace layout (sidebar + content)                                           |
+| `src/app/(workspace)/[workspace]/page.tsx`     | Workspace home (empty state)                                                   |
+| `src/components/layouts/sidebar.tsx`           | Sidebar shell (navigation placeholder)                                         |
+| `src/components/layouts/app-shell.tsx`         | Main content wrapper                                                           |
+| `src/components/auth/login-form.tsx`           | Email input + submit + Google OAuth button                                     |
+| `src/components/auth/verify-code-form.tsx`     | 6-digit code input (auto-submits on URL prefill)                               |
+| `src/hooks/use-auth.ts`                        | Auth state management hook                                                     |
+| `src/middleware.ts`                            | Next.js middleware for protected routes                                        |
 
 ---
 
@@ -496,6 +497,7 @@ yarn add -D prisma @types/nodemailer @types/pg
 - [x] Tokens are stored in httpOnly cookies via `POST /api/auth/session`
 
 **Implementation notes:**
+
 - GraphQL endpoint is `POST /api/graphql` for all mutations (not separate REST endpoints)
 - Cookie setting is a separate step: client receives tokens from GraphQL then calls `POST /api/auth/session` which verifies and sets `httpOnly` cookies
 - Magic link codes use `crypto.randomInt` (CSPRNG); only SHA-256 hash stored in DB
@@ -507,12 +509,12 @@ yarn add -D prisma @types/nodemailer @types/pg
 
 ## 9. Cross-References
 
-| Topic | Document | Section |
-|-------|----------|---------|
-| Database schema (SQL) | `docs/DATABASE_SCHEMA.md` | 2.1 Organizations & Users |
-| Auth mutations (GraphQL) | `docs/API_DESIGN.md` | 2. Authentication |
-| User/Org types (GraphQL) | `docs/API_DESIGN.md` | 4.1-4.2 |
-| Auth flow diagrams | `docs/ARCHITECTURE.md` | 6.1 Authentication Flow |
-| Authorization model | `docs/ARCHITECTURE.md` | 6.2 Authorization Model |
-| Token security | `docs/ARCHITECTURE.md` | 6.3 Data Security |
-| Routing structure | `docs/ARCHITECTURE.md` | 4.3 Routing |
+| Topic                    | Document                  | Section                   |
+| ------------------------ | ------------------------- | ------------------------- |
+| Database schema (SQL)    | `docs/DATABASE_SCHEMA.md` | 2.1 Organizations & Users |
+| Auth mutations (GraphQL) | `docs/API_DESIGN.md`      | 2. Authentication         |
+| User/Org types (GraphQL) | `docs/API_DESIGN.md`      | 4.1-4.2                   |
+| Auth flow diagrams       | `docs/ARCHITECTURE.md`    | 6.1 Authentication Flow   |
+| Authorization model      | `docs/ARCHITECTURE.md`    | 6.2 Authorization Model   |
+| Token security           | `docs/ARCHITECTURE.md`    | 6.3 Data Security         |
+| Routing structure        | `docs/ARCHITECTURE.md`    | 4.3 Routing               |

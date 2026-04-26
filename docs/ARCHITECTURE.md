@@ -131,19 +131,19 @@
 
 ### 2.1 Frontend
 
-| Layer          | Technology                   | Rationale                                               |
-| -------------- | ---------------------------- | ------------------------------------------------------- |
-| Framework      | **Next.js 16 (App Router)**  | SSR, routing, API routes, existing in repo              |
-| Language       | **TypeScript**               | Type safety, shared types with backend                  |
-| State          | **MobX**                     | Observable-based reactivity (matches Linear's approach) |
-| Local DB       | **IndexedDB** (via Dexie.js) | Offline-first local cache                               |
-| Real-time      | **WebSocket** (native)       | Delta sync, low latency                                 |
-| Styling        | **Tailwind CSS + shadcn/ui** | Rapid UI development (already in repo)                  |
-| Editor         | **TipTap** (ProseMirror)     | Rich text with collaborative editing                    |
-| Virtualization | **TanStack Virtual**         | 60fps scrolling for large lists                         |
-| DnD            | **@dnd-kit**                 | Accessible drag-and-drop                                |
-| Date           | **date-fns**                 | Lightweight date utilities                              |
-| Charts         | **Hand-rolled SVG** (`BurndownChart`, stat cards + CSS bars) | Single-purpose charts; no Recharts dependency |
+| Layer          | Technology                                                   | Rationale                                               |
+| -------------- | ------------------------------------------------------------ | ------------------------------------------------------- |
+| Framework      | **Next.js 16 (App Router)**                                  | SSR, routing, API routes, existing in repo              |
+| Language       | **TypeScript**                                               | Type safety, shared types with backend                  |
+| State          | **MobX**                                                     | Observable-based reactivity (matches Linear's approach) |
+| Local DB       | **IndexedDB** (via Dexie.js)                                 | Offline-first local cache                               |
+| Real-time      | **WebSocket** (native)                                       | Delta sync, low latency                                 |
+| Styling        | **Tailwind CSS + shadcn/ui**                                 | Rapid UI development (already in repo)                  |
+| Editor         | **TipTap** (ProseMirror)                                     | Rich text with collaborative editing                    |
+| Virtualization | **TanStack Virtual**                                         | 60fps scrolling for large lists                         |
+| DnD            | **@dnd-kit**                                                 | Accessible drag-and-drop                                |
+| Date           | **date-fns**                                                 | Lightweight date utilities                              |
+| Charts         | **Hand-rolled SVG** (`BurndownChart`, stat cards + CSS bars) | Single-purpose charts; no Recharts dependency           |
 
 ### 2.2 Backend
 
@@ -162,13 +162,13 @@
 
 ### 2.3 Infrastructure
 
-| Layer      | Technology                                             | Status | Rationale                     |
-| ---------- | ------------------------------------------------------ | ------ | ----------------------------- |
-| Hosting    | **Vercel** (frontend) + **Docker Compose** self-hosting | ✅ | `deployment/` has the full-stack compose file; Vercel deploy wired |
-| CI/CD      | **GitHub Actions**                                     | ✅ | Unit + E2E + lint + typecheck + build on push |
-| Errors     | **Sentry** (`@sentry/nextjs`)                          | ✅ | `sentry.{client,edge,server}.config.ts` |
-| Metrics    | **Prometheus / Grafana**                               | 🔲 Planned | Not wired yet |
-| CDN        | **Cloudflare**                                         | 🔲 Planned | Cloudflare-in-front is optional; Vercel edge covers the baseline |
+| Layer   | Technology                                              | Status    | Rationale                                                          |
+| ------- | ------------------------------------------------------- | --------- | ------------------------------------------------------------------ |
+| Hosting | **Vercel** (frontend) + **Docker Compose** self-hosting | ✅         | `deployment/` has the full-stack compose file; Vercel deploy wired |
+| CI/CD   | **GitHub Actions**                                      | ✅         | Unit + E2E + lint + typecheck + build on push                      |
+| Errors  | **Sentry** (`@sentry/nextjs`)                           | ✅         | `sentry.{client,edge,server}.config.ts`                            |
+| Metrics | **Prometheus / Grafana**                                | 🔲 Planned | Not wired yet                                                      |
+| CDN     | **Cloudflare**                                          | 🔲 Planned | Cloudflare-in-front is optional; Vercel edge covers the baseline   |
 
 ---
 
@@ -285,11 +285,11 @@ Reconnection (Delta Sync):
 
 ### 3.5 Model Load Strategies
 
-| Strategy  | When Loaded                                       | Examples                                                                 |
-| --------- | ------------------------------------------------- | ------------------------------------------------------------------------ |
-| `instant` | Full bootstrap                                    | Organization, Team, User, WorkflowState, IssueLabel, Issue, Project, Cycle, CustomView, Document, CustomField*, Notification, Comment, File |
-| `lazy`    | On demand (per request)                           | IssueActivity (per issue), file bytes (per key), search results          |
-| `local`   | Client-only                                       | UI state, sidebar collapse, column picker choices, drafts                |
+| Strategy  | When Loaded             | Examples                                                                                                                                    |
+| --------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `instant` | Full bootstrap          | Organization, Team, User, WorkflowState, IssueLabel, Issue, Project, Cycle, CustomView, Document, CustomField*, Notification, Comment, File |
+| `lazy`    | On demand (per request) | IssueActivity (per issue), file bytes (per key), search results                                                                             |
+| `local`   | Client-only             | UI state, sidebar collapse, column picker choices, drafts                                                                                   |
 
 ### 3.6 Conflict Resolution
 
@@ -304,7 +304,7 @@ Reconnection (Delta Sync):
 
 ### 4.1 Component Hierarchy
 
-```
+```text
 App
 ├── AuthProvider
 │   └── SyncProvider
@@ -399,7 +399,7 @@ fetch), `FileStore` (file rows come with the owning issue/project),
 
 Actual app routes under `src/app/`:
 
-```
+```text
 /                              → login / redirect
 /login                         → magic-link entry
 /workspace/new                 → first-time org setup
@@ -502,7 +502,7 @@ type Mutation {
 
 ### 5.2 Service Layer
 
-```
+```text
 ┌──────────────────────────────────────────────────────────┐
 │                    GraphQL Resolvers                      │
 │  (thin: requireAuth(ctx) → ctx.services.*.call()         │
@@ -555,7 +555,7 @@ Not yet extracted: **WebhookService** (§5.4 BullMQ queues), **IntegrationServic
 
 ### 5.3 Sync Broadcast Pipeline
 
-```
+```text
 Mutation executed
     │
     ▼
@@ -592,17 +592,17 @@ Mutation executed
 BullMQ queues are **not yet wired**. Today the jobs that would live here run
 inline in the request-response path or on explicit user trigger:
 
-| Work                            | Current implementation                         |
-|---------------------------------|------------------------------------------------|
-| Magic-link email send           | Inline in `AuthService.requestMagicLink` (dev logs to console) |
-| Notification fanout             | Inline in the mutation path, before SyncAction broadcast       |
-| Cycle rollover                  | Button → `cycleRollover` GraphQL mutation (user-initiated)     |
-| Sync action cleanup             | Not implemented; rows accumulate                               |
-| Full-text search index          | Postgres FTS GIN index updated automatically by triggers       |
+| Work                   | Current implementation                                         |
+| ---------------------- | -------------------------------------------------------------- |
+| Magic-link email send  | Inline in `AuthService.requestMagicLink` (dev logs to console) |
+| Notification fanout    | Inline in the mutation path, before SyncAction broadcast       |
+| Cycle rollover         | Button → `cycleRollover` GraphQL mutation (user-initiated)     |
+| Sync action cleanup    | Not implemented; rows accumulate                               |
+| Full-text search index | Postgres FTS GIN index updated automatically by triggers       |
 
 Planned queues (Sprint 37+):
 
-```
+```text
 BullMQ Queues:
 ├── webhook-dispatch   → outbound webhooks with retry (1m, 1h, 6h)
 ├── email-send         → async magic links, notifications, digests
@@ -618,7 +618,7 @@ BullMQ Queues:
 
 ### 6.1 Authentication Flow
 
-```
+```text
 Email Magic Link:
   1. User enters email → emailLogin GraphQL mutation (POST /api/graphql)
   2. Server generates cryptographically random 6-digit code (crypto.randomInt)
@@ -653,7 +653,7 @@ Token Security:
 
 ### 6.2 Authorization Model
 
-```
+```text
 Workspace Level:
   Owner > Admin > Member > Guest
 
@@ -683,7 +683,7 @@ Permission checks in resolvers:
 
 ## 7. Deployment Architecture
 
-```
+```text
                     ┌─────────────┐
                     │ Cloudflare  │
                     │ CDN / WAF   │

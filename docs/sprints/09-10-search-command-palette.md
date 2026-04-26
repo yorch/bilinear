@@ -1,8 +1,9 @@
 # Sprint 9-10: Search & Command Palette
+
 ## Issue Tracker — Linear Rebuild
 
-**Phase:** 1 (Foundation)  
-**Weeks:** 9-10  
+**Phase:** 1 (Foundation)
+**Weeks:** 9-10
 **Goal:** Fast search and keyboard-first navigation via command palette
 **Status:** ✅ Shipped — historical spec; current state lives in `docs/PATTERNS.md` (§ Command Palette) and the source tree.
 
@@ -36,7 +37,7 @@ const serverResults = await graphqlClient.query({ query: SEARCH_ISSUES, variable
 
 The command palette is a layered modal with nested flows:
 
-```
+```text
 Layer 0: Top-level search (issues, projects, actions)
 Layer 1: Action sub-menus (e.g., "Set status" → list of statuses)
 Layer 2: Confirmation (if needed)
@@ -64,6 +65,7 @@ useHotkeys('j', selectNext, { scope: 'list' });
 The GIN index on issues was defined in the schema (Sprint 5-6). This sprint adds the `searchIssues` query that uses it.
 
 If using PostgreSQL `to_tsvector`:
+
 ```sql
 -- Already in DATABASE_SCHEMA.md
 CREATE INDEX idx_issues_search ON issues
@@ -150,7 +152,7 @@ async searchIssues(
 
 ### 5.1 Structure
 
-```
+```text
 CommandPalette (Cmd+K)
 ├── SearchInput (with icon, placeholder text changes per context)
 ├── ResultsList
@@ -166,21 +168,22 @@ CommandPalette (Cmd+K)
 
 ### 5.2 Available Actions
 
-| Action | Keywords | Behavior |
-|--------|----------|----------|
-| Create issue | "create issue", "new issue" | Opens create issue modal |
-| Set status | "set status", "change status" | → Sub-menu: list of statuses |
-| Set assignee | "assign", "set assignee" | → Sub-menu: list of users |
-| Set priority | "priority", "set priority" | → Sub-menu: priority levels |
-| Add label | "label", "add label" | → Sub-menu: list of labels |
-| Go to My Issues | "my issues" | Navigate to my issues |
-| Go to Inbox | "inbox", "notifications" | Navigate to inbox |
-| Go to Team | "team [name]" | Navigate to team |
-| Go to Settings | "settings" | Navigate to settings |
+| Action          | Keywords                      | Behavior                     |
+| --------------- | ----------------------------- | ---------------------------- |
+| Create issue    | "create issue", "new issue"   | Opens create issue modal     |
+| Set status      | "set status", "change status" | → Sub-menu: list of statuses |
+| Set assignee    | "assign", "set assignee"      | → Sub-menu: list of users    |
+| Set priority    | "priority", "set priority"    | → Sub-menu: priority levels  |
+| Add label       | "label", "add label"          | → Sub-menu: list of labels   |
+| Go to My Issues | "my issues"                   | Navigate to my issues        |
+| Go to Inbox     | "inbox", "notifications"      | Navigate to inbox            |
+| Go to Team      | "team [name]"                 | Navigate to team             |
+| Go to Settings  | "settings"                    | Navigate to settings         |
 
 ### 5.3 Fuzzy Matching
 
 Use a lightweight fuzzy match algorithm (e.g., fuse.js-style scoring) against:
+
 - Issue identifiers (ENG-123)
 - Issue titles
 - Project names
@@ -192,40 +195,40 @@ Use a lightweight fuzzy match algorithm (e.g., fuse.js-style scoring) against:
 
 ### 6.1 Global Shortcuts
 
-| Key | Action | Scope |
-|-----|--------|-------|
-| `Cmd+K` / `Ctrl+K` | Open command palette | Global |
-| `C` | Create new issue | Global (not in input) |
-| `I` | Go to inbox | Global (not in input) |
+| Key                | Action               | Scope                 |
+| ------------------ | -------------------- | --------------------- |
+| `Cmd+K` / `Ctrl+K` | Open command palette | Global                |
+| `C`                | Create new issue     | Global (not in input) |
+| `I`                | Go to inbox          | Global (not in input) |
 
 ### 6.2 List View Shortcuts
 
-| Key | Action |
-|-----|--------|
-| `J` | Select next issue |
-| `K` | Select previous issue |
-| `X` | Toggle selection checkbox |
-| `Enter` | Open selected issue detail |
+| Key      | Action                         |
+| -------- | ------------------------------ |
+| `J`      | Select next issue              |
+| `K`      | Select previous issue          |
+| `X`      | Toggle selection checkbox      |
+| `Enter`  | Open selected issue detail     |
 | `Escape` | Clear selection / close detail |
 
 ### 6.3 Issue Context Shortcuts (when issue is selected)
 
-| Key | Action |
-|-----|--------|
-| `S` | Change status |
-| `A` | Change assignee |
-| `P` | Change priority |
-| `L` | Change label |
-| `Shift+E` | Set estimate |
-| `D` | Set due date |
-| `Backspace` / `Delete` | Archive issue |
+| Key                    | Action          |
+| ---------------------- | --------------- |
+| `S`                    | Change status   |
+| `A`                    | Change assignee |
+| `P`                    | Change priority |
+| `L`                    | Change label    |
+| `Shift+E`              | Set estimate    |
+| `D`                    | Set due date    |
+| `Backspace` / `Delete` | Archive issue   |
 
 ### 6.4 Multi-Key Shortcuts
 
-| Keys | Action |
-|------|--------|
+| Keys         | Action          |
+| ------------ | --------------- |
 | `G` then `I` | Go to my issues |
-| `G` then `N` | Go to inbox |
+| `G` then `N` | Go to inbox     |
 
 ---
 
@@ -233,7 +236,7 @@ Use a lightweight fuzzy match algorithm (e.g., fuse.js-style scoring) against:
 
 ### Right-Click Context Menu
 
-```
+```text
 IssueContextMenu (right-click on issue row)
 ├── Open issue
 ├── Open in new tab
@@ -255,22 +258,22 @@ IssueContextMenu (right-click on issue row)
 
 ## 8. Files to Create/Modify
 
-| File | Action | Purpose |
-|------|--------|---------|
-| `src/server/services/search.service.ts` | **Create** | Full-text search + ID lookup |
-| `src/server/graphql/resolvers/search.ts` | **Create** | searchIssues resolver |
-| `prisma/migrations/xxx_add_fulltext_search/migration.sql` | **Create** | GIN index migration |
-| `src/components/command-palette/command-palette.tsx` | **Create** | Main palette modal |
-| `src/components/command-palette/search-input.tsx` | **Create** | Search input with debounce |
-| `src/components/command-palette/results-list.tsx` | **Create** | Virtualized results |
-| `src/components/command-palette/issue-result-row.tsx` | **Create** | Issue search result |
-| `src/components/command-palette/action-row.tsx` | **Create** | Action search result |
-| `src/components/command-palette/sub-menu.tsx` | **Create** | Nested action menu |
-| `src/components/issues/issue-context-menu.tsx` | **Create** | Right-click context menu |
-| `src/hooks/use-hotkeys.ts` | **Modify** | Full shortcut system with scopes |
-| `src/hooks/use-recent-items.ts` | **Create** | Track recently visited items |
-| `src/stores/ui-store.ts` | **Modify** | Add commandPaletteOpen, selectedIssueId state |
-| `src/lib/fuzzy-search.ts` | **Create** | Lightweight fuzzy matching |
+| File                                                      | Action     | Purpose                                       |
+| --------------------------------------------------------- | ---------- | --------------------------------------------- |
+| `src/server/services/search.service.ts`                   | **Create** | Full-text search + ID lookup                  |
+| `src/server/graphql/resolvers/search.ts`                  | **Create** | searchIssues resolver                         |
+| `prisma/migrations/xxx_add_fulltext_search/migration.sql` | **Create** | GIN index migration                           |
+| `src/components/command-palette/command-palette.tsx`      | **Create** | Main palette modal                            |
+| `src/components/command-palette/search-input.tsx`         | **Create** | Search input with debounce                    |
+| `src/components/command-palette/results-list.tsx`         | **Create** | Virtualized results                           |
+| `src/components/command-palette/issue-result-row.tsx`     | **Create** | Issue search result                           |
+| `src/components/command-palette/action-row.tsx`           | **Create** | Action search result                          |
+| `src/components/command-palette/sub-menu.tsx`             | **Create** | Nested action menu                            |
+| `src/components/issues/issue-context-menu.tsx`            | **Create** | Right-click context menu                      |
+| `src/hooks/use-hotkeys.ts`                                | **Modify** | Full shortcut system with scopes              |
+| `src/hooks/use-recent-items.ts`                           | **Create** | Track recently visited items                  |
+| `src/stores/ui-store.ts`                                  | **Modify** | Add commandPaletteOpen, selectedIssueId state |
+| `src/lib/fuzzy-search.ts`                                 | **Create** | Lightweight fuzzy matching                    |
 
 ---
 
@@ -313,56 +316,56 @@ yarn add cmdk                      # Command palette primitives (or build custom
 
 ### Key decisions
 
-| Decision | Rationale |
-|----------|-----------|
-| No `cmdk` dependency | Built custom palette to avoid an extra 20kB dependency; the implementation is simple enough to maintain in-house. |
-| FTS: fetch IDs only from raw query, then hydrate via `findMany` | Avoids mapping snake_case raw DB columns to Prisma camelCase types; `findMany` returns proper typed models. |
-| `useChord` as a separate hook | Chord timeout state is inherently different from single-key listeners; separating them keeps `useHotkeys` simple. |
-| `forceOpen` prop on property selects | Allows keyboard shortcuts (S/A/P/L/D) to open inline row selects without lifting all select state to the page. |
-| `UIStore.commandPaletteOpen` | Centralises palette visibility in MobX so any component can open/close it without prop drilling. |
-| `WorkspaceClient` wrapper | The Next.js workspace layout is a Server Component; `WorkspaceClient` creates a clean client boundary that hosts the palette and global shortcuts. |
-| `useParams` in `CommandPalette` | Reads the workspace URL segment directly rather than prop-drilling from a server layout. |
+| Decision                                                        | Rationale                                                                                                                                          |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No `cmdk` dependency                                            | Built custom palette to avoid an extra 20kB dependency; the implementation is simple enough to maintain in-house.                                  |
+| FTS: fetch IDs only from raw query, then hydrate via `findMany` | Avoids mapping snake_case raw DB columns to Prisma camelCase types; `findMany` returns proper typed models.                                        |
+| `useChord` as a separate hook                                   | Chord timeout state is inherently different from single-key listeners; separating them keeps `useHotkeys` simple.                                  |
+| `forceOpen` prop on property selects                            | Allows keyboard shortcuts (S/A/P/L/D) to open inline row selects without lifting all select state to the page.                                     |
+| `UIStore.commandPaletteOpen`                                    | Centralises palette visibility in MobX so any component can open/close it without prop drilling.                                                   |
+| `WorkspaceClient` wrapper                                       | The Next.js workspace layout is a Server Component; `WorkspaceClient` creates a clean client boundary that hosts the palette and global shortcuts. |
+| `useParams` in `CommandPalette`                                 | Reads the workspace URL segment directly rather than prop-drilling from a server layout.                                                           |
 
 ### Files created / modified
 
-| File | Change |
-|------|--------|
-| `prisma/migrations/20260407000000_add_fulltext_search/migration.sql` | New: GIN index on `issues` |
-| `src/server/services/search.service.ts` | New: identifier + FTS search |
-| `src/server/graphql/resolvers/search.ts` | New: `searchIssues` resolver |
-| `src/server/graphql/schema.ts` | Added `searchIssues` to Query |
-| `src/server/graphql/context.ts` | Added `SearchService` |
-| `src/server/graphql/resolvers/index.ts` | Merged search resolvers |
-| `src/test/context-mock.ts` | Added `search` service to mock |
-| `src/test/prisma-mock.ts` | Added `$queryRaw` mock |
-| `src/lib/fuzzy-search.ts` | New: local fuzzy match |
-| `src/stores/issue-store.ts` | Added `search()` method |
-| `src/stores/ui-store.ts` | Added `commandPaletteOpen` + actions |
-| `src/hooks/use-recent-items.ts` | New: localStorage recent issues |
-| `src/hooks/use-hotkeys.ts` | Added `options` param, `enabled`, `allowInInput`; added `useChord` |
-| `src/components/properties/status-select.tsx` | Added `forceOpen`, `onClose` |
-| `src/components/properties/priority-select.tsx` | Added `forceOpen`, `onClose` |
-| `src/components/properties/assignee-select.tsx` | Added `forceOpen`, `onClose` |
-| `src/components/properties/label-select.tsx` | Added `forceOpen`, `onClose` |
-| `src/components/properties/due-date-picker.tsx` | Added `forceOpen`, `onClose` |
-| `src/components/issues/issue-row.tsx` | Added `openProperty`, `onPropertyClosed`, `onContextMenu` |
-| `src/components/issues/issue-list-view.tsx` | Added context menu state, `openProperty` forwarding, `onArchive`/`onDelete` |
-| `src/components/issues/issue-context-menu.tsx` | New: right-click context menu |
-| `src/components/command-palette/command-palette.tsx` | New: command palette modal |
-| `src/components/layouts/workspace-client.tsx` | New: Cmd+K registration + palette mount point |
-| `src/app/(workspace)/layout.tsx` | Wrapped with `WorkspaceClient` |
-| `src/app/(workspace)/[workspace]/team/[key]/page.tsx` | All new shortcuts, archive/delete handlers, recent item tracking |
+| File                                                                 | Change                                                                      |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `prisma/migrations/20260407000000_add_fulltext_search/migration.sql` | New: GIN index on `issues`                                                  |
+| `src/server/services/search.service.ts`                              | New: identifier + FTS search                                                |
+| `src/server/graphql/resolvers/search.ts`                             | New: `searchIssues` resolver                                                |
+| `src/server/graphql/schema.ts`                                       | Added `searchIssues` to Query                                               |
+| `src/server/graphql/context.ts`                                      | Added `SearchService`                                                       |
+| `src/server/graphql/resolvers/index.ts`                              | Merged search resolvers                                                     |
+| `src/test/context-mock.ts`                                           | Added `search` service to mock                                              |
+| `src/test/prisma-mock.ts`                                            | Added `$queryRaw` mock                                                      |
+| `src/lib/fuzzy-search.ts`                                            | New: local fuzzy match                                                      |
+| `src/stores/issue-store.ts`                                          | Added `search()` method                                                     |
+| `src/stores/ui-store.ts`                                             | Added `commandPaletteOpen` + actions                                        |
+| `src/hooks/use-recent-items.ts`                                      | New: localStorage recent issues                                             |
+| `src/hooks/use-hotkeys.ts`                                           | Added `options` param, `enabled`, `allowInInput`; added `useChord`          |
+| `src/components/properties/status-select.tsx`                        | Added `forceOpen`, `onClose`                                                |
+| `src/components/properties/priority-select.tsx`                      | Added `forceOpen`, `onClose`                                                |
+| `src/components/properties/assignee-select.tsx`                      | Added `forceOpen`, `onClose`                                                |
+| `src/components/properties/label-select.tsx`                         | Added `forceOpen`, `onClose`                                                |
+| `src/components/properties/due-date-picker.tsx`                      | Added `forceOpen`, `onClose`                                                |
+| `src/components/issues/issue-row.tsx`                                | Added `openProperty`, `onPropertyClosed`, `onContextMenu`                   |
+| `src/components/issues/issue-list-view.tsx`                          | Added context menu state, `openProperty` forwarding, `onArchive`/`onDelete` |
+| `src/components/issues/issue-context-menu.tsx`                       | New: right-click context menu                                               |
+| `src/components/command-palette/command-palette.tsx`                 | New: command palette modal                                                  |
+| `src/components/layouts/workspace-client.tsx`                        | New: Cmd+K registration + palette mount point                               |
+| `src/app/(workspace)/layout.tsx`                                     | Wrapped with `WorkspaceClient`                                              |
+| `src/app/(workspace)/[workspace]/team/[key]/page.tsx`                | All new shortcuts, archive/delete handlers, recent item tracking            |
 
 ---
 
 ## 12. Cross-References
 
-| Topic | Document | Section |
-|-------|----------|---------|
-| Search query (GraphQL) | `docs/API_DESIGN.md` | 5. Queries (searchIssues) |
-| Full-text search index | `docs/DATABASE_SCHEMA.md` | 2.4 Issues (GIN index) |
-| Search requirements | `docs/PRD.md` | Search (<100ms) |
-| Keyboard shortcuts spec | `docs/PRD.md` | UX (keyboard-first) |
-| Command palette | `docs/ARCHITECTURE.md` | 4.1 (CommandPalette) |
-| Routing (navigation targets) | `docs/ARCHITECTURE.md` | 4.3 Routing |
-| Linear research — shortcuts | `LINEAR_RESEARCH.md` | UX & Design Patterns (40+ shortcuts) |
+| Topic                        | Document                  | Section                              |
+| ---------------------------- | ------------------------- | ------------------------------------ |
+| Search query (GraphQL)       | `docs/API_DESIGN.md`      | 5. Queries (searchIssues)            |
+| Full-text search index       | `docs/DATABASE_SCHEMA.md` | 2.4 Issues (GIN index)               |
+| Search requirements          | `docs/PRD.md`             | Search (<100ms)                      |
+| Keyboard shortcuts spec      | `docs/PRD.md`             | UX (keyboard-first)                  |
+| Command palette              | `docs/ARCHITECTURE.md`    | 4.1 (CommandPalette)                 |
+| Routing (navigation targets) | `docs/ARCHITECTURE.md`    | 4.3 Routing                          |
+| Linear research — shortcuts  | `LINEAR_RESEARCH.md`      | UX & Design Patterns (40+ shortcuts) |
