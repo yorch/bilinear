@@ -35,6 +35,13 @@ export class SyncManager {
     const { syncStore } = this.stores;
     syncStore.setStatus('bootstrapping');
 
+    // If the cache was last populated for a different org (token refresh
+    // hit a new orgId, or the user signed into a different account on the
+    // same browser) wipe IndexedDB before loading. Without this, the prior
+    // org's rows hydrate into MobX for the duration of the deltaSync round-
+    // trip — visible flicker plus a real cross-org leak window.
+    await this.invalidateCacheIfOrgChanged(token);
+
     // Load cached data from IndexedDB into MobX stores
     const hasCachedData = await this.loadFromIndexedDB();
 
@@ -72,6 +79,56 @@ export class SyncManager {
   }
 
   // ─── Private methods ────────────────────────────────────────────────────────
+
+  /**
+   * Decode the (already-server-verified) JWT to read its orgId claim.
+   * Client doesn't re-verify the signature — the cookie was set by the
+   * server which validated it. We only need the claim to compare with
+   * what's persisted in IndexedDB.
+   */
+  private decodeTokenOrgId(token: string): string | null {
+    try {
+      const payloadB64 = token.split('.')[1];
+      if (!payloadB64) {
+        return null;
+      }
+      const normalized = payloadB64.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = normalized.padEnd(
+        Math.ceil(normalized.length / 4) * 4,
+        '=',
+      );
+      const payload = JSON.parse(atob(padded)) as { orgId?: string };
+      return payload.orgId ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async invalidateCacheIfOrgChanged(token: string): Promise<void> {
+    const tokenOrgId = this.decodeTokenOrgId(token);
+    if (!tokenOrgId) {
+      return;
+    }
+    const cached = await db.syncMetadata.get('activeOrgId');
+    const cachedOrgId = typeof cached?.value === 'string' ? cached.value : null;
+
+    if (cachedOrgId && cachedOrgId !== tokenOrgId) {
+      // Cross-org cache — wipe every table. Bootstrap will refill from
+      // the server using the new token's orgId.
+      await db.transaction('rw', db.tables, async () => {
+        for (const table of db.tables) {
+          await table.clear();
+        }
+      });
+    }
+
+    // Write the new orgId outside the wipe transaction on purpose. The
+    // wipe table list includes syncMetadata; folding the put into the same
+    // txn would race the clear() and lose the value.
+    if (cachedOrgId !== tokenOrgId) {
+      await db.syncMetadata.put({ key: 'activeOrgId', value: tokenOrgId });
+    }
+  }
 
   private async loadFromIndexedDB(): Promise<boolean> {
     const [
