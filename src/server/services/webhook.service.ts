@@ -1,5 +1,6 @@
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import type { PrismaClient, Webhook, WebhookDelivery } from '../../generated/prisma';
 import { childLogger } from '../lib/logger';
 
@@ -196,44 +197,67 @@ export class WebhookService {
     data: object,
     teamId?: string | null,
   ): Promise<WebhookDelivery[]> {
+    // Team-scoped filter: when an event is associated with a team,
+    // include hooks that subscribe to that team OR are org-wide
+    // (teamId=null). Org-level events (teamId not passed) match every
+    // hook regardless of scope.
     const subscribers = await this.prisma.webhook.findMany({
       where: {
         archivedAt: null,
         enabled: true,
         events: { has: event },
         organizationId: orgId,
-        ...(teamId === undefined
-          ? {}
-          : { OR: [{ teamId: null }, { teamId: teamId ?? undefined }] }),
+        ...(teamId == null ? {} : { OR: [{ teamId: null }, { teamId }] }),
       },
     });
     if (subscribers.length === 0) {
       return [];
     }
 
-    const deliveries: WebhookDelivery[] = [];
-    for (const webhook of subscribers) {
-      // Pre-generate the id so the payload's `deliveryId` field matches
-      // the row id and the X-Bilinear-Delivery header. Without this the
-      // payload would have to be patched after create, doubling DB writes.
+    // Pre-generate ids so the payload's `deliveryId` field matches the
+    // row id and the X-Bilinear-Delivery header. createMany is one
+    // round-trip vs. N for a per-subscriber `create` loop — meaningful
+    // when the call sits on every issue/comment mutation hot path.
+    const now = new Date();
+    const rows = subscribers.map(webhook => {
       const id = randomUUID();
-      const delivery = await this.prisma.webhookDelivery.create({
-        data: {
-          event,
-          id,
-          nextAttemptAt: new Date(),
-          payload: this.buildPayload(id, orgId, event, data),
-          status: 'pending',
-          webhookId: webhook.id,
-        },
-      });
-      deliveries.push(delivery);
-      // Fire-and-forget the first attempt. Errors are caught inside.
-      void this.processDelivery(delivery.id).catch(err => {
-        log.error({ deliveryId: delivery.id, err }, 'Webhook delivery failed');
+      return {
+        event,
+        id,
+        nextAttemptAt: now,
+        payload: this.buildPayload(id, orgId, event, data),
+        status: 'pending',
+        webhookId: webhook.id,
+      };
+    });
+    await this.prisma.webhookDelivery.createMany({ data: rows });
+
+    // Fire the first attempt for each delivery in parallel. Errors are
+    // caught inside processDelivery; the catch here is belt-and-braces.
+    for (const r of rows) {
+      void this.processDelivery(r.id).catch(err => {
+        log.error({ deliveryId: r.id, err }, 'Webhook delivery failed');
       });
     }
-    return deliveries;
+
+    // Return the freshly-inserted rows so callers can observe the
+    // dispatch (used by tests). createMany doesn't return rows, so we
+    // shape them from the inputs.
+    return rows.map(r => ({
+      attempts: 0,
+      createdAt: now,
+      deliveredAt: null,
+      errorMessage: null,
+      event: r.event,
+      id: r.id,
+      nextAttemptAt: r.nextAttemptAt,
+      payload: r.payload,
+      responseBody: null,
+      responseStatus: null,
+      status: r.status,
+      updatedAt: now,
+      webhookId: r.webhookId,
+    })) as WebhookDelivery[];
   }
 
   /**
@@ -468,25 +492,18 @@ export class WebhookService {
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       throw new WebhookInvalidUrlError();
     }
-    // SSRF protection — webhook URLs are tenant-supplied and the server
-    // fetches them, so we must reject any address that could reach an
-    // internal service.
-    //
-    // Two layers of defense:
-    //   1. Block obvious private hostnames at parse time.
-    //   2. The dispatcher is responsible for re-validating the *resolved*
-    //      IP at request time (see verifyResolvedIp). This double-check
-    //      catches DNS rebinding and aliases that resolve to internal IPs.
-    //
-    // We also normalize hex/octal/decimal IP encodings via Node's URL
-    // canonicalization (it leaves them as-is in `hostname`, so we
-    // explicitly reject anything that isn't a "normal" hostname or
-    // dotted-quad / bracketed IPv6 literal).
+    // SSRF: validateUrl rejects obvious private/loopback hostnames at
+    // parse time; the delivery path (assertSafeUrl) re-validates the
+    // *resolved* IP to defeat DNS rebinding.
     const host = parsed.hostname.toLowerCase();
-    if (host === '' || isBlockedHost(host)) {
+    if (host === '') {
+      // Empty host is never a valid webhook target, and the
+      // ALLOW_PRIVATE_WEBHOOK_URLS escape hatch shouldn't apply to it.
+      throw new WebhookInvalidUrlError();
+    }
+    if (isBlockedHost(host)) {
       // Default-deny: only allow private/loopback when explicitly opted
-      // in. Production never bypasses; non-production requires
-      // ALLOW_PRIVATE_WEBHOOK_URLS=1 (e.g. local dev with `.env` set).
+      // in (e.g. local dev with `.env` set).
       if (process.env.ALLOW_PRIVATE_WEBHOOK_URLS !== '1') {
         throw new WebhookPrivateUrlError();
       }
@@ -596,8 +613,10 @@ export function isBlockedHost(host: string): boolean {
  * single decimal (e.g. "2130706433"), and hex (0x7f000001).
  */
 function parseIpLiteral(s: string): string | null {
-  // IPv6 (contains a colon and is not a port suffix)
-  if (s.includes(':')) {
+  // IPv6 — verified by net.isIPv6 to avoid treating colon-bearing
+  // hostnames (e.g. user-supplied "foo:bar") as IP literals and slipping
+  // them past the SSRF gate.
+  if (isIP(s) === 6) {
     return s.toLowerCase();
   }
   // Single integer → IPv4 (e.g. "2130706433" → 127.0.0.1)
@@ -718,7 +737,10 @@ async function assertSafeUrl(url: string): Promise<void> {
     if (err instanceof WebhookPrivateUrlError) {
       throw err;
     }
-    // DNS failure — let the fetch attempt surface the network error.
+    // DNS failure — let the fetch attempt surface the network error,
+    // but log so we have a trail when something unexpected happens
+    // (lookup throwing on bad input, resolver outage, etc.).
+    log.warn({ err, host }, 'Webhook DNS pre-check failed');
   }
 }
 

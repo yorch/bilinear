@@ -12,7 +12,7 @@ export interface InitiativeCreateInput {
   sortOrder?: number;
   startDate?: string;
   startDateResolution?: string;
-  status?: string;
+  status?: InitiativeStatus;
   targetDate?: string;
   targetDateResolution?: string;
 }
@@ -28,12 +28,37 @@ export interface InitiativeUpdateInput {
   sortOrder?: number;
   startDate?: string | null;
   startDateResolution?: string | null;
-  status?: string;
+  status?: InitiativeStatus;
   targetDate?: string | null;
   targetDateResolution?: string | null;
 }
 
-const VALID_STATUSES = new Set(['planned', 'active', 'completed', 'canceled']);
+export type InitiativeStatus = 'planned' | 'active' | 'completed' | 'canceled';
+
+const VALID_STATUSES = new Set<InitiativeStatus>(['planned', 'active', 'completed', 'canceled']);
+
+/**
+ * Lifecycle-timestamp patch applied when transitioning into each status.
+ * Stamps the entered status's marker and clears the others so a revert
+ * (e.g. canceled → active) doesn't leave stale terminal markers behind.
+ * Only the timestamps are listed here; the caller still sets `status`.
+ *
+ * `startedAt: now` for `active` is set by the caller (Date is created
+ * once per update call); this table holds the constants only.
+ */
+const STATUS_TRANSITION_CLEARS: Record<
+  InitiativeStatus,
+  {
+    startedAt: 'now' | 'clear' | 'leave';
+    completedAt: 'clear' | 'now' | 'leave';
+    canceledAt: 'clear' | 'now' | 'leave';
+  }
+> = {
+  active: { canceledAt: 'clear', completedAt: 'clear', startedAt: 'now' },
+  canceled: { canceledAt: 'now', completedAt: 'clear', startedAt: 'leave' },
+  completed: { canceledAt: 'clear', completedAt: 'now', startedAt: 'leave' },
+  planned: { canceledAt: 'clear', completedAt: 'clear', startedAt: 'clear' },
+};
 
 /**
  * Initiatives are top-level strategic objects that group projects toward a
@@ -142,23 +167,20 @@ export class InitiativeService {
     if (input.status !== undefined) {
       data.status = input.status;
       const now = new Date();
-      // Lifecycle timestamps mirror Project. Stamp the entered status's
-      // timestamp and clear the others so a revert (e.g. canceled → active)
-      // doesn't leave stale terminal markers around.
-      if (input.status === 'planned') {
-        data.startedAt = null;
-        data.completedAt = null;
-        data.canceledAt = null;
-      } else if (input.status === 'active') {
-        data.startedAt = now;
-        data.completedAt = null;
-        data.canceledAt = null;
-      } else if (input.status === 'completed') {
-        data.completedAt = now;
-        data.canceledAt = null;
-      } else if (input.status === 'canceled') {
-        data.canceledAt = now;
-        data.completedAt = null;
+      const transition = STATUS_TRANSITION_CLEARS[input.status as InitiativeStatus];
+      const apply = (op: 'now' | 'clear' | 'leave') =>
+        op === 'now' ? now : op === 'clear' ? null : undefined;
+      const startedAt = apply(transition.startedAt);
+      const completedAt = apply(transition.completedAt);
+      const canceledAt = apply(transition.canceledAt);
+      if (startedAt !== undefined) {
+        data.startedAt = startedAt;
+      }
+      if (completedAt !== undefined) {
+        data.completedAt = completedAt;
+      }
+      if (canceledAt !== undefined) {
+        data.canceledAt = canceledAt;
       }
     }
 
@@ -253,22 +275,39 @@ export class InitiativeService {
    * Recompute and persist `Initiative.progress` as the mean progress of all
    * non-archived linked projects. Returns the updated initiative row so the
    * caller can emit a `'U' Initiative` SyncAction. Returns `null` if the
-   * initiative no longer exists (e.g. deleted during a project event).
+   * initiative no longer exists (e.g. deleted during a project event), or
+   * if the recomputed value is unchanged (no-op skip — saves a wasteful
+   * SyncAction broadcast on the common projectUpdate path).
    */
   async recomputeProgress(initiativeId: string): Promise<Initiative | null> {
-    const links = await this.prisma.initiativeProject.findMany({
-      include: {
-        project: {
-          select: { archivedAt: true, progress: true, trashed: true },
+    const [links, current] = await Promise.all([
+      this.prisma.initiativeProject.findMany({
+        include: {
+          project: {
+            select: { archivedAt: true, progress: true, trashed: true },
+          },
         },
-      },
-      where: { initiativeId },
-    });
+        where: { initiativeId },
+      }),
+      this.prisma.initiative.findUnique({
+        select: { progress: true },
+        where: { id: initiativeId },
+      }),
+    ]);
+    if (!current) {
+      return null;
+    }
     const eligible = links.filter(l => l.project && !l.project.archivedAt && !l.project.trashed);
     const progress =
       eligible.length === 0
         ? 0
         : eligible.reduce((sum, l) => sum + (l.project?.progress ?? 0), 0) / eligible.length;
+
+    // Skip the write when the rolled-up value didn't actually move.
+    // 1e-9 tolerance covers floating-point round-trip jitter.
+    if (Math.abs(progress - current.progress) < 1e-9) {
+      return null;
+    }
 
     try {
       return await this.prisma.initiative.update({

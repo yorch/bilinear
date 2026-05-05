@@ -229,30 +229,30 @@ describe('WebhookService', () => {
       expect(prisma.webhookDelivery.create).not.toHaveBeenCalled();
     });
 
-    it('creates a delivery row for each subscriber', async () => {
-      prisma.webhook.findMany.mockResolvedValue([TEST_WEBHOOK]);
-      prisma.webhookDelivery.create.mockResolvedValue({
-        attempts: 0,
-        event: 'issue.created',
-        id: 'delivery-1',
-        status: 'pending',
-        webhookId: TEST_WEBHOOK.id,
-      });
+    it('batches deliveries with createMany and fires processDelivery per row', async () => {
+      const TEST_WEBHOOK_2 = { ...TEST_WEBHOOK, id: '00000000-0000-0000-0000-000000000a01' };
+      prisma.webhook.findMany.mockResolvedValue([TEST_WEBHOOK, TEST_WEBHOOK_2]);
+      prisma.webhookDelivery.createMany.mockResolvedValue({ count: 2 });
       // Stub processDelivery so the test doesn't make real HTTP calls.
-      vi.spyOn(service, 'processDelivery').mockResolvedValue();
+      const spy = vi.spyOn(service, 'processDelivery').mockResolvedValue();
 
       const result = await service.dispatchEvent(TEST_ORG.id, 'issue.created', {
         id: 'issue-1',
       });
 
-      expect(result).toHaveLength(1);
-      expect(prisma.webhookDelivery.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          event: 'issue.created',
-          status: 'pending',
-          webhookId: TEST_WEBHOOK.id,
-        }),
+      expect(result).toHaveLength(2);
+      // One round-trip (createMany), not N per-row inserts.
+      expect(prisma.webhookDelivery.create).not.toHaveBeenCalled();
+      expect(prisma.webhookDelivery.createMany).toHaveBeenCalledTimes(1);
+      const args = prisma.webhookDelivery.createMany.mock.calls[0][0];
+      expect(args.data).toHaveLength(2);
+      expect(args.data[0]).toMatchObject({
+        event: 'issue.created',
+        status: 'pending',
+        webhookId: TEST_WEBHOOK.id,
       });
+      // Each delivery's first attempt is queued.
+      expect(spy).toHaveBeenCalledTimes(2);
     });
   });
 });

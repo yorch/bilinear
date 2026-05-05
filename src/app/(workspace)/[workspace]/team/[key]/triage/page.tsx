@@ -3,6 +3,7 @@
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useOutsideClick } from '@/hooks/use-outside-click';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { useStore } from '@/providers/store-provider';
@@ -55,8 +56,8 @@ const SNOOZE_PRESETS: Array<{ label: string; hours: number }> = [
 ];
 
 /**
- * Snooze button with a click-to-open popover. Replaces an earlier
- * `group-hover:block` approach which was inaccessible on touch devices
+ * Click-to-open popover with preset items. Replaces an earlier
+ * `group-hover:block` approach that was inaccessible on touch devices
  * and dismissed before the click could register on some browsers.
  */
 function SnoozeButton({
@@ -69,27 +70,18 @@ function SnoozeButton({
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
 
-  // Close the popover when the user clicks outside or presses Escape.
+  useOutsideClick(ref, () => setOpen(false), open);
   useEffect(() => {
     if (!open) {
       return;
     }
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setOpen(false);
       }
     };
-    document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
+    return () => document.removeEventListener('keydown', onKey);
   }, [open]);
 
   return (

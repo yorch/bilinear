@@ -68,7 +68,10 @@ describe('InitiativeService', () => {
       await expect(
         service.create(TEST_ORG.id, TEST_USER.id, {
           name: 'Q2',
-          status: 'invalid',
+          // Bypass the typed input — the service validates at runtime so
+          // we can still defend against callers that come in untyped (e.g.
+          // GraphQL input that wasn't enum-validated).
+          status: 'invalid' as never,
         }),
       ).rejects.toThrow(InitiativeInvalidStatusError);
     });
@@ -145,6 +148,7 @@ describe('InitiativeService', () => {
   describe('recomputeProgress', () => {
     it('returns the updated initiative with progress=0 when no projects are linked', async () => {
       prisma.initiativeProject.findMany.mockResolvedValue([]);
+      prisma.initiative.findUnique.mockResolvedValue({ progress: 0.5 });
       prisma.initiative.update.mockResolvedValue({ ...TEST_INITIATIVE, progress: 0 });
 
       const result = await service.recomputeProgress(TEST_INITIATIVE.id);
@@ -156,6 +160,7 @@ describe('InitiativeService', () => {
         { project: { archivedAt: null, progress: 0.5, trashed: false } },
         { project: { archivedAt: null, progress: 1.0, trashed: false } },
       ]);
+      prisma.initiative.findUnique.mockResolvedValue({ progress: 0 });
       prisma.initiative.update.mockResolvedValue({ ...TEST_INITIATIVE, progress: 0.75 });
 
       const result = await service.recomputeProgress(TEST_INITIATIVE.id);
@@ -172,6 +177,7 @@ describe('InitiativeService', () => {
         { project: { archivedAt: new Date(), progress: 1.0, trashed: false } },
         { project: { archivedAt: null, progress: 1.0, trashed: true } },
       ]);
+      prisma.initiative.findUnique.mockResolvedValue({ progress: 0 });
       prisma.initiative.update.mockResolvedValue({ ...TEST_INITIATIVE, progress: 0.5 });
 
       const result = await service.recomputeProgress(TEST_INITIATIVE.id);
@@ -180,10 +186,22 @@ describe('InitiativeService', () => {
 
     it('returns null if the initiative has been deleted', async () => {
       prisma.initiativeProject.findMany.mockResolvedValue([]);
-      prisma.initiative.update.mockRejectedValue(new Error('not found'));
+      prisma.initiative.findUnique.mockResolvedValue(null);
 
       const result = await service.recomputeProgress(TEST_INITIATIVE.id);
       expect(result).toBeNull();
+      expect(prisma.initiative.update).not.toHaveBeenCalled();
+    });
+
+    it('skips the write (and SyncAction) when progress is unchanged', async () => {
+      prisma.initiativeProject.findMany.mockResolvedValue([
+        { project: { archivedAt: null, progress: 0.5, trashed: false } },
+      ]);
+      prisma.initiative.findUnique.mockResolvedValue({ progress: 0.5 });
+
+      const result = await service.recomputeProgress(TEST_INITIATIVE.id);
+      expect(result).toBeNull();
+      expect(prisma.initiative.update).not.toHaveBeenCalled();
     });
   });
 
@@ -197,6 +215,7 @@ describe('InitiativeService', () => {
       prisma.initiativeProject.findMany.mockResolvedValue([
         { project: { archivedAt: null, progress: 0.4, trashed: false } },
       ]);
+      prisma.initiative.findUnique.mockResolvedValue({ progress: 0 });
       prisma.initiative.update.mockResolvedValue({ ...TEST_INITIATIVE, progress: 0.4 });
 
       const result = await service.addProject(TEST_INITIATIVE.id, 'p-1');
@@ -239,6 +258,7 @@ describe('InitiativeService', () => {
     it('returns the deleted link id', async () => {
       prisma.initiativeProject.delete.mockResolvedValue({ id: 'link-123' });
       prisma.initiativeProject.findMany.mockResolvedValue([]);
+      prisma.initiative.findUnique.mockResolvedValue({ progress: 0.5 });
       prisma.initiative.update.mockResolvedValue(TEST_INITIATIVE);
 
       const result = await service.removeProject('init-1', 'project-1');
@@ -248,7 +268,7 @@ describe('InitiativeService', () => {
     it('returns null and is idempotent when link is already gone', async () => {
       prisma.initiativeProject.delete.mockRejectedValue(new Error('not found'));
       prisma.initiativeProject.findMany.mockResolvedValue([]);
-      prisma.initiative.update.mockResolvedValue(TEST_INITIATIVE);
+      prisma.initiative.findUnique.mockResolvedValue({ progress: 0 });
 
       const result = await service.removeProject('init-1', 'project-1');
       expect(result).toBeNull();

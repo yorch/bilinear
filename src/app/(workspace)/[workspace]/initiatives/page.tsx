@@ -70,7 +70,9 @@ function InitiativeRow({ initiative }: { initiative: DBInitiative }) {
   const [expanded, setExpanded] = useState(false);
   const [adding, setAdding] = useState(false);
   const projectIds = initiativeStore.getProjectIds(initiative.id);
-  const projects = projectIds.map(id => projectStore.findById(id)).filter(p => p !== null);
+  const projects = projectIds
+    .map(id => projectStore.findById(id))
+    .filter((p): p is NonNullable<typeof p> => p !== null);
 
   const allProjects = projectStore.all.filter(p => !projectIds.includes(p.id));
 
@@ -152,42 +154,40 @@ function InitiativeRow({ initiative }: { initiative: DBInitiative }) {
             <div className="text-xs text-zinc-400">No projects yet.</div>
           ) : (
             <div className="space-y-1">
-              {projects.map(p =>
-                p ? (
-                  <div
-                    className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300"
-                    key={p.id}
+              {projects.map(p => (
+                <div
+                  className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300"
+                  key={p.id}
+                >
+                  <span
+                    className="inline-block h-2 w-2 rounded-full"
+                    style={{ backgroundColor: p.color }}
+                  />
+                  <span className="flex-1">{p.name}</span>
+                  <span className="text-zinc-400">{Math.round(p.progress * 100)}%</span>
+                  <button
+                    className="text-zinc-400 hover:text-red-500"
+                    onClick={async () => {
+                      const res = await gql(INITIATIVE_REMOVE_PROJECT_MUTATION, {
+                        initiativeId: initiative.id,
+                        projectId: p.id,
+                      });
+                      if (res.errors?.length) {
+                        toast.error(
+                          (res.errors[0] as { message?: string })?.message ??
+                            'Failed to remove project',
+                        );
+                      } else {
+                        toast.success(`Removed ${p.name}`);
+                      }
+                    }}
+                    title={`Remove ${p.name} from this initiative`}
+                    type="button"
                   >
-                    <span
-                      className="inline-block h-2 w-2 rounded-full"
-                      style={{ backgroundColor: p.color }}
-                    />
-                    <span className="flex-1">{p.name}</span>
-                    <span className="text-zinc-400">{Math.round(p.progress * 100)}%</span>
-                    <button
-                      className="text-zinc-400 hover:text-red-500"
-                      onClick={async () => {
-                        const res = await gql(INITIATIVE_REMOVE_PROJECT_MUTATION, {
-                          initiativeId: initiative.id,
-                          projectId: p.id,
-                        });
-                        if (res.errors?.length) {
-                          toast.error(
-                            (res.errors[0] as { message?: string })?.message ??
-                              'Failed to remove project',
-                          );
-                        } else {
-                          toast.success(`Removed ${p.name}`);
-                        }
-                      }}
-                      title={`Remove ${p.name} from this initiative`}
-                      type="button"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ) : null,
-              )}
+                    ×
+                  </button>
+                </div>
+              ))}
             </div>
           )}
           <div className="mt-3 flex gap-1">

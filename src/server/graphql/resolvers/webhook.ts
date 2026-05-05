@@ -1,27 +1,23 @@
 import { GraphQLError } from 'graphql';
 import type { Webhook } from '../../../generated/prisma';
 import { requireAuth, requireOrgRole } from '../../middleware/auth';
-import type { WebhookCreateInput, WebhookUpdateInput } from '../../services/webhook.service';
+import {
+  WEBHOOK_EVENTS,
+  type WebhookCreateInput,
+  type WebhookUpdateInput,
+} from '../../services/webhook.service';
 import type { GraphQLContext } from '../context';
+import { mapServiceError } from '../types/errors';
 
-function mapWebhookError(err: unknown): never {
-  const error = err as Error;
-  switch (error.name) {
-    case 'WebhookNotFoundError':
-      throw new GraphQLError(error.message, {
-        extensions: { code: 'NOT_FOUND' },
-      });
-    case 'WebhookInvalidUrlError':
-    case 'WebhookPrivateUrlError':
-    case 'WebhookInvalidEventError':
-    case 'WebhookNoEventsError':
-      throw new GraphQLError(error.message, {
-        extensions: { code: 'BAD_USER_INPUT' },
-      });
-    default:
-      throw err;
-  }
-}
+const WEBHOOK_ERROR_MAP = {
+  BAD_USER_INPUT: [
+    'WebhookInvalidUrlError',
+    'WebhookPrivateUrlError',
+    'WebhookInvalidEventError',
+    'WebhookNoEventsError',
+  ],
+  NOT_FOUND: ['WebhookNotFoundError'],
+} as const;
 
 /**
  * Webhook management is restricted to org owners and admins. The signing
@@ -53,7 +49,7 @@ export const webhookResolvers = {
       }
 
       const webhook = await ctx.services.webhook.archive(id);
-      return { lastSyncId: '0', success: true, webhook };
+      return { success: true, webhook };
     },
 
     webhookCreate: async (
@@ -65,9 +61,9 @@ export const webhookResolvers = {
 
       try {
         const webhook = await ctx.services.webhook.create(auth.orgId, auth.userId, input);
-        return { lastSyncId: '0', success: true, webhook };
+        return { success: true, webhook };
       } catch (err) {
-        mapWebhookError(err);
+        mapServiceError(err, WEBHOOK_ERROR_MAP);
       }
     },
 
@@ -82,7 +78,7 @@ export const webhookResolvers = {
       }
 
       await ctx.services.webhook.delete(id);
-      return { lastSyncId: '0', success: true };
+      return { success: true };
     },
 
     webhookRotateSecret: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
@@ -96,7 +92,7 @@ export const webhookResolvers = {
       }
 
       const webhook = await ctx.services.webhook.rotateSecret(id);
-      return { lastSyncId: '0', success: true, webhook };
+      return { success: true, webhook };
     },
 
     webhookUpdate: async (
@@ -115,9 +111,9 @@ export const webhookResolvers = {
 
       try {
         const webhook = await ctx.services.webhook.update(id, input);
-        return { lastSyncId: '0', success: true, webhook };
+        return { success: true, webhook };
       } catch (err) {
-        mapWebhookError(err);
+        mapServiceError(err, WEBHOOK_ERROR_MAP);
       }
     },
   },
@@ -151,13 +147,10 @@ export const webhookResolvers = {
       return ctx.services.webhook.listDeliveries(webhookId, limit ?? 50);
     },
 
+    // Admin-gated to match the rest of the webhook surface — the event
+    // list isn't sensitive but consistency keeps role-checks predictable.
     webhookEvents: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
-      requireAuth(ctx);
-      // Same admin gate as the rest of the webhook surface — keeps the
-      // resolver consistent and ensures only admins can enumerate the
-      // event surface (matters if events ever encode internal structure).
       await requireOrgAdmin(ctx);
-      const { WEBHOOK_EVENTS } = await import('../../services/webhook.service');
       return [...WEBHOOK_EVENTS];
     },
 

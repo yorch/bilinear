@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { Project, ProjectUpdate } from '../../../generated/prisma';
+import { logger } from '../../lib/logger';
 import { requireAuth } from '../../middleware/auth';
 import type {
   ProjectCreateInput,
@@ -170,7 +171,7 @@ export const projectResolvers = {
       );
       void ctx.services.webhook
         .dispatchEvent(ctx.orgId, 'project.created', project)
-        .catch(() => {});
+        .catch(err => logger.error({ err }, 'webhook dispatch failed: project.created'));
       return { lastSyncId: sync.id.toString(), project, success: true };
     },
 
@@ -388,7 +389,7 @@ export const projectResolvers = {
       let sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Project', id, project);
       void ctx.services.webhook
         .dispatchEvent(ctx.orgId, 'project.updated', project)
-        .catch(() => {});
+        .catch(err => logger.error({ err }, 'webhook dispatch failed: project.updated'));
 
       // Project progress drives initiative roll-up — recompute every linked
       // initiative whenever a project's progress, status, or archive state

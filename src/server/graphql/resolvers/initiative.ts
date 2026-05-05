@@ -1,28 +1,18 @@
 import { GraphQLError } from 'graphql';
 import type { Initiative } from '../../../generated/prisma';
+import { logger } from '../../lib/logger';
 import { requireAuth } from '../../middleware/auth';
 import type {
   InitiativeCreateInput,
   InitiativeUpdateInput,
 } from '../../services/initiative.service';
 import type { GraphQLContext } from '../context';
+import { mapServiceError } from '../types/errors';
 
-function mapInitiativeError(err: unknown): never {
-  const error = err as Error;
-  switch (error.name) {
-    case 'InitiativeNotFoundError':
-      throw new GraphQLError(error.message, {
-        extensions: { code: 'NOT_FOUND' },
-      });
-    case 'InitiativeInvalidStatusError':
-    case 'InitiativeProjectNotFoundError':
-      throw new GraphQLError(error.message, {
-        extensions: { code: 'BAD_USER_INPUT' },
-      });
-    default:
-      throw err;
-  }
-}
+const INITIATIVE_ERROR_MAP = {
+  BAD_USER_INPUT: ['InitiativeInvalidStatusError', 'InitiativeProjectNotFoundError'],
+  NOT_FOUND: ['InitiativeNotFoundError'],
+} as const;
 
 export const initiativeResolvers = {
   Initiative: {
@@ -135,10 +125,10 @@ export const initiativeResolvers = {
         }
         void ctx.services.webhook
           .dispatchEvent(ctx.orgId, 'initiative.created', initiative)
-          .catch(() => {});
+          .catch(err => logger.error({ err }, 'webhook dispatch failed: initiative.created'));
         return { initiative, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        mapInitiativeError(err);
+        mapServiceError(err, INITIATIVE_ERROR_MAP);
       }
     },
 
@@ -219,10 +209,10 @@ export const initiativeResolvers = {
         );
         void ctx.services.webhook
           .dispatchEvent(ctx.orgId, 'initiative.updated', initiative)
-          .catch(() => {});
+          .catch(err => logger.error({ err }, 'webhook dispatch failed: initiative.updated'));
         return { initiative, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        mapInitiativeError(err);
+        mapServiceError(err, INITIATIVE_ERROR_MAP);
       }
     },
   },

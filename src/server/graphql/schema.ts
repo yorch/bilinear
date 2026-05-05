@@ -1097,10 +1097,18 @@ export const typeDefs = `
     archivedAt: DateTime
   }
 
+  """
+  Webhook mutations don't emit SyncActions (webhooks are admin-only and
+  not mirrored into the org-wide sync stream), so these payloads omit
+  the lastSyncId field that other mutation results carry.
+  """
   type WebhookPayload {
     success: Boolean!
     webhook: Webhook
-    lastSyncId: String!
+  }
+
+  type WebhookDeletePayload {
+    success: Boolean!
   }
 
   type WebhookDelivery {
@@ -1340,7 +1348,7 @@ export const typeDefs = `
     webhookCreate(input: WebhookCreateInput!): WebhookPayload!
     webhookUpdate(id: ID!, input: WebhookUpdateInput!): WebhookPayload!
     webhookArchive(id: ID!): WebhookPayload!
-    webhookDelete(id: ID!): DeletePayload!
+    webhookDelete(id: ID!): WebhookDeletePayload!
     webhookRotateSecret(id: ID!): WebhookPayload!
   }
 `;

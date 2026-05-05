@@ -306,7 +306,7 @@ export default function WebhooksSettingsPage() {
                     <span className="text-zinc-500 dark:text-zinc-400">Signing secret:</span>
                     {revealedSecrets.has(hook.id) ? (
                       <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs dark:bg-zinc-800">
-                        {hook.signingSecret ?? <em>hidden</em>}
+                        {hook.signingSecret ?? '(hidden — non-admin)'}
                       </code>
                     ) : (
                       <button

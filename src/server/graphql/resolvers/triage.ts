@@ -1,32 +1,20 @@
 import { GraphQLError } from 'graphql';
 import { requireAuth, requireTeamMember } from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
+import { mapServiceError } from '../types/errors';
 
-/**
- * Map a triage service error to a GraphQL error. Falls through to rethrow
- * unrecognized errors so unexpected failures still surface as 500s.
- */
-function mapTriageError(err: unknown): never {
-  const error = err as Error;
-  switch (error.name) {
-    case 'TriageIssueNotFoundError':
-      throw new GraphQLError(error.message, {
-        extensions: { code: 'NOT_FOUND' },
-      });
-    case 'TriageNotEnabledError':
-    case 'TriageNotInQueueError':
-    case 'TriageMissingTargetStateError':
-    case 'TriageDuplicateSelfError':
-    case 'TriageCrossOrgError':
-    case 'TriageSnoozeInvalidDateError':
-    case 'TriageInvalidTargetStateError':
-      throw new GraphQLError(error.message, {
-        extensions: { code: 'BAD_USER_INPUT' },
-      });
-    default:
-      throw err;
-  }
-}
+const TRIAGE_ERROR_MAP = {
+  BAD_USER_INPUT: [
+    'TriageNotEnabledError',
+    'TriageNotInQueueError',
+    'TriageMissingTargetStateError',
+    'TriageDuplicateSelfError',
+    'TriageCrossOrgError',
+    'TriageSnoozeInvalidDateError',
+    'TriageInvalidTargetStateError',
+  ],
+  NOT_FOUND: ['TriageIssueNotFoundError'],
+} as const;
 
 export const triageResolvers = {
   Mutation: {
@@ -67,7 +55,7 @@ export const triageResolvers = {
         );
         return { issue: updated, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        mapTriageError(err);
+        mapServiceError(err, TRIAGE_ERROR_MAP);
       }
     },
 
@@ -97,7 +85,7 @@ export const triageResolvers = {
         );
         return { issue: updated, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        mapTriageError(err);
+        mapServiceError(err, TRIAGE_ERROR_MAP);
       }
     },
 
@@ -140,7 +128,7 @@ export const triageResolvers = {
         );
         return { issue: updated, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        mapTriageError(err);
+        mapServiceError(err, TRIAGE_ERROR_MAP);
       }
     },
 
@@ -170,7 +158,7 @@ export const triageResolvers = {
         );
         return { issue: updated, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        mapTriageError(err);
+        mapServiceError(err, TRIAGE_ERROR_MAP);
       }
     },
   },

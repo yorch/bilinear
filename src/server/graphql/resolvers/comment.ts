@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { Comment, CommentReaction } from '../../../generated/prisma';
+import { logger } from '../../lib/logger';
 import { requireAuth, requireTeamMember } from '../../middleware/auth';
 import type { CommentCreateInput, CommentUpdateInput } from '../../services/comment.service';
 import type { GraphQLContext } from '../context';
@@ -91,7 +92,7 @@ export const commentResolvers = {
       // Webhook fan-out — fire-and-forget, scoped to the issue's team.
       void ctx.services.webhook
         .dispatchEvent(ctx.orgId, 'comment.created', comment, issue.teamId)
-        .catch(() => {});
+        .catch(err => logger.error({ err }, 'webhook dispatch failed: comment.created'));
 
       return { comment, lastSyncId: sync.id.toString(), success: true };
     },
@@ -202,7 +203,7 @@ export const commentResolvers = {
         if (issue) {
           void ctx.services.webhook
             .dispatchEvent(ctx.orgId, 'comment.updated', comment, issue.teamId)
-            .catch(() => {});
+            .catch(err => logger.error({ err }, 'webhook dispatch failed: comment.updated'));
         }
         return { comment, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
