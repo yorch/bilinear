@@ -76,11 +76,40 @@ export class IssueService {
       const number = team.issueCount;
       const identifier = `${team.key}-${number}`;
 
-      // If no stateId supplied, fall back to team's defaultIssueStateId
-      const stateId = input.stateId ?? team.defaultIssueStateId;
+      // Caller-supplied stateId must belong to the same team — otherwise
+      // a member of team A could create an issue in team A but with team
+      // B's workflow state, breaking team isolation. Mirrors the same
+      // check the triage service applies on accept.
+      if (input.stateId) {
+        const state = await tx.workflowState.findFirst({
+          select: { teamId: true },
+          where: { archivedAt: null, id: input.stateId },
+        });
+        if (!state || state.teamId !== input.teamId) {
+          throw new IssueInvalidStateError();
+        }
+      }
+
+      // Triage routing: issues created on a triage-enabled team without an
+      // explicit stateId go to the team's triage state, not the default. The
+      // triage state was seeded at team creation (see TeamService) and lives
+      // ahead of the default backlog state in `position`.
+      let triageStateId: string | null = null;
+      if (!input.stateId && team.triageEnabled) {
+        const triageState = await tx.workflowState.findFirst({
+          select: { id: true },
+          where: { archivedAt: null, teamId: input.teamId, type: 'triage' },
+        });
+        triageStateId = triageState?.id ?? null;
+      }
+
+      // If no stateId supplied, fall back to triage (if applicable) then to
+      // the team's defaultIssueStateId.
+      const stateId = input.stateId ?? triageStateId ?? team.defaultIssueStateId;
       if (!stateId) {
         throw new IssueStateRequiredError();
       }
+      const enteringTriage = stateId === triageStateId;
 
       // Property inheritance: a child created from a parent inherits the
       // parent's project and cycle when the caller does not supply them.
@@ -134,6 +163,7 @@ export class IssueService {
           projectId: inheritedProjectId,
           projectMilestoneId: inheritedProjectMilestoneId,
           sortOrder: input.sortOrder ?? 0,
+          startedTriageAt: enteringTriage ? new Date() : undefined,
           stateId,
           teamId: input.teamId,
           title: input.title,
@@ -496,5 +526,12 @@ export class IssueStateRequiredError extends Error {
   constructor() {
     super('No workflow state found for the team. Please set a default state.');
     this.name = 'IssueStateRequiredError';
+  }
+}
+
+export class IssueInvalidStateError extends Error {
+  constructor() {
+    super('Workflow state must belong to the same team as the issue');
+    this.name = 'IssueInvalidStateError';
   }
 }

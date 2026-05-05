@@ -15,6 +15,8 @@ import Redis from 'ioredis';
 import { type WebSocket, WebSocketServer } from 'ws';
 import { verifyAccessToken } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
+import { prisma } from '@/server/lib/prisma';
+import { WebhookService } from '@/server/services/webhook.service';
 import { ConnectionManager } from './connection-manager';
 
 const log = childLogger({ module: 'ws' });
@@ -22,6 +24,11 @@ const log = childLogger({ module: 'ws' });
 const PORT = Number(process.env.WS_PORT ?? 3001);
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
 const PING_INTERVAL_MS = 30_000;
+// Run the webhook delivery scheduler every 30s. It picks up any pending
+// deliveries whose nextAttemptAt has passed and retries them. Co-locating
+// with the WS server (instead of the Next request path) keeps retries
+// running between requests on serverless deployments.
+const WEBHOOK_RETRY_INTERVAL_MS = 30_000;
 
 // verifyAccessToken() reads JWT_SECRET via getSecret() and throws if unset
 if (!process.env.JWT_SECRET) {
@@ -169,8 +176,20 @@ httpServer.listen(PORT, () => {
   log.info({ port: PORT }, 'WebSocket server listening');
 });
 
+// ─── Webhook retry scheduler ────────────────────────────────────────────────
+// Periodically drain any due `pending` deliveries. The first attempt for
+// each event runs inline in the request path; this loop only services
+// retries from earlier failures.
+const webhookService = new WebhookService(prisma);
+const webhookTimer = setInterval(() => {
+  webhookService.processDuePending().catch((err: Error) => {
+    log.error({ err }, 'Webhook retry sweep failed');
+  });
+}, WEBHOOK_RETRY_INTERVAL_MS);
+
 // Graceful shutdown
 process.on('SIGTERM', () => {
+  clearInterval(webhookTimer);
   wss.close();
   redisSubscriber.disconnect();
   httpServer.close();

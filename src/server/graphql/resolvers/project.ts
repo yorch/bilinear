@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { Project, ProjectUpdate } from '../../../generated/prisma';
+import { logger } from '../../lib/logger';
 import { requireAuth } from '../../middleware/auth';
 import type {
   ProjectCreateInput,
@@ -114,7 +115,24 @@ export const projectResolvers = {
       }
 
       const project = await ctx.services.project.archive(id);
-      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'A', 'Project', id, project);
+      let sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'A', 'Project', id, project);
+      // Archiving a project effectively removes it from initiative
+      // progress calculations (recomputeProgress filters out archived
+      // projects). Update each linked initiative so the rollup stays
+      // current.
+      const initiatives = await ctx.services.initiative.getInitiativesForProject(id);
+      for (const init of initiatives) {
+        const updated = await ctx.services.initiative.recomputeProgress(init.id);
+        if (updated) {
+          sync = await ctx.services.sync.createSyncAction(
+            ctx.orgId,
+            'U',
+            'Initiative',
+            init.id,
+            updated,
+          );
+        }
+      }
       return { lastSyncId: sync.id.toString(), project, success: true };
     },
     projectCreate: async (
@@ -151,6 +169,9 @@ export const projectResolvers = {
         project.id,
         project,
       );
+      void ctx.services.webhook
+        .dispatchEvent(ctx.orgId, 'project.created', project)
+        .catch(err => logger.error({ err }, 'webhook dispatch failed: project.created'));
       return { lastSyncId: sync.id.toString(), project, success: true };
     },
 
@@ -164,8 +185,28 @@ export const projectResolvers = {
         });
       }
 
+      // ProjectService.delete is a soft-delete (sets archivedAt + trashed),
+      // so the InitiativeProject rows still exist in Postgres. We must NOT
+      // emit `'D' InitiativeProject` sync actions — clients that drop the
+      // rows would see them reappear on next bootstrap. recomputeProgress
+      // already filters archived+trashed projects out of the rollup, and
+      // the project store's `.all` getter hides them from list views.
+      const initiatives = await ctx.services.initiative.getInitiativesForProject(id);
+
       await ctx.services.project.delete(id);
-      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Project', id, null);
+      let sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Project', id, null);
+      for (const init of initiatives) {
+        const updated = await ctx.services.initiative.recomputeProgress(init.id);
+        if (updated) {
+          sync = await ctx.services.sync.createSyncAction(
+            ctx.orgId,
+            'U',
+            'Initiative',
+            init.id,
+            updated,
+          );
+        }
+      }
       return { lastSyncId: sync.id.toString(), success: true };
     },
 
@@ -335,7 +376,30 @@ export const projectResolvers = {
       }
 
       const project = await ctx.services.project.update(id, input);
-      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Project', id, project);
+      let sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Project', id, project);
+      void ctx.services.webhook
+        .dispatchEvent(ctx.orgId, 'project.updated', project)
+        .catch(err => logger.error({ err }, 'webhook dispatch failed: project.updated'));
+
+      // Project progress drives initiative roll-up — recompute every linked
+      // initiative whenever a project's progress, status, or archive state
+      // changes. Each recomputed initiative gets its own SyncAction so
+      // remote clients see the updated progress without a full bootstrap.
+      if (existing.progress !== project.progress || existing.statusType !== project.statusType) {
+        const initiatives = await ctx.services.initiative.getInitiativesForProject(id);
+        for (const init of initiatives) {
+          const updated = await ctx.services.initiative.recomputeProgress(init.id);
+          if (updated) {
+            sync = await ctx.services.sync.createSyncAction(
+              ctx.orgId,
+              'U',
+              'Initiative',
+              init.id,
+              updated,
+            );
+          }
+        }
+      }
       return { lastSyncId: sync.id.toString(), project, success: true };
     },
 

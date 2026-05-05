@@ -1028,6 +1028,8 @@ tests/
 
 When adding a new entity to the real-time sync pipeline, touch five files in order. `ProjectUpdate` (Sprint 13-14) is the canonical example.
 
+> **Opt-out exception:** admin-only entities (e.g. `Webhook`, `WebhookDelivery`) are deliberately *not* synced. Only org admins ever read them, so mirroring rows into every member's IndexedDB would leak signing secrets and waste bandwidth. Instead, the settings page fetches via GraphQL on demand. See PATTERNS §40 for the webhook flow.
+
 ### Step 1 — Client type (`src/lib/db.ts`)
 
 Add a `DB*` interface that mirrors the Prisma model with JS-friendly types (Date → string, BigInt → string):
@@ -1251,3 +1253,98 @@ The `TipTapEditor` component (`src/components/editor/tiptap-editor.tsx`) is used
 - The `Document` editor (`/documents/[id]`) reuses the same extension set so server-side markdown rendering is identical
 - Still planned: @mentions for issues / projects (users only today), image drag-and-drop, YJS / Hocuspocus collab
 - Reference: `src/components/editor/tiptap-editor.tsx`, `src/components/editor/slash-commands.ts`, `src/components/editor/embed-node.tsx`, `src/components/editor/mermaid-node.tsx`
+
+---
+
+## 38. Triage Workflow Pattern (2026-05-05)
+
+Triage-enabled teams have a `triage`-type workflow state seeded at team creation (see `TeamService.seedDefaultStates`). New issues created on a triage-enabled team without an explicit `stateId` are auto-routed there (see `IssueService.create`).
+
+```typescript
+// IssueService.create — triage routing
+let triageStateId: string | null = null;
+if (!input.stateId && team.triageEnabled) {
+  const triageState = await tx.workflowState.findFirst({
+    where: { archivedAt: null, teamId: input.teamId, type: 'triage' },
+  });
+  triageStateId = triageState?.id ?? null;
+}
+const stateId = input.stateId ?? triageStateId ?? team.defaultIssueStateId;
+const enteringTriage = stateId === triageStateId;
+// ...stamp `startedTriageAt` if enteringTriage.
+```
+
+The `TriageService` exposes four mutations: `accept`, `decline`, `markDuplicate`, `snooze`. All four use **atomic CAS** via `updateMany({ where: { id, stateId: triageState.id } })` so two concurrent operators can't both succeed and emit conflicting SyncActions.
+
+| Action          | Effect                                                                                |
+| --------------- | ------------------------------------------------------------------------------------- |
+| `accept`        | Move to a target workflow state (must belong to the same team), stamp `triagedAt`     |
+| `decline`       | Move to the team's first `canceled` state, stamp `canceledAt` + `triagedAt`           |
+| `markDuplicate` | Create a `duplicate` IssueRelation + cancel (idempotent via `createMany skipDuplicates`) |
+| `snooze`        | Set `snoozedUntilAt`; queue filter excludes snoozed-and-future issues                 |
+
+**UI optimistic updates.** The triage page (`/team/[key]/triage`) snapshots the issue, applies the optimistic state change, calls the mutation, and rolls back on error (with a `toast` from `@/lib/toast`). Decline/snooze hide the row by setting a synthetic `snoozedUntilAt` until the WS sync replaces it with the real cancel.
+
+Reference: `src/server/services/triage.service.ts`, `src/server/graphql/resolvers/triage.ts`, `src/app/(workspace)/[workspace]/team/[key]/triage/page.tsx`.
+
+---
+
+## 39. Initiative Roll-up Pattern (2026-05-05)
+
+`Initiative` is a top-level strategic object that links m:n to `Project`. `Initiative.progress` is a cached float (0..1) computed as the mean progress of associated non-archived/non-trashed projects.
+
+**Recompute fan-out.** Project mutations that affect roll-up (`projectArchive`, `projectDelete`, and any `projectUpdate` whose `progress` or `statusType` changed) call `initiative.recomputeProgress(initId)` for every linked initiative AND emit a follow-up `'U' Initiative` SyncAction so collaborators see the new progress in real time.
+
+```typescript
+// project.ts resolver — recompute hook
+if (existing.progress !== project.progress || existing.statusType !== project.statusType) {
+  const initiatives = await ctx.services.initiative.getInitiativesForProject(id);
+  for (const init of initiatives) {
+    const updated = await ctx.services.initiative.recomputeProgress(init.id);
+    if (updated) {
+      sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Initiative', init.id, updated);
+    }
+  }
+}
+```
+
+**Status transitions** clear the *other* lifecycle timestamps so a revert doesn't leave a stale terminal marker:
+
+- `→ planned` clears `startedAt`, `completedAt`, `canceledAt`
+- `→ active` stamps `startedAt`, clears `completedAt` + `canceledAt`
+- `→ completed` stamps `completedAt`, clears `canceledAt`
+- `→ canceled` stamps `canceledAt`, clears `completedAt`
+
+**Two-action emission.** `initiativeAddProject`/`initiativeRemoveProject` emit BOTH an `InitiativeProject` action (link row) and an `Initiative` `'U'` action (recomputed progress) — without the link action other clients see the progress change but no project membership.
+
+Reference: `src/server/services/initiative.service.ts`, `src/server/graphql/resolvers/initiative.ts`, `src/server/graphql/resolvers/project.ts`, `src/stores/initiative-store.ts`.
+
+---
+
+## 40. Webhook Dispatch Pattern (2026-05-05)
+
+Outbound HTTP webhooks live entirely on the server — they're admin-only and not synced to clients. Subscriptions are CRUDed through the GraphQL admin surface; events are dispatched via `WebhookService.dispatchEvent(orgId, event, data, teamId?)` from inside resolvers, AFTER the SyncAction is written so the system-of-record is the truth before the fan-out fires.
+
+```typescript
+// issueCreate resolver
+const issue = await ctx.services.issue.create(ctx.orgId, ctx.userId, input);
+const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'I', 'Issue', issue.id, issue);
+void ctx.services.webhook
+  .dispatchEvent(ctx.orgId, 'issue.created', issue, issue.teamId)
+  .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.created'));
+return { issue, lastSyncId: sync.id.toString(), success: true };
+```
+
+**Always `void` the dispatch** — never `await`. A slow subscriber endpoint must not block the mutation response.
+
+**Signing.** HMAC SHA-256 over the JSON body with the per-webhook `signing_secret`. Header: `X-Bilinear-Signature: sha256=<hex>`. Receivers verify with the helper `verifySignature(rawBody, secret, headerValue)` exported from `webhook.service.ts`.
+
+**SSRF protection** is two-layered: `validateUrl` rejects private/loopback hosts at create time (covers decimal/octal/hex IP encodings, IPv4-mapped IPv6, RFC 1918, link-local, `.local`/`.internal` suffixes); `assertSafeUrl` re-resolves the hostname at delivery time to defeat DNS rebinding. Bypass requires explicit `ALLOW_PRIVATE_WEBHOOK_URLS=1` (default-deny in all environments).
+
+**Concurrency-safe retries.** `processDelivery` claims a row via `updateMany({ where: { id, status: 'pending' } })` before sending; the second runner sees `count=0` and bails. Auto-disable (after `consecutive_failures >= 20`) uses an atomic conditional update so a successful delivery cannot be raced into a disabled state.
+
+**Background sweep.** The WS server's `setInterval(processDuePending, 30s)` drains `status='pending', next_attempt_at <= now()` rows. Backoff schedule: 30s → 2m → 10m → 30m → 2h, capped at 5 attempts.
+
+**Field-level secret guard.** `Webhook.signingSecret` has a field-level resolver that re-checks org admin role; non-admins get `null` even if some future query path returns the row.
+
+Reference: `src/server/services/webhook.service.ts`, `src/server/graphql/resolvers/webhook.ts`, `src/server/ws/index.ts` (retry tick).

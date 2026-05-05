@@ -653,39 +653,50 @@ ALTER TABLE issues ADD CONSTRAINT fk_issues_cycle
 `organization_id` is denormalized onto the cycle so bootstrap / delta sync can
 scope by org without a join through teams.
 
-### 2.13 Initiatives 📋
+### 2.13 Initiatives ✅
 
-> **Not yet in Prisma.** `Organization.initiativesEnabled` is a feature flag only.
-> This design remains the reference for when the sprint lands.
+> **Shipped (2026-05-05).** Top-level strategic objects that group projects
+> toward multi-quarter goals. `Initiative.progress` is a cached roll-up
+> computed as the mean of associated projects' progress; recompute fires
+> on project create/archive/delete and on project status/progress changes.
+> The actual schema is flatter than the early sketch — no `parent_id` (no
+> sub-initiatives yet) and no `slug_id` (lookups by id only).
 
 ```sql
 CREATE TABLE initiatives (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID NOT NULL REFERENCES organizations(id),
-    name            VARCHAR(255) NOT NULL,
-    slug_id         VARCHAR(255) NOT NULL UNIQUE,
-    description     TEXT,
-    content         TEXT,
-    icon            VARCHAR(255),
-    color           VARCHAR(7),
+    id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id        UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    name                   VARCHAR(255) NOT NULL,
+    description            TEXT,
+    icon                   VARCHAR(255),
+    color                  VARCHAR(7) NOT NULL DEFAULT '#6366f1',
 
-    status          VARCHAR(20) NOT NULL DEFAULT 'planned',  -- 'planned', 'active', 'completed'
-    health          VARCHAR(20),
-    target_date     DATE,
+    status                 VARCHAR(20) NOT NULL DEFAULT 'planned',  -- 'planned' | 'active' | 'completed' | 'canceled'
+    priority               SMALLINT NOT NULL DEFAULT 0,
+    priority_sort_order    FLOAT NOT NULL DEFAULT 0,
+    sort_order             FLOAT NOT NULL DEFAULT 0,
+
+    target_date            DATE,
+    start_date             DATE,
+    start_date_resolution  VARCHAR(20),
     target_date_resolution VARCHAR(20),
 
-    owner_id        UUID REFERENCES users(id),
-    creator_id      UUID REFERENCES users(id),
+    owner_id               UUID REFERENCES users(id) ON DELETE SET NULL,
+    creator_id             UUID REFERENCES users(id) ON DELETE SET NULL,
 
-    -- Hierarchy
-    parent_id       UUID REFERENCES initiatives(id) ON DELETE SET NULL,
+    progress               FLOAT NOT NULL DEFAULT 0,  -- 0..1, recomputed from linked projects
 
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    archived_at     TIMESTAMPTZ
+    started_at             TIMESTAMPTZ,
+    completed_at           TIMESTAMPTZ,
+    canceled_at            TIMESTAMPTZ,
+
+    created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at             TIMESTAMPTZ NOT NULL,
+    archived_at            TIMESTAMPTZ
 );
-CREATE INDEX idx_initiatives_org ON initiatives(organization_id);
-CREATE INDEX idx_initiatives_parent ON initiatives(parent_id);
+CREATE INDEX idx_initiatives_organization_id ON initiatives(organization_id);
+CREATE INDEX idx_initiatives_status ON initiatives(status);
+CREATE INDEX idx_initiatives_owner_id ON initiatives(owner_id);
 
 -- Initiatives <-> Projects (many-to-many)
 CREATE TABLE initiative_projects (
@@ -697,6 +708,13 @@ CREATE TABLE initiative_projects (
     UNIQUE(initiative_id, project_id)
 );
 ```
+
+**Sync action coverage:** `initiativeAddProject`/`initiativeRemoveProject`
+emit BOTH an `InitiativeProject` action (for the link row) and an
+`Initiative` `'U'` action (for the recomputed progress). `projectArchive`,
+`projectDelete`, and `projectUpdate` emit a follow-up `Initiative` `'U'`
+for every linked initiative whose progress shifted, so collaborators see
+roll-up changes in real time without a bootstrap.
 
 ### 2.14 Attachments 📋
 
@@ -935,30 +953,84 @@ CREATE INDEX idx_issue_templates_creator ON issue_templates(creator_id);
 > A generic polymorphic `templates` table (with `type`, `has_form_fields`, etc.)
 > remains a design target for when project / document templates ship.
 
-### 2.21 Webhooks 📋
+### 2.21 Webhooks ✅
 
-> **Not yet in Prisma.** Outbound webhooks with HMAC signing are planned.
+> **Shipped (2026-05-05).** Outbound HTTP webhooks with HMAC SHA-256
+> signing. Each enabled subscription that lists a fired event in its
+> `events` array gets a `webhook_deliveries` row; the WS server's
+> 30-second sweep retries any pending deliveries whose `next_attempt_at`
+> has passed (exponential backoff: 30s, 2m, 10m, 30m, 2h; max 5 attempts).
+> A webhook auto-disables after `consecutive_failures >= 20`.
 
 ```sql
 CREATE TABLE webhooks (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID NOT NULL REFERENCES organizations(id),
-    team_id         UUID REFERENCES teams(id),
-    url             TEXT NOT NULL,
-    label           VARCHAR(255),
-    secret          TEXT NOT NULL,  -- HMAC signing key
-    enabled         BOOLEAN NOT NULL DEFAULT true,
-    all_public_teams BOOLEAN NOT NULL DEFAULT false,
-    resource_types  TEXT[] NOT NULL DEFAULT '{}',
+    id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id      UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    name                 VARCHAR(255) NOT NULL,
+    url                  VARCHAR(2000) NOT NULL,
+    events               TEXT[] NOT NULL DEFAULT ARRAY[]::text[],
+    signing_secret       TEXT NOT NULL,
+    enabled              BOOLEAN NOT NULL DEFAULT true,
+    team_id              UUID,  -- null = org-wide; otherwise scoped to one team
 
-    creator_id      UUID REFERENCES users(id),
+    last_delivery_at     TIMESTAMPTZ,
+    last_success_at      TIMESTAMPTZ,
+    consecutive_failures INTEGER NOT NULL DEFAULT 0,
 
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    archived_at     TIMESTAMPTZ
+    created_by_id        UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at           TIMESTAMPTZ NOT NULL,
+    archived_at          TIMESTAMPTZ
 );
-CREATE INDEX idx_webhooks_org ON webhooks(organization_id);
+CREATE INDEX idx_webhooks_organization_id ON webhooks(organization_id);
+CREATE INDEX idx_webhooks_organization_id_enabled ON webhooks(organization_id, enabled);
+
+CREATE TABLE webhook_deliveries (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    webhook_id      UUID NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
+    event           VARCHAR(50) NOT NULL,
+    payload         JSONB NOT NULL,
+    status          VARCHAR(10) NOT NULL DEFAULT 'pending',  -- 'pending' | 'success' | 'failed'
+    attempts        INTEGER NOT NULL DEFAULT 0,
+    response_status INTEGER,
+    response_body   TEXT,
+    error_message   TEXT,
+    next_attempt_at TIMESTAMPTZ,
+    delivered_at    TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX idx_webhook_deliveries_webhook_id_created_at
+  ON webhook_deliveries(webhook_id, created_at);
+CREATE INDEX idx_webhook_deliveries_status_next_attempt_at
+  ON webhook_deliveries(status, next_attempt_at);
 ```
+
+**Signing.** Body is signed with `HMAC_SHA256(payload, signing_secret)`,
+hex-encoded, sent as `X-Bilinear-Signature: sha256=<hex>`. The receiver
+verifies with `verifySignature` (helper exported from
+`webhook.service.ts`).
+
+**SSRF protection.** Webhook URLs are validated at create time AND
+re-validated against the resolved IP at delivery time (mitigates DNS
+rebinding). Private/loopback ranges are rejected unless
+`ALLOW_PRIVATE_WEBHOOK_URLS=1` is explicitly set.
+
+**Concurrency.** `processDelivery` claims a row via `updateMany` on
+`status='pending'` before sending; concurrent runners (e.g. multiple WS
+replicas) see `count=0` and bail. Auto-disable uses an atomic
+conditional update so a successful delivery cannot be raced into a
+disabled state.
+
+**Webhooks are NOT synced via the org-wide sync stream** — only org
+admins can manage them, so the GraphQL `webhooks` query is fetched on
+demand by the settings page rather than mirrored into IndexedDB.
+
+**Event surface (`WEBHOOK_EVENTS`):**
+`issue.created`, `issue.updated`, `issue.archived`, `issue.deleted`,
+`comment.created`, `comment.updated`, `project.created`,
+`project.updated`, `cycle.created`, `cycle.completed`,
+`initiative.created`, `initiative.updated`.
 
 ### 2.22 Sync Actions (Delta Sync)
 

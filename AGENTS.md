@@ -6,6 +6,12 @@ This file provides guidance to AI Agents when working with code in this reposito
 
 A Linear-style issue tracker built with Next.js 16 (App Router), Apollo Server GraphQL, Prisma 7, PostgreSQL, MobX, and real-time sync via WebSocket + Redis Pub/Sub. Offline-first with Dexie.js (IndexedDB) client cache.
 
+### Recently shipped (2026-05-05)
+
+- **Triage workflow** — inbound issue queue at `/team/[key]/triage` with accept/decline/snooze/duplicate. Issues created on triage-enabled teams default to a `triage`-type workflow state. See PATTERNS.md §38.
+- **Initiatives** — top-level strategic objects above projects, m:n with `Project`. Progress rolls up from linked projects. UI at `/initiatives`. See PATTERNS.md §39.
+- **Webhooks** — outbound HMAC-signed HTTP subscriptions, admin-only at `/settings/webhooks`. Retry sweep runs in the WS server every 30s. See PATTERNS.md §40 and DATABASE_SCHEMA.md §2.21.
+
 ## Commands
 
 | Task                           | Command                                                    |

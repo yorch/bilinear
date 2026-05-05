@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { Cycle } from '../../../generated/prisma';
+import { logger } from '../../lib/logger';
 import { requireAuth, requireTeamMember } from '../../middleware/auth';
 import type { CycleCreateInput, CycleUpdateInput } from '../../services/cycle.service';
 import type { GraphQLContext } from '../context';
@@ -93,6 +94,9 @@ export const cycleResolvers = {
           cycle.id,
           cycle,
         );
+        void ctx.services.webhook
+          .dispatchEvent(ctx.orgId, 'cycle.created', cycle, cycle.teamId)
+          .catch(err => logger.error({ err }, 'webhook dispatch failed: cycle.created'));
         return { cycle, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         const error = err as Error;
@@ -175,6 +179,14 @@ export const cycleResolvers = {
           completedAt: new Date().toISOString(),
           id: cycleId,
         });
+        void ctx.services.webhook
+          .dispatchEvent(
+            ctx.orgId,
+            'cycle.completed',
+            { id: cycleId, movedCount: result.movedCount },
+            existing.teamId,
+          )
+          .catch(err => logger.error({ err }, 'webhook dispatch failed: cycle.completed'));
 
         // Broadcast each moved issue so connected clients update their cycle view
         if (result.movedIssueIds.length > 0) {

@@ -1000,6 +1000,155 @@ export const typeDefs = `
     role: String!
   }
 
+  enum InitiativeStatus {
+    planned
+    active
+    completed
+    canceled
+  }
+
+  type Initiative {
+    id: ID!
+    organizationId: ID!
+    name: String!
+    description: String
+    icon: String
+    color: String!
+    status: InitiativeStatus!
+    priority: Int!
+    sortOrder: Float!
+    targetDate: Date
+    startDate: Date
+    startDateResolution: String
+    targetDateResolution: String
+    progress: Float!
+    ownerId: ID
+    creatorId: ID
+    owner: User
+    creator: User
+    projects: [Project!]!
+    startedAt: DateTime
+    completedAt: DateTime
+    canceledAt: DateTime
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    archivedAt: DateTime
+  }
+
+  type InitiativePayload {
+    success: Boolean!
+    initiative: Initiative
+    lastSyncId: String!
+  }
+
+  input InitiativeCreateInput {
+    id: String
+    name: String!
+    description: String
+    icon: String
+    color: String
+    status: InitiativeStatus
+    priority: Int
+    sortOrder: Float
+    targetDate: Date
+    startDate: Date
+    startDateResolution: String
+    targetDateResolution: String
+    ownerId: String
+    projectIds: [String!]
+  }
+
+  input InitiativeUpdateInput {
+    name: String
+    description: String
+    icon: String
+    color: String
+    status: InitiativeStatus
+    priority: Int
+    prioritySortOrder: Float
+    sortOrder: Float
+    targetDate: Date
+    startDate: Date
+    startDateResolution: String
+    targetDateResolution: String
+    ownerId: String
+  }
+
+  type Webhook {
+    id: ID!
+    organizationId: ID!
+    name: String!
+    url: String!
+    events: [String!]!
+    """
+    HMAC-SHA256 signing secret used to compute the X-Bilinear-Signature
+    header. Returned only to org owners/admins (the field-level resolver
+    returns null for other callers as defense in depth, even though
+    webhook queries themselves require admin role).
+    """
+    signingSecret: String
+    enabled: Boolean!
+    teamId: ID
+    lastDeliveryAt: DateTime
+    lastSuccessAt: DateTime
+    consecutiveFailures: Int!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    archivedAt: DateTime
+  }
+
+  """
+  Webhook mutations don't emit SyncActions (webhooks are admin-only and
+  not mirrored into the org-wide sync stream), so these payloads omit
+  the lastSyncId field that other mutation results carry.
+  """
+  type WebhookPayload {
+    success: Boolean!
+    webhook: Webhook
+  }
+
+  type WebhookDeletePayload {
+    success: Boolean!
+  }
+
+  type WebhookDelivery {
+    id: ID!
+    webhookId: ID!
+    event: String!
+    status: String!
+    attempts: Int!
+    responseStatus: Int
+    responseBody: String
+    errorMessage: String
+    nextAttemptAt: DateTime
+    deliveredAt: DateTime
+    createdAt: DateTime!
+    updatedAt: DateTime!
+  }
+
+  input WebhookCreateInput {
+    name: String!
+    url: String!
+    events: [String!]!
+    enabled: Boolean
+    teamId: String
+  }
+
+  input WebhookUpdateInput {
+    name: String
+    url: String
+    events: [String!]
+    enabled: Boolean
+    teamId: String
+  }
+
+  input IssueTriageAcceptInput {
+    stateId: String!
+    assigneeId: String
+    priority: Int
+    cycleId: String
+  }
+
   type Query {
     viewer: User!
     organization: Organization!
@@ -1051,6 +1200,17 @@ export const typeDefs = `
     issueFiles(issueId: ID!): [File!]!
     publicRoadmap: PublicRoadmap
     publicRoadmapPage(slug: String!, password: String): PublicRoadmapPage!
+
+    triageQueue(teamId: ID!): [Issue!]!
+    triageQueueCount(teamId: ID!): Int!
+
+    initiative(id: ID!): Initiative!
+    initiatives(includeArchived: Boolean): [Initiative!]!
+
+    webhook(id: ID!): Webhook!
+    webhooks(includeArchived: Boolean): [Webhook!]!
+    webhookDeliveries(webhookId: ID!, limit: Int): [WebhookDelivery!]!
+    webhookEvents: [String!]!
 
     """
     Begin a Google OAuth flow. Returns the consent URL (with
@@ -1172,5 +1332,23 @@ export const typeDefs = `
 
     publicRoadmapUpsert(input: PublicRoadmapUpsertInput!): PublicRoadmapUpsertResult!
     projectSetRoadmapVisible(id: ID!, visible: Boolean!): ProjectMutationResult!
+
+    issueTriageAccept(issueId: ID!, input: IssueTriageAcceptInput!): IssuePayload!
+    issueTriageDecline(issueId: ID!): IssuePayload!
+    issueTriageMarkDuplicate(issueId: ID!, canonicalIssueId: ID!): IssuePayload!
+    issueTriageSnooze(issueId: ID!, until: DateTime!): IssuePayload!
+
+    initiativeCreate(input: InitiativeCreateInput!): InitiativePayload!
+    initiativeUpdate(id: ID!, input: InitiativeUpdateInput!): InitiativePayload!
+    initiativeArchive(id: ID!): InitiativePayload!
+    initiativeDelete(id: ID!): DeletePayload!
+    initiativeAddProject(initiativeId: ID!, projectId: ID!): InitiativePayload!
+    initiativeRemoveProject(initiativeId: ID!, projectId: ID!): InitiativePayload!
+
+    webhookCreate(input: WebhookCreateInput!): WebhookPayload!
+    webhookUpdate(id: ID!, input: WebhookUpdateInput!): WebhookPayload!
+    webhookArchive(id: ID!): WebhookPayload!
+    webhookDelete(id: ID!): WebhookDeletePayload!
+    webhookRotateSecret(id: ID!): WebhookPayload!
   }
 `;
