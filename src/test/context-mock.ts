@@ -1,5 +1,6 @@
 import { createLoaders, type Loaders } from '../server/graphql/loaders';
 import { AuthService } from '../server/services/auth.service';
+import { InitiativeService } from '../server/services/initiative.service';
 import { IssueService } from '../server/services/issue.service';
 import { IssueActivityService } from '../server/services/issue-activity.service';
 import { LabelService } from '../server/services/label.service';
@@ -8,6 +9,7 @@ import { OrganizationService } from '../server/services/organization.service';
 import { SearchService } from '../server/services/search.service';
 import type { SyncActionType } from '../server/services/sync.service';
 import { TeamService } from '../server/services/team.service';
+import { TriageService } from '../server/services/triage.service';
 import { UserService } from '../server/services/user.service';
 import { WorkflowStateService } from '../server/services/workflow-state.service';
 import { TEST_ORG, TEST_USER } from './fixtures';
@@ -26,12 +28,22 @@ class MockSyncService {
   }
 }
 
+// Minimal mock WebhookService — webhooks are fire-and-forget, so the resolver
+// only needs `dispatchEvent` to resolve without throwing. Returning an empty
+// array mirrors the "no subscribers" path.
+class MockWebhookService {
+  async dispatchEvent(_orgId: string, _event: string, _data: object, _teamId?: string | null) {
+    return [];
+  }
+}
+
 export interface MockGraphQLContext {
   loaders: Loaders;
   orgId: string | null;
   prisma: MockPrismaClient;
   services: {
     auth: AuthService;
+    initiative: InitiativeService;
     issue: IssueService;
     issueActivity: IssueActivityService;
     label: LabelService;
@@ -40,7 +52,9 @@ export interface MockGraphQLContext {
     search: SearchService;
     sync: MockSyncService;
     team: TeamService;
+    triage: TriageService;
     user: UserService;
+    webhook: MockWebhookService;
     workflowState: WorkflowStateService;
   };
   userId: string | null;
@@ -58,6 +72,7 @@ export function createMockContext(
     prisma,
     services: {
       auth: new AuthService(prisma as never, userService),
+      initiative: new InitiativeService(prisma as never),
       issue: new IssueService(prisma as never),
       issueActivity: new IssueActivityService(prisma as never),
       label: new LabelService(prisma as never),
@@ -66,7 +81,9 @@ export function createMockContext(
       search: new SearchService(prisma as never),
       sync: new MockSyncService(),
       team: new TeamService(prisma as never),
+      triage: new TriageService(prisma as never),
       user: userService,
+      webhook: new MockWebhookService(),
       workflowState: new WorkflowStateService(prisma as never),
     },
     userId: overrides.userId !== undefined ? overrides.userId : TEST_USER.id,

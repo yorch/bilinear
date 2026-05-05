@@ -82,6 +82,15 @@ export async function GET(req: NextRequest) {
     for (const val of data.customFieldValues) {
       lines.push(`CustomFieldValue=${JSON.stringify(val)}`);
     }
+    for (const doc of data.documents) {
+      lines.push(`Document=${JSON.stringify(doc)}`);
+    }
+    for (const initiative of data.initiatives) {
+      lines.push(`Initiative=${JSON.stringify(initiative)}`);
+    }
+    for (const link of data.initiativeProjects) {
+      lines.push(`InitiativeProject=${JSON.stringify(link)}`);
+    }
 
     lines.push(`_metadata_=${JSON.stringify({ lastSyncId: data.lastSyncId })}`);
 

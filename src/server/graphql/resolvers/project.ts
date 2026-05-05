@@ -114,7 +114,24 @@ export const projectResolvers = {
       }
 
       const project = await ctx.services.project.archive(id);
-      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'A', 'Project', id, project);
+      let sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'A', 'Project', id, project);
+      // Archiving a project effectively removes it from initiative
+      // progress calculations (recomputeProgress filters out archived
+      // projects). Update each linked initiative so the rollup stays
+      // current.
+      const initiatives = await ctx.services.initiative.getInitiativesForProject(id);
+      for (const init of initiatives) {
+        const updated = await ctx.services.initiative.recomputeProgress(init.id);
+        if (updated) {
+          sync = await ctx.services.sync.createSyncAction(
+            ctx.orgId,
+            'U',
+            'Initiative',
+            init.id,
+            updated,
+          );
+        }
+      }
       return { lastSyncId: sync.id.toString(), project, success: true };
     },
     projectCreate: async (
@@ -151,6 +168,9 @@ export const projectResolvers = {
         project.id,
         project,
       );
+      void ctx.services.webhook
+        .dispatchEvent(ctx.orgId, 'project.created', project)
+        .catch(() => {});
       return { lastSyncId: sync.id.toString(), project, success: true };
     },
 
@@ -164,8 +184,38 @@ export const projectResolvers = {
         });
       }
 
+      // Capture initiative associations before delete — Postgres CASCADE
+      // will drop the InitiativeProject rows, but we need to emit the
+      // sync actions so other clients clean up their local store.
+      const initiatives = await ctx.services.initiative.getInitiativesForProject(id);
+      const linksToDelete = await ctx.prisma.initiativeProject.findMany({
+        select: { id: true },
+        where: { projectId: id },
+      });
+
       await ctx.services.project.delete(id);
-      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Project', id, null);
+      let sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Project', id, null);
+      for (const link of linksToDelete) {
+        sync = await ctx.services.sync.createSyncAction(
+          ctx.orgId,
+          'D',
+          'InitiativeProject',
+          link.id,
+          null,
+        );
+      }
+      for (const init of initiatives) {
+        const updated = await ctx.services.initiative.recomputeProgress(init.id);
+        if (updated) {
+          sync = await ctx.services.sync.createSyncAction(
+            ctx.orgId,
+            'U',
+            'Initiative',
+            init.id,
+            updated,
+          );
+        }
+      }
       return { lastSyncId: sync.id.toString(), success: true };
     },
 
@@ -335,7 +385,30 @@ export const projectResolvers = {
       }
 
       const project = await ctx.services.project.update(id, input);
-      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Project', id, project);
+      let sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Project', id, project);
+      void ctx.services.webhook
+        .dispatchEvent(ctx.orgId, 'project.updated', project)
+        .catch(() => {});
+
+      // Project progress drives initiative roll-up — recompute every linked
+      // initiative whenever a project's progress, status, or archive state
+      // changes. Each recomputed initiative gets its own SyncAction so
+      // remote clients see the updated progress without a full bootstrap.
+      if (existing.progress !== project.progress || existing.statusType !== project.statusType) {
+        const initiatives = await ctx.services.initiative.getInitiativesForProject(id);
+        for (const init of initiatives) {
+          const updated = await ctx.services.initiative.recomputeProgress(init.id);
+          if (updated) {
+            sync = await ctx.services.sync.createSyncAction(
+              ctx.orgId,
+              'U',
+              'Initiative',
+              init.id,
+              updated,
+            );
+          }
+        }
+      }
       return { lastSyncId: sync.id.toString(), project, success: true };
     },
 

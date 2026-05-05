@@ -44,6 +44,8 @@ export type MockPrismaClient = {
     | 'cycle'
     | 'document'
     | 'file'
+    | 'initiative'
+    | 'initiativeProject'
     | 'issue'
     | 'issueActivity'
     | 'issueLabel'
@@ -61,6 +63,8 @@ export type MockPrismaClient = {
     | 'teamMemberRole'
     | 'teamMembership'
     | 'user'
+    | 'webhook'
+    | 'webhookDelivery'
     | 'workflowState'
     ? MockModel
     : PrismaClient[K];
@@ -85,6 +89,8 @@ export function createMockPrisma(): MockPrismaClient {
     cycle: createMockModel(),
     document: createMockModel(),
     file: createMockModel(),
+    initiative: createMockModel(),
+    initiativeProject: createMockModel(),
     issue: createMockModel(),
     issueActivity: createMockModel(),
     issueLabel: createMockModel(),
@@ -102,6 +108,8 @@ export function createMockPrisma(): MockPrismaClient {
     teamMemberRole: createMockModel(),
     teamMembership: createMockModel(),
     user: createMockModel(),
+    webhook: createMockModel(),
+    webhookDelivery: createMockModel(),
     workflowState: createMockModel(),
   } as unknown as MockPrismaClient;
 

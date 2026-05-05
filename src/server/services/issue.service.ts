@@ -76,11 +76,26 @@ export class IssueService {
       const number = team.issueCount;
       const identifier = `${team.key}-${number}`;
 
-      // If no stateId supplied, fall back to team's defaultIssueStateId
-      const stateId = input.stateId ?? team.defaultIssueStateId;
+      // Triage routing: issues created on a triage-enabled team without an
+      // explicit stateId go to the team's triage state, not the default. The
+      // triage state was seeded at team creation (see TeamService) and lives
+      // ahead of the default backlog state in `position`.
+      let triageStateId: string | null = null;
+      if (!input.stateId && team.triageEnabled) {
+        const triageState = await tx.workflowState.findFirst({
+          select: { id: true },
+          where: { archivedAt: null, teamId: input.teamId, type: 'triage' },
+        });
+        triageStateId = triageState?.id ?? null;
+      }
+
+      // If no stateId supplied, fall back to triage (if applicable) then to
+      // the team's defaultIssueStateId.
+      const stateId = input.stateId ?? triageStateId ?? team.defaultIssueStateId;
       if (!stateId) {
         throw new IssueStateRequiredError();
       }
+      const enteringTriage = stateId === triageStateId;
 
       // Property inheritance: a child created from a parent inherits the
       // parent's project and cycle when the caller does not supply them.
@@ -134,6 +149,7 @@ export class IssueService {
           projectId: inheritedProjectId,
           projectMilestoneId: inheritedProjectMilestoneId,
           sortOrder: input.sortOrder ?? 0,
+          startedTriageAt: enteringTriage ? new Date() : undefined,
           stateId,
           teamId: input.teamId,
           title: input.title,

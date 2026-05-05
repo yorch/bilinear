@@ -768,6 +768,12 @@ issueCreate, issueUpdate, issueArchive, issueUnarchive, issueDelete
 issueLabelCreate, issueLabelUpdate, issueLabelArchive
 issueRelationCreate, issueRelationDelete
 issueTemplateCreate, issueTemplateUpdate, issueTemplateArchive, issueTemplateDelete
+
+# Triage queue actions (triage-enabled teams only)
+issueTriageAccept(issueId, input: { stateId, assigneeId?, priority?, cycleId? })
+issueTriageDecline(issueId)
+issueTriageMarkDuplicate(issueId, canonicalIssueId)
+issueTriageSnooze(issueId, until: DateTime)
 ```
 
 ### Projects / Cycles
@@ -820,6 +826,40 @@ customFieldValuesSet(issueId, values: [CustomFieldValueInput!]!)   # upsert + de
 organizationMemberUpdateRole(userId, role)
 publicRoadmapUpsert(input: PublicRoadmapUpsertInput!)   # manages current org's PublicRoadmap row
 ```
+
+### Initiatives
+
+Top-level strategic objects above projects (m:n with `Project`). Progress
+rolls up from linked projects' `progress`. See PATTERNS §39.
+
+```
+initiativeCreate, initiativeUpdate, initiativeArchive, initiativeDelete
+initiativeAddProject(initiativeId, projectId)
+initiativeRemoveProject(initiativeId, projectId)
+
+# Queries
+initiative(id), initiatives(includeArchived?)
+```
+
+### Webhooks (admin-only)
+
+Outbound HTTP subscriptions; signed with HMAC-SHA256 (`X-Bilinear-Signature`).
+Events fire from issue/comment/project/cycle/initiative resolvers. See
+PATTERNS §40 and DATABASE_SCHEMA §2.21.
+
+```
+webhookCreate(input: { name, url, events, enabled?, teamId? })
+webhookUpdate, webhookArchive, webhookDelete
+webhookRotateSecret(id)
+
+# Queries (org admins only)
+webhook(id), webhooks(includeArchived?)
+webhookDeliveries(webhookId, limit?)
+webhookEvents       # canonical list of subscribable event names
+```
+
+`Webhook.signingSecret` is returned only to org owners/admins; the
+field-level resolver returns `null` for other callers as defense-in-depth.
 
 ---
 

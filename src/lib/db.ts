@@ -87,12 +87,16 @@ export interface DBIssue {
   priority: number;
   prioritySortOrder: number;
   projectId?: string | null;
+  snoozedById?: string | null;
+  snoozedUntilAt?: string | null;
   sortOrder: number;
   startedAt?: string | null;
+  startedTriageAt?: string | null;
   stateId: string;
   teamId: string;
   title: string;
   trashed: boolean;
+  triagedAt?: string | null;
   updatedAt: string;
 }
 
@@ -289,6 +293,40 @@ export interface DBDocument {
   updatedAt: string;
 }
 
+export interface DBInitiative {
+  archivedAt?: string | null;
+  canceledAt?: string | null;
+  color: string;
+  completedAt?: string | null;
+  createdAt: string;
+  creatorId?: string | null;
+  description?: string | null;
+  icon?: string | null;
+  id: string;
+  name: string;
+  organizationId: string;
+  ownerId?: string | null;
+  priority: number;
+  prioritySortOrder: number;
+  progress: number;
+  sortOrder: number;
+  startDate?: string | null;
+  startDateResolution?: string | null;
+  startedAt?: string | null;
+  status: string;
+  targetDate?: string | null;
+  targetDateResolution?: string | null;
+  updatedAt: string;
+}
+
+export interface DBInitiativeProject {
+  createdAt: string;
+  id: string;
+  initiativeId: string;
+  projectId: string;
+  sortOrder: number;
+}
+
 export interface DBSyncMetadata {
   key: string;
   value: unknown;
@@ -310,6 +348,8 @@ export class AppDatabase extends Dexie {
   customFieldValues!: Table<DBCustomFieldValue, string>;
   cycles!: Table<DBCycle, string>;
   documents!: Table<DBDocument, string>;
+  initiatives!: Table<DBInitiative, string>;
+  initiativeProjects!: Table<DBInitiativeProject, string>;
   projects!: Table<DBProject, string>;
   projectMilestones!: Table<DBProjectMilestone, string>;
   projectUpdates!: Table<DBProjectUpdate, string>;
@@ -449,6 +489,29 @@ export class AppDatabase extends Dexie {
           await tx.table(table.name).clear();
         }
       });
+    this.version(9).stores({
+      customFieldDefinitions: 'id, teamId',
+      customFieldValues: 'id, issueId, definitionId, [issueId+definitionId]',
+      customViews: 'id, organizationId, teamId, creatorId',
+      cycles: 'id, teamId, organizationId',
+      documents: 'id, organizationId, teamId, projectId, parentId',
+      initiativeProjects: 'id, initiativeId, projectId, [initiativeId+projectId]',
+      initiatives: 'id, organizationId, status, ownerId',
+      issueActivities: 'id, issueId',
+      issueLabels: 'id, organizationId, teamId, parentId',
+      issueRelations: 'id, issueId, relatedIssueId',
+      issues: 'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
+      issueTemplates: 'id, teamId, creatorId',
+      notifications: 'id, userId, organizationId, issueId, read',
+      organizations: 'id',
+      projectMilestones: 'id, projectId',
+      projects: 'id, organizationId, statusType, leadId',
+      projectUpdates: 'id, projectId, userId',
+      syncMetadata: 'key',
+      teams: 'id, organizationId, parentId',
+      users: 'id, email',
+      workflowStates: 'id, teamId',
+    });
   }
 }
 

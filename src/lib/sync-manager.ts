@@ -146,6 +146,8 @@ export class SyncManager {
       issueTemplates,
       customFieldDefinitions,
       customFieldValues,
+      initiatives,
+      initiativeProjects,
       meta,
     ] = await Promise.all([
       db.organizations.toArray(),
@@ -165,6 +167,8 @@ export class SyncManager {
       db.issueTemplates.toArray(),
       db.customFieldDefinitions.toArray(),
       db.customFieldValues.toArray(),
+      db.initiatives.toArray(),
+      db.initiativeProjects.toArray(),
       db.syncMetadata.get('lastSyncId'),
     ]);
 
@@ -180,6 +184,7 @@ export class SyncManager {
       issueStore,
       cycleStore,
       documentStore,
+      initiativeStore,
       projectStore,
       customViewStore,
       customFieldStore,
@@ -200,6 +205,8 @@ export class SyncManager {
       issueStore.upsertMany(issues);
       cycleStore.upsertMany(cycles);
       documentStore.upsertMany(documents);
+      initiativeStore.upsertMany(initiatives);
+      initiativeStore.upsertProjectLinks(initiativeProjects);
       projectStore.upsertMany(projects);
       projectStore.upsertMilestones(projectMilestones);
       projectStore.upsertUpdates(projectUpdates);
@@ -230,6 +237,7 @@ export class SyncManager {
       issueStore,
       cycleStore,
       documentStore,
+      initiativeStore,
       projectStore,
       customViewStore,
       customFieldStore,
@@ -259,6 +267,8 @@ export class SyncManager {
         customViews: [] as object[],
         cycles: [] as object[],
         documents: [] as object[],
+        initiativeProjects: [] as object[],
+        initiatives: [] as object[],
         issueLabels: [] as object[],
         issueRelations: [] as object[],
         issues: [] as object[],
@@ -307,6 +317,8 @@ export class SyncManager {
           db.issues,
           db.cycles,
           db.documents,
+          db.initiatives,
+          db.initiativeProjects,
           db.projects,
           db.projectMilestones,
           db.projectUpdates,
@@ -328,6 +340,8 @@ export class SyncManager {
             db.issues.clear(),
             db.cycles.clear(),
             db.documents.clear(),
+            db.initiatives.clear(),
+            db.initiativeProjects.clear(),
             db.projects.clear(),
             db.projectMilestones.clear(),
             db.projectUpdates.clear(),
@@ -380,6 +394,12 @@ export class SyncManager {
             db.customFieldValues.bulkPut(
               batches.customFieldValues as Parameters<typeof db.customFieldValues.bulkPut>[0],
             ),
+            db.initiatives.bulkPut(
+              batches.initiatives as Parameters<typeof db.initiatives.bulkPut>[0],
+            ),
+            db.initiativeProjects.bulkPut(
+              batches.initiativeProjects as Parameters<typeof db.initiativeProjects.bulkPut>[0],
+            ),
             db.syncMetadata.put({ key: 'lastSyncId', value: lastSyncId }),
           ]);
         },
@@ -423,6 +443,12 @@ export class SyncManager {
       );
       customFieldStore.upsertValues(
         batches.customFieldValues as Parameters<typeof customFieldStore.upsertValues>[0],
+      );
+      initiativeStore.upsertMany(
+        batches.initiatives as Parameters<typeof initiativeStore.upsertMany>[0],
+      );
+      initiativeStore.upsertProjectLinks(
+        batches.initiativeProjects as Parameters<typeof initiativeStore.upsertProjectLinks>[0],
       );
       syncStore.setLastSyncId(lastSyncId);
       syncStore.setStatus('connected');
@@ -496,6 +522,7 @@ export class SyncManager {
       issueStore,
       cycleStore,
       documentStore,
+      initiativeStore,
       projectStore,
       customViewStore,
       customFieldStore,
@@ -516,6 +543,8 @@ export class SyncManager {
       issues: object[];
       cycles: object[];
       documents: object[];
+      initiatives: object[];
+      initiativeProjects: object[];
       organizations: object[];
       projects: object[];
       projectMilestones: object[];
@@ -532,6 +561,8 @@ export class SyncManager {
       customViews: [],
       cycles: [],
       documents: [],
+      initiativeProjects: [],
+      initiatives: [],
       issueLabels: [],
       issueRelations: [],
       issues: [],
@@ -554,6 +585,8 @@ export class SyncManager {
         | 'issues'
         | 'cycles'
         | 'documents'
+        | 'initiatives'
+        | 'initiativeProjects'
         | 'projects'
         | 'projectMilestones'
         | 'projectUpdates'
@@ -778,6 +811,30 @@ export class SyncManager {
             await db.issueActivities.put(data as Parameters<typeof db.issueActivities.put>[0]);
           }
           break;
+        case 'Initiative':
+          initiativeStore.applySyncAction(
+            act,
+            modelId,
+            data as Parameters<typeof initiativeStore.applySyncAction>[2],
+          );
+          if (act === 'D') {
+            dexieDeletes.push({ id: modelId, table: 'initiatives' });
+          } else if (data) {
+            dexieUpserts.initiatives.push(data);
+          }
+          break;
+        case 'InitiativeProject':
+          initiativeStore.applyInitiativeProjectSyncAction(
+            act,
+            modelId,
+            data as Parameters<typeof initiativeStore.applyInitiativeProjectSyncAction>[2],
+          );
+          if (act === 'D') {
+            dexieDeletes.push({ id: modelId, table: 'initiativeProjects' });
+          } else if (data) {
+            dexieUpserts.initiativeProjects.push(data);
+          }
+          break;
       }
 
       // Update max sync ID
@@ -799,6 +856,8 @@ export class SyncManager {
         db.issues,
         db.cycles,
         db.documents,
+        db.initiatives,
+        db.initiativeProjects,
         db.projects,
         db.projectMilestones,
         db.projectUpdates,
@@ -862,6 +921,16 @@ export class SyncManager {
             db.customFieldDefinitions.bulkPut(
               dexieUpserts.customFieldDefinitions as Parameters<
                 typeof db.customFieldDefinitions.bulkPut
+              >[0],
+            ),
+          dexieUpserts.initiatives.length > 0 &&
+            db.initiatives.bulkPut(
+              dexieUpserts.initiatives as Parameters<typeof db.initiatives.bulkPut>[0],
+            ),
+          dexieUpserts.initiativeProjects.length > 0 &&
+            db.initiativeProjects.bulkPut(
+              dexieUpserts.initiativeProjects as Parameters<
+                typeof db.initiativeProjects.bulkPut
               >[0],
             ),
           db.syncMetadata.put({ key: 'lastSyncId', value: maxId }),

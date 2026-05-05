@@ -6,6 +6,7 @@ import { customViewResolvers } from './custom-view';
 import { cycleResolvers } from './cycle';
 import { documentResolvers } from './document';
 import { fileResolvers } from './file';
+import { initiativeResolvers } from './initiative';
 import { issueResolvers } from './issue';
 import { issueActivityResolvers } from './issue-activity';
 import { issueRelationResolvers } from './issue-relation';
@@ -18,7 +19,9 @@ import { roadmapResolvers } from './roadmap';
 import { searchResolvers } from './search';
 import { teamResolvers } from './team';
 import { teamMembershipResolvers } from './team-membership';
+import { triageResolvers } from './triage';
 import { userResolvers } from './user';
+import { webhookResolvers } from './webhook';
 import { workflowStateResolvers } from './workflow-state';
 
 // Scalar for date-only strings (YYYY-MM-DD). Validates format on input.
@@ -81,6 +84,10 @@ export const resolvers = {
 
   DateTime: DateTimeScalar,
 
+  Initiative: {
+    ...initiativeResolvers.Initiative,
+  },
+
   Issue: {
     ...issueResolvers.Issue,
     ...customFieldResolvers.Issue,
@@ -110,6 +117,7 @@ export const resolvers = {
     ...commentResolvers.Mutation,
     ...documentResolvers.Mutation,
     ...fileResolvers.Mutation,
+    ...initiativeResolvers.Mutation,
     ...notificationResolvers.Mutation,
     ...issueRelationResolvers.Mutation,
     ...issueTemplateResolvers.Mutation,
@@ -123,6 +131,8 @@ export const resolvers = {
     ...roadmapResolvers.Mutation,
     ...teamResolvers.Mutation,
     ...teamMembershipResolvers.Mutation,
+    ...triageResolvers.Mutation,
+    ...webhookResolvers.Mutation,
     ...workflowStateResolvers.Mutation,
   },
 
@@ -148,6 +158,7 @@ export const resolvers = {
     ...commentResolvers.Query,
     ...documentResolvers.Query,
     ...fileResolvers.Query,
+    ...initiativeResolvers.Query,
     ...issueActivityResolvers.Query,
     ...notificationResolvers.Query,
     ...issueRelationResolvers.Query,
@@ -162,6 +173,8 @@ export const resolvers = {
     ...cycleResolvers.Query,
     ...projectResolvers.Query,
     ...roadmapResolvers.Query,
+    ...triageResolvers.Query,
+    ...webhookResolvers.Query,
   },
 
   Team: {
@@ -177,6 +190,10 @@ export const resolvers = {
   },
 
   UUID: UUIDScalar,
+
+  Webhook: {
+    ...webhookResolvers.Webhook,
+  },
 
   WorkflowState: {
     ...workflowStateResolvers.WorkflowState,

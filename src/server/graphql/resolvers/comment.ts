@@ -88,6 +88,11 @@ export const commentResolvers = {
         .notifyCommentSubscribers(ctx.orgId, comment.issueId, ctx.userId, comment.id)
         .catch(() => {}); // non-fatal
 
+      // Webhook fan-out — fire-and-forget, scoped to the issue's team.
+      void ctx.services.webhook
+        .dispatchEvent(ctx.orgId, 'comment.created', comment, issue.teamId)
+        .catch(() => {});
+
       return { comment, lastSyncId: sync.id.toString(), success: true };
     },
     commentDelete: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
@@ -193,6 +198,12 @@ export const commentResolvers = {
           comment.id,
           comment,
         );
+        const issue = await ctx.services.issue.findById(comment.issueId);
+        if (issue) {
+          void ctx.services.webhook
+            .dispatchEvent(ctx.orgId, 'comment.updated', comment, issue.teamId)
+            .catch(() => {});
+        }
         return { comment, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         handleCommentError(err);

@@ -11,6 +11,7 @@ import { CustomViewService } from '../services/custom-view.service';
 import { CycleService } from '../services/cycle.service';
 import { DocumentService } from '../services/document.service';
 import { FileService } from '../services/file.service';
+import { InitiativeService } from '../services/initiative.service';
 import { IssueService } from '../services/issue.service';
 import { IssueActivityService } from '../services/issue-activity.service';
 import { IssueRelationService } from '../services/issue-relation.service';
@@ -23,7 +24,9 @@ import { RoadmapService } from '../services/roadmap.service';
 import { SearchService } from '../services/search.service';
 import { SyncService } from '../services/sync.service';
 import { TeamService } from '../services/team.service';
+import { TriageService } from '../services/triage.service';
 import { UserService } from '../services/user.service';
+import { WebhookService } from '../services/webhook.service';
 import { WorkflowStateService } from '../services/workflow-state.service';
 import { createLoaders, type Loaders } from './loaders';
 
@@ -41,6 +44,7 @@ export interface GraphQLContext extends AuthContext {
     cycle: CycleService;
     document: DocumentService;
     file: FileService;
+    initiative: InitiativeService;
     issue: IssueService;
     issueActivity: IssueActivityService;
     issueRelation: IssueRelationService;
@@ -53,7 +57,9 @@ export interface GraphQLContext extends AuthContext {
     search: SearchService;
     sync: SyncService;
     team: TeamService;
+    triage: TriageService;
     user: UserService;
+    webhook: WebhookService;
     workflowState: WorkflowStateService;
   };
 }
@@ -97,6 +103,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const teamService = new TeamService(prisma);
   const workflowStateService = new WorkflowStateService(prisma);
   const cycleService = new CycleService(prisma);
+  const initiativeService = new InitiativeService(prisma);
   const issueService = new IssueService(prisma);
   const issueRelationService = new IssueRelationService(prisma);
   const issueTemplateService = new IssueTemplateService(prisma);
@@ -105,6 +112,8 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const roadmapService = new RoadmapService(prisma);
   const syncService = new SyncService(prisma, redis);
   const searchService = new SearchService(prisma);
+  const triageService = new TriageService(prisma);
+  const webhookService = new WebhookService(prisma);
 
   return {
     ...auth,
@@ -119,6 +128,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
       cycle: cycleService,
       document: documentService,
       file: fileService,
+      initiative: initiativeService,
       issue: issueService,
       issueActivity: issueActivityService,
       issueRelation: issueRelationService,
@@ -131,7 +141,9 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
       search: searchService,
       sync: syncService,
       team: teamService,
+      triage: triageService,
       user: userService,
+      webhook: webhookService,
       workflowState: workflowStateService,
     },
   };

@@ -39,6 +39,8 @@ model Organization {
   customViews    CustomView[]
   documents      Document[]
   publicRoadmap  PublicRoadmap?
+  initiatives    Initiative[]
+  webhooks       Webhook[]
 
   @@map("organizations")
 }
@@ -88,6 +90,9 @@ model User {
   resolvedComments          Comment[]                  @relation("ResolvedComments")
   commentReactions          CommentReaction[]
   teamMemberRoles           TeamMemberRole[]
+  ownedInitiatives          Initiative[]               @relation("InitiativeOwner")
+  createdInitiatives        Initiative[]               @relation("InitiativeCreator")
+  createdWebhooks           Webhook[]                  @relation("WebhookCreator")
 
   @@map("users")
 }
@@ -455,15 +460,16 @@ model Project {
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   archivedAt DateTime? @map("archived_at") @db.Timestamptz
 
-  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  lead         User?              @relation("ProjectLead", fields: [leadId], references: [id])
-  creator      User?              @relation("ProjectCreator", fields: [creatorId], references: [id])
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead         User?               @relation("ProjectLead", fields: [leadId], references: [id])
+  creator      User?               @relation("ProjectCreator", fields: [creatorId], references: [id])
   teams        ProjectTeam[]
   members      ProjectMember[]
   issues       Issue[]
   milestones   ProjectMilestone[]
   updates      ProjectUpdate[]
   documents    Document[]
+  initiatives  InitiativeProject[]
 
   @@unique([organizationId, slugId])
   @@index([organizationId])
@@ -907,4 +913,137 @@ model Document {
   @@index([projectId])
   @@index([parentId])
   @@map("documents")
+}
+
+/// Top-level strategic planning object that groups one or more projects
+/// to track a multi-quarter goal. Progress rolls up from associated
+/// projects (issue-completion average).
+model Initiative {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @map("organization_id") @db.Uuid
+  name           String  @db.VarChar(255)
+  description    String?
+  icon           String? @db.VarChar(255)
+  color          String  @default("#6366f1") @db.VarChar(7)
+
+  // planned, active, completed, canceled
+  status            String  @default("planned") @db.VarChar(20)
+  priority          Int     @default(0) @db.SmallInt
+  prioritySortOrder Float   @default(0) @map("priority_sort_order")
+  sortOrder         Float   @default(0) @map("sort_order")
+
+  // Quarter or date-range targets
+  targetDate           DateTime? @map("target_date") @db.Date
+  startDate            DateTime? @map("start_date") @db.Date
+  startDateResolution  String?   @map("start_date_resolution") @db.VarChar(20)
+  targetDateResolution String?   @map("target_date_resolution") @db.VarChar(20)
+
+  ownerId   String? @map("owner_id") @db.Uuid
+  creatorId String? @map("creator_id") @db.Uuid
+
+  // Cached roll-up — recomputed when projects change
+  progress Float @default(0)
+
+  startedAt   DateTime? @map("started_at") @db.Timestamptz
+  completedAt DateTime? @map("completed_at") @db.Timestamptz
+  canceledAt  DateTime? @map("canceled_at") @db.Timestamptz
+
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner        User?               @relation("InitiativeOwner", fields: [ownerId], references: [id])
+  creator      User?               @relation("InitiativeCreator", fields: [creatorId], references: [id])
+  projects     InitiativeProject[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([ownerId])
+  @@map("initiatives")
+}
+
+/// Many-to-many join: each row associates a Project to an Initiative.
+/// A project can belong to multiple initiatives (rare but supported by Linear).
+model InitiativeProject {
+  id           String   @id @default(uuid()) @db.Uuid
+  initiativeId String   @map("initiative_id") @db.Uuid
+  projectId    String   @map("project_id") @db.Uuid
+  sortOrder    Float    @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  initiative Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  project    Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([initiativeId, projectId])
+  @@index([initiativeId])
+  @@index([projectId])
+  @@map("initiative_projects")
+}
+
+/// Outbound HTTP webhook subscription. Events from `events` are POSTed to
+/// `url` with a HMAC SHA-256 signature header (`X-Bilinear-Signature`)
+/// computed from the raw request body using `signingSecret`. Deliveries
+/// are recorded in WebhookDelivery and retried with exponential backoff.
+model Webhook {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @map("organization_id") @db.Uuid
+  name           String  @db.VarChar(255)
+  url            String  @db.VarChar(2000)
+  // Array of subscribed event names: "issue.created", "issue.updated",
+  // "comment.created", "project.updated", etc. See WEBHOOK_EVENTS in
+  // src/server/services/webhook.service.ts for the full list.
+  events         String[] @default([])
+  signingSecret  String  @map("signing_secret")
+  enabled        Boolean @default(true)
+  // teamId scopes events to a single team — null = org-wide.
+  teamId         String? @map("team_id") @db.Uuid
+
+  // Health metrics
+  lastDeliveryAt    DateTime? @map("last_delivery_at") @db.Timestamptz
+  lastSuccessAt     DateTime? @map("last_success_at") @db.Timestamptz
+  consecutiveFailures Int     @default(0) @map("consecutive_failures")
+
+  createdById String?   @map("created_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt  DateTime? @map("archived_at") @db.Timestamptz
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?             @relation("WebhookCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  deliveries   WebhookDelivery[]
+
+  @@index([organizationId])
+  @@index([organizationId, enabled])
+  @@map("webhooks")
+}
+
+/// Single attempt to deliver a webhook event. Status is one of "pending",
+/// "success", "failed". Failed deliveries are retried up to 5 times with
+/// exponential backoff; the final attempt sets status="failed".
+model WebhookDelivery {
+  id        String   @id @default(uuid()) @db.Uuid
+  webhookId String   @map("webhook_id") @db.Uuid
+  event     String   @db.VarChar(50)
+  payload   Json
+  // pending, success, failed
+  status    String   @default("pending") @db.VarChar(10)
+  attempts  Int      @default(0)
+  // Last response status code; null until the first attempt completes.
+  responseStatus Int?    @map("response_status")
+  responseBody   String? @map("response_body")
+  errorMessage   String? @map("error_message")
+
+  // Next retry timestamp; null when status != pending.
+  nextAttemptAt DateTime? @map("next_attempt_at") @db.Timestamptz
+  deliveredAt   DateTime? @map("delivered_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId, createdAt])
+  @@index([status, nextAttemptAt])
+  @@map("webhook_deliveries")
 }

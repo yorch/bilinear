@@ -106,6 +106,9 @@ export const issueResolvers = {
 
       const issue = await ctx.services.issue.archive(id);
       const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'A', 'Issue', id, issue);
+      void ctx.services.webhook
+        .dispatchEvent(ctx.orgId, 'issue.archived', issue, issue.teamId)
+        .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.archived'));
       return { issue, lastSyncId: sync.id.toString(), success: true };
     },
     issueCreate: async (
@@ -140,6 +143,9 @@ export const issueResolvers = {
           issue.id,
           issue,
         );
+        void ctx.services.webhook
+          .dispatchEvent(ctx.orgId, 'issue.created', issue, issue.teamId)
+          .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.created'));
         return { issue, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         const error = err as Error;
@@ -165,6 +171,9 @@ export const issueResolvers = {
 
       await ctx.services.issue.delete(id);
       const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Issue', id, null);
+      void ctx.services.webhook
+        .dispatchEvent(ctx.orgId, 'issue.deleted', { id, teamId: existing.teamId }, existing.teamId)
+        .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.deleted'));
       return { lastSyncId: sync.id.toString(), success: true };
     },
 
@@ -258,6 +267,9 @@ export const issueResolvers = {
       }
 
       const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', id, issue);
+      void ctx.services.webhook
+        .dispatchEvent(ctx.orgId, 'issue.updated', issue, issue.teamId)
+        .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.updated'));
       return { issue, lastSyncId: sync.id.toString(), success: true };
     },
   },
