@@ -149,7 +149,7 @@ export const issueResolvers = {
         return { issue, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         const error = err as Error;
-        if (error.name === 'IssueStateRequiredError') {
+        if (error.name === 'IssueStateRequiredError' || error.name === 'IssueInvalidStateError') {
           throw new GraphQLError(error.message, {
             extensions: { code: 'BAD_USER_INPUT' },
           });

@@ -185,26 +185,16 @@ export const projectResolvers = {
         });
       }
 
-      // Capture initiative associations before delete — Postgres CASCADE
-      // will drop the InitiativeProject rows, but we need to emit the
-      // sync actions so other clients clean up their local store.
+      // ProjectService.delete is a soft-delete (sets archivedAt + trashed),
+      // so the InitiativeProject rows still exist in Postgres. We must NOT
+      // emit `'D' InitiativeProject` sync actions — clients that drop the
+      // rows would see them reappear on next bootstrap. recomputeProgress
+      // already filters archived+trashed projects out of the rollup, and
+      // the project store's `.all` getter hides them from list views.
       const initiatives = await ctx.services.initiative.getInitiativesForProject(id);
-      const linksToDelete = await ctx.prisma.initiativeProject.findMany({
-        select: { id: true },
-        where: { projectId: id },
-      });
 
       await ctx.services.project.delete(id);
       let sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Project', id, null);
-      for (const link of linksToDelete) {
-        sync = await ctx.services.sync.createSyncAction(
-          ctx.orgId,
-          'D',
-          'InitiativeProject',
-          link.id,
-          null,
-        );
-      }
       for (const init of initiatives) {
         const updated = await ctx.services.initiative.recomputeProgress(init.id);
         if (updated) {

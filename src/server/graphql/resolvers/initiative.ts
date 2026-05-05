@@ -23,8 +23,16 @@ export const initiativeResolvers = {
       initiative.ownerId ? ctx.loaders.user.load(initiative.ownerId) : null,
 
     projects: async (initiative: Initiative, _args: unknown, ctx: GraphQLContext) => {
-      const links = await ctx.services.initiative.getProjects(initiative.id);
-      return links.map(l => l.project);
+      // Use the project DataLoader so the full Project row flows through
+      // (callers asking for `slugId`, `color`, `statusType`, etc. get the
+      // real values). Filter out projects from a different org or that
+      // were archived between link creation and this read.
+      const ids = await ctx.services.initiative.getProjectIds(initiative.id);
+      const projects = await Promise.all(ids.map(id => ctx.loaders.project.load(id)));
+      return projects.filter(
+        (p): p is NonNullable<typeof p> =>
+          p !== null && p.organizationId === ctx.orgId && !p.archivedAt && !p.trashed,
+      );
     },
   },
 
@@ -62,6 +70,11 @@ export const initiativeResolvers = {
         initiativeId,
         updated,
       );
+      if (updated) {
+        void ctx.services.webhook
+          .dispatchEvent(ctx.orgId, 'initiative.updated', updated)
+          .catch(err => logger.error({ err }, 'webhook dispatch failed: initiative.updated'));
+      }
       return { initiative: updated, lastSyncId: sync.id.toString(), success: true };
     },
 
@@ -181,6 +194,11 @@ export const initiativeResolvers = {
         initiativeId,
         updated,
       );
+      if (updated) {
+        void ctx.services.webhook
+          .dispatchEvent(ctx.orgId, 'initiative.updated', updated)
+          .catch(err => logger.error({ err }, 'webhook dispatch failed: initiative.updated'));
+      }
       return { initiative: updated, lastSyncId: sync.id.toString(), success: true };
     },
 

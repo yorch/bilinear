@@ -39,6 +39,16 @@ const TRIAGE_DECLINE_MUTATION = `
   }
 `;
 
+const TRIAGE_MARK_DUPLICATE_MUTATION = `
+  mutation TriageMarkDuplicate($issueId: ID!, $canonicalIssueId: ID!) {
+    issueTriageMarkDuplicate(issueId: $issueId, canonicalIssueId: $canonicalIssueId) {
+      success
+      lastSyncId
+      issue { id stateId canceledAt triagedAt }
+    }
+  }
+`;
+
 const TRIAGE_SNOOZE_MUTATION = `
   mutation TriageSnooze($issueId: ID!, $until: DateTime!) {
     issueTriageSnooze(issueId: $issueId, until: $until) {
@@ -243,6 +253,53 @@ const TriagePage = observer(function TriagePage() {
     [issueStore],
   );
 
+  const handleMarkDuplicate = useCallback(
+    async (issueId: string) => {
+      // Minimal UX: prompt for the canonical identifier (e.g. "ENG-42").
+      // The user resolves the lookup against the local issue store; the
+      // resolver re-validates org/team membership server-side.
+      const input = window.prompt('Mark as duplicate of (issue identifier, e.g. ENG-42):');
+      if (!input) {
+        return;
+      }
+      const ident = input.trim().toUpperCase();
+      const canonical = Array.from(issueStore.pool.values()).find(i => i.identifier === ident);
+      if (!canonical) {
+        toast.error(`Issue ${ident} not found in your workspace`);
+        return;
+      }
+      if (canonical.id === issueId) {
+        toast.error('Cannot mark an issue as a duplicate of itself');
+        return;
+      }
+      const snapshot = issueStore.findById(issueId);
+      setBusyId(issueId);
+      issueStore.optimisticUpdate(issueId, {
+        snoozedUntilAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      });
+      try {
+        const res = await gql(TRIAGE_MARK_DUPLICATE_MUTATION, {
+          canonicalIssueId: canonical.id,
+          issueId,
+        });
+        if (res.errors?.length) {
+          throw new Error(
+            (res.errors[0] as { message?: string })?.message ?? 'Mark duplicate failed',
+          );
+        }
+        toast.success(`Marked as duplicate of ${ident}`);
+      } catch (err) {
+        if (snapshot) {
+          issueStore.optimisticUpdate(issueId, snapshot);
+        }
+        toast.error(err instanceof Error ? err.message : 'Failed to mark duplicate');
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [issueStore],
+  );
+
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
 
   if (isLoading) {
@@ -322,6 +379,15 @@ const TriagePage = observer(function TriagePage() {
                     type="button"
                   >
                     Decline
+                  </button>
+                  <button
+                    className="rounded border border-zinc-300 px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    disabled={busy}
+                    onClick={() => handleMarkDuplicate(issue.id)}
+                    title="Mark as duplicate of another issue"
+                    type="button"
+                  >
+                    Duplicate
                   </button>
                   <SnoozeButton disabled={busy} onSelect={hours => handleSnooze(issue.id, hours)} />
                 </div>

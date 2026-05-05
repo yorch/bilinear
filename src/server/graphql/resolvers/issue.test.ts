@@ -20,6 +20,14 @@ describe('issueResolvers', () => {
   // ── Mutation.issueCreate ──────────────────────────────────────────────────
 
   describe('Mutation.issueCreate', () => {
+    // IssueService.create now validates that a caller-supplied stateId
+    // belongs to the same team. Mock the lookup to return the team match
+    // by default so existing tests stay focused on the assignment/
+    // notification behavior they were written for.
+    beforeEach(() => {
+      ctx.prisma.workflowState.findFirst.mockResolvedValue({ teamId: TEST_TEAM.id });
+    });
+
     it('creates an issue and returns payload', async () => {
       ctx.prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1 });
       ctx.prisma.issue.create.mockResolvedValue(TEST_ISSUE);

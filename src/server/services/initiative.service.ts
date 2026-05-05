@@ -101,8 +101,13 @@ export class InitiativeService {
 
       if (input.projectIds?.length) {
         // Verify all projects belong to the same org before linking.
+        // Capture progress on the same query so we can compute the
+        // initial rollup inline — without this the returned initiative
+        // would carry progress=0 even if every linked project is at
+        // 100%, and the create-time SyncAction would broadcast that
+        // wrong value.
         const projects = await tx.project.findMany({
-          select: { id: true },
+          select: { archivedAt: true, id: true, progress: true, trashed: true },
           where: { id: { in: input.projectIds }, organizationId: orgId },
         });
         if (projects.length !== input.projectIds.length) {
@@ -116,6 +121,17 @@ export class InitiativeService {
           })),
           skipDuplicates: true,
         });
+        const eligible = projects.filter(p => !p.archivedAt && !p.trashed);
+        const progress =
+          eligible.length === 0
+            ? 0
+            : eligible.reduce((sum, p) => sum + p.progress, 0) / eligible.length;
+        if (progress > 0) {
+          return tx.initiative.update({
+            data: { progress },
+            where: { id: initiative.id },
+          });
+        }
       }
 
       return initiative;
@@ -243,6 +259,22 @@ export class InitiativeService {
     }
     await this.recomputeProgress(initiativeId);
     return removedId;
+  }
+
+  /**
+   * Project ids linked to the initiative, ordered by `sortOrder`. Used
+   * by the `Initiative.projects` GraphQL field, which then loads the
+   * full Project rows via DataLoader so callers see the complete shape
+   * (slugId, color, statusType, etc.) — not just the truncated subset
+   * `getProjects` returns.
+   */
+  async getProjectIds(initiativeId: string): Promise<string[]> {
+    const links = await this.prisma.initiativeProject.findMany({
+      orderBy: { sortOrder: 'asc' },
+      select: { projectId: true },
+      where: { initiativeId },
+    });
+    return links.map(l => l.projectId);
   }
 
   /** Linked projects ordered by sortOrder. */

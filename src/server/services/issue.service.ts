@@ -76,6 +76,20 @@ export class IssueService {
       const number = team.issueCount;
       const identifier = `${team.key}-${number}`;
 
+      // Caller-supplied stateId must belong to the same team — otherwise
+      // a member of team A could create an issue in team A but with team
+      // B's workflow state, breaking team isolation. Mirrors the same
+      // check the triage service applies on accept.
+      if (input.stateId) {
+        const state = await tx.workflowState.findFirst({
+          select: { teamId: true },
+          where: { archivedAt: null, id: input.stateId },
+        });
+        if (!state || state.teamId !== input.teamId) {
+          throw new IssueInvalidStateError();
+        }
+      }
+
       // Triage routing: issues created on a triage-enabled team without an
       // explicit stateId go to the team's triage state, not the default. The
       // triage state was seeded at team creation (see TeamService) and lives
@@ -512,5 +526,12 @@ export class IssueStateRequiredError extends Error {
   constructor() {
     super('No workflow state found for the team. Please set a default state.');
     this.name = 'IssueStateRequiredError';
+  }
+}
+
+export class IssueInvalidStateError extends Error {
+  constructor() {
+    super('Workflow state must belong to the same team as the issue');
+    this.name = 'IssueInvalidStateError';
   }
 }

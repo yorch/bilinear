@@ -1,4 +1,4 @@
-import type { Issue, PrismaClient } from '../../generated/prisma';
+import type { Issue, IssueRelation, PrismaClient } from '../../generated/prisma';
 
 /**
  * TriageService manages the inbound issue triage queue.
@@ -194,8 +194,17 @@ export class TriageService {
    * Mark an issue as a duplicate of another. Creates a `duplicate` IssueRelation
    * and cancels the duplicate (same flow as decline). Both issues must belong
    * to the same organization. Self-references are rejected.
+   *
+   * Returns both the updated issue and the relation row (when newly
+   * created) so the resolver can emit a `'I' IssueRelation` SyncAction —
+   * without that, other clients won't see the relation until a full
+   * bootstrap. `relation` is null when the link already existed
+   * (idempotent re-call).
    */
-  async markDuplicate(issueId: string, canonicalIssueId: string): Promise<Issue> {
+  async markDuplicate(
+    issueId: string,
+    canonicalIssueId: string,
+  ): Promise<{ issue: Issue; relation: IssueRelation | null }> {
     if (issueId === canonicalIssueId) {
       throw new TriageDuplicateSelfError();
     }
@@ -227,13 +236,20 @@ export class TriageService {
     }
 
     return this.prisma.$transaction(async tx => {
-      // createMany with skipDuplicates is race-safe — relies on the
-      // unique index `(issueId, relatedIssueId, type)` rather than a
-      // findFirst+create check that two concurrent calls could both pass.
-      await tx.issueRelation.createMany({
-        data: [{ issueId, relatedIssueId: canonicalIssueId, type: 'duplicate' }],
-        skipDuplicates: true,
+      // Capture whether a new relation row was created so the resolver
+      // can decide whether to emit an `'I' IssueRelation` SyncAction.
+      // skipDuplicates makes this idempotent at the DB level — concurrent
+      // calls don't race because of the unique (issueId, relatedIssueId,
+      // type) index.
+      const before = await tx.issueRelation.findFirst({
+        where: { issueId, relatedIssueId: canonicalIssueId, type: 'duplicate' },
       });
+      let relation: IssueRelation | null = null;
+      if (!before) {
+        relation = await tx.issueRelation.create({
+          data: { issueId, relatedIssueId: canonicalIssueId, type: 'duplicate' },
+        });
+      }
       const now = new Date();
       // Atomic CAS — only cancel if still in triage. Prevents racing with
       // concurrent decline / accept calls.
@@ -252,7 +268,7 @@ export class TriageService {
       if (!updated) {
         throw new TriageIssueNotFoundError();
       }
-      return updated;
+      return { issue: updated, relation };
     });
   }
 
@@ -269,23 +285,28 @@ export class TriageService {
     if (!issue) {
       throw new TriageIssueNotFoundError();
     }
-    await this.assertInTriage(issue.teamId, issue.stateId);
-
-    return this.prisma.issue.update({
-      data: { snoozedById, snoozedUntilAt: until },
-      where: { id: issueId },
-    });
-  }
-
-  /** Verify an issue's stateId is the team's triage state. */
-  private async assertInTriage(teamId: string, stateId: string): Promise<void> {
-    const triageState = await this.findTriageState(teamId);
+    const triageState = await this.findTriageState(issue.teamId);
     if (!triageState) {
       throw new TriageNotEnabledError();
     }
-    if (triageState.id !== stateId) {
+    if (triageState.id !== issue.stateId) {
       throw new TriageNotInQueueError();
     }
+
+    // Atomic CAS — see accept() for rationale. A concurrent accept/decline
+    // could otherwise leave the just-resolved issue with a stale snooze.
+    const result = await this.prisma.issue.updateMany({
+      data: { snoozedById, snoozedUntilAt: until },
+      where: { id: issueId, stateId: triageState.id },
+    });
+    if (result.count === 0) {
+      throw new TriageNotInQueueError();
+    }
+    const updated = await this.prisma.issue.findUnique({ where: { id: issueId } });
+    if (!updated) {
+      throw new TriageIssueNotFoundError();
+    }
+    return updated;
   }
 }
 

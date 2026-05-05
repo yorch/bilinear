@@ -1,5 +1,7 @@
 import { GraphQLError } from 'graphql';
+import { logger } from '../../lib/logger';
 import { requireAuth, requireTeamMember } from '../../middleware/auth';
+import type { IssueActivityCreateInput } from '../../services/issue-activity.service';
 import type { GraphQLContext } from '../context';
 import { mapServiceError } from '../types/errors';
 
@@ -15,6 +17,48 @@ const TRIAGE_ERROR_MAP = {
   ],
   NOT_FOUND: ['TriageIssueNotFoundError'],
 } as const;
+
+/**
+ * Record IssueActivity rows for the triage transition AND fire the
+ * issue.updated webhook. The activity rows mirror what `issueUpdate`
+ * writes for the same fields (stateId, assigneeId, etc.) so the
+ * timeline shows the same shape regardless of which mutation drove
+ * the change.
+ */
+async function recordTriageSideEffects(
+  ctx: GraphQLContext & { orgId: string; userId: string },
+  before: { stateId: string; assigneeId: string | null; priority: number; cycleId: string | null },
+  after: {
+    id: string;
+    stateId: string;
+    assigneeId: string | null;
+    priority: number;
+    cycleId: string | null;
+    teamId: string;
+  },
+) {
+  const activities: IssueActivityCreateInput[] = [];
+  const fields: Array<keyof typeof before> = ['stateId', 'assigneeId', 'priority', 'cycleId'];
+  for (const field of fields) {
+    const oldVal = before[field];
+    const newVal = after[field];
+    if (oldVal !== newVal) {
+      activities.push({
+        actorId: ctx.userId,
+        field,
+        issueId: after.id,
+        newValue: newVal == null ? undefined : String(newVal),
+        oldValue: oldVal == null ? undefined : String(oldVal),
+      });
+    }
+  }
+  if (activities.length > 0) {
+    await ctx.services.issueActivity.createMany(activities);
+  }
+  void ctx.services.webhook
+    .dispatchEvent(ctx.orgId, 'issue.updated', after, after.teamId)
+    .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.updated'));
+}
 
 export const triageResolvers = {
   Mutation: {
@@ -53,6 +97,7 @@ export const triageResolvers = {
           issueId,
           updated,
         );
+        await recordTriageSideEffects(ctx, issue, updated);
         return { issue: updated, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         mapServiceError(err, TRIAGE_ERROR_MAP);
@@ -83,6 +128,7 @@ export const triageResolvers = {
           issueId,
           updated,
         );
+        await recordTriageSideEffects(ctx, issue, updated);
         return { issue: updated, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         mapServiceError(err, TRIAGE_ERROR_MAP);
@@ -118,7 +164,23 @@ export const triageResolvers = {
       }
 
       try {
-        const updated = await ctx.services.triage.markDuplicate(issueId, canonicalIssueId);
+        const { issue: updated, relation } = await ctx.services.triage.markDuplicate(
+          issueId,
+          canonicalIssueId,
+        );
+        // Emit the new IssueRelation row (when one was created) so other
+        // clients see the duplicate link without a full bootstrap. Skip
+        // when the relation already existed — re-emitting a no-op row
+        // would just generate sync churn.
+        if (relation) {
+          await ctx.services.sync.createSyncAction(
+            ctx.orgId,
+            'I',
+            'IssueRelation',
+            relation.id,
+            relation,
+          );
+        }
         const sync = await ctx.services.sync.createSyncAction(
           ctx.orgId,
           'U',
@@ -126,6 +188,7 @@ export const triageResolvers = {
           issueId,
           updated,
         );
+        await recordTriageSideEffects(ctx, issue, updated);
         return { issue: updated, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         mapServiceError(err, TRIAGE_ERROR_MAP);
@@ -156,6 +219,12 @@ export const triageResolvers = {
           issueId,
           updated,
         );
+        // Snooze leaves stateId/assignee/priority/cycle alone, so the
+        // side-effects helper would no-op on activity rows. Still fire
+        // the webhook so subscribers see the snooze transition.
+        void ctx.services.webhook
+          .dispatchEvent(ctx.orgId, 'issue.updated', updated, updated.teamId)
+          .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.updated'));
         return { issue: updated, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         mapServiceError(err, TRIAGE_ERROR_MAP);

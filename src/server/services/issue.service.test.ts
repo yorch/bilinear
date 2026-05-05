@@ -7,7 +7,7 @@ import {
   TEST_USER,
 } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
-import { IssueService, IssueStateRequiredError } from './issue.service';
+import { IssueInvalidStateError, IssueService, IssueStateRequiredError } from './issue.service';
 
 const COMPLETED_STATE = DEFAULT_WORKFLOW_STATES[3]; // type: 'completed'
 const CANCELED_STATE = DEFAULT_WORKFLOW_STATES[4]; // type: 'canceled'
@@ -43,6 +43,12 @@ describe('IssueService', () => {
   });
 
   describe('create', () => {
+    // create() now validates that a caller-supplied stateId belongs to
+    // the same team. Default the lookup to a same-team match so tests
+    // not specifically exercising that check stay focused.
+    beforeEach(() => {
+      prisma.workflowState.findFirst.mockResolvedValue({ teamId: TEST_TEAM.id });
+    });
     it('atomically increments team.issueCount and generates identifier', async () => {
       const teamWithCount = { ...TEST_TEAM, issueCount: 1, key: 'ENG' };
       prisma.team.update.mockResolvedValue(teamWithCount);
@@ -111,6 +117,24 @@ describe('IssueService', () => {
           data: expect.objectContaining({ stateId }),
         }),
       );
+    });
+
+    it('rejects a stateId that belongs to a different team', async () => {
+      // The state lookup returns a state pointing at some other team —
+      // the same shape an attacker would get if they fed in another
+      // team's workflow state id. Must throw, not silently misfile the
+      // issue under a foreign team's state.
+      prisma.workflowState.findFirst.mockReset();
+      prisma.workflowState.findFirst.mockResolvedValue({ teamId: 'other-team-id' });
+      prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1 });
+
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, {
+          stateId: DEFAULT_WORKFLOW_STATES[0].id,
+          teamId: TEST_TEAM.id,
+          title: 'Cross-team state',
+        }),
+      ).rejects.toThrow(IssueInvalidStateError);
     });
 
     it('throws IssueStateRequiredError when no state available', async () => {

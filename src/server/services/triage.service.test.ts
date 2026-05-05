@@ -210,18 +210,33 @@ describe('TriageService', () => {
       ).rejects.toThrow(TriageSnoozeInvalidDateError);
     });
 
-    it('updates snoozedUntilAt and snoozedById', async () => {
+    it('updates snoozedUntilAt and snoozedById via atomic CAS', async () => {
       const future = new Date(Date.now() + 60_000);
-      prisma.issue.findUnique.mockResolvedValue(TRIAGE_ISSUE);
+      prisma.issue.findUnique.mockResolvedValueOnce(TRIAGE_ISSUE).mockResolvedValueOnce({
+        ...TRIAGE_ISSUE,
+        snoozedById: 'user-id',
+        snoozedUntilAt: future,
+      });
       prisma.workflowState.findFirst.mockResolvedValue({ id: TRIAGE_STATE.id });
-      prisma.issue.update.mockResolvedValue(TRIAGE_ISSUE);
+      prisma.issue.updateMany.mockResolvedValue({ count: 1 });
 
       await service.snooze(TRIAGE_ISSUE.id, future, 'user-id');
 
-      expect(prisma.issue.update).toHaveBeenCalledWith({
+      expect(prisma.issue.updateMany).toHaveBeenCalledWith({
         data: { snoozedById: 'user-id', snoozedUntilAt: future },
-        where: { id: TRIAGE_ISSUE.id },
+        where: { id: TRIAGE_ISSUE.id, stateId: TRIAGE_STATE.id },
       });
+    });
+
+    it('throws TriageNotInQueueError when issue raced out of triage', async () => {
+      const future = new Date(Date.now() + 60_000);
+      prisma.issue.findUnique.mockResolvedValue(TRIAGE_ISSUE);
+      prisma.workflowState.findFirst.mockResolvedValue({ id: TRIAGE_STATE.id });
+      prisma.issue.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.snooze(TRIAGE_ISSUE.id, future, 'user-id')).rejects.toThrow(
+        TriageNotInQueueError,
+      );
     });
   });
 });

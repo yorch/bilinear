@@ -197,17 +197,19 @@ export class WebhookService {
     data: object,
     teamId?: string | null,
   ): Promise<WebhookDelivery[]> {
-    // Team-scoped filter: when an event is associated with a team,
-    // include hooks that subscribe to that team OR are org-wide
-    // (teamId=null). Org-level events (teamId not passed) match every
-    // hook regardless of scope.
+    // Team-scoped filter:
+    //  - Team-level event (teamId passed): include org-wide hooks AND
+    //    hooks scoped to that specific team.
+    //  - Org-level event (teamId omitted): include only org-wide hooks.
+    //    A team-scoped hook must NOT receive cross-team org events — that
+    //    would leak data from teams the subscriber wasn't authorized for.
     const subscribers = await this.prisma.webhook.findMany({
       where: {
         archivedAt: null,
         enabled: true,
         events: { has: event },
         organizationId: orgId,
-        ...(teamId == null ? {} : { OR: [{ teamId: null }, { teamId }] }),
+        ...(teamId == null ? { teamId: null } : { OR: [{ teamId: null }, { teamId }] }),
       },
     });
     if (subscribers.length === 0) {
