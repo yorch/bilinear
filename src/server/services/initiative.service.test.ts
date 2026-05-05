@@ -187,6 +187,54 @@ describe('InitiativeService', () => {
     });
   });
 
+  describe('addProject', () => {
+    it('upserts the link and recomputes progress', async () => {
+      prisma.initiativeProject.upsert.mockResolvedValue({
+        id: 'link-1',
+        initiativeId: TEST_INITIATIVE.id,
+        projectId: 'p-1',
+      });
+      prisma.initiativeProject.findMany.mockResolvedValue([
+        { project: { archivedAt: null, progress: 0.4, trashed: false } },
+      ]);
+      prisma.initiative.update.mockResolvedValue({ ...TEST_INITIATIVE, progress: 0.4 });
+
+      const result = await service.addProject(TEST_INITIATIVE.id, 'p-1');
+
+      expect(result).toMatchObject({ id: 'link-1' });
+      expect(prisma.initiativeProject.upsert).toHaveBeenCalledWith({
+        create: { initiativeId: TEST_INITIATIVE.id, projectId: 'p-1' },
+        update: {},
+        where: {
+          initiativeId_projectId: { initiativeId: TEST_INITIATIVE.id, projectId: 'p-1' },
+        },
+      });
+      // recompute fired
+      expect(prisma.initiative.update).toHaveBeenCalledWith({
+        data: { progress: 0.4 },
+        where: { id: TEST_INITIATIVE.id },
+      });
+    });
+  });
+
+  describe('getInitiativesForProject', () => {
+    it('filters out archived initiatives', async () => {
+      prisma.initiativeProject.findMany.mockResolvedValue([{ initiative: TEST_INITIATIVE }]);
+      const result = await service.getInitiativesForProject('p-1');
+      expect(result).toHaveLength(1);
+      // The query itself adds the archivedAt: null filter — verify it's
+      // present so an archived initiative can't sneak through.
+      expect(prisma.initiativeProject.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            initiative: { archivedAt: null },
+            projectId: 'p-1',
+          }),
+        }),
+      );
+    });
+  });
+
   describe('removeProject', () => {
     it('returns the deleted link id', async () => {
       prisma.initiativeProject.delete.mockResolvedValue({ id: 'link-123' });
@@ -213,6 +261,23 @@ describe('InitiativeService', () => {
 
       await service.update(TEST_INITIATIVE.id, { status: 'active' });
 
+      expect(prisma.initiative.update).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          canceledAt: null,
+          completedAt: null,
+          startedAt: expect.any(Date),
+          status: 'active',
+        }),
+        where: { id: TEST_INITIATIVE.id },
+      });
+    });
+
+    it('clears completedAt when transitioning completed → active', async () => {
+      prisma.initiative.update.mockResolvedValue({ ...TEST_INITIATIVE, status: 'active' });
+
+      await service.update(TEST_INITIATIVE.id, { status: 'active' });
+
+      // Both terminal markers cleared, startedAt stamped fresh.
       expect(prisma.initiative.update).toHaveBeenCalledWith({
         data: expect.objectContaining({
           canceledAt: null,

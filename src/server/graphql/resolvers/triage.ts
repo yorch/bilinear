@@ -116,6 +116,19 @@ export const triageResolvers = {
       }
       await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
 
+      // The canonical issue must also exist within the user's org and on a
+      // team they're a member of — otherwise a member of team A could link
+      // duplicates to a private team-B issue they shouldn't see.
+      const canonical = await ctx.services.issue.findById(canonicalIssueId);
+      if (!canonical || canonical.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Canonical issue not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+      if (canonical.teamId !== issue.teamId) {
+        await requireTeamMember(ctx.prisma, canonical.teamId, ctx.userId);
+      }
+
       try {
         const updated = await ctx.services.triage.markDuplicate(issueId, canonicalIssueId);
         const sync = await ctx.services.sync.createSyncAction(

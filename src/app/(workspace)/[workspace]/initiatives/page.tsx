@@ -167,11 +167,20 @@ function InitiativeRow({ initiative }: { initiative: DBInitiative }) {
                     <button
                       className="text-zinc-400 hover:text-red-500"
                       onClick={async () => {
-                        await gql(INITIATIVE_REMOVE_PROJECT_MUTATION, {
+                        const res = await gql(INITIATIVE_REMOVE_PROJECT_MUTATION, {
                           initiativeId: initiative.id,
                           projectId: p.id,
                         });
+                        if (res.errors?.length) {
+                          toast.error(
+                            (res.errors[0] as { message?: string })?.message ??
+                              'Failed to remove project',
+                          );
+                        } else {
+                          toast.success(`Removed ${p.name}`);
+                        }
                       }}
+                      title={`Remove ${p.name} from this initiative`}
                       type="button"
                     >
                       ×

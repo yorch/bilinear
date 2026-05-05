@@ -27,15 +27,22 @@ function mapWebhookError(err: unknown): never {
  * Webhook management is restricted to org owners and admins. The signing
  * secret is sensitive and the URL is fetched by the server, so we don't
  * want regular members to manage subscriptions.
+ *
+ * Calls requireAuth internally so callers can't accidentally skip it.
+ * Returns the narrowed context so the rest of the resolver can use
+ * non-null `orgId`/`userId` without type assertions.
  */
-async function requireOrgAdmin(ctx: GraphQLContext & { orgId: string; userId: string }) {
+async function requireOrgAdmin(
+  ctx: GraphQLContext,
+): Promise<GraphQLContext & { orgId: string; userId: string }> {
+  requireAuth(ctx);
   await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+  return ctx as GraphQLContext & { orgId: string; userId: string };
 }
 
 export const webhookResolvers = {
   Mutation: {
     webhookArchive: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
-      requireAuth(ctx);
       await requireOrgAdmin(ctx);
 
       const existing = await ctx.services.webhook.findById(id);
@@ -54,11 +61,10 @@ export const webhookResolvers = {
       { input }: { input: WebhookCreateInput },
       ctx: GraphQLContext,
     ) => {
-      requireAuth(ctx);
-      await requireOrgAdmin(ctx);
+      const auth = await requireOrgAdmin(ctx);
 
       try {
-        const webhook = await ctx.services.webhook.create(ctx.orgId, ctx.userId, input);
+        const webhook = await ctx.services.webhook.create(auth.orgId, auth.userId, input);
         return { lastSyncId: '0', success: true, webhook };
       } catch (err) {
         mapWebhookError(err);
@@ -66,7 +72,6 @@ export const webhookResolvers = {
     },
 
     webhookDelete: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
-      requireAuth(ctx);
       await requireOrgAdmin(ctx);
 
       const existing = await ctx.services.webhook.findById(id);
@@ -81,7 +86,6 @@ export const webhookResolvers = {
     },
 
     webhookRotateSecret: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
-      requireAuth(ctx);
       await requireOrgAdmin(ctx);
 
       const existing = await ctx.services.webhook.findById(id);
@@ -100,7 +104,6 @@ export const webhookResolvers = {
       { id, input }: { id: string; input: WebhookUpdateInput },
       ctx: GraphQLContext,
     ) => {
-      requireAuth(ctx);
       await requireOrgAdmin(ctx);
 
       const existing = await ctx.services.webhook.findById(id);
@@ -121,7 +124,6 @@ export const webhookResolvers = {
 
   Query: {
     webhook: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
-      requireAuth(ctx);
       await requireOrgAdmin(ctx);
 
       const webhook = await ctx.services.webhook.findById(id);
@@ -138,7 +140,6 @@ export const webhookResolvers = {
       { webhookId, limit }: { webhookId: string; limit?: number },
       ctx: GraphQLContext,
     ) => {
-      requireAuth(ctx);
       await requireOrgAdmin(ctx);
 
       const webhook = await ctx.services.webhook.findById(webhookId);
@@ -165,9 +166,8 @@ export const webhookResolvers = {
       { includeArchived }: { includeArchived?: boolean },
       ctx: GraphQLContext,
     ) => {
-      requireAuth(ctx);
-      await requireOrgAdmin(ctx);
-      return ctx.services.webhook.findByOrgId(ctx.orgId, includeArchived ?? false);
+      const auth = await requireOrgAdmin(ctx);
+      return ctx.services.webhook.findByOrgId(auth.orgId, includeArchived ?? false);
     },
   },
   // Defense in depth: even though every webhook entry-point requires admin,

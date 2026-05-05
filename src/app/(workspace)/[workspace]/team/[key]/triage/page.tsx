@@ -2,7 +2,7 @@
 
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { useStore } from '@/providers/store-provider';
@@ -53,6 +53,81 @@ const SNOOZE_PRESETS: Array<{ label: string; hours: number }> = [
   { hours: 24, label: '1 day' },
   { hours: 168, label: '1 week' },
 ];
+
+/**
+ * Snooze button with a click-to-open popover. Replaces an earlier
+ * `group-hover:block` approach which was inaccessible on touch devices
+ * and dismissed before the click could register on some browsers.
+ */
+function SnoozeButton({
+  disabled,
+  onSelect,
+}: {
+  disabled: boolean;
+  onSelect: (hours: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  // Close the popover when the user clicks outside or presses Escape.
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className="rounded border border-zinc-300 px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+        disabled={disabled}
+        onClick={() => setOpen(o => !o)}
+        type="button"
+      >
+        Snooze
+      </button>
+      {open ? (
+        <div
+          className="absolute right-0 z-10 mt-1 min-w-[120px] rounded border border-zinc-200 bg-white py-1 text-xs shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+          role="menu"
+        >
+          {SNOOZE_PRESETS.map(p => (
+            <button
+              className="block w-full px-3 py-1 text-left text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              key={p.hours}
+              onClick={() => {
+                setOpen(false);
+                onSelect(p.hours);
+              }}
+              role="menuitem"
+              type="button"
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 const TriagePage = observer(function TriagePage() {
   const { key: teamKey } = useParams<{ workspace: string; key: string }>();
@@ -256,27 +331,7 @@ const TriagePage = observer(function TriagePage() {
                   >
                     Decline
                   </button>
-                  <div className="group relative">
-                    <button
-                      className="rounded border border-zinc-300 px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                      disabled={busy}
-                      type="button"
-                    >
-                      Snooze
-                    </button>
-                    <div className="absolute right-0 z-10 mt-1 hidden min-w-[120px] rounded border border-zinc-200 bg-white py-1 text-xs shadow-lg group-hover:block dark:border-zinc-700 dark:bg-zinc-900">
-                      {SNOOZE_PRESETS.map(p => (
-                        <button
-                          className="block w-full px-3 py-1 text-left text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                          key={p.hours}
-                          onClick={() => handleSnooze(issue.id, p.hours)}
-                          type="button"
-                        >
-                          {p.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  <SnoozeButton disabled={busy} onSelect={hours => handleSnooze(issue.id, hours)} />
                 </div>
               </div>
             );

@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import type { PrismaClient, Webhook, WebhookDelivery } from '../../generated/prisma';
 import { childLogger } from '../lib/logger';
@@ -213,11 +213,16 @@ export class WebhookService {
 
     const deliveries: WebhookDelivery[] = [];
     for (const webhook of subscribers) {
+      // Pre-generate the id so the payload's `deliveryId` field matches
+      // the row id and the X-Bilinear-Delivery header. Without this the
+      // payload would have to be patched after create, doubling DB writes.
+      const id = randomUUID();
       const delivery = await this.prisma.webhookDelivery.create({
         data: {
           event,
+          id,
           nextAttemptAt: new Date(),
-          payload: this.buildPayload(orgId, event, data),
+          payload: this.buildPayload(id, orgId, event, data),
           status: 'pending',
           webhookId: webhook.id,
         },
@@ -500,9 +505,12 @@ export class WebhookService {
     }
   }
 
-  private buildPayload(orgId: string, event: string, data: object) {
+  private buildPayload(deliveryId: string, orgId: string, event: string, data: object) {
     return {
       data,
+      // Stable id matching the X-Bilinear-Delivery header. Receivers can
+      // use it for at-least-once delivery deduplication (we may retry).
+      deliveryId,
       event,
       organizationId: orgId,
       timestamp: new Date().toISOString(),
