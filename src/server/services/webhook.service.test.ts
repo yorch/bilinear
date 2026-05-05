@@ -2,11 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TEST_ORG, TEST_USER } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
+  isBlockedHost,
   signPayload,
   verifySignature,
   WebhookInvalidEventError,
   WebhookInvalidUrlError,
   WebhookNoEventsError,
+  WebhookPrivateUrlError,
   WebhookService,
 } from './webhook.service';
 
@@ -111,6 +113,111 @@ describe('WebhookService', () => {
       const body = 'x';
       const sig = signPayload(body, 'k');
       expect(verifySignature(body, 'k', sig)).toBe(true);
+    });
+
+    it('rejects non-hex header values without throwing', () => {
+      // 64 chars but all 'g' — Buffer.from(_, 'hex') silently truncates,
+      // so without the regex guard timingSafeEqual would throw on length
+      // mismatch. We expect a clean `false`.
+      const badHex = 'g'.repeat(64);
+      expect(verifySignature('hello', 'secret', `sha256=${badHex}`)).toBe(false);
+    });
+
+    it('rejects header values with wrong length', () => {
+      expect(verifySignature('hello', 'secret', 'sha256=deadbeef')).toBe(false);
+    });
+
+    it('rejects empty header value', () => {
+      expect(verifySignature('hello', 'secret', '')).toBe(false);
+      expect(verifySignature('hello', 'secret', 'sha256=')).toBe(false);
+    });
+  });
+
+  describe('isBlockedHost (SSRF guard)', () => {
+    it('blocks loopback and meta hostnames', () => {
+      expect(isBlockedHost('localhost')).toBe(true);
+      expect(isBlockedHost('foo.local')).toBe(true);
+      expect(isBlockedHost('bar.internal')).toBe(true);
+      expect(isBlockedHost('0')).toBe(true);
+    });
+
+    it('blocks dotted-quad IPv4 in private/loopback ranges', () => {
+      expect(isBlockedHost('127.0.0.1')).toBe(true);
+      expect(isBlockedHost('10.0.0.1')).toBe(true);
+      expect(isBlockedHost('192.168.1.1')).toBe(true);
+      expect(isBlockedHost('172.16.0.1')).toBe(true);
+      expect(isBlockedHost('169.254.169.254')).toBe(true); // AWS IMDS
+      expect(isBlockedHost('0.0.0.0')).toBe(true);
+    });
+
+    it('blocks decimal-encoded IPv4 (2130706433 = 127.0.0.1)', () => {
+      expect(isBlockedHost('2130706433')).toBe(true);
+    });
+
+    it('blocks hex-encoded IPv4 (0x7f000001 = 127.0.0.1)', () => {
+      expect(isBlockedHost('0x7f000001')).toBe(true);
+    });
+
+    it('blocks dotted hex octets (0x7f.0.0.1)', () => {
+      expect(isBlockedHost('0x7f.0.0.1')).toBe(true);
+    });
+
+    it('blocks IPv4-mapped IPv6 (::ffff:127.0.0.1)', () => {
+      expect(isBlockedHost('::ffff:127.0.0.1')).toBe(true);
+      expect(isBlockedHost('::ffff:10.0.0.1')).toBe(true);
+    });
+
+    it('blocks IPv6 loopback and ULA / link-local', () => {
+      expect(isBlockedHost('::1')).toBe(true);
+      expect(isBlockedHost('fe80::1')).toBe(true);
+      expect(isBlockedHost('fc00::1')).toBe(true);
+      expect(isBlockedHost('fd12::3456')).toBe(true);
+    });
+
+    it('allows public hostnames and IPs', () => {
+      expect(isBlockedHost('api.example.com')).toBe(false);
+      expect(isBlockedHost('1.1.1.1')).toBe(false);
+      expect(isBlockedHost('8.8.8.8')).toBe(false);
+    });
+  });
+
+  describe('validateUrl via create (SSRF integration)', () => {
+    afterEach(() => {
+      delete process.env.ALLOW_PRIVATE_WEBHOOK_URLS;
+    });
+
+    it('rejects decimal-encoded loopback in production', async () => {
+      delete process.env.ALLOW_PRIVATE_WEBHOOK_URLS;
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, {
+          events: ['issue.created'],
+          name: 'evil',
+          url: 'http://2130706433/path',
+        }),
+      ).rejects.toThrow(WebhookPrivateUrlError);
+    });
+
+    it('rejects IPv4-mapped IPv6 loopback', async () => {
+      delete process.env.ALLOW_PRIVATE_WEBHOOK_URLS;
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, {
+          events: ['issue.created'],
+          name: 'evil',
+          url: 'http://[::ffff:127.0.0.1]/x',
+        }),
+      ).rejects.toThrow(WebhookPrivateUrlError);
+    });
+
+    it('allows private URLs only when ALLOW_PRIVATE_WEBHOOK_URLS=1', async () => {
+      process.env.ALLOW_PRIVATE_WEBHOOK_URLS = '1';
+      prisma.webhook.create.mockResolvedValue(TEST_WEBHOOK);
+      // Should NOT throw.
+      await service.create(TEST_ORG.id, TEST_USER.id, {
+        events: ['issue.created'],
+        name: 'dev',
+        url: 'http://127.0.0.1:3000/hook',
+      });
+      expect(prisma.webhook.create).toHaveBeenCalled();
     });
   });
 

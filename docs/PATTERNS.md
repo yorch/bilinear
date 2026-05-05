@@ -1028,6 +1028,8 @@ tests/
 
 When adding a new entity to the real-time sync pipeline, touch five files in order. `ProjectUpdate` (Sprint 13-14) is the canonical example.
 
+> **Opt-out exception:** admin-only entities (e.g. `Webhook`, `WebhookDelivery`) are deliberately *not* synced. Only org admins ever read them, so mirroring rows into every member's IndexedDB would leak signing secrets and waste bandwidth. Instead, the settings page fetches via GraphQL on demand. See PATTERNS §40 for the webhook flow.
+
 ### Step 1 — Client type (`src/lib/db.ts`)
 
 Add a `DB*` interface that mirrors the Prisma model with JS-friendly types (Date → string, BigInt → string):

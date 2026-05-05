@@ -20,7 +20,10 @@ interface Webhook {
   lastDeliveryAt: string | null;
   lastSuccessAt: string | null;
   name: string;
-  signingSecret: string;
+  // Nullable: the field-level resolver returns null for non-admin
+  // callers as defense-in-depth. This page is admin-gated so it'll
+  // generally be a string, but treat it defensively.
+  signingSecret: string | null;
   url: string;
 }
 
@@ -303,7 +306,7 @@ export default function WebhooksSettingsPage() {
                     <span className="text-zinc-500 dark:text-zinc-400">Signing secret:</span>
                     {revealedSecrets.has(hook.id) ? (
                       <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs dark:bg-zinc-800">
-                        {hook.signingSecret}
+                        {hook.signingSecret ?? <em>hidden</em>}
                       </code>
                     ) : (
                       <button

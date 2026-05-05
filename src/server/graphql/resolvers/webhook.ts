@@ -152,6 +152,10 @@ export const webhookResolvers = {
 
     webhookEvents: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
+      // Same admin gate as the rest of the webhook surface — keeps the
+      // resolver consistent and ensures only admins can enumerate the
+      // event surface (matters if events ever encode internal structure).
+      await requireOrgAdmin(ctx);
       const { WEBHOOK_EVENTS } = await import('../../services/webhook.service');
       return [...WEBHOOK_EVENTS];
     },

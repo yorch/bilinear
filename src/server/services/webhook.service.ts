@@ -104,6 +104,20 @@ export class WebhookService {
     if (input.events !== undefined) {
       this.validateEvents(input.events);
     }
+    // Re-validate the stored URL when (re-)enabling a hook. A row created
+    // when ALLOW_PRIVATE_WEBHOOK_URLS=1 was set could otherwise silently
+    // re-enable in production with a private URL. The runtime
+    // assertSafeUrl check would still catch it at delivery, but failing
+    // fast at the admin UI is friendlier.
+    if (input.enabled === true && input.url === undefined) {
+      const existing = await this.prisma.webhook.findUnique({
+        select: { url: true },
+        where: { id },
+      });
+      if (existing) {
+        this.validateUrl(existing.url);
+      }
+    }
     return this.prisma.webhook.update({
       data: {
         // Resetting consecutiveFailures on enable lets a previously-disabled
@@ -395,8 +409,17 @@ export class WebhookService {
    * Process every pending delivery whose `nextAttemptAt` is due. Used by a
    * background job (cron / setInterval in the WS server) to drive retries.
    * Returns the number of deliveries attempted.
+   *
+   * The query also picks up rows whose claim deadline elapsed without a
+   * worker completing — `processDelivery` writes a future `nextAttemptAt`
+   * when it claims a row, so a crashed worker's row becomes due again
+   * naturally after that window. The atomic claim inside processDelivery
+   * still prevents double-sends if two sweeps overlap on the same row.
+   *
+   * Deliveries run with bounded concurrency so a single slow endpoint
+   * (10s timeout) doesn't sequentially throttle the whole sweep.
    */
-  async processDuePending(limit = 50): Promise<number> {
+  async processDuePending(limit = 50, concurrency = 5): Promise<number> {
     const due = await this.prisma.webhookDelivery.findMany({
       orderBy: { nextAttemptAt: 'asc' },
       take: limit,
@@ -405,11 +428,26 @@ export class WebhookService {
         status: 'pending',
       },
     });
-    for (const d of due) {
-      await this.processDelivery(d.id).catch(err => {
-        log.error({ deliveryId: d.id, err }, 'Webhook retry failed');
-      });
-    }
+
+    let cursor = 0;
+    const workers = Array.from(
+      { length: Math.min(concurrency, due.length) },
+      async (): Promise<void> => {
+        while (cursor < due.length) {
+          const idx = cursor++;
+          const d = due[idx];
+          if (!d) {
+            return;
+          }
+          try {
+            await this.processDelivery(d.id);
+          } catch (err) {
+            log.error({ deliveryId: d.id, err }, 'Webhook retry failed');
+          }
+        }
+      },
+    );
+    await Promise.all(workers);
     return due.length;
   }
 
@@ -490,10 +528,19 @@ export function verifySignature(
 ): boolean {
   const provided = headerValue.startsWith('sha256=') ? headerValue.slice(7) : headerValue;
   const expected = signPayload(rawBody, signingSecret);
-  if (provided.length !== expected.length) {
+  // Reject malformed input upfront. `Buffer.from(s, 'hex')` silently
+  // truncates on the first non-hex character, so without this guard a
+  // header like "g".repeat(64) parses to an empty buffer and
+  // timingSafeEqual throws on length mismatch (turning an attacker-
+  // controlled value into a server error).
+  if (provided.length !== expected.length || !/^[0-9a-fA-F]+$/.test(provided)) {
     return false;
   }
-  return timingSafeEqual(Buffer.from(provided, 'hex'), Buffer.from(expected, 'hex'));
+  try {
+    return timingSafeEqual(Buffer.from(provided, 'hex'), Buffer.from(expected, 'hex'));
+  } catch {
+    return false;
+  }
 }
 
 function generateSigningSecret(): string {
@@ -508,8 +555,10 @@ function generateSigningSecret(): string {
  * Accepts: regular DNS hostnames, public IPv4/IPv6 literals.
  * Rejects: localhost, .local/.internal suffixes, RFC 1918, link-local,
  *          unique-local IPv6, "0", "0.0.0.0", IPv4-mapped IPv6 forms.
+ *
+ * Exported for tests.
  */
-function isBlockedHost(host: string): boolean {
+export function isBlockedHost(host: string): boolean {
   // Strip IPv6 brackets if present.
   const h = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
   if (h === '' || h === '0' || h === 'localhost') {
@@ -578,8 +627,13 @@ function parseIpLiteral(s: string): string | null {
 /** Whether a normalized IP literal points to a private/loopback range. */
 function isPrivateIp(ip: string): boolean {
   // IPv6 forms — strip zone id and zero-pad shorthand for matching.
-  if (ip.includes(':')) {
-    const v6 = ip.split('%')[0];
+  // Node's URL parser keeps brackets in `hostname`, but isPrivateIp is
+  // also called recursively on already-stripped values, so accept both.
+  let v6 = ip.split('%')[0];
+  if (v6.startsWith('[') && v6.endsWith(']')) {
+    v6 = v6.slice(1, -1);
+  }
+  if (v6.includes(':')) {
     if (
       v6 === '::1' ||
       v6 === '::' ||
@@ -590,11 +644,22 @@ function isPrivateIp(ip: string): boolean {
     ) {
       return true;
     }
-    // IPv4-mapped IPv6 (::ffff:a.b.c.d or ::ffff:0:a.b.c.d)
-    const mapped = v6.match(/::ffff:(?:0:)?([0-9a-f.]+)/i);
-    if (mapped) {
-      const inner = parseIpLiteral(mapped[1]);
-      return inner ? isPrivateIp(inner) : false;
+    // IPv4-mapped IPv6 — dotted form (::ffff:127.0.0.1).
+    const mappedDotted = v6.match(/^::ffff:(?:0:)?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i);
+    if (mappedDotted) {
+      return isPrivateIp(mappedDotted[1]);
+    }
+    // IPv4-mapped IPv6 — compressed numeric form (::ffff:7f00:1). Node's
+    // URL parser canonicalizes `[::ffff:127.0.0.1]` to this shape, so the
+    // SSRF guard MUST handle it or the loopback bypass slips through.
+    const mappedHex = v6.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+    if (mappedHex) {
+      const hi = Number.parseInt(mappedHex[1], 16);
+      const lo = Number.parseInt(mappedHex[2], 16);
+      if (Number.isFinite(hi) && Number.isFinite(lo)) {
+        const dotted = [(hi >>> 8) & 0xff, hi & 0xff, (lo >>> 8) & 0xff, lo & 0xff].join('.');
+        return isPrivateIp(dotted);
+      }
     }
     return false;
   }
@@ -619,6 +684,11 @@ function isPrivateIp(ip: string): boolean {
  * Resolve `url`'s hostname and throw if it points to a private/internal
  * address. Mitigates DNS rebinding — even if validateUrl passed at create
  * time, the host may resolve differently now.
+ *
+ * Uses `lookup({ all: true })` so a host with multiple A records (e.g. a
+ * mix of public and private IPs) is rejected if ANY resolved address is
+ * private. Picking only the first record would let an attacker race the
+ * resolver to win an SSRF.
  */
 async function assertSafeUrl(url: string): Promise<void> {
   if (process.env.ALLOW_PRIVATE_WEBHOOK_URLS === '1') {
@@ -627,13 +697,13 @@ async function assertSafeUrl(url: string): Promise<void> {
   const parsed = new URL(url);
   const host = parsed.hostname.toLowerCase();
   // If the hostname is already an IP literal, validateUrl handled it.
-  // Otherwise resolve and validate the resolved IP.
+  // Otherwise resolve and validate every resolved address.
   if (parseIpLiteral(host)) {
     return;
   }
   try {
-    const { address } = await lookup(host);
-    if (isPrivateIp(address)) {
+    const addresses = await lookup(host, { all: true });
+    if (addresses.some(a => isPrivateIp(a.address))) {
       throw new WebhookPrivateUrlError();
     }
   } catch (err) {

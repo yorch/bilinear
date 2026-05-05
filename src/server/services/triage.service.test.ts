@@ -109,6 +109,37 @@ describe('TriageService', () => {
         /same team/,
       );
     });
+
+    it('clears stale canceledAt when re-accepting a re-routed issue', async () => {
+      // Scenario: issue was previously declined (canceledAt set), someone
+      // manually moved its stateId back to triage, now we accept again.
+      // The CAS update should reset canceledAt to null.
+      const previouslyCancelled = {
+        ...TRIAGE_ISSUE,
+        canceledAt: new Date('2026-01-01'),
+      };
+      prisma.issue.findUnique.mockResolvedValue(previouslyCancelled);
+      prisma.workflowState.findFirst
+        .mockResolvedValueOnce({ id: TRIAGE_STATE.id })
+        .mockResolvedValueOnce({ id: 'target-state', teamId: TRIAGE_ISSUE.teamId });
+      prisma.issue.updateMany.mockResolvedValue({ count: 1 });
+      prisma.issue.findUnique.mockResolvedValueOnce(previouslyCancelled).mockResolvedValueOnce({
+        ...previouslyCancelled,
+        canceledAt: null,
+        stateId: 'target-state',
+      });
+
+      await service.accept(TRIAGE_ISSUE.id, { stateId: 'target-state' });
+
+      expect(prisma.issue.updateMany).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          canceledAt: null,
+          stateId: 'target-state',
+          triagedAt: expect.any(Date),
+        }),
+        where: { id: TRIAGE_ISSUE.id, stateId: TRIAGE_STATE.id },
+      });
+    });
   });
 
   describe('decline', () => {
