@@ -53,12 +53,39 @@ test.describe('Offline Support', () => {
 
     await page.waitForSelector('[data-testid="issue-list-view"]');
 
-    // Select first issue and read its title
-    await page.keyboard.press('j');
-    const activeRow = page.locator('[data-testid="issue-row"][data-selected="true"]').first();
-    await expect(activeRow).toBeVisible();
-    const issueTitle = (await activeRow.locator('button.flex-1').textContent())?.trim();
-    expect(issueTitle).toBeTruthy();
+    // Pre-warm the create-issue modal so the lazy-loaded TipTap editor chunks
+    // are fetched while we're still online — opening the modal for the first
+    // time after setOffline(true) would trip a ChunkLoadError.
+    await page.keyboard.press('c');
+    const dialog = page.getByRole('dialog', { name: /create issue/i });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('.ProseMirror')).toBeVisible({ timeout: 10_000 });
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+
+    // Create a fresh issue to operate on so we don't rely on whichever issue
+    // is at the top of the list (sibling specs may have moved seeded issues
+    // into Done already, in which case picking "Done" would be a no-op).
+    const issueTitle = `Offline status ${Date.now()}`;
+    await page.keyboard.press('c');
+    await expect(dialog).toBeVisible();
+    const titleInput = dialog.getByPlaceholder(/issue title/i);
+    await titleInput.fill(issueTitle);
+    await titleInput.press('Enter');
+    await expect(dialog).not.toBeVisible();
+    await expect(page.getByText(issueTitle)).toBeVisible({ timeout: 10_000 });
+
+    // Click the freshly-created row to focus it (becomes selected).
+    const freshRow = page
+      .locator('[data-testid="issue-row"]')
+      .filter({ hasText: issueTitle })
+      .first();
+    await freshRow.click();
+    await expect(
+      page
+        .locator('[data-testid="issue-row"][data-selected="true"]')
+        .filter({ hasText: issueTitle }),
+    ).toBeVisible();
 
     // Go offline
     await context.setOffline(true);
@@ -74,7 +101,7 @@ test.describe('Offline Support', () => {
     const doneGroup = page
       .locator('[data-testid="group-section"]')
       .filter({ has: page.getByTestId('group-header').filter({ hasText: 'Done' }) })
-      .filter({ hasText: issueTitle as string });
+      .filter({ hasText: issueTitle });
     await expect(doneGroup).toBeVisible({ timeout: 5000 });
 
     // Go back online
@@ -86,7 +113,7 @@ test.describe('Offline Support', () => {
     const doneGroupAfterReload = page
       .locator('[data-testid="group-section"]')
       .filter({ has: page.getByTestId('group-header').filter({ hasText: 'Done' }) })
-      .filter({ hasText: issueTitle as string });
+      .filter({ hasText: issueTitle });
     await expect(doneGroupAfterReload).toBeVisible({ timeout: 10000 });
   });
 
@@ -95,21 +122,46 @@ test.describe('Offline Support', () => {
 
     await page.waitForSelector('[data-testid="issue-list-view"]');
 
-    // Read first issue title
-    await page.keyboard.press('j');
-    const activeRow = page.locator('[data-testid="issue-row"][data-selected="true"]').first();
-    await expect(activeRow).toBeVisible();
-    const issueTitle = (await activeRow.locator('button.flex-1').textContent())?.trim();
-    expect(issueTitle).toBeTruthy();
+    // Pre-warm the create-issue modal so the lazy-loaded TipTap editor chunks
+    // are fetched while we're still online.
+    await page.keyboard.press('c');
+    const dialog = page.getByRole('dialog', { name: /create issue/i });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('.ProseMirror')).toBeVisible({ timeout: 10_000 });
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+
+    // Create a fresh issue to archive so we don't depend on the seed state
+    // (sibling specs may have already archived the seeded ENG-* issues).
+    const issueTitle = `Offline archive ${Date.now()}`;
+    await page.keyboard.press('c');
+    await expect(dialog).toBeVisible();
+    const titleInput = dialog.getByPlaceholder(/issue title/i);
+    await titleInput.fill(issueTitle);
+    await titleInput.press('Enter');
+    await expect(dialog).not.toBeVisible();
+    await expect(page.getByText(issueTitle)).toBeVisible({ timeout: 10_000 });
+
+    // Focus the fresh row so Backspace targets it.
+    const freshRow = page
+      .locator('[data-testid="issue-row"]')
+      .filter({ hasText: issueTitle })
+      .first();
+    await freshRow.click();
+    await expect(
+      page
+        .locator('[data-testid="issue-row"][data-selected="true"]')
+        .filter({ hasText: issueTitle }),
+    ).toBeVisible();
 
     // Go offline
     await context.setOffline(true);
 
-    // Archive via Backspace (selection is still on first issue)
+    // Archive via Backspace
     await page.keyboard.press('Backspace');
 
     // Optimistic: title is gone from the list
-    await expect(page.getByText(issueTitle as string)).toHaveCount(0, { timeout: 5000 });
+    await expect(page.getByText(issueTitle)).toHaveCount(0, { timeout: 5000 });
 
     // Go online
     await context.setOffline(false);
@@ -117,7 +169,7 @@ test.describe('Offline Support', () => {
     // Reload — server-confirmed archive
     await page.reload();
     await page.waitForSelector('[data-testid="issue-list-view"]');
-    await expect(page.getByText(issueTitle as string)).toHaveCount(0, { timeout: 10000 });
+    await expect(page.getByText(issueTitle)).toHaveCount(0, { timeout: 10000 });
   });
 
   test('multiple mutations queued offline all apply', async ({ page, context }) => {

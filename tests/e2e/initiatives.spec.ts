@@ -122,9 +122,20 @@ test.describe('Initiatives', () => {
 
     // Step 4: assert the linked-projects list now contains the project.
     // The header reads "Projects (1)" once linked, and the project name renders
-    // inside the projects list inside the expanded row.
+    // inside the projects list inside the expanded row. Scope the project-name
+    // assertion to the expanded panel — `getByText(projectName)` would otherwise
+    // strict-mode-collide with the success toast text "Added <projectName>".
     await expect(page.getByText(/^projects \(1\)$/i)).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(projectName)).toBeVisible({ timeout: 10_000 });
+    // The expanded panel is the sibling div following the row button (px-12 pb-3
+    // container in src/app/(workspace)/[workspace]/initiatives/page.tsx). Use
+    // contains() since the row button has multiple inner spans (color, name,
+    // status pill, progress %, target date).
+    const expandedPanel = page
+      .locator(
+        `xpath=//button[contains(., "${initiativeName}")]/following-sibling::div[contains(@class, "px-12")][1]`,
+      )
+      .first();
+    await expect(expandedPanel.getByText(projectName)).toBeVisible({ timeout: 10_000 });
   });
 
   /**

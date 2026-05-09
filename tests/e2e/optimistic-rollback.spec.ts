@@ -78,17 +78,34 @@ test.describe('Optimistic Update Rollback', () => {
     await loginAs(page, 'e2e@test.local');
     await page.waitForSelector('[data-testid="issue-list-view"]');
 
-    // Pick the first seeded issue (ENG-1, "Set up CI/CD pipeline", state = Todo).
-    const targetTitle = 'Set up CI/CD pipeline';
-    const row = page.locator('[data-testid="issue-row"]', { hasText: targetTitle });
-    await expect(row).toBeVisible();
+    // Pick whichever issue is currently first in the list. Sibling specs may
+    // have archived ENG-1 ("Set up CI/CD pipeline") so we discover the title
+    // and current group rather than hardcoding the seed.
+    const firstRow = page.locator('[data-testid="issue-row"]').first();
+    await expect(firstRow).toBeVisible({ timeout: 10_000 });
+    const targetTitle = (await firstRow.locator('button.flex-1').textContent())?.trim() ?? '';
+    expect(targetTitle.length).toBeGreaterThan(0);
 
-    // Confirm the starting group: the "Todo" group section should contain
-    // this row before we attempt any mutation.
-    const todoGroup = page
+    // Discover the row's starting group section by walking up to the
+    // ancestor [data-testid="group-section"] and reading its header text.
+    const startingGroup = page
       .locator('[data-testid="group-section"]')
-      .filter({ has: page.locator('[data-testid="group-header"]', { hasText: /^Todo/i }) });
-    await expect(todoGroup.getByText(targetTitle)).toBeVisible();
+      .filter({ hasText: targetTitle })
+      .first();
+    const startingHeader =
+      (await startingGroup.locator('[data-testid="group-header"]').textContent())?.trim() ?? '';
+    // Header text looks like "▾ Todo 3" — extract the workflow state name.
+    const startingStateName = startingHeader
+      .replace(/^▾\s*/, '')
+      .replace(/\s+\d+$/, '')
+      .trim();
+    expect(startingStateName.length).toBeGreaterThan(0);
+
+    // Pick a target state distinct from the starting one. "Done" is fine
+    // unless the row already lives there; in that case fall back to "Todo".
+    const targetStateName = startingStateName.toLowerCase() === 'done' ? 'Todo' : 'Done';
+
+    const row = firstRow;
 
     // Now intercept ONLY issueUpdate mutations whose body mentions stateId.
     // Other mutations (e.g. unrelated sync calls) keep working.
@@ -119,21 +136,27 @@ test.describe('Optimistic Update Rollback', () => {
     const popover = page.locator('[data-testid="status-select-popover"]');
     await expect(popover).toBeVisible();
 
-    // Pick a different state ("Done"). The popover lists every workflow
-    // state by name, so match by accessible name.
-    await popover.getByRole('button', { name: /^Done$/i }).click();
+    // Pick a different workflow state. The popover lists every state by name.
+    await popover.getByRole('button', { name: new RegExp(`^${targetStateName}$`, 'i') }).click();
     await expect(popover).not.toBeVisible();
 
     // Final state: after the queue exhausts retries the snapshot is
-    // re-applied, so the row should NOT remain under the Done group; it
-    // must end up back under "Todo". TransactionQueue retry schedule is
-    // 1s + 3s + 10s before treating the failure as permanent, so allow up
-    // to ~20s for the rollback to settle.
-    const doneGroup = page
-      .locator('[data-testid="group-section"]')
-      .filter({ has: page.locator('[data-testid="group-header"]', { hasText: /^Done/i }) });
+    // re-applied, so the row should NOT remain under the target group; it
+    // must end up back under its starting group. TransactionQueue retry
+    // schedule is 1s + 3s + 10s before treating the failure as permanent,
+    // so allow up to ~20s for the rollback to settle.
+    const targetGroup = page.locator('[data-testid="group-section"]').filter({
+      has: page.locator('[data-testid="group-header"]', {
+        hasText: new RegExp(`^▾?\\s*${targetStateName}`, 'i'),
+      }),
+    });
+    const startingGroupAfter = page.locator('[data-testid="group-section"]').filter({
+      has: page.locator('[data-testid="group-header"]', {
+        hasText: new RegExp(`^▾?\\s*${startingStateName}`, 'i'),
+      }),
+    });
 
-    await expect(doneGroup.getByText(targetTitle)).toHaveCount(0, { timeout: 20_000 });
-    await expect(todoGroup.getByText(targetTitle)).toBeVisible({ timeout: 20_000 });
+    await expect(targetGroup.getByText(targetTitle)).toHaveCount(0, { timeout: 20_000 });
+    await expect(startingGroupAfter.getByText(targetTitle)).toBeVisible({ timeout: 20_000 });
   });
 });

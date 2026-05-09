@@ -37,12 +37,18 @@ test.describe('Bulk Actions', () => {
   test('selecting two rows shows the bulk action toolbar', async ({ page }) => {
     // Backlog rows aren't tagged with data-testid="issue-row"; the row that
     // owns the click handler is the innermost div containing the identifier
-    // text node. `.last()` picks that innermost match.
-    const row1 = page.locator('div', { has: page.getByText('ENG-1', { exact: true }) }).last();
-    const row3 = page.locator('div', { has: page.getByText('ENG-3', { exact: true }) }).last();
+    // text node. Discover whichever rows are present rather than hardcoding
+    // ENG-1 / ENG-3, since sibling tests can archive those seeded issues.
+    const idCells = page.locator('span', { hasText: /^ENG-\d+$/ });
+    await expect(idCells.first()).toBeVisible({ timeout: 10_000 });
+    expect(await idCells.count()).toBeGreaterThanOrEqual(2);
+    const id1 = (await idCells.nth(0).textContent())?.trim() ?? '';
+    const id2 = (await idCells.nth(1).textContent())?.trim() ?? '';
+    const row1 = page.locator('div', { has: page.getByText(id1, { exact: true }) }).last();
+    const row2 = page.locator('div', { has: page.getByText(id2, { exact: true }) }).last();
 
     await row1.click();
-    await row3.click();
+    await row2.click();
 
     // The toolbar reports "<n> selected" and surfaces the bulk controls.
     await expect(page.getByText(/2 selected/i)).toBeVisible();
@@ -51,11 +57,16 @@ test.describe('Bulk Actions', () => {
   });
 
   test('bulk archive removes selected issues from the list', async ({ page }) => {
-    const row1 = page.locator('div', { has: page.getByText('ENG-1', { exact: true }) }).last();
-    const row3 = page.locator('div', { has: page.getByText('ENG-3', { exact: true }) }).last();
+    const idCells = page.locator('span', { hasText: /^ENG-\d+$/ });
+    await expect(idCells.first()).toBeVisible({ timeout: 10_000 });
+    expect(await idCells.count()).toBeGreaterThanOrEqual(2);
+    const id1 = (await idCells.nth(0).textContent())?.trim() ?? '';
+    const id2 = (await idCells.nth(1).textContent())?.trim() ?? '';
+    const row1 = page.locator('div', { has: page.getByText(id1, { exact: true }) }).last();
+    const row2 = page.locator('div', { has: page.getByText(id2, { exact: true }) }).last();
 
     await row1.click();
-    await row3.click();
+    await row2.click();
     await expect(page.getByText(/2 selected/i)).toBeVisible();
 
     await page.getByRole('button', { name: /^archive$/i }).click();
@@ -65,27 +76,37 @@ test.describe('Bulk Actions', () => {
     // don't race the optimistic store update.
     await expect(page.getByText(/\d+ selected/i)).toHaveCount(0, { timeout: 10_000 });
 
-    await expect(page.getByText('ENG-1', { exact: true })).toHaveCount(0, { timeout: 10_000 });
-    await expect(page.getByText('ENG-3', { exact: true })).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.getByText(id1, { exact: true })).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.getByText(id2, { exact: true })).toHaveCount(0, { timeout: 10_000 });
   });
 
   test('bulk priority change moves selected issues into the new priority group', async ({
     page,
   }) => {
     // The backlog groups issues by priority, so re-prioritising the selected
-    // rows moves them into a different group section. Seed state has ENG-1
-    // (P2 = Medium) and ENG-3 (P0 = no priority) sitting in different groups,
-    // so after a bulk "Set Urgent" both should land under the "Urgent" group.
-    const row1 = page.locator('div', { has: page.getByText('ENG-1', { exact: true }) }).last();
-    const row3 = page.locator('div', { has: page.getByText('ENG-3', { exact: true }) }).last();
+    // rows moves them into a different group section. Sibling tests may have
+    // archived seeded ENG-1 / ENG-3, so we discover whichever issue
+    // identifiers are currently present rather than hardcoding numbers.
+    const idCells = page.locator('span', { hasText: /^ENG-\d+$/ });
+    await expect(idCells.first()).toBeVisible({ timeout: 10_000 });
+    const count = await idCells.count();
+    expect(count).toBeGreaterThanOrEqual(2);
+    const id1 = (await idCells.nth(0).textContent())?.trim() ?? '';
+    const id2 = (await idCells.nth(1).textContent())?.trim() ?? '';
+    expect(id1).toMatch(/^ENG-\d+$/);
+    expect(id2).toMatch(/^ENG-\d+$/);
+
+    const row1 = page.locator('div', { has: page.getByText(id1, { exact: true }) }).last();
+    const row2 = page.locator('div', { has: page.getByText(id2, { exact: true }) }).last();
 
     await row1.click();
-    await row3.click();
+    await row2.click();
     await expect(page.getByText(/2 selected/i)).toBeVisible();
 
-    // Priority buttons are icon-only; their accessible name comes from the
-    // title attribute ("Set Urgent" / "Set High" / "Set Medium" / "Set Low").
-    await page.getByRole('button', { name: /^Set Urgent$/i }).click();
+    // Priority buttons are icon-only; the accessible label is on the title
+    // attribute ("Set Urgent" / "Set High" / "Set Medium" / "Set Low") rather
+    // than the button text content (which is the priority icon glyph).
+    await page.locator('button[title="Set Urgent"]').click();
 
     // Toolbar clears once the bulk priority operation commits.
     await expect(page.getByText(/\d+ selected/i)).toHaveCount(0, { timeout: 10_000 });
@@ -95,7 +116,7 @@ test.describe('Bulk Actions', () => {
       .locator('div')
       .filter({ has: page.getByText('Urgent', { exact: true }) })
       .first();
-    await expect(urgentGroup.getByText('ENG-1', { exact: true })).toBeVisible({ timeout: 10_000 });
-    await expect(urgentGroup.getByText('ENG-3', { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(urgentGroup.getByText(id1, { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(urgentGroup.getByText(id2, { exact: true })).toBeVisible({ timeout: 10_000 });
   });
 });

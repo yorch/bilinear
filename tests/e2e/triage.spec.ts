@@ -1,6 +1,57 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import { loginAs } from '../fixtures/auth';
 import { getTeamKey, getWorkspaceKey } from '../fixtures/workspace';
+
+/**
+ * Create a fresh issue on a triage-enabled team without an explicit stateId.
+ * The server's triage routing (issue.service.ts:93–108) auto-routes the
+ * resulting issue to the team's triage workflow state, so this issue then
+ * appears on /team/<key>/triage. We POST directly to /api/graphql via the
+ * page context so the auth cookies tag along.
+ *
+ * Returns the title that was used so the caller can locate the new row.
+ */
+async function createFreshTriageIssue(page: Page, teamKey: string): Promise<string> {
+  const title = `Triage action ${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const result = await page.evaluate(
+    async ({ title, teamKey }) => {
+      // 1. Look up the team id by key.
+      const teamsResp = await fetch('/api/graphql', {
+        body: JSON.stringify({ query: `{ teams { id key } }` }),
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      });
+      const teamsJson = await teamsResp.json();
+      const teams = teamsJson?.data?.teams as Array<{ id: string; key: string }> | undefined;
+      const team = teams?.find(t => t.key === teamKey);
+      if (!team) {
+        throw new Error(`Team ${teamKey} not found`);
+      }
+
+      // 2. Create an issue without stateId so the server triage-routes it.
+      const createResp = await fetch('/api/graphql', {
+        body: JSON.stringify({
+          query: `mutation Create($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { id identifier title } } }`,
+          variables: { input: { teamId: team.id, title } },
+        }),
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      });
+      const createJson = await createResp.json();
+      if (createJson?.errors?.length) {
+        throw new Error(`issueCreate failed: ${JSON.stringify(createJson.errors)}`);
+      }
+      return createJson?.data?.issueCreate;
+    },
+    { teamKey, title },
+  );
+  if (!result?.success) {
+    throw new Error(`createFreshTriageIssue failed: ${JSON.stringify(result)}`);
+  }
+  return title;
+}
 
 /**
  * Triage queue page.
@@ -37,86 +88,162 @@ test.describe('Triage', () => {
     const team = getTeamKey(page);
     await page.goto(`/${ws}/team/${team}/triage`);
 
-    // Header counter "{n} to triage" — the seed creates 3 triage issues.
+    // Header counter "{n} to triage" — the seed creates 3 triage issues, but
+    // sibling action specs may have consumed some by the time this runs.
     await expect(page.getByText(/to triage/i)).toBeVisible({ timeout: 15_000 });
 
-    // The Accept button is the most stable per-row signal: one per queued issue.
+    // The Accept button is the most stable per-row signal: one per queued
+    // issue. Relax to >= 1 so the test still passes after sibling specs
+    // accept/decline/snooze/duplicate the seeded queue.
     const acceptButtons = page.getByRole('button', { name: 'Accept' });
     await expect(acceptButtons.first()).toBeVisible();
-    expect(await acceptButtons.count()).toBeGreaterThanOrEqual(2);
+    expect(await acceptButtons.count()).toBeGreaterThanOrEqual(1);
 
-    // At least one of the seeded triage issue identifiers should appear.
-    await expect(page.getByText(/ENG-[456]/).first()).toBeVisible();
+    // At least one issue identifier should appear; we don't pin to ENG-[456]
+    // anymore because the seeded triage issues may have been consumed.
+    await expect(page.getByText(/ENG-\d+/).first()).toBeVisible();
   });
 
   test('Accept moves the issue out of triage', async ({ page }) => {
     const ws = getWorkspaceKey(page);
     const team = getTeamKey(page);
+    // Land on a workspace page first so cookies are attached for the API call.
+    await page.goto(`/${ws}/team/${team}`);
+    await page.waitForSelector('[data-testid="issue-list-view"], [data-testid="empty-state"]');
+
+    // Seed a fresh triage issue so this test never depends on whatever the
+    // sibling specs left in the queue. The server auto-routes issues created
+    // without stateId on a triage-enabled team to the triage state.
+    const freshTitle = await createFreshTriageIssue(page, team);
+
+    // Now navigate to triage; the new row is fetched via bootstrap on load.
     await page.goto(`/${ws}/team/${team}/triage`);
+    await expect(page.getByText(/to triage/i)).toBeVisible({ timeout: 15_000 });
 
-    const acceptButtons = page.getByRole('button', { name: 'Accept' });
-    await expect(acceptButtons.first()).toBeVisible({ timeout: 15_000 });
-    const initialCount = await acceptButtons.count();
-    expect(initialCount).toBeGreaterThan(0);
+    // Wait for the new row (delivered via bootstrap) to appear.
+    // Each triage row is a flex div with the "items-center gap-3 border-b"
+    // utility classes. Find the one whose subtree contains the fresh title.
+    const freshRow = page
+      .locator('div.flex.items-center.gap-3.border-b')
+      .filter({ hasText: freshTitle })
+      .first();
+    await expect(freshRow).toBeVisible({ timeout: 15_000 });
 
-    await acceptButtons.first().click();
+    // Click the Accept button on THAT row, not the first row of the queue.
+    await freshRow.getByRole('button', { name: 'Accept' }).click();
 
-    // Optimistic update removes the row immediately. Wait for the count to drop.
-    await expect.poll(() => acceptButtons.count(), { timeout: 10_000 }).toBe(initialCount - 1);
+    // Once the optimistic update commits, the row with the fresh title is gone.
+    await expect(page.getByText(freshTitle)).toHaveCount(0, { timeout: 10_000 });
   });
 
   test('Decline cancels the issue and removes it from the queue', async ({ page }) => {
     const ws = getWorkspaceKey(page);
     const team = getTeamKey(page);
     await page.goto(`/${ws}/team/${team}/triage`);
+    await expect(page.getByText(/to triage/i)).toBeVisible({ timeout: 15_000 });
 
-    const declineButtons = page.getByRole('button', { name: 'Decline' });
-    await expect(declineButtons.first()).toBeVisible({ timeout: 15_000 });
-    const initialCount = await declineButtons.count();
-    expect(initialCount).toBeGreaterThan(0);
+    const freshTitle = await createFreshTriageIssue(page, team);
+    // Each triage row is a flex div with the "items-center gap-3 border-b"
+    // utility classes. Find the one whose subtree contains the fresh title.
+    const freshRow = page
+      .locator('div.flex.items-center.gap-3.border-b')
+      .filter({ hasText: freshTitle })
+      .first();
+    await expect(freshRow).toBeVisible({ timeout: 15_000 });
 
-    await declineButtons.first().click();
+    await freshRow.getByRole('button', { name: 'Decline' }).click();
 
-    await expect.poll(() => declineButtons.count(), { timeout: 10_000 }).toBe(initialCount - 1);
+    await expect(page.getByText(freshTitle)).toHaveCount(0, { timeout: 10_000 });
   });
 
   test('Mark Duplicate removes the issue and creates a duplicate relation', async ({ page }) => {
     const ws = getWorkspaceKey(page);
     const team = getTeamKey(page);
     await page.goto(`/${ws}/team/${team}/triage`);
+    await expect(page.getByText(/to triage/i)).toBeVisible({ timeout: 15_000 });
 
-    const duplicateButtons = page.getByRole('button', { name: 'Duplicate' });
-    await expect(duplicateButtons.first()).toBeVisible({ timeout: 15_000 });
-    const initialCount = await duplicateButtons.count();
-    expect(initialCount).toBeGreaterThan(0);
+    const freshTitle = await createFreshTriageIssue(page, team);
+    // Each triage row is a flex div with the "items-center gap-3 border-b"
+    // utility classes. Find the one whose subtree contains the fresh title.
+    const freshRow = page
+      .locator('div.flex.items-center.gap-3.border-b')
+      .filter({ hasText: freshTitle })
+      .first();
+    await expect(freshRow).toBeVisible({ timeout: 15_000 });
 
-    // The Duplicate flow uses window.prompt() — auto-accept with ENG-1
-    // (a non-triage seeded issue) as the canonical target.
+    // Find an arbitrary non-triage issue identifier to use as the duplicate
+    // target; ENG-1/2/3 are seeded but ENG-1 may have been archived. Pick
+    // any visible identifier in the queue OTHER than the fresh one we just
+    // created, falling back to ENG-2 / ENG-3 from the seed if needed.
+    let canonicalIdentifier = 'ENG-2';
+    const idMatch = await page.evaluate(async (teamKey: string) => {
+      // Look up the team id first since the issues query requires teamId.
+      const teamsResp = await fetch('/api/graphql', {
+        body: JSON.stringify({ query: `{ teams { id key } }` }),
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      });
+      const teamsJson = await teamsResp.json();
+      const teams = teamsJson?.data?.teams as Array<{ id: string; key: string }> | undefined;
+      const team = teams?.find(t => t.key === teamKey);
+      if (!team) {
+        return [] as Array<{ identifier: string; title: string }>;
+      }
+
+      const resp = await fetch('/api/graphql', {
+        body: JSON.stringify({
+          query: `query($teamId: String!) { issues(filter: { teamId: $teamId }, first: 50) { edges { node { identifier title } } } }`,
+          variables: { teamId: team.id },
+        }),
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      });
+      const json = await resp.json();
+      const edges = json?.data?.issues?.edges as
+        | Array<{ node: { identifier: string; title: string } }>
+        | undefined;
+      return edges?.map(e => e.node) ?? [];
+    }, team);
+    const candidate = idMatch.find(n => n.title !== freshTitle && /^ENG-\d+$/.test(n.identifier));
+    if (candidate) {
+      canonicalIdentifier = candidate.identifier;
+    }
+
+    // The Duplicate flow uses window.prompt() — auto-accept with the canonical
+    // identifier we discovered.
     page.once('dialog', async dialog => {
       expect(dialog.type()).toBe('prompt');
-      await dialog.accept('ENG-1');
+      await dialog.accept(canonicalIdentifier);
     });
 
-    await duplicateButtons.first().click();
+    await freshRow.getByRole('button', { name: 'Duplicate' }).click();
 
-    await expect.poll(() => duplicateButtons.count(), { timeout: 10_000 }).toBe(initialCount - 1);
+    await expect(page.getByText(freshTitle)).toHaveCount(0, { timeout: 10_000 });
   });
 
   test('Snooze hides the issue from the active queue', async ({ page }) => {
     const ws = getWorkspaceKey(page);
     const team = getTeamKey(page);
     await page.goto(`/${ws}/team/${team}/triage`);
+    await expect(page.getByText(/to triage/i)).toBeVisible({ timeout: 15_000 });
 
-    const snoozeButtons = page.getByRole('button', { name: 'Snooze' });
-    await expect(snoozeButtons.first()).toBeVisible({ timeout: 15_000 });
-    const initialCount = await snoozeButtons.count();
-    expect(initialCount).toBeGreaterThan(0);
+    const freshTitle = await createFreshTriageIssue(page, team);
+    // Each triage row is a flex div with the "items-center gap-3 border-b"
+    // utility classes. Find the one whose subtree contains the fresh title.
+    const freshRow = page
+      .locator('div.flex.items-center.gap-3.border-b')
+      .filter({ hasText: freshTitle })
+      .first();
+    await expect(freshRow).toBeVisible({ timeout: 15_000 });
 
-    // Click the first row's Snooze button to open the preset popover, then
+    // Click the row-scoped Snooze button to open the preset popover, then
     // pick "1 day" (the page exposes 4 hours / 1 day / 1 week presets).
-    await snoozeButtons.first().click();
+    await freshRow.getByRole('button', { name: 'Snooze' }).click();
     await page.getByRole('menuitem', { name: '1 day' }).click();
 
-    await expect.poll(() => snoozeButtons.count(), { timeout: 10_000 }).toBe(initialCount - 1);
+    // The snoozed row leaves the active queue.
+    await expect(page.getByText(freshTitle)).toHaveCount(0, { timeout: 10_000 });
   });
 });
