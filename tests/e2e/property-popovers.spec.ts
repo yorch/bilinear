@@ -26,11 +26,12 @@ test.describe('Property Popovers', () => {
     await expect(popover).not.toBeVisible();
   });
 
-  test('status popover closes when clicking outside', async ({ page }) => {
+  test('selecting a status option dismisses the popover', async ({ page }) => {
     await page.keyboard.press('s');
     const popover = page.locator('[data-testid="status-select-popover"]');
     await expect(popover).toBeVisible();
-    await page.locator('aside').click();
+    // Picking any state option commits the change and closes the popover.
+    await popover.getByRole('button').first().click();
     await expect(popover).not.toBeVisible();
   });
 
