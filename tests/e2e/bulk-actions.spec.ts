@@ -57,46 +57,35 @@ test.describe('Bulk Actions', () => {
   });
 
   test('bulk archive removes selected issues from the list', async ({ page }) => {
-    // Pre-create two fresh issues to archive so we don't archive the seeded
-    // ENG-1/2/3 that pre-existing issue-crud / issue-detail specs depend on.
-    const ts = Date.now();
-    const titles = [`Bulk archive A ${ts}`, `Bulk archive B ${ts}`];
+    // Pre-create two fresh issues to archive via the team-page C modal (the
+    // modal explicitly sends stateId = team.defaultIssueStateId, bypassing the
+    // server's triage auto-route that fires when stateId is omitted on a
+    // triage-enabled team). Going through the API directly would put the
+    // issues in the Triage state and they wouldn't appear in the backlog.
     const ws = getWorkspaceKey(page);
     const team = getTeamKey(page);
-    const ids = await page.evaluate(
-      async ({ teamKey, titles }) => {
-        const teamsResp = await fetch('/api/graphql', {
-          body: JSON.stringify({ query: `{ teams { id key } }` }),
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          method: 'POST',
-        });
-        const tjson = await teamsResp.json();
-        const team = (tjson?.data?.teams as Array<{ id: string; key: string }>).find(
-          t => t.key === teamKey,
-        );
-        if (!team) {
-          throw new Error('team not found');
-        }
-        const ids: string[] = [];
-        for (const title of titles) {
-          const r = await fetch('/api/graphql', {
-            body: JSON.stringify({
-              query: `mutation Create($input: IssueCreateInput!) { issueCreate(input: $input) { issue { id identifier } } }`,
-              variables: { input: { teamId: team.id, title } },
-            }),
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            method: 'POST',
-          });
-          const j = await r.json();
-          ids.push(j.data.issueCreate.issue.identifier);
-        }
-        return ids;
-      },
-      { teamKey: team, titles },
-    );
-    // Reload backlog so the new issues appear.
+    const ts = Date.now();
+    const titles = [`Bulk archive A ${ts}`, `Bulk archive B ${ts}`];
+    await page.goto(`/${ws}/team/${team}`);
+    await page.waitForSelector('[data-testid="issue-list-view"]');
+    for (const title of titles) {
+      await page.keyboard.press('c');
+      const dialog = page.getByRole('dialog', { name: /create issue/i });
+      await expect(dialog).toBeVisible();
+      const titleInput = dialog.getByPlaceholder(/issue title/i);
+      await titleInput.fill(title);
+      await titleInput.press('Enter');
+      await expect(dialog).not.toBeVisible();
+      await expect(page.getByText(title)).toBeVisible({ timeout: 10_000 });
+    }
+    // Read the freshly-assigned identifiers from the team page.
+    const ids: string[] = [];
+    for (const title of titles) {
+      const row = page.locator('[data-testid="issue-row"]').filter({ hasText: title }).first();
+      await expect(row.getByText(/^ENG-\d+$/)).toBeVisible({ timeout: 10_000 });
+      ids.push(((await row.getByText(/^ENG-\d+$/).textContent()) ?? '').trim());
+    }
+    // Navigate to the backlog where the bulk-action toolbar lives.
     await page.goto(`/${ws}/team/${team}/backlog`);
     await expect(page.getByText(ids[0], { exact: true })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(ids[1], { exact: true })).toBeVisible({ timeout: 10_000 });
