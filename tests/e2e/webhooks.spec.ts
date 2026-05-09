@@ -69,24 +69,22 @@ test.describe('Webhooks Settings', () => {
     await page.getByRole('checkbox', { name: 'issue.created' }).check();
     await page.getByRole('button', { name: /^create webhook$/i }).click();
 
-    // The card lives next to the webhook name; scope further actions to it
-    // so we don't accidentally hit a button on a different webhook left
-    // over from a sibling test.
+    // Scope to the closest webhook card (the rounded outer div) so we don't
+    // pick up status badges or action buttons from sibling rows.
     const card = page
-      .locator('div')
-      .filter({ has: page.getByText(name, { exact: true }) })
-      .filter({ has: page.getByRole('button', { name: /^disable$/i }) })
-      .first();
+      .getByText(name, { exact: true })
+      .locator('xpath=ancestor::div[contains(@class,"rounded") and contains(@class,"p-4")][1]');
     await expect(card).toBeVisible();
 
-    // Initially enabled.
-    await expect(card.getByText(/^enabled$/i)).toBeVisible();
+    // Initially enabled. Use `Enabled` (capitalised, the actual badge text)
+    // to avoid matching the "Continue with email" Enable... fragments.
+    await expect(card.getByText('Enabled', { exact: true })).toBeVisible();
 
     await card.getByRole('button', { name: /^disable$/i }).click();
 
     // The disable button flips to "Enable" and the status badge swaps.
     await expect(card.getByRole('button', { name: /^enable$/i })).toBeVisible();
-    await expect(card.getByText(/^disabled$/i)).toBeVisible();
+    await expect(card.getByText('Disabled', { exact: true })).toBeVisible();
   });
 
   test('created webhook can be deleted', async ({ page }) => {
@@ -104,10 +102,8 @@ test.describe('Webhooks Settings', () => {
     await expect(page.getByText(name)).toBeVisible();
 
     const card = page
-      .locator('div')
-      .filter({ has: page.getByText(name, { exact: true }) })
-      .filter({ has: page.getByRole('button', { name: /^delete$/i }) })
-      .first();
+      .getByText(name, { exact: true })
+      .locator('xpath=ancestor::div[contains(@class,"rounded") and contains(@class,"p-4")][1]');
 
     // Delete uses window.confirm() — auto-accept it.
     page.once('dialog', dialog => {
