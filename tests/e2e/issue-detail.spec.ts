@@ -56,6 +56,14 @@ test.describe('Issue Detail Panel', () => {
     await page.getByRole('button', { name: /^create issue$/i }).click();
     await expect(page.getByText(original)).toBeVisible({ timeout: 5_000 });
 
+    // Wait for the optimistic temp-id identifier ("ENG-…") to settle to the
+    // server-issued numeric id ("ENG-N") before navigating. Clicking the
+    // title button while still optimistic routes to /issue/temp-…, and the
+    // server lookup races with the store-dedup that replaces the temp entry
+    // — landing on "Issue not found" if dedup wins.
+    const row = page.locator('[data-testid="issue-row"]', { hasText: original });
+    await expect(row.getByText(/ENG-\d+/)).toBeVisible({ timeout: 10_000 });
+
     await titleButton(page, original).click();
     const panel = page.locator('[data-testid="issue-detail-panel"]');
     await expect(panel).toBeVisible();
