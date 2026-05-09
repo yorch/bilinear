@@ -1,7 +1,8 @@
 import { ApolloServer } from '@apollo/server';
 import { startServerAndCreateNextHandler } from '@as-integrations/next';
+import { GraphQLError } from 'graphql';
 import depthLimit from 'graphql-depth-limit';
-import { createComplexityRule, simpleEstimator } from 'graphql-query-complexity';
+import { getComplexity, simpleEstimator } from 'graphql-query-complexity';
 import type { NextRequest } from 'next/server';
 import type { GraphQLContext } from '../../../server/graphql/context';
 import { createContext } from '../../../server/graphql/context';
@@ -30,23 +31,39 @@ const MAX_QUERY_COMPLEXITY = 1000;
 const requestContextCache = new WeakMap<Request, GraphQLContext>();
 
 const server = new ApolloServer<GraphQLContext>({
+  plugins: [
+    {
+      // Complexity has to be evaluated per request because the limit
+      // depends on actual variable values; running it as a static
+      // validationRule rejects every mutation with required input
+      // variables (no variables are available before parsing).
+      async requestDidStart() {
+        return {
+          async didResolveOperation({ request, document, schema }) {
+            const complexity = getComplexity({
+              estimators: [simpleEstimator({ defaultComplexity: 1 })],
+              operationName: request.operationName ?? undefined,
+              query: document,
+              schema,
+              variables: request.variables ?? {},
+            });
+            if (complexity > MAX_QUERY_COMPLEXITY / 2) {
+              logger.warn({ complexity }, 'High GraphQL query complexity');
+            }
+            if (complexity > MAX_QUERY_COMPLEXITY) {
+              throw new GraphQLError(
+                `Query is too complex: ${complexity}. Maximum allowed: ${MAX_QUERY_COMPLEXITY}`,
+                { extensions: { code: 'QUERY_TOO_COMPLEX' } },
+              );
+            }
+          },
+        };
+      },
+    },
+  ],
   resolvers,
   typeDefs,
-  validationRules: [
-    depthLimit(MAX_QUERY_DEPTH),
-    createComplexityRule({
-      // `simpleEstimator` gives every field a cost of 1; total complexity
-      // equals the number of selections. For a tighter cap, move to
-      // fieldExtensionsEstimator + schema directives per hot path.
-      estimators: [simpleEstimator({ defaultComplexity: 1 })],
-      maximumComplexity: MAX_QUERY_COMPLEXITY,
-      onComplete: (complexity: number) => {
-        if (complexity > MAX_QUERY_COMPLEXITY / 2) {
-          logger.warn({ complexity }, 'High GraphQL query complexity');
-        }
-      },
-    }),
-  ],
+  validationRules: [depthLimit(MAX_QUERY_DEPTH)],
 });
 
 const handler = startServerAndCreateNextHandler<NextRequest, GraphQLContext>(server, {

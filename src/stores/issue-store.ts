@@ -114,12 +114,15 @@ export class IssueStore {
 
         // When a real issue arrives (non-optimistic identifier), atomically
         // remove any optimistic placeholder for the same title/team so the
-        // list never shows both at once.
-        if (action === 'I' && issueData.identifier !== '…') {
+        // list never shows both at once. The team page creates optimistic
+        // entries with identifier `<TEAM_KEY>-…` (e.g. "ENG-…"), so match
+        // on the trailing ellipsis rather than an exact-equals check.
+        const isOptimisticIdentifier = (ident: string) => ident.endsWith('…');
+        if (action === 'I' && !isOptimisticIdentifier(issueData.identifier)) {
           for (const [existingId, existing] of this.pool) {
             if (
               existingId !== id &&
-              existing.identifier === '…' &&
+              isOptimisticIdentifier(existing.identifier) &&
               existing.title === issueData.title &&
               existing.teamId === issueData.teamId
             ) {

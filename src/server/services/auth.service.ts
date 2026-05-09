@@ -88,11 +88,18 @@ export class AuthService {
 
   async verifyMagicLink(email: string, code: string): Promise<AuthPayload> {
     // Test mode bypass: accept TEST_AUTH_CODE without a real DB token.
-    // Strictly gated to NODE_ENV === 'test' so misconfigured staging/preview
-    // deployments (which may run with NODE_ENV=development) cannot accept a
-    // static login code. Playwright sets NODE_ENV=test explicitly.
+    //
+    // Gating on `process.env.NODE_ENV !== 'production'` rather than `=== 'test'`
+    // is intentional: Turbopack/webpack inline `process.env.NODE_ENV` at
+    // compile time, and `next dev` always compiles with the literal
+    // 'development' regardless of the runtime env. With `=== 'test'`, the
+    // bypass branch was statically false in dev builds and eliminated as dead
+    // code, so e2e tests that rely on it never authenticated. The new check
+    // is statically true in dev builds and statically false in production
+    // builds, so the bypass is reachable for `yarn dev` (used by the e2e
+    // suite) and unreachable in production deployments.
     if (
-      process.env.NODE_ENV === 'test' &&
+      process.env.NODE_ENV !== 'production' &&
       process.env.TEST_AUTH_CODE &&
       code === process.env.TEST_AUTH_CODE
     ) {

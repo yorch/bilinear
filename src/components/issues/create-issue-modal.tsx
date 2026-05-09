@@ -59,6 +59,11 @@ export function CreateIssueModal({
   const [dueDate, setDueDate] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
+  // Synchronous re-entry guard. The disabled prop on the submit button
+  // races React's state-update commit, so a fast double click (notably
+  // under Firefox + Playwright) can dispatch two handleSubmit runs before
+  // setSubmitting(true) ever lands and create the issue twice.
+  const submittingRef = useRef(false);
 
   const applyTemplate = useCallback((data: object) => {
     const d = data as Record<string, unknown>;
@@ -82,43 +87,49 @@ export function CreateIssueModal({
     }
   }, []);
 
-  // When modal opens, reset fields; if teamId is provided, fetch and apply default template
+  // Reset form state only when the modal transitions from closed to open.
+  // Including the MobX-derived props (states, defaultStateId, teamId) in the
+  // dep array re-runs this effect every render — `setTitle('')` mid-typing
+  // wipes user input and `disabled={!title.trim()}` keeps the submit button
+  // disabled, producing flaky e2e behaviour under Firefox + Playwright.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only re-run on open transitions
   useEffect(() => {
-    if (open) {
-      setTitle('');
-      setDescription('');
-      setStateId(defaultStateId ?? states[0]?.id ?? '');
-      setAssigneeId(null);
-      setPriority(0);
-      setLabelIds([]);
-      setDueDate(null);
-      setTemplateOpen(false);
-      setTimeout(() => titleRef.current?.focus(), 50);
-
-      if (teamId) {
-        gql(GET_TEMPLATES_QUERY, { teamId })
-          .then(res => {
-            const templates = (
-              res.data as {
-                issueTemplates?: Array<{
-                  id: string;
-                  name: string;
-                  templateData: object;
-                  isDefault: boolean;
-                }>;
-              }
-            )?.issueTemplates;
-            const defaultTemplate = templates?.find(t => t.isDefault);
-            if (defaultTemplate) {
-              applyTemplate(defaultTemplate.templateData);
-            }
-          })
-          .catch(() => {
-            // Silently fail — template auto-apply is best-effort
-          });
-      }
+    if (!open) {
+      return;
     }
-  }, [open, defaultStateId, states, teamId, applyTemplate]);
+    setTitle('');
+    setDescription('');
+    setStateId(defaultStateId ?? states[0]?.id ?? '');
+    setAssigneeId(null);
+    setPriority(0);
+    setLabelIds([]);
+    setDueDate(null);
+    setTemplateOpen(false);
+    setTimeout(() => titleRef.current?.focus(), 50);
+
+    if (teamId) {
+      gql(GET_TEMPLATES_QUERY, { teamId })
+        .then(res => {
+          const templates = (
+            res.data as {
+              issueTemplates?: Array<{
+                id: string;
+                name: string;
+                templateData: object;
+                isDefault: boolean;
+              }>;
+            }
+          )?.issueTemplates;
+          const defaultTemplate = templates?.find(t => t.isDefault);
+          if (defaultTemplate) {
+            applyTemplate(defaultTemplate.templateData);
+          }
+        })
+        .catch(() => {
+          // Silently fail — template auto-apply is best-effort
+        });
+    }
+  }, [open]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -139,10 +150,11 @@ export function CreateIssueModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || submitting) {
+    if (!title.trim() || submittingRef.current) {
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       await onSubmit({
@@ -156,6 +168,7 @@ export function CreateIssueModal({
       });
       onClose();
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };

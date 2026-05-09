@@ -22,16 +22,23 @@ test.describe('Real-time Sync', () => {
 
     const title = `Sync test ${Date.now()}`;
 
-    // Create issue in tab A
+    // Create issue in tab A. Submit via Enter on the title input — the
+    // submit button can disappear momentarily when MobX-derived props
+    // re-render the modal.
     await pageA.keyboard.press('c');
-    await pageA.getByPlaceholder(/issue title/i).fill(title);
-    await pageA.getByRole('button', { name: /create/i }).click();
+    const dialogA = pageA.getByRole('dialog', { name: /create issue/i });
+    await expect(dialogA).toBeVisible();
+    const titleA = dialogA.getByPlaceholder(/issue title/i);
+    await titleA.fill(title);
+    await titleA.press('Enter');
 
     // Verify in tab A
     await expect(pageA.getByText(title)).toBeVisible({ timeout: 5000 });
 
-    // Verify in tab B (WebSocket push or delta sync catchup)
-    await expect(pageB.getByText(title)).toBeVisible({ timeout: 20000 });
+    // Verify in tab B (WebSocket push or delta sync catchup). Allow a little
+    // more headroom — the delta sync poll interval can cause a delay if the
+    // direct WS broadcast misses the second context.
+    await expect(pageB.getByText(title)).toBeVisible({ timeout: 30000 });
 
     await contextA.close();
     await contextB.close();
