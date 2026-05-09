@@ -40,7 +40,9 @@ test.describe('Team Creation', () => {
       .click();
     const dialog = page.getByRole('dialog', { name: /create team/i });
     await expect(dialog).toBeVisible();
-    await page.keyboard.press('Escape');
+    // Press Escape from the dialog so its onKeyDown handler receives the
+    // event no matter which descendant currently has focus.
+    await dialog.press('Escape');
     await expect(dialog).not.toBeVisible();
   });
 });

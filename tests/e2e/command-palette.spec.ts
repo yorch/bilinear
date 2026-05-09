@@ -37,8 +37,11 @@ test.describe('Command Palette', () => {
 
   test('arrow keys navigate results', async ({ page }) => {
     await page.keyboard.press('Meta+k');
+    // Wait for the palette dialog and at least one item to be present so the
+    // useLayoutEffect-installed keydown listener has run before we send keys.
+    await expect(page.locator('[data-testid="command-palette"]')).toBeVisible();
+    await expect(page.locator('[data-testid="command-palette-item"]').first()).toBeVisible();
     await page.keyboard.press('ArrowDown');
-    // First item should be highlighted
     const firstItem = page.locator('[data-testid="command-palette-item"]').first();
     await expect(firstItem).toHaveAttribute('data-highlighted', 'true');
   });

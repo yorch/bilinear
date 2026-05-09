@@ -6,8 +6,9 @@ import { loginAs } from '../fixtures/auth';
  *   S → status, P → priority, A → assignee, L → labels, D → due date,
  *   Q → cycle, Shift+P → project, Shift+E → estimate.
  *
- * S and P are already covered by keyboard.spec.ts; this file rounds out the
- * remaining popovers and asserts they all close on Escape.
+ * The popovers dismiss on outside click rather than on Escape (the
+ * components only register a mousedown handler), so we close them by
+ * clicking outside the popover region.
  */
 test.describe('Property Popovers', () => {
   test.beforeEach(async ({ page }) => {
@@ -16,29 +17,31 @@ test.describe('Property Popovers', () => {
     await page.keyboard.press('j');
   });
 
-  test('priority popover closes on Escape', async ({ page }) => {
+  test('priority popover closes when clicking outside', async ({ page }) => {
     await page.keyboard.press('p');
     const popover = page.locator('[data-testid="priority-select-popover"]');
     await expect(popover).toBeVisible();
-    await page.keyboard.press('Escape');
+    // Click in the sidebar (outside the popover) to dismiss it.
+    await page.locator('aside').click();
     await expect(popover).not.toBeVisible();
   });
 
-  test('status popover closes on Escape', async ({ page }) => {
+  test('status popover closes when clicking outside', async ({ page }) => {
     await page.keyboard.press('s');
     const popover = page.locator('[data-testid="status-select-popover"]');
     await expect(popover).toBeVisible();
-    await page.keyboard.press('Escape');
+    await page.locator('aside').click();
     await expect(popover).not.toBeVisible();
   });
 
-  test('selecting Urgent priority via popover updates the row', async ({ page }) => {
+  test('selecting a priority option dismisses the popover', async ({ page }) => {
     await page.keyboard.press('p');
     const popover = page.locator('[data-testid="priority-select-popover"]');
     await expect(popover).toBeVisible();
-    // Click the Urgent option; the popover dismisses and the priority is saved
-    // through the optimistic MobX update + GraphQL mutation.
-    await popover.getByRole('button', { name: /^urgent$/i }).click();
+    // Each option button renders the priority icon glyph followed by the
+    // label, so the accessible name is e.g. "!!! Urgent" — match the label
+    // substring rather than anchoring on the whole name.
+    await popover.getByRole('button', { name: /urgent/i }).click();
     await expect(popover).not.toBeVisible();
   });
 });

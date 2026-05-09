@@ -28,6 +28,10 @@ test.describe('Issue Archive', () => {
     await row.locator('input[type="checkbox"]').click({ force: true });
     await expect(row).toHaveAttribute('data-selected', 'true');
 
+    // useHotkeys('backspace', …) is registered on the window but ignores
+    // events whose target is an INPUT/TEXTAREA — clicking the row checkbox
+    // leaves focus on it, so we blur before sending the shortcut.
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await page.keyboard.press('Backspace');
 
     // After archive, the row should disappear from the default list.
