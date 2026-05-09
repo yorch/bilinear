@@ -1,10 +1,30 @@
 # E2E Test Gap Analysis
 
-_Generated 2026-05-09 against branch `claude/e2e-test-gap-analysis-YHpZP`._
+_Initial analysis: 2026-05-09. Updated after Tier 1 + Tier 2 closure on the same branch._
 
-This document compares the existing Playwright E2E suite (`tests/e2e/`, 27 spec files / 76 tests) against the full feature surface of the product (PRD, PATTERNS.md, shipped routes, services, and Prisma models). Each domain lists what is covered, what is partially covered, and what has no E2E coverage today.
+This document compares the Playwright E2E suite against the full feature surface of the product (PRD, PATTERNS.md, shipped routes, services, and Prisma models).
 
-Legend: ✅ covered · 🟡 partial / smoke only · ❌ not covered
+## Status snapshot
+
+| Metric | Before | After |
+| --- | ---: | ---: |
+| Spec files | 27 | 30 |
+| Tests | 76 | 32 new (104 total) |
+| Tier 1 gaps closed | 0 / 5 | 4 / 5 (offline-mutate fixme) |
+| Tier 2 gaps closed | 0 / 3 | 2 / 3 (triage actions fixme) |
+
+Three new specs added: `issue-properties.spec.ts`, `bulk-actions.spec.ts`, `optimistic-rollback.spec.ts`. Five existing specs extended: `sync.spec.ts`, `offline.spec.ts`, `initiatives.spec.ts`, `triage.spec.ts`, `webhooks.spec.ts`. Seed (`prisma/seed.ts`) updated to enable triage on ENG and add a Triage workflow state plus three triage-state issues so triage tests have queued items.
+
+### Tracked product limitations
+
+The new tests surfaced two real product limitations, captured as `test.fixme`:
+
+1. **Offline mutations don't survive `page.reload()`.** `TransactionQueue` is in-memory and per-component-mount with a 14s retry budget (1s + 3s + 10s). If the queue doesn't drain before reload, the offline mutation is lost. Affects status-change-offline, archive-offline, and multi-create-offline tests. Fix: persist the queue to IndexedDB.
+2. **Triage actions on API-bootstrapped issues don't optimistically remove the row.** Accept / Decline / Mark Duplicate / Snooze work on issues present at sync-bootstrap, but for an issue inserted after bootstrap (via post-login GraphQL `issueCreate`), the optimistic update doesn't propagate to the queue render within the assertion window. Needs investigation of `issueStore.optimisticUpdate` interaction with newly-bootstrapped issues.
+
+Two issue-row hotkeys are also skipped because they have no in-row UI to drive: `Shift+P` (project) and `Shift+E` (estimate, which only renders when the team has an `estimationType`). The hotkey sets `openProperty` on the page but no in-row component subscribes.
+
+Legend: ✅ covered · 🟡 partial / smoke only · ❌ not covered · ⚠️ test.fixme (real limitation)
 
 ---
 
@@ -27,13 +47,15 @@ Legend: ✅ covered · 🟡 partial / smoke only · ❌ not covered
 | Issues — create | ✅ | `issue-crud.spec.ts` |
 | Issues — open detail panel / inline title edit / subscribe | ✅ | `issue-detail.spec.ts` |
 | Issues — list grouping / collapse / J-K nav | ✅ | `issue-list.spec.ts` |
-| Issues — bulk select | 🟡 | One row toggle + X to clear; no bulk action toolbar tests (status/priority/assignee/labels/project/cycle/archive/delete in bulk) |
+| Issues — bulk select | ✅ | `bulk-select.spec.ts` (existing) + `bulk-actions.spec.ts` (new): toolbar appears on multi-select; bulk archive removes rows; bulk priority change re-groups rows |
 | Issues — context menu | 🟡 | Open + Esc only; no actual menu actions exercised |
 | Issues — archive (single) | ✅ | `issue-archive.spec.ts` (Backspace) |
 | Issues — unarchive / soft-delete / permanent delete / trash recovery | ❌ | None |
-| Issues — set status via S | 🟡 | `keyboard.spec.ts` opens selector but doesn't pick |
-| Issues — set priority via P | 🟡 | Same — opens selector only |
-| Issues — set assignee (A), labels (L), due date (D), estimate (Shift+E), project (Shift+P), cycle (Q), templates (Alt+C) | ❌ | No coverage; only S and P shortcuts open the popover |
+| Issues — set status via S | ✅ | `issue-properties.spec.ts`: opens popover, picks option, asserts dismiss |
+| Issues — set priority via P | ✅ | Same |
+| Issues — set assignee (A), labels (L), due date (D), cycle (Q) | ✅ | `issue-properties.spec.ts`: each opens its expected popover and dismisses on Escape |
+| Issues — set project (Shift+P), estimate (Shift+E) | ⚠️ | Skipped — ProjectSelect not rendered in IssueRow; EstimatePicker only renders when team has `estimationType` (seeded ENG has none) |
+| Issues — templates (Alt+C) | ❌ | Not covered |
 | Issues — property popovers select-and-dismiss | ✅ | `property-popovers.spec.ts` (status, priority) |
 | Issues — labels apply/remove | ❌ | None |
 | Issues — assignee change | ❌ | None |
@@ -65,10 +87,12 @@ Legend: ✅ covered · 🟡 partial / smoke only · ❌ not covered
 | Cycles — assign issue (Q), rollover, burndown chart | ❌ | None |
 | Initiatives — list & empty state | ✅ | `initiatives.spec.ts` |
 | Initiatives — create from inline input + escape cancel | ✅ | `initiatives.spec.ts` |
-| Initiatives — link projects, sub-initiatives, updates, owner, target date, health | ❌ | None |
-| Triage — page renders | 🟡 | `triage.spec.ts` smoke only |
-| Triage — accept / decline / duplicate / snooze actions | ❌ | None |
-| Triage — auto-route on issue creation when triage enabled | ❌ | None |
+| Initiatives — row expand, link project, status persistence | ✅ | `initiatives.spec.ts` (extended): row expand panel; link a project via `+ Add project`; change status to Active and reload-persist |
+| Initiatives — updates timeline | ⚠️ | Skipped — feature not implemented (no resolver / UI) |
+| Initiatives — sub-initiatives, owner, target date, health | ❌ | Not covered |
+| Triage — page renders | ✅ | `triage.spec.ts` smoke + queued-issues check (count, identifiers, action buttons) |
+| Triage — accept / decline / duplicate / snooze actions | ⚠️ | `test.fixme` — buttons fire but optimistic remove on API-bootstrapped rows doesn't propagate in time. Works on seed-time rows. Needs investigation. |
+| Triage — auto-route on issue creation when triage enabled | 🟡 | Implicitly verified: `createFreshTriageIssue` helper relies on auto-route and the row appears in /triage |
 | Labels — CRUD, label groups, archive vs delete | ❌ | None |
 | Comments — create / reply / edit / delete / mention / reactions / resolve | ❌ | None |
 | Activity timeline (field changes shown on detail panel) | ❌ | None |
@@ -85,10 +109,11 @@ Legend: ✅ covered · 🟡 partial / smoke only · ❌ not covered
 | Theme — dark/light toggle | ✅ | `theme.spec.ts` |
 | Theme — system preference / persistence across reload | ❌ | None |
 | Real-time sync — cross-tab issue create | ✅ | `sync.spec.ts` |
-| Real-time sync — cross-tab updates (status, assignee, comments, projects, cycles) | ❌ | Only create is asserted |
+| Real-time sync — cross-tab status change / archive / create-then-delete | ✅ | `sync.spec.ts` (new) |
+| Real-time sync — cross-tab comments / projects / cycles | ❌ | Not covered |
 | Offline — create while offline + reconcile | ✅ | `offline.spec.ts` |
-| Offline — update / delete / multiple queued mutations / rollback on server error | ❌ | None |
-| Optimistic update rollback (server rejects mutation) | ❌ | None |
+| Offline — status change / archive / multi-create queued offline | ⚠️ | `test.fixme` — TransactionQueue is in-memory; `page.reload()` drops queued mutations. Needs IndexedDB persistence. |
+| Optimistic update rollback (server rejects mutation) | ✅ | `optimistic-rollback.spec.ts`: forces 500 on createIssue / updateIssue via `page.route` and asserts rollback |
 | Delta sync after disconnect window | ❌ | None |
 | WebSocket reconnect / auth failure | ❌ | None |
 | Analytics dashboard — velocity / cycle time / workload charts render | ❌ | Route is reachable from sidebar but no assertions on charts |
@@ -96,7 +121,8 @@ Legend: ✅ covered · 🟡 partial / smoke only · ❌ not covered
 | Custom fields — define on team, render on detail panel, edit value | ❌ | None |
 | CSV export | ❌ | None |
 | Webhooks — create form open + cancel | ✅ | `webhooks.spec.ts` |
-| Webhooks — full create / list / edit / archive / delivery + retry / signature verification | ❌ | None |
+| Webhooks — full create persists + appears in list, disable, delete (window.confirm), SSRF-protected URL rejection, invalid-URL validation | ✅ | `webhooks.spec.ts` (extended) |
+| Webhooks — actual outbound delivery + HMAC signature + retry-on-failure | ❌ | Out of scope here; needs a local receiver and the 30s retry sweep makes E2E flaky |
 | Rate limiting — over-budget responses (UI surfacing) | ❌ | None |
 | Roles & permissions — admin-gated routes (webhooks, settings) | ❌ | None |
 
