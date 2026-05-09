@@ -59,6 +59,11 @@ export function CreateIssueModal({
   const [dueDate, setDueDate] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
+  // Synchronous re-entry guard. The disabled prop on the submit button
+  // races React's state-update commit, so a fast double click (notably
+  // under Firefox + Playwright) can dispatch two handleSubmit runs before
+  // setSubmitting(true) ever lands and create the issue twice.
+  const submittingRef = useRef(false);
 
   const applyTemplate = useCallback((data: object) => {
     const d = data as Record<string, unknown>;
@@ -139,10 +144,11 @@ export function CreateIssueModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || submitting) {
+    if (!title.trim() || submittingRef.current) {
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       await onSubmit({
@@ -156,6 +162,7 @@ export function CreateIssueModal({
       });
       onClose();
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
