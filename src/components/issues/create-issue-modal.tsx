@@ -87,43 +87,49 @@ export function CreateIssueModal({
     }
   }, []);
 
-  // When modal opens, reset fields; if teamId is provided, fetch and apply default template
+  // Reset form state only when the modal transitions from closed to open.
+  // Including the MobX-derived props (states, defaultStateId, teamId) in the
+  // dep array re-runs this effect every render — `setTitle('')` mid-typing
+  // wipes user input and `disabled={!title.trim()}` keeps the submit button
+  // disabled, producing flaky e2e behaviour under Firefox + Playwright.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only re-run on open transitions
   useEffect(() => {
-    if (open) {
-      setTitle('');
-      setDescription('');
-      setStateId(defaultStateId ?? states[0]?.id ?? '');
-      setAssigneeId(null);
-      setPriority(0);
-      setLabelIds([]);
-      setDueDate(null);
-      setTemplateOpen(false);
-      setTimeout(() => titleRef.current?.focus(), 50);
-
-      if (teamId) {
-        gql(GET_TEMPLATES_QUERY, { teamId })
-          .then(res => {
-            const templates = (
-              res.data as {
-                issueTemplates?: Array<{
-                  id: string;
-                  name: string;
-                  templateData: object;
-                  isDefault: boolean;
-                }>;
-              }
-            )?.issueTemplates;
-            const defaultTemplate = templates?.find(t => t.isDefault);
-            if (defaultTemplate) {
-              applyTemplate(defaultTemplate.templateData);
-            }
-          })
-          .catch(() => {
-            // Silently fail — template auto-apply is best-effort
-          });
-      }
+    if (!open) {
+      return;
     }
-  }, [open, defaultStateId, states, teamId, applyTemplate]);
+    setTitle('');
+    setDescription('');
+    setStateId(defaultStateId ?? states[0]?.id ?? '');
+    setAssigneeId(null);
+    setPriority(0);
+    setLabelIds([]);
+    setDueDate(null);
+    setTemplateOpen(false);
+    setTimeout(() => titleRef.current?.focus(), 50);
+
+    if (teamId) {
+      gql(GET_TEMPLATES_QUERY, { teamId })
+        .then(res => {
+          const templates = (
+            res.data as {
+              issueTemplates?: Array<{
+                id: string;
+                name: string;
+                templateData: object;
+                isDefault: boolean;
+              }>;
+            }
+          )?.issueTemplates;
+          const defaultTemplate = templates?.find(t => t.isDefault);
+          if (defaultTemplate) {
+            applyTemplate(defaultTemplate.templateData);
+          }
+        })
+        .catch(() => {
+          // Silently fail — template auto-apply is best-effort
+        });
+    }
+  }, [open]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

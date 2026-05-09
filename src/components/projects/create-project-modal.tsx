@@ -44,17 +44,28 @@ export const CreateProjectModal = observer(function CreateProjectModal({
 
   const teams = teamStore.all;
 
+  // Reset form state only on open transitions — including `teams` here
+  // re-fires the effect whenever the MobX-derived array gets a new identity
+  // (every parent render), which wipes user input mid-typing.
   useEffect(() => {
-    if (open) {
-      setName('');
-      setDescription('');
-      setStatusType('planned');
-      setSelectedTeamIds(teams.length > 0 ? [teams[0].id] : []);
-      setStartDate('');
-      setTargetDate('');
-      setSubmitting(false);
-      setSubmitError('');
-      setTimeout(() => nameRef.current?.focus(), 50);
+    if (!open) {
+      return;
+    }
+    setName('');
+    setDescription('');
+    setStatusType('planned');
+    setStartDate('');
+    setTargetDate('');
+    setSubmitting(false);
+    setSubmitError('');
+    setTimeout(() => nameRef.current?.focus(), 50);
+  }, [open]);
+
+  // Default-select the first team when the modal opens or when teams arrive
+  // after the initial open. Don't clobber an explicit user selection.
+  useEffect(() => {
+    if (open && teams.length > 0) {
+      setSelectedTeamIds(prev => (prev.length === 0 ? [teams[0].id] : prev));
     }
   }, [open, teams]);
 
