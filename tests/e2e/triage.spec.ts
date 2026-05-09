@@ -79,28 +79,34 @@ test.describe('Triage', () => {
 
     // One of these should be visible — either the heading (when enabled),
     // the all-clear message (when enabled and empty), or the not-enabled
-    // explanation (when disabled).
-    await expect(notEnabled.or(allClear).or(triageHeading)).toBeVisible({ timeout: 15_000 });
+    // explanation (when disabled). Use .first() because the heading + all-
+    // clear can both render together when the queue is empty.
+    await expect(notEnabled.or(allClear).or(triageHeading).first()).toBeVisible({
+      timeout: 15_000,
+    });
   });
 
   test('triage page shows the queued issues', async ({ page }) => {
     const ws = getWorkspaceKey(page);
     const team = getTeamKey(page);
+
+    // Pre-create a triage issue from this test so we don't depend on whatever
+    // sibling specs have left in the seeded queue.
+    await page.goto(`/${ws}/team/${team}`);
+    await page.waitForSelector('[data-testid="issue-list-view"], [data-testid="empty-state"]');
+    await createFreshTriageIssue(page, team);
+
     await page.goto(`/${ws}/team/${team}/triage`);
 
-    // Header counter "{n} to triage" — the seed creates 3 triage issues, but
-    // sibling action specs may have consumed some by the time this runs.
+    // Header counter "{n} to triage".
     await expect(page.getByText(/to triage/i)).toBeVisible({ timeout: 15_000 });
 
-    // The Accept button is the most stable per-row signal: one per queued
-    // issue. Relax to >= 1 so the test still passes after sibling specs
-    // accept/decline/snooze/duplicate the seeded queue.
+    // The Accept button is the most stable per-row signal: one per queued issue.
     const acceptButtons = page.getByRole('button', { name: 'Accept' });
     await expect(acceptButtons.first()).toBeVisible();
     expect(await acceptButtons.count()).toBeGreaterThanOrEqual(1);
 
-    // At least one issue identifier should appear; we don't pin to ENG-[456]
-    // anymore because the seeded triage issues may have been consumed.
+    // At least one issue identifier should appear.
     await expect(page.getByText(/ENG-\d+/).first()).toBeVisible();
   });
 

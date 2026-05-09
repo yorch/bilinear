@@ -57,13 +57,52 @@ test.describe('Bulk Actions', () => {
   });
 
   test('bulk archive removes selected issues from the list', async ({ page }) => {
-    const idCells = page.locator('span', { hasText: /^ENG-\d+$/ });
-    await expect(idCells.first()).toBeVisible({ timeout: 10_000 });
-    expect(await idCells.count()).toBeGreaterThanOrEqual(2);
-    const id1 = (await idCells.nth(0).textContent())?.trim() ?? '';
-    const id2 = (await idCells.nth(1).textContent())?.trim() ?? '';
-    const row1 = page.locator('div', { has: page.getByText(id1, { exact: true }) }).last();
-    const row2 = page.locator('div', { has: page.getByText(id2, { exact: true }) }).last();
+    // Pre-create two fresh issues to archive so we don't archive the seeded
+    // ENG-1/2/3 that pre-existing issue-crud / issue-detail specs depend on.
+    const ts = Date.now();
+    const titles = [`Bulk archive A ${ts}`, `Bulk archive B ${ts}`];
+    const ws = getWorkspaceKey(page);
+    const team = getTeamKey(page);
+    const ids = await page.evaluate(
+      async ({ teamKey, titles }) => {
+        const teamsResp = await fetch('/api/graphql', {
+          body: JSON.stringify({ query: `{ teams { id key } }` }),
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+        });
+        const tjson = await teamsResp.json();
+        const team = (tjson?.data?.teams as Array<{ id: string; key: string }>).find(
+          t => t.key === teamKey,
+        );
+        if (!team) {
+          throw new Error('team not found');
+        }
+        const ids: string[] = [];
+        for (const title of titles) {
+          const r = await fetch('/api/graphql', {
+            body: JSON.stringify({
+              query: `mutation Create($input: IssueCreateInput!) { issueCreate(input: $input) { issue { id identifier } } }`,
+              variables: { input: { teamId: team.id, title } },
+            }),
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            method: 'POST',
+          });
+          const j = await r.json();
+          ids.push(j.data.issueCreate.issue.identifier);
+        }
+        return ids;
+      },
+      { teamKey: team, titles },
+    );
+    // Reload backlog so the new issues appear.
+    await page.goto(`/${ws}/team/${team}/backlog`);
+    await expect(page.getByText(ids[0], { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(ids[1], { exact: true })).toBeVisible({ timeout: 10_000 });
+
+    const row1 = page.locator('div', { has: page.getByText(ids[0], { exact: true }) }).last();
+    const row2 = page.locator('div', { has: page.getByText(ids[1], { exact: true }) }).last();
 
     await row1.click();
     await row2.click();
@@ -72,12 +111,11 @@ test.describe('Bulk Actions', () => {
     await page.getByRole('button', { name: /^archive$/i }).click();
 
     // Once the bulk action commits the selection clears and the toolbar
-    // disappears — wait for that state before re-querying the list so we
-    // don't race the optimistic store update.
+    // disappears — wait for that state before re-querying the list.
     await expect(page.getByText(/\d+ selected/i)).toHaveCount(0, { timeout: 10_000 });
 
-    await expect(page.getByText(id1, { exact: true })).toHaveCount(0, { timeout: 10_000 });
-    await expect(page.getByText(id2, { exact: true })).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.getByText(ids[0], { exact: true })).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.getByText(ids[1], { exact: true })).toHaveCount(0, { timeout: 10_000 });
   });
 
   test('bulk priority change moves selected issues into the new priority group', async ({

@@ -56,13 +56,20 @@ test.describe('Real-time Sync', () => {
     await pageA.waitForSelector('[data-testid="issue-list-view"]');
     await pageB.waitForSelector('[data-testid="issue-list-view"]');
 
-    // Select first issue in tab A and read its title from the active row's
-    // title button.
-    await pageA.keyboard.press('j');
-    const activeRowA = pageA.locator('[data-testid="issue-row"][data-selected="true"]').first();
-    await expect(activeRowA).toBeVisible();
-    const issueTitle = (await activeRowA.locator('button.flex-1').textContent())?.trim();
-    expect(issueTitle).toBeTruthy();
+    // Pre-create a fresh issue in tab A so we don't mutate a seeded ENG-N
+    // that sibling specs (issue-crud, issue-detail) look up by title.
+    const issueTitle = `Sync status ${Date.now()}`;
+    await pageA.keyboard.press('c');
+    const dialogA = pageA.getByRole('dialog', { name: /create issue/i });
+    await expect(dialogA).toBeVisible();
+    await dialogA.getByPlaceholder(/issue title/i).fill(issueTitle);
+    await dialogA.getByPlaceholder(/issue title/i).press('Enter');
+    await expect(pageA.getByText(issueTitle)).toBeVisible({ timeout: 10_000 });
+    const rowA = pageA.locator('[data-testid="issue-row"]').filter({ hasText: issueTitle }).first();
+    await expect(rowA.getByText(/^ENG-\d+$/)).toBeVisible({ timeout: 10_000 });
+    await rowA.locator('input[type="checkbox"]').click({ force: true });
+    await expect(rowA).toHaveAttribute('data-selected', 'true', { timeout: 5000 });
+    await pageA.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
 
     // Open status popover and pick "Done"
     await pageA.keyboard.press('s');
@@ -75,7 +82,7 @@ test.describe('Real-time Sync', () => {
     const doneGroupB = pageB
       .locator('[data-testid="group-section"]')
       .filter({ has: pageB.getByTestId('group-header').filter({ hasText: 'Done' }) })
-      .filter({ hasText: issueTitle as string });
+      .filter({ hasText: issueTitle });
     await expect(doneGroupB).toBeVisible({ timeout: 30000 });
 
     await contextA.close();
@@ -94,21 +101,30 @@ test.describe('Real-time Sync', () => {
     await pageA.waitForSelector('[data-testid="issue-list-view"]');
     await pageB.waitForSelector('[data-testid="issue-list-view"]');
 
-    // Select first issue and grab its title
-    await pageA.keyboard.press('j');
-    const activeRowA = pageA.locator('[data-testid="issue-row"][data-selected="true"]').first();
-    await expect(activeRowA).toBeVisible();
-    const issueTitle = (await activeRowA.locator('button.flex-1').textContent())?.trim();
-    expect(issueTitle).toBeTruthy();
+    // Pre-create a fresh issue in tab A so we don't archive a seeded ENG-N
+    // that sibling specs depend on.
+    const title = `Sync archive ${Date.now()}`;
+    await pageA.keyboard.press('c');
+    const dialogA = pageA.getByRole('dialog', { name: /create issue/i });
+    await expect(dialogA).toBeVisible();
+    await dialogA.getByPlaceholder(/issue title/i).fill(title);
+    await dialogA.getByPlaceholder(/issue title/i).press('Enter');
+    await expect(pageA.getByText(title)).toBeVisible({ timeout: 10_000 });
 
-    // Confirm tab B currently shows it
-    await expect(pageB.getByText(issueTitle as string).first()).toBeVisible();
+    // Wait for tab B to receive the create + for the temp '…' identifier to
+    // reconcile in tab A so checkbox-driven selection sticks.
+    await expect(pageB.getByText(title)).toBeVisible({ timeout: 30_000 });
+    const rowA = pageA.locator('[data-testid="issue-row"]').filter({ hasText: title }).first();
+    await expect(rowA.getByText(/^ENG-\d+$/)).toBeVisible({ timeout: 10_000 });
 
-    // Archive via Backspace
+    // Select the fresh row and archive.
+    await rowA.locator('input[type="checkbox"]').click({ force: true });
+    await expect(rowA).toHaveAttribute('data-selected', 'true', { timeout: 5000 });
+    await pageA.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await pageA.keyboard.press('Backspace');
 
-    // Title should disappear from tab B
-    await expect(pageB.getByText(issueTitle as string)).toHaveCount(0, { timeout: 30000 });
+    // Title disappears from tab B.
+    await expect(pageB.getByText(title)).toHaveCount(0, { timeout: 30000 });
 
     await contextA.close();
     await contextB.close();
