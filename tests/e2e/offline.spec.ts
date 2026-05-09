@@ -85,6 +85,9 @@ test.describe('Offline Support', () => {
       .first();
     await freshRow.locator('input[type="checkbox"]').click({ force: true });
     await expect(freshRow).toHaveAttribute('data-selected', 'true');
+    // Blur the checkbox so subsequent keyboard shortcuts (S, Backspace) are not
+    // swallowed by useHotkeys' INPUT-target gating.
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
 
     // Go offline
     await context.setOffline(true);
@@ -149,6 +152,9 @@ test.describe('Offline Support', () => {
       .first();
     await freshRow.locator('input[type="checkbox"]').click({ force: true });
     await expect(freshRow).toHaveAttribute('data-selected', 'true');
+    // Blur the checkbox so subsequent keyboard shortcuts (S, Backspace) are not
+    // swallowed by useHotkeys' INPUT-target gating.
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
 
     // Go offline
     await context.setOffline(true);
