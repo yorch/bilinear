@@ -1,23 +1,38 @@
+import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '@playwright/test';
 import { loginAs } from '../fixtures/auth';
 
 /**
  * Issue detail panel:
- *   - opens when an issue row is clicked
+ *   - opens when an issue row's title is clicked
  *   - close button dismisses it
  *   - title can be edited inline
  *   - Shift+S toggles the issue subscription bell
  *
- * Relies on a seeded issue existing in the team's default issue list.
+ * Pin selection to a seeded issue ("Set up CI/CD pipeline") so the test
+ * doesn't race against parallel specs that create their own issues — using
+ * `.first()` would otherwise click whichever throwaway happens to lead the
+ * sort order at the moment the test runs.
+ *
+ * Click the title button (not the row container) — the row's div has no
+ * onClick of its own; only the title button triggers `onOpen`. Clicking
+ * the row at its visual center can land on a sibling control (priority,
+ * label, due-date) and silently miss the navigation.
  */
+const SEED_TITLE = 'Set up CI/CD pipeline';
+
+const titleButton = (page: Page, title: string): Locator =>
+  page
+    .locator('[data-testid="issue-row"]', { hasText: title })
+    .getByRole('button', { exact: true, name: title });
+
 test.describe('Issue Detail Panel', () => {
   test.beforeEach(async ({ page }) => {
     await loginAs(page, 'e2e@test.local');
   });
 
   test('clicking an issue opens the detail panel with the identifier', async ({ page }) => {
-    const firstRow = page.locator('[data-testid="issue-row"]').first();
-    await firstRow.click();
+    await titleButton(page, SEED_TITLE).click();
     const panel = page.locator('[data-testid="issue-detail-panel"]');
     await expect(panel).toBeVisible();
     // The panel header always renders the issue identifier (e.g. "ENG-1")
@@ -25,8 +40,7 @@ test.describe('Issue Detail Panel', () => {
   });
 
   test('Close button dismisses the panel', async ({ page }) => {
-    const firstRow = page.locator('[data-testid="issue-row"]').first();
-    await firstRow.click();
+    await titleButton(page, SEED_TITLE).click();
     const panel = page.locator('[data-testid="issue-detail-panel"]');
     await expect(panel).toBeVisible();
     await panel.getByRole('button', { name: /close/i }).click();
@@ -42,13 +56,13 @@ test.describe('Issue Detail Panel', () => {
     await page.getByRole('button', { name: /^create issue$/i }).click();
     await expect(page.getByText(original)).toBeVisible({ timeout: 5_000 });
 
-    await page.locator('[data-testid="issue-row"]', { hasText: original }).click();
+    await titleButton(page, original).click();
     const panel = page.locator('[data-testid="issue-detail-panel"]');
     await expect(panel).toBeVisible();
 
-    const titleButton = panel.locator('button.text-xl').first();
-    await expect(titleButton).toHaveText(original);
-    await titleButton.click();
+    const titleHeading = panel.locator('button.text-xl').first();
+    await expect(titleHeading).toHaveText(original);
+    await titleHeading.click();
 
     const titleInput = panel.locator('input.text-xl');
     await expect(titleInput).toBeVisible();
@@ -61,8 +75,7 @@ test.describe('Issue Detail Panel', () => {
   });
 
   test('Shift+S toggles the subscription bell aria label', async ({ page }) => {
-    const firstRow = page.locator('[data-testid="issue-row"]').first();
-    await firstRow.click();
+    await titleButton(page, SEED_TITLE).click();
     const panel = page.locator('[data-testid="issue-detail-panel"]');
     await expect(panel).toBeVisible();
 
