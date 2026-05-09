@@ -145,15 +145,14 @@ test.describe('Real-time Sync', () => {
     // In tab A, navigate selection (J) until the active row is the new issue,
     // then archive via Backspace. (Clicking the row's title button opens the
     // detail panel rather than selecting, so we drive selection via J.)
-    const rowA = pageA
-      .locator('[data-testid="issue-row"]')
-      .filter({ hasText: title })
-      .first();
+    const rowA = pageA.locator('[data-testid="issue-row"]').filter({ hasText: title }).first();
     // Press J up to N times to land on our row.
     for (let i = 0; i < 20; i++) {
       await pageA.keyboard.press('j');
       const isSelected = await rowA.getAttribute('data-selected');
-      if (isSelected === 'true') break;
+      if (isSelected === 'true') {
+        break;
+      }
     }
     await expect(rowA).toHaveAttribute('data-selected', 'true');
     await pageA.keyboard.press('Backspace');
