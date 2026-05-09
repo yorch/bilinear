@@ -146,6 +146,9 @@ test.describe('Real-time Sync', () => {
     // then archive via Backspace. (Clicking the row's title button opens the
     // detail panel rather than selecting, so we drive selection via J.)
     const rowA = pageA.locator('[data-testid="issue-row"]').filter({ hasText: title }).first();
+    // Wait for the optimistic temp identifier ('…' suffix) to reconcile to
+    // a real ENG-N before navigating, so J's selectedId target is stable.
+    await expect(rowA.getByText(/^ENG-\d+$/)).toBeVisible({ timeout: 10000 });
     // Press J up to N times to land on our row.
     for (let i = 0; i < 20; i++) {
       await pageA.keyboard.press('j');
