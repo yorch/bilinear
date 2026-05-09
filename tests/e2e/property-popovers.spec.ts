@@ -30,8 +30,10 @@ test.describe('Property Popovers', () => {
     await page.keyboard.press('s');
     const popover = page.locator('[data-testid="status-select-popover"]');
     await expect(popover).toBeVisible();
-    // Picking any state option commits the change and closes the popover.
-    await popover.getByRole('button').first().click();
+    // Pick "Todo" by name. The seeded Triage state sorts first (position=-1)
+    // but moving an issue into Triage hides it from the main list, breaking
+    // sibling specs that look up the seeded ENG-1 by title.
+    await popover.getByRole('button', { name: /^Todo$/ }).click();
     await expect(popover).not.toBeVisible();
   });
 

@@ -33,7 +33,11 @@ test.describe('Issue Properties via Keyboard', () => {
     await page.keyboard.press('s');
     const popover = page.locator('[data-testid="status-select-popover"]');
     await expect(popover).toBeVisible();
-    await popover.getByRole('button').first().click();
+    // Pick "Todo" by name rather than first(): the seed's Triage state has
+    // position=-1 so it sorts first in the popover, but moving the active
+    // issue to Triage hides it from the main list view and breaks sibling
+    // specs that look up issues like ENG-1 by title.
+    await popover.getByRole('button', { name: /^Todo$/ }).click();
     await expect(popover).not.toBeVisible();
   });
 
