@@ -22,13 +22,15 @@ test.describe('Real-time Sync', () => {
 
     const title = `Sync test ${Date.now()}`;
 
-    // Create issue in tab A. Scope the modal interactions so /create/i doesn't
-    // collide with sidebar buttons like "Create a team".
+    // Create issue in tab A. Submit via Enter on the title input — the
+    // submit button can disappear momentarily when MobX-derived props
+    // re-render the modal.
     await pageA.keyboard.press('c');
     const dialogA = pageA.getByRole('dialog', { name: /create issue/i });
     await expect(dialogA).toBeVisible();
-    await dialogA.getByPlaceholder(/issue title/i).fill(title);
-    await dialogA.getByRole('button', { exact: true, name: 'Create issue' }).click();
+    const titleA = dialogA.getByPlaceholder(/issue title/i);
+    await titleA.fill(title);
+    await titleA.press('Enter');
 
     // Verify in tab A
     await expect(pageA.getByText(title)).toBeVisible({ timeout: 5000 });

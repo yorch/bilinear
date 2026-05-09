@@ -122,6 +122,7 @@ export const typeDefs = `
     estimate: Float
     dueDate: Date
     sortOrder: Float!
+    prioritySortOrder: Float!
     trashed: Boolean!
     teamId: ID!
     stateId: ID!
