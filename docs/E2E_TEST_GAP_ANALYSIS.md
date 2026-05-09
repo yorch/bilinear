@@ -9,9 +9,10 @@ This document compares the Playwright E2E suite against the full feature surface
 | Metric | Before | After |
 | --- | ---: | ---: |
 | Spec files | 27 | 30 |
-| Tests | 76 | 32 new (104 total) |
+| Tests | 76 | 104 (28 new) |
 | Tier 1 gaps closed | 0 / 5 | 4 / 5 (offline-mutate fixme) |
 | Tier 2 gaps closed | 0 / 3 | 2 / 3 (triage actions fixme) |
+| Final full-suite result | n/a | **94 passed / 10 skipped / 0 failed** (chromium, ~3 min) |
 
 Three new specs added: `issue-properties.spec.ts`, `bulk-actions.spec.ts`, `optimistic-rollback.spec.ts`. Five existing specs extended: `sync.spec.ts`, `offline.spec.ts`, `initiatives.spec.ts`, `triage.spec.ts`, `webhooks.spec.ts`. Seed (`prisma/seed.ts`) updated to enable triage on ENG and add a Triage workflow state plus three triage-state issues so triage tests have queued items.
 
