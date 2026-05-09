@@ -142,22 +142,17 @@ test.describe('Real-time Sync', () => {
     await expect(pageA.getByText(title)).toBeVisible({ timeout: 10000 });
     await expect(pageB.getByText(title)).toBeVisible({ timeout: 30000 });
 
-    // In tab A, navigate selection (J) until the active row is the new issue,
-    // then archive via Backspace. (Clicking the row's title button opens the
-    // detail panel rather than selecting, so we drive selection via J.)
+    // In tab A, select the new row via its hidden checkbox after the
+    // optimistic temp identifier ('…' suffix) reconciles to a real ENG-N.
+    // (Clicking the row container falls onto the title button and opens the
+    // detail panel; pressing J many times is unreliable when the list has
+    // accumulated test data.)
     const rowA = pageA.locator('[data-testid="issue-row"]').filter({ hasText: title }).first();
-    // Wait for the optimistic temp identifier ('…' suffix) to reconcile to
-    // a real ENG-N before navigating, so J's selectedId target is stable.
     await expect(rowA.getByText(/^ENG-\d+$/)).toBeVisible({ timeout: 10000 });
-    // Press J up to N times to land on our row.
-    for (let i = 0; i < 20; i++) {
-      await pageA.keyboard.press('j');
-      const isSelected = await rowA.getAttribute('data-selected');
-      if (isSelected === 'true') {
-        break;
-      }
-    }
-    await expect(rowA).toHaveAttribute('data-selected', 'true');
+    await rowA.locator('input[type="checkbox"]').click({ force: true });
+    await expect(rowA).toHaveAttribute('data-selected', 'true', { timeout: 5000 });
+    // Blur the checkbox so Backspace isn't gated by useHotkeys' INPUT check.
+    await pageA.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await pageA.keyboard.press('Backspace');
 
     // Title disappears from tab B
