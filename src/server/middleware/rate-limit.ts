@@ -177,6 +177,16 @@ export async function checkAuthMutationLimit(
   email: string,
   clientIp: string | null,
 ): Promise<{ exceeded: boolean }> {
+  // E2E tests reuse a single fixture email and exceed the per-email
+  // login cap (5/hour) within the first batch. The TEST_AUTH_CODE
+  // bypass already short-circuits verifyMagicLink, so skipping the
+  // cap here is consistent with that contract. We gate on TEST_AUTH_CODE
+  // (only set by playwright.config.ts) rather than NODE_ENV, since
+  // unit tests run with NODE_ENV=test and assert on the real limiter.
+  if (process.env.TEST_AUTH_CODE) {
+    return { exceeded: false };
+  }
+
   const emailKey = `rl:auth:${kind}:email:${email.toLowerCase()}`;
   const ipKey = clientIp ? `rl:auth:${kind}:ip:${clientIp}` : null;
 
