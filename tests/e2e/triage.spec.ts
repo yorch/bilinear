@@ -132,19 +132,27 @@ test.describe('Triage', () => {
     // Click the Accept button on THAT row, not the first row of the queue.
     await freshRow.getByRole('button', { name: 'Accept' }).click();
 
-    // Once the optimistic update commits, the row with the fresh title is gone.
-    await expect(page.getByText(freshTitle)).toHaveCount(0, { timeout: 10_000 });
+    // The accepted row leaves the active queue. Assert against `freshRow` (a
+    // queue-scoped locator) rather than `getByText(freshTitle)` page-wide,
+    // because Sonner's success toast briefly echoes the title.
+    await expect(freshRow).not.toBeVisible({ timeout: 10_000 });
   });
 
   test('Decline cancels the issue and removes it from the queue', async ({ page }) => {
     const ws = getWorkspaceKey(page);
     const team = getTeamKey(page);
+    // Land on team page first so cookies attach and bootstrap completes BEFORE
+    // we create the fresh issue. Then navigate to /triage so the bootstrap on
+    // load picks up the new row (the triage page does not subscribe to live
+    // updates for newly-created issues).
+    await page.goto(`/${ws}/team/${team}`);
+    await page.waitForSelector('[data-testid="issue-list-view"], [data-testid="empty-state"]');
+
+    const freshTitle = await createFreshTriageIssue(page, team);
+
     await page.goto(`/${ws}/team/${team}/triage`);
     await expect(page.getByText(/to triage/i)).toBeVisible({ timeout: 15_000 });
 
-    const freshTitle = await createFreshTriageIssue(page, team);
-    // Each triage row is a flex div with the "items-center gap-3 border-b"
-    // utility classes. Find the one whose subtree contains the fresh title.
     const freshRow = page
       .locator('div.flex.items-center.gap-3.border-b')
       .filter({ hasText: freshTitle })
@@ -153,18 +161,22 @@ test.describe('Triage', () => {
 
     await freshRow.getByRole('button', { name: 'Decline' }).click();
 
-    await expect(page.getByText(freshTitle)).toHaveCount(0, { timeout: 10_000 });
+    await expect(freshRow).not.toBeVisible({ timeout: 10_000 });
   });
 
   test('Mark Duplicate removes the issue and creates a duplicate relation', async ({ page }) => {
     const ws = getWorkspaceKey(page);
     const team = getTeamKey(page);
+    // Land on team page first so the fresh issue is created BEFORE the triage
+    // page bootstraps. Bootstrap on /triage load then picks up the new row.
+    await page.goto(`/${ws}/team/${team}`);
+    await page.waitForSelector('[data-testid="issue-list-view"], [data-testid="empty-state"]');
+
+    const freshTitle = await createFreshTriageIssue(page, team);
+
     await page.goto(`/${ws}/team/${team}/triage`);
     await expect(page.getByText(/to triage/i)).toBeVisible({ timeout: 15_000 });
 
-    const freshTitle = await createFreshTriageIssue(page, team);
-    // Each triage row is a flex div with the "items-center gap-3 border-b"
-    // utility classes. Find the one whose subtree contains the fresh title.
     const freshRow = page
       .locator('div.flex.items-center.gap-3.border-b')
       .filter({ hasText: freshTitle })
@@ -220,18 +232,22 @@ test.describe('Triage', () => {
 
     await freshRow.getByRole('button', { name: 'Duplicate' }).click();
 
-    await expect(page.getByText(freshTitle)).toHaveCount(0, { timeout: 10_000 });
+    await expect(freshRow).not.toBeVisible({ timeout: 10_000 });
   });
 
   test('Snooze hides the issue from the active queue', async ({ page }) => {
     const ws = getWorkspaceKey(page);
     const team = getTeamKey(page);
+    // Land on team page first; create fresh issue; then navigate to /triage
+    // so the bootstrap on load picks up the new row.
+    await page.goto(`/${ws}/team/${team}`);
+    await page.waitForSelector('[data-testid="issue-list-view"], [data-testid="empty-state"]');
+
+    const freshTitle = await createFreshTriageIssue(page, team);
+
     await page.goto(`/${ws}/team/${team}/triage`);
     await expect(page.getByText(/to triage/i)).toBeVisible({ timeout: 15_000 });
 
-    const freshTitle = await createFreshTriageIssue(page, team);
-    // Each triage row is a flex div with the "items-center gap-3 border-b"
-    // utility classes. Find the one whose subtree contains the fresh title.
     const freshRow = page
       .locator('div.flex.items-center.gap-3.border-b')
       .filter({ hasText: freshTitle })
@@ -244,6 +260,6 @@ test.describe('Triage', () => {
     await page.getByRole('menuitem', { name: '1 day' }).click();
 
     // The snoozed row leaves the active queue.
-    await expect(page.getByText(freshTitle)).toHaveCount(0, { timeout: 10_000 });
+    await expect(freshRow).not.toBeVisible({ timeout: 10_000 });
   });
 });

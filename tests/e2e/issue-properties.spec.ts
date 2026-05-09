@@ -46,55 +46,65 @@ test.describe('Issue Properties via Keyboard', () => {
   });
 
   test('A opens the assignee selector and dismisses on outside click', async ({ page }) => {
+    // Each row renders an inline assignee select with a `title="No assignee"`
+    // affordance, so page-wide locators match dozens of buttons. Scope to the
+    // row that the keyboard shortcut force-opens (the selected row).
+    const selectedRow = page.locator('[data-testid="issue-row"][data-selected="true"]');
     await page.keyboard.press('a');
-    // The assignee popover surfaces a "No assignee" entry that is unique to
-    // this popover (the seeded ENG-1 has no assignee).
-    const noAssignee = page.getByRole('button', { name: /^No assignee$/ });
-    await expect(noAssignee).toBeVisible({ timeout: 5_000 });
+    // The opened popover renders a wide `min-w-[200px]` button with "No assignee"
+    // text — distinct from the inline trigger button.
+    const popoverButton = selectedRow.locator('button.w-full', { hasText: /^No assignee$/ });
+    await expect(popoverButton).toBeVisible({ timeout: 5_000 });
     await page.locator('aside').click();
-    await expect(noAssignee).not.toBeVisible();
+    await expect(popoverButton).not.toBeVisible();
   });
 
   test('L opens the label selector and dismisses on outside click', async ({ page }) => {
+    const selectedRow = page.locator('[data-testid="issue-row"][data-selected="true"]');
     await page.keyboard.press('l');
-    // ENG has no labels seeded, so the popover renders the "No labels" copy.
-    const noLabels = page.getByText('No labels', { exact: true });
+    // The label popover renders a "No labels" empty-state paragraph; scope to
+    // the selected row to avoid matching label-pill text in other rows.
+    const noLabels = selectedRow.getByText('No labels', { exact: true });
     await expect(noLabels).toBeVisible({ timeout: 5_000 });
     await page.locator('aside').click();
     await expect(noLabels).not.toBeVisible();
   });
 
   test('D opens the due date picker and dismisses on outside click', async ({ page }) => {
+    const selectedRow = page.locator('[data-testid="issue-row"][data-selected="true"]');
     await page.keyboard.press('d');
-    // The due date popover renders a native <input type="date">.
-    const dateInput = page.locator('input[type="date"]');
+    const dateInput = selectedRow.locator('input[type="date"]');
     await expect(dateInput).toBeVisible({ timeout: 5_000 });
     await page.locator('aside').click();
     await expect(dateInput).not.toBeVisible();
   });
 
   test('Q opens the cycle selector and dismisses on outside click', async ({ page }) => {
+    const selectedRow = page.locator('[data-testid="issue-row"][data-selected="true"]');
     await page.keyboard.press('q');
-    // The cycle popover has a "Search cycles..." placeholder we can target.
-    const cycleSearch = page.getByPlaceholder('Search cycles...');
+    const cycleSearch = selectedRow.getByPlaceholder('Search cycles...');
     await expect(cycleSearch).toBeVisible({ timeout: 5_000 });
     await page.locator('aside').click();
     await expect(cycleSearch).not.toBeVisible();
   });
 
   test('Shift+P opens the project selector and dismisses on outside click', async ({ page }) => {
+    const selectedRow = page.locator('[data-testid="issue-row"][data-selected="true"]');
     await page.keyboard.press('Shift+p');
-    const projectSearch = page.getByPlaceholder('Search projects...');
+    const projectSearch = selectedRow.getByPlaceholder('Search projects...');
     await expect(projectSearch).toBeVisible({ timeout: 5_000 });
     await page.locator('aside').click();
     await expect(projectSearch).not.toBeVisible();
   });
 
   test('Shift+E opens the estimate picker and dismisses on outside click', async ({ page }) => {
+    const selectedRow = page.locator('[data-testid="issue-row"][data-selected="true"]');
     await page.keyboard.press('Shift+e');
     // ENG has no estimationType configured, so the picker falls back to a
-    // numeric input. Either way the popover surfaces an input we can scope on.
-    const estimateInput = page.locator('input[type="number"], input[placeholder="0"]').first();
+    // numeric input. Scope to the selected row.
+    const estimateInput = selectedRow
+      .locator('input[type="number"], input[placeholder="0"]')
+      .first();
     await expect(estimateInput).toBeVisible({ timeout: 5_000 });
     await page.locator('aside').click();
     await expect(estimateInput).not.toBeVisible();
