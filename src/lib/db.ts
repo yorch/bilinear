@@ -380,8 +380,9 @@ export class AppDatabase extends Dexie {
     // client to re-bootstrap from the server into a fresh DB and orphans
     // the old one. Pre-launch we use this in lieu of versioned upgrades —
     // edit the schema below freely and bump `-vN` when an existing dev
-    // pool would conflict. Once we ship, switch to `.version(N)` blocks
-    // with `.upgrade()` migrations and stop bumping the name.
+    // pool would conflict.
+    // TODO(pre-launch): once we have real users, switch to `.version(N)`
+    // blocks with `.upgrade()` migrations and stop bumping the DB name.
     super('issue-tracker-v2');
     this.version(1).stores({
       customFieldDefinitions: 'id, teamId',
