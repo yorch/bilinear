@@ -130,7 +130,7 @@ test.describe('Real-time Sync', () => {
     await contextB.close();
   });
 
-  test('issue created in tab A and then deleted in tab A no longer appears in tab B', async ({
+  test('issue created in tab A and then archived in tab A no longer appears in tab B', async ({
     browser,
   }) => {
     const contextA = await browser.newContext();
@@ -144,7 +144,7 @@ test.describe('Real-time Sync', () => {
     await pageA.waitForSelector('[data-testid="issue-list-view"]');
     await pageB.waitForSelector('[data-testid="issue-list-view"]');
 
-    const title = `Sync delete ${Date.now()}`;
+    const title = `Sync archive-after-create ${Date.now()}`;
 
     // Create in tab A
     await pageA.keyboard.press('c');

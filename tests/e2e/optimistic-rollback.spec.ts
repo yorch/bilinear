@@ -11,10 +11,13 @@ import { loginAs } from '../fixtures/auth';
  *   - issueUpdate failure  → `issueStore.optimisticUpdate(id, snapshot)`
  *                            (the pre-mutation snapshot is re-applied)
  *
- * To exercise these paths deterministically we intercept the GraphQL endpoint
- * with `page.route()` and reply 500 only for the specific operation under
- * test. This lets the bootstrap, sync, and unrelated mutations succeed
- * normally while still forcing the targeted mutation to fail permanently.
+ * We intercept the GraphQL endpoint with `page.route()` and respond with
+ * HTTP 200 + a GraphQL-shape `{ data: null, errors: [...] }` body for the
+ * targeted operation. That reaches `TransactionQueue.processNext`'s
+ * `result.errors?.length` branch, which throws with `permanent: true` and
+ * fires `onError` immediately — no 14s retry budget. Stubbing HTTP 500
+ * instead would make `gql()` throw before parsing JSON and only exercise
+ * the network-failure retry path.
  *
  * Note on toasts: the team page's onError handlers currently only
  * `console.error` — there is no user-facing toast for these particular
@@ -47,7 +50,7 @@ test.describe('Optimistic Update Rollback', () => {
             errors: [{ extensions: { code: 'INTERNAL' }, message: 'simulated rejection' }],
           }),
           contentType: 'application/json',
-          status: 500,
+          status: 200,
         });
         return;
       }
@@ -66,12 +69,10 @@ test.describe('Optimistic Update Rollback', () => {
     // can resolve the rejection before Playwright's next tick), so skip
     // asserting "title appears" and go straight to the final-state check.
 
-    // Final state: the title must NOT remain in the list. TransactionQueue
-    // retries up to 3 times before the error is treated as permanent (only
-    // `permanent: true` skips the retry path, and we don't set that here),
-    // so allow a generous timeout for the rollback to settle. The retry
-    // schedule is 1s + 3s + 10s ≈ 14s.
-    await expect(page.getByText(title)).toHaveCount(0, { timeout: 20_000 });
+    // Final state: the title must NOT remain in the list. The 200 + errors[]
+    // response triggers the permanent-failure branch in TransactionQueue,
+    // so onError fires immediately without retries.
+    await expect(page.getByText(title)).toHaveCount(0, { timeout: 5_000 });
   });
 
   test('server rejection of status change rolls back the issue state', async ({ page }) => {
@@ -120,7 +121,7 @@ test.describe('Optimistic Update Rollback', () => {
             errors: [{ extensions: { code: 'INTERNAL' }, message: 'simulated rejection' }],
           }),
           contentType: 'application/json',
-          status: 500,
+          status: 200,
         });
         return;
       }
@@ -140,11 +141,10 @@ test.describe('Optimistic Update Rollback', () => {
     await popover.getByRole('button', { name: new RegExp(`^${targetStateName}$`, 'i') }).click();
     await expect(popover).not.toBeVisible();
 
-    // Final state: after the queue exhausts retries the snapshot is
-    // re-applied, so the row should NOT remain under the target group; it
-    // must end up back under its starting group. TransactionQueue retry
-    // schedule is 1s + 3s + 10s before treating the failure as permanent,
-    // so allow up to ~20s for the rollback to settle.
+    // Final state: after the GraphQL `errors[]` response trips the permanent-
+    // failure branch the snapshot is re-applied, so the row should NOT remain
+    // under the target group; it must end up back under its starting group.
+    // No retry budget — onError fires on the first response.
     const targetGroup = page.locator('[data-testid="group-section"]').filter({
       has: page.locator('[data-testid="group-header"]', {
         hasText: new RegExp(`^▾?\\s*${targetStateName}`, 'i'),
@@ -156,7 +156,7 @@ test.describe('Optimistic Update Rollback', () => {
       }),
     });
 
-    await expect(targetGroup.getByText(targetTitle)).toHaveCount(0, { timeout: 20_000 });
-    await expect(startingGroupAfter.getByText(targetTitle)).toBeVisible({ timeout: 20_000 });
+    await expect(targetGroup.getByText(targetTitle)).toHaveCount(0, { timeout: 5_000 });
+    await expect(startingGroupAfter.getByText(targetTitle)).toBeVisible({ timeout: 5_000 });
   });
 });

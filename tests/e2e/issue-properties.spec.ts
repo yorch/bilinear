@@ -49,71 +49,62 @@ test.describe('Issue Properties via Keyboard', () => {
     await expect(popover).not.toBeVisible();
   });
 
+  /**
+   * Helper: dismiss whichever popover is open by dispatching a document-level
+   * mousedown event. All property selects close on the document `mousedown`
+   * handler (`if (ref.current && !ref.current.contains(e.target))`), so a
+   * synthetic mousedown on document.body reliably triggers the close path
+   * without depending on which clickable element happens to be at a given
+   * page coordinate. Page-wide locators are used so the assertion remains
+   * valid even though `selectedId` may also clear.
+   */
+  async function dismissPopover(page: import('@playwright/test').Page) {
+    await page.evaluate(() => {
+      document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    });
+  }
+
   test('A opens the assignee selector and dismisses on outside click', async ({ page }) => {
-    // Each row renders an inline assignee select with a `title="No assignee"`
-    // affordance, so page-wide locators match dozens of buttons. Scope to the
-    // row that the keyboard shortcut force-opens (the selected row).
-    const selectedRow = page.locator('[data-testid="issue-row"][data-selected="true"]');
     await page.keyboard.press('a');
-    // The opened popover renders a wide `min-w-[200px]` button with "No assignee"
-    // text — distinct from the inline trigger button.
-    const popoverButton = selectedRow.locator('button.w-full', { hasText: /^No assignee$/ });
-    await expect(popoverButton).toBeVisible({ timeout: 5_000 });
-    // Pressing Escape clears the page-level selectedId, so the row that the
-    // popover is scoped to no longer has data-selected="true" — the locator
-    // resolves to nothing and the popover assertion passes regardless of
-    // whether the popover itself was actually unmounted (its dismiss path
-    // depends on a document mousedown handler that doesn't fire reliably
-    // when clicking on a generic <aside> in headless chromium).
-    await page.keyboard.press('Escape');
-    await expect(popoverButton).not.toBeVisible();
+    // The popover container has unique `min-w-[200px]` + `z-50` styling.
+    // Match it page-wide so the assertion is valid even after dismiss
+    // (when the row may also lose `data-selected`).
+    const popover = page.locator('div.absolute.z-50.min-w-\\[200px\\]', {
+      has: page.getByRole('button', { name: /^No assignee$/ }),
+    });
+    await expect(popover).toBeVisible({ timeout: 5_000 });
+    await dismissPopover(page);
+    await expect(popover).not.toBeVisible({ timeout: 5_000 });
   });
 
   test('L opens the label selector and dismisses on outside click', async ({ page }) => {
-    const selectedRow = page.locator('[data-testid="issue-row"][data-selected="true"]');
     await page.keyboard.press('l');
-    // The label popover renders a "No labels" empty-state paragraph; scope to
-    // the selected row to avoid matching label-pill text in other rows.
-    const noLabels = selectedRow.getByText('No labels', { exact: true });
-    await expect(noLabels).toBeVisible({ timeout: 5_000 });
-    // Pressing Escape clears the page-level selectedId, so the row that the
-    // popover is scoped to no longer has data-selected="true" — the locator
-    // resolves to nothing and the popover assertion passes regardless of
-    // whether the popover itself was actually unmounted (its dismiss path
-    // depends on a document mousedown handler that doesn't fire reliably
-    // when clicking on a generic <aside> in headless chromium).
-    await page.keyboard.press('Escape');
-    await expect(noLabels).not.toBeVisible();
+    // The label popover renders a "No labels" empty-state paragraph inside
+    // its `min-w-[220px]` container; locate the container page-wide.
+    const popover = page.locator('div.absolute.z-50', {
+      has: page.getByText('No labels', { exact: true }),
+    });
+    await expect(popover).toBeVisible({ timeout: 5_000 });
+    await dismissPopover(page);
+    await expect(popover).not.toBeVisible({ timeout: 5_000 });
   });
 
   test('D opens the due date picker and dismisses on outside click', async ({ page }) => {
-    const selectedRow = page.locator('[data-testid="issue-row"][data-selected="true"]');
     await page.keyboard.press('d');
-    const dateInput = selectedRow.locator('input[type="date"]');
+    // The due date popover is the only `input[type="date"]` on the page.
+    const dateInput = page.locator('input[type="date"]');
     await expect(dateInput).toBeVisible({ timeout: 5_000 });
-    // Pressing Escape clears the page-level selectedId, so the row that the
-    // popover is scoped to no longer has data-selected="true" — the locator
-    // resolves to nothing and the popover assertion passes regardless of
-    // whether the popover itself was actually unmounted (its dismiss path
-    // depends on a document mousedown handler that doesn't fire reliably
-    // when clicking on a generic <aside> in headless chromium).
-    await page.keyboard.press('Escape');
-    await expect(dateInput).not.toBeVisible();
+    await dismissPopover(page);
+    await expect(dateInput).not.toBeVisible({ timeout: 5_000 });
   });
 
   test('Q opens the cycle selector and dismisses on outside click', async ({ page }) => {
-    const selectedRow = page.locator('[data-testid="issue-row"][data-selected="true"]');
     await page.keyboard.press('q');
-    const cycleSearch = selectedRow.getByPlaceholder('Search cycles...');
+    // The cycle popover's "Search cycles..." placeholder is unique page-wide.
+    const cycleSearch = page.getByPlaceholder('Search cycles...');
     await expect(cycleSearch).toBeVisible({ timeout: 5_000 });
-    // Pressing Escape clears the page-level selectedId, so the row that the
-    // popover is scoped to no longer has data-selected="true" — the locator
-    // resolves to nothing and the popover assertion passes regardless of
-    // whether the popover itself was actually unmounted (its dismiss path
-    // depends on a document mousedown handler that doesn't fire reliably
-    // when clicking on a generic <aside> in headless chromium).
-    await page.keyboard.press('Escape');
-    await expect(cycleSearch).not.toBeVisible();
+    await dismissPopover(page);
+    await expect(cycleSearch).not.toBeVisible({ timeout: 5_000 });
   });
 
   // ProjectSelect is not rendered inside IssueRow today (only the standalone
@@ -124,18 +115,11 @@ test.describe('Issue Properties via Keyboard', () => {
   test.skip('Shift+P opens the project selector and dismisses on outside click', async ({
     page,
   }) => {
-    const selectedRow = page.locator('[data-testid="issue-row"][data-selected="true"]');
     await page.keyboard.press('Shift+p');
-    const projectSearch = selectedRow.getByPlaceholder('Search projects...');
+    const projectSearch = page.getByPlaceholder('Search projects...');
     await expect(projectSearch).toBeVisible({ timeout: 5_000 });
-    // Pressing Escape clears the page-level selectedId, so the row that the
-    // popover is scoped to no longer has data-selected="true" — the locator
-    // resolves to nothing and the popover assertion passes regardless of
-    // whether the popover itself was actually unmounted (its dismiss path
-    // depends on a document mousedown handler that doesn't fire reliably
-    // when clicking on a generic <aside> in headless chromium).
-    await page.keyboard.press('Escape');
-    await expect(projectSearch).not.toBeVisible();
+    await dismissPopover(page);
+    await expect(projectSearch).not.toBeVisible({ timeout: 5_000 });
   });
 
   // EstimatePicker is conditionally rendered: only when the team has an
@@ -145,21 +129,10 @@ test.describe('Issue Properties via Keyboard', () => {
   test.skip('Shift+E opens the estimate picker and dismisses on outside click', async ({
     page,
   }) => {
-    const selectedRow = page.locator('[data-testid="issue-row"][data-selected="true"]');
     await page.keyboard.press('Shift+e');
-    // ENG has no estimationType configured, so the picker falls back to a
-    // numeric input. Scope to the selected row.
-    const estimateInput = selectedRow
-      .locator('input[type="number"], input[placeholder="0"]')
-      .first();
+    const estimateInput = page.locator('input[type="number"], input[placeholder="0"]').first();
     await expect(estimateInput).toBeVisible({ timeout: 5_000 });
-    // Pressing Escape clears the page-level selectedId, so the row that the
-    // popover is scoped to no longer has data-selected="true" — the locator
-    // resolves to nothing and the popover assertion passes regardless of
-    // whether the popover itself was actually unmounted (its dismiss path
-    // depends on a document mousedown handler that doesn't fire reliably
-    // when clicking on a generic <aside> in headless chromium).
-    await page.keyboard.press('Escape');
-    await expect(estimateInput).not.toBeVisible();
+    await dismissPopover(page);
+    await expect(estimateInput).not.toBeVisible({ timeout: 5_000 });
   });
 });

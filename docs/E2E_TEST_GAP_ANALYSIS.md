@@ -10,9 +10,11 @@ This document compares the Playwright E2E suite against the full feature surface
 | --- | ---: | ---: |
 | Spec files | 27 | 30 |
 | Tests | 76 | 104 (28 new) |
-| Tier 1 gaps closed | 0 / 5 | 4 / 5 (offline-mutate fixme) |
-| Tier 2 gaps closed | 0 / 3 | 2 / 3 (triage actions fixme) |
+| Tier 1 gaps closed | 0 / 5 | 3 closed + 1 partial + 1 fixme |
+| Tier 2 gaps closed | 0 / 3 | 2 closed + 1 fixme |
 | Final full-suite result | n/a | **94 passed / 10 skipped / 0 failed** (chromium, ~3 min) |
+
+**Tier 1 #1 ("issue property mutations end-to-end") is _partial_, not closed**: the new `issue-properties.spec.ts` exercises S/P/A/L/D/Q popover open + commit (the option click commits the mutation through the resolver/service path) and verifies the popover dismisses cleanly. It does NOT read back the issue's post-mutation state — a row-level / detail-panel read-back is still a coverage gap. Bulk priority change (`bulk-actions.spec.ts`) and cross-tab status change (`sync.spec.ts`) DO assert the post-mutation state in their own scopes.
 
 Three new specs added: `issue-properties.spec.ts`, `bulk-actions.spec.ts`, `optimistic-rollback.spec.ts`. Five existing specs extended: `sync.spec.ts`, `offline.spec.ts`, `initiatives.spec.ts`, `triage.spec.ts`, `webhooks.spec.ts`. Seed (`prisma/seed.ts`) updated to enable triage on ENG and add a Triage workflow state plus three triage-state issues so triage tests have queued items.
 
@@ -135,7 +137,7 @@ These are the gaps most worth filling first, based on user-impact × regression 
 
 ### Tier 1 — core user paths with no real assertion (addressed)
 
-1. ✅ **Issue property mutations end-to-end** — `issue-properties.spec.ts` covers S, P, A, L, D, Q. Shift+P / Shift+E skipped because no in-row UI subscribes to the openProperty state today.
+1. 🟡 **Issue property mutations end-to-end (partial)** — `issue-properties.spec.ts` opens the popover for S/P/A/L/D/Q, commits a value via option-click for S and P (which exercises the resolver → service → SyncAction pipeline), and asserts the popover dismisses on a synthetic outside `mousedown`. **It does not yet read back the post-mutation state** — a row-level or detail-panel assertion that the issue's status/priority/etc. actually changed is still a gap. Bulk priority change (`bulk-actions.spec.ts`) and cross-tab status change (`sync.spec.ts`) cover the read-back side in their own scopes. Shift+P / Shift+E skipped because no in-row UI subscribes to those `openProperty` values today.
 2. ✅ **Bulk actions toolbar** — `bulk-actions.spec.ts` covers the multi-select toolbar appearance, bulk archive, and bulk priority change on `/team/<key>/backlog`.
 3. ✅ **Cross-tab sync beyond create** — `sync.spec.ts` extended to cover status change, archive, and create-then-delete cross-tab.
 4. ✅ **Optimistic update rollback** — `optimistic-rollback.spec.ts` forces 500 on createIssue / updateIssue via `page.route` and asserts the MobX store rolls back.
