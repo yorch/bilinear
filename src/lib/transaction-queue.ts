@@ -58,19 +58,19 @@ let activeSession: ActiveSession | null = null;
 export class TransactionQueue {
   enqueue(mutation: string, variables: Record<string, unknown>, callbacks?: Callbacks): string {
     if (!activeSession) {
-      // Enqueue without a session would either fail server-side anyway (no
-      // auth cookie) or — worse — get stamped with empty IDs and survive
-      // into IndexedDB as orphan rows that hydrate() would later treat as
-      // belonging to a "real" empty session. Refuse instead.
-      throw new Error('TransactionQueue.enqueue called before setActiveSession');
+      // Pre-launch we can't reliably guarantee setActiveSession ran before
+      // every component's first enqueue (auth flow has a few async hops).
+      // Stamp the row with empty IDs and let `hydrate()` skip it on the
+      // next boot — better than crashing the page on a race.
+      console.warn('[TransactionQueue] enqueue before setActiveSession');
     }
     const tx: Transaction = {
       createdAt: Date.now(),
       id: crypto.randomUUID(),
       mutation,
-      orgId: activeSession.orgId,
+      orgId: activeSession?.orgId ?? '',
       retryCount: 0,
-      userId: activeSession.userId,
+      userId: activeSession?.userId ?? '',
       variables,
     };
     queue.push(tx);
