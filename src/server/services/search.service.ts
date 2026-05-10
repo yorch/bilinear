@@ -1,8 +1,6 @@
 import type { Issue, PrismaClient } from '../../generated/prisma';
 import { Prisma } from '../../generated/prisma';
-
-// Pattern that matches issue identifiers like "ENG-123" (case-insensitive)
-const IDENTIFIER_RE = /^[A-Z]+-\d+$/i;
+import { IDENTIFIER_RE } from '../../lib/identifiers';
 
 export class SearchService {
   constructor(private prisma: PrismaClient) {}

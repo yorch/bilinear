@@ -9,6 +9,7 @@ export class IssueStore {
     makeObservable(this, {
       all: computed,
       applySyncAction: action,
+      identifierIndex: computed,
       optimisticUpdate: action,
       pool: observable,
       upsertMany: action,
@@ -19,8 +20,26 @@ export class IssueStore {
     return Array.from(this.pool.values()).filter(i => !i.trashed && !i.archivedAt);
   }
 
+  /**
+   * O(1) identifier→issue lookup. Computed off `pool` so MobX rebuilds the
+   * map only when entries are added/removed and reuses it across reads.
+   * Identifiers are stored canonical (uppercase); callers should uppercase
+   * the query before lookup.
+   */
+  get identifierIndex(): Map<string, DBIssue> {
+    const idx = new Map<string, DBIssue>();
+    for (const issue of this.pool.values()) {
+      idx.set(issue.identifier, issue);
+    }
+    return idx;
+  }
+
   findById(id: string): DBIssue | null {
     return this.pool.get(id) ?? null;
+  }
+
+  findByIdentifier(identifier: string): DBIssue | null {
+    return this.identifierIndex.get(identifier) ?? null;
   }
 
   findByTeamId(teamId: string): DBIssue[] {

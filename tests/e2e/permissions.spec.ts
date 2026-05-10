@@ -1,107 +1,68 @@
 import { expect, test } from '@playwright/test';
 import { loginAs } from '../fixtures/auth';
+import { gqlInPage } from '../fixtures/graphql';
 import { getWorkspaceKey } from '../fixtures/workspace';
+
+const WEBHOOK_INPUT = {
+  events: ['issue.created'],
+  url: 'https://example.com/hook',
+};
 
 /**
  * Role-gating for admin-only surfaces.
  *
  * The seed creates `e2e-member@test.local` with org role=member (no admin
  * privileges). These tests verify the server enforces FORBIDDEN on the
- * admin-gated webhook surface and that the UI degrades gracefully (it does
- * not crash, it does not leak the signing secret) when the GraphQL queries
- * come back rejected.
+ * admin-gated webhook surface and that the UI degrades gracefully when the
+ * GraphQL queries come back rejected.
+ *
+ * Apollo returns `errors: [{ message, extensions: { code } }]`. Don't assume
+ * FORBIDDEN is at index 0 — middleware ordering or future resolver behavior
+ * could push it later. Use `errors.some(...)` instead.
  */
 test.describe('Permissions — admin-only routes', () => {
   test('non-admin webhookCreate returns FORBIDDEN', async ({ page }) => {
     await loginAs(page, 'e2e-member@test.local');
 
-    const result = await page.evaluate(async () => {
-      const resp = await fetch('/api/graphql', {
-        body: JSON.stringify({
-          query: `mutation Create($input: WebhookCreateInput!) { webhookCreate(input: $input) { success } }`,
-          variables: {
-            input: {
-              events: ['issue.created'],
-              name: 'Forbidden create attempt',
-              url: 'https://example.com/hook',
-            },
-          },
-        }),
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        method: 'POST',
-      });
-      return resp.json();
-    });
+    const result = await gqlInPage(
+      page,
+      `mutation Create($input: WebhookCreateInput!) { webhookCreate(input: $input) { success } }`,
+      { input: { ...WEBHOOK_INPUT, name: 'Forbidden create attempt' } },
+    );
 
-    // Apollo returns `errors: [{ message, extensions: { code } }]`. Don't
-    // assume FORBIDDEN is at index 0 — middleware ordering or future
-    // resolver behavior could push it later. Assert at least one error
-    // carries the code instead.
-    const errors = result?.errors as Array<{ extensions?: { code?: string } }> | undefined;
-    expect(errors?.length ?? 0).toBeGreaterThan(0);
-    expect(errors?.some(e => e.extensions?.code === 'FORBIDDEN')).toBe(true);
+    expect(result.errors?.length ?? 0).toBeGreaterThan(0);
+    expect(result.errors?.some(e => e.extensions?.code === 'FORBIDDEN')).toBe(true);
   });
 
   test('non-admin webhooks query returns FORBIDDEN', async ({ page }) => {
     await loginAs(page, 'e2e-member@test.local');
 
-    const result = await page.evaluate(async () => {
-      const resp = await fetch('/api/graphql', {
-        body: JSON.stringify({
-          query: `query { webhooks { id name } }`,
-        }),
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        method: 'POST',
-      });
-      return resp.json();
-    });
+    const result = await gqlInPage(page, `query { webhooks { id name } }`);
 
-    const errors = result?.errors as Array<{ extensions?: { code?: string } }> | undefined;
-    expect(errors?.length ?? 0).toBeGreaterThan(0);
-    expect(errors?.some(e => e.extensions?.code === 'FORBIDDEN')).toBe(true);
+    expect(result.errors?.length ?? 0).toBeGreaterThan(0);
+    expect(result.errors?.some(e => e.extensions?.code === 'FORBIDDEN')).toBe(true);
   });
 
   test('admin webhookCreate succeeds (control)', async ({ page }) => {
     await loginAs(page, 'e2e@test.local');
 
-    const result = await page.evaluate(async () => {
-      const resp = await fetch('/api/graphql', {
-        body: JSON.stringify({
-          query: `mutation Create($input: WebhookCreateInput!) { webhookCreate(input: $input) { success webhook { id } } }`,
-          variables: {
-            input: {
-              events: ['issue.created'],
-              name: `Permission control ${Date.now()}`,
-              url: 'https://example.com/hook',
-            },
-          },
-        }),
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        method: 'POST',
-      });
-      return resp.json();
-    });
+    const result = await gqlInPage<{
+      webhookCreate: { success: boolean; webhook?: { id: string } };
+    }>(
+      page,
+      `mutation Create($input: WebhookCreateInput!) {
+        webhookCreate(input: $input) { success webhook { id } }
+      }`,
+      { input: { ...WEBHOOK_INPUT, name: `Permission control ${Date.now()}` } },
+    );
 
-    expect(result?.errors).toBeUndefined();
-    expect(result?.data?.webhookCreate?.success).toBe(true);
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.webhookCreate?.success).toBe(true);
 
-    // Clean up so the seed list doesn't grow per test run.
-    const id = result?.data?.webhookCreate?.webhook?.id as string | undefined;
+    // Cleanup so the seed list doesn't grow per test run.
+    const id = result.data?.webhookCreate?.webhook?.id;
     if (id) {
-      await page.evaluate(async (id: string) => {
-        await fetch('/api/graphql', {
-          body: JSON.stringify({
-            query: `mutation($id: ID!) { webhookDelete(id: $id) { success } }`,
-            variables: { id },
-          }),
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          method: 'POST',
-        });
-      }, id);
+      await gqlInPage(page, `mutation($id: ID!) { webhookDelete(id: $id) { success } }`, { id });
     }
   });
 
@@ -117,7 +78,6 @@ test.describe('Permissions — admin-only routes', () => {
     await expect(page.getByText(/something went wrong/i)).not.toBeVisible({
       timeout: 5_000,
     });
-    // Heading still renders to confirm the route is reachable.
     await expect(page.getByRole('heading', { name: /webhook/i }).first()).toBeVisible({
       timeout: 10_000,
     });

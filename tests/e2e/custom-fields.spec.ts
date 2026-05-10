@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { loginAs } from '../fixtures/auth';
+import { getTeamIdByKey, gqlInPage } from '../fixtures/graphql';
 import { getTeamKey, getWorkspaceKey } from '../fixtures/workspace';
 
 /**
@@ -38,38 +39,17 @@ test.describe('Custom fields', () => {
     // Capture its id by name (not by array position) so cleanup targets the
     // definition this test created even when other definitions exist or
     // the resolver reorders results.
-    const definitionId = await page.evaluate(
-      async ({ teamKey, fieldName }: { teamKey: string; fieldName: string }) => {
-        const teamsResp = await fetch('/api/graphql', {
-          body: JSON.stringify({ query: `{ teams { id key } }` }),
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          method: 'POST',
-        });
-        const teamsJson = await teamsResp.json();
-        const teamId = (teamsJson?.data?.teams as Array<{ id: string; key: string }>).find(
-          t => t.key === teamKey,
-        )?.id;
-        if (!teamId) {
-          return null;
-        }
-        const defsResp = await fetch('/api/graphql', {
-          body: JSON.stringify({
-            query: `query($teamId: ID!) { customFieldDefinitions(teamId: $teamId) { id name } }`,
-            variables: { teamId },
-          }),
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          method: 'POST',
-        });
-        const json = await defsResp.json();
-        const defs = json?.data?.customFieldDefinitions as
-          | Array<{ id: string; name: string }>
-          | undefined;
-        return defs?.find(d => d.name === fieldName)?.id ?? null;
-      },
-      { fieldName, teamKey: team },
-    );
+    const teamId = await getTeamIdByKey(page, team);
+    let definitionId: string | null = null;
+    if (teamId) {
+      const defsRes = await gqlInPage<{
+        customFieldDefinitions: Array<{ id: string; name: string }>;
+      }>(page, `query($teamId: ID!) { customFieldDefinitions(teamId: $teamId) { id name } }`, {
+        teamId,
+      });
+      definitionId =
+        defsRes.data?.customFieldDefinitions.find(d => d.name === fieldName)?.id ?? null;
+    }
 
     // Open the seeded ENG-1 issue and verify the new field shows up in the
     // Custom fields editor section.
@@ -89,17 +69,11 @@ test.describe('Custom fields', () => {
     // Cleanup: archive the definition so the team doesn't approach MAX_FIELDS
     // across runs. Failures here are non-fatal — the test already passed.
     if (definitionId) {
-      await page.evaluate(async (id: string) => {
-        await fetch('/api/graphql', {
-          body: JSON.stringify({
-            query: `mutation($id: ID!) { customFieldDefinitionArchive(id: $id) { success } }`,
-            variables: { id },
-          }),
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          method: 'POST',
-        });
-      }, definitionId);
+      await gqlInPage(
+        page,
+        `mutation($id: ID!) { customFieldDefinitionArchive(id: $id) { success } }`,
+        { id: definitionId },
+      );
     }
   });
 });

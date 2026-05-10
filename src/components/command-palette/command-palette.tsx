@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { RecentItem } from '@/hooks/use-recent-items';
 import type { DBIssue } from '@/lib/db';
+import { IDENTIFIER_RE } from '@/lib/identifiers';
 import { getPriorityConfig } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -99,8 +100,8 @@ export const CommandPalette = observer(function CommandPalette({
     // an exact identifier hit so a press of Enter routes straight to it
     // without the user having to disambiguate against fuzzy near-matches.
     const trimmed = (query || '').trim().toUpperCase();
-    const exactIdentifier = /^[A-Z]+-\d+$/.test(trimmed)
-      ? Array.from(issueStore.pool.values()).find(i => i.identifier === trimmed)
+    const exactIdentifier = IDENTIFIER_RE.test(trimmed)
+      ? (issueStore.findByIdentifier(trimmed) ?? undefined)
       : undefined;
 
     const matched = issueStore.search(query || '', 10);

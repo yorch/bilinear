@@ -1,5 +1,6 @@
 import type { RootStore } from '@/stores/root-store';
 import { db } from './db';
+import { decodeTokenOrgId } from './jwt';
 import type { SerializedSyncAction, WsClient } from './ws-client';
 
 // Upper bound on delta pages consumed per deltaSync call. Server returns
@@ -80,29 +81,8 @@ export class SyncManager {
 
   // ─── Private methods ────────────────────────────────────────────────────────
 
-  /**
-   * Decode the (already-server-verified) JWT to read its orgId claim.
-   * Client doesn't re-verify the signature — the cookie was set by the
-   * server which validated it. We only need the claim to compare with
-   * what's persisted in IndexedDB.
-   */
-  private decodeTokenOrgId(token: string): string | null {
-    try {
-      const payloadB64 = token.split('.')[1];
-      if (!payloadB64) {
-        return null;
-      }
-      const normalized = payloadB64.replace(/-/g, '+').replace(/_/g, '/');
-      const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-      const payload = JSON.parse(atob(padded)) as { orgId?: string };
-      return payload.orgId ?? null;
-    } catch {
-      return null;
-    }
-  }
-
   private async invalidateCacheIfOrgChanged(token: string): Promise<void> {
-    const tokenOrgId = this.decodeTokenOrgId(token);
+    const tokenOrgId = decodeTokenOrgId(token);
     if (!tokenOrgId) {
       return;
     }

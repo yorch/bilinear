@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { decodeSessionClaims } from '@/lib/jwt';
 import { SyncManager } from '@/lib/sync-manager';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { WsClient } from '@/lib/ws-client';
@@ -39,12 +40,10 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // Decode the access token's claims (no signature check — the cookie
-      // was already validated by the server) to scope the TransactionQueue
-      // to this session. Without this, a sign-out + sign-in on the same
-      // browser would replay the previous user's pending mutations under
-      // the new user's auth cookies.
-      const session = decodeSessionFromToken(data.token);
+      // Scope the TransactionQueue to this user/org so a sign-out + sign-in
+      // on the same browser can't replay the previous user's pending
+      // mutations under the new user's auth cookies.
+      const session = decodeSessionClaims(data.token);
       if (session) {
         TransactionQueue.setActiveSession(session);
       }
@@ -56,13 +55,10 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
       await syncManager.start(data.token);
 
-      // Replay any mutations that were queued in a previous session and
-      // didn't drain before the page closed (or crashed). Filters to the
-      // active session so cross-user rows are dropped instead of replayed.
-      // Runs after bootstrap/delta sync so reconciliation has the latest
-      // server state — if the server already accepted a queued mutation,
-      // the retry becomes a no-op (mutations are idempotent on identifier
-      // conflict) or surfaces a permanent error which drops the row.
+      // Replay queued mutations from a previous session. Run after
+      // bootstrap/delta sync so reconciliation has the latest server
+      // state — an already-accepted mutation becomes a no-op retry or
+      // surfaces a permanent error and drops the row.
       if (session) {
         void TransactionQueue.hydrate(session);
       }
@@ -82,28 +78,4 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   }, [store]);
 
   return <>{children}</>;
-}
-
-/**
- * Read `userId`/`orgId` claims from the JWT without verifying the signature
- * — the cookie was already validated by the server when it set the cookie.
- * Returns null on any decode failure so the caller can skip session-scoped
- * features rather than crash.
- */
-function decodeSessionFromToken(token: string): { orgId: string; userId: string } | null {
-  try {
-    const payloadB64 = token.split('.')[1];
-    if (!payloadB64) {
-      return null;
-    }
-    const normalized = payloadB64.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-    const payload = JSON.parse(atob(padded)) as { orgId?: string; userId?: string };
-    if (!payload.orgId || !payload.userId) {
-      return null;
-    }
-    return { orgId: payload.orgId, userId: payload.userId };
-  } catch {
-    return null;
-  }
 }

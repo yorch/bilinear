@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { loginAs } from '../fixtures/auth';
+import { getTeamIdByKey, gqlInPage } from '../fixtures/graphql';
 import { getTeamKey, getWorkspaceKey } from '../fixtures/workspace';
 
 /**
@@ -21,67 +22,41 @@ test.describe('Comments + Activity', () => {
     const ws = getWorkspaceKey(page);
     const team = getTeamKey(page);
 
-    // Create a fresh issue so we don't pollute seeded data across parallel
-    // specs. Use direct GraphQL so the test doesn't depend on the create
-    // modal's behavior.
+    // Create a fresh issue via direct GraphQL so we don't pollute seeded
+    // data and don't couple the test to the create modal's behavior.
     const title = `Comment target ${Date.now()}`;
-    const created = await page.evaluate(
-      async ({ title, teamKey }: { title: string; teamKey: string }) => {
-        const teamsResp = await fetch('/api/graphql', {
-          body: JSON.stringify({ query: `{ teams { id key } }` }),
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          method: 'POST',
-        });
-        const teamsJson = await teamsResp.json();
-        const teamId = (teamsJson?.data?.teams as Array<{ id: string; key: string }>).find(
-          t => t.key === teamKey,
-        )?.id;
-        if (!teamId) {
-          throw new Error(`Team ${teamKey} not found`);
-        }
-        const createResp = await fetch('/api/graphql', {
-          body: JSON.stringify({
-            query: `mutation Create($input: IssueCreateInput!) { issueCreate(input: $input) { issue { id identifier } } }`,
-            variables: { input: { teamId, title } },
-          }),
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          method: 'POST',
-        });
-        const createJson = await createResp.json();
-        return createJson?.data?.issueCreate?.issue as
-          | { id: string; identifier: string }
-          | undefined;
-      },
-      { teamKey: team, title },
+    const teamId = await getTeamIdByKey(page, team);
+    if (!teamId) {
+      throw new Error(`Team ${team} not found`);
+    }
+    const createRes = await gqlInPage<{
+      issueCreate: { issue?: { id: string; identifier: string } };
+    }>(
+      page,
+      `mutation Create($input: IssueCreateInput!) {
+        issueCreate(input: $input) { issue { id identifier } }
+      }`,
+      { input: { teamId, title } },
     );
+    const created = createRes.data?.issueCreate?.issue;
     if (!created) {
       throw new Error('issueCreate did not return an issue');
     }
 
-    // Post a comment via the same GraphQL surface the UI uses. We don't go
-    // through TipTap because it would require contenteditable input that
-    // races with the lazy-loaded editor module.
+    // Post a comment via the same GraphQL surface the UI uses. We don't
+    // type into TipTap because it would race with the lazy-loaded editor
+    // module's contenteditable initialization.
     const body = `<p>E2E comment ${Date.now()}</p>`;
-    await page.evaluate(
-      async ({ issueId, body }) => {
-        const resp = await fetch('/api/graphql', {
-          body: JSON.stringify({
-            query: `mutation Create($input: CommentCreateInput!) { commentCreate(input: $input) { success comment { id body } } }`,
-            variables: { input: { body, issueId, parentId: null } },
-          }),
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          method: 'POST',
-        });
-        const json = await resp.json();
-        if (!json?.data?.commentCreate?.success) {
-          throw new Error(`commentCreate failed: ${JSON.stringify(json)}`);
-        }
-      },
-      { body, issueId: created.id },
+    const commentRes = await gqlInPage<{ commentCreate: { success: boolean } }>(
+      page,
+      `mutation Create($input: CommentCreateInput!) {
+        commentCreate(input: $input) { success comment { id body } }
+      }`,
+      { input: { body, issueId: created.id, parentId: null } },
     );
+    if (!commentRes.data?.commentCreate?.success) {
+      throw new Error(`commentCreate failed: ${JSON.stringify(commentRes)}`);
+    }
 
     // Navigate directly to the issue page so the detail panel mounts and
     // CommentThread fetches the freshly-posted comment via gql().
