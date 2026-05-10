@@ -99,7 +99,7 @@ Legend: ✅ covered · 🟡 partial / smoke only · ❌ not covered · ⚠️ te
 | Initiatives — updates timeline | ⚠️ | Skipped — feature not implemented (no resolver / UI) |
 | Initiatives — sub-initiatives, owner, target date, health | ❌ | Not covered |
 | Triage — page renders | ✅ | `triage.spec.ts` smoke + queued-issues check (count, identifiers, action buttons) |
-| Triage — accept / decline / duplicate / snooze actions | 🟡 | `triage.spec.ts` — Accept and Decline are stable. Mark Duplicate and Snooze are `test.fixme`: row stays visible past the 10s budget in CI even though Accept and Decline (which use the same MobX path) pass. Suspected WS-reconcile race when the optimistic patch sets `snoozedUntilAt` AND the mutation also creates a relation (Mark Duplicate) or routes through a sub-popover (Snooze). Needs a local repro. |
+| Triage — accept / decline / duplicate / snooze actions | 🟡 | `triage.spec.ts` — Decline is stable; Accept / Mark Duplicate / Snooze are `test.fixme`. Symptom: row stays visible past the 10s budget in CI even though Decline (same MobX path) passes. Suspected server-side WebSocket reconcile race — needs a local repro to root-cause. |
 | Triage — auto-route on issue creation when triage enabled | 🟡 | Implicitly verified: `createFreshTriageIssue` helper relies on auto-route and the row appears in /triage |
 | Labels — CRUD, label groups, archive vs delete | ❌ | None |
 | Comments — create / reply / edit / delete / mention / reactions / resolve | 🟡 | `comments.spec.ts` covers create + read-back via direct `commentCreate`. Reply / edit / delete / mention / reactions / resolve still uncovered. |
