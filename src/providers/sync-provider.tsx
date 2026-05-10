@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { SyncManager } from '@/lib/sync-manager';
+import { TransactionQueue } from '@/lib/transaction-queue';
 import { WsClient } from '@/lib/ws-client';
 import { useStore } from './store-provider';
 
@@ -44,6 +45,14 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       syncManagerRef.current = syncManager;
 
       await syncManager.start(data.token);
+
+      // Replay any mutations that were queued in a previous session and
+      // didn't drain before the page closed (or crashed). Run after the
+      // bootstrap/delta sync settles so reconciliation has the latest server
+      // state — if the server already accepted a queued mutation, the retry
+      // becomes a no-op (mutations are idempotent on identifier conflict) or
+      // surfaces a permanent error which drops the row.
+      void TransactionQueue.hydrate();
     }
 
     init().catch(err => {

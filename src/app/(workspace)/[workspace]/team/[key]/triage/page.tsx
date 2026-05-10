@@ -155,20 +155,24 @@ const TriagePage = observer(function TriagePage() {
     return workflowStateStore.findByTeamId(teamId).find(s => s.type === 'backlog')?.id ?? null;
   }, [teamId, workflowStateStore]);
 
-  const queue = useMemo(() => {
-    if (!teamId || !triageStateId) {
-      return [];
-    }
-    const now = Date.now();
-    return issueStore
-      .findByTeamId(teamId)
-      .filter(
-        i =>
-          i.stateId === triageStateId &&
-          (!i.snoozedUntilAt || new Date(i.snoozedUntilAt).getTime() <= now),
-      )
-      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-  }, [teamId, triageStateId, issueStore]);
+  // Compute inline (no useMemo) so the wrapping `observer` re-runs the
+  // selector on every observable change in `issueStore.pool`. With useMemo,
+  // optimisticUpdate (which mutates pool entries without changing pool.size)
+  // would not invalidate the cached queue and accept/decline/snooze on a
+  // post-bootstrap issue would leave the row visible even after the state
+  // patch landed.
+  const now = Date.now();
+  const queue =
+    !teamId || !triageStateId
+      ? []
+      : issueStore
+          .findByTeamId(teamId)
+          .filter(
+            i =>
+              i.stateId === triageStateId &&
+              (!i.snoozedUntilAt || new Date(i.snoozedUntilAt).getTime() <= now),
+          )
+          .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
   /** Snapshot the issue so we can roll back optimistic edits on error. */
   const handleAccept = useCallback(

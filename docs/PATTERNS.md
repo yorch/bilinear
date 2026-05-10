@@ -447,9 +447,9 @@ const handleUpdate = useCallback((id, patch) => {
 **Rules:**
 
 - Wrap page components with `observer()` from `mobx-react-lite` so they re-render on store changes
-- Use `useMemo` with `store.pool.size` as a dependency — the Map itself is stable; `pool.size` changes when entries are added/removed
+- Use `useMemo` with `store.pool.size` as a dependency — the Map itself is stable; `pool.size` changes when entries are added/removed. **Caveat**: `optimisticUpdate(id, patch)` does `pool.set(id, {...existing, ...patch})` which keeps `pool.size` constant, so a `useMemo` whose result depends on a filter over per-entry fields (`stateId`, `priority`, `assigneeId`, …) will be **stale** after an optimistic edit. For those selectors, drop the `useMemo` and compute inline under the wrapping `observer` so MobX tracks the per-entry reads. The triage queue (`/team/[key]/triage/page.tsx`) is one such selector.
 - Use `useStore()` to access the `RootStore` from context — never import `getRootStore()` directly in components
-- `TransactionQueue` must be created per component mount with `useMemo(() => new TransactionQueue(), [])` — not at module level
+- `TransactionQueue` instances share a singleton in-memory FIFO backed by an IndexedDB `pendingTransactions` table (Dexie v10). The `new TransactionQueue()` per component mount with `useMemo(() => new TransactionQueue(), [])` convention still holds — every instance enqueues into the shared queue. Pending transactions persist across page reloads; `TransactionQueue.hydrate()` is called once at app boot from `SyncProvider` to replay them. Callbacks (`onSuccess`/`onError`) live in-memory only and don't survive reload — rehydrated transactions fire fire-and-forget and reconcile via the WebSocket SyncAction stream.
 - The frontend still does **not** use Apollo Client — mutations are plain template strings passed to `txQueue.enqueue()`
 - Shared frontend types (`WorkflowState`, `IssueUser`, `IssueLabel`, `IssueBase`, `IssueDetail`) live in `src/types/issues.ts`
 - DB entity types (`DBIssue`, `DBTeam`, etc.) live in `src/lib/db.ts` — these are the types stored in IndexedDB and MobX pools

@@ -332,6 +332,14 @@ export interface DBSyncMetadata {
   value: unknown;
 }
 
+export interface DBPendingTransaction {
+  createdAt: number;
+  id: string;
+  mutation: string;
+  retryCount: number;
+  variables: Record<string, unknown>;
+}
+
 // ─── Dexie database ───────────────────────────────────────────────────────────
 
 export class AppDatabase extends Dexie {
@@ -355,6 +363,7 @@ export class AppDatabase extends Dexie {
   projectUpdates!: Table<DBProjectUpdate, string>;
   customViews!: Table<DBCustomView, string>;
   notifications!: Table<DBNotification, string>;
+  pendingTransactions!: Table<DBPendingTransaction, string>;
   syncMetadata!: Table<DBSyncMetadata, string>;
 
   constructor() {
@@ -504,6 +513,30 @@ export class AppDatabase extends Dexie {
       issueTemplates: 'id, teamId, creatorId',
       notifications: 'id, userId, organizationId, issueId, read',
       organizations: 'id',
+      projectMilestones: 'id, projectId',
+      projects: 'id, organizationId, statusType, leadId',
+      projectUpdates: 'id, projectId, userId',
+      syncMetadata: 'key',
+      teams: 'id, organizationId, parentId',
+      users: 'id, email',
+      workflowStates: 'id, teamId',
+    });
+    this.version(10).stores({
+      customFieldDefinitions: 'id, teamId',
+      customFieldValues: 'id, issueId, definitionId, [issueId+definitionId]',
+      customViews: 'id, organizationId, teamId, creatorId',
+      cycles: 'id, teamId, organizationId',
+      documents: 'id, organizationId, teamId, projectId, parentId',
+      initiativeProjects: 'id, initiativeId, projectId, [initiativeId+projectId]',
+      initiatives: 'id, organizationId, status, ownerId',
+      issueActivities: 'id, issueId',
+      issueLabels: 'id, organizationId, teamId, parentId',
+      issueRelations: 'id, issueId, relatedIssueId',
+      issues: 'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
+      issueTemplates: 'id, teamId, creatorId',
+      notifications: 'id, userId, organizationId, issueId, read',
+      organizations: 'id',
+      pendingTransactions: 'id, createdAt',
       projectMilestones: 'id, projectId',
       projects: 'id, organizationId, statusType, leadId',
       projectUpdates: 'id, projectId, userId',
