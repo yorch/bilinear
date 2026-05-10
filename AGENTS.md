@@ -90,7 +90,7 @@ Resolvers are thin: `requireAuth(ctx)` → `ctx.services.<domain>.method()` → 
 - Wrap components with `observer()` from `mobx-react-lite`
 - Use `useStore()` hook (from StoreProvider context) to access RootStore — never import `getRootStore()` directly
 - Use `store.pool.size` as dependency in `useMemo`, not the Map itself
-- `TransactionQueue` instances share a singleton in-memory FIFO backed by an IndexedDB `pendingTransactions` table. `new TransactionQueue()` per component mount with `useMemo(() => new TransactionQueue(), [])` is still the convention — every instance enqueues into the shared queue. Pending transactions survive a page reload; `TransactionQueue.hydrate()` runs once at app boot from `SyncProvider` to replay them.
+- `TransactionQueue` instances share a singleton in-memory FIFO backed by an IndexedDB `pendingTransactions` table. `new TransactionQueue()` per component mount with `useMemo(() => new TransactionQueue(), [])` is still the convention — every instance enqueues into the shared queue. Pending transactions survive a page reload, scoped to the session that enqueued them (`orgId`/`userId` from the JWT). `SyncProvider` calls `TransactionQueue.setActiveSession(...)` then `TransactionQueue.hydrate(session)` once at app boot; rows from other sessions are deleted, not replayed.
 
 ### Auth
 

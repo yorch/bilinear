@@ -34,10 +34,13 @@ test.describe('Permissions — admin-only routes', () => {
       return resp.json();
     });
 
-    // Apollo error shape: { errors: [{ message, extensions: { code } }] }
+    // Apollo returns `errors: [{ message, extensions: { code } }]`. Don't
+    // assume FORBIDDEN is at index 0 — middleware ordering or future
+    // resolver behavior could push it later. Assert at least one error
+    // carries the code instead.
     const errors = result?.errors as Array<{ extensions?: { code?: string } }> | undefined;
     expect(errors?.length ?? 0).toBeGreaterThan(0);
-    expect(errors?.[0]?.extensions?.code).toBe('FORBIDDEN');
+    expect(errors?.some(e => e.extensions?.code === 'FORBIDDEN')).toBe(true);
   });
 
   test('non-admin webhooks query returns FORBIDDEN', async ({ page }) => {
@@ -57,7 +60,7 @@ test.describe('Permissions — admin-only routes', () => {
 
     const errors = result?.errors as Array<{ extensions?: { code?: string } }> | undefined;
     expect(errors?.length ?? 0).toBeGreaterThan(0);
-    expect(errors?.[0]?.extensions?.code).toBe('FORBIDDEN');
+    expect(errors?.some(e => e.extensions?.code === 'FORBIDDEN')).toBe(true);
   });
 
   test('admin webhookCreate succeeds (control)', async ({ page }) => {

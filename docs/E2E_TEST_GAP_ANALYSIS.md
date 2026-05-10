@@ -28,7 +28,7 @@ Plus seven previously-fixme tests un-blocked by the underlying fixes:
 
 ### Round-3 product fixes
 
-1. **`TransactionQueue` is now IndexedDB-persisted.** A new `pendingTransactions` Dexie table (v10) backs every enqueue; the singleton drains serially in-memory, removes on success/permanent-failure. `TransactionQueue.hydrate()` runs at app boot from `SyncProvider.start()` to replay rows carried over from a previous session. Retry counter resets on hydrate so a long offline window followed by a reload still drains within the 14s budget. Callbacks live in-memory (component closures don't survive reload); rehydrated transactions fire fire-and-forget — server reconciliation via the WebSocket SyncAction stream is the source of truth. (`src/lib/transaction-queue.ts`, `src/lib/db.ts`, `src/providers/sync-provider.tsx`.)
+1. **`TransactionQueue` is now IndexedDB-persisted.** A new `pendingTransactions` Dexie table backs every enqueue; the singleton drains serially in-memory, removes on success/permanent-failure. Each row is stamped with the session's `orgId`/`userId` and `TransactionQueue.hydrate(session)` filters to the active session — rows from other users/orgs are deleted (a sign-out + sign-in on the same browser does not replay the previous user's mutations). Hydrate runs once at app boot from `SyncProvider`; on transient Dexie errors the `hydrated` flag stays clear so a later boot can retry. Retry counter resets on hydrate so a long offline window followed by a reload still drains within the 14s budget. Callbacks live in-memory (component closures don't survive reload); rehydrated transactions fire fire-and-forget — server reconciliation via the WebSocket SyncAction stream is the source of truth. (`src/lib/transaction-queue.ts`, `src/lib/db.ts`, `src/providers/sync-provider.tsx`.)
 2. **Triage queue selector now re-runs on every observable change.** The previous `useMemo` cached the queue array with deps `[teamId, triageStateId, issueStore]`; `optimisticUpdate` mutates pool entries without changing `pool.size`, so the cached array stayed stale and the row never disappeared after Accept/Decline/Snooze on a post-bootstrap issue. Switched to inline computation under the wrapping `observer` so MobX tracking picks up every pool mutation. (`src/app/(workspace)/[workspace]/team/[key]/triage/page.tsx`.)
 
 Two issue-row hotkeys are still skipped because they have no in-row UI to drive: `Shift+P` (project) and `Shift+E` (estimate, which only renders when the team has an `estimationType`). The hotkey sets `openProperty` on the page but no in-row component subscribes. The `Initiatives — updates timeline` skip remains (feature not implemented).
@@ -121,7 +121,7 @@ Legend: ✅ covered · 🟡 partial / smoke only · ❌ not covered · ⚠️ te
 | Real-time sync — cross-tab status change / archive / create-then-delete | ✅ | `sync.spec.ts` (new) |
 | Real-time sync — cross-tab comments / projects / cycles | ❌ | Not covered |
 | Offline — create while offline + reconcile | ✅ | `offline.spec.ts` |
-| Offline — status change / archive / multi-create queued offline | ✅ | `offline.spec.ts` — all three now active. `TransactionQueue` is IndexedDB-persisted (Dexie v10 `pendingTransactions` table) and rehydrates at app boot via `SyncProvider`. |
+| Offline — status change / archive / multi-create queued offline | ✅ | `offline.spec.ts` — all three now active. `TransactionQueue` is IndexedDB-persisted (Dexie `pendingTransactions` table) and rehydrates at app boot via `SyncProvider`. |
 | Optimistic update rollback (server rejects mutation) | ✅ | `optimistic-rollback.spec.ts`: forces 500 on createIssue / updateIssue via `page.route` and asserts rollback |
 | Delta sync after disconnect window | ❌ | None |
 | WebSocket reconnect / auth failure | ❌ | None |
@@ -147,7 +147,7 @@ These are the gaps most worth filling first, based on user-impact × regression 
 2. ✅ **Bulk actions toolbar** — `bulk-actions.spec.ts` covers the multi-select toolbar appearance, bulk archive, and bulk priority change on `/team/<key>/backlog`.
 3. ✅ **Cross-tab sync beyond create** — `sync.spec.ts` extended to cover status change, archive, and create-then-delete cross-tab.
 4. ✅ **Optimistic update rollback** — `optimistic-rollback.spec.ts` forces 500 on createIssue / updateIssue via `page.route` and asserts the MobX store rolls back.
-5. ✅ **Offline coverage beyond create** — `offline.spec.ts` status-change, archive, and multi-create offline tests are now active. Backed by an IndexedDB-persisted `TransactionQueue` (Dexie v10 `pendingTransactions` table) that rehydrates at app boot.
+5. ✅ **Offline coverage beyond create** — `offline.spec.ts` status-change, archive, and multi-create offline tests are now active. Backed by an IndexedDB-persisted `TransactionQueue` (Dexie `pendingTransactions` table) that rehydrates at app boot.
 
 ### Tier 2 — recently shipped features (addressed)
 

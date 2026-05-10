@@ -35,36 +35,41 @@ test.describe('Custom fields', () => {
     // The new field appears in the list.
     await expect(page.getByText(fieldName)).toBeVisible({ timeout: 10_000 });
 
-    // Capture its id via GraphQL so we can clean up after.
-    const definitionId = await page.evaluate(async (teamKey: string) => {
-      const teamsResp = await fetch('/api/graphql', {
-        body: JSON.stringify({ query: `{ teams { id key } }` }),
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        method: 'POST',
-      });
-      const teamsJson = await teamsResp.json();
-      const teamId = (teamsJson?.data?.teams as Array<{ id: string; key: string }>).find(
-        t => t.key === teamKey,
-      )?.id;
-      if (!teamId) {
-        return null;
-      }
-      const defsResp = await fetch('/api/graphql', {
-        body: JSON.stringify({
-          query: `query($teamId: ID!) { customFieldDefinitions(teamId: $teamId) { id name } }`,
-          variables: { teamId },
-        }),
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        method: 'POST',
-      });
-      const json = await defsResp.json();
-      const defs = json?.data?.customFieldDefinitions as
-        | Array<{ id: string; name: string }>
-        | undefined;
-      return defs?.[defs.length - 1]?.id ?? null;
-    }, team);
+    // Capture its id by name (not by array position) so cleanup targets the
+    // definition this test created even when other definitions exist or
+    // the resolver reorders results.
+    const definitionId = await page.evaluate(
+      async ({ teamKey, fieldName }: { teamKey: string; fieldName: string }) => {
+        const teamsResp = await fetch('/api/graphql', {
+          body: JSON.stringify({ query: `{ teams { id key } }` }),
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+        });
+        const teamsJson = await teamsResp.json();
+        const teamId = (teamsJson?.data?.teams as Array<{ id: string; key: string }>).find(
+          t => t.key === teamKey,
+        )?.id;
+        if (!teamId) {
+          return null;
+        }
+        const defsResp = await fetch('/api/graphql', {
+          body: JSON.stringify({
+            query: `query($teamId: ID!) { customFieldDefinitions(teamId: $teamId) { id name } }`,
+            variables: { teamId },
+          }),
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+        });
+        const json = await defsResp.json();
+        const defs = json?.data?.customFieldDefinitions as
+          | Array<{ id: string; name: string }>
+          | undefined;
+        return defs?.find(d => d.name === fieldName)?.id ?? null;
+      },
+      { fieldName, teamKey: team },
+    );
 
     // Open the seeded ENG-1 issue and verify the new field shows up in the
     // Custom fields editor section.

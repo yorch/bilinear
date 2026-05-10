@@ -5,13 +5,20 @@ export interface Transaction {
   createdAt: number;
   id: string;
   mutation: string;
+  orgId: string;
   retryCount: number;
+  userId: string;
   variables: Record<string, unknown>;
 }
 
 interface Callbacks {
   onError?: (err: Error) => void;
   onSuccess?: (result: unknown) => void;
+}
+
+interface ActiveSession {
+  orgId: string;
+  userId: string;
 }
 
 const MAX_RETRIES = 3;
@@ -23,6 +30,11 @@ const RETRY_DELAYS_MS = [1_000, 3_000, 10_000];
  * writes to IndexedDB before processing so a page reload (or crash) preserves
  * the pending mutations; `hydrate()` (called once at app boot) re-loads them
  * and resumes draining.
+ *
+ * Persisted rows carry the `orgId`/`userId` they were enqueued under.
+ * `hydrate()` filters to the active session so a sign-out + sign-in on the
+ * same browser never replays the previous user's mutations under the new
+ * user's auth cookies. Rows from other sessions are deleted on hydrate.
  *
  * Callbacks live in-memory only — they hold component-scoped closures
  * (`optimisticUpdate` rollback, toast on error) that don't survive a reload.
@@ -36,6 +48,7 @@ const queue: Transaction[] = [];
 const callbackMap = new Map<string, Callbacks>();
 let processing = false;
 let hydrated = false;
+let activeSession: ActiveSession | null = null;
 
 /**
  * Queues GraphQL mutations and processes them serially with IndexedDB
@@ -44,11 +57,21 @@ let hydrated = false;
  */
 export class TransactionQueue {
   enqueue(mutation: string, variables: Record<string, unknown>, callbacks?: Callbacks): string {
+    if (!activeSession) {
+      // No session set means we're enqueueing before SyncProvider finished
+      // wiring auth. The mutation will fail server-side without auth cookies
+      // anyway, but we still record it so it shows up in dev logs and gets
+      // dropped on the first onError. Mark as a sentinel session so it's
+      // never replayed under a different user post-reload.
+      console.warn('[TransactionQueue] enqueue before setActiveSession');
+    }
     const tx: Transaction = {
       createdAt: Date.now(),
       id: crypto.randomUUID(),
       mutation,
+      orgId: activeSession?.orgId ?? '',
       retryCount: 0,
+      userId: activeSession?.userId ?? '',
       variables,
     };
     queue.push(tx);
@@ -62,26 +85,44 @@ export class TransactionQueue {
   }
 
   /**
-   * Load any pending transactions from IndexedDB (carried over from a previous
-   * session) and resume draining. Idempotent — safe to call multiple times.
-   * Should be invoked once at app boot, after the user is authenticated.
+   * Record the authenticated session so subsequent enqueues can stamp each
+   * persisted row with `orgId`/`userId`. Called once from `SyncProvider`
+   * after the access token is fetched.
    */
-  static async hydrate(): Promise<void> {
+  static setActiveSession(session: ActiveSession): void {
+    activeSession = session;
+  }
+
+  /**
+   * Load any pending transactions from IndexedDB (carried over from a
+   * previous session) and resume draining. Filters to the active session;
+   * rows from other users/orgs are deleted instead of replayed. Idempotent
+   * on success; on transient Dexie failures, leaves the flag clear so a
+   * later boot can retry.
+   */
+  static async hydrate(session: ActiveSession): Promise<void> {
     if (hydrated) {
       return;
     }
-    hydrated = true;
     let pending: DBPendingTransaction[];
     try {
       pending = await db.pendingTransactions.orderBy('createdAt').toArray();
     } catch (err) {
-      // Dexie not ready (or the table doesn't exist yet on a stale schema) —
-      // nothing to hydrate. Future enqueues will work normally once the user
-      // performs a write.
+      // Dexie not ready (or the table doesn't exist yet on a stale schema)
+      // — leave `hydrated` false so a later call (e.g. after a token
+      // refresh that re-runs SyncProvider.start) can retry.
       console.warn('[TransactionQueue] Hydrate failed:', err);
       return;
     }
+    hydrated = true;
+
+    const stale: string[] = [];
     for (const row of pending) {
+      const matchesSession = row.orgId === session.orgId && row.userId === session.userId;
+      if (!matchesSession) {
+        stale.push(row.id);
+        continue;
+      }
       // Reset retry count on hydrate. Reload typically means the user came
       // back later; the network may now be fine, so give a fresh budget.
       // Skip transactions already queued in-memory (StrictMode double-mount).
@@ -92,9 +133,18 @@ export class TransactionQueue {
         createdAt: row.createdAt,
         id: row.id,
         mutation: row.mutation,
+        orgId: row.orgId,
         retryCount: 0,
+        userId: row.userId,
         variables: row.variables,
       });
+    }
+    if (stale.length > 0) {
+      try {
+        await db.pendingTransactions.bulkDelete(stale);
+      } catch (err) {
+        console.warn('[TransactionQueue] Stale-row cleanup failed:', err);
+      }
     }
     if (queue.length > 0) {
       void processNext();
@@ -107,6 +157,7 @@ export class TransactionQueue {
     callbackMap.clear();
     processing = false;
     hydrated = false;
+    activeSession = null;
   }
 }
 
@@ -161,8 +212,11 @@ async function processNext(): Promise<void> {
       cb?.onError?.(error);
     } else {
       tx.retryCount++;
-      // Persist updated retry count so a reload during the retry window
-      // resumes from the correct attempt.
+      // Persist the bumped retry count so an in-flight tab close stops
+      // retrying past the in-memory budget. NOTE: `hydrate()` resets the
+      // counter to 0 because a reload typically means a long gap during
+      // which the network may have recovered — the persisted count is for
+      // same-session continuity, not cross-reload state.
       await persist(tx);
       const delay = RETRY_DELAYS_MS[tx.retryCount - 1] ?? 10_000;
       await sleep(delay);
