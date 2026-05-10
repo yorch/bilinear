@@ -65,8 +65,8 @@ async function main() {
   });
 
   await prisma.organizationMember.upsert({
-    create: { organizationId: org.id, role: 'member', userId: e2eUser.id },
-    update: {},
+    create: { organizationId: org.id, role: 'admin', userId: e2eUser.id },
+    update: { role: 'admin' },
     where: {
       organizationId_userId: { organizationId: org.id, userId: e2eUser.id },
     },
@@ -85,8 +85,18 @@ async function main() {
         key: 'ENG',
         name: 'Engineering',
         organizationId: org.id,
+        triageEnabled: true,
       },
     }));
+
+  // Ensure triage is enabled on the team even if it pre-existed from an older seed.
+  if (!team.triageEnabled) {
+    await prisma.team.update({
+      data: { triageEnabled: true },
+      where: { id: team.id },
+    });
+    team.triageEnabled = true;
+  }
 
   await prisma.teamMembership.upsert({
     create: { isOwner: true, teamId: team.id, userId: demoUser.id },
@@ -103,6 +113,7 @@ async function main() {
   // ── Workflow states ────────────────────────────────────────────────────────
 
   const stateConfigs = [
+    { color: '#a855f7', name: 'Triage', position: -1, type: 'triage' },
     { color: '#95a3b3', name: 'Backlog', position: 0, type: 'backlog' },
     { color: '#e2e8f0', name: 'Todo', position: 1, type: 'unstarted' },
     { color: '#f59e0b', name: 'In Progress', position: 2, type: 'started' },
@@ -161,6 +172,28 @@ async function main() {
       stateKey: 'Todo',
       title: 'Write E2E tests for issue CRUD',
     },
+    // Triage queue — three inbound issues awaiting accept/decline/snooze/duplicate.
+    {
+      identifier: 'ENG-4',
+      number: 4,
+      priority: 0,
+      stateKey: 'Triage',
+      title: 'Triage: investigate flaky CI run',
+    },
+    {
+      identifier: 'ENG-5',
+      number: 5,
+      priority: 0,
+      stateKey: 'Triage',
+      title: 'Triage: customer reports broken login on Safari',
+    },
+    {
+      identifier: 'ENG-6',
+      number: 6,
+      priority: 0,
+      stateKey: 'Triage',
+      title: 'Triage: typo on marketing landing page',
+    },
   ];
 
   for (const seed of issueSeeds) {
@@ -169,6 +202,7 @@ async function main() {
     });
 
     if (!existing) {
+      const isTriage = seed.stateKey === 'Triage';
       await prisma.issue.create({
         data: {
           identifier: seed.identifier,
@@ -179,6 +213,7 @@ async function main() {
           stateId: states[seed.stateKey],
           teamId: team.id,
           title: seed.title,
+          ...(isTriage ? { startedTriageAt: new Date() } : {}),
         },
       });
     }
