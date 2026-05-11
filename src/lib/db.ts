@@ -332,6 +332,23 @@ export interface DBSyncMetadata {
   value: unknown;
 }
 
+export interface DBPendingTransaction {
+  createdAt: number;
+  id: string;
+  mutation: string;
+  /**
+   * Org and user the transaction was enqueued under. `hydrate()` filters
+   * persisted rows to the active session so a sign-out + sign-in (same
+   * browser, different account) doesn't replay the previous user's
+   * mutations under the new user's auth cookies. Rows from other sessions
+   * are deleted on hydrate to keep the table from growing unbounded.
+   */
+  orgId: string;
+  retryCount: number;
+  userId: string;
+  variables: Record<string, unknown>;
+}
+
 // ─── Dexie database ───────────────────────────────────────────────────────────
 
 export class AppDatabase extends Dexie {
@@ -355,141 +372,19 @@ export class AppDatabase extends Dexie {
   projectUpdates!: Table<DBProjectUpdate, string>;
   customViews!: Table<DBCustomView, string>;
   notifications!: Table<DBNotification, string>;
+  pendingTransactions!: Table<DBPendingTransaction, string>;
   syncMetadata!: Table<DBSyncMetadata, string>;
 
   constructor() {
-    super('issue-tracker-v1');
+    // The DB name is the migration boundary: bumping it forces every
+    // client to re-bootstrap from the server into a fresh DB and orphans
+    // the old one. Pre-launch we use this in lieu of versioned upgrades —
+    // edit the schema below freely and bump `-vN` when an existing dev
+    // pool would conflict.
+    // TODO(pre-launch): once we have real users, switch to `.version(N)`
+    // blocks with `.upgrade()` migrations and stop bumping the DB name.
+    super('issue-tracker-v2');
     this.version(1).stores({
-      issueLabels: 'id, organizationId, teamId, parentId',
-      issues: 'id, teamId, stateId, assigneeId, organizationId, identifier',
-      organizations: 'id',
-      syncMetadata: 'key',
-      teams: 'id, organizationId, parentId',
-      users: 'id, email',
-      workflowStates: 'id, teamId',
-    });
-    this.version(2).stores({
-      issueLabels: 'id, organizationId, teamId, parentId',
-      issues: 'id, teamId, stateId, assigneeId, organizationId, identifier, projectId',
-      organizations: 'id',
-      projectMilestones: 'id, projectId',
-      projects: 'id, organizationId, statusType, leadId',
-      syncMetadata: 'key',
-      teams: 'id, organizationId, parentId',
-      users: 'id, email',
-      workflowStates: 'id, teamId',
-    });
-    this.version(3).stores({
-      issueLabels: 'id, organizationId, teamId, parentId',
-      issues: 'id, teamId, stateId, assigneeId, organizationId, identifier, projectId',
-      organizations: 'id',
-      projectMilestones: 'id, projectId',
-      projects: 'id, organizationId, statusType, leadId',
-      projectUpdates: 'id, projectId, userId',
-      syncMetadata: 'key',
-      teams: 'id, organizationId, parentId',
-      users: 'id, email',
-      workflowStates: 'id, teamId',
-    });
-    this.version(4).stores({
-      cycles: 'id, teamId, organizationId',
-      issueLabels: 'id, organizationId, teamId, parentId',
-      issues: 'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
-      organizations: 'id',
-      projectMilestones: 'id, projectId',
-      projects: 'id, organizationId, statusType, leadId',
-      projectUpdates: 'id, projectId, userId',
-      syncMetadata: 'key',
-      teams: 'id, organizationId, parentId',
-      users: 'id, email',
-      workflowStates: 'id, teamId',
-    });
-    this.version(5).stores({
-      customViews: 'id, organizationId, teamId, creatorId',
-      cycles: 'id, teamId, organizationId',
-      issueLabels: 'id, organizationId, teamId, parentId',
-      issues: 'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
-      organizations: 'id',
-      projectMilestones: 'id, projectId',
-      projects: 'id, organizationId, statusType, leadId',
-      projectUpdates: 'id, projectId, userId',
-      syncMetadata: 'key',
-      teams: 'id, organizationId, parentId',
-      users: 'id, email',
-      workflowStates: 'id, teamId',
-    });
-    this.version(6).stores({
-      customViews: 'id, organizationId, teamId, creatorId',
-      cycles: 'id, teamId, organizationId',
-      issueActivities: 'id, issueId',
-      issueLabels: 'id, organizationId, teamId, parentId',
-      issueRelations: 'id, issueId, relatedIssueId',
-      issues: 'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
-      issueTemplates: 'id, teamId, creatorId',
-      notifications: 'id, userId, organizationId, issueId, read',
-      organizations: 'id',
-      projectMilestones: 'id, projectId',
-      projects: 'id, organizationId, statusType, leadId',
-      projectUpdates: 'id, projectId, userId',
-      syncMetadata: 'key',
-      teams: 'id, organizationId, parentId',
-      users: 'id, email',
-      workflowStates: 'id, teamId',
-    });
-    this.version(7).stores({
-      customFieldDefinitions: 'id, teamId',
-      customFieldValues: 'id, issueId, definitionId, [issueId+definitionId]',
-      customViews: 'id, organizationId, teamId, creatorId',
-      cycles: 'id, teamId, organizationId',
-      issueActivities: 'id, issueId',
-      issueLabels: 'id, organizationId, teamId, parentId',
-      issueRelations: 'id, issueId, relatedIssueId',
-      issues: 'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
-      issueTemplates: 'id, teamId, creatorId',
-      notifications: 'id, userId, organizationId, issueId, read',
-      organizations: 'id',
-      projectMilestones: 'id, projectId',
-      projects: 'id, organizationId, statusType, leadId',
-      projectUpdates: 'id, projectId, userId',
-      syncMetadata: 'key',
-      teams: 'id, organizationId, parentId',
-      users: 'id, email',
-      workflowStates: 'id, teamId',
-    });
-    this.version(8)
-      .stores({
-        customFieldDefinitions: 'id, teamId',
-        customFieldValues: 'id, issueId, definitionId, [issueId+definitionId]',
-        customViews: 'id, organizationId, teamId, creatorId',
-        cycles: 'id, teamId, organizationId',
-        documents: 'id, organizationId, teamId, projectId, parentId',
-        issueActivities: 'id, issueId',
-        issueLabels: 'id, organizationId, teamId, parentId',
-        issueRelations: 'id, issueId, relatedIssueId',
-        issues: 'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
-        issueTemplates: 'id, teamId, creatorId',
-        notifications: 'id, userId, organizationId, issueId, read',
-        organizations: 'id',
-        projectMilestones: 'id, projectId',
-        projects: 'id, organizationId, statusType, leadId',
-        projectUpdates: 'id, projectId, userId',
-        syncMetadata: 'key',
-        teams: 'id, organizationId, parentId',
-        users: 'id, email',
-        workflowStates: 'id, teamId',
-      })
-      // Any user upgrading from v1-v7 carries rows that may be missing new
-      // fields (`cycleId`, `projectId`, custom fields, …). Rather than
-      // write a migration per version, wipe the cache on the first upgrade
-      // to v8 — SyncManager sees an empty pool, falls through to
-      // fullBootstrap, and refills from the server. Future schema bumps
-      // should attach a similar `.upgrade()` (or bump the DB name).
-      .upgrade(async tx => {
-        for (const table of tx.db.tables) {
-          await tx.table(table.name).clear();
-        }
-      });
-    this.version(9).stores({
       customFieldDefinitions: 'id, teamId',
       customFieldValues: 'id, issueId, definitionId, [issueId+definitionId]',
       customViews: 'id, organizationId, teamId, creatorId',
@@ -504,6 +399,7 @@ export class AppDatabase extends Dexie {
       issueTemplates: 'id, teamId, creatorId',
       notifications: 'id, userId, organizationId, issueId, read',
       organizations: 'id',
+      pendingTransactions: 'id, createdAt, [orgId+userId]',
       projectMilestones: 'id, projectId',
       projects: 'id, organizationId, statusType, leadId',
       projectUpdates: 'id, projectId, userId',

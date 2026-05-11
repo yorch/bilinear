@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { decodeSessionClaims } from '@/lib/jwt';
 import { SyncManager } from '@/lib/sync-manager';
+import { TransactionQueue } from '@/lib/transaction-queue';
 import { WsClient } from '@/lib/ws-client';
 import { useStore } from './store-provider';
 
@@ -38,12 +40,28 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // Scope the TransactionQueue to this user/org so a sign-out + sign-in
+      // on the same browser can't replay the previous user's pending
+      // mutations under the new user's auth cookies.
+      const session = decodeSessionClaims(data.token);
+      if (session) {
+        TransactionQueue.setActiveSession(session);
+      }
+
       const wsClient = new WsClient();
       const syncManager = new SyncManager(store, wsClient);
       localManager = syncManager;
       syncManagerRef.current = syncManager;
 
       await syncManager.start(data.token);
+
+      // Replay queued mutations from a previous session. Run after
+      // bootstrap/delta sync so reconciliation has the latest server
+      // state — an already-accepted mutation becomes a no-op retry or
+      // surfaces a permanent error and drops the row.
+      if (session) {
+        void TransactionQueue.hydrate(session);
+      }
     }
 
     init().catch(err => {

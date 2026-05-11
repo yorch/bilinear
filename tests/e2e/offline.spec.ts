@@ -48,11 +48,10 @@ test.describe('Offline Support', () => {
     await expect(page.getByText(title)).toBeVisible({ timeout: 10000 });
   });
 
-  // Same TransactionQueue limitation as the multi-create test below: the
-  // 14s retry budget (1s + 3s + 10s) may exhaust the offline window before
-  // we reconnect, and page.reload() drops the in-memory queue regardless.
-  // Fixme until the queue is persisted to IndexedDB.
-  test.fixme('status change made while offline syncs on reconnect', async ({ page, context }) => {
+  // TransactionQueue persists each enqueue to IndexedDB and resumes on the
+  // next page load via TransactionQueue.hydrate(). The retry counter resets
+  // on hydrate so a long offline window followed by a reload still drains.
+  test('status change made while offline syncs on reconnect', async ({ page, context }) => {
     await loginAs(page, 'e2e@test.local');
 
     await page.waitForSelector('[data-testid="issue-list-view"]');
@@ -127,7 +126,7 @@ test.describe('Offline Support', () => {
     await expect(doneGroupAfterReload).toBeVisible({ timeout: 10000 });
   });
 
-  test.fixme('archive made while offline syncs on reconnect', async ({ page, context }) => {
+  test('archive made while offline syncs on reconnect', async ({ page, context }) => {
     await loginAs(page, 'e2e@test.local');
 
     await page.waitForSelector('[data-testid="issue-list-view"]');
@@ -182,13 +181,9 @@ test.describe('Offline Support', () => {
     await expect(page.getByText(issueTitle)).toHaveCount(0, { timeout: 10000 });
   });
 
-  // The current TransactionQueue is in-memory and per-component-mount with a
-  // 14s retry budget (1s + 3s + 10s). Reloading the page during the offline
-  // window discards the queue entirely, and even without reload, all three
-  // issues would have to flush within 14s of going back online before the
-  // first one is dropped by the retry cap. Mark fixme until the queue is
-  // persisted to IndexedDB (or the assertion is reframed to skip reload).
-  test.fixme('multiple mutations queued offline all apply', async ({ page, context }) => {
+  // Pending transactions persist to IndexedDB so multiple offline writes
+  // survive a page reload and drain serially after hydrate().
+  test('multiple mutations queued offline all apply', async ({ page, context }) => {
     await loginAs(page, 'e2e@test.local');
 
     await page.waitForSelector('[data-testid="issue-list-view"]');

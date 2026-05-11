@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { RecentItem } from '@/hooks/use-recent-items';
 import type { DBIssue } from '@/lib/db';
+import { IDENTIFIER_RE } from '@/lib/identifiers';
 import { getPriorityConfig } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -95,6 +96,14 @@ export const CommandPalette = observer(function CommandPalette({
   // ── Build result items ───────────────────────────────────────────────────
 
   const buildIssueItems = useCallback((): IssueItem[] => {
+    // Identifier instant-jump: when the query is shaped like ENG-123, prefer
+    // an exact identifier hit so a press of Enter routes straight to it
+    // without the user having to disambiguate against fuzzy near-matches.
+    const trimmed = (query || '').trim().toUpperCase();
+    const exactIdentifier = IDENTIFIER_RE.test(trimmed)
+      ? (issueStore.findByIdentifier(trimmed) ?? undefined)
+      : undefined;
+
     const matched = issueStore.search(query || '', 10);
     const recent = query
       ? []
@@ -103,7 +112,10 @@ export const CommandPalette = observer(function CommandPalette({
           .filter((i): i is DBIssue => i !== null)
           .slice(0, 5);
 
-    const issues = query ? matched : recent;
+    let issues = query ? matched : recent;
+    if (exactIdentifier) {
+      issues = [exactIdentifier, ...issues.filter(i => i.id !== exactIdentifier.id)];
+    }
 
     return issues.map(issue => ({
       issue,
@@ -300,7 +312,11 @@ export const CommandPalette = observer(function CommandPalette({
         if (inSub) {
           sub[idx]?.onSelect();
         } else {
-          select(all[idx]);
+          // Fall back to the first item when nothing is highlighted yet so
+          // typing an issue identifier and hitting Enter jumps straight to
+          // it instead of being a no-op.
+          const target = idx === -1 ? all[0] : all[idx];
+          select(target);
         }
       } else if (e.key === 'Escape') {
         e.preventDefault();

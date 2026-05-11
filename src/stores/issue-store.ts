@@ -23,6 +23,21 @@ export class IssueStore {
     return this.pool.get(id) ?? null;
   }
 
+  /**
+   * Linear scan for an exact identifier match (e.g. `ENG-42`). Identifiers
+   * are unique per org so the first hit terminates. Used by the command
+   * palette's instant-jump path; keeping this inline (no `computed`) means
+   * we don't add another iterator over `pool` to MobX's dependency graph.
+   */
+  findByIdentifier(identifier: string): DBIssue | null {
+    for (const issue of this.pool.values()) {
+      if (issue.identifier === identifier) {
+        return issue;
+      }
+    }
+    return null;
+  }
+
   findByTeamId(teamId: string): DBIssue[] {
     return Array.from(this.pool.values()).filter(
       i => i.teamId === teamId && !i.trashed && !i.archivedAt,

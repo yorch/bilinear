@@ -14,6 +14,7 @@ const prisma = new PrismaClient({ adapter });
 const DEMO_EMAIL = 'demo@example.com';
 const DEMO_CODE = '123456';
 const E2E_EMAIL = 'e2e@test.local';
+const E2E_MEMBER_EMAIL = 'e2e-member@test.local';
 
 function hashToken(value: string): string {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -46,6 +47,21 @@ async function main() {
     where: { email: E2E_EMAIL },
   });
 
+  // Non-admin member used by permission-gating tests. Joined to the org with
+  // role=member (not admin/owner) so admin-only routes (webhooks, settings)
+  // surface the correct rejection path.
+  const e2eMember = await prisma.user.upsert({
+    create: {
+      avatarBgColor: '#f97316',
+      displayName: 'E2E Member',
+      email: E2E_MEMBER_EMAIL,
+      initials: 'EM',
+      name: 'E2E Member',
+    },
+    update: {},
+    where: { email: E2E_MEMBER_EMAIL },
+  });
+
   // ── Organization ───────────────────────────────────────────────────────────
 
   const org = await prisma.organization.upsert({
@@ -69,6 +85,14 @@ async function main() {
     update: { role: 'admin' },
     where: {
       organizationId_userId: { organizationId: org.id, userId: e2eUser.id },
+    },
+  });
+
+  await prisma.organizationMember.upsert({
+    create: { organizationId: org.id, role: 'member', userId: e2eMember.id },
+    update: { role: 'member' },
+    where: {
+      organizationId_userId: { organizationId: org.id, userId: e2eMember.id },
     },
   });
 
@@ -108,6 +132,12 @@ async function main() {
     create: { isOwner: false, teamId: team.id, userId: e2eUser.id },
     update: {},
     where: { teamId_userId: { teamId: team.id, userId: e2eUser.id } },
+  });
+
+  await prisma.teamMembership.upsert({
+    create: { isOwner: false, teamId: team.id, userId: e2eMember.id },
+    update: {},
+    where: { teamId_userId: { teamId: team.id, userId: e2eMember.id } },
   });
 
   // ── Workflow states ────────────────────────────────────────────────────────

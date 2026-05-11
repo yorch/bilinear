@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { gql } from '@/lib/graphql';
+import { TransactionQueue } from '@/lib/transaction-queue';
 
 interface AuthUser {
   displayName: string;
@@ -69,6 +70,9 @@ export function useAuth() {
     await gql('mutation { logout { success } }');
     await fetch('/api/auth/session', { method: 'DELETE' });
 
+    // Drop the previous user's session reference so any racing enqueue
+    // can't stamp a new transaction with stale ids before page navigation.
+    TransactionQueue.clearActiveSession();
     setState({ error: null, loading: false, user: null });
     router.push('/login');
   }, [router]);
