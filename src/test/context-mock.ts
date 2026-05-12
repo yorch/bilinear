@@ -66,9 +66,10 @@ export function createMockContext(
   const prisma = createMockPrisma();
   const userService = new UserService(prisma as never);
 
+  const orgId = overrides.orgId !== undefined ? overrides.orgId : TEST_ORG.id;
   return {
-    loaders: createLoaders(prisma as never),
-    orgId: overrides.orgId !== undefined ? overrides.orgId : TEST_ORG.id,
+    loaders: createLoaders(prisma as never, orgId),
+    orgId,
     prisma,
     services: {
       auth: new AuthService(prisma as never, userService),

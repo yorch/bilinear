@@ -29,7 +29,7 @@ export const labelResolvers = {
         });
       }
       if (existing.teamId) {
-        await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
+        await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
       }
 
       const label = await ctx.services.label.archive(id);
@@ -54,7 +54,7 @@ export const labelResolvers = {
       requireAuth(ctx);
 
       if (input.teamId) {
-        await requireTeamMember(ctx.prisma, input.teamId, ctx.userId);
+        await requireTeamMember(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
       }
 
       const label = await ctx.services.label.create(ctx.orgId, ctx.userId, input);
@@ -86,7 +86,7 @@ export const labelResolvers = {
         });
       }
       if (existing.teamId) {
-        await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
+        await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
       }
 
       const label = await ctx.services.label.update(id, input);

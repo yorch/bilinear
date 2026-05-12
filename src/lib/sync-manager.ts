@@ -1,7 +1,56 @@
 import type { RootStore } from '@/stores/root-store';
 import { db } from './db';
-import { decodeTokenOrgId } from './jwt';
 import type { SerializedSyncAction, WsClient } from './ws-client';
+
+/**
+ * Cursor for delta-sync is a `(committedAt, id)` tuple encoded as
+ * `<committedAtMicros>-<id>`. Using id alone races when transactions
+ * commit out of order — a slow-committing earlier-id row would be
+ * permanently skipped if we just kept `max(id)`. See
+ * `src/server/services/sync.service.ts` for the server-side encoding.
+ */
+function compareCursor(a: string, b: string): number {
+  const [aMicros, aId] = splitCursor(a);
+  const [bMicros, bId] = splitCursor(b);
+  if (aMicros < bMicros) {
+    return -1;
+  }
+  if (aMicros > bMicros) {
+    return 1;
+  }
+  if (aId < bId) {
+    return -1;
+  }
+  if (aId > bId) {
+    return 1;
+  }
+  return 0;
+}
+
+function splitCursor(c: string): [bigint, bigint] {
+  // Legacy `<id>` is treated as `(0, id)` so a re-read after upgrade
+  // pulls in any rows the new encoding cares about.
+  const dash = c.indexOf('-');
+  if (dash === -1) {
+    try {
+      return [BigInt(0), BigInt(c)];
+    } catch {
+      return [BigInt(0), BigInt(0)];
+    }
+  }
+  try {
+    return [BigInt(c.slice(0, dash)), BigInt(c.slice(dash + 1))];
+  } catch {
+    return [BigInt(0), BigInt(0)];
+  }
+}
+
+function actionCursor(action: SerializedSyncAction): string {
+  // committedAt is a Date ISO string from the server; convert to
+  // microseconds-since-epoch to match the server-side encoder.
+  const micros = BigInt(new Date(action.committedAt).getTime()) * BigInt(1000);
+  return `${micros.toString()}-${action.id}`;
+}
 
 // Upper bound on delta pages consumed per deltaSync call. Server returns
 // 5,000 rows/page, so this covers a 1M-row backlog — far more than any
@@ -26,13 +75,17 @@ export class SyncManager {
   private isBootstrapping = false;
   private isDeltaSyncing = false;
   private stopped = false;
+  // Single coalesced timer for post-drain catch-up — multiple drains in
+  // rapid succession (e.g. a hydrate replay batch) collapse to one
+  // delta-sync after the last one settles.
+  private drainedRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(stores: RootStore, wsClient: WsClient) {
     this.stores = stores;
     this.wsClient = wsClient;
   }
 
-  async start(token: string) {
+  async start(orgId: string) {
     const { syncStore } = this.stores;
     syncStore.setStatus('bootstrapping');
 
@@ -41,7 +94,7 @@ export class SyncManager {
     // same browser) wipe IndexedDB before loading. Without this, the prior
     // org's rows hydrate into MobX for the duration of the deltaSync round-
     // trip — visible flicker plus a real cross-org leak window.
-    await this.invalidateCacheIfOrgChanged(token);
+    await this.invalidateCacheIfOrgChanged(orgId);
 
     // Load cached data from IndexedDB into MobX stores
     const hasCachedData = await this.loadFromIndexedDB();
@@ -60,16 +113,30 @@ export class SyncManager {
       return;
     }
 
-    // Connect WebSocket for real-time updates
-    this.setupWebSocket(token);
+    // Connect WebSocket for real-time updates. WsClient self-fetches a
+    // fresh ws-ticket on each (re)connect so we don't pass one here.
+    this.setupWebSocket();
 
     // Offline / online detection
     window.addEventListener('online', this.handleOnline);
     window.addEventListener('offline', this.handleOffline);
+
+    // When a TransactionQueue mutation drains successfully, the server
+    // creates a SyncAction and publishes it to Redis. If our WS connection
+    // happened to be mid-handshake at that moment, the broadcast went to
+    // an empty subscriber set and pub/sub doesn't replay. Schedule a
+    // delta-sync past the server's watermark to catch it up — this is
+    // the post-reload-hydrate case the offline tests exercise.
+    window.addEventListener('bilinear:transaction-drained', this.handleTransactionDrained);
   }
 
   stop() {
     this.stopped = true;
+    if (this.drainedRetryTimer) {
+      clearTimeout(this.drainedRetryTimer);
+      this.drainedRetryTimer = null;
+    }
+    window.removeEventListener('bilinear:transaction-drained', this.handleTransactionDrained);
     for (const unsub of this.wsUnsubscribers) {
       unsub();
     }
@@ -81,17 +148,16 @@ export class SyncManager {
 
   // ─── Private methods ────────────────────────────────────────────────────────
 
-  private async invalidateCacheIfOrgChanged(token: string): Promise<void> {
-    const tokenOrgId = decodeTokenOrgId(token);
-    if (!tokenOrgId) {
+  private async invalidateCacheIfOrgChanged(activeOrgId: string): Promise<void> {
+    if (!activeOrgId) {
       return;
     }
     const cached = await db.syncMetadata.get('activeOrgId');
     const cachedOrgId = typeof cached?.value === 'string' ? cached.value : null;
 
-    if (cachedOrgId && cachedOrgId !== tokenOrgId) {
+    if (cachedOrgId && cachedOrgId !== activeOrgId) {
       // Cross-org cache — wipe every table. Bootstrap will refill from
-      // the server using the new token's orgId.
+      // the server using the new orgId.
       await db.transaction('rw', db.tables, async () => {
         for (const table of db.tables) {
           await table.clear();
@@ -102,8 +168,8 @@ export class SyncManager {
     // Write the new orgId outside the wipe transaction on purpose. The
     // wipe table list includes syncMetadata; folding the put into the same
     // txn would race the clear() and lose the value.
-    if (cachedOrgId !== tokenOrgId) {
-      await db.syncMetadata.put({ key: 'activeOrgId', value: tokenOrgId });
+    if (cachedOrgId !== activeOrgId) {
+      await db.syncMetadata.put({ key: 'activeOrgId', value: activeOrgId });
     }
   }
 
@@ -535,6 +601,7 @@ export class SyncManager {
       issueTemplates: object[];
       customFieldDefinitions: object[];
       customFieldValues: object[];
+      issueActivities: object[];
     } = {
       customFieldDefinitions: [],
       customFieldValues: [],
@@ -543,6 +610,7 @@ export class SyncManager {
       documents: [],
       initiativeProjects: [],
       initiatives: [],
+      issueActivities: [],
       issueLabels: [],
       issueRelations: [],
       issues: [],
@@ -574,7 +642,8 @@ export class SyncManager {
         | 'notifications'
         | 'issueRelations'
         | 'issueTemplates'
-        | 'customFieldDefinitions';
+        | 'customFieldDefinitions'
+        | 'issueActivities';
       id: string;
     }[] = [];
     /**
@@ -785,10 +854,12 @@ export class SyncManager {
         case 'IssueActivity':
           // IssueActivity is queried per-issue via GraphQL when the detail panel opens;
           // we only persist it to Dexie for offline reads, no MobX store needed.
+          // Batched into the closing transaction below — the prior per-row
+          // awaits issued one round-trip per row on activity-heavy deltas.
           if (act === 'D') {
-            await db.issueActivities.delete(modelId);
+            dexieDeletes.push({ id: modelId, table: 'issueActivities' });
           } else if (data) {
-            await db.issueActivities.put(data as Parameters<typeof db.issueActivities.put>[0]);
+            dexieUpserts.issueActivities.push(data);
           }
           break;
         case 'Initiative':
@@ -817,9 +888,11 @@ export class SyncManager {
           break;
       }
 
-      // Update max sync ID
-      if (BigInt(action.id) > BigInt(maxId)) {
-        maxId = action.id;
+      // Update max sync cursor — `(committedAt, id)` tuple comparison.
+      // Using id alone would skip an earlier-id-later-committed row.
+      const incoming = actionCursor(action);
+      if (compareCursor(incoming, maxId) > 0) {
+        maxId = incoming;
       }
     }
 
@@ -847,6 +920,7 @@ export class SyncManager {
         db.issueTemplates,
         db.customFieldDefinitions,
         db.customFieldValues,
+        db.issueActivities,
         db.syncMetadata,
       ],
       async () => {
@@ -913,6 +987,10 @@ export class SyncManager {
                 typeof db.initiativeProjects.bulkPut
               >[0],
             ),
+          dexieUpserts.issueActivities.length > 0 &&
+            db.issueActivities.bulkPut(
+              dexieUpserts.issueActivities as Parameters<typeof db.issueActivities.bulkPut>[0],
+            ),
           db.syncMetadata.put({ key: 'lastSyncId', value: maxId }),
         ]);
         await Promise.all(dexieDeletes.map(({ table, id }) => db[table].delete(id)));
@@ -937,7 +1015,7 @@ export class SyncManager {
     );
   }
 
-  private setupWebSocket(token: string) {
+  private setupWebSocket() {
     const unsub1 = this.wsClient.onMessage(async msg => {
       if (msg.cmd === 'sync') {
         await this.applyActions(msg.sync);
@@ -966,8 +1044,27 @@ export class SyncManager {
     });
 
     this.wsUnsubscribers.push(unsub1, unsub2);
-    this.wsClient.connect(token);
+    this.wsClient.connect();
   }
+
+  /**
+   * Coalesce drain notifications into a single delta-sync past the server's
+   * 500ms watermark. Server has had at least 600ms (well past the watermark)
+   * to flush the SyncAction, so the next delta is guaranteed to include it
+   * even if the WS broadcast was lost in a reconnect handshake gap.
+   */
+  private handleTransactionDrained = () => {
+    if (this.stopped) {
+      return;
+    }
+    if (this.drainedRetryTimer) {
+      clearTimeout(this.drainedRetryTimer);
+    }
+    this.drainedRetryTimer = setTimeout(() => {
+      this.drainedRetryTimer = null;
+      void this.deltaSync();
+    }, 600);
+  };
 
   private handleOnline = () => {
     const { syncStore } = this.stores;

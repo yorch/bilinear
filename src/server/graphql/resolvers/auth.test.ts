@@ -48,8 +48,9 @@ describe('authResolvers', () => {
   describe('Mutation.emailVerify', () => {
     it('throws INVALID_CODE when code is invalid', async () => {
       ctx.prisma.user.findUnique.mockResolvedValue(TEST_USER);
-      // No matching token found
-      ctx.prisma.authToken.findFirst.mockResolvedValue(null);
+      // verifyMagicLink now claims the token atomically via updateMany —
+      // a count of 0 means no matching live token was found.
+      ctx.prisma.authToken.updateMany.mockResolvedValue({ count: 0 });
 
       try {
         await authResolvers.Mutation.emailVerify(

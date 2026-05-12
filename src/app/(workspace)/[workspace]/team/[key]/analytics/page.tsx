@@ -55,7 +55,7 @@ function BarChart({ data, maxValue, unit = '', emptyMessage = 'No data' }: BarCh
             <div
               className="w-full rounded-t"
               style={{
-                backgroundColor: item.color ?? '#6366f1',
+                backgroundColor: item.color ?? 'var(--chart-primary)',
                 height: `${Math.max(pct, item.value > 0 ? 4 : 0)}%`,
                 minHeight: item.value > 0 ? '4px' : '0',
               }}
@@ -105,7 +105,7 @@ function HBarChart({ data, maxValue, emptyMessage = 'No data' }: HBarChartProps)
               <div
                 className="h-5 rounded transition-all"
                 style={{
-                  backgroundColor: item.color ?? '#6366f1',
+                  backgroundColor: item.color ?? 'var(--chart-primary)',
                   width: `${Math.max(pct, item.value > 0 ? 2 : 0)}%`,
                 }}
               />
@@ -264,7 +264,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
     }
 
     return weeks.map(w => ({
-      color: '#6366f1',
+      color: 'var(--chart-primary)',
       label: fmtShort(w.start),
       value: w.count,
     }));
@@ -297,14 +297,14 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
     const rows = users
       .filter(u => counts.has(u.id))
       .map(u => ({
-        color: '#6366f1',
+        color: 'var(--chart-primary)',
         label: u.displayName,
         value: counts.get(u.id) ?? 0,
       }))
       .sort((a, b) => b.value - a.value);
 
     if (unassigned > 0) {
-      rows.push({ color: '#a1a1aa', label: 'Unassigned', value: unassigned });
+      rows.push({ color: 'var(--chart-muted)', label: 'Unassigned', value: unassigned });
     }
 
     return rows;

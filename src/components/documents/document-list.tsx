@@ -4,7 +4,7 @@ import { FileText, Plus } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { createDocument } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { useStore } from '@/providers/store-provider';
@@ -23,16 +23,14 @@ export const DocumentList = observer(function DocumentList({
   const { documentStore } = useStore();
   const [creating, setCreating] = useState(false);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: MobX pool.size triggers re-computation when documents change
-  const documents = useMemo(() => {
-    if (teamId) {
-      return documentStore.getByTeamId(teamId);
-    }
-    if (projectId) {
-      return documentStore.getByProjectId(projectId);
-    }
-    return documentStore.all;
-  }, [documentStore, teamId, projectId, documentStore.pool.size]);
+  // Plain selector — observer() picks up the observable reads, so the
+  // selector re-runs on any mutation (rename, archive). Memoizing on
+  // `pool.size` skipped in-place updates.
+  const documents = teamId
+    ? documentStore.getByTeamId(teamId)
+    : projectId
+      ? documentStore.getByProjectId(projectId)
+      : documentStore.all;
 
   const handleNewDocument = async () => {
     setCreating(true);

@@ -99,22 +99,43 @@ describe('requireTeamMember', () => {
     prisma.teamMembership.findUnique.mockReset();
   });
 
-  it('passes when user is a team member', async () => {
+  it('passes when user is a team member in the active org', async () => {
     prisma.teamMembership.findUnique.mockResolvedValue({
       id: 'tm-1',
       isOwner: false,
+      team: { organizationId: 'org-1' },
       teamId: 'team-1',
       userId: 'user-1',
     });
 
-    await expect(requireTeamMember(prisma as never, 'team-1', 'user-1')).resolves.toBeUndefined();
+    await expect(
+      requireTeamMember(prisma as never, 'team-1', 'user-1', 'org-1'),
+    ).resolves.toBeUndefined();
+  });
+
+  it('throws FORBIDDEN when team belongs to a different org', async () => {
+    prisma.teamMembership.findUnique.mockResolvedValue({
+      id: 'tm-1',
+      isOwner: false,
+      team: { organizationId: 'org-1' },
+      teamId: 'team-1',
+      userId: 'user-1',
+    });
+
+    try {
+      await requireTeamMember(prisma as never, 'team-1', 'user-1', 'org-other');
+      expect.unreachable('Should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(GraphQLError);
+      expect((e as GraphQLError).extensions?.code).toBe('FORBIDDEN');
+    }
   });
 
   it('throws FORBIDDEN when user is not a member', async () => {
     prisma.teamMembership.findUnique.mockResolvedValue(null);
 
     try {
-      await requireTeamMember(prisma as never, 'team-1', 'user-1');
+      await requireTeamMember(prisma as never, 'team-1', 'user-1', 'org-1');
       expect.unreachable('Should have thrown');
     } catch (e) {
       expect(e).toBeInstanceOf(GraphQLError);
@@ -134,23 +155,45 @@ describe('requireTeamOwner', () => {
     prisma.teamMembership.findUnique.mockResolvedValue({
       id: 'tm-1',
       isOwner: true,
+      team: { organizationId: 'org-1' },
       teamId: 'team-1',
       userId: 'user-1',
     });
 
-    await expect(requireTeamOwner(prisma as never, 'team-1', 'user-1')).resolves.toBeUndefined();
+    await expect(
+      requireTeamOwner(prisma as never, 'team-1', 'user-1', 'org-1'),
+    ).resolves.toBeUndefined();
   });
 
   it('throws FORBIDDEN when user is a member but not owner', async () => {
     prisma.teamMembership.findUnique.mockResolvedValue({
       id: 'tm-1',
       isOwner: false,
+      team: { organizationId: 'org-1' },
       teamId: 'team-1',
       userId: 'user-1',
     });
 
     try {
-      await requireTeamOwner(prisma as never, 'team-1', 'user-1');
+      await requireTeamOwner(prisma as never, 'team-1', 'user-1', 'org-1');
+      expect.unreachable('Should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(GraphQLError);
+      expect((e as GraphQLError).extensions?.code).toBe('FORBIDDEN');
+    }
+  });
+
+  it('throws FORBIDDEN when team belongs to a different org', async () => {
+    prisma.teamMembership.findUnique.mockResolvedValue({
+      id: 'tm-1',
+      isOwner: true,
+      team: { organizationId: 'org-1' },
+      teamId: 'team-1',
+      userId: 'user-1',
+    });
+
+    try {
+      await requireTeamOwner(prisma as never, 'team-1', 'user-1', 'org-other');
       expect.unreachable('Should have thrown');
     } catch (e) {
       expect(e).toBeInstanceOf(GraphQLError);
@@ -162,7 +205,7 @@ describe('requireTeamOwner', () => {
     prisma.teamMembership.findUnique.mockResolvedValue(null);
 
     try {
-      await requireTeamOwner(prisma as never, 'team-1', 'user-1');
+      await requireTeamOwner(prisma as never, 'team-1', 'user-1', 'org-1');
       expect.unreachable('Should have thrown');
     } catch (e) {
       expect(e).toBeInstanceOf(GraphQLError);

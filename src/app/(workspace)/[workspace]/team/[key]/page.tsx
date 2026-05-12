@@ -1,6 +1,6 @@
 'use client';
 
-import { Settings } from 'lucide-react';
+import { Bookmark, Settings } from 'lucide-react';
 import { runInAction } from 'mobx';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
@@ -15,11 +15,14 @@ import { IssueListView } from '@/components/issues/issue-list-view';
 import type { OpenProperty } from '@/components/issues/issue-row';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
 import { type ViewMode, ViewToggle } from '@/components/issues/view-toggle';
+import { type SaveViewInput, SaveViewModal } from '@/components/views/save-view-modal';
 import { useChord, useHotkeys } from '@/hooks/use-hotkeys';
 import { useRecentItems } from '@/hooks/use-recent-items';
 import { useVisibleColumns } from '@/hooks/use-visible-columns';
 import type { DBIssue, DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
+import { gql } from '@/lib/graphql';
+import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
@@ -35,6 +38,16 @@ const ISSUE_FIELDS = `
   projectId cycleId branchName
   startedAt completedAt canceledAt archivedAt createdAt updatedAt
   labels { id name color }
+`;
+
+const CUSTOM_VIEW_CREATE_MUTATION = `
+  mutation CustomViewCreate($input: CustomViewCreateInput!) {
+    customViewCreate(input: $input) {
+      success
+      lastSyncId
+      customView { id name }
+    }
+  }
 `;
 
 const ISSUE_CREATE_MUTATION = `
@@ -104,6 +117,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detailIssueId, setDetailIssueId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [saveViewOpen, setSaveViewOpen] = useState(false);
   // Which property popover to force-open on the selected row (keyboard shortcut)
   const [openProperty, setOpenProperty] = useState<OpenProperty>(null);
   // View mode (list vs board), board group-by, and swimlane
@@ -149,26 +163,25 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
       });
   })();
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: MobX observables — size changes when definitions mutate, which is the signal we want to re-run on
-  const customFieldDefs = useMemo(
-    () => (teamId ? customFieldStore.findDefinitionsByTeamId(teamId) : []),
-    [teamId, customFieldStore.definitions.size],
-  );
+  // Plain selector rather than useMemo. The previous `[..., definitions.size]`
+  // dep ignored in-place mutations (rename, options change) — size is
+  // unchanged, so the memo kept stale values. `observer()` tracks every
+  // observable read inside this component, so the selector re-runs whenever
+  // any field actually used (definition row, value) updates. The cost is a
+  // map filter per render, which is negligible for the typical <50 fields.
+  const customFieldDefs = teamId ? customFieldStore.findDefinitionsByTeamId(teamId) : [];
 
   // Column visibility is per-team so switching teams gives a fresh pick.
   const { isVisible: isColumnVisible, toggle: toggleColumn } = useVisibleColumns(
     teamId ?? 'no-team',
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: MobX observables — values.size change triggers re-filter on value updates
-  const issues = useMemo(
-    () =>
-      applyFilters(
-        allIssues,
-        filterSet,
-        (issueId, definitionId) => customFieldStore.findValue(issueId, definitionId)?.value ?? null,
-      ),
-    [allIssues, filterSet, customFieldStore.values.size],
+  // Same rationale as `customFieldDefs`: stop memoizing on `.size`. Filters
+  // depend on the actual field values, not their cardinality.
+  const issues = applyFilters(
+    allIssues,
+    filterSet,
+    (issueId, definitionId) => customFieldStore.findValue(issueId, definitionId)?.value ?? null,
   );
 
   const users: IssueUser[] = userStore.all.map(u => ({
@@ -240,6 +253,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
       priority: number;
       labelIds: string[];
       dueDate?: string | null;
+      projectId?: string;
     }) => {
       if (!teamId || !team) {
         return;
@@ -270,7 +284,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         parentId: null,
         priority: input.priority,
         prioritySortOrder: 0,
-        projectId: null,
+        projectId: input.projectId ?? null,
         sortOrder: 0,
         startedAt: null,
         stateId: effectiveStateId,
@@ -594,6 +608,15 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
               isVisible={isColumnVisible}
               onToggle={toggleColumn}
             />
+            <button
+              aria-label="Save view"
+              className="flex items-center justify-center rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+              onClick={() => setSaveViewOpen(true)}
+              title="Save current filters as a view"
+              type="button"
+            >
+              <Bookmark className="h-4 w-4" />
+            </button>
           </div>
         )}
       </div>
@@ -660,6 +683,25 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         states={states}
         teamId={teamId ?? undefined}
         users={users}
+      />
+
+      {/* Save current filters as a custom view */}
+      <SaveViewModal
+        initialFilters={filterSet as unknown as object}
+        initialGroupBy={viewMode === 'board' ? boardGroupBy : undefined}
+        initialLayout={viewMode}
+        onClose={() => setSaveViewOpen(false)}
+        onSubmit={async (input: SaveViewInput) => {
+          const res = await gql(CUSTOM_VIEW_CREATE_MUTATION, {
+            input: { ...input, teamId },
+          });
+          if (res.errors?.length) {
+            throw new Error((res.errors[0] as { message: string }).message);
+          }
+          toast.success('View saved');
+        }}
+        open={saveViewOpen}
+        teamId={teamId ?? undefined}
       />
     </div>
   );

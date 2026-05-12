@@ -27,7 +27,7 @@ export const teamMembershipResolvers = {
         });
       }
 
-      await requireTeamOwner(ctx.prisma, input.teamId, ctx.userId);
+      await requireTeamOwner(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
 
       try {
         const teamMembership = await ctx.services.team.addMember(
@@ -71,7 +71,7 @@ export const teamMembershipResolvers = {
 
       const isSelf = membership.userId === ctx.userId;
       if (!isSelf) {
-        await requireTeamOwner(ctx.prisma, membership.teamId, ctx.userId);
+        await requireTeamOwner(ctx.prisma, membership.teamId, ctx.userId, ctx.orgId);
       }
 
       await ctx.services.team.removeMember(id);
@@ -106,9 +106,9 @@ export const teamMembershipResolvers = {
       }
 
       if (input.isOwner !== undefined) {
-        await requireTeamOwner(ctx.prisma, membership.teamId, ctx.userId);
+        await requireTeamOwner(ctx.prisma, membership.teamId, ctx.userId, ctx.orgId);
       } else {
-        await requireTeamMember(ctx.prisma, membership.teamId, ctx.userId);
+        await requireTeamMember(ctx.prisma, membership.teamId, ctx.userId, ctx.orgId);
       }
 
       const teamMembership = await ctx.services.team.updateMembership(id, input);

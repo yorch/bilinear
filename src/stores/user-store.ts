@@ -40,11 +40,15 @@ export class UserStore {
   }
 
   applySyncAction(action: string, id: string, data: DBUser | null) {
-    if (action === 'I' || action === 'U') {
+    if (action === 'I' || action === 'U' || action === 'A') {
+      // Treat archive as an upsert — keep the row around so existing
+      // references (e.g. an issue's creatorId) can still resolve to a
+      // name. UI consumers that don't want archived users filter on
+      // `active` themselves.
       if (data) {
         this.pool.set(id, data);
       }
-    } else if (action === 'D' || action === 'A') {
+    } else if (action === 'D') {
       this.pool.delete(id);
     }
   }

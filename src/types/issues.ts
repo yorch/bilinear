@@ -40,6 +40,7 @@ export interface IssueDetail extends IssueBase {
   createdAt: string;
   description?: string | null;
   estimate?: number | null;
+  projectId?: string | null;
   teamId: string;
   updatedAt: string;
 }

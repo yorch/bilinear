@@ -195,6 +195,15 @@ async function processNext(): Promise<void> {
         permanent: true,
       });
     }
+    // Signal a successful drain so SyncManager can schedule a delta-sync
+    // catch-up past the server's commit-watermark window. Without this,
+    // a mutation that drains while WS is in the middle of its handshake
+    // can land in the Redis broadcast gap (pub/sub has no replay) and
+    // the just-emitted SyncAction is invisible to this client until the
+    // next WS push. Best-effort: skip on SSR / non-DOM environments.
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('bilinear:transaction-drained'));
+    }
     queue.shift();
     await unpersist(tx.id);
     const cb = callbackMap.get(tx.id);

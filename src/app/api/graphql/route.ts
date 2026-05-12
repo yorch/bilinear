@@ -23,6 +23,29 @@ const MAX_QUERY_DEPTH = 10;
 const MAX_QUERY_COMPLEXITY = 1000;
 
 /**
+ * Resolve the allow-list of Origins permitted to hit `/api/graphql`.
+ * Built from `APP_URL` plus any additional comma-separated entries in
+ * `GRAPHQL_ALLOWED_ORIGINS` (e.g. preview deployments). Returning an
+ * empty list disables the check — useful in tests where the request
+ * arrives with no Origin header.
+ */
+function getAllowedOrigins(): string[] {
+  const fromEnv: string[] = [];
+  if (process.env.APP_URL) {
+    fromEnv.push(process.env.APP_URL.replace(/\/$/, ''));
+  }
+  if (process.env.GRAPHQL_ALLOWED_ORIGINS) {
+    for (const o of process.env.GRAPHQL_ALLOWED_ORIGINS.split(',')) {
+      const trimmed = o.trim().replace(/\/$/, '');
+      if (trimmed) {
+        fromEnv.push(trimmed);
+      }
+    }
+  }
+  return fromEnv;
+}
+
+/**
  * Cache the GraphQL context per request so we only call createContext once.
  * Apollo's context callback and the rate-limit check both need the context,
  * but createContext does JWT verification + service instantiation on every
@@ -31,7 +54,31 @@ const MAX_QUERY_COMPLEXITY = 1000;
 const requestContextCache = new WeakMap<Request, GraphQLContext>();
 
 const server = new ApolloServer<GraphQLContext>({
+  // CSRF prevention: rejects POSTs missing a preflight-triggering header
+  // (Content-Type !== application/json, or no Apollo-Require-Preflight).
+  // Auth is taken from the httpOnly cookie, so without this an attacker
+  // page could POST a multipart/form-urlencoded body to /api/graphql with
+  // the user's cookie attached and trigger mutations. SameSite=lax helps
+  // for top-level navigations but not for sub-resource POSTs.
+  csrfPrevention: true,
   plugins: [
+    {
+      // Origin allow-list: even with csrfPrevention, lock down the set of
+      // origins that can hit /api/graphql. Locks out third-party sites
+      // sending POSTs with `apollo-require-preflight` headers from
+      // arbitrary contexts. Same-origin requests have an empty/null Origin
+      // on some browsers, so allow no-Origin too.
+      async requestDidStart({ contextValue: _ctx, request }) {
+        const origin = request.http?.headers.get('origin') ?? null;
+        const allowed = getAllowedOrigins();
+        if (origin && allowed.length > 0 && !allowed.includes(origin)) {
+          throw new GraphQLError('Origin not allowed', {
+            extensions: { code: 'FORBIDDEN' },
+          });
+        }
+        return {};
+      },
+    },
     {
       // Complexity has to be evaluated per request because the limit
       // depends on actual variable values; running it as a static
@@ -51,9 +98,13 @@ const server = new ApolloServer<GraphQLContext>({
               logger.warn({ complexity }, 'High GraphQL query complexity');
             }
             if (complexity > MAX_QUERY_COMPLEXITY) {
+              // Use BAD_USER_INPUT to match the CLAUDE.md error-code
+              // discriminator list — clients already know how to handle
+              // it. The detail (computed vs allowed complexity) goes in
+              // the message.
               throw new GraphQLError(
                 `Query is too complex: ${complexity}. Maximum allowed: ${MAX_QUERY_COMPLEXITY}`,
-                { extensions: { code: 'QUERY_TOO_COMPLEX' } },
+                { extensions: { code: 'BAD_USER_INPUT' } },
               );
             }
           },

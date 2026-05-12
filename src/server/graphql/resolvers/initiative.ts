@@ -44,59 +44,53 @@ export const initiativeResolvers = {
     ) => {
       requireAuth(ctx);
 
-      const initiative = await ctx.services.initiative.findById(initiativeId);
-      if (!initiative || initiative.organizationId !== ctx.orgId) {
-        throw new GraphQLError('Initiative not found', {
-          extensions: { code: 'NOT_FOUND' },
-        });
+      try {
+        const link = await ctx.services.initiative.addProject(ctx.orgId, initiativeId, projectId);
+        const updated = await ctx.services.initiative.findById(ctx.orgId, initiativeId);
+        // Emit both an InitiativeProject 'I' (so other clients populate the
+        // project link map) and an Initiative 'U' (so the recomputed
+        // progress propagates).
+        await ctx.services.sync.createSyncAction(
+          ctx.orgId,
+          'I',
+          'InitiativeProject',
+          link.id,
+          link,
+        );
+        const sync = await ctx.services.sync.createSyncAction(
+          ctx.orgId,
+          'U',
+          'Initiative',
+          initiativeId,
+          updated,
+        );
+        if (updated) {
+          void ctx.services.webhook
+            .dispatchEvent(ctx.orgId, 'initiative.updated', updated)
+            .catch(err => logger.error({ err }, 'webhook dispatch failed: initiative.updated'));
+        }
+        return { initiative: updated, lastSyncId: sync.id.toString(), success: true };
+      } catch (err) {
+        mapServiceError(err, INITIATIVE_ERROR_MAP);
       }
-      const project = await ctx.services.project.findById(projectId);
-      if (!project || project.organizationId !== ctx.orgId) {
-        throw new GraphQLError('Project not found', {
-          extensions: { code: 'NOT_FOUND' },
-        });
-      }
-
-      const link = await ctx.services.initiative.addProject(initiativeId, projectId);
-      const updated = await ctx.services.initiative.findById(initiativeId);
-      // Emit both an InitiativeProject 'I' (so other clients populate the
-      // project link map) and an Initiative 'U' (so the recomputed
-      // progress propagates).
-      await ctx.services.sync.createSyncAction(ctx.orgId, 'I', 'InitiativeProject', link.id, link);
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'U',
-        'Initiative',
-        initiativeId,
-        updated,
-      );
-      if (updated) {
-        void ctx.services.webhook
-          .dispatchEvent(ctx.orgId, 'initiative.updated', updated)
-          .catch(err => logger.error({ err }, 'webhook dispatch failed: initiative.updated'));
-      }
-      return { initiative: updated, lastSyncId: sync.id.toString(), success: true };
     },
 
     initiativeArchive: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
-      const existing = await ctx.services.initiative.findById(id);
-      if (!existing || existing.organizationId !== ctx.orgId) {
-        throw new GraphQLError('Initiative not found', {
-          extensions: { code: 'NOT_FOUND' },
-        });
+      try {
+        const initiative = await ctx.services.initiative.archive(ctx.orgId, id);
+        const sync = await ctx.services.sync.createSyncAction(
+          ctx.orgId,
+          'A',
+          'Initiative',
+          id,
+          initiative,
+        );
+        return { initiative, lastSyncId: sync.id.toString(), success: true };
+      } catch (err) {
+        mapServiceError(err, INITIATIVE_ERROR_MAP);
       }
-
-      const initiative = await ctx.services.initiative.archive(id);
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'A',
-        'Initiative',
-        id,
-        initiative,
-      );
-      return { initiative, lastSyncId: sync.id.toString(), success: true };
     },
 
     initiativeCreate: async (
@@ -148,16 +142,19 @@ export const initiativeResolvers = {
     initiativeDelete: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
-      const existing = await ctx.services.initiative.findById(id);
-      if (!existing || existing.organizationId !== ctx.orgId) {
-        throw new GraphQLError('Initiative not found', {
-          extensions: { code: 'NOT_FOUND' },
-        });
+      try {
+        await ctx.services.initiative.delete(ctx.orgId, id);
+        const sync = await ctx.services.sync.createSyncAction(
+          ctx.orgId,
+          'D',
+          'Initiative',
+          id,
+          null,
+        );
+        return { lastSyncId: sync.id.toString(), success: true };
+      } catch (err) {
+        mapServiceError(err, INITIATIVE_ERROR_MAP);
       }
-
-      await ctx.services.initiative.delete(id);
-      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Initiative', id, null);
-      return { lastSyncId: sync.id.toString(), success: true };
     },
 
     initiativeRemoveProject: async (
@@ -167,15 +164,15 @@ export const initiativeResolvers = {
     ) => {
       requireAuth(ctx);
 
-      const initiative = await ctx.services.initiative.findById(initiativeId);
-      if (!initiative || initiative.organizationId !== ctx.orgId) {
+      const initiative = await ctx.services.initiative.findById(ctx.orgId, initiativeId);
+      if (!initiative) {
         throw new GraphQLError('Initiative not found', {
           extensions: { code: 'NOT_FOUND' },
         });
       }
 
       const removedId = await ctx.services.initiative.removeProject(initiativeId, projectId);
-      const updated = await ctx.services.initiative.findById(initiativeId);
+      const updated = await ctx.services.initiative.findById(ctx.orgId, initiativeId);
       // Emit a 'D' for the link row (so other clients drop it from their
       // store) and a 'U' for the initiative (recomputed progress).
       if (removedId) {
@@ -209,15 +206,8 @@ export const initiativeResolvers = {
     ) => {
       requireAuth(ctx);
 
-      const existing = await ctx.services.initiative.findById(id);
-      if (!existing || existing.organizationId !== ctx.orgId) {
-        throw new GraphQLError('Initiative not found', {
-          extensions: { code: 'NOT_FOUND' },
-        });
-      }
-
       try {
-        const initiative = await ctx.services.initiative.update(id, input);
+        const initiative = await ctx.services.initiative.update(ctx.orgId, id, input);
         const sync = await ctx.services.sync.createSyncAction(
           ctx.orgId,
           'U',
@@ -239,8 +229,8 @@ export const initiativeResolvers = {
     initiative: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
-      const initiative = await ctx.services.initiative.findById(id);
-      if (!initiative || initiative.organizationId !== ctx.orgId) {
+      const initiative = await ctx.services.initiative.findById(ctx.orgId, id);
+      if (!initiative) {
         throw new GraphQLError('Initiative not found', {
           extensions: { code: 'NOT_FOUND' },
         });

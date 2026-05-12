@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export interface RecentItem {
   id: string;
@@ -45,15 +45,37 @@ function saveToStorage(key: string, items: RecentItem[]): void {
 /**
  * Tracks the last MAX_RECENT visited issues in localStorage.
  * Scoped by `workspaceKey` so multiple workspaces on the same origin
- * maintain independent recent-item lists.
- * Returns the recent list and a function to record a new visit.
+ * maintain independent recent-item lists. Re-loads from storage when
+ * `workspaceKey` changes — without that, switching workspaces would
+ * keep showing the previous workspace's list AND the persist effect
+ * would silently overwrite the new workspace's storage with stale
+ * items.
  */
 export function useRecentItems(workspaceKey?: string) {
   const key = storageKey(workspaceKey);
   const [items, setItems] = useState<RecentItem[]>(() => loadFromStorage(key));
 
-  // Sync to localStorage whenever items change
+  // Track the key that produced the current `items` state. The persist
+  // effect must NOT write `items` into a newly-changed `key` before the
+  // load effect has had a chance to swap state to the new workspace's
+  // list, or it would corrupt the new workspace's localStorage.
+  const loadedKeyRef = useRef(key);
+
   useEffect(() => {
+    if (loadedKeyRef.current === key) {
+      return;
+    }
+    loadedKeyRef.current = key;
+    setItems(loadFromStorage(key));
+  }, [key]);
+
+  useEffect(() => {
+    if (loadedKeyRef.current !== key) {
+      // We're between renders — `key` changed but the load effect above
+      // hasn't run yet. Skip the write so we don't corrupt the new key
+      // with the old workspace's items.
+      return;
+    }
     saveToStorage(key, items);
   }, [key, items]);
 

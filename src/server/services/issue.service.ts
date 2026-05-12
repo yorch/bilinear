@@ -185,10 +185,18 @@ export class IssueService {
     });
   }
 
-  async findByIdentifier(identifier: string): Promise<Issue | null> {
+  /**
+   * Team keys are unique only within an org (and only among non-archived
+   * teams). Without `organizationId` in the where clause, two orgs that
+   * both happen to use team key `BUG` could return each other's `BUG-1` —
+   * not a data leak (resolvers re-check `organizationId`) but the caller's
+   * own issue would be unreachable when another org claims the same key
+   * first in the index.
+   */
+  async findByIdentifier(orgId: string, identifier: string): Promise<Issue | null> {
     return this.prisma.issue.findFirst({
       include: { labelAssignments: { include: { label: true } } },
-      where: { identifier },
+      where: { identifier, organizationId: orgId },
     });
   }
 
@@ -253,7 +261,15 @@ export class IssueService {
     });
   }
 
-  async update(id: string, input: IssueUpdateInput): Promise<Issue> {
+  /**
+   * Returns the updated issue plus any cascaded sibling/parent/child issues
+   * the auto-close rules touched. Cascades run inside the same transaction
+   * as the primary update so a crash mid-cascade cannot leave the tree in
+   * an inconsistent state (and remote clients see all changes or none).
+   * The caller is responsible for emitting one SyncAction per `cascaded`
+   * entry so remote clients can reflect the cascade in real time.
+   */
+  async update(id: string, input: IssueUpdateInput): Promise<{ issue: Issue; cascaded: Issue[] }> {
     const data: Parameters<PrismaClient['issue']['update']>[0]['data'] = {};
 
     if (input.title !== undefined) {
@@ -291,8 +307,13 @@ export class IssueService {
     }
     if ('projectId' in input) {
       data.projectId = input.projectId;
+      // Mirror the cycle branch: set the timestamp when joining a project,
+      // clear it when leaving. Without the null branch the timestamp would
+      // persist past project removal, polluting "added to project" filters.
       if (input.projectId) {
         data.addedToProjectAt = new Date();
+      } else {
+        data.addedToProjectAt = null;
       }
     }
     if ('projectMilestoneId' in input) {
@@ -307,37 +328,63 @@ export class IssueService {
       }
     }
 
-    const issue = await this.prisma.$transaction(async tx => {
-      const updated = await tx.issue.update({ data, where: { id } });
+    return this.prisma.$transaction(async tx => {
+      // Validate stateId belongs to the same team as the issue. Create
+      // already does this; the update path must too, or a member can move
+      // their issue into another team's workflow state.
+      if (input.stateId !== undefined) {
+        const existing = await tx.issue.findUnique({
+          select: { teamId: true },
+          where: { id },
+        });
+        if (!existing) {
+          throw new IssueInvalidStateError();
+        }
+        const state = await tx.workflowState.findFirst({
+          select: { teamId: true },
+          where: { archivedAt: null, id: input.stateId },
+        });
+        if (!state || state.teamId !== existing.teamId) {
+          throw new IssueInvalidStateError();
+        }
+      }
+
+      const issue = await tx.issue.update({ data, where: { id } });
 
       if (input.labelIds !== undefined) {
         await this.syncLabels(tx, id, input.labelIds);
       }
 
-      return updated;
+      const cascaded: Issue[] = [];
+      if (input.stateId !== undefined) {
+        const team = await tx.team.findUnique({
+          select: {
+            autoCloseChildIssues: true,
+            autoCloseParentIssues: true,
+          },
+          where: { id: issue.teamId },
+        });
+
+        if (team?.autoCloseParentIssues && issue.parentId) {
+          const closedParent = await this.maybeCloseParentTx(tx, issue.parentId, issue.teamId);
+          if (closedParent) {
+            cascaded.push(closedParent);
+          }
+        }
+
+        if (team?.autoCloseChildIssues) {
+          const closedChildren = await this.maybeCloseChildrenTx(
+            tx,
+            issue.id,
+            issue.stateId,
+            issue.teamId,
+          );
+          cascaded.push(...closedChildren);
+        }
+      }
+
+      return { cascaded, issue };
     });
-
-    if (input.stateId !== undefined) {
-      // Read the team's cascade flags once so the two cascade checks share the
-      // same lookup and stay consistent.
-      const team = await this.prisma.team.findUnique({
-        select: {
-          autoCloseChildIssues: true,
-          autoCloseParentIssues: true,
-        },
-        where: { id: issue.teamId },
-      });
-
-      if (team?.autoCloseParentIssues && issue.parentId) {
-        await this.maybeCloseParent(issue.parentId, issue.teamId);
-      }
-
-      if (team?.autoCloseChildIssues) {
-        await this.maybeCloseChildren(issue.id, issue.stateId, issue.teamId);
-      }
-    }
-
-    return issue;
   }
 
   async archive(id: string): Promise<Issue> {
@@ -386,14 +433,18 @@ export class IssueService {
     return assignments.map(a => a.label);
   }
 
-  private async maybeCloseParent(parentId: string, teamId: string): Promise<void> {
+  private async maybeCloseParentTx(
+    tx: Pick<PrismaClient, 'issue' | 'workflowState'>,
+    parentId: string,
+    teamId: string,
+  ): Promise<Issue | null> {
     // Get all non-archived children of this parent
-    const siblings = await this.prisma.issue.findMany({
+    const siblings = await tx.issue.findMany({
       include: { state: { select: { type: true } } },
       where: { archivedAt: null, parentId, trashed: false },
     });
     if (siblings.length === 0) {
-      return;
+      return null;
     }
 
     // Check if all are completed or cancelled
@@ -401,28 +452,28 @@ export class IssueService {
       s => s.state.type === 'completed' || s.state.type === 'canceled',
     );
     if (!allDone) {
-      return;
+      return null;
     }
 
     // Get parent, check it's not already done
-    const parent = await this.prisma.issue.findUnique({
+    const parent = await tx.issue.findUnique({
       include: { state: { select: { type: true } } },
       where: { id: parentId },
     });
     if (!parent || parent.state.type === 'completed' || parent.state.type === 'canceled') {
-      return;
+      return null;
     }
 
     // Find first completed state for the team
-    const completedState = await this.prisma.workflowState.findFirst({
+    const completedState = await tx.workflowState.findFirst({
       orderBy: { position: 'asc' },
       where: { archivedAt: null, teamId, type: 'completed' },
     });
     if (!completedState) {
-      return;
+      return null;
     }
 
-    await this.prisma.issue.update({
+    return tx.issue.update({
       data: { completedAt: new Date(), stateId: completedState.id },
       where: { id: parentId },
     });
@@ -431,22 +482,23 @@ export class IssueService {
   /**
    * Cascade the parent's newly-completed / -canceled state down to any open
    * children. Fires only when `team.autoCloseChildIssues` is enabled.
-   * No-op if the parent did not move into a terminal state.
+   * Returns the post-update rows so the caller can emit per-row SyncActions.
    */
-  private async maybeCloseChildren(
+  private async maybeCloseChildrenTx(
+    tx: Pick<PrismaClient, 'issue' | 'workflowState'>,
     parentId: string,
     parentStateId: string,
     teamId: string,
-  ): Promise<void> {
-    const parentState = await this.prisma.workflowState.findUnique({
+  ): Promise<Issue[]> {
+    const parentState = await tx.workflowState.findUnique({
       select: { type: true },
       where: { id: parentStateId },
     });
     if (!parentState || (parentState.type !== 'completed' && parentState.type !== 'canceled')) {
-      return;
+      return [];
     }
 
-    const children = await this.prisma.issue.findMany({
+    const children = await tx.issue.findMany({
       include: { state: { select: { type: true } } },
       where: { archivedAt: null, parentId, trashed: false },
     });
@@ -454,12 +506,12 @@ export class IssueService {
       c => c.state.type !== 'completed' && c.state.type !== 'canceled',
     );
     if (openChildren.length === 0) {
-      return;
+      return [];
     }
 
     // Match the parent's final state by type (completed → completed,
     // canceled → canceled); fall back to team's first state of that type.
-    const targetState = await this.prisma.workflowState.findFirst({
+    const targetState = await tx.workflowState.findFirst({
       orderBy: { position: 'asc' },
       where: {
         archivedAt: null,
@@ -468,18 +520,37 @@ export class IssueService {
       },
     });
     if (!targetState) {
-      return;
+      return [];
     }
 
     const now = new Date();
-    await this.prisma.issue.updateMany({
+    const ids = openChildren.map(c => c.id);
+    await tx.issue.updateMany({
       data: {
         stateId: targetState.id,
         ...(parentState.type === 'completed' ? { completedAt: now } : {}),
         ...(parentState.type === 'canceled' ? { canceledAt: now } : {}),
       },
-      where: { id: { in: openChildren.map(c => c.id) } },
+      where: { id: { in: ids } },
     });
+    // Synthesize post-update rows from the pre-update children + the
+    // fields we just wrote, instead of re-reading. updateMany doesn't
+    // return rows in Prisma/Postgres, and an extra findMany doubles the
+    // round-trips on every cascade. `state` is dropped (it was the
+    // pre-update include for type filtering, not a column).
+    //
+    // `updatedAt` is auto-managed by Prisma via `@updatedAt` and we just
+    // wrote each row, so we set it to `now` here too — without that, the
+    // SyncAction + webhook payloads for the cascaded rows would carry
+    // the pre-update timestamp and remote clients would see a stale
+    // "Updated 2 days ago" until the next bootstrap.
+    return openChildren.map(({ state: _state, ...child }) => ({
+      ...child,
+      canceledAt: parentState.type === 'canceled' ? now : child.canceledAt,
+      completedAt: parentState.type === 'completed' ? now : child.completedAt,
+      stateId: targetState.id,
+      updatedAt: now,
+    })) as Issue[];
   }
 
   private async syncLabels(tx: PrismaLike, issueId: string, labelIds: string[]): Promise<void> {

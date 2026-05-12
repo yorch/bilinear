@@ -49,7 +49,7 @@ remains a design target.
 | 2.10 Project Milestones   | ✅      |                                                                                                       |
 | 2.11 Project Updates      | ✅      |                                                                                                       |
 | 2.12 Cycles               | ⚠️      | `organization_id` was missing from doc                                                                |
-| 2.13 Initiatives          | 📋      | Feature-flagged off; no table yet                                                                     |
+| 2.13 Initiatives          | ✅      | Shipped 2026-05-05 — `initiatives` + `initiative_projects` join                                       |
 | 2.14 Attachments          | 📋      | Superseded by §2.25 Files                                                                             |
 | 2.15 Comment Reactions    | ✅      |                                                                                                       |
 | 2.16 Notifications        | ⚠️      | Doc listed polymorphic FKs that were never added                                                      |
@@ -57,7 +57,7 @@ remains a design target.
 | 2.18 Favorites            | 📋      |                                                                                                       |
 | 2.19 Documents            | ✅      | Parent hierarchy, editor output in `content` TEXT; no YJS yet                                         |
 | 2.20 Issue Templates      | ⚠️      | Real model is issue-only (not polymorphic)                                                            |
-| 2.21 Webhooks             | 📋      |                                                                                                       |
+| 2.21 Webhooks             | ✅      | Shipped 2026-05-05 — `webhooks` + `webhook_deliveries`                                                |
 | 2.22 Sync Actions         | ✅      |                                                                                                       |
 | 2.23 Auth Tokens          | ✅      |                                                                                                       |
 | 2.24 Audit Log            | 📋      |                                                                                                       |
@@ -1043,14 +1043,36 @@ CREATE TABLE sync_actions (
     model_id        UUID NOT NULL,
     data            JSONB,  -- null for deletes
 
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- Statement-time timestamp populated by the
+    -- `sync_action_set_committed_at` BEFORE INSERT trigger. Delta-sync
+    -- orders by `committed_at` and waits a small safety window so an
+    -- earlier-id row whose transaction commits late can't be skipped.
+    committed_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_sync_actions_org ON sync_actions(organization_id, id);
+CREATE INDEX idx_sync_actions_org_committed ON sync_actions(organization_id, committed_at, id);
 CREATE INDEX idx_sync_actions_model ON sync_actions(model_name, model_id);
 
 -- Partition by organization for scale (optional)
 -- Prune old entries (>30 days) via background job
 ```
+
+> **Ordering invariant.** BIGSERIAL `id` values are assigned at INSERT
+> but transactions commit out of order. Delta-sync MUST order by
+> `(committed_at, id)` and exclude rows newer than
+> `now() - SyncService.COMMITTED_WATERMARK_LAG_MS` (500ms today). Reading
+> by `id` alone permanently skips rows whose commit lands after a faster
+> later-id row. See `SyncService.getDeltaSyncActions`.
+
+### 2.22a Action codes
+
+| Code | Meaning  | Notes                                                              |
+| ---- | -------- | ------------------------------------------------------------------ |
+| `I`  | Insert   | First time the client should see this row                          |
+| `U`  | Update   | Replace existing pool row by id                                    |
+| `D`  | Delete   | Hard delete — remove from pool                                     |
+| `A`  | Archive  | Soft delete — upsert with `archivedAt` populated; row stays in the pool so references can still resolve to a name (UI consumers filter by `archivedAt`) |
 
 ### 2.23 Auth Tokens
 

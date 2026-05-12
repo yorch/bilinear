@@ -33,7 +33,7 @@ export const issueTemplateResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
       const template = await ctx.services.issueTemplate.archive(id);
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
@@ -54,7 +54,7 @@ export const issueTemplateResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, input.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
       const team = await ctx.services.team.findById(input.teamId);
       if (!team || team.organizationId !== ctx.orgId) {
         throw new GraphQLError('Team not found', {
@@ -89,7 +89,7 @@ export const issueTemplateResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
       await ctx.services.issueTemplate.delete(id);
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
@@ -118,7 +118,7 @@ export const issueTemplateResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
       const template = await ctx.services.issueTemplate.update(id, input);
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
@@ -149,7 +149,7 @@ export const issueTemplateResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, template.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, template.teamId, ctx.userId, ctx.orgId);
       return template;
     },
     issueTemplates: async (
@@ -158,7 +158,7 @@ export const issueTemplateResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
       return ctx.services.issueTemplate.findByTeamId(teamId, includeArchived ?? false);
     },
   },

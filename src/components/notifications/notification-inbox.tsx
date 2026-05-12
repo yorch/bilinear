@@ -299,6 +299,13 @@ export const NotificationInbox = observer(function NotificationInbox() {
   const notifications = notificationStore.all;
 
   const handleMarkRead = async (id: string) => {
+    // Snapshot the pre-mutation values so a rollback restores the exact
+    // prior state. The previous implementation rolled back to
+    // `readAt: undefined`, which would clobber a non-null readAt if the
+    // notification had been read-then-unread-then-read-again.
+    const prev = notificationStore.findById(id);
+    const prevRead = prev?.read ?? false;
+    const prevReadAt = prev?.readAt ?? null;
     notificationStore.markRead(id); // Optimistic update
     setMarkingId(id);
     try {
@@ -307,10 +314,9 @@ export const NotificationInbox = observer(function NotificationInbox() {
         throw new Error('Failed to mark notification as read');
       }
     } catch {
-      // Roll back optimistic update
       notificationStore.optimisticUpdate(id, {
-        read: false,
-        readAt: undefined,
+        read: prevRead,
+        readAt: prevReadAt,
       });
       toast.error('Failed to mark notification as read');
     } finally {
@@ -319,7 +325,11 @@ export const NotificationInbox = observer(function NotificationInbox() {
   };
 
   const handleSnooze = async (id: string, until: Date) => {
-    // Optimistic: mark as snoozed in store — the derived filter will hide it
+    // Snapshot the prior snooze (could be a real future date if the user
+    // is extending an existing snooze) so a rollback restores the exact
+    // prior state instead of clobbering it to null.
+    const prev = notificationStore.findById(id);
+    const prevSnoozedUntilAt = prev?.snoozedUntilAt ?? null;
     notificationStore.optimisticUpdate(id, {
       snoozedUntilAt: until.toISOString(),
     });
@@ -334,8 +344,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
       }
       toast.success('Notification snoozed');
     } catch {
-      // Roll back optimistic update
-      notificationStore.optimisticUpdate(id, { snoozedUntilAt: null });
+      notificationStore.optimisticUpdate(id, { snoozedUntilAt: prevSnoozedUntilAt });
       toast.error('Failed to snooze notification');
     } finally {
       setSnoozingId(null);

@@ -24,14 +24,14 @@ export const issueRelationResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
       const relatedIssue = await ctx.services.issue.findById(input.relatedIssueId);
       if (!relatedIssue || relatedIssue.organizationId !== ctx.orgId) {
         throw new GraphQLError('Related issue not found', {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, relatedIssue.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, relatedIssue.teamId, ctx.userId, ctx.orgId);
       try {
         const relation = await ctx.services.issueRelation.create(input);
         const sync = await ctx.services.sync.createSyncAction(
@@ -75,7 +75,7 @@ export const issueRelationResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
       await ctx.services.issueRelation.delete(id);
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
@@ -100,7 +100,7 @@ export const issueRelationResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
       return ctx.services.issueRelation.findByIssueId(issueId);
     },
   },

@@ -104,6 +104,7 @@ export function IssueListView({
         <GroupSection
           color={state.color}
           count={groupIssues.length}
+          getKey={item => (item as IssueRowData).id}
           items={groupIssues}
           key={state.id}
           name={state.name}

@@ -62,7 +62,7 @@ export const customViewResolvers = {
             extensions: { code: 'NOT_FOUND' },
           });
         }
-        await requireTeamMember(ctx.prisma, input.teamId, ctx.userId);
+        await requireTeamMember(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
       }
 
       const customView = await ctx.services.customView.create(ctx.orgId, ctx.userId, input);
@@ -149,7 +149,7 @@ export const customViewResolvers = {
 
       // Team-scoped views require team membership
       if (customView.teamId) {
-        await requireTeamMember(ctx.prisma, customView.teamId, ctx.userId);
+        await requireTeamMember(ctx.prisma, customView.teamId, ctx.userId, ctx.orgId);
       }
 
       return customView;
@@ -159,7 +159,7 @@ export const customViewResolvers = {
       requireAuth(ctx);
 
       if (teamId) {
-        await requireTeamMember(ctx.prisma, teamId, ctx.userId);
+        await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
       }
 
       return ctx.services.customView.findByOrgId(ctx.orgId, ctx.userId, teamId ?? undefined);

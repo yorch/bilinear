@@ -137,10 +137,11 @@ src/
 │   └── api/sync/delta/       # GET — SyncActions since lastSyncId
 ├── server/                   # Backend-only code (never imported by client)
 │   ├── graphql/              # schema.ts, context.ts, resolvers/, types/
-│   ├── services/             # auth, user, team, workflow-state, label, issue,
+│   ├── services/             # auth, user, organization, team, workflow-state, label, issue,
 │   │                         # issue-activity, issue-relation, issue-template,
 │   │                         # project, cycle, custom-view, custom-field,
 │   │                         # comment, notification, document, file, roadmap,
+│   │                         # triage, initiative, webhook,
 │   │                         # search, sync (one class per domain)
 │   ├── lib/                  # prisma, redis, jwt, email, logger (pino), tiptap-schema
 │   ├── middleware/           # JWT extraction, requireAuth, requireOrgRole, requireTeamMember, rate limiter
@@ -163,7 +164,9 @@ src/
 │   ├── notification-store.ts
 │   ├── issue-relation-store.ts
 │   ├── issue-template-store.ts
-│   └── document-store.ts
+│   ├── document-store.ts
+│   ├── initiative-store.ts
+│   └── triage-store.ts
 ├── providers/
 │   ├── store-provider.tsx    # React context for MobX RootStore
 │   └── sync-provider.tsx     # Bootstrap + WebSocket lifecycle

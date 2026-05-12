@@ -173,6 +173,11 @@ export const TEST_TEAM_MEMBERSHIP = {
   id: '00000000-0000-0000-0000-000000000300',
   isOwner: true,
   sortOrder: 0,
+  // Denormalized `team` so this fixture doubles as the return shape of
+  // requireTeamMember/Owner's findUnique-with-include. Prisma scalar
+  // serialization ignores nested objects, so tests that use it as a row
+  // are unaffected.
+  team: { organizationId: TEST_ORG.id },
   teamId: TEST_TEAM.id,
   updatedAt: new Date('2026-01-15T00:00:00Z'),
   userId: TEST_USER.id,

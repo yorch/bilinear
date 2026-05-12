@@ -40,7 +40,7 @@ function indexById<T extends { id: string }>(rows: T[], ids: readonly string[]):
   return ids.map(id => byId.get(id) ?? null);
 }
 
-export function createLoaders(prisma: PrismaClient): Loaders {
+export function createLoaders(prisma: PrismaClient, orgId: string | null): Loaders {
   return {
     cycle: new DataLoader(async (ids: readonly string[]) => {
       const rows = await prisma.cycle.findMany({
@@ -81,8 +81,18 @@ export function createLoaders(prisma: PrismaClient): Loaders {
     }),
 
     user: new DataLoader(async (ids: readonly string[]) => {
+      // Defense-in-depth: scope to users with at least one membership in
+      // the caller's org so a guessed UUID can't leak another org's user
+      // metadata (name, email). When orgId is null (e.g. onboarding
+      // queries before an org exists), fall back to the unscoped lookup
+      // since there's nothing meaningful to filter on yet.
       const rows = await prisma.user.findMany({
-        where: { id: { in: ids as string[] } },
+        where: orgId
+          ? {
+              id: { in: ids as string[] },
+              orgMemberships: { some: { organizationId: orgId } },
+            }
+          : { id: { in: ids as string[] } },
       });
       return indexById(rows, ids);
     }),

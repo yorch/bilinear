@@ -1,4 +1,5 @@
 import { GraphQLError } from 'graphql';
+import type { SyncAction } from '../../../generated/prisma';
 
 /**
  * Map a service-thrown error (with `name` matching one of the keys in
@@ -31,4 +32,21 @@ export function mapServiceError(err: unknown, byCode: Record<string, readonly st
     }
   }
   throw err;
+}
+
+/**
+ * Standard `{ success, lastSyncId, ...entity }` mutation result envelope.
+ *
+ * Every mutation that creates a SyncAction (i.e. ~all of them) shapes its
+ * return value the same way. This collapses the boilerplate so resolvers
+ * don't manually `String(sync.id)`-stringify and assemble the object.
+ *
+ * Pass the SyncAction returned by `ctx.services.sync.createSyncAction(...)`
+ * along with the entity payload — e.g. `withSyncResult(sync, { issue })`.
+ */
+export function withSyncResult<T extends Record<string, unknown>>(
+  sync: SyncAction,
+  payload: T,
+): T & { success: true; lastSyncId: string } {
+  return { ...payload, lastSyncId: sync.id.toString(), success: true };
 }

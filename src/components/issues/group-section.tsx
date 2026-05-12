@@ -26,6 +26,14 @@ interface GroupSectionProps {
   children?: React.ReactNode;
   color: string;
   count: number;
+  /**
+   * Stable identity extractor for the items array. Required when `items`
+   * is non-virtual (small group) so React doesn't fall back to the array
+   * index as the key — reordering (status change, sortOrder update)
+   * would otherwise reuse the wrong DOM/state, including popover open
+   * state and focus.
+   */
+  getKey?: (item: unknown, index: number) => string;
   itemHeight?: number;
   items?: unknown[];
   name: string;
@@ -85,6 +93,7 @@ export function GroupSection({
   items,
   renderItem,
   itemHeight = 36,
+  getKey,
 }: GroupSectionProps) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -116,8 +125,7 @@ export function GroupSection({
           <VirtualizedList itemHeight={itemHeight} items={items} renderItem={renderItem} />
         ) : items !== undefined && renderItem !== undefined ? (
           items.map((item, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: items are stable within a group; no stable key available at this layer
-            <div key={i}>{renderItem(item, i)}</div>
+            <div key={getKey ? getKey(item, i) : i}>{renderItem(item, i)}</div>
           ))
         ) : (
           children

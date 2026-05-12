@@ -251,10 +251,14 @@ Phase 1 (Full Bootstrap):
     Project, ProjectMilestone, ProjectUpdate, ProjectTeam, ProjectMember,
     Cycle, CustomView, IssueRelation, IssueTemplate,
     CustomFieldDefinition, CustomFieldValue,
+    Initiative, InitiativeProject,
     Document, PublicRoadmap (single row), Notification (user-scoped),
     Comment, CommentReaction, File
   → Response is a JSON object with one key per model plus `lastSyncId: string`
   → Written atomically to IndexedDB via Dexie transaction before MobX population
+  → Webhook + WebhookDelivery are admin-only and NOT bootstrapped — admins
+    fetch them via the `webhooks` / `webhookDeliveries` GraphQL queries
+    on demand from /settings/webhooks.
 
 Deferred (loaded on demand via GraphQL):
   IssueActivity (fetched per-issue when detail panel opens)
@@ -262,14 +266,21 @@ Deferred (loaded on demand via GraphQL):
   Search results (searchIssues query)
 
 Phase 2 (Real-time):
-  WebSocket connection to ws://host:3001?token=<jwt>
+  WebSocket connection to ws://host:3001?token=<ws_ticket>
+  → ws_ticket is a 60s scoped JWT issued by /api/auth/ws-ticket; the
+    long-lived access token never reaches client JavaScript.
   → Server pushes: {cmd: "sync", sync: [SyncAction]}
   → {cmd: "ping"} → client replies {cmd: "pong"}
   → {cmd: "connected", orgId: "..."}
+  → {cmd: "resync"} → Redis subscriber blip; client re-runs delta sync
 
 Reconnection (Delta Sync):
   GET /api/sync/delta?lastSyncId=X
-  → Returns SyncActions with id > X for the authenticated org
+  → Returns SyncActions with id > X for the authenticated org, ORDERED
+    BY (committed_at, id) and ignoring rows committed in the last 500ms
+    (the safety window) so an earlier-id row whose transaction commits
+    late can't be skipped. See DATABASE_SCHEMA.md §2.22 for the
+    `committed_at` trigger.
   → Client applies deltas; updates lastSyncId in IndexedDB
   → Falls back to full bootstrap if delta returns non-200
 ```
@@ -542,6 +553,17 @@ type Mutation {
 │                                 Postgres FTS              │
 │  sync.service                — SyncAction writer +        │
 │                                 Redis Pub/Sub broadcaster │
+│  triage.service              — triage queue + accept/     │
+│                                 decline/duplicate/snooze  │
+│                                 (atomic CAS on stateId)   │
+│  initiative.service          — initiatives CRUD, m:n      │
+│                                 project link, progress    │
+│                                 rollup (mean of linked)   │
+│  webhook.service             — outbound HTTP webhooks,    │
+│                                 HMAC signing, SSRF guard, │
+│                                 retry sweep (in WS srv)   │
+│  organization.service        — workspace mgmt, members,   │
+│                                 settings                  │
 └───────────────────────┬──────────────────────────────────┘
                         │
 ┌───────────────────────┴──────────────────────────────────┐
@@ -550,8 +572,8 @@ type Mutation {
 └──────────────────────────────────────────────────────────┘
 ```
 
-Not yet extracted: **WebhookService** (§5.4 BullMQ queues), **IntegrationService**
-(Slack / GitHub), **ApiKeyService** — all planned.
+Not yet extracted: **IntegrationService** (Slack / GitHub), **ApiKeyService**
+— planned.
 
 ### 5.3 Sync Broadcast Pipeline
 
@@ -587,13 +609,20 @@ Mutation executed
   Clients   Clients
 ```
 
-### 5.4 Background Job Processing 🔲 Planned
+### 5.4 Background Job Processing 🟡 Partial
 
-BullMQ queues are **not yet wired**. Today the jobs that would live here run
-inline in the request-response path or on explicit user trigger:
+BullMQ queues are **not yet wired**. The first piece of true background
+work landed with the webhook retry sweep — `setInterval(..., 30_000)` in
+the WS server (`src/server/ws/index.ts`) calls
+`WebhookService.processDuePending` which picks up `pending` and stale
+`in_flight` deliveries whose `nextAttemptAt` has elapsed.
+
+Everything else still runs inline in the request-response path or on
+explicit user trigger:
 
 | Work                   | Current implementation                                         |
 | ---------------------- | -------------------------------------------------------------- |
+| Webhook retries        | `setInterval` sweep in `ws/index.ts` calls `processDuePending` |
 | Magic-link email send  | Inline in `AuthService.requestMagicLink` (dev logs to console) |
 | Notification fanout    | Inline in the mutation path, before SyncAction broadcast       |
 | Cycle rollover         | Button → `cycleRollover` GraphQL mutation (user-initiated)     |

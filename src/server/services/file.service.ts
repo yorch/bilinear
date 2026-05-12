@@ -58,12 +58,35 @@ export class FileService {
     });
   }
 
-  async deleteFile(fileId: string, userId: string): Promise<PrismaFile> {
+  async deleteFile(fileId: string, userId: string, orgId: string): Promise<PrismaFile> {
     const file = await this.prisma.file.findUnique({ where: { id: fileId } });
     if (!file) {
       throw new FileNotFoundError();
     }
     if (file.uploaderId !== userId) {
+      throw new FileForbiddenError();
+    }
+    // Confirm the file's parent issue/project belongs to orgId — otherwise
+    // an uploader who has since left an org could still mutate the row.
+    if (file.issueId) {
+      const ok = await this.prisma.issue.findFirst({
+        select: { id: true },
+        where: { id: file.issueId, organizationId: orgId },
+      });
+      if (!ok) {
+        throw new FileForbiddenError();
+      }
+    } else if (file.projectId) {
+      const ok = await this.prisma.project.findFirst({
+        select: { id: true },
+        where: { id: file.projectId, organizationId: orgId },
+      });
+      if (!ok) {
+        throw new FileForbiddenError();
+      }
+    } else {
+      // Orphan file — refuse rather than allow the legacy uploader-only path
+      // to mutate a row that nothing else references.
       throw new FileForbiddenError();
     }
 

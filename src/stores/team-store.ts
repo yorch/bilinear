@@ -37,11 +37,15 @@ export class TeamStore {
   }
 
   applySyncAction(action: string, id: string, data: DBTeam | null) {
-    if (action === 'I' || action === 'U') {
+    if (action === 'I' || action === 'U' || action === 'A') {
+      // Archive is an upsert that flips archivedAt — NOT a hard delete.
+      // `get all` already filters by archivedAt, so existing UI hides the
+      // row without forcing every other store reference (e.g. an issue's
+      // teamId) to dangle. Hard delete still removes from the pool.
       if (data) {
         this.pool.set(id, data);
       }
-    } else if (action === 'D' || action === 'A') {
+    } else if (action === 'D') {
       this.pool.delete(id);
     }
   }

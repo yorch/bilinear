@@ -407,10 +407,19 @@ model SyncAction {
   data           Json?
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  // Statement-time timestamp set at COMMIT inside a trigger
+  // (`set_sync_action_committed_at`). Delta-sync orders by `committedAt`
+  // and ignores rows newer than `now() - SAFETY_WINDOW_MS` so a slow
+  // commit cannot leave a gap in the sequence — without this, BIGSERIAL
+  // ids can commit out of order and a client that records lastSyncId=N
+  // would silently skip an earlier-id-but-later-commit row. See
+  // `SyncService.getDeltaSyncActions`.
+  committedAt DateTime @default(now()) @map("committed_at") @db.Timestamptz
 
   organization Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId, id])
+  @@index([organizationId, committedAt, id])
   @@index([createdAt])
   @@map("sync_actions")
 }
@@ -1019,14 +1028,17 @@ model Webhook {
 }
 
 /// Single attempt to deliver a webhook event. Status is one of "pending",
-/// "success", "failed". Failed deliveries are retried up to 5 times with
-/// exponential backoff; the final attempt sets status="failed".
+/// "in_flight", "success", or "failed". A worker transitions a row from
+/// `pending` to `in_flight` atomically before sending the HTTP request,
+/// so two concurrent workers can't both deliver the same event. Failed
+/// deliveries are retried up to 5 times with exponential backoff; the
+/// final attempt sets status="failed".
 model WebhookDelivery {
   id        String   @id @default(uuid()) @db.Uuid
   webhookId String   @map("webhook_id") @db.Uuid
   event     String   @db.VarChar(50)
   payload   Json
-  // pending, success, failed
+  // pending, in_flight, success, failed
   status    String   @default("pending") @db.VarChar(10)
   attempts  Int      @default(0)
   // Last response status code; null until the first attempt completes.

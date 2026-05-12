@@ -28,7 +28,7 @@ export const cycleResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, cycle.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, cycle.teamId, ctx.userId, ctx.orgId);
 
       const issue = await ctx.services.issue.findById(issueId);
       if (!issue || issue.organizationId !== ctx.orgId) {
@@ -62,7 +62,7 @@ export const cycleResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
 
       const cycle = await ctx.services.cycle.archive(id);
       const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'A', 'Cycle', id, cycle);
@@ -75,7 +75,7 @@ export const cycleResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, input.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
 
       // Verify team belongs to user's org
       const team = await ctx.services.team.findById(input.teamId);
@@ -118,9 +118,18 @@ export const cycleResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
 
-      await ctx.services.cycle.delete(id);
+      const { unassignedIssueIds } = await ctx.services.cycle.delete(id);
+      // Re-read the affected issues so remote clients see the cleared
+      // cycleId/addedToCycleAt — without these SyncActions the issues
+      // keep pointing at a cycle that no longer exists until next bootstrap.
+      if (unassignedIssueIds.length > 0) {
+        const refreshed = await ctx.services.issue.findByIdsInOrg(unassignedIssueIds, ctx.orgId);
+        for (const row of refreshed) {
+          await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', row.id, row);
+        }
+      }
       const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Cycle', id, null);
       return { lastSyncId: sync.id.toString(), success: true };
     },
@@ -138,7 +147,7 @@ export const cycleResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
 
       await ctx.services.cycle.removeIssueFromCycle(issueId);
       const updatedIssue = await ctx.services.issue.findById(issueId);
@@ -169,7 +178,7 @@ export const cycleResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
 
       try {
         const result = await ctx.services.cycle.rollover(ctx.orgId, cycleId);
@@ -235,7 +244,7 @@ export const cycleResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
 
       try {
         const cycle = await ctx.services.cycle.update(id, input);
@@ -267,7 +276,7 @@ export const cycleResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, cycle.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, cycle.teamId, ctx.userId, ctx.orgId);
       return cycle;
     },
 
@@ -284,7 +293,7 @@ export const cycleResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, cycle.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, cycle.teamId, ctx.userId, ctx.orgId);
 
       return ctx.services.cycle.getBurndown(cycleId);
     },
@@ -298,7 +307,7 @@ export const cycleResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, args.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, args.teamId, ctx.userId, ctx.orgId);
 
       return ctx.services.cycle.findByTeamId(args.teamId, args.includeArchived ?? false);
     },
@@ -309,7 +318,7 @@ export const cycleResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
       return ctx.services.cycle.getVelocity(teamId, cycleCount ?? 8);
     },
   },

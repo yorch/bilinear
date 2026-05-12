@@ -12,6 +12,14 @@ A Linear-style issue tracker built with Next.js 16 (App Router), Apollo Server G
 - **Initiatives** — top-level strategic objects above projects, m:n with `Project`. Progress rolls up from linked projects. UI at `/initiatives`. See PATTERNS.md §39.
 - **Webhooks** — outbound HMAC-signed HTTP subscriptions, admin-only at `/settings/webhooks`. Retry sweep runs in the WS server every 30s. See PATTERNS.md §40 and DATABASE_SCHEMA.md §2.21.
 
+### Hardening pass (2026-05-12)
+
+- **WebSocket auth** — replaced the JWT-leaking `/api/auth/session` GET with `/api/auth/ws-ticket`. The long-lived access token never reaches client JavaScript; instead a scoped 60s `ws_ticket` JWT is issued per (re)connect. `WsClient.connect()` no longer takes a token — it fetches its own. See PATTERNS.md §18.
+- **SyncAction commit watermark** — `sync_actions` gained a `committed_at` column populated by a BEFORE INSERT trigger. Delta-sync now orders by `(committed_at, id)` and ignores rows newer than 500ms so an earlier-id-but-later-commit row can't be silently skipped. See DATABASE_SCHEMA.md §2.22.
+- **Tenant guards** — `requireTeamMember` / `requireTeamOwner` now take an explicit `orgId` and verify the team belongs to it. `Issue.findByIdentifier`, `Initiative.update/archive/delete/findById`, `Webhook.update/archive/delete/rotateSecret/findById/listDeliveries` were all rescoped to require `orgId`. Auto-close cascade now runs in the same transaction as the parent update AND emits per-row SyncActions.
+- **Webhook concurrency** — `processDelivery` claims rows by transitioning `pending → in_flight` atomically; stale `in_flight` rows are reclaimed by the sweep after the claim deadline elapses. No more double deliveries on concurrent runners.
+- **CSRF + per-IP caps** — Apollo `csrfPrevention: true` and an Origin allow-list now gate `/api/graphql`. Magic-link verify has a per-IP cap to match the per-email cap. The client-IP fallback works without `TRUST_PROXY_HEADERS=1`.
+
 ## Commands
 
 | Task                           | Command                                                    |
@@ -29,7 +37,7 @@ A Linear-style issue tracker built with Next.js 16 (App Router), Apollo Server G
 | Coverage                       | `yarn test:coverage`                                       |
 | E2E tests                      | `yarn test:e2e` (needs both dev + ws:server running)       |
 | E2E with UI                    | `yarn test:e2e:ui`                                         |
-| Generate Prisma client         | `yarn db:generate`                                         |
+| Generate Prisma client         | `yarn db:generate` (aka `yarn prisma generate`)            |
 | Push schema to DB              | `yarn db:push`                                             |
 | Run migrations                 | `yarn db:migrate`                                          |
 | Reset DB                       | `yarn db:reset`                                            |

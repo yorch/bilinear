@@ -17,9 +17,11 @@ import { DueDatePicker } from '../properties/due-date-picker';
 import { EstimatePicker } from '../properties/estimate-picker';
 import { LabelDot, LabelSelect } from '../properties/label-select';
 import { PrioritySelect } from '../properties/priority-select';
+import { ProjectSelect } from '../properties/project-select';
 import { StatusSelect } from '../properties/status-select';
 import { ActivityTimeline } from './activity-timeline';
 import { CommentThread } from './comment-thread';
+import { FileAttachments } from './file-attachments';
 import { RelationsSection } from './relations-section';
 import { SubIssueList } from './sub-issue-list';
 
@@ -284,6 +286,13 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
               ))}
             </div>
 
+            {/* Project */}
+            <span className="text-zinc-500">Project</span>
+            <ProjectSelect
+              onChange={projectId => handleUpdate(issue.id, { projectId })}
+              value={issue.projectId ?? null}
+            />
+
             {/* Due date */}
             <span className="text-zinc-500">Due date</span>
             <div className="flex items-center gap-1.5">
@@ -352,6 +361,9 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
 
           {/* Relations */}
           <RelationsSection issueId={issue.id} />
+
+          {/* Attachments */}
+          <FileAttachments issueId={issue.id} />
 
           {/* Comments */}
           <div className="mt-6">

@@ -20,6 +20,39 @@ const UNSAFE_INLINE_MIME = new Set([
   'text/xml',
 ]);
 
+/**
+ * Build a safe RFC 5987 / 6266 `Content-Disposition` header value. The
+ * stored filename is user-supplied (passed straight through from the
+ * upload's multipart name) and historically only had `"` stripped — a
+ * control character like CR/LF in the name could inject HTTP headers via
+ * the response writer. Strip all C0 controls, quotes, and backslashes
+ * for the ASCII fallback, and use `filename*=UTF-8''…` for non-ASCII so
+ * downloads still preserve the original name where the browser supports it.
+ */
+function buildContentDisposition(rawName: string): string {
+  // Strip C0 controls + DEL char-by-char (CR/LF are the actual injection
+  // vectors). Avoids embedding the control range in a regex literal, which
+  // the linter (correctly) flags as a smell — even though stripping is the
+  // intent here.
+  let sanitized = '';
+  for (const ch of rawName) {
+    const code = ch.charCodeAt(0);
+    if (code < 0x20 || code === 0x7f || ch === '"' || ch === '\\') {
+      continue;
+    }
+    sanitized += ch;
+  }
+  // ASCII fallback: anything outside printable ASCII becomes `_`.
+  let ascii = '';
+  for (const ch of sanitized) {
+    const code = ch.charCodeAt(0);
+    ascii += code >= 0x20 && code <= 0x7e ? ch : '_';
+  }
+  ascii = ascii.slice(0, 200) || 'download';
+  const encoded = encodeURIComponent(sanitized);
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
 const SAFE_MIME: Record<string, string> = {
   gif: 'image/gif',
   jpeg: 'image/jpeg',
@@ -95,9 +128,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
     'X-Content-Type-Options': 'nosniff',
   };
   if (forceDownload) {
-    // Quote the filename to protect against filenames containing commas/quotes.
-    const safeName = record.name.replace(/"/g, '');
-    headers['Content-Disposition'] = `attachment; filename="${safeName}"`;
+    headers['Content-Disposition'] = buildContentDisposition(record.name);
   }
 
   const stream = createReadStream(filePath);

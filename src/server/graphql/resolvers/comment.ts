@@ -18,7 +18,7 @@ async function requireCommentAccess(
       extensions: { code: 'NOT_FOUND' },
     });
   }
-  await requireTeamMember(ctx.prisma, target.teamId, ctx.userId);
+  await requireTeamMember(ctx.prisma, target.teamId, ctx.userId, ctx.orgId);
 }
 
 function handleCommentError(err: unknown): never {
@@ -73,7 +73,7 @@ export const commentResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
 
       const comment = await ctx.services.comment.create(ctx.userId, input);
       const sync = await ctx.services.sync.createSyncAction(
@@ -229,7 +229,7 @@ export const commentResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
       return ctx.services.comment.findByIssueId(issueId, includeArchived ?? false);
     },
   },

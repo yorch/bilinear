@@ -129,7 +129,7 @@ export const teamResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, id, ctx.userId);
+      await requireTeamMember(ctx.prisma, id, ctx.userId, ctx.orgId);
 
       const existing = await ctx.services.team.findById(id);
       if (!existing || existing.organizationId !== ctx.orgId) {
@@ -188,18 +188,15 @@ export const teamResolvers = {
 
     issues: async (team: Team, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, team.id, ctx.userId);
+      await requireTeamMember(ctx.prisma, team.id, ctx.userId, ctx.orgId);
       return ctx.services.issue.findByTeamId(team.id);
     },
 
     members: async (team: Team, _args: unknown, ctx: GraphQLContext) =>
       ctx.services.team.getMembers(team.id),
 
-    // TODO(Sprint 5+): move to OrganizationService once org business logic exists
     organization: async (team: Team, _args: unknown, ctx: GraphQLContext) =>
-      ctx.prisma.organization.findUnique({
-        where: { id: team.organizationId },
-      }),
+      ctx.services.organization.findById(team.organizationId),
 
     parent: async (team: Team, _args: unknown, ctx: GraphQLContext) => {
       if (!team.parentId) {
