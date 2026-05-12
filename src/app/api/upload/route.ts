@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { createWriteStream, mkdirSync } from 'node:fs';
+import { createWriteStream, mkdirSync, unlink } from 'node:fs';
 import { join } from 'node:path';
-import { Readable } from 'node:stream';
+import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
@@ -120,10 +120,34 @@ export async function POST(req: NextRequest) {
   const filePath = join(uploadDir, key);
 
   try {
+    // Cap the *actual* number of bytes written. `file.size` is client-
+    // declared via the multipart envelope; a lying client could stream
+    // gigabytes past it. The Transform aborts the pipeline as soon as
+    // the cumulative byte count exceeds MAX_FILE_SIZE.
+    let bytesSeen = 0;
+    const sizeGuard = new Transform({
+      transform(chunk: Buffer, _enc, cb) {
+        bytesSeen += chunk.length;
+        if (bytesSeen > MAX_FILE_SIZE) {
+          cb(new Error('file_too_large'));
+          return;
+        }
+        cb(null, chunk);
+      },
+    });
     const readable = Readable.fromWeb(file.stream() as Parameters<typeof Readable.fromWeb>[0]);
     const writable = createWriteStream(filePath);
-    await pipeline(readable, writable);
-  } catch {
+    await pipeline(readable, sizeGuard, writable);
+  } catch (err) {
+    // Clean up the partial file before responding so the directory
+    // doesn't accumulate orphans on abuse.
+    unlink(filePath, () => {});
+    if ((err as Error).message === 'file_too_large') {
+      return NextResponse.json(
+        { error: `File exceeds ${MAX_FILE_SIZE / 1024 / 1024} MB limit` },
+        { status: 413 },
+      );
+    }
     return NextResponse.json({ error: 'Failed to save file' }, { status: 500 });
   }
 

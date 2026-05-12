@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TEST_ORG } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
-import { SyncService } from './sync.service';
+import { parseCursor, SyncService } from './sync.service';
 
 // Minimal stand-in for the ioredis Redis instance — only `publish` is
 // touched on the path under test (createSyncAction fires it, but the
@@ -10,10 +10,11 @@ const mockRedis = {
   publish: vi.fn().mockResolvedValue(1),
 } as unknown as ConstructorParameters<typeof SyncService>[1];
 
-function makeAction(id: bigint) {
+function makeAction(id: bigint, committedAt = new Date('2026-04-22T00:00:00Z')) {
   return {
     action: 'I' as const,
-    createdAt: new Date('2026-04-22T00:00:00Z'),
+    committedAt,
+    createdAt: committedAt,
     data: {},
     id,
     modelId: '00000000-0000-0000-0000-0000000aaaaa',
@@ -35,7 +36,7 @@ describe('SyncService.getDeltaSyncActions — pagination', () => {
     const rows = [makeAction(BigInt(1)), makeAction(BigInt(2)), makeAction(BigInt(3))];
     prisma.syncAction.findMany.mockResolvedValue(rows);
 
-    const result = await svc.getDeltaSyncActions(TEST_ORG.id, BigInt(0), undefined, 5);
+    const result = await svc.getDeltaSyncActions(TEST_ORG.id, parseCursor('0'), undefined, 5);
 
     expect(result.actions).toHaveLength(3);
     expect(result.hasMore).toBe(false);
@@ -55,54 +56,71 @@ describe('SyncService.getDeltaSyncActions — pagination', () => {
     ];
     prisma.syncAction.findMany.mockResolvedValue(rows);
 
-    const result = await svc.getDeltaSyncActions(TEST_ORG.id, BigInt(0), undefined, 5);
+    const result = await svc.getDeltaSyncActions(TEST_ORG.id, parseCursor('0'), undefined, 5);
 
     expect(result.actions).toHaveLength(5);
     expect(result.hasMore).toBe(true);
     expect(result.actions.at(-1)?.id).toBe(BigInt(5));
   });
 
-  it('passes lastSyncId / toSyncId through as cursor bounds', async () => {
+  it('passes a tuple cursor through as a tuple-greater-than filter', async () => {
     prisma.syncAction.findMany.mockResolvedValue([]);
 
-    await svc.getDeltaSyncActions(TEST_ORG.id, BigInt(100), BigInt(200), 50);
-
-    expect(prisma.syncAction.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          id: { gt: BigInt(100), lte: BigInt(200) },
-          organizationId: TEST_ORG.id,
-        }),
-      }),
-    );
-  });
-
-  it('omits the upper bound when toSyncId is not provided', async () => {
-    prisma.syncAction.findMany.mockResolvedValue([]);
-
-    await svc.getDeltaSyncActions(TEST_ORG.id, BigInt(0));
+    // 1700000000000000 microseconds = 1700000000000 ms; id=100.
+    const from = parseCursor('1700000000000000-100');
+    await svc.getDeltaSyncActions(TEST_ORG.id, from, undefined, 50);
 
     const call = prisma.syncAction.findMany.mock.calls[0]?.[0] as {
-      where: { id: { gt: bigint; lte?: bigint } };
+      where: { OR: Array<Record<string, unknown>> };
     };
-    expect(call.where.id.gt).toBe(BigInt(0));
-    expect(call.where.id.lte).toBeUndefined();
+    // The query must encode (committed_at, id) > (fromCommittedAt, fromId)
+    // as two OR branches — committed_at strictly greater, OR equal AND id
+    // greater. Anything else (e.g. `id > fromId` alone) would skip a row
+    // whose tx commits late at an earlier id.
+    expect(call.where.OR).toHaveLength(2);
+    expect((call.where.OR[0].committedAt as { gt: Date }).gt).toBeInstanceOf(Date);
+    expect((call.where.OR[1].id as { gt: bigint }).gt).toBe(BigInt(100));
   });
 
-  it('filters rows newer than the commit watermark', async () => {
+  it('omits the upper bound when toCursor is not provided', async () => {
     prisma.syncAction.findMany.mockResolvedValue([]);
 
-    await svc.getDeltaSyncActions(TEST_ORG.id, BigInt(0));
+    await svc.getDeltaSyncActions(TEST_ORG.id, parseCursor('0'));
 
     const call = prisma.syncAction.findMany.mock.calls[0]?.[0] as {
-      where: { committedAt: { lte: Date } };
+      where: { OR: Array<{ committedAt: { lte?: Date } | Date; id?: { lte?: bigint } }> };
+    };
+    // No `lte` on the id sub-branch (only `gt` from the cursor).
+    const idBranch = call.where.OR[1];
+    expect(idBranch.id?.lte).toBeUndefined();
+  });
+
+  it('orders by (committedAt, id) ASC and clamps by the safety watermark', async () => {
+    prisma.syncAction.findMany.mockResolvedValue([]);
+
+    await svc.getDeltaSyncActions(TEST_ORG.id, parseCursor('0'));
+
+    const call = prisma.syncAction.findMany.mock.calls[0]?.[0] as {
       orderBy: Array<Record<string, string>>;
+      where: { OR: Array<{ committedAt?: { lte?: Date } }> };
     };
-    // Bound is current-time-ish (allow for test execution slack).
-    expect(call.where.committedAt.lte).toBeInstanceOf(Date);
-    expect(call.where.committedAt.lte.getTime()).toBeLessThanOrEqual(Date.now());
-    // Cursor orders by commit time first so an out-of-order id can't
-    // leapfrog ahead of an earlier-committed but later-id row.
     expect(call.orderBy).toEqual([{ committedAt: 'asc' }, { id: 'asc' }]);
+    // Watermark applied to the strictly-greater branch so a fresh row whose
+    // tx is still in-flight cannot leapfrog the cursor.
+    const watermark = call.where.OR[0].committedAt?.lte;
+    expect(watermark).toBeInstanceOf(Date);
+    expect((watermark as Date).getTime()).toBeLessThanOrEqual(Date.now());
+  });
+
+  it('parseCursor accepts legacy `<id>` strings as (epoch, id) tuples', () => {
+    const c = parseCursor('42');
+    expect(c.committedAtMicros).toBe(BigInt(0));
+    expect(c.id).toBe(BigInt(42));
+  });
+
+  it('parseCursor decodes `<micros>-<id>` tuples', () => {
+    const c = parseCursor('1700000000000000-99');
+    expect(c.committedAtMicros).toBe(BigInt('1700000000000000'));
+    expect(c.id).toBe(BigInt(99));
   });
 });

@@ -19,6 +19,13 @@ export type WsMessage =
 
 export interface SerializedSyncAction {
   action: string;
+  /**
+   * Statement-time commit watermark for this row (`sync_actions.committed_at`).
+   * The delta-sync cursor is a `(committedAt, id)` tuple — BIGSERIAL ids alone
+   * can race when transactions commit out of order, so this field is what
+   * the client uses to advance `lastSyncId` (encoded as `committedAtMicros-id`).
+   */
+  committedAt: string;
   createdAt: string;
   data: object | null;
   id: string;

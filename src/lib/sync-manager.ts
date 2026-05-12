@@ -2,6 +2,56 @@ import type { RootStore } from '@/stores/root-store';
 import { db } from './db';
 import type { SerializedSyncAction, WsClient } from './ws-client';
 
+/**
+ * Cursor for delta-sync is a `(committedAt, id)` tuple encoded as
+ * `<committedAtMicros>-<id>`. Using id alone races when transactions
+ * commit out of order — a slow-committing earlier-id row would be
+ * permanently skipped if we just kept `max(id)`. See
+ * `src/server/services/sync.service.ts` for the server-side encoding.
+ */
+function compareCursor(a: string, b: string): number {
+  const [aMicros, aId] = splitCursor(a);
+  const [bMicros, bId] = splitCursor(b);
+  if (aMicros < bMicros) {
+    return -1;
+  }
+  if (aMicros > bMicros) {
+    return 1;
+  }
+  if (aId < bId) {
+    return -1;
+  }
+  if (aId > bId) {
+    return 1;
+  }
+  return 0;
+}
+
+function splitCursor(c: string): [bigint, bigint] {
+  // Legacy `<id>` is treated as `(0, id)` so a re-read after upgrade
+  // pulls in any rows the new encoding cares about.
+  const dash = c.indexOf('-');
+  if (dash === -1) {
+    try {
+      return [BigInt(0), BigInt(c)];
+    } catch {
+      return [BigInt(0), BigInt(0)];
+    }
+  }
+  try {
+    return [BigInt(c.slice(0, dash)), BigInt(c.slice(dash + 1))];
+  } catch {
+    return [BigInt(0), BigInt(0)];
+  }
+}
+
+function actionCursor(action: SerializedSyncAction): string {
+  // committedAt is a Date ISO string from the server; convert to
+  // microseconds-since-epoch to match the server-side encoder.
+  const micros = BigInt(new Date(action.committedAt).getTime()) * BigInt(1000);
+  return `${micros.toString()}-${action.id}`;
+}
+
 // Upper bound on delta pages consumed per deltaSync call. Server returns
 // 5,000 rows/page, so this covers a 1M-row backlog — far more than any
 // realistic offline gap. A finite loop prevents a malformed server
@@ -821,9 +871,11 @@ export class SyncManager {
           break;
       }
 
-      // Update max sync ID
-      if (BigInt(action.id) > BigInt(maxId)) {
-        maxId = action.id;
+      // Update max sync cursor — `(committedAt, id)` tuple comparison.
+      // Using id alone would skip an earlier-id-later-committed row.
+      const incoming = actionCursor(action);
+      if (compareCursor(incoming, maxId) > 0) {
+        maxId = incoming;
       }
     }
 

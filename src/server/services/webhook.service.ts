@@ -312,6 +312,20 @@ export class WebhookService {
     // failsafe — if the worker crashes mid-flight, the retry sweep won't
     // re-pick the row until the claim expires (success/failure handlers
     // overwrite it with the real value below).
+    // The claim has two timestamps:
+    //   claimDeadline   = +REQUEST_TIMEOUT_MS + 60s in the future.
+    //                     Written into nextAttemptAt so the retry sweep
+    //                     won't re-pick the row while it's still being
+    //                     sent. Inflated past REQUEST_TIMEOUT_MS so a
+    //                     slow fetch (network jitter past the abort) is
+    //                     still treated as live, not stale.
+    //   claimableBefore = the same window in the past. A row whose
+    //                     nextAttemptAt is older than this is "stale
+    //                     in_flight" — its worker has crashed or hung
+    //                     past the entire window, so the sweep can
+    //                     reclaim it. Symmetric with claimDeadline so
+    //                     the reclaim window matches the protection
+    //                     window the writer originally granted itself.
     const claimDeadline = new Date(Date.now() + REQUEST_TIMEOUT_MS + 60_000);
     const claimableBefore = new Date(Date.now() - REQUEST_TIMEOUT_MS - 60_000);
     const claim = await this.prisma.webhookDelivery.updateMany({

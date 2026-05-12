@@ -325,7 +325,11 @@ export const NotificationInbox = observer(function NotificationInbox() {
   };
 
   const handleSnooze = async (id: string, until: Date) => {
-    // Optimistic: mark as snoozed in store — the derived filter will hide it
+    // Snapshot the prior snooze (could be a real future date if the user
+    // is extending an existing snooze) so a rollback restores the exact
+    // prior state instead of clobbering it to null.
+    const prev = notificationStore.findById(id);
+    const prevSnoozedUntilAt = prev?.snoozedUntilAt ?? null;
     notificationStore.optimisticUpdate(id, {
       snoozedUntilAt: until.toISOString(),
     });
@@ -340,8 +344,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
       }
       toast.success('Notification snoozed');
     } catch {
-      // Roll back optimistic update
-      notificationStore.optimisticUpdate(id, { snoozedUntilAt: null });
+      notificationStore.optimisticUpdate(id, { snoozedUntilAt: prevSnoozedUntilAt });
       toast.error('Failed to snooze notification');
     } finally {
       setSnoozingId(null);

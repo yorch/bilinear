@@ -4,13 +4,18 @@ import { verifyAccessToken } from '@/server/lib/jwt';
 import { logger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { redis } from '@/server/lib/redis';
-import { SyncService, serializeSyncAction } from '@/server/services/sync.service';
+import { parseCursor, SyncService, serializeSyncAction } from '@/server/services/sync.service';
 
 /**
- * GET /api/sync/delta?lastSyncId=<N>&toSyncId=<N>
+ * GET /api/sync/delta?lastSyncId=<cursor>&toSyncId=<cursor>
  *
- * Returns all SyncActions since lastSyncId (exclusive) up to toSyncId (inclusive, optional).
- * Response: JSON array of serialized SyncActions.
+ * Returns all SyncActions strictly after `lastSyncId` (exclusive), up to
+ * `toSyncId` (inclusive, optional). Cursors are opaque strings encoding
+ * a `(committedAt, id)` tuple — see `parseCursor` for the format. The
+ * legacy `<id>` form is accepted for backward-compat with clients that
+ * persisted the cursor before the encoding change.
+ *
+ * Response: { actions: SerializedSyncAction[]; hasMore: boolean }.
  */
 export async function GET(req: NextRequest) {
   const token =
@@ -37,19 +42,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'lastSyncId query parameter is required' }, { status: 400 });
   }
 
-  let lastSyncId: bigint;
-  let toSyncId: bigint | undefined;
-  try {
-    lastSyncId = BigInt(lastSyncIdParam);
-    toSyncId = toSyncIdParam ? BigInt(toSyncIdParam) : undefined;
-  } catch {
-    return NextResponse.json({ error: 'Invalid lastSyncId or toSyncId value' }, { status: 400 });
-  }
+  const fromCursor = parseCursor(lastSyncIdParam);
+  const toCursor = toSyncIdParam ? parseCursor(toSyncIdParam) : undefined;
 
   const syncService = new SyncService(prisma, redis);
 
   try {
-    const { actions, hasMore } = await syncService.getDeltaSyncActions(orgId, lastSyncId, toSyncId);
+    const { actions, hasMore } = await syncService.getDeltaSyncActions(orgId, fromCursor, toCursor);
     return NextResponse.json(
       { actions: actions.map(serializeSyncAction), hasMore },
       { headers: { 'Cache-Control': 'no-store' } },

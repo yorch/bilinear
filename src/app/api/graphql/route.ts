@@ -98,9 +98,13 @@ const server = new ApolloServer<GraphQLContext>({
               logger.warn({ complexity }, 'High GraphQL query complexity');
             }
             if (complexity > MAX_QUERY_COMPLEXITY) {
+              // Use BAD_USER_INPUT to match the CLAUDE.md error-code
+              // discriminator list — clients already know how to handle
+              // it. The detail (computed vs allowed complexity) goes in
+              // the message.
               throw new GraphQLError(
                 `Query is too complex: ${complexity}. Maximum allowed: ${MAX_QUERY_COMPLEXITY}`,
-                { extensions: { code: 'QUERY_TOO_COMPLEX' } },
+                { extensions: { code: 'BAD_USER_INPUT' } },
               );
             }
           },

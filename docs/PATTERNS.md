@@ -1345,7 +1345,7 @@ return { issue, lastSyncId: sync.id.toString(), success: true };
 
 **Concurrency-safe retries.** `processDelivery` atomically transitions the row from `pending` to `in_flight` in a single `updateMany`. Two concurrent runners contend on the row; the loser sees `count=0` and bails, so an event is never delivered twice. Crashed-worker recovery is built in: the claim also accepts `in_flight` rows whose stamped `next_attempt_at` deadline has elapsed. Auto-disable (after `consecutive_failures >= 20`) uses an atomic conditional update so a successful delivery cannot be raced into a disabled state.
 
-**Background sweep.** The WS server's `setInterval(processDuePending, 30s)` drains both `pending` and stale `in_flight` rows whose `next_attempt_at <= now()`. Backoff schedule: 30s → 2m → 10m → 30m → 2h, capped at 5 attempts.
+**Background sweep.** The WS server's `setInterval(processDuePending, 30s)` drains both `pending` and stale `in_flight` rows whose `next_attempt_at <= now()`. Backoff schedule: 30s → 2m → 10m → 30m → 2h, capped at 5 attempts. With multiple WS replicas every replica runs the sweep — the atomic `pending → in_flight` claim keeps deliveries unique, but replicas waste a query/tick contending for the same rows. Add a leader election or `pg_advisory_lock` if the fleet grows.
 
 **Field-level secret guard.** `Webhook.signingSecret` has a field-level resolver that re-checks org admin role; non-admins get `null` even if some future query path returns the row.
 
