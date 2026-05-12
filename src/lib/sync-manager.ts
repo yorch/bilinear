@@ -1021,6 +1021,18 @@ export class SyncManager {
         syncStore.setStatus('connected');
         // Catch up on any missed actions
         this.deltaSync();
+        // The server's delta-sync watermark (500ms) excludes rows
+        // committed inside that window so an in-flight tx can't be
+        // skipped — but it ALSO means a SyncAction broadcast over Redis
+        // during the WS reconnect handshake (e.g. a queued offline
+        // mutation drained right before WS came back) won't appear in
+        // this first delta. Redis pub/sub doesn't replay, so without
+        // this follow-up the row would only surface on the next WS
+        // event. Schedule a delayed re-poll past the watermark lag so
+        // the catch-up is deterministic.
+        setTimeout(() => {
+          void this.deltaSync();
+        }, 700);
       } else {
         syncStore.setStatus('offline');
       }
