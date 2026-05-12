@@ -75,6 +75,10 @@ export class SyncManager {
   private isBootstrapping = false;
   private isDeltaSyncing = false;
   private stopped = false;
+  // Single coalesced timer for post-drain catch-up — multiple drains in
+  // rapid succession (e.g. a hydrate replay batch) collapse to one
+  // delta-sync after the last one settles.
+  private drainedRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(stores: RootStore, wsClient: WsClient) {
     this.stores = stores;
@@ -116,10 +120,23 @@ export class SyncManager {
     // Offline / online detection
     window.addEventListener('online', this.handleOnline);
     window.addEventListener('offline', this.handleOffline);
+
+    // When a TransactionQueue mutation drains successfully, the server
+    // creates a SyncAction and publishes it to Redis. If our WS connection
+    // happened to be mid-handshake at that moment, the broadcast went to
+    // an empty subscriber set and pub/sub doesn't replay. Schedule a
+    // delta-sync past the server's watermark to catch it up — this is
+    // the post-reload-hydrate case the offline tests exercise.
+    window.addEventListener('bilinear:transaction-drained', this.handleTransactionDrained);
   }
 
   stop() {
     this.stopped = true;
+    if (this.drainedRetryTimer) {
+      clearTimeout(this.drainedRetryTimer);
+      this.drainedRetryTimer = null;
+    }
+    window.removeEventListener('bilinear:transaction-drained', this.handleTransactionDrained);
     for (const unsub of this.wsUnsubscribers) {
       unsub();
     }
@@ -1021,18 +1038,6 @@ export class SyncManager {
         syncStore.setStatus('connected');
         // Catch up on any missed actions
         this.deltaSync();
-        // The server's delta-sync watermark (500ms) excludes rows
-        // committed inside that window so an in-flight tx can't be
-        // skipped — but it ALSO means a SyncAction broadcast over Redis
-        // during the WS reconnect handshake (e.g. a queued offline
-        // mutation drained right before WS came back) won't appear in
-        // this first delta. Redis pub/sub doesn't replay, so without
-        // this follow-up the row would only surface on the next WS
-        // event. Schedule a delayed re-poll past the watermark lag so
-        // the catch-up is deterministic.
-        setTimeout(() => {
-          void this.deltaSync();
-        }, 700);
       } else {
         syncStore.setStatus('offline');
       }
@@ -1041,6 +1046,25 @@ export class SyncManager {
     this.wsUnsubscribers.push(unsub1, unsub2);
     this.wsClient.connect();
   }
+
+  /**
+   * Coalesce drain notifications into a single delta-sync past the server's
+   * 500ms watermark. Server has had at least 600ms (well past the watermark)
+   * to flush the SyncAction, so the next delta is guaranteed to include it
+   * even if the WS broadcast was lost in a reconnect handshake gap.
+   */
+  private handleTransactionDrained = () => {
+    if (this.stopped) {
+      return;
+    }
+    if (this.drainedRetryTimer) {
+      clearTimeout(this.drainedRetryTimer);
+    }
+    this.drainedRetryTimer = setTimeout(() => {
+      this.drainedRetryTimer = null;
+      void this.deltaSync();
+    }, 600);
+  };
 
   private handleOnline = () => {
     const { syncStore } = this.stores;
