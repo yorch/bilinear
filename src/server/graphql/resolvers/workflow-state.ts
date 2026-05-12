@@ -18,7 +18,7 @@ export const workflowStateResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
 
       try {
         const workflowState = await ctx.services.workflowState.archive(existing);
@@ -47,7 +47,7 @@ export const workflowStateResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, input.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
 
       try {
         const workflowState = await ctx.services.workflowState.create(input);
@@ -83,7 +83,7 @@ export const workflowStateResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
 
       const workflowState = await ctx.services.workflowState.update(id, input);
       const sync = await ctx.services.sync.createSyncAction(

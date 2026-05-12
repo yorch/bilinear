@@ -175,21 +175,35 @@ Build a modern, high-performance issue tracking and project management platform 
 - Capacity estimation based on 3-cycle velocity history
 - Calendar integration (Google Calendar, .ics, feed URL)
 
-### 2.8 Initiatives (P2)
+### 2.8 Initiatives (P2) 🟡 BASE SHIPPED (2026-05-05)
 
-- Highest-level planning: group projects by company objective
-- Status: Planned, Active, Completed
-- Owner, target date, health indicator
-- Sub-initiatives: nest up to 5 levels, multiple parents allowed
-- Project inheritance from sub-initiatives
+- Highest-level planning: group projects by company objective ✅
+- Status: Planned, Active, Completed, Canceled ✅
+- Owner, target date ✅; health indicator (deferred)
+- Cached progress rolled up from linked-project `Project.progress` ✅
+- Sub-initiatives: nest up to 5 levels, multiple parents allowed (deferred)
+- Project inheritance from sub-initiatives (deferred)
 
-### 2.9 Triage (P1)
+### 2.9 Triage (P1) ✅ SHIPPED (2026-05-05)
 
-- Optional per-team inbox for incoming issues
-- Actions: Accept, Mark Duplicate, Decline, Snooze
-- Triage responsibility with rotating schedules
-- Intelligence (P2): AI-powered assignee/label/duplicate suggestions
-- Rules-based automation (P2)
+- Optional per-team inbox for incoming issues ✅ (`team.triageEnabled`)
+- Actions: Accept, Mark Duplicate, Decline, Snooze ✅
+- Triage responsibility with rotating schedules (deferred)
+- Intelligence (P2): AI-powered assignee/label/duplicate suggestions (deferred)
+- Rules-based automation (P2) (deferred)
+
+### 2.9a Webhooks (P1) ✅ SHIPPED (2026-05-05)
+
+Outbound HTTP webhook subscriptions for integrating with external systems.
+
+- Admin-only CRUD at `/settings/webhooks`
+- 12 supported events (issue, comment, project, cycle, initiative lifecycle)
+- HMAC-SHA256 request signing via `X-Bilinear-Signature: sha256=<hex>`
+- SSRF protection: private-IP allow-list at create, DNS re-resolve at delivery
+- Retry schedule: `30s → 2m → 10m → 30m → 2h` (5 attempts), then `failed`
+- Auto-disable after 20 consecutive failures
+- Per-org delivery log with response status/body
+- Atomic `pending → in_flight` claim transition prevents double delivery
 
 ### 2.10 Views & Filtering (P0)
 

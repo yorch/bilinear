@@ -14,17 +14,53 @@ const TRIAGE_ERROR_MAP = {
     'TriageCrossOrgError',
     'TriageSnoozeInvalidDateError',
     'TriageInvalidTargetStateError',
+    'TriageInvalidAssigneeError',
+    'TriageInvalidCycleError',
   ],
   NOT_FOUND: ['TriageIssueNotFoundError'],
 } as const;
 
 /**
- * Record IssueActivity rows for the triage transition AND fire the
- * issue.updated webhook. The activity rows mirror what `issueUpdate`
- * writes for the same fields (stateId, assigneeId, etc.) so the
- * timeline shows the same shape regardless of which mutation drove
- * the change.
+ * Compute the IssueActivity rows that should be written for a triage
+ * transition. The activity rows mirror what `issueUpdate` writes for the
+ * same fields (stateId, assigneeId, etc.) so the timeline shows the
+ * same shape regardless of which mutation drove the change.
+ *
+ * Returned to the resolver so it can persist activities BEFORE creating
+ * the SyncAction — that ordering means a partial failure leaves us with
+ * either "no activities + no broadcast" (we'll catch up on next bootstrap)
+ * or "activities + broadcast", but never "broadcast without an activity
+ * trail", which would be a confusing audit gap for users.
  */
+function computeTriageActivities(
+  userId: string,
+  before: { stateId: string; assigneeId: string | null; priority: number; cycleId: string | null },
+  after: {
+    id: string;
+    stateId: string;
+    assigneeId: string | null;
+    priority: number;
+    cycleId: string | null;
+  },
+): IssueActivityCreateInput[] {
+  const activities: IssueActivityCreateInput[] = [];
+  const fields: Array<keyof typeof before> = ['stateId', 'assigneeId', 'priority', 'cycleId'];
+  for (const field of fields) {
+    const oldVal = before[field];
+    const newVal = after[field];
+    if (oldVal !== newVal) {
+      activities.push({
+        actorId: userId,
+        field,
+        issueId: after.id,
+        newValue: newVal == null ? undefined : String(newVal),
+        oldValue: oldVal == null ? undefined : String(oldVal),
+      });
+    }
+  }
+  return activities;
+}
+
 async function recordTriageSideEffects(
   ctx: GraphQLContext & { orgId: string; userId: string },
   before: { stateId: string; assigneeId: string | null; priority: number; cycleId: string | null },
@@ -37,21 +73,7 @@ async function recordTriageSideEffects(
     teamId: string;
   },
 ) {
-  const activities: IssueActivityCreateInput[] = [];
-  const fields: Array<keyof typeof before> = ['stateId', 'assigneeId', 'priority', 'cycleId'];
-  for (const field of fields) {
-    const oldVal = before[field];
-    const newVal = after[field];
-    if (oldVal !== newVal) {
-      activities.push({
-        actorId: ctx.userId,
-        field,
-        issueId: after.id,
-        newValue: newVal == null ? undefined : String(newVal),
-        oldValue: oldVal == null ? undefined : String(oldVal),
-      });
-    }
-  }
+  const activities = computeTriageActivities(ctx.userId, before, after);
   if (activities.length > 0) {
     await ctx.services.issueActivity.createMany(activities);
   }
@@ -86,10 +108,13 @@ export const triageResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
 
       try {
         const updated = await ctx.services.triage.accept(issueId, input);
+        // Write activity rows BEFORE the SyncAction so a partial failure
+        // can't broadcast a state change with no audit trail.
+        await recordTriageSideEffects(ctx, issue, updated);
         const sync = await ctx.services.sync.createSyncAction(
           ctx.orgId,
           'U',
@@ -97,7 +122,6 @@ export const triageResolvers = {
           issueId,
           updated,
         );
-        await recordTriageSideEffects(ctx, issue, updated);
         return { issue: updated, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         mapServiceError(err, TRIAGE_ERROR_MAP);
@@ -117,10 +141,11 @@ export const triageResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
 
       try {
         const updated = await ctx.services.triage.decline(issueId);
+        await recordTriageSideEffects(ctx, issue, updated);
         const sync = await ctx.services.sync.createSyncAction(
           ctx.orgId,
           'U',
@@ -128,7 +153,6 @@ export const triageResolvers = {
           issueId,
           updated,
         );
-        await recordTriageSideEffects(ctx, issue, updated);
         return { issue: updated, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         mapServiceError(err, TRIAGE_ERROR_MAP);
@@ -148,7 +172,7 @@ export const triageResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
 
       // The canonical issue must also exist within the user's org and on a
       // team they're a member of — otherwise a member of team A could link
@@ -160,7 +184,7 @@ export const triageResolvers = {
         });
       }
       if (canonical.teamId !== issue.teamId) {
-        await requireTeamMember(ctx.prisma, canonical.teamId, ctx.userId);
+        await requireTeamMember(ctx.prisma, canonical.teamId, ctx.userId, ctx.orgId);
       }
 
       try {
@@ -168,6 +192,8 @@ export const triageResolvers = {
           issueId,
           canonicalIssueId,
         );
+        // Activities first — see issueTriageAccept above.
+        await recordTriageSideEffects(ctx, issue, updated);
         // Emit the new IssueRelation row (when one was created) so other
         // clients see the duplicate link without a full bootstrap. Skip
         // when the relation already existed — re-emitting a no-op row
@@ -188,7 +214,6 @@ export const triageResolvers = {
           issueId,
           updated,
         );
-        await recordTriageSideEffects(ctx, issue, updated);
         return { issue: updated, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         mapServiceError(err, TRIAGE_ERROR_MAP);
@@ -208,7 +233,7 @@ export const triageResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
 
       try {
         const updated = await ctx.services.triage.snooze(issueId, new Date(until), ctx.userId);
@@ -235,7 +260,7 @@ export const triageResolvers = {
   Query: {
     triageQueue: async (_parent: unknown, { teamId }: { teamId: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
 
       const team = await ctx.services.team.findById(teamId);
       if (!team || team.organizationId !== ctx.orgId) {
@@ -253,7 +278,7 @@ export const triageResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
       return ctx.services.triage.getQueueCount(teamId);
     },
   },

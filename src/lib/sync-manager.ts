@@ -1,6 +1,5 @@
 import type { RootStore } from '@/stores/root-store';
 import { db } from './db';
-import { decodeTokenOrgId } from './jwt';
 import type { SerializedSyncAction, WsClient } from './ws-client';
 
 // Upper bound on delta pages consumed per deltaSync call. Server returns
@@ -32,7 +31,7 @@ export class SyncManager {
     this.wsClient = wsClient;
   }
 
-  async start(token: string) {
+  async start(orgId: string) {
     const { syncStore } = this.stores;
     syncStore.setStatus('bootstrapping');
 
@@ -41,7 +40,7 @@ export class SyncManager {
     // same browser) wipe IndexedDB before loading. Without this, the prior
     // org's rows hydrate into MobX for the duration of the deltaSync round-
     // trip — visible flicker plus a real cross-org leak window.
-    await this.invalidateCacheIfOrgChanged(token);
+    await this.invalidateCacheIfOrgChanged(orgId);
 
     // Load cached data from IndexedDB into MobX stores
     const hasCachedData = await this.loadFromIndexedDB();
@@ -60,8 +59,9 @@ export class SyncManager {
       return;
     }
 
-    // Connect WebSocket for real-time updates
-    this.setupWebSocket(token);
+    // Connect WebSocket for real-time updates. WsClient self-fetches a
+    // fresh ws-ticket on each (re)connect so we don't pass one here.
+    this.setupWebSocket();
 
     // Offline / online detection
     window.addEventListener('online', this.handleOnline);
@@ -81,17 +81,16 @@ export class SyncManager {
 
   // ─── Private methods ────────────────────────────────────────────────────────
 
-  private async invalidateCacheIfOrgChanged(token: string): Promise<void> {
-    const tokenOrgId = decodeTokenOrgId(token);
-    if (!tokenOrgId) {
+  private async invalidateCacheIfOrgChanged(activeOrgId: string): Promise<void> {
+    if (!activeOrgId) {
       return;
     }
     const cached = await db.syncMetadata.get('activeOrgId');
     const cachedOrgId = typeof cached?.value === 'string' ? cached.value : null;
 
-    if (cachedOrgId && cachedOrgId !== tokenOrgId) {
+    if (cachedOrgId && cachedOrgId !== activeOrgId) {
       // Cross-org cache — wipe every table. Bootstrap will refill from
-      // the server using the new token's orgId.
+      // the server using the new orgId.
       await db.transaction('rw', db.tables, async () => {
         for (const table of db.tables) {
           await table.clear();
@@ -102,8 +101,8 @@ export class SyncManager {
     // Write the new orgId outside the wipe transaction on purpose. The
     // wipe table list includes syncMetadata; folding the put into the same
     // txn would race the clear() and lose the value.
-    if (cachedOrgId !== tokenOrgId) {
-      await db.syncMetadata.put({ key: 'activeOrgId', value: tokenOrgId });
+    if (cachedOrgId !== activeOrgId) {
+      await db.syncMetadata.put({ key: 'activeOrgId', value: activeOrgId });
     }
   }
 
@@ -535,6 +534,7 @@ export class SyncManager {
       issueTemplates: object[];
       customFieldDefinitions: object[];
       customFieldValues: object[];
+      issueActivities: object[];
     } = {
       customFieldDefinitions: [],
       customFieldValues: [],
@@ -543,6 +543,7 @@ export class SyncManager {
       documents: [],
       initiativeProjects: [],
       initiatives: [],
+      issueActivities: [],
       issueLabels: [],
       issueRelations: [],
       issues: [],
@@ -574,7 +575,8 @@ export class SyncManager {
         | 'notifications'
         | 'issueRelations'
         | 'issueTemplates'
-        | 'customFieldDefinitions';
+        | 'customFieldDefinitions'
+        | 'issueActivities';
       id: string;
     }[] = [];
     /**
@@ -785,10 +787,12 @@ export class SyncManager {
         case 'IssueActivity':
           // IssueActivity is queried per-issue via GraphQL when the detail panel opens;
           // we only persist it to Dexie for offline reads, no MobX store needed.
+          // Batched into the closing transaction below — the prior per-row
+          // awaits issued one round-trip per row on activity-heavy deltas.
           if (act === 'D') {
-            await db.issueActivities.delete(modelId);
+            dexieDeletes.push({ id: modelId, table: 'issueActivities' });
           } else if (data) {
-            await db.issueActivities.put(data as Parameters<typeof db.issueActivities.put>[0]);
+            dexieUpserts.issueActivities.push(data);
           }
           break;
         case 'Initiative':
@@ -847,6 +851,7 @@ export class SyncManager {
         db.issueTemplates,
         db.customFieldDefinitions,
         db.customFieldValues,
+        db.issueActivities,
         db.syncMetadata,
       ],
       async () => {
@@ -913,6 +918,10 @@ export class SyncManager {
                 typeof db.initiativeProjects.bulkPut
               >[0],
             ),
+          dexieUpserts.issueActivities.length > 0 &&
+            db.issueActivities.bulkPut(
+              dexieUpserts.issueActivities as Parameters<typeof db.issueActivities.bulkPut>[0],
+            ),
           db.syncMetadata.put({ key: 'lastSyncId', value: maxId }),
         ]);
         await Promise.all(dexieDeletes.map(({ table, id }) => db[table].delete(id)));
@@ -937,7 +946,7 @@ export class SyncManager {
     );
   }
 
-  private setupWebSocket(token: string) {
+  private setupWebSocket() {
     const unsub1 = this.wsClient.onMessage(async msg => {
       if (msg.cmd === 'sync') {
         await this.applyActions(msg.sync);
@@ -966,7 +975,7 @@ export class SyncManager {
     });
 
     this.wsUnsubscribers.push(unsub1, unsub2);
-    this.wsClient.connect(token);
+    this.wsClient.connect();
   }
 
   private handleOnline = () => {

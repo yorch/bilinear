@@ -65,22 +65,29 @@ export interface GraphQLContext extends AuthContext {
 }
 
 function extractClientIp(req: NextRequest): string | null {
-  // Only trust forwarded-IP headers when explicitly opted in — otherwise a
-  // client can spoof `X-Forwarded-For` to bypass the per-IP rate-limit
-  // bucket. Set `TRUST_PROXY_HEADERS=1` in deployments that sit behind a
-  // proxy that strips/overwrites client-supplied forwarding headers
-  // (Vercel, Cloudflare, reverse-proxy with trust_forwarded, etc.).
-  if (process.env.TRUST_PROXY_HEADERS !== '1') {
-    return null;
-  }
-  const xff = req.headers.get('x-forwarded-for');
-  if (xff) {
-    const first = xff.split(',')[0]?.trim();
-    if (first) {
-      return first;
+  // When TRUST_PROXY_HEADERS=1, read X-Forwarded-For / X-Real-IP. Deploy
+  // this only when the upstream proxy strips client-supplied forwarding
+  // headers (Vercel, Cloudflare, reverse-proxy with trust_forwarded, etc.).
+  if (process.env.TRUST_PROXY_HEADERS === '1') {
+    const xff = req.headers.get('x-forwarded-for');
+    if (xff) {
+      const first = xff.split(',')[0]?.trim();
+      if (first) {
+        return first;
+      }
+    }
+    const realIp = req.headers.get('x-real-ip');
+    if (realIp) {
+      return realIp;
     }
   }
-  return req.headers.get('x-real-ip');
+  // Fallback: NextRequest exposes the socket-level remote address. This
+  // is the actual TCP peer — when the app runs without a proxy, it's
+  // already the real client IP; behind a misconfigured proxy it'll be
+  // the proxy itself, which still bounds the per-IP cap to one shared
+  // bucket per upstream rather than disabling it entirely.
+  const nextIp = (req as unknown as { ip?: string | null }).ip;
+  return nextIp ?? null;
 }
 
 export async function createContext(req: NextRequest): Promise<GraphQLContext> {
@@ -118,7 +125,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   return {
     ...auth,
     clientIp,
-    loaders: createLoaders(prisma),
+    loaders: createLoaders(prisma, auth.orgId),
     prisma,
     services: {
       auth: authService,

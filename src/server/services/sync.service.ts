@@ -8,6 +8,13 @@ const log = childLogger({ module: 'sync' });
 // memory footprint bounded even when a client has been offline for weeks.
 const DELTA_PAGE_SIZE = 5000;
 
+// Safety window for the committed-at watermark. Rows committed inside this
+// window may have been preceded by a row whose transaction was still
+// in-flight at our last read — wait for it to land before serving the
+// span to a client. 500ms covers typical write tail latency comfortably
+// while keeping real-time sync feel instant.
+const COMMITTED_WATERMARK_LAG_MS = 500;
+
 export type SyncActionType = 'I' | 'U' | 'D' | 'A';
 
 export class SyncService {
@@ -106,7 +113,6 @@ export class SyncService {
           project: { archivedAt: null, organizationId: orgId, trashed: false },
         },
       }),
-      // TODO: paginate if a project org accumulates >500 updates
       this.prisma.projectUpdate.findMany({
         orderBy: { createdAt: 'desc' },
         take: 500,
@@ -139,10 +145,17 @@ export class SyncService {
       this.prisma.initiativeProject.findMany({
         where: { initiative: { archivedAt: null, organizationId: orgId } },
       }),
+      // Use the watermarked latest row (see getDeltaSyncActions). Without
+      // this, bootstrap could return a lastSyncId that points past an
+      // earlier-id-but-later-commit row, leaving a permanent gap in the
+      // client's delta stream.
       this.prisma.syncAction.findFirst({
-        orderBy: { id: 'desc' },
+        orderBy: [{ committedAt: 'desc' }, { id: 'desc' }],
         select: { id: true },
-        where: { organizationId: orgId },
+        where: {
+          committedAt: { lte: this.watermark() },
+          organizationId: orgId,
+        },
       }),
     ]);
 
@@ -181,10 +194,18 @@ export class SyncService {
   }
 
   /**
-   * Fetch up to `limit` SyncActions strictly after `lastSyncId`. Capped so a
-   * long-offline client (days/weeks) cannot request a multi-million-row
-   * response that OOMs the server. Callers paginate by resubmitting with the
-   * last returned id until `hasMore` is false.
+   * Fetch up to `limit` SyncActions strictly after `lastSyncId`, but only
+   * rows that have committed earlier than `now() - safety window`. The
+   * watermark is critical: BIGSERIAL ids are assigned at INSERT, but
+   * transactions commit out of order. Without the watermark, a client
+   * that records `lastSyncId = N` could miss a row whose id is < N but
+   * whose commit landed after the client's read. The trigger-populated
+   * `committedAt` column gives us a monotonic ordering AT THE TIME OF
+   * READ as long as we wait for all in-flight transactions to land.
+   *
+   * Cap is per-page so a long-offline client (days/weeks) cannot request
+   * a multi-million-row response that OOMs the server; callers paginate
+   * by resubmitting with the last returned id until `hasMore` is false.
    */
   async getDeltaSyncActions(
     orgId: string,
@@ -195,9 +216,10 @@ export class SyncService {
     // Request one extra row to cheaply detect whether the caller needs
     // another page, without a separate count query.
     const rows = await this.prisma.syncAction.findMany({
-      orderBy: { id: 'asc' },
+      orderBy: [{ committedAt: 'asc' }, { id: 'asc' }],
       take: limit + 1,
       where: {
+        committedAt: { lte: this.watermark() },
         id: {
           gt: lastSyncId,
           ...(toSyncId ? { lte: toSyncId } : {}),
@@ -211,11 +233,18 @@ export class SyncService {
 
   async getLastSyncId(orgId: string): Promise<bigint> {
     const last = await this.prisma.syncAction.findFirst({
-      orderBy: { id: 'desc' },
+      orderBy: [{ committedAt: 'desc' }, { id: 'desc' }],
       select: { id: true },
-      where: { organizationId: orgId },
+      where: {
+        committedAt: { lte: this.watermark() },
+        organizationId: orgId,
+      },
     });
     return last?.id ?? BigInt(0);
+  }
+
+  private watermark(): Date {
+    return new Date(Date.now() - COMMITTED_WATERMARK_LAG_MS);
   }
 }
 

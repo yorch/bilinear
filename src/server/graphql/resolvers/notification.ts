@@ -98,7 +98,7 @@ export const notificationResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
 
       await ctx.services.notification.subscribe(ctx.userId, issueId);
 
@@ -120,7 +120,7 @@ export const notificationResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
 
       await ctx.services.notification.unsubscribe(ctx.userId, issueId);
 
@@ -159,7 +159,7 @@ export const notificationResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
 
       return ctx.services.notification.isSubscribed(ctx.userId, issueId);
     },

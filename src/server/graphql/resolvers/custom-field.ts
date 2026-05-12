@@ -47,7 +47,7 @@ async function loadDefinitionForMutation(
       extensions: { code: 'NOT_FOUND' },
     });
   }
-  await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
+  await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
   return existing;
 }
 
@@ -96,7 +96,7 @@ export const customFieldResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, input.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
       const team = await ctx.services.team.findById(input.teamId);
       if (!team || team.organizationId !== ctx.orgId) {
         throw new GraphQLError('Team not found', {
@@ -179,7 +179,7 @@ export const customFieldResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
       try {
         await ctx.services.customField.setValuesForIssue(issueId, values);
       } catch (err) {
@@ -207,7 +207,7 @@ export const customFieldResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
       return ctx.services.customField.findDefinitionsByTeamId(teamId, includeArchived ?? false);
     },
     customFieldValuesForIssue: async (
@@ -222,7 +222,7 @@ export const customFieldResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
       return ctx.services.customField.findValuesByIssueIds([issueId]);
     },
   },

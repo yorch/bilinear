@@ -111,37 +111,66 @@ describe('InitiativeService', () => {
   });
 
   describe('update', () => {
-    it('stamps startedAt when transitioning to active', async () => {
-      prisma.initiative.update.mockResolvedValue({
-        ...TEST_INITIATIVE,
-        status: 'active',
+    beforeEach(() => {
+      // update() now uses updateMany scoped by orgId, then findUnique to
+      // re-read the row. Provide defaults so tests focused on the data
+      // patch don't have to re-state the plumbing.
+      prisma.initiative.updateMany.mockResolvedValue({ count: 1 });
+      prisma.initiative.findUnique.mockResolvedValue(TEST_INITIATIVE);
+      // Default "current" snapshot for the active-transition guard.
+      prisma.initiative.findFirst.mockResolvedValue({
+        startedAt: null,
+        status: 'planned',
       });
+    });
 
-      await service.update(TEST_INITIATIVE.id, { status: 'active' });
+    it('stamps startedAt when transitioning planned → active', async () => {
+      await service.update(TEST_ORG.id, TEST_INITIATIVE.id, { status: 'active' });
 
-      expect(prisma.initiative.update).toHaveBeenCalledWith({
+      expect(prisma.initiative.updateMany).toHaveBeenCalledWith({
         data: expect.objectContaining({
           startedAt: expect.any(Date),
           status: 'active',
         }),
-        where: { id: TEST_INITIATIVE.id },
+        where: { id: TEST_INITIATIVE.id, organizationId: TEST_ORG.id },
       });
     });
 
+    it('preserves the original startedAt on active → active no-op', async () => {
+      const originalStartedAt = new Date('2026-03-01T00:00:00Z');
+      prisma.initiative.findFirst.mockResolvedValue({
+        startedAt: originalStartedAt,
+        status: 'active',
+      });
+
+      await service.update(TEST_ORG.id, TEST_INITIATIVE.id, { status: 'active' });
+
+      const call = prisma.initiative.updateMany.mock.calls[0][0];
+      // startedAt should NOT be re-stamped — the original "started" time
+      // is preserved across no-op edits.
+      expect(call.data.startedAt).toBeUndefined();
+    });
+
     it('clears terminal timestamps when reverting to planned', async () => {
-      prisma.initiative.update.mockResolvedValue(TEST_INITIATIVE);
+      await service.update(TEST_ORG.id, TEST_INITIATIVE.id, { status: 'planned' });
 
-      await service.update(TEST_INITIATIVE.id, { status: 'planned' });
-
-      expect(prisma.initiative.update).toHaveBeenCalledWith({
+      expect(prisma.initiative.updateMany).toHaveBeenCalledWith({
         data: expect.objectContaining({
           canceledAt: null,
           completedAt: null,
           startedAt: null,
           status: 'planned',
         }),
-        where: { id: TEST_INITIATIVE.id },
+        where: { id: TEST_INITIATIVE.id, organizationId: TEST_ORG.id },
       });
+    });
+
+    it('throws NotFound when the initiative belongs to a different org', async () => {
+      prisma.initiative.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.update(TEST_ORG.id, TEST_INITIATIVE.id, { name: 'New name' }),
+      ).rejects.toThrow('Initiative not found');
     });
   });
 
@@ -207,6 +236,9 @@ describe('InitiativeService', () => {
 
   describe('addProject', () => {
     it('upserts the link and recomputes progress', async () => {
+      // Tenant checks: both initiative and project must exist in orgId.
+      prisma.initiative.findFirst.mockResolvedValue({ id: TEST_INITIATIVE.id });
+      prisma.project.findFirst.mockResolvedValue({ id: 'p-1' });
       prisma.initiativeProject.upsert.mockResolvedValue({
         id: 'link-1',
         initiativeId: TEST_INITIATIVE.id,
@@ -218,7 +250,7 @@ describe('InitiativeService', () => {
       prisma.initiative.findUnique.mockResolvedValue({ progress: 0 });
       prisma.initiative.update.mockResolvedValue({ ...TEST_INITIATIVE, progress: 0.4 });
 
-      const result = await service.addProject(TEST_INITIATIVE.id, 'p-1');
+      const result = await service.addProject(TEST_ORG.id, TEST_INITIATIVE.id, 'p-1');
 
       expect(result).toMatchObject({ id: 'link-1' });
       expect(prisma.initiativeProject.upsert).toHaveBeenCalledWith({
@@ -233,6 +265,16 @@ describe('InitiativeService', () => {
         data: { progress: 0.4 },
         where: { id: TEST_INITIATIVE.id },
       });
+    });
+
+    it('refuses when the project belongs to a different org', async () => {
+      prisma.initiative.findFirst.mockResolvedValue({ id: TEST_INITIATIVE.id });
+      prisma.project.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.addProject(TEST_ORG.id, TEST_INITIATIVE.id, 'p-foreign'),
+      ).rejects.toThrow('One or more projects not found');
+      expect(prisma.initiativeProject.upsert).not.toHaveBeenCalled();
     });
   });
 
@@ -276,51 +318,55 @@ describe('InitiativeService', () => {
   });
 
   describe('update status transitions', () => {
+    beforeEach(() => {
+      prisma.initiative.updateMany.mockResolvedValue({ count: 1 });
+      prisma.initiative.findUnique.mockResolvedValue(TEST_INITIATIVE);
+    });
+
     it('clears canceledAt when transitioning canceled → active', async () => {
-      prisma.initiative.update.mockResolvedValue({ ...TEST_INITIATIVE, status: 'active' });
+      prisma.initiative.findFirst.mockResolvedValue({ startedAt: null, status: 'canceled' });
 
-      await service.update(TEST_INITIATIVE.id, { status: 'active' });
+      await service.update(TEST_ORG.id, TEST_INITIATIVE.id, { status: 'active' });
 
-      expect(prisma.initiative.update).toHaveBeenCalledWith({
+      expect(prisma.initiative.updateMany).toHaveBeenCalledWith({
         data: expect.objectContaining({
           canceledAt: null,
           completedAt: null,
           startedAt: expect.any(Date),
           status: 'active',
         }),
-        where: { id: TEST_INITIATIVE.id },
+        where: { id: TEST_INITIATIVE.id, organizationId: TEST_ORG.id },
       });
     });
 
     it('clears completedAt when transitioning completed → active', async () => {
-      prisma.initiative.update.mockResolvedValue({ ...TEST_INITIATIVE, status: 'active' });
+      prisma.initiative.findFirst.mockResolvedValue({ startedAt: null, status: 'completed' });
 
-      await service.update(TEST_INITIATIVE.id, { status: 'active' });
+      await service.update(TEST_ORG.id, TEST_INITIATIVE.id, { status: 'active' });
 
-      // Both terminal markers cleared, startedAt stamped fresh.
-      expect(prisma.initiative.update).toHaveBeenCalledWith({
+      // Both terminal markers cleared, startedAt stamped fresh (no prior
+      // active session to preserve).
+      expect(prisma.initiative.updateMany).toHaveBeenCalledWith({
         data: expect.objectContaining({
           canceledAt: null,
           completedAt: null,
           startedAt: expect.any(Date),
           status: 'active',
         }),
-        where: { id: TEST_INITIATIVE.id },
+        where: { id: TEST_INITIATIVE.id, organizationId: TEST_ORG.id },
       });
     });
 
     it('clears completedAt when transitioning completed → canceled', async () => {
-      prisma.initiative.update.mockResolvedValue({ ...TEST_INITIATIVE, status: 'canceled' });
+      await service.update(TEST_ORG.id, TEST_INITIATIVE.id, { status: 'canceled' });
 
-      await service.update(TEST_INITIATIVE.id, { status: 'canceled' });
-
-      expect(prisma.initiative.update).toHaveBeenCalledWith({
+      expect(prisma.initiative.updateMany).toHaveBeenCalledWith({
         data: expect.objectContaining({
           canceledAt: expect.any(Date),
           completedAt: null,
           status: 'canceled',
         }),
-        where: { id: TEST_INITIATIVE.id },
+        where: { id: TEST_INITIATIVE.id, organizationId: TEST_ORG.id },
       });
     });
   });

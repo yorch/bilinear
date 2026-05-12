@@ -637,16 +637,18 @@ The sync lifecycle is managed by two providers wrapping the workspace layout:
 
 `SyncProvider` on mount:
 
-1. Fetches JWT token from `GET /api/auth/session` (reads httpOnly cookie server-side)
-2. Creates `SyncManager` and `WsClient`
-3. Calls `syncManager.start(token)` which runs:
+1. Fetches a session resolution from `GET /api/auth/ws-ticket` (server reads the httpOnly access cookie, returns `{ ticket, userId, orgId }`)
+2. Calls `userStore.setCurrentUserId(userId)` so `currentUser` resolves everywhere
+3. Creates `SyncManager` and `WsClient`
+4. Calls `syncManager.start(ticket, orgId)` which runs:
+   - Compare cached vs active `orgId`; wipe IndexedDB if changed
    - Load from IndexedDB → if cached, delta sync; otherwise full bootstrap
-   - Connect WebSocket (`ws://host:3001?token=<jwt>`)
+   - Connect WebSocket (`ws://host:3001?token=<ticket>`); WsClient itself re-fetches a fresh ticket on every reconnect
    - Register `online`/`offline` event listeners
 
 On unmount, `syncManager.stop()` disconnects WebSocket and removes event listeners.
 
-**WebSocket auth:** Browsers cannot set custom headers on WebSocket connections. The JWT is passed as a query parameter (`?token=<jwt>`). The WS server verifies it and maps the connection to an org.
+**WebSocket auth (ws-ticket flow):** Browsers cannot set custom headers on WebSocket connections, AND we never want the long-lived access JWT readable by JavaScript. So `/api/auth/ws-ticket` issues a separate 60s ticket whose `type` claim is `ws_ticket` — it carries `userId` / `orgId` but is verified server-side via `verifyWsTicket` and rejected by `verifyAccessToken`. The ticket is passed in the query string of the WS upgrade URL. `WsClient` re-fetches a fresh ticket on every reconnect, so transient downtime past the 60s lifetime still recovers automatically.
 
 ---
 
@@ -1341,9 +1343,9 @@ return { issue, lastSyncId: sync.id.toString(), success: true };
 
 **SSRF protection** is two-layered: `validateUrl` rejects private/loopback hosts at create time (covers decimal/octal/hex IP encodings, IPv4-mapped IPv6, RFC 1918, link-local, `.local`/`.internal` suffixes); `assertSafeUrl` re-resolves the hostname at delivery time to defeat DNS rebinding. Bypass requires explicit `ALLOW_PRIVATE_WEBHOOK_URLS=1` (default-deny in all environments).
 
-**Concurrency-safe retries.** `processDelivery` claims a row via `updateMany({ where: { id, status: 'pending' } })` before sending; the second runner sees `count=0` and bails. Auto-disable (after `consecutive_failures >= 20`) uses an atomic conditional update so a successful delivery cannot be raced into a disabled state.
+**Concurrency-safe retries.** `processDelivery` atomically transitions the row from `pending` to `in_flight` in a single `updateMany`. Two concurrent runners contend on the row; the loser sees `count=0` and bails, so an event is never delivered twice. Crashed-worker recovery is built in: the claim also accepts `in_flight` rows whose stamped `next_attempt_at` deadline has elapsed. Auto-disable (after `consecutive_failures >= 20`) uses an atomic conditional update so a successful delivery cannot be raced into a disabled state.
 
-**Background sweep.** The WS server's `setInterval(processDuePending, 30s)` drains `status='pending', next_attempt_at <= now()` rows. Backoff schedule: 30s → 2m → 10m → 30m → 2h, capped at 5 attempts.
+**Background sweep.** The WS server's `setInterval(processDuePending, 30s)` drains both `pending` and stale `in_flight` rows whose `next_attempt_at <= now()`. Backoff schedule: 30s → 2m → 10m → 30m → 2h, capped at 5 attempts.
 
 **Field-level secret guard.** `Webhook.signingSecret` has a field-level resolver that re-checks org admin role; non-admins get `null` even if some future query path returns the row.
 

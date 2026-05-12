@@ -299,6 +299,13 @@ export const NotificationInbox = observer(function NotificationInbox() {
   const notifications = notificationStore.all;
 
   const handleMarkRead = async (id: string) => {
+    // Snapshot the pre-mutation values so a rollback restores the exact
+    // prior state. The previous implementation rolled back to
+    // `readAt: undefined`, which would clobber a non-null readAt if the
+    // notification had been read-then-unread-then-read-again.
+    const prev = notificationStore.findById(id);
+    const prevRead = prev?.read ?? false;
+    const prevReadAt = prev?.readAt ?? null;
     notificationStore.markRead(id); // Optimistic update
     setMarkingId(id);
     try {
@@ -307,10 +314,9 @@ export const NotificationInbox = observer(function NotificationInbox() {
         throw new Error('Failed to mark notification as read');
       }
     } catch {
-      // Roll back optimistic update
       notificationStore.optimisticUpdate(id, {
-        read: false,
-        readAt: undefined,
+        read: prevRead,
+        readAt: prevReadAt,
       });
       toast.error('Failed to mark notification as read');
     } finally {

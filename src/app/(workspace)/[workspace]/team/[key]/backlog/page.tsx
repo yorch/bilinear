@@ -272,21 +272,14 @@ const BacklogPage = observer(function BacklogPage() {
       }));
   }, [teamId, issueStore, labelStore, backlogStateIds]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: MobX observables — definitions.size change triggers re-compute
-  const customFieldDefs = useMemo(
-    () => (teamId ? customFieldStore.findDefinitionsByTeamId(teamId) : []),
-    [teamId, customFieldStore.definitions.size],
-  );
+  // Plain selectors — see team/[key]/page.tsx for rationale. Memo deps
+  // keyed on `.size` ignored in-place definition/value mutations.
+  const customFieldDefs = teamId ? customFieldStore.findDefinitionsByTeamId(teamId) : [];
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: MobX observables — values.size change triggers re-filter
-  const filteredIssues = useMemo(
-    () =>
-      applyFilters(
-        allBacklogIssues,
-        filterSet,
-        (issueId, definitionId) => customFieldStore.findValue(issueId, definitionId)?.value ?? null,
-      ),
-    [allBacklogIssues, filterSet, customFieldStore.values.size],
+  const filteredIssues = applyFilters(
+    allBacklogIssues,
+    filterSet,
+    (issueId, definitionId) => customFieldStore.findValue(issueId, definitionId)?.value ?? null,
   );
 
   // Group by priority

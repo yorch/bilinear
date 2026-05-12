@@ -149,26 +149,25 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
       });
   })();
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: MobX observables — size changes when definitions mutate, which is the signal we want to re-run on
-  const customFieldDefs = useMemo(
-    () => (teamId ? customFieldStore.findDefinitionsByTeamId(teamId) : []),
-    [teamId, customFieldStore.definitions.size],
-  );
+  // Plain selector rather than useMemo. The previous `[..., definitions.size]`
+  // dep ignored in-place mutations (rename, options change) — size is
+  // unchanged, so the memo kept stale values. `observer()` tracks every
+  // observable read inside this component, so the selector re-runs whenever
+  // any field actually used (definition row, value) updates. The cost is a
+  // map filter per render, which is negligible for the typical <50 fields.
+  const customFieldDefs = teamId ? customFieldStore.findDefinitionsByTeamId(teamId) : [];
 
   // Column visibility is per-team so switching teams gives a fresh pick.
   const { isVisible: isColumnVisible, toggle: toggleColumn } = useVisibleColumns(
     teamId ?? 'no-team',
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: MobX observables — values.size change triggers re-filter on value updates
-  const issues = useMemo(
-    () =>
-      applyFilters(
-        allIssues,
-        filterSet,
-        (issueId, definitionId) => customFieldStore.findValue(issueId, definitionId)?.value ?? null,
-      ),
-    [allIssues, filterSet, customFieldStore.values.size],
+  // Same rationale as `customFieldDefs`: stop memoizing on `.size`. Filters
+  // depend on the actual field values, not their cardinality.
+  const issues = applyFilters(
+    allIssues,
+    filterSet,
+    (issueId, definitionId) => customFieldStore.findValue(issueId, definitionId)?.value ?? null,
   );
 
   const users: IssueUser[] = userStore.all.map(u => ({

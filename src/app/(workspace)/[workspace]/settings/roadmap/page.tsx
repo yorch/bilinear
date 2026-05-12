@@ -3,7 +3,7 @@
 import { ExternalLink, Eye, EyeOff } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { useStore } from '@/providers/store-provider';
@@ -102,8 +102,9 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
     };
   }, []);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: MobX pool.size triggers re-computation when projects change
-  const projects = useMemo(() => projectStore.all, [projectStore, projectStore.pool.size]);
+  // Plain getter — observer() tracks the read so updates flow through
+  // without a memo whose `.size` dep would miss in-place mutations.
+  const projects = projectStore.all;
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();

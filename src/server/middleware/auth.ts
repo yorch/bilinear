@@ -62,18 +62,27 @@ export async function requireOrgRole(
   }
 }
 
+/**
+ * Verify the caller is a member of `teamId` AND that the team belongs to
+ * the caller's org. The orgId check is critical for multi-org accounts:
+ * without it, a user who is a member of team T in org A can pass this
+ * check while currently authenticated to org B and trigger team T's
+ * mutations from B's context, breaking tenant isolation.
+ */
 export async function requireTeamMember(
   prisma: PrismaClient,
   teamId: string,
   userId: string,
+  orgId: string,
 ): Promise<void> {
   const membership = await prisma.teamMembership.findUnique({
+    include: { team: { select: { organizationId: true } } },
     where: {
       teamId_userId: { teamId, userId },
     },
   });
 
-  if (!membership) {
+  if (!membership || membership.team.organizationId !== orgId) {
     throw new GraphQLError('Not a member of this team', {
       extensions: { code: 'FORBIDDEN' },
     });
@@ -84,14 +93,16 @@ export async function requireTeamOwner(
   prisma: PrismaClient,
   teamId: string,
   userId: string,
+  orgId: string,
 ): Promise<void> {
   const membership = await prisma.teamMembership.findUnique({
+    include: { team: { select: { organizationId: true } } },
     where: {
       teamId_userId: { teamId, userId },
     },
   });
 
-  if (!membership?.isOwner) {
+  if (!membership?.isOwner || membership.team.organizationId !== orgId) {
     throw new GraphQLError('Must be a team owner', {
       extensions: { code: 'FORBIDDEN' },
     });

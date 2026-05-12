@@ -138,7 +138,7 @@ export class InitiativeService {
     });
   }
 
-  async update(id: string, input: InitiativeUpdateInput): Promise<Initiative> {
+  async update(orgId: string, id: string, input: InitiativeUpdateInput): Promise<Initiative> {
     if (input.status !== undefined && !VALID_STATUSES.has(input.status)) {
       throw new InitiativeInvalidStatusError();
     }
@@ -184,11 +184,23 @@ export class InitiativeService {
       data.status = input.status;
       const now = new Date();
       const transition = STATUS_TRANSITION_CLEARS[input.status as InitiativeStatus];
+      // For startedAt: only stamp `now` when transitioning INTO active from a
+      // non-active state, so re-saving an already-active initiative (or
+      // bouncing canceled→active) doesn't overwrite the original start.
       const apply = (op: 'now' | 'clear' | 'leave') =>
         op === 'now' ? now : op === 'clear' ? null : undefined;
-      const startedAt = apply(transition.startedAt);
+      let startedAt = apply(transition.startedAt);
       const completedAt = apply(transition.completedAt);
       const canceledAt = apply(transition.canceledAt);
+      if (input.status === 'active') {
+        const current = await this.prisma.initiative.findFirst({
+          select: { startedAt: true, status: true },
+          where: { id, organizationId: orgId },
+        });
+        if (current?.status === 'active' && current.startedAt) {
+          startedAt = undefined;
+        }
+      }
       if (startedAt !== undefined) {
         data.startedAt = startedAt;
       }
@@ -200,22 +212,50 @@ export class InitiativeService {
       }
     }
 
-    return this.prisma.initiative.update({ data, where: { id } });
-  }
-
-  async archive(id: string): Promise<Initiative> {
-    return this.prisma.initiative.update({
-      data: { archivedAt: new Date() },
-      where: { id },
+    // updateMany scoped by orgId is the tenant guard — an admin who guesses
+    // an initiative id in another org gets a zero-row update, which we
+    // surface as NotFound rather than letting it leak through as a 200.
+    const claim = await this.prisma.initiative.updateMany({
+      data,
+      where: { id, organizationId: orgId },
     });
+    if (claim.count !== 1) {
+      throw new InitiativeNotFoundError();
+    }
+    const updated = await this.prisma.initiative.findUnique({ where: { id } });
+    if (!updated) {
+      throw new InitiativeNotFoundError();
+    }
+    return updated;
   }
 
-  async delete(id: string): Promise<Initiative> {
+  async archive(orgId: string, id: string): Promise<Initiative> {
+    const claim = await this.prisma.initiative.updateMany({
+      data: { archivedAt: new Date() },
+      where: { id, organizationId: orgId },
+    });
+    if (claim.count !== 1) {
+      throw new InitiativeNotFoundError();
+    }
+    const updated = await this.prisma.initiative.findUnique({ where: { id } });
+    if (!updated) {
+      throw new InitiativeNotFoundError();
+    }
+    return updated;
+  }
+
+  async delete(orgId: string, id: string): Promise<Initiative> {
+    const existing = await this.findById(orgId, id);
+    if (!existing) {
+      throw new InitiativeNotFoundError();
+    }
     return this.prisma.initiative.delete({ where: { id } });
   }
 
-  async findById(id: string): Promise<Initiative | null> {
-    return this.prisma.initiative.findUnique({ where: { id } });
+  async findById(orgId: string, id: string): Promise<Initiative | null> {
+    return this.prisma.initiative.findFirst({
+      where: { id, organizationId: orgId },
+    });
   }
 
   async findByOrgId(orgId: string, includeArchived = false): Promise<Initiative[]> {
@@ -230,9 +270,31 @@ export class InitiativeService {
 
   /**
    * Add a project to this initiative. No-op if the link already exists.
-   * Caller is responsible for verifying both ids share an org.
+   * Verifies both initiative and project belong to `orgId` before linking
+   * so this method can be called directly from a resolver without an
+   * out-of-band tenant check.
    */
-  async addProject(initiativeId: string, projectId: string): Promise<InitiativeProject> {
+  async addProject(
+    orgId: string,
+    initiativeId: string,
+    projectId: string,
+  ): Promise<InitiativeProject> {
+    const [initiative, project] = await Promise.all([
+      this.prisma.initiative.findFirst({
+        select: { id: true },
+        where: { id: initiativeId, organizationId: orgId },
+      }),
+      this.prisma.project.findFirst({
+        select: { id: true },
+        where: { id: projectId, organizationId: orgId },
+      }),
+    ]);
+    if (!initiative) {
+      throw new InitiativeNotFoundError();
+    }
+    if (!project) {
+      throw new InitiativeProjectNotFoundError();
+    }
     const link = await this.prisma.initiativeProject.upsert({
       create: { initiativeId, projectId },
       update: {},

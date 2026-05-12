@@ -9,7 +9,10 @@ import {
   verifyOAuthState,
   verifyRefreshToken,
 } from '../lib/jwt';
+import { childLogger } from '../lib/logger';
 import type { UserService } from './user.service';
+
+const securityLog = childLogger({ event: 'security', module: 'auth' });
 
 const MAGIC_LINK_EXPIRY_MINUTES = 15;
 const REFRESH_GRACE_PERIOD_MINUTES = 30;
@@ -116,10 +119,16 @@ export class AuthService {
     }
 
     // Compare by hash — never query by raw code to avoid timing side-channels.
+    // Atomically claim the token via updateMany scoped to `revokedAt: null` so
+    // two concurrent verifyMagicLink requests for the same code race on the DB
+    // and exactly one wins. Without this guard, both calls passed find-then-
+    // update and both received valid token pairs.
     const tokenHash = hashToken(code);
-    const token = await this.prisma.authToken.findFirst({
+    const now = new Date();
+    const claim = await this.prisma.authToken.updateMany({
+      data: { lastUsedAt: now, revokedAt: now },
       where: {
-        expiresAt: { gt: new Date() },
+        expiresAt: { gt: now },
         revokedAt: null,
         tokenHash,
         type: 'magic_link',
@@ -127,15 +136,9 @@ export class AuthService {
       },
     });
 
-    if (!token) {
+    if (claim.count !== 1) {
       throw new InvalidCodeError();
     }
-
-    // Revoke used token
-    await this.prisma.authToken.update({
-      data: { lastUsedAt: new Date(), revokedAt: new Date() },
-      where: { id: token.id },
-    });
 
     return this.issueTokenPair(user.id);
   }
@@ -216,6 +219,11 @@ export class AuthService {
     // If revokedAt is in the past, this token was rotated more than the grace
     // period ago AND is being presented again — classic reuse. Kill the family.
     if (token.revokedAt && token.revokedAt < now) {
+      // Refresh-token reuse detected — someone is replaying a previously-
+      // rotated token outside the grace window. Kill the whole family so a
+      // compromised token can't keep producing new access tokens, and log
+      // a warn-level security event so this lands in observability /
+      // Sentry for incident response.
       if (token.familyId) {
         await this.prisma.authToken.updateMany({
           data: { revokedAt: now },
@@ -226,6 +234,15 @@ export class AuthService {
           },
         });
       }
+      securityLog.warn(
+        {
+          eventType: 'refresh_token_reuse',
+          familyId: token.familyId,
+          tokenId: token.id,
+          userId: token.userId,
+        },
+        'Refresh token reuse detected — revoking token family',
+      );
       throw new InvalidTokenError();
     }
 

@@ -98,7 +98,7 @@ export class WebhookService {
     });
   }
 
-  async update(id: string, input: WebhookUpdateInput): Promise<Webhook> {
+  async update(orgId: string, id: string, input: WebhookUpdateInput): Promise<Webhook> {
     if (input.url !== undefined) {
       this.validateUrl(input.url);
     }
@@ -111,15 +111,18 @@ export class WebhookService {
     // assertSafeUrl check would still catch it at delivery, but failing
     // fast at the admin UI is friendlier.
     if (input.enabled === true && input.url === undefined) {
-      const existing = await this.prisma.webhook.findUnique({
+      const existing = await this.prisma.webhook.findFirst({
         select: { url: true },
-        where: { id },
+        where: { id, organizationId: orgId },
       });
       if (existing) {
         this.validateUrl(existing.url);
       }
     }
-    return this.prisma.webhook.update({
+    // updateMany scoped by orgId so an admin from another org can't mutate
+    // a webhook by guessing its UUID. updateMany returns count rather than
+    // throwing on miss — promote a zero match to NotFound for the caller.
+    const claim = await this.prisma.webhook.updateMany({
       data: {
         // Resetting consecutiveFailures on enable lets a previously-disabled
         // hook get a fresh chance before auto-disable kicks in again.
@@ -130,18 +133,38 @@ export class WebhookService {
         teamId: input.teamId,
         url: input.url,
       },
-      where: { id },
+      where: { id, organizationId: orgId },
     });
+    if (claim.count !== 1) {
+      throw new WebhookNotFoundError();
+    }
+    const updated = await this.prisma.webhook.findUnique({ where: { id } });
+    if (!updated) {
+      throw new WebhookNotFoundError();
+    }
+    return updated;
   }
 
-  async archive(id: string): Promise<Webhook> {
-    return this.prisma.webhook.update({
+  async archive(orgId: string, id: string): Promise<Webhook> {
+    const claim = await this.prisma.webhook.updateMany({
       data: { archivedAt: new Date(), enabled: false },
-      where: { id },
+      where: { id, organizationId: orgId },
     });
+    if (claim.count !== 1) {
+      throw new WebhookNotFoundError();
+    }
+    const updated = await this.prisma.webhook.findUnique({ where: { id } });
+    if (!updated) {
+      throw new WebhookNotFoundError();
+    }
+    return updated;
   }
 
-  async delete(id: string): Promise<Webhook> {
+  async delete(orgId: string, id: string): Promise<Webhook> {
+    const existing = await this.findById(orgId, id);
+    if (!existing) {
+      throw new WebhookNotFoundError();
+    }
     return this.prisma.webhook.delete({ where: { id } });
   }
 
@@ -153,15 +176,25 @@ export class WebhookService {
    * because each delivery captures the secret implicitly via its payload
    * signature at send time, which uses the current Webhook row.
    */
-  async rotateSecret(id: string): Promise<Webhook> {
-    return this.prisma.webhook.update({
+  async rotateSecret(orgId: string, id: string): Promise<Webhook> {
+    const claim = await this.prisma.webhook.updateMany({
       data: { signingSecret: generateSigningSecret() },
-      where: { id },
+      where: { id, organizationId: orgId },
     });
+    if (claim.count !== 1) {
+      throw new WebhookNotFoundError();
+    }
+    const updated = await this.prisma.webhook.findUnique({ where: { id } });
+    if (!updated) {
+      throw new WebhookNotFoundError();
+    }
+    return updated;
   }
 
-  async findById(id: string): Promise<Webhook | null> {
-    return this.prisma.webhook.findUnique({ where: { id } });
+  async findById(orgId: string, id: string): Promise<Webhook | null> {
+    return this.prisma.webhook.findFirst({
+      where: { id, organizationId: orgId },
+    });
   }
 
   async findByOrgId(orgId: string, includeArchived = false): Promise<Webhook[]> {
@@ -174,11 +207,11 @@ export class WebhookService {
     });
   }
 
-  async listDeliveries(webhookId: string, limit = 50): Promise<WebhookDelivery[]> {
+  async listDeliveries(orgId: string, webhookId: string, limit = 50): Promise<WebhookDelivery[]> {
     return this.prisma.webhookDelivery.findMany({
       orderBy: { createdAt: 'desc' },
       take: limit,
-      where: { webhookId },
+      where: { webhook: { organizationId: orgId }, webhookId },
     });
   }
 
@@ -268,17 +301,31 @@ export class WebhookService {
    * just performs two attempts.
    */
   async processDelivery(deliveryId: string): Promise<void> {
-    // Atomic claim: only proceed if the row is still pending and the
-    // claim succeeds. Two concurrent runners (e.g. multiple WS replicas)
-    // both call this; the second sees count=0 and bails. The claim sets
-    // nextAttemptAt to a far-future placeholder so the retry sweep won't
-    // pick the row up while it's in flight; success/failure handlers
-    // overwrite it with the real value (null on success, schedule on
-    // failure).
+    // Atomic claim: transition status from `pending` to `in_flight`. Two
+    // concurrent runners (e.g. multiple WS replicas) both call this; the
+    // second sees the row already moved to `in_flight` and updateMany
+    // returns count=0, so only one delivery fires. The previous design
+    // only touched `nextAttemptAt` while leaving status='pending', so two
+    // calls could both pass the where-clause and double-deliver.
+    //
+    // We also stamp `nextAttemptAt` to a far-future placeholder as a
+    // failsafe — if the worker crashes mid-flight, the retry sweep won't
+    // re-pick the row until the claim expires (success/failure handlers
+    // overwrite it with the real value below).
     const claimDeadline = new Date(Date.now() + REQUEST_TIMEOUT_MS + 60_000);
+    const claimableBefore = new Date(Date.now() - REQUEST_TIMEOUT_MS - 60_000);
     const claim = await this.prisma.webhookDelivery.updateMany({
-      data: { nextAttemptAt: claimDeadline },
-      where: { id: deliveryId, status: 'pending' },
+      data: { nextAttemptAt: claimDeadline, status: 'in_flight' },
+      where: {
+        id: deliveryId,
+        // Claim if currently pending, OR if an earlier worker's claim
+        // window has elapsed (handles a crashed worker that never wrote
+        // success/failure).
+        OR: [
+          { status: 'pending' },
+          { nextAttemptAt: { lte: claimableBefore }, status: 'in_flight' },
+        ],
+      },
     });
     if (claim.count === 0) {
       return;
@@ -451,12 +498,17 @@ export class WebhookService {
    * (10s timeout) doesn't sequentially throttle the whole sweep.
    */
   async processDuePending(limit = 50, concurrency = 5): Promise<number> {
+    const now = new Date();
     const due = await this.prisma.webhookDelivery.findMany({
       orderBy: { nextAttemptAt: 'asc' },
       take: limit,
       where: {
-        nextAttemptAt: { lte: new Date() },
-        status: 'pending',
+        nextAttemptAt: { lte: now },
+        // Pick up `pending` rows that are due, and `in_flight` rows whose
+        // claim deadline has elapsed (crashed worker). processDelivery's
+        // atomic claim ensures we don't double-send if a stalled-but-still-
+        // running worker eventually wakes up.
+        OR: [{ status: 'pending' }, { status: 'in_flight' }],
       },
     });
 

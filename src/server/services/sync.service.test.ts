@@ -88,4 +88,21 @@ describe('SyncService.getDeltaSyncActions — pagination', () => {
     expect(call.where.id.gt).toBe(BigInt(0));
     expect(call.where.id.lte).toBeUndefined();
   });
+
+  it('filters rows newer than the commit watermark', async () => {
+    prisma.syncAction.findMany.mockResolvedValue([]);
+
+    await svc.getDeltaSyncActions(TEST_ORG.id, BigInt(0));
+
+    const call = prisma.syncAction.findMany.mock.calls[0]?.[0] as {
+      where: { committedAt: { lte: Date } };
+      orderBy: Array<Record<string, string>>;
+    };
+    // Bound is current-time-ish (allow for test execution slack).
+    expect(call.where.committedAt.lte).toBeInstanceOf(Date);
+    expect(call.where.committedAt.lte.getTime()).toBeLessThanOrEqual(Date.now());
+    // Cursor orders by commit time first so an out-of-order id can't
+    // leapfrog ahead of an earlier-committed but later-id row.
+    expect(call.orderBy).toEqual([{ committedAt: 'asc' }, { id: 'asc' }]);
+  });
 });

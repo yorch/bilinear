@@ -262,6 +262,15 @@ describe('IssueService', () => {
   });
 
   describe('update', () => {
+    // update() now returns { issue, cascaded } and validates that any
+    // caller-supplied stateId belongs to the same team. These defaults
+    // satisfy the validation so tests not specifically exercising it
+    // stay focused on the field being asserted.
+    beforeEach(() => {
+      prisma.issue.findUnique.mockResolvedValue({ teamId: TEST_TEAM.id });
+      prisma.workflowState.findFirst.mockResolvedValue({ teamId: TEST_TEAM.id });
+    });
+
     it('updates individual fields', async () => {
       const updated = { ...TEST_ISSUE, priority: 2, title: 'Updated title' };
       prisma.issue.update.mockResolvedValue(updated);
@@ -271,7 +280,8 @@ describe('IssueService', () => {
         title: 'Updated title',
       });
 
-      expect(result).toEqual(updated);
+      expect(result.issue).toEqual(updated);
+      expect(result.cascaded).toEqual([]);
       expect(prisma.issue.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -320,6 +330,27 @@ describe('IssueService', () => {
           data: expect.objectContaining({ assigneeId: null }),
         }),
       );
+    });
+
+    it('clears addedToProjectAt when projectId is set to null', async () => {
+      prisma.issue.update.mockResolvedValue({ ...TEST_ISSUE, projectId: null });
+
+      await service.update(TEST_ISSUE.id, { projectId: null });
+
+      expect(prisma.issue.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ addedToProjectAt: null, projectId: null }),
+        }),
+      );
+    });
+
+    it('rejects a stateId from a different team', async () => {
+      prisma.issue.findUnique.mockResolvedValue({ teamId: TEST_TEAM.id });
+      prisma.workflowState.findFirst.mockResolvedValue({ teamId: 'different-team' });
+
+      await expect(
+        service.update(TEST_ISSUE.id, { stateId: COMPLETED_STATE.id }),
+      ).rejects.toBeInstanceOf(IssueInvalidStateError);
     });
   });
 
@@ -371,6 +402,12 @@ describe('IssueService', () => {
         autoCloseParentIssues: true,
       });
     };
+    // stateId validation now runs inside the transaction; provide
+    // default mocks so the validation passes for the cascade tests.
+    beforeEach(() => {
+      prisma.issue.findUnique.mockResolvedValue({ teamId: TEST_TEAM.id });
+      prisma.workflowState.findFirst.mockResolvedValue(COMPLETED_STATE);
+    });
 
     it('closes parent when last child is completed', async () => {
       mockTeamWithAutoCloseParent();
@@ -469,9 +506,15 @@ describe('IssueService', () => {
 
       await service.update(CHILD_ISSUE.id, { stateId: COMPLETED_STATE.id });
 
-      // Parent should NOT have been closed — parent fetch only happens after
-      // the sibling check passes.
-      expect(prisma.issue.findUnique).not.toHaveBeenCalled();
+      // Parent should NOT have been closed — parent fetch only happens
+      // after the sibling check passes. findUnique IS called once for the
+      // in-tx stateId validation (selects only `teamId`), but the cascade
+      // path's parent fetch (which selects `state`) must never run.
+      const calls = prisma.issue.findUnique.mock.calls.map((c: unknown[]) => c[0]);
+      const selectStateCalls = calls.filter(
+        (call: unknown) => (call as { include?: { state?: unknown } }).include?.state !== undefined,
+      );
+      expect(selectStateCalls).toHaveLength(0);
     });
 
     it('does not close parent when autoCloseParentIssues flag is off', async () => {
@@ -512,8 +555,11 @@ describe('IssueService', () => {
 
       await service.update(CHILD_ISSUE.id, { stateId: COMPLETED_STATE.id });
 
-      // workflowState.findFirst should not have been called
-      expect(prisma.workflowState.findFirst).not.toHaveBeenCalled();
+      // workflowState.findFirst is now called once for the in-tx stateId
+      // validation. The cascade-target lookup must NOT fire — the parent
+      // is already in a terminal state, so we exit before looking for a
+      // completed state to assign.
+      expect(prisma.workflowState.findFirst).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -524,6 +570,12 @@ describe('IssueService', () => {
         autoCloseParentIssues: false,
       });
     };
+    // stateId validation now runs inside the transaction; provide
+    // default mocks so the validation passes for the cascade tests.
+    beforeEach(() => {
+      prisma.issue.findUnique.mockResolvedValue({ teamId: TEST_TEAM.id });
+      prisma.workflowState.findFirst.mockResolvedValue(COMPLETED_STATE);
+    });
 
     it('closes open children when parent moves to completed', async () => {
       const updatedParent = {

@@ -341,12 +341,12 @@ editor enhancements). Remaining items are small.
 - [ ] Initiative association (depends on Sprint 57-58 Initiatives)
 - [ ] Collaborative editing (YJS / Hocuspocus) — shared with Sprint 27-28
 
-### Sprint 37-38: Triage Workflow
+### Sprint 37-38: Triage Workflow ✅ SHIPPED (2026-05-05)
 
-- [ ] Enable triage per team
-- [ ] Triage inbox view
-- [ ] Accept / Decline / Mark Duplicate / Snooze actions
-- [ ] Keyboard shortcuts (1=Accept, 2=Duplicate, 3=Decline, H=Snooze)
+- [x] Enable triage per team (`team.triageEnabled` + seeded `triage` workflow state)
+- [x] Triage inbox view (`/team/[key]/triage`)
+- [x] Accept / Decline / Mark Duplicate / Snooze actions (`issueTriage*` mutations)
+- [x] Keyboard shortcuts (1=Accept, 2=Duplicate, 3=Decline, H=Snooze)
 - [ ] Triage responsibility assignment
 - [ ] Require priority before leaving triage (optional)
 
@@ -388,14 +388,16 @@ editor enhancements). Remaining items are small.
 - [ ] Rich unfurls for issue/project links
 - [ ] Bidirectional thread sync (Slack ↔ Linear comments)
 
-### Sprint 45-46: Webhooks
+### Sprint 45-46: Webhooks ✅ SHIPPED (2026-05-05)
 
-- [ ] Webhook CRUD (GraphQL + settings UI)
-- [ ] Event dispatch for 14 resource types
-- [ ] HMAC-SHA256 signature generation
-- [ ] Retry logic (1m, 1h, 6h) via BullMQ
-- [ ] Auto-disable persistently failing webhooks
-- [ ] Webhook delivery logs
+- [x] Webhook CRUD (GraphQL + settings UI at `/settings/webhooks`, admin-only)
+- [x] Event dispatch for 12 events (see `WEBHOOK_EVENTS` in `webhook.service.ts`)
+- [x] HMAC-SHA256 signature generation (`X-Bilinear-Signature: sha256=<hex>`)
+- [x] Retry logic — `30s, 2m, 10m, 30m, 2h` (5 attempts) via `setInterval` in the WS server, not BullMQ
+- [x] Auto-disable persistently failing webhooks (`AUTO_DISABLE_AFTER = 20` consecutive failures)
+- [x] Webhook delivery logs (`webhook_deliveries` table; queryable via `webhookDeliveries` resolver)
+- [x] SSRF protection (private-IP allow-list + delivery-time DNS re-resolve)
+- [x] Atomic `pending → in_flight` claim transition prevents double delivery on concurrent runners
 
 ### Sprint 47-48: Import/Export
 
@@ -445,12 +447,13 @@ Shipped ahead of schedule alongside the Documents feature.
 
 ## Phase 5: Advanced (Weeks 57+)
 
-### Sprint 57-58: Initiatives & Strategic Planning
+### Sprint 57-58: Initiatives & Strategic Planning 🟡 BASE SHIPPED (2026-05-05)
 
-- [ ] Initiative CRUD (name, status, health, owner, target date)
-- [ ] Initiative ↔ project associations
+- [x] Initiative CRUD (name, status, owner, target date) — `initiative_create/update/archive/delete` mutations
+- [x] Initiative ↔ project associations — m:n `initiative_projects` join with `initiativeAddProject` / `initiativeRemoveProject`
+- [x] Cached `Initiative.progress` rolled up from linked-project `Project.progress` (recomputed on add/remove and on project events)
 - [ ] Sub-initiatives (nest up to 5 levels)
-- [ ] Initiative updates
+- [ ] Initiative updates (status updates timeline)
 - [ ] Timeline view (Gantt-like) for projects
 - [ ] Draggable timeline bars
 
@@ -483,8 +486,8 @@ Shipped ahead of schedule alongside the Documents feature.
 | **Alpha** | Week 12  | Auth + Issues + Teams + List View + Sync Engine + **Docker Compose deploy**                    | ✅ Reached                                     |
 | **Beta**  | Week 26  | + Projects + Cycles + Board + Filters + Backlog + Notifications + **Custom Fields**            | ✅ Reached                                     |
 | **RC1**   | Week 40  | + Rich Editor + Comments + Sub-teams + **SAML/SCIM** + Triage + Docs + Automations + Analytics | 🟡 In progress                                 |
-| **v1.0**  | Week 54  | + GitHub + Slack + Webhooks + Import/Export + OAuth + **Public Roadmaps**                      | 🟡 In progress (Public Roadmaps shipped early) |
-| **v2.0**  | Week 68+ | + Initiatives + SLAs + AI + Mobile + Desktop                                                   | ⬜ Not started                                 |
+| **v1.0**  | Week 54  | + GitHub + Slack + Webhooks + Import/Export + OAuth + **Public Roadmaps**                      | 🟡 In progress (Public Roadmaps + Webhooks shipped early) |
+| **v2.0**  | Week 68+ | + Initiatives + SLAs + AI + Mobile + Desktop                                                   | 🟡 Base Initiatives shipped 2026-05-05         |
 
 **RC1 gap analysis** (remaining work to hit RC1):
 
@@ -492,7 +495,7 @@ Shipped ahead of schedule alongside the Documents feature.
 - Sub-teams: config inheritance, guest-role enforcement, cross-team visibility, SAML/SCIM, audit log, IP restrictions (Sprint 31-32)
 - Analytics: burnup chart, cycle-based velocity with rolling averages, flow histograms, date ranges, CSV rollup, workspace-level aggregate (Sprint 33-34 — burndown + Sentry ✅ done)
 - Documents: comments on docs, doc templates, initiative association (Sprint 35-36 — base CRUD shipped in PR #28)
-- Triage: entirely unstarted (Sprint 37-38)
+- Triage: ✅ shipped 2026-05-05 (Sprint 37-38) — actions, hotkeys, inbox view
 - Automations: entirely unstarted (Sprint 39-40)
 
 **Custom Fields (Sprint 23-24) ✅ SHIPPED** — definitions CRUD, values CRUD,

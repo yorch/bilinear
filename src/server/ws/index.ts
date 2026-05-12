@@ -4,7 +4,8 @@
  * Run with:  yarn ws:server
  *
  * It:
- *  1. Authenticates clients via JWT passed as a `token` query param
+ *  1. Authenticates clients via a short-lived `ws_ticket` JWT passed as a
+ *     `token` query param. Tickets are issued by `/api/auth/ws-ticket`.
  *  2. Subscribes to Redis PubSub channel `sync:<orgId>`
  *  3. Broadcasts incoming SyncActions to all connected org clients
  *  4. Sends periodic pings and handles pong / reconnection
@@ -13,7 +14,7 @@
 import { createServer } from 'node:http';
 import Redis from 'ioredis';
 import { type WebSocket, WebSocketServer } from 'ws';
-import { verifyAccessToken } from '@/server/lib/jwt';
+import { verifyWsTicket } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { WebhookService } from '@/server/services/webhook.service';
@@ -24,13 +25,16 @@ const log = childLogger({ module: 'ws' });
 const PORT = Number(process.env.WS_PORT ?? 3001);
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
 const PING_INTERVAL_MS = 30_000;
+// Force-terminate clients that haven't responded to two consecutive pings,
+// so half-open TCP connections don't accumulate ConnectionManager entries.
+const PONG_TIMEOUT_MS = PING_INTERVAL_MS * 2 + 5_000;
 // Run the webhook delivery scheduler every 30s. It picks up any pending
 // deliveries whose nextAttemptAt has passed and retries them. Co-locating
 // with the WS server (instead of the Next request path) keeps retries
 // running between requests on serverless deployments.
 const WEBHOOK_RETRY_INTERVAL_MS = 30_000;
 
-// verifyAccessToken() reads JWT_SECRET via getSecret() and throws if unset
+// verifyWsTicket() reads JWT_SECRET via getSecret() and throws if unset
 if (!process.env.JWT_SECRET) {
   log.fatal('JWT_SECRET is not set — cannot verify tokens');
   process.exit(1);
@@ -43,15 +47,58 @@ const connectionManager = new ConnectionManager();
 
 // Track which org channels we've already subscribed to
 const subscribedOrgs = new Set<string>();
+// Serialize subscribe/unsubscribe per orgId so a fast disconnect → connect
+// cycle can't end up with the channel marked "subscribed" while the actual
+// Redis SUBSCRIBE is still in flight (or vice versa).
+const orgSubLocks = new Map<string, Promise<void>>();
+
+async function withOrgSubLock(orgId: string, fn: () => Promise<void>): Promise<void> {
+  const prev = orgSubLocks.get(orgId) ?? Promise.resolve();
+  const next = prev.then(fn).catch((err: unknown) => {
+    log.error({ err, orgId }, 'Org subscription lock error');
+  });
+  orgSubLocks.set(
+    orgId,
+    next.finally(() => {
+      if (orgSubLocks.get(orgId) === next) {
+        orgSubLocks.delete(orgId);
+      }
+    }),
+  );
+  await next;
+}
 
 async function ensureOrgSubscription(orgId: string) {
-  if (subscribedOrgs.has(orgId)) {
-    return;
-  }
-  // Add to set only after a successful subscribe to avoid masking future retries
-  await redisSubscriber.subscribe(`sync:${orgId}`);
-  subscribedOrgs.add(orgId);
-  log.info({ orgId }, 'Subscribed to Redis channel');
+  await withOrgSubLock(orgId, async () => {
+    if (subscribedOrgs.has(orgId)) {
+      return;
+    }
+    await redisSubscriber.subscribe(`sync:${orgId}`);
+    subscribedOrgs.add(orgId);
+    log.info({ orgId }, 'Subscribed to Redis channel');
+  });
+}
+
+async function maybeReleaseOrgSubscription(orgId: string) {
+  await withOrgSubLock(orgId, async () => {
+    // Re-check inside the lock — a new client may have connected since
+    // the disconnect handler queued this release.
+    if (connectionManager.clientCount(orgId) > 0) {
+      return;
+    }
+    if (!subscribedOrgs.has(orgId)) {
+      return;
+    }
+    subscribedOrgs.delete(orgId);
+    try {
+      await redisSubscriber.unsubscribe(`sync:${orgId}`);
+    } catch (err) {
+      log.error({ err, orgId }, 'Failed to unsubscribe from Redis channel');
+      // Re-add so a future client triggers a fresh subscribe attempt
+      // rather than silently dropping messages.
+      subscribedOrgs.add(orgId);
+    }
+  });
 }
 
 redisSubscriber.on('message', (channel: string, message: string) => {
@@ -106,7 +153,7 @@ const httpServer = createServer((_req, res) => {
 const wss = new WebSocketServer({ server: httpServer });
 
 wss.on('connection', async (ws: WebSocket, req) => {
-  // Extract token from query string: ws://host:3001/?token=<jwt>
+  // Extract ws_ticket from query string: ws://host:3001/?token=<ticket>
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
   const token = url.searchParams.get('token');
 
@@ -119,7 +166,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
   let userId: string;
 
   try {
-    ({ orgId, userId } = await verifyAccessToken(token));
+    ({ orgId, userId } = await verifyWsTicket(token));
     if (!orgId || !userId) {
       throw new Error('Invalid token payload');
     }
@@ -137,18 +184,27 @@ wss.on('connection', async (ws: WebSocket, req) => {
   // Send initial connection ack
   ws.send(JSON.stringify({ cmd: 'connected', orgId }));
 
-  // Periodic ping
+  // Heartbeat: server pings every PING_INTERVAL_MS; if no pong within
+  // PONG_TIMEOUT_MS we drop the socket so half-open connections don't
+  // accumulate ConnectionManager entries.
+  let lastPongAt = Date.now();
   const pingTimer = setInterval(() => {
-    if (ws.readyState === 1 /* OPEN */) {
-      ws.send(JSON.stringify({ cmd: 'ping' }));
+    if (ws.readyState !== 1 /* OPEN */) {
+      return;
     }
+    if (Date.now() - lastPongAt > PONG_TIMEOUT_MS) {
+      log.info({ orgId, userId }, 'Pong timeout — terminating socket');
+      ws.terminate();
+      return;
+    }
+    ws.send(JSON.stringify({ cmd: 'ping' }));
   }, PING_INTERVAL_MS);
 
   ws.on('message', (data: Buffer) => {
     try {
       const msg = JSON.parse(data.toString()) as { cmd: string };
       if (msg.cmd === 'pong') {
-        // Client is alive — nothing to do
+        lastPongAt = Date.now();
       }
     } catch {
       // Ignore malformed messages
@@ -160,10 +216,10 @@ wss.on('connection', async (ws: WebSocket, req) => {
     const orgEmpty = connectionManager.remove(clientInfo);
     log.info({ orgId, total: connectionManager.clientCount(), userId }, 'Client disconnected');
     if (orgEmpty) {
-      subscribedOrgs.delete(orgId);
-      redisSubscriber.unsubscribe(`sync:${orgId}`).catch((err: Error) => {
-        log.error({ err, orgId }, 'Failed to unsubscribe from Redis channel');
-      });
+      // Serialize through the per-org lock so a racing new connection's
+      // ensureOrgSubscription() runs after this release completes (or is
+      // skipped because the new client repopulated the count).
+      void maybeReleaseOrgSubscription(orgId);
     }
   });
 

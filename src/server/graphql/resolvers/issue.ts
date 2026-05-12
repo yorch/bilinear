@@ -102,7 +102,7 @@ export const issueResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
 
       const issue = await ctx.services.issue.archive(id);
       const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'A', 'Issue', id, issue);
@@ -117,7 +117,7 @@ export const issueResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, input.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
 
       try {
         const issue = await ctx.services.issue.create(ctx.orgId, ctx.userId, input);
@@ -167,7 +167,7 @@ export const issueResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
 
       await ctx.services.issue.delete(id);
       const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Issue', id, null);
@@ -186,7 +186,7 @@ export const issueResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
 
       const issue = await ctx.services.issue.unarchive(id);
       const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', id, issue);
@@ -206,9 +206,9 @@ export const issueResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
 
-      const issue = await ctx.services.issue.update(id, input);
+      const { issue, cascaded } = await ctx.services.issue.update(id, input);
 
       // Record an activity entry for each changed tracked field
       const activities: IssueActivityCreateInput[] = [];
@@ -267,6 +267,18 @@ export const issueResolvers = {
       }
 
       const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', id, issue);
+
+      // Auto-close cascade may have touched parent/child issues inside the
+      // same transaction. Emit one SyncAction per row so remote clients
+      // see the cascaded state changes in real time (instead of next
+      // bootstrap), and fire webhook events for each.
+      for (const row of cascaded) {
+        await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', row.id, row);
+        void ctx.services.webhook
+          .dispatchEvent(ctx.orgId, 'issue.updated', row, row.teamId)
+          .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.updated (cascade)'));
+      }
+
       void ctx.services.webhook
         .dispatchEvent(ctx.orgId, 'issue.updated', issue, issue.teamId)
         .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.updated'));
@@ -284,7 +296,7 @@ export const issueResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
       return issue;
     },
 
@@ -310,7 +322,7 @@ export const issueResolvers = {
           { extensions: { code: 'BAD_USER_INPUT' } },
         );
       }
-      await requireTeamMember(ctx.prisma, filter.teamId, ctx.userId);
+      await requireTeamMember(ctx.prisma, filter.teamId, ctx.userId, ctx.orgId);
 
       const page = await ctx.services.issue.findMany(
         ctx.orgId,

@@ -12,6 +12,13 @@ import { FileService } from '@/server/services/file.service';
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 
+// Allow-list of file extensions we accept. Mirrors the SAFE_MIME map in
+// /api/uploads/[...path]/route.ts so we never persist a file the
+// download endpoint can't serve safely. Anything outside this set is
+// rejected at write time rather than stored and silently served as
+// application/octet-stream forever.
+const ALLOWED_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'svg']);
+
 // Ensure the directory exists once at module load rather than on every request.
 const uploadDir = getUploadDir();
 mkdirSync(uploadDir, { recursive: true });
@@ -94,9 +101,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  // Reject path-traversal-y names and disallowed extensions BEFORE writing
+  // anything to disk. Filename is user-supplied — strip directory separators
+  // and pull only the lowercased final extension.
+  if (file.name.includes('/') || file.name.includes('\\') || file.name.includes('\x00')) {
+    return NextResponse.json({ error: 'Invalid filename' }, { status: 400 });
+  }
+  const rawExt = file.name.includes('.') ? (file.name.split('.').pop()?.toLowerCase() ?? '') : '';
+  if (!ALLOWED_EXT.has(rawExt)) {
+    return NextResponse.json(
+      { error: `File type not allowed (.${rawExt || 'no extension'})` },
+      { status: 400 },
+    );
+  }
+
   const id = randomUUID();
-  const ext = file.name.includes('.') ? `.${file.name.split('.').pop()}` : '';
-  const key = `${id}${ext}`;
+  const key = `${id}.${rawExt}`;
   const filePath = join(uploadDir, key);
 
   try {

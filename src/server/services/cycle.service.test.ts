@@ -144,11 +144,12 @@ describe('CycleService', () => {
   });
 
   describe('delete', () => {
-    it('unassigns issues and deletes cycle', async () => {
+    it('unassigns issues, deletes cycle, and returns affected issue ids', async () => {
+      prisma.issue.findMany.mockResolvedValue([{ id: 'i-1' }, { id: 'i-2' }]);
       prisma.issue.updateMany.mockResolvedValue({ count: 2 });
       prisma.cycle.delete.mockResolvedValue(TEST_CYCLE);
 
-      await service.delete(TEST_CYCLE.id);
+      const result = await service.delete(TEST_CYCLE.id);
 
       expect(prisma.issue.updateMany).toHaveBeenCalledWith({
         data: { addedToCycleAt: null, cycleId: null },
@@ -157,6 +158,7 @@ describe('CycleService', () => {
       expect(prisma.cycle.delete).toHaveBeenCalledWith({
         where: { id: TEST_CYCLE.id },
       });
+      expect(result.unassignedIssueIds).toEqual(['i-1', 'i-2']);
     });
   });
 

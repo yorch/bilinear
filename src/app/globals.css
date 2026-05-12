@@ -23,6 +23,8 @@
   --color-chart-grid: var(--chart-grid);
   --color-chart-ideal: var(--chart-ideal);
   --color-chart-actual: var(--chart-actual);
+  --color-chart-primary: var(--chart-primary);
+  --color-chart-muted: var(--chart-muted);
   --color-state-default: var(--state-default);
   --font-sans: ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, monospace;
@@ -58,6 +60,9 @@
   --chart-grid: oklch(0.708 0.012 286);
   --chart-actual: oklch(0.733 0.184 142);
   --chart-ideal: oklch(0.585 0.233 277);
+  /* Analytics page generic accents — indigo-500 / zinc-400. */
+  --chart-primary: oklch(0.585 0.233 277);
+  --chart-muted: oklch(0.708 0.012 286);
   --state-default: oklch(0.585 0.012 286);
 }
 
@@ -87,6 +92,8 @@
   --chart-grid: oklch(0.585 0.012 286);
   --chart-actual: oklch(0.789 0.179 144);
   --chart-ideal: oklch(0.685 0.193 273);
+  --chart-primary: oklch(0.685 0.193 273);
+  --chart-muted: oklch(0.585 0.012 286);
   --state-default: oklch(0.708 0.012 286);
 }
 

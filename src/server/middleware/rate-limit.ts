@@ -167,7 +167,12 @@ export async function checkFixedWindow(
  * Enforce per-email + per-IP limits on an unauthenticated auth mutation.
  *
  * - login:  5 req / hour / email, 20 req / hour / IP
- * - verify: 10 attempts / 15 min / email
+ * - verify: 10 attempts / 15 min / email, 50 attempts / 15 min / IP
+ *
+ * The per-IP cap on `verify` matters because the per-email cap can be
+ * trivially bypassed by an attacker who has a list of target emails:
+ * 10 attempts/email × N emails = unbounded total attempts from one IP.
+ * Capping per-IP closes that hole.
  *
  * IP is best-effort — requests without a forwarded IP only trip the
  * per-email limit.
@@ -198,6 +203,9 @@ export async function checkAuthMutationLimit(
     return { exceeded: byEmail.exceeded || byIp.exceeded };
   }
 
-  const byEmail = await checkFixedWindow(emailKey, 10, 15 * 60);
-  return { exceeded: byEmail.exceeded };
+  const [byEmail, byIp] = await Promise.all([
+    checkFixedWindow(emailKey, 10, 15 * 60),
+    ipKey ? checkFixedWindow(ipKey, 50, 15 * 60) : Promise.resolve({ count: 0, exceeded: false }),
+  ]);
+  return { exceeded: byEmail.exceeded || byIp.exceeded };
 }

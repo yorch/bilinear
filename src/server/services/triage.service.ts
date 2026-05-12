@@ -115,16 +115,44 @@ export class TriageService {
       triagedAt: new Date(),
     };
     if ('assigneeId' in input) {
+      // Validate the assignee is a member of the issue's team. Without
+      // this an actor in team A could assign a triage issue to a user
+      // who has no presence on that team, leaking who-is-where signals
+      // across team boundaries.
+      if (input.assigneeId) {
+        const membership = await this.prisma.teamMembership.findUnique({
+          select: { userId: true },
+          where: {
+            teamId_userId: { teamId: issue.teamId, userId: input.assigneeId },
+          },
+        });
+        if (!membership) {
+          throw new TriageInvalidAssigneeError();
+        }
+      }
       data.assigneeId = input.assigneeId;
     }
     if (input.priority !== undefined) {
       data.priority = input.priority;
     }
     if ('cycleId' in input) {
-      data.cycleId = input.cycleId;
+      // Validate the cycle belongs to the same team. Mirrors the stateId
+      // check above — caller-supplied references must respect team scope.
       if (input.cycleId) {
+        const cycle = await this.prisma.cycle.findFirst({
+          select: { id: true },
+          where: { archivedAt: null, id: input.cycleId, teamId: issue.teamId },
+        });
+        if (!cycle) {
+          throw new TriageInvalidCycleError();
+        }
         data.addedToCycleAt = new Date();
+      } else {
+        // Mirror IssueService.update: clearing the cycle also clears the
+        // join-timestamp so "added to cycle" filters don't show stale rows.
+        data.addedToCycleAt = null;
       }
+      data.cycleId = input.cycleId;
     }
 
     // Atomic CAS — only update if still in the triage state. Prevents two
@@ -363,5 +391,19 @@ export class TriageSnoozeInvalidDateError extends Error {
   constructor() {
     super('Snooze date must be in the future');
     this.name = 'TriageSnoozeInvalidDateError';
+  }
+}
+
+export class TriageInvalidAssigneeError extends Error {
+  constructor() {
+    super("Assignee must be a member of the issue's team");
+    this.name = 'TriageInvalidAssigneeError';
+  }
+}
+
+export class TriageInvalidCycleError extends Error {
+  constructor() {
+    super('Cycle must belong to the same team as the issue');
+    this.name = 'TriageInvalidCycleError';
   }
 }

@@ -48,41 +48,58 @@ export class CycleService {
       throw new CycleInvalidDatesError();
     }
 
-    return this.prisma.$transaction(async tx => {
-      // Check for overlapping cycles on this team
-      const overlap = await tx.cycle.findFirst({
-        where: {
-          archivedAt: null,
-          endsAt: { gt: startsAt },
-          startsAt: { lt: endsAt },
-          teamId: input.teamId,
-        },
-      });
-      if (overlap) {
-        throw new CycleOverlapError();
+    // `(teamId, number)` is unique. At Postgres' default READ COMMITTED
+    // isolation, two concurrent creates on the same team can both read
+    // max(number) and pick number+1, with one of them failing the unique
+    // constraint at INSERT (Prisma P2002). Retry a small number of times
+    // on that specific conflict so the slower request silently picks the
+    // next number rather than surfacing an opaque error to the caller.
+    const MAX_NUMBER_RETRIES = 5;
+    for (let attempt = 0; attempt < MAX_NUMBER_RETRIES; attempt++) {
+      try {
+        return await this.prisma.$transaction(async tx => {
+          const overlap = await tx.cycle.findFirst({
+            where: {
+              archivedAt: null,
+              endsAt: { gt: startsAt },
+              startsAt: { lt: endsAt },
+              teamId: input.teamId,
+            },
+          });
+          if (overlap) {
+            throw new CycleOverlapError();
+          }
+
+          const lastCycle = await tx.cycle.findFirst({
+            orderBy: { number: 'desc' },
+            select: { number: true },
+            where: { teamId: input.teamId },
+          });
+          const number = (lastCycle?.number ?? 0) + 1;
+
+          return tx.cycle.create({
+            data: {
+              ...(input.id ? { id: input.id } : {}),
+              description: input.description ?? null,
+              endsAt,
+              name: input.name ?? null,
+              number,
+              organizationId: orgId,
+              startsAt,
+              teamId: input.teamId,
+            },
+          });
+        });
+      } catch (err) {
+        const code = (err as { code?: string }).code;
+        if (code === 'P2002' && attempt < MAX_NUMBER_RETRIES - 1) {
+          continue;
+        }
+        throw err;
       }
-
-      // Get next cycle number for this team
-      const lastCycle = await tx.cycle.findFirst({
-        orderBy: { number: 'desc' },
-        select: { number: true },
-        where: { teamId: input.teamId },
-      });
-      const number = (lastCycle?.number ?? 0) + 1;
-
-      return tx.cycle.create({
-        data: {
-          ...(input.id ? { id: input.id } : {}),
-          description: input.description ?? null,
-          endsAt,
-          name: input.name ?? null,
-          number,
-          organizationId: orgId,
-          startsAt,
-          teamId: input.teamId,
-        },
-      });
-    });
+    }
+    // Unreachable — the loop either returns or throws.
+    throw new Error('Failed to allocate cycle number after retries');
   }
 
   async update(id: string, input: CycleUpdateInput): Promise<Cycle> {
@@ -142,13 +159,23 @@ export class CycleService {
     });
   }
 
-  async delete(id: string): Promise<Cycle> {
-    // Unassign all issues from this cycle before deleting
+  /**
+   * Delete a cycle. Unassigns any issues currently on it (returning the
+   * affected ids so the caller can emit one `'U' Issue` SyncAction per row
+   * — without that, remote clients keep showing those issues on a cycle
+   * that no longer exists until the next bootstrap).
+   */
+  async delete(id: string): Promise<{ cycle: Cycle; unassignedIssueIds: string[] }> {
+    const affected = await this.prisma.issue.findMany({
+      select: { id: true },
+      where: { cycleId: id },
+    });
     await this.prisma.issue.updateMany({
       data: { addedToCycleAt: null, cycleId: null },
       where: { cycleId: id },
     });
-    return this.prisma.cycle.delete({ where: { id } });
+    const cycle = await this.prisma.cycle.delete({ where: { id } });
+    return { cycle, unassignedIssueIds: affected.map(i => i.id) };
   }
 
   async findById(id: string): Promise<Cycle | null> {

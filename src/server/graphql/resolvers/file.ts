@@ -19,7 +19,7 @@ export const fileResolvers = {
       requireAuth(ctx);
 
       // deleteFile checks existence and ownership; returns the deleted record.
-      const file = await ctx.services.file.deleteFile(args.id, ctx.userId).catch(err => {
+      const file = await ctx.services.file.deleteFile(args.id, ctx.userId, ctx.orgId).catch(err => {
         if (err instanceof FileNotFoundError) {
           throw new GraphQLError('File not found', {
             extensions: { code: 'NOT_FOUND' },

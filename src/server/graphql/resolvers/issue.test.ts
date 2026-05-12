@@ -4,6 +4,7 @@ import { createMockContext, type MockGraphQLContext } from '../../../test/contex
 import {
   DEFAULT_WORKFLOW_STATES,
   TEST_ISSUE,
+  TEST_ORG,
   TEST_TEAM,
   TEST_USER,
   TEST_USER_2,
@@ -35,6 +36,7 @@ describe('issueResolvers', () => {
         count: 0,
       });
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        team: { organizationId: TEST_ORG.id },
         teamId: TEST_TEAM.id,
         userId: TEST_USER.id,
       });
@@ -63,6 +65,7 @@ describe('issueResolvers', () => {
         count: 0,
       });
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        team: { organizationId: TEST_ORG.id },
         teamId: TEST_TEAM.id,
         userId: TEST_USER.id,
       });
@@ -105,6 +108,7 @@ describe('issueResolvers', () => {
         count: 0,
       });
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        team: { organizationId: TEST_ORG.id },
         teamId: TEST_TEAM.id,
         userId: TEST_USER.id,
       });
@@ -164,6 +168,7 @@ describe('issueResolvers', () => {
         count: 0,
       });
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        team: { organizationId: TEST_ORG.id },
         teamId: TEST_TEAM.id,
         userId: TEST_USER.id,
       });
@@ -212,6 +217,7 @@ describe('issueResolvers', () => {
       ctx.prisma.issue.findUnique.mockResolvedValue(TEST_ISSUE);
       ctx.prisma.issue.update.mockResolvedValue(updated);
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        team: { organizationId: TEST_ORG.id },
         teamId: TEST_TEAM.id,
         userId: TEST_USER.id,
       });
@@ -231,6 +237,7 @@ describe('issueResolvers', () => {
       ctx.prisma.issue.findUnique.mockResolvedValue(TEST_ISSUE);
       ctx.prisma.issue.update.mockResolvedValue(updated);
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        team: { organizationId: TEST_ORG.id },
         teamId: TEST_TEAM.id,
         userId: TEST_USER.id,
       });
@@ -256,6 +263,7 @@ describe('issueResolvers', () => {
       ctx.prisma.issue.findUnique.mockResolvedValue(issueWithoutAssignee);
       ctx.prisma.issue.update.mockResolvedValue(updated);
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        team: { organizationId: TEST_ORG.id },
         teamId: TEST_TEAM.id,
         userId: TEST_USER.id,
       });
@@ -303,7 +311,16 @@ describe('issueResolvers', () => {
       const updated = { ...TEST_ISSUE, stateId: newStateId };
       ctx.prisma.issue.findUnique.mockResolvedValue(TEST_ISSUE);
       ctx.prisma.issue.update.mockResolvedValue(updated);
+      // update() now validates stateId belongs to the same team — the
+      // workflowState lookup must return a same-team match for the
+      // mutation to pass through to the cascade/notification path.
+      ctx.prisma.workflowState.findFirst.mockResolvedValue({ teamId: TEST_TEAM.id });
+      ctx.prisma.team.findUnique.mockResolvedValue({
+        autoCloseChildIssues: false,
+        autoCloseParentIssues: false,
+      });
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        team: { organizationId: TEST_ORG.id },
         teamId: TEST_TEAM.id,
         userId: TEST_USER.id,
       });
@@ -379,6 +396,7 @@ describe('issueResolvers', () => {
       ctx.prisma.issue.findUnique.mockResolvedValue(TEST_ISSUE);
       ctx.prisma.issue.update.mockResolvedValue(archived);
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        team: { organizationId: TEST_ORG.id },
         teamId: TEST_TEAM.id,
         userId: TEST_USER.id,
       });
@@ -400,6 +418,7 @@ describe('issueResolvers', () => {
       ctx.prisma.issue.findUnique.mockResolvedValue(archivedIssue);
       ctx.prisma.issue.update.mockResolvedValue(TEST_ISSUE);
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        team: { organizationId: TEST_ORG.id },
         teamId: TEST_TEAM.id,
         userId: TEST_USER.id,
       });
@@ -422,6 +441,7 @@ describe('issueResolvers', () => {
       ctx.prisma.issue.findUnique.mockResolvedValue(TEST_ISSUE);
       ctx.prisma.issue.delete.mockResolvedValue(TEST_ISSUE);
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        team: { organizationId: TEST_ORG.id },
         teamId: TEST_TEAM.id,
         userId: TEST_USER.id,
       });
@@ -443,6 +463,7 @@ describe('issueResolvers', () => {
       ctx.prisma.issue.findUnique.mockResolvedValue(TEST_ISSUE);
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({
         isOwner: false,
+        team: { organizationId: TEST_ORG.id },
         teamId: TEST_ISSUE.teamId,
         userId: TEST_USER.id,
       });
@@ -480,6 +501,7 @@ describe('issueResolvers', () => {
       ctx.prisma.issue.count.mockResolvedValue(1);
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({
         isOwner: false,
+        team: { organizationId: TEST_ORG.id },
         teamId: TEST_TEAM.id,
         userId: TEST_USER.id,
       });
@@ -507,6 +529,7 @@ describe('issueResolvers', () => {
       ctx.prisma.issue.count.mockResolvedValue(0);
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({
         isOwner: false,
+        team: { organizationId: TEST_ORG.id },
         teamId: TEST_TEAM.id,
         userId: TEST_USER.id,
       });

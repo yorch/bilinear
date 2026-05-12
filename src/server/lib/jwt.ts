@@ -4,11 +4,17 @@ import { jwtVerify, SignJWT } from 'jose';
 const ACCESS_TOKEN_EXPIRY = '24h';
 const REFRESH_TOKEN_EXPIRY = '30d';
 const OAUTH_STATE_EXPIRY = '10m';
+const WS_TICKET_EXPIRY = '60s';
 
 // HS256 (HMAC-SHA256) recommends secrets >= 32 bytes per RFC 7518 §3.2.
 // `jose` does not enforce this itself, so we validate at boot to fail fast
 // on weak/placeholder secrets.
 const MIN_SECRET_BYTES = 32;
+
+// Pin verification to HS256 so a token claiming any other alg (or `none`)
+// cannot be tricked through. `jose` is hardened against alg-confusion but
+// an explicit pin is best-practice defense-in-depth.
+const ALLOWED_ALGORITHMS = ['HS256'];
 
 function getSecret(key: string): Uint8Array {
   const secret = process.env[key];
@@ -35,6 +41,11 @@ export interface RefreshTokenPayload {
   userId: string;
 }
 
+export interface WsTicketPayload {
+  orgId: string;
+  userId: string;
+}
+
 export async function signAccessToken(payload: AccessTokenPayload): Promise<string> {
   return new SignJWT({ ...payload, type: 'access' })
     .setProtectedHeader({ alg: 'HS256' })
@@ -52,7 +63,9 @@ export async function signRefreshToken(payload: RefreshTokenPayload): Promise<st
 }
 
 export async function verifyAccessToken(token: string): Promise<AccessTokenPayload> {
-  const { payload } = await jwtVerify(token, getSecret('JWT_SECRET'));
+  const { payload } = await jwtVerify(token, getSecret('JWT_SECRET'), {
+    algorithms: ALLOWED_ALGORITHMS,
+  });
 
   if (payload.type !== 'access') {
     throw new Error('Invalid token type');
@@ -65,7 +78,9 @@ export async function verifyAccessToken(token: string): Promise<AccessTokenPaylo
 }
 
 export async function verifyRefreshToken(token: string): Promise<RefreshTokenPayload> {
-  const { payload } = await jwtVerify(token, getSecret('JWT_REFRESH_SECRET'));
+  const { payload } = await jwtVerify(token, getSecret('JWT_REFRESH_SECRET'), {
+    algorithms: ALLOWED_ALGORITHMS,
+  });
 
   if (payload.type !== 'refresh') {
     throw new Error('Invalid token type');
@@ -79,6 +94,38 @@ export async function verifyRefreshToken(token: string): Promise<RefreshTokenPay
 
 // Access token expires in 24h = 86400 seconds
 export const ACCESS_TOKEN_EXPIRY_SECONDS = 86400;
+
+/**
+ * Sign a short-lived WebSocket ticket. Issued by `/api/auth/ws-ticket` from
+ * a valid httpOnly access cookie and consumed by the WebSocket server. Lives
+ * 60s so a leaked ticket has a tiny replay window; carries a narrow
+ * `type: 'ws_ticket'` claim so it cannot be substituted for an access token.
+ *
+ * Returning a ticket (instead of the access token) means client JavaScript
+ * never sees the long-lived bearer, preserving the httpOnly invariant.
+ */
+export async function signWsTicket(payload: WsTicketPayload): Promise<string> {
+  return new SignJWT({ ...payload, type: 'ws_ticket' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime(WS_TICKET_EXPIRY)
+    .sign(getSecret('JWT_SECRET'));
+}
+
+export async function verifyWsTicket(token: string): Promise<WsTicketPayload> {
+  const { payload } = await jwtVerify(token, getSecret('JWT_SECRET'), {
+    algorithms: ALLOWED_ALGORITHMS,
+  });
+
+  if (payload.type !== 'ws_ticket') {
+    throw new Error('Invalid token type');
+  }
+
+  return {
+    orgId: payload.orgId as string,
+    userId: payload.userId as string,
+  };
+}
 
 /**
  * Sign a short-lived OAuth "state" JWT used to prevent CSRF on the
@@ -100,7 +147,9 @@ export async function signOAuthState(
 }
 
 export async function verifyOAuthState(state: string, provider: 'google'): Promise<void> {
-  const { payload } = await jwtVerify(state, getSecret('JWT_SECRET'));
+  const { payload } = await jwtVerify(state, getSecret('JWT_SECRET'), {
+    algorithms: ALLOWED_ALGORITHMS,
+  });
   if (payload.type !== 'oauth_state' || payload.provider !== provider) {
     throw new Error('Invalid OAuth state token');
   }
