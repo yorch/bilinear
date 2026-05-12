@@ -122,11 +122,11 @@ model AuthToken {
   // magic_link, refresh, api_key
   type      String  @db.VarChar(20)
   // tokenHash carries a partial UNIQUE constraint enforced in SQL (see
-  // 20260512100000_db_hardening_constraints) covering `type IN
-  // ('refresh', 'api_key')` only. Magic-link rows hash a 6-digit code
-  // whose 1M-value space makes cross-user hash collisions expected,
-  // so they are deliberately excluded. Prisma cannot model partial
-  // unique indexes, so the constraint lives in the migration only.
+  // 20260512100000_db_hardening_constraints) covering `type = 'refresh'`
+  // only. Magic-link rows hash a 6-digit code whose 1M-value space
+  // makes cross-user hash collisions expected, so they are deliberately
+  // excluded. Prisma cannot model partial unique indexes, so the
+  // constraint lives in the migration only.
   tokenHash String  @map("token_hash")
   // 6-digit code for magic link
   code      String? @db.VarChar(6)
@@ -154,9 +154,9 @@ model AuthToken {
   // The single `(token_hash)` index from the init migration was replaced
   // with two type-partitioned indexes in
   // 20260512100000_db_hardening_constraints: a partial UNIQUE for
-  // `type IN ('refresh', 'api_key')` and a partial non-unique for
-  // `type = 'magic_link'`. Both live in SQL only because Prisma cannot
-  // model partial indexes.
+  // `type = 'refresh'` and a partial non-unique for `type =
+  // 'magic_link'`. Both live in SQL only because Prisma cannot model
+  // partial indexes.
   @@index([familyId])
   @@map("auth_tokens")
 }

@@ -13,11 +13,13 @@
 --      left dangling references.
 --   4. `files.project_id` FK to `projects(id)` with `ON DELETE SET NULL` —
 --      same shape as (3); the `issue_id` FK already exists.
---   5. `auth_tokens.token_hash` partial UNIQUE — refresh / api_key tokens
---      hash long random strings (collisions ≈ 0); the constraint catches
---      any bug that issues the same hash twice. **Excludes** `magic_link`
---      rows, which hash a 6-digit code (1M possibilities) where collisions
---      across users are mathematically expected.
+--   5. `auth_tokens.token_hash` partial UNIQUE — refresh tokens hash long
+--      random strings (collisions ≈ 0); the constraint catches any bug
+--      that issues the same hash twice. **Excludes** `magic_link` rows,
+--      which hash a 6-digit code (1M possibilities) where collisions
+--      across users are mathematically expected. If `api_key` (or any
+--      other random-string token type) is added later, extend the
+--      predicate in a follow-up migration.
 --
 -- Each block is fenced by an integrity-check that fails loudly if the
 -- migration would corrupt existing data — see the comments inline.
@@ -101,7 +103,7 @@ ALTER TABLE "files"
     ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- ---------------------------------------------------------------------------
--- 5. auth_tokens.token_hash partial UNIQUE (refresh / api_key only)
+-- 5. auth_tokens.token_hash partial UNIQUE (refresh only)
 -- ---------------------------------------------------------------------------
 --
 -- Magic-link rows hash a 6-digit numeric code (`crypto.randomInt(100000,
@@ -110,16 +112,22 @@ ALTER TABLE "files"
 -- `token_hash` values by birthday-paradox math; a blanket unique index
 -- would randomly fail INSERTs in production.
 --
--- Refresh and api_key tokens hash long random strings — collisions are
--- ~0. The partial unique catches double-issuance bugs for those types
--- without touching the magic-link path.
+-- Refresh tokens hash long random strings — collisions are ~0. The
+-- partial unique catches double-issuance bugs for that path without
+-- touching the magic-link one.
 --
 -- `verifyMagicLink` already disambiguates by `(userId, tokenHash, type)`,
 -- so the absence of a magic-link uniqueness constraint is correct for
 -- the lookup as well.
+--
+-- The predicate uses `type = 'refresh'` (matching the runtime lookup
+-- verbatim) rather than `type <> 'magic_link'` so PostgreSQL's planner
+-- reliably uses the partial index for `WHERE token_hash = ? AND type =
+-- 'refresh'` queries. If a future `api_key` (or similar long-random-
+-- string) token type is added, extend the predicate in a follow-up.
 
--- Pre-flight: any existing duplicate hashes among refresh / api_key rows
--- would block index creation. Fail loud rather than silently drop the
+-- Pre-flight: any existing duplicate hashes among refresh rows would
+-- block index creation. Fail loud rather than silently drop the
 -- constraint.
 DO $$
 DECLARE
@@ -127,23 +135,23 @@ DECLARE
 BEGIN
   SELECT count(*) INTO dupes FROM (
     SELECT token_hash FROM auth_tokens
-     WHERE type IN ('refresh', 'api_key')
+     WHERE type = 'refresh'
      GROUP BY token_hash HAVING count(*) > 1
   ) d;
   IF dupes > 0 THEN
     RAISE EXCEPTION
-      'auth_tokens has % duplicate token_hash value(s) among refresh/api_key rows; resolve before applying this migration',
+      'auth_tokens has % duplicate token_hash value(s) among refresh rows; resolve before applying this migration',
       dupes;
   END IF;
 END $$;
 
 -- Drop the legacy non-unique index — the partial unique below covers the
--- common-case lookup (`WHERE token_hash = ? AND type = ?`).
+-- common-case lookup (`WHERE token_hash = ? AND type = 'refresh'`).
 DROP INDEX "auth_tokens_token_hash_idx";
 
-CREATE UNIQUE INDEX "auth_tokens_token_hash_non_magic_link_key"
+CREATE UNIQUE INDEX "auth_tokens_token_hash_refresh_key"
   ON "auth_tokens"("token_hash")
-  WHERE "type" <> 'magic_link';
+  WHERE "type" = 'refresh';
 
 -- Keep a non-unique index for magic-link lookups so verifyMagicLink stays
 -- on an indexed path.

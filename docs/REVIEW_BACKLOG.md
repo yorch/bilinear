@@ -583,15 +583,18 @@ others landed as written.
   references are nulled out in the migration before the FK is added.
 - `files.project_id` — FK to `projects(id)` with `ON DELETE SET
   NULL`; same orphan-cleanup pattern.
-- `auth_tokens.token_hash` — **partial** UNIQUE (`WHERE type IN
-  ('refresh', 'api_key')`) rather than the blanket UNIQUE originally
-  proposed. Magic-link rows hash a 6-digit code (1M-value space) so
-  cross-user hash collisions are expected at any meaningful scale;
-  a blanket UNIQUE would randomly fail magic-link INSERTs in
-  production. The partial unique keeps the safety net for refresh /
-  api_key tokens (which hash long random strings). The legacy
+- `auth_tokens.token_hash` — **partial** UNIQUE (`WHERE type =
+  'refresh'`) rather than the blanket UNIQUE originally proposed.
+  Magic-link rows hash a 6-digit code (1M-value space) so cross-user
+  hash collisions are expected at any meaningful scale; a blanket
+  UNIQUE would randomly fail magic-link INSERTs in production. The
+  partial unique keeps the safety net for refresh tokens (which hash
+  long random strings) and uses a predicate that matches the runtime
+  lookup verbatim so the planner reliably picks it up. The legacy
   non-unique `(token_hash)` index is replaced by two type-partitioned
-  indexes so both lookup paths stay on an index.
+  indexes so both lookup paths stay on an index. If `api_key` (or any
+  similar long-random-string token type) is added later, extend the
+  predicate in a follow-up migration.
 
 The partial unique cannot be modeled in `schema.prisma`; comments on
 the `AuthToken.tokenHash` field document the constraint and point at
