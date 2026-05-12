@@ -20,7 +20,7 @@ interface IssueWithTeam extends IssueDetail {
 const ISSUE_QUERY = `
   query Issue($id: ID!) {
     issue(id: $id) {
-      id identifier title description priority estimate stateId teamId assigneeId dueDate createdAt updatedAt
+      id identifier title description priority estimate stateId teamId assigneeId projectId dueDate createdAt updatedAt
       labels { id name color }
       team {
         id key
@@ -39,7 +39,7 @@ const ISSUE_UPDATE_MUTATION = `
     issueUpdate(id: $id, input: $input) {
       success
       issue {
-        id identifier title priority stateId assigneeId dueDate description createdAt updatedAt
+        id identifier title priority stateId assigneeId projectId dueDate description createdAt updatedAt
         labels { id name color }
       }
     }

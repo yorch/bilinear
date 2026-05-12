@@ -6,6 +6,7 @@ import {
   Eye,
   FileText,
   Inbox,
+  LogOut,
   PanelLeft,
   Plus,
   RefreshCw,
@@ -18,6 +19,7 @@ import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { useAuth } from '@/hooks/use-auth';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -305,23 +307,49 @@ export const Sidebar = observer(function Sidebar({
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-zinc-200 dark:border-zinc-800 p-1.5">
-        {collapsed ? (
-          <div className="flex flex-col items-center gap-1">
-            <Link
-              className={cn(
-                'flex items-center justify-center rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
-                pathname.startsWith(`${base}/settings`) &&
-                  'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50',
-              )}
-              href={`${base}/settings`}
-              title="Settings"
-            >
-              <Settings className="h-4 w-4" />
-            </Link>
-            <ThemeToggle compact />
-          </div>
-        ) : (
+      <SidebarFooter base={base} collapsed={collapsed} pathname={pathname} />
+    </aside>
+  );
+});
+
+function SidebarFooter({
+  base,
+  collapsed,
+  pathname,
+}: {
+  base: string;
+  collapsed: boolean;
+  pathname: string;
+}) {
+  const { logout, user } = useAuth();
+  return (
+    <div className="border-t border-zinc-200 dark:border-zinc-800 p-1.5">
+      {collapsed ? (
+        <div className="flex flex-col items-center gap-1">
+          <Link
+            className={cn(
+              'flex items-center justify-center rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
+              pathname.startsWith(`${base}/settings`) &&
+                'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50',
+            )}
+            href={`${base}/settings`}
+            title="Settings"
+          >
+            <Settings className="h-4 w-4" />
+          </Link>
+          <ThemeToggle compact />
+          <button
+            aria-label="Sign out"
+            className="flex items-center justify-center rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
+            onClick={() => void logout()}
+            title="Sign out"
+            type="button"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between">
             <Link
               className={cn(
@@ -337,8 +365,25 @@ export const Sidebar = observer(function Sidebar({
             </Link>
             <ThemeToggle />
           </div>
-        )}
-      </div>
-    </aside>
+          {user && (
+            <div className="flex items-center justify-between gap-2 px-2 py-1 text-xs text-zinc-500">
+              <span className="truncate" title={user.email}>
+                {user.displayName}
+              </span>
+              <button
+                aria-label="Sign out"
+                className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
+                onClick={() => void logout()}
+                title="Sign out"
+                type="button"
+              >
+                <LogOut className="h-3 w-3" />
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
-});
+}

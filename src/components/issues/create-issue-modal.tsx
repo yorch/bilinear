@@ -9,6 +9,7 @@ import { AssigneeSelect } from '../properties/assignee-select';
 import { DueDatePicker } from '../properties/due-date-picker';
 import { LabelSelect } from '../properties/label-select';
 import { PrioritySelect } from '../properties/priority-select';
+import { ProjectSelect } from '../properties/project-select';
 import { StatusSelect } from '../properties/status-select';
 import { TemplateSelector } from './template-selector';
 
@@ -24,6 +25,7 @@ interface CreateIssueInput {
   dueDate?: string | null;
   labelIds: string[];
   priority: number;
+  projectId?: string;
   stateId?: string;
   title: string;
 }
@@ -57,6 +59,7 @@ export function CreateIssueModal({
   const [priority, setPriority] = useState(0);
   const [labelIds, setLabelIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState<string | null>(null);
+  const [projectId, setProjectId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
   // Synchronous re-entry guard. The disabled prop on the submit button
@@ -104,6 +107,7 @@ export function CreateIssueModal({
     setPriority(0);
     setLabelIds([]);
     setDueDate(null);
+    setProjectId(null);
     setTemplateOpen(false);
     setTimeout(() => titleRef.current?.focus(), 50);
 
@@ -163,6 +167,7 @@ export function CreateIssueModal({
         dueDate,
         labelIds,
         priority,
+        projectId: projectId ?? undefined,
         stateId: stateId || undefined,
         title: title.trim(),
       });
@@ -225,6 +230,7 @@ export function CreateIssueModal({
             <AssigneeSelect onChange={setAssigneeId} users={users} value={assigneeId} />
             <LabelSelect labels={labels} onChange={setLabelIds} value={labelIds} />
             <DueDatePicker onChange={setDueDate} value={dueDate} />
+            <ProjectSelect onChange={setProjectId} value={projectId} />
             {teamId && (
               <TemplateSelector
                 forceOpen={templateOpen}
