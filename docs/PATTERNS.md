@@ -637,13 +637,13 @@ The sync lifecycle is managed by two providers wrapping the workspace layout:
 
 `SyncProvider` on mount:
 
-1. Fetches a session resolution from `GET /api/auth/ws-ticket` (server reads the httpOnly access cookie, returns `{ ticket, userId, orgId }`)
+1. Fetches a session resolution from `GET /api/auth/ws-ticket` (server reads the httpOnly access cookie, returns `{ ticket, userId, orgId }`). The `ticket` is consumed only by `SyncProvider` to confirm the session is live — it's not threaded down into `SyncManager` since `WsClient` re-fetches its own fresh ticket on every (re)connect.
 2. Calls `userStore.setCurrentUserId(userId)` so `currentUser` resolves everywhere
 3. Creates `SyncManager` and `WsClient`
-4. Calls `syncManager.start(ticket, orgId)` which runs:
+4. Calls `syncManager.start(orgId)` which runs:
    - Compare cached vs active `orgId`; wipe IndexedDB if changed
    - Load from IndexedDB → if cached, delta sync; otherwise full bootstrap
-   - Connect WebSocket (`ws://host:3001?token=<ticket>`); WsClient itself re-fetches a fresh ticket on every reconnect
+   - `wsClient.connect()` — WsClient fetches a fresh `ws_ticket` from `/api/auth/ws-ticket` and opens the socket. It does the same on every reconnect, so the 60s ticket lifetime is bounded per-connection and transient downtime past that still recovers automatically.
    - Register `online`/`offline` event listeners
 
 On unmount, `syncManager.stop()` disconnects WebSocket and removes event listeners.

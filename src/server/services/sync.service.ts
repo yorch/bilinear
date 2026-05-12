@@ -269,25 +269,43 @@ export class SyncService {
   ): Promise<{ actions: SyncAction[]; hasMore: boolean }> {
     const fromCommittedAt = new Date(Number(fromCursor.committedAtMicros / BigInt(1000)));
     const watermark = this.watermark();
+    const toCommittedAt = toCursor
+      ? new Date(Number(toCursor.committedAtMicros / BigInt(1000)))
+      : null;
 
-    // Tuple-greater-than filter expressed in Prisma:
-    //   (committed_at, id) > (fromCommittedAt, fromId)
-    // → committed_at > fromCommittedAt
-    //   OR (committed_at = fromCommittedAt AND id > fromId)
-    // The `committedAt <= watermark` clause inside each branch is what
-    // gives the safety window its bite.
-    const tupleAfter = [
-      {
-        committedAt: {
-          gt: fromCommittedAt,
-          lte: toCursor ? new Date(Number(toCursor.committedAtMicros / BigInt(1000))) : watermark,
-        },
-      },
-      {
-        committedAt: fromCommittedAt,
-        id: { gt: fromCursor.id, ...(toCursor ? { lte: toCursor.id } : {}) },
-      },
-    ];
+    // Hard upper-bound on committedAt — applied to BOTH branches of the
+    // tuple-greater filter below. The watermark is the lag floor that
+    // guarantees a row's tx has had time to commit; `toCommittedAt`, when
+    // present, is the bootstrap→delta handoff ceiling. Take the smaller
+    // so we never serve rows past either boundary, even when the
+    // cursor's `committedAt` itself happens to fall inside the lag
+    // window (which would otherwise let the lower-bound's same-time
+    // branch sneak in a too-recent row and advance the cursor past
+    // still-in-flight inserts).
+    const upperCommittedAt = toCommittedAt && toCommittedAt < watermark ? toCommittedAt : watermark;
+
+    // Lower bound — `(committedAt, id) > (fromCommittedAt, fromId)`,
+    // expressed as the two OR branches Prisma needs.
+    const lowerBound = {
+      OR: [
+        { committedAt: { gt: fromCommittedAt } },
+        { committedAt: fromCommittedAt, id: { gt: fromCursor.id } },
+      ],
+    };
+
+    // Upper bound (only when toCursor is given) — encoded as a true
+    // tuple `(committedAt, id) <= (toCommittedAt, toId)`. Without the
+    // id-tie-break, rows sharing toCommittedAt could leak past the
+    // intended upper bound on a bootstrap→delta handoff.
+    const upperBound =
+      toCursor && toCommittedAt
+        ? {
+            OR: [
+              { committedAt: { lt: toCommittedAt } },
+              { committedAt: toCommittedAt, id: { lte: toCursor.id } },
+            ],
+          }
+        : null;
 
     // Request one extra row to cheaply detect whether the caller needs
     // another page, without a separate count query.
@@ -295,7 +313,11 @@ export class SyncService {
       orderBy: [{ committedAt: 'asc' }, { id: 'asc' }],
       take: limit + 1,
       where: {
-        OR: tupleAfter,
+        AND: [
+          { committedAt: { lte: upperCommittedAt } },
+          lowerBound,
+          ...(upperBound ? [upperBound] : []),
+        ],
         organizationId: orgId,
       },
     });

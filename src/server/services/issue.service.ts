@@ -538,11 +538,18 @@ export class IssueService {
     // return rows in Prisma/Postgres, and an extra findMany doubles the
     // round-trips on every cascade. `state` is dropped (it was the
     // pre-update include for type filtering, not a column).
+    //
+    // `updatedAt` is auto-managed by Prisma via `@updatedAt` and we just
+    // wrote each row, so we set it to `now` here too — without that, the
+    // SyncAction + webhook payloads for the cascaded rows would carry
+    // the pre-update timestamp and remote clients would see a stale
+    // "Updated 2 days ago" until the next bootstrap.
     return openChildren.map(({ state: _state, ...child }) => ({
       ...child,
       canceledAt: parentState.type === 'canceled' ? now : child.canceledAt,
       completedAt: parentState.type === 'completed' ? now : child.completedAt,
       stateId: targetState.id,
+      updatedAt: now,
     })) as Issue[];
   }
 
