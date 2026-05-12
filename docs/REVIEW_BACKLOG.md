@@ -27,8 +27,8 @@ PR with a brainstorming pass before code.
 ### 1.1 — Atomic `SyncAction` + business write (#18)
 
 **File entry points:**
-- `src/server/services/sync.service.ts:14-44` — `createSyncAction`
-- 73 call sites across 18 resolver files (`createSyncAction(`) — every
+- `src/server/services/sync.service.ts:73-102` — `createSyncAction`
+- 91 call sites across 19 resolver files (`createSyncAction(`) — every
   mutation in `src/server/graphql/resolvers/*.ts`
 
 **Problem.** The mutation hot path runs
@@ -55,7 +55,7 @@ SyncAction itself is missing, delta sync has nothing to ship.
    `createSyncAction(orgId, action, modelName, modelId, data, tx?)`
    overload accepting the Prisma transaction client. Callers wrap the
    business write + sync write in `prisma.$transaction(async tx => ...)`.
-   Pro: bullet-proof atomicity. Con: 73 call sites; some mutations
+   Pro: bullet-proof atomicity. Con: 91 call sites; some mutations
    already have nested `$transaction` (Cycle rollover, Project create)
    so we'd need careful nesting.
 2. **Outbox pattern.** Keep mutations as-is, but write a `sync_outbox`
@@ -82,14 +82,17 @@ SyncAction itself is missing, delta sync has nothing to ship.
 ### 1.2 — TransactionQueue rollback (LIFO + stacking) (#21)
 
 **File entry points:**
-- `src/lib/transaction-queue.ts` (84 LOC, 0 tests)
-- 15 call sites: `src/components/issues/sub-issue-list.tsx:240`,
-  `src/components/issues/relations-section.tsx:133,162`,
-  `src/components/cycles/cycle-detail-view.tsx:381,481`,
-  `src/app/(workspace)/[workspace]/team/[key]/page.tsx:223,326,349`,
-  `src/app/(workspace)/[workspace]/team/[key]/backlog/page.tsx:344,403`,
-  + a few more in `tests/`.
-- `src/stores/issue-store.ts` (and other pool stores) — `optimisticUpdate`
+- `src/lib/transaction-queue.ts` (240 LOC, 0 tests; carries the
+  module-scoped singleton + IndexedDB persistence + session hydrate
+  flow added in the 2026-05-12 hardening pass)
+- 13 `.enqueue(` call sites in components/app:
+  `src/components/issues/sub-issue-list.tsx:216`,
+  `src/components/issues/relations-section.tsx:125,151`,
+  `src/components/cycles/cycle-detail-view.tsx:348,442`,
+  `src/components/documents/document-editor.tsx:42,66`,
+  `src/app/(workspace)/[workspace]/team/[key]/page.tsx:226,297,325,348`,
+  `src/app/(workspace)/[workspace]/team/[key]/backlog/page.tsx:324,382`.
+- `src/stores/issue-store.ts:99` (and other pool stores) — `optimisticUpdate`
 
 **Problem.** Today every call site captures a snapshot manually:
 
@@ -127,7 +130,7 @@ tuples. `revert()` removes its tuple from the stack and re-derives the
 entity by replaying remaining stack tuples on top of the current
 authoritative state. `commit()` pops without re-deriving.
 
-- **Effort:** Large. New API on the pool base store + 15-site sweep +
+- **Effort:** Large. New API on the pool base store + 13-site sweep +
   concurrency tests for stacked ops.
 - **Risk:** High. Optimistic UI semantics are subtle; need fake-timer
   tests that simulate two enqueued mutations failing in different
@@ -135,7 +138,7 @@ authoritative state. `commit()` pops without re-deriving.
 - **Why deferred:** Concurrent-ops design needs to be locked in (and
   agreed on) before code.
 - **First-touch:** Implement `applyOptimistic` on `BasePoolStore`;
-  migrate `sub-issue-list.tsx:240` (a single onError site); add a
+  migrate `sub-issue-list.tsx:216` (a single onError site); add a
   test that two stacked optimistic patches roll back in LIFO order.
 - **Acceptance signal:** A new vitest suite `transaction-queue.test
   .ts` that drives 3 stacked optimistic ops on the same entity, fails
@@ -145,12 +148,12 @@ authoritative state. `commit()` pops without re-deriving.
 ### 1.3 — Bootstrap ↔ WS race + self-echo filter
 
 **File entry points:**
-- `src/lib/sync-manager.ts:223-468` — `fullBootstrap`
-- `src/lib/sync-manager.ts:947-957` — WS message handler (after
+- `src/lib/sync-manager.ts:271-509` — `fullBootstrap`
+- `src/lib/sync-manager.ts:1022` — WS message handler (after
   `5b9c22e` it now handles `'resync'` too)
-- `src/server/services/sync.service.ts:14-44` — where the SyncAction
+- `src/server/services/sync.service.ts:73-102` — where the SyncAction
   is created (would need a `txId` echo)
-- `src/lib/transaction-queue.ts:24-41` — where a client `txId` would
+- `src/lib/transaction-queue.ts:59-84` — where a client `txId` would
   be generated
 
 **Problem.** Two distinct races:
@@ -185,7 +188,9 @@ authoritative state. `commit()` pops without re-deriving.
 - **First-touch:** Schema migration adding `tx_id text NULL` to
   `sync_actions`; thread it through `createSyncAction`; smallest
   client change is to skip echoes whose `txId` matches a recently
-  enqueued tx (kept in a small ring buffer for ~30s).
+  enqueued tx (kept in a small ring buffer for ~30s). The
+  `committed_at` column added in the 2026-05-12 hardening pass
+  (`schema.prisma:411-422`) is a precedent for the migration shape.
 - **Acceptance signal:** Manual flow — drag an issue card; observe
   network tab shows `issueUpdate` mutation, then a WS message — and
   the issue position doesn't snap-back during the brief moment
@@ -194,17 +199,18 @@ authoritative state. `commit()` pops without re-deriving.
 ### 1.4 — Optimistic placeholder collision
 
 **File entry points:**
-- `src/stores/issue-store.ts:120-134` — `upsertMany` placeholder
-  matching
+- `src/stores/issue-store.ts:130-148` — `applySyncAction` placeholder
+  reconciliation
 - `src/components/issues/create-issue-modal.tsx` — issue creation
   optimistic write site
 
 **Problem.** When a create-issue mutation is enqueued, the client
-inserts a placeholder Issue with a synthesized id. Later, when the
-server's `IssueCreate` SyncAction lands over WS, the store de-dups by
-matching `(title, teamId)` — if the placeholder matches, swap real id
-for synthetic. Two rapid creates with identical title+team collide:
-the first placeholder gets matched against the second's server echo.
+inserts a placeholder Issue with an "optimistic identifier" (ends with
+`…`, e.g. `ENG-…`). Later, when the server's `IssueCreate` SyncAction
+lands over WS, the store de-dups by walking pool entries whose
+identifier is still optimistic and matching `(title, teamId)`. Two
+rapid creates with identical title+team collide: the first placeholder
+gets matched against the second's server echo.
 
 **Design.** Pass a client-issued `clientId` (UUID) through the
 `issueCreate` mutation. Server stores it transiently (or just echoes
@@ -214,9 +220,11 @@ by `clientId` instead of `(title, teamId)`. Couples nicely with the
 
 - **Effort:** Small-Medium.
 - **Risk:** Low.
+- **Why deferred:** Wants to land alongside or after §1.3's `txId`
+  work so we add a single correlation id, not two.
 - **First-touch:** Add `clientId` field to `IssueCreateInput`; have
   `IssueService.create` echo it back in the SyncAction `data` blob;
-  update `issue-store.ts:upsertMany` to prefer `clientId`-keyed
+  update `issue-store.ts:applySyncAction` to prefer `clientId`-keyed
   matching.
 - **Acceptance signal:** New e2e test creates two issues with
   identical titles in <100ms; both end up in the list with their
@@ -306,10 +314,10 @@ that drops partitions older than ~30d. Delta sync won't fetch them
 ### 3.1 Bootstrap pagination + streaming
 
 **File entry points:**
-- `src/server/services/sync.service.ts:43-132` — `getBootstrapData`
-- `src/app/api/sync/bootstrap/route.ts:38-95` — NDJSON serializer
+- `src/server/services/sync.service.ts:104` — `getBootstrapData`
+- `src/app/api/sync/bootstrap/route.ts` (~108 LOC) — NDJSON serializer
   buffered into `lines.join('\n')`
-- `src/lib/sync-manager.ts:218-410` — `fullBootstrap` reader
+- `src/lib/sync-manager.ts:271-509` — `fullBootstrap` reader
 
 **Problem.** Bootstrap returns every issue / label / cycle / etc. for
 the org in a single buffered NDJSON response. For a 10k-issue org this
@@ -429,7 +437,7 @@ Listed in priority order.
 - `TEST_AUTH_CODE` only honored when `NODE_ENV === 'test'` (boundary
   test in `auth.service.test.ts`).
 
-### 5.2 `sync-manager.ts` (950 LOC, 0 tests)
+### 5.2 `sync-manager.ts` (1078 LOC, 0 tests)
 
 Approach: extract the pure dispatch portion of `applyActions` into a
 new `apply-actions.ts` helper that takes `(actions, stores)` and has
@@ -441,7 +449,7 @@ no `db` / `fetch` / `WebSocket` side effects. Then unit-test:
 Integration test under `fake-indexeddb` for the bootstrap → load →
 delta sequence.
 
-### 5.3 `transaction-queue.ts` (84 LOC, 0 tests)
+### 5.3 `transaction-queue.ts` (240 LOC, 0 tests)
 
 Pairs with §1.2. Test cases under `vi.useFakeTimers`:
 - One enqueued tx → mutation fires once → `onSuccess` called.
@@ -466,7 +474,7 @@ to import). Cases:
 
 ### 5.5 Resolver auth-guard sweep
 
-Currently: 7 of 20 resolver files have any test coverage. Build a
+Currently: 6 of 25 resolver files have any test coverage. Build a
 parameterized helper:
 
 ```ts
@@ -499,9 +507,10 @@ Run the helper across all 17 stores.
 
 | Spec | Status | What to add |
 | --- | --- | --- |
-| `tests/e2e/issue-crud.spec.ts` | empty file | create / edit title / edit description / change state / assign / archive / delete |
+| `tests/e2e/issue-crud.spec.ts` | partial (4 tests: open modal, create+verify, open detail, close detail) | edit title / edit description / change state / assign / archive / delete |
 | `tests/e2e/drag-drop.spec.ts` | missing | drag a card across columns; verify position persists after reload |
-| `tests/e2e/offline-reload.spec.ts` | missing | offline → create issue → reconnect → reload page → issue persists |
+| `tests/e2e/offline.spec.ts` | partial (236 LOC) | confirm reload-survival path: offline → create issue → reconnect → reload page → issue persists |
+| `tests/e2e/optimistic-rollback.spec.ts` | partial (162 LOC) | audit coverage against the 13 `tq.enqueue` sites; add a stacked-ops case (pairs with §1.2) |
 | `tests/e2e/multi-user.spec.ts` | missing | two browser contexts in different orgs; org A's actions invisible to org B |
 | `tests/e2e/magic-link-signup.spec.ts` | missing | full magic-link signup flow (vs. existing `loginAs` shortcut) |
 
@@ -511,6 +520,41 @@ Run the helper across all 17 stores.
 
 A condensed history of what landed in main. See `git log` for full
 details.
+
+### Hardening pass (2026-05-12)
+
+- WebSocket auth — `/api/auth/ws-ticket` issues a scoped 60s
+  `ws_ticket` JWT per (re)connect; the long-lived access token no
+  longer reaches client JS. `WsClient.connect()` fetches its own
+  ticket. (PATTERNS.md §18.)
+- `sync_actions.committed_at` column + BEFORE INSERT trigger; delta
+  sync now orders by `(committed_at, id)` and ignores rows newer than
+  500ms. (DATABASE_SCHEMA.md §2.22; `schema.prisma:411-422`.)
+- Tenant guards — `requireTeamMember` / `requireTeamOwner` take an
+  explicit `orgId` and verify the team belongs to it; `Issue
+  .findByIdentifier`, `Initiative.update/archive/delete/findById`,
+  `Webhook.update/archive/delete/rotateSecret/findById/listDeliveries`
+  rescoped to require `orgId`. Auto-close cascade now runs inside the
+  parent transaction and emits per-row SyncActions.
+- Webhook concurrency — `processDelivery` claims rows by transitioning
+  `pending → in_flight` atomically; stale `in_flight` rows reclaimed
+  by the sweep after the claim deadline elapses.
+- CSRF + per-IP caps — Apollo `csrfPrevention: true` + Origin
+  allow-list on `/api/graphql`; per-IP cap on magic-link verify;
+  client-IP fallback works without `TRUST_PROXY_HEADERS=1`.
+- `TransactionQueue` reload-survival — module-scoped singleton,
+  IndexedDB-persisted FIFO, per-session `hydrate()` / `setActiveSession()`.
+
+### Features (2026-05-05)
+
+- Triage workflow — inbound issue queue at `/team/[key]/triage` with
+  accept / decline / snooze / duplicate. (PATTERNS.md §38.)
+- Initiatives — top-level strategic objects m:n with `Project`;
+  progress rolls up from linked projects. UI at `/initiatives`.
+  (PATTERNS.md §39.)
+- Webhooks — outbound HMAC-signed HTTP subscriptions, admin-only at
+  `/settings/webhooks`. Retry sweep runs in the WS server every 30s.
+  (PATTERNS.md §40; DATABASE_SCHEMA.md §2.21.)
 
 ### Security (7 commits — all 13 audit items closed)
 
