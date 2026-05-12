@@ -650,6 +650,45 @@ details.
 - `TransactionQueue` reload-survival — module-scoped singleton,
   IndexedDB-persisted FIFO, per-session `hydrate()` / `setActiveSession()`.
 
+### DB hardening — misc constraints (2026-05-12, §2.4)
+
+Migration `20260512100000_db_hardening_constraints` closed the five
+items from §2.4. One item changed shape during implementation; the
+others landed as written.
+
+- `users.google_id` — UNIQUE constraint added. Pre-flight check
+  aborts the migration if any duplicate google_id exists.
+- `issues.previous_identifiers` — GIN index added. Not yet exercised
+  — `IssueService.findByIdentifier` currently matches only on the
+  live `identifier` column. The index ships ahead of a planned change
+  that adds a `previousIdentifiers` fallback so renamed issues remain
+  reachable by their old key; cheap to maintain in the meantime since
+  the column is only written on team-key renames.
+- `teams.default_issue_state_id` / `auto_close_state_id` — FKs to
+  `workflow_states(id)` with `ON DELETE SET NULL`; orphan references
+  are nulled out in the migration before the FK is added. Both
+  referencing columns also get a plain b-tree index so the FK's
+  `ON DELETE SET NULL` check doesn't seq-scan `teams` whenever a
+  workflow state is deleted.
+- `files.project_id` — FK to `projects(id)` with `ON DELETE SET
+  NULL`; same orphan-cleanup pattern.
+- `auth_tokens.token_hash` — **partial** UNIQUE (`WHERE type =
+  'refresh'`) rather than the blanket UNIQUE originally proposed.
+  Magic-link rows hash a 6-digit code (1M-value space) so cross-user
+  hash collisions are expected at any meaningful scale; a blanket
+  UNIQUE would randomly fail magic-link INSERTs in production. The
+  partial unique keeps the safety net for refresh tokens (which hash
+  long random strings) and uses a predicate that matches the runtime
+  lookup verbatim so the planner reliably picks it up. The legacy
+  non-unique `(token_hash)` index is replaced by two type-partitioned
+  indexes so both lookup paths stay on an index. If `api_key` (or any
+  similar long-random-string token type) is added later, extend the
+  predicate in a follow-up migration.
+
+The partial unique cannot be modeled in `schema.prisma`; comments on
+the `AuthToken.tokenHash` field document the constraint and point at
+the migration as the source of truth.
+
 ### Features (2026-05-05)
 
 - Triage workflow — inbound issue queue at `/team/[key]/triage` with
@@ -715,45 +754,6 @@ details.
 ### Docs
 
 - This file (`4f1936c`); follow-up prune (`25f4f08`).
-
-### DB hardening — misc constraints (§2.4)
-
-Migration `20260512100000_db_hardening_constraints` closed the five
-items from §2.4. One item changed shape during implementation; the
-others landed as written.
-
-- `users.google_id` — UNIQUE constraint added. Pre-flight check
-  aborts the migration if any duplicate google_id exists.
-- `issues.previous_identifiers` — GIN index added. Not yet exercised
-  — `IssueService.findByIdentifier` currently matches only on the
-  live `identifier` column. The index ships ahead of a planned change
-  that adds a `previousIdentifiers` fallback so renamed issues remain
-  reachable by their old key; cheap to maintain in the meantime since
-  the column is only written on team-key renames.
-- `teams.default_issue_state_id` / `auto_close_state_id` — FKs to
-  `workflow_states(id)` with `ON DELETE SET NULL`; orphan references
-  are nulled out in the migration before the FK is added. Both
-  referencing columns also get a plain b-tree index so the FK's
-  `ON DELETE SET NULL` check doesn't seq-scan `teams` whenever a
-  workflow state is deleted.
-- `files.project_id` — FK to `projects(id)` with `ON DELETE SET
-  NULL`; same orphan-cleanup pattern.
-- `auth_tokens.token_hash` — **partial** UNIQUE (`WHERE type =
-  'refresh'`) rather than the blanket UNIQUE originally proposed.
-  Magic-link rows hash a 6-digit code (1M-value space) so cross-user
-  hash collisions are expected at any meaningful scale; a blanket
-  UNIQUE would randomly fail magic-link INSERTs in production. The
-  partial unique keeps the safety net for refresh tokens (which hash
-  long random strings) and uses a predicate that matches the runtime
-  lookup verbatim so the planner reliably picks it up. The legacy
-  non-unique `(token_hash)` index is replaced by two type-partitioned
-  indexes so both lookup paths stay on an index. If `api_key` (or any
-  similar long-random-string token type) is added later, extend the
-  predicate in a follow-up migration.
-
-The partial unique cannot be modeled in `schema.prisma`; comments on
-the `AuthToken.tokenHash` field document the constraint and point at
-the migration as the source of truth.
 
 ---
 
