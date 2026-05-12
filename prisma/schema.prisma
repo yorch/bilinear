@@ -63,7 +63,7 @@ model User {
   statusUntilAt DateTime? @map("status_until_at") @db.Timestamptz
 
   passwordHash String? @map("password_hash")
-  googleId     String? @map("google_id") @db.VarChar(255)
+  googleId     String? @unique @map("google_id") @db.VarChar(255)
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
@@ -121,6 +121,12 @@ model AuthToken {
   userId    String  @map("user_id") @db.Uuid
   // magic_link, refresh, api_key
   type      String  @db.VarChar(20)
+  // tokenHash carries a partial UNIQUE constraint enforced in SQL (see
+  // 20260512100000_db_hardening_constraints) covering `type IN
+  // ('refresh', 'api_key')` only. Magic-link rows hash a 6-digit code
+  // whose 1M-value space makes cross-user hash collisions expected,
+  // so they are deliberately excluded. Prisma cannot model partial
+  // unique indexes, so the constraint lives in the migration only.
   tokenHash String  @map("token_hash")
   // 6-digit code for magic link
   code      String? @db.VarChar(6)
@@ -145,7 +151,12 @@ model AuthToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([tokenHash])
+  // The single `(token_hash)` index from the init migration was replaced
+  // with two type-partitioned indexes in
+  // 20260512100000_db_hardening_constraints: a partial UNIQUE for
+  // `type IN ('refresh', 'api_key')` and a partial non-unique for
+  // `type = 'magic_link'`. Both live in SQL only because Prisma cannot
+  // model partial indexes.
   @@index([familyId])
   @@map("auth_tokens")
 }
@@ -207,7 +218,9 @@ model Team {
   parent                 Team?                   @relation("TeamHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children               Team[]                  @relation("TeamHierarchy")
   memberships            TeamMembership[]
-  workflowStates         WorkflowState[]
+  workflowStates         WorkflowState[]         @relation("TeamWorkflowStates")
+  defaultIssueState      WorkflowState?          @relation("TeamDefaultIssueState", fields: [defaultIssueStateId], references: [id], onDelete: SetNull)
+  autoCloseState         WorkflowState?          @relation("TeamAutoCloseState", fields: [autoCloseStateId], references: [id], onDelete: SetNull)
   issues                 Issue[]
   labels                 IssueLabel[]
   projectTeams           ProjectTeam[]
@@ -258,8 +271,10 @@ model WorkflowState {
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   archivedAt DateTime? @map("archived_at") @db.Timestamptz
 
-  team   Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  issues Issue[]
+  team              Team    @relation("TeamWorkflowStates", fields: [teamId], references: [id], onDelete: Cascade)
+  issues            Issue[]
+  defaultForTeams   Team[]  @relation("TeamDefaultIssueState")
+  autoCloseForTeams Team[]  @relation("TeamAutoCloseState")
 
   @@index([teamId])
   @@index([teamId, type])
@@ -363,6 +378,12 @@ model Issue {
   @@index([teamId, priority])
   @@index([teamId, createdAt])
   @@index([updatedAt])
+  // GIN index over the previous-identifier history array so renames (e.g. a
+  // team-key change that moves ENG-123 → PLAT-123) remain searchable by any
+  // prior identifier. The hot path is `Issue.findByIdentifier` after a
+  // rename; without this, the lookup degrades to a sequential scan on the
+  // issues table.
+  @@index([previousIdentifiers], type: Gin)
   @@map("issues")
 }
 
@@ -479,6 +500,7 @@ model Project {
   updates      ProjectUpdate[]
   documents    Document[]
   initiatives  InitiativeProject[]
+  files        File[]
 
   @@unique([organizationId, slugId])
   @@index([organizationId])
@@ -808,7 +830,8 @@ model File {
   url        String?
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  issue Issue? @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  issue   Issue?   @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@index([issueId])
   @@index([projectId])

@@ -273,20 +273,9 @@ Pattern already exists for `CustomFieldType`. Each promotion is
 service-layer string literals to typed enum values; update GraphQL
 schema to expose enum types.
 
-### 2.4 Misc additive constraints
+### 2.4 Misc additive constraints — ✅ shipped
 
-- `auth_tokens.token_hash` — currently has `@@index([tokenHash])`,
-  promote to `@unique` (the field is a SHA-256 hash, collisions in
-  practice = 0).
-- `users.google_id` — add `@unique`. Prevents two accounts from
-  pointing at the same Google identity.
-- `Issue.previousIdentifiers String[]` — add `@@index([previousIdentifiers], type: Gin)`
-  for rename-history lookups.
-- `Team.defaultIssueStateId` / `Team.autoCloseStateId` — currently
-  raw UUID columns with no FK. Add `@relation` with `onDelete: SetNull`
-  pointing at `WorkflowState`.
-- `File.projectId` — currently a raw UUID. Add `project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)`.
-  (`File.issueId` already has the relation.)
+Migration `20260512100000_db_hardening_constraints`. See §6 for details.
 
 ### 2.5 SyncAction retention
 
@@ -577,6 +566,36 @@ details.
 ### Docs
 
 - This file (`4f1936c`); follow-up prune (`25f4f08`).
+
+### DB hardening — misc constraints (§2.4)
+
+Migration `20260512100000_db_hardening_constraints` closed the five
+items from §2.4. One item changed shape during implementation; the
+others landed as written.
+
+- `users.google_id` — UNIQUE constraint added. Pre-flight check
+  aborts the migration if any duplicate google_id exists.
+- `issues.previous_identifiers` — GIN index added (rename-history
+  lookups via `Issue.findByIdentifier` no longer fall back to a
+  sequential scan).
+- `teams.default_issue_state_id` / `auto_close_state_id` — FKs to
+  `workflow_states(id)` with `ON DELETE SET NULL`; orphan
+  references are nulled out in the migration before the FK is added.
+- `files.project_id` — FK to `projects(id)` with `ON DELETE SET
+  NULL`; same orphan-cleanup pattern.
+- `auth_tokens.token_hash` — **partial** UNIQUE (`WHERE type IN
+  ('refresh', 'api_key')`) rather than the blanket UNIQUE originally
+  proposed. Magic-link rows hash a 6-digit code (1M-value space) so
+  cross-user hash collisions are expected at any meaningful scale;
+  a blanket UNIQUE would randomly fail magic-link INSERTs in
+  production. The partial unique keeps the safety net for refresh /
+  api_key tokens (which hash long random strings). The legacy
+  non-unique `(token_hash)` index is replaced by two type-partitioned
+  indexes so both lookup paths stay on an index.
+
+The partial unique cannot be modeled in `schema.prisma`; comments on
+the `AuthToken.tokenHash` field document the constraint and point at
+the migration as the source of truth.
 
 ---
 
