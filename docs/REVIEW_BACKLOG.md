@@ -29,7 +29,10 @@ PR with a brainstorming pass before code.
 **File entry points:**
 - `src/server/services/sync.service.ts:73-102` — `createSyncAction`
 - 91 call sites across 19 resolver files (`createSyncAction(`) — every
-  mutation in `src/server/graphql/resolvers/*.ts`
+  mutation in `src/server/graphql/resolvers/*.ts` for a synced entity.
+  Resolvers for non-synced concerns (auth, search, user profile,
+  webhook management, raw activity log reads) intentionally skip it
+  because they don't affect the client-replicated dataset.
 
 **Problem.** The mutation hot path runs
 
@@ -112,7 +115,7 @@ Two real holes:
    snapshot taken *after* the first patch already applied, which means
    later success keeps the older patch live.
 2. **Boilerplate per call site.** Easy to forget. Easy to capture the
-   wrong field. Already inconsistent across the 15 sites.
+   wrong field. Already inconsistent across the 13 sites.
 
 **Design.** Promote the snapshot dance into the store. Two viable
 shapes:
@@ -156,10 +159,10 @@ matters more than coupling.
 - **First-touch:** Implement `applyOptimistic` on `BasePoolStore`;
   migrate `sub-issue-list.tsx:216` (a single onError site); add a
   test that two stacked optimistic patches roll back in LIFO order.
-- **Acceptance signal:** A new vitest suite `transaction-queue.test
-  .ts` that drives 3 stacked optimistic ops on the same entity, fails
-  the middle one, and asserts the post-state matches what would have
-  happened if only the first and third had run.
+- **Acceptance signal:** A new vitest suite
+  `transaction-queue.test.ts` that drives 3 stacked optimistic ops on
+  the same entity, fails the middle one, and asserts the post-state
+  matches what would have happened if only the first and third had run.
 
 ### 1.3 — Bootstrap ↔ WS race + self-echo filter
 
