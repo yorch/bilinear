@@ -31,9 +31,14 @@ test.describe('Real-time Sync', () => {
     const titleA = dialogA.getByPlaceholder(/issue title/i);
     await titleA.fill(title);
     await titleA.press('Enter');
+    // Force a synchronization point on the modal close — without this,
+    // CI can race the next getByText against the React commit that
+    // unmounts the dialog AND the team page commit that renders the
+    // optimistic row. The offline tests already use this pattern.
+    await expect(dialogA).not.toBeVisible({ timeout: 10_000 });
 
     // Verify in tab A
-    await expect(pageA.getByText(title)).toBeVisible({ timeout: 5000 });
+    await expect(pageA.getByText(title)).toBeVisible({ timeout: 10_000 });
 
     // Verify in tab B (WebSocket push or delta sync catchup). Allow a little
     // more headroom — the delta sync poll interval can cause a delay if the
@@ -64,6 +69,7 @@ test.describe('Real-time Sync', () => {
     await expect(dialogA).toBeVisible();
     await dialogA.getByPlaceholder(/issue title/i).fill(issueTitle);
     await dialogA.getByPlaceholder(/issue title/i).press('Enter');
+    await expect(dialogA).not.toBeVisible({ timeout: 10_000 });
     await expect(pageA.getByText(issueTitle)).toBeVisible({ timeout: 10_000 });
     const rowA = pageA.locator('[data-testid="issue-row"]').filter({ hasText: issueTitle }).first();
     await expect(rowA.getByText(/^ENG-\d+$/)).toBeVisible({ timeout: 10_000 });
@@ -109,6 +115,7 @@ test.describe('Real-time Sync', () => {
     await expect(dialogA).toBeVisible();
     await dialogA.getByPlaceholder(/issue title/i).fill(title);
     await dialogA.getByPlaceholder(/issue title/i).press('Enter');
+    await expect(dialogA).not.toBeVisible({ timeout: 10_000 });
     await expect(pageA.getByText(title)).toBeVisible({ timeout: 10_000 });
 
     // Wait for tab B to receive the create + for the temp '…' identifier to
@@ -153,6 +160,7 @@ test.describe('Real-time Sync', () => {
     const titleA = dialogA.getByPlaceholder(/issue title/i);
     await titleA.fill(title);
     await titleA.press('Enter');
+    await expect(dialogA).not.toBeVisible({ timeout: 10_000 });
 
     // Wait for it to land in tab A and propagate to tab B
     await expect(pageA.getByText(title)).toBeVisible({ timeout: 10000 });
