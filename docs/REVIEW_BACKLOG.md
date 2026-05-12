@@ -114,21 +114,37 @@ Two real holes:
 2. **Boilerplate per call site.** Easy to forget. Easy to capture the
    wrong field. Already inconsistent across the 15 sites.
 
-**Design.** Promote the snapshot dance into the store:
+**Design.** Promote the snapshot dance into the store. Two viable
+shapes:
 
-```ts
-// Returned closure rolls back to the entity state at the moment of call.
-const rollback = issueStore.applyOptimistic(id, patch);
-tq.enqueue(MUTATION, vars, {
-  onSuccess: rollback.commit,   // discard the snapshot
-  onError: rollback.revert,     // restore the snapshot
-});
-```
+1. **Closure-returning `applyOptimistic`.** The store returns a
+   `{ commit, revert }` pair scoped to the patch:
 
-Pool store internally maintains a per-entity stack of `(patch, before)`
-tuples. `revert()` removes its tuple from the stack and re-derives the
-entity by replaying remaining stack tuples on top of the current
-authoritative state. `commit()` pops without re-deriving.
+   ```ts
+   const rollback = issueStore.applyOptimistic(id, patch);
+   tq.enqueue(MUTATION, vars, {
+     onSuccess: rollback.commit,   // discard the snapshot
+     onError: rollback.revert,     // restore the snapshot
+   });
+   ```
+
+   Pool store internally maintains a per-entity stack of
+   `(patch, before)` tuples. `revert()` removes its tuple from the
+   stack and re-derives the entity by replaying remaining stack
+   tuples on top of the current authoritative state. `commit()` pops
+   without re-deriving. Pro: idiomatic and explicit; pairs naturally
+   with the queue's `onSuccess`/`onError` callbacks. Con: callers
+   must remember to wire both ends.
+
+2. **Queue-owned rollback via patch handle.** `tq.enqueue` accepts an
+   `optimistic: { store, id, patch }` field and owns the lifecycle
+   end-to-end: pushes onto the store's stack, commits or reverts on
+   resolution. Pro: removes the 13-site boilerplate entirely. Con:
+   couples `TransactionQueue` to the store API; harder to use from
+   non-component code paths (e.g. tests, future server-side replay).
+
+Option 1 is the recommended path unless the boilerplate-elimination
+matters more than coupling.
 
 - **Effort:** Large. New API on the pool base store + 13-site sweep +
   concurrency tests for stacked ops.
@@ -172,13 +188,30 @@ authoritative state. `commit()` pops without re-deriving.
    patches.
 
 **Design.**
-- Race 1: open the WS *before* bootstrap fetches but **buffer**
-  incoming actions until the bootstrap response is fully applied. Then
-  drain the buffer keeping only entries with `id > bootstrapLastSyncId`.
-- Race 2: client generates a `txId` in `TransactionQueue.enqueue`,
-  threads it through the GraphQL mutation; server stores it on the
-  resulting `SyncAction` (new column) and echoes it. Client filters
-  WS messages by `txId` and skips its own.
+
+Race 1 — two options:
+
+1. **Open WS first, buffer until bootstrap drains.** Connect before
+   the `/api/sync/bootstrap` fetch, buffer incoming actions in
+   memory, then drain the buffer keeping only entries with
+   `id > bootstrapLastSyncId`. Pro: zero schema change. Con: requires
+   careful ordering in `SyncManager` so the WS handler doesn't apply
+   buffered actions before the bootstrap rows land in the stores.
+2. **Bootstrap-then-delta with no WS buffering.** Fetch bootstrap,
+   then immediately fire a delta from `bootstrapLastSyncId` before
+   opening the WS. Anything broadcast during the gap re-arrives via
+   delta. Pro: simpler control flow; reuses the delta path that
+   already exists. Con: extra round-trip on every (re)connect.
+
+Race 2 — `txId` echo:
+- Client generates a `txId` in `TransactionQueue.enqueue`, threads it
+  through the GraphQL mutation; server stores it on the resulting
+  `SyncAction` (new column) and echoes it. Client filters WS messages
+  by `txId` and skips its own.
+
+Option 1 for race 1 is recommended (lower per-connect cost), but
+option 2 is the cheaper migration if the buffering refactor proves
+hard to bound.
 
 - **Effort:** Medium-Large.
 - **Risk:** High. This is the heart of the sync model.
@@ -285,13 +318,6 @@ schema to expose enum types.
 
 Migration `20260512100000_db_hardening_constraints`. See §6 for details.
 
-### 2.5 SyncAction retention
-
-Not in this PR — flag for follow-up. Once volume warrants, partition
-`sync_actions` by `created_at` via `pg_partman` and add a daily job
-that drops partitions older than ~30d. Delta sync won't fetch them
-(clients past 30d offline get a full bootstrap regardless).
-
 - **Effort:** Medium (one migration, schema edits across ~10 models).
 - **Risk:** Low. Migration is additive; no row rewrites except enum
   type swaps which run as `USING role::"OrgRole"`-style casts.
@@ -306,6 +332,26 @@ that drops partitions older than ~30d. Delta sync won't fetch them
   unchanged; e2e suite still passes; benchmark numbers in PR
   description show ≥2× improvement on the inbox-unread query for an
   org with ≥10k notifications.
+
+### 2.6 SyncAction retention (deferred follow-up, not in the hardening PR)
+
+Once volume warrants, partition `sync_actions` by `created_at` via
+`pg_partman` and add a daily job that drops partitions older than
+~30d. Delta sync won't fetch them (clients past 30d offline get a
+full bootstrap regardless).
+
+- **Effort:** Medium.
+- **Risk:** Medium — partitioning swap requires careful coordination
+  with the BIGSERIAL `id` sequence and the `committed_at` watermark
+  query plan.
+- **Why deferred:** No measurable pressure on `sync_actions` size
+  yet; revisit when the table crosses ~10M rows or delta-page p99 on
+  catch-up reads regresses.
+- **First-touch:** Capture current row count + table size + p99 of
+  the delta query on prod; only proceed if the numbers warrant.
+- **Acceptance signal:** Delta-page p99 unchanged or improved post
+  partition; a 30-day-old row is no longer queryable; full bootstrap
+  still hydrates correctly for a client past the retention window.
 
 ---
 
@@ -373,6 +419,13 @@ handling.
 - **Effort:** Medium.
 - **Risk:** Medium. Latency-sensitive UX (drag-drop) will see ~25ms
   more median delivery time.
+- **First-touch:** Wire the 50ms coalesce window in
+  `broadcastToOrgAll`; verify the client already handles `sync: [...]`
+  arrays in `sync-manager.ts:1022` handler.
+- **Acceptance signal:** A 1000-connection load test (Artillery or
+  k6) shows event-loop p99 unchanged at 10 mut/s; a deliberately-slow
+  client (paused tab) gets disconnected with the "slow client" code
+  rather than back-pressuring the org; drag-drop e2e spec still passes.
 
 ### 3.3 Smaller perf wins
 
@@ -382,6 +435,12 @@ handling.
 | `IssueService.maybeCloseParent` / `maybeCloseChildren` skip team read when neither auto-close flag is set | `src/server/services/issue.service.ts:289-295, 335-438` | -5–30ms on every `issueUpdate` with state change |
 | MobX secondary indexes (`Map<teamId, Set<id>>`) on base pool store | `src/stores/issue-store.ts:18-29, 52-79` | Eliminates `Array.from(pool.values()).filter` in observer components — material on 10k-issue stores |
 | TipTap further code-split inside the lazy editor module | `src/components/editor/tiptap-editor.tsx` | Probably a no-op now that the editor is dynamically imported; verify with bundle inspector before doing more work |
+
+- **Acceptance signal:** Each item ships with a before/after measurement
+  in the PR description matching its "Estimated impact" column —
+  bundle-inspector diff for TipTap, microbenchmark on the
+  `Array.from(...).filter` filter selector for the MobX indexes, etc.
+  No item lands without numbers.
 
 ---
 
@@ -416,6 +475,12 @@ work *and* perceived UI responsiveness.
 
 **Effort:** Small per component, ~30min × 6 components.
 
+**Acceptance signal:** axe-core (or Playwright `@axe-core/playwright`)
+sweep on `/team/[key]` and `/issue/[id]` passes with zero combobox-
+related violations; a keyboard-only walkthrough opens each select,
+filters with type-ahead, selects an option, and closes with Esc
+without touching the mouse.
+
 ---
 
 ## 5. Test coverage gaps
@@ -437,6 +502,10 @@ Listed in priority order.
 - `TEST_AUTH_CODE` only honored when `NODE_ENV === 'test'` (boundary
   test in `auth.service.test.ts`).
 
+**Acceptance signal:** `auth.service.test.ts` covers the four gaps
+above with deterministic assertions; the `NODE_ENV !== 'test'` case
+proves `TEST_AUTH_CODE` is rejected.
+
 ### 5.2 `sync-manager.ts` (1078 LOC, 0 tests)
 
 Approach: extract the pure dispatch portion of `applyActions` into a
@@ -449,6 +518,10 @@ no `db` / `fetch` / `WebSocket` side effects. Then unit-test:
 Integration test under `fake-indexeddb` for the bootstrap → load →
 delta sequence.
 
+**Acceptance signal:** `apply-actions.test.ts` reaches ≥80% line
+coverage on the extracted module; the integration test catches an
+intentionally-introduced bug (e.g. swap I/U dispatch) by failing.
+
 ### 5.3 `transaction-queue.ts` (240 LOC, 0 tests)
 
 Pairs with §1.2. Test cases under `vi.useFakeTimers`:
@@ -459,6 +532,15 @@ Pairs with §1.2. Test cases under `vi.useFakeTimers`:
 - Two enqueued mutations process sequentially (the second waits for
   the first to resolve).
 - Queue drains FIFO when both succeed.
+- `hydrate()` skips rows whose `(orgId, userId)` don't match the
+  active session and deletes them.
+- `setActiveSession` / `clearActiveSession` boundary: an enqueue
+  during the cleared window logs a warning and stamps empty IDs.
+
+**Acceptance signal:** `transaction-queue.test.ts` covers all 8
+cases above with `vi.useFakeTimers` driving the retry schedule; a
+fault-injected `gql()` rejection produces exactly the documented
+retry pattern.
 
 ### 5.4 WebSocket handshake + delivery
 
@@ -471,6 +553,13 @@ to import). Cases:
 - Org A's broadcast doesn't reach Org B's connections.
 - `resync` hint after Redis reconnect (commit `5b9c22e`) — exercise
   the reconnect path with a flaky Redis mock.
+- `ws-ticket` (2026-05-12) — a ticket older than 60s is rejected;
+  reused ticket is rejected on second handshake.
+
+**Acceptance signal:** `ws.test.ts` boots a real `ws` server bound
+to ephemeral ports; each case asserts the expected close code or
+delivery; the cross-org isolation case is the gate — without it,
+the test suite shouldn't ship.
 
 ### 5.5 Resolver auth-guard sweep
 
@@ -489,6 +578,10 @@ testAuthGuard({
 Run the table for every mutation. Catches drift between service-layer
 typed errors and the GraphQL `extensions.code` discriminator.
 
+**Acceptance signal:** Every mutation in the 25 resolver files has at
+least one `testAuthGuard` row; deliberately removing a `requireAuth`
+call in any resolver fails the suite.
+
 ### 5.6 MobX store coverage
 
 Currently: 2 of 17 store files have tests. Build a shared
@@ -503,6 +596,10 @@ Currently: 2 of 17 store files have tests. Build a shared
 
 Run the helper across all 17 stores.
 
+**Acceptance signal:** All 17 stores import the shared helper; the
+suite catches an intentionally-broken `applySyncAction('U')` (e.g.
+overwrite instead of merge) by failing.
+
 ### 5.7 E2E gaps
 
 | Spec | Status | What to add |
@@ -513,6 +610,11 @@ Run the helper across all 17 stores.
 | `tests/e2e/optimistic-rollback.spec.ts` | partial (162 LOC) | audit coverage against the 13 `tq.enqueue` sites; add a stacked-ops case (pairs with §1.2) |
 | `tests/e2e/multi-user.spec.ts` | missing | two browser contexts in different orgs; org A's actions invisible to org B |
 | `tests/e2e/magic-link-signup.spec.ts` | missing | full magic-link signup flow (vs. existing `loginAs` shortcut) |
+
+**Acceptance signal:** Each row's `Status` column reads "complete"
+in a future revision of this doc, and the e2e suite covers a
+realistic regression path for the listed scenario (assert the
+post-state in the DB or store, not just visual presence).
 
 ---
 
