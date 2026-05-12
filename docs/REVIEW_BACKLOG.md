@@ -402,7 +402,7 @@ it for issue *list* queries but not for bootstrap.
 
 **File entry points:**
 - `src/server/ws/connection-manager.ts:42-52` — per-client `ws.send`
-- `src/server/ws/index.ts:50-55` — Redis `message` → broadcast
+- `src/server/ws/index.ts:104-108` — Redis `message` → broadcast
 
 **Problem.** `broadcastToOrgAll` calls `ws.send` synchronously per
 client per SyncAction. No batching, no `bufferedAmount` checks. At
@@ -434,8 +434,8 @@ handling.
 
 | Item | File / line | Estimated impact |
 | --- | --- | --- |
-| Native `ws.ping()` + pong-driven terminate timer (vs. app-level JSON pings) | `src/server/ws/index.ts:106-121` | Closes dead connections that survived TCP reset |
-| `IssueService.maybeCloseParent` / `maybeCloseChildren` skip team read when neither auto-close flag is set | `src/server/services/issue.service.ts:289-295, 335-438` | -5–30ms on every `issueUpdate` with state change |
+| Native `ws.ping()` + pong-driven terminate timer (vs. app-level JSON pings) | `src/server/ws/index.ts:187-215` | Closes dead connections that survived TCP reset |
+| `IssueService.maybeCloseParentTx` / `maybeCloseChildrenTx` skip the team-flag read when the issue's state change can't trigger an auto-close | `src/server/services/issue.service.ts:362-378, 436-547` | -5–30ms on every `issueUpdate` with state change |
 | MobX secondary indexes (`Map<teamId, Set<id>>`) on base pool store | `src/stores/issue-store.ts:18-29, 52-79` | Eliminates `Array.from(pool.values()).filter` in observer components — material on 10k-issue stores |
 | TipTap further code-split inside the lazy editor module | `src/components/editor/tiptap-editor.tsx` | Probably a no-op now that the editor is dynamically imported; verify with bundle inspector before doing more work |
 
@@ -748,8 +748,16 @@ the migration as the source of truth.
 
 ### Tests
 
-- 343 → 380. New suites for rate-limit, file IDOR, delta pagination,
-  OAuth state JWT, OrganizationService (`71e7e04`).
+- Initial unit-test push: 343 → 380. New suites for rate-limit, file
+  IDOR, delta pagination, OAuth state JWT, OrganizationService
+  (`71e7e04`); refresh-token family rotation + reuse detection
+  (`e826638`).
+- E2E expansion (`3d68c44` → `485de42` → `44d7240`): 35 e2e specs on
+  main covering issue CRUD, drag-drop adjacent flows, offline,
+  optimistic rollback, comments, search, permissions, docs,
+  custom fields, triage. The §5.7 table tracks the still-open gaps
+  (drag-drop, multi-user, magic-link signup; partial coverage on
+  issue-crud, offline, optimistic-rollback).
 
 ### Docs
 
