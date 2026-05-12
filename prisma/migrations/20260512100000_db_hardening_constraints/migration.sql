@@ -87,6 +87,14 @@ ALTER TABLE "teams"
     REFERENCES "workflow_states"("id")
     ON DELETE SET NULL ON UPDATE CASCADE;
 
+-- Index the referencing columns so the FK's ON DELETE SET NULL check
+-- doesn't seq-scan `teams` whenever a workflow_state is deleted.
+CREATE INDEX "teams_default_issue_state_id_idx"
+  ON "teams"("default_issue_state_id");
+
+CREATE INDEX "teams_auto_close_state_id_idx"
+  ON "teams"("auto_close_state_id");
+
 -- ---------------------------------------------------------------------------
 -- 4. files.project_id FK
 -- ---------------------------------------------------------------------------

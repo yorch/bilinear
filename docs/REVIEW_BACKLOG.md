@@ -575,12 +575,18 @@ others landed as written.
 
 - `users.google_id` — UNIQUE constraint added. Pre-flight check
   aborts the migration if any duplicate google_id exists.
-- `issues.previous_identifiers` — GIN index added (rename-history
-  lookups via `Issue.findByIdentifier` no longer fall back to a
-  sequential scan).
+- `issues.previous_identifiers` — GIN index added. Not yet exercised
+  — `IssueService.findByIdentifier` currently matches only on the
+  live `identifier` column. The index ships ahead of a planned change
+  that adds a `previousIdentifiers` fallback so renamed issues remain
+  reachable by their old key; cheap to maintain in the meantime since
+  the column is only written on team-key renames.
 - `teams.default_issue_state_id` / `auto_close_state_id` — FKs to
-  `workflow_states(id)` with `ON DELETE SET NULL`; orphan
-  references are nulled out in the migration before the FK is added.
+  `workflow_states(id)` with `ON DELETE SET NULL`; orphan references
+  are nulled out in the migration before the FK is added. Both
+  referencing columns also get a plain b-tree index so the FK's
+  `ON DELETE SET NULL` check doesn't seq-scan `teams` whenever a
+  workflow state is deleted.
 - `files.project_id` — FK to `projects(id)` with `ON DELETE SET
   NULL`; same orphan-cleanup pattern.
 - `auth_tokens.token_hash` — **partial** UNIQUE (`WHERE type =

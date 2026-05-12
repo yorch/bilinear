@@ -236,6 +236,12 @@ model Team {
   @@index([organizationId, key])
   @@index([organizationId])
   @@index([parentId])
+  // Index the FK referencing columns so deletes/updates of a WorkflowState
+  // don't seq-scan teams to find dependents. Without these, PG falls back
+  // to a full table scan on every workflow_states delete (which the FK's
+  // ON DELETE SET NULL has to evaluate).
+  @@index([defaultIssueStateId])
+  @@index([autoCloseStateId])
   @@map("teams")
 }
 
@@ -378,11 +384,13 @@ model Issue {
   @@index([teamId, priority])
   @@index([teamId, createdAt])
   @@index([updatedAt])
-  // GIN index over the previous-identifier history array so renames (e.g. a
-  // team-key change that moves ENG-123 → PLAT-123) remain searchable by any
-  // prior identifier. The hot path is `Issue.findByIdentifier` after a
-  // rename; without this, the lookup degrades to a sequential scan on the
-  // issues table.
+  // GIN index over the previous-identifier history array. Currently
+  // unused — `IssueService.findByIdentifier` only matches on the live
+  // `identifier` column. The index ships ahead of a planned change
+  // that will fall back to a `previousIdentifiers` lookup so renamed
+  // issues stay reachable by their old key (e.g. a team-key change
+  // moving ENG-123 → PLAT-123). Cheap to maintain in the meantime;
+  // writes to `previousIdentifiers` happen only on team-key renames.
   @@index([previousIdentifiers], type: Gin)
   @@map("issues")
 }
