@@ -27,9 +27,12 @@ PR with a brainstorming pass before code.
 ### 1.1 — Atomic `SyncAction` + business write (#18)
 
 **File entry points:**
-- `src/server/services/sync.service.ts:14-44` — `createSyncAction`
-- 73 call sites across 18 resolver files (`createSyncAction(`) — every
-  mutation in `src/server/graphql/resolvers/*.ts`
+- `src/server/services/sync.service.ts:73-102` — `createSyncAction`
+- 91 call sites across 19 resolver files (`createSyncAction(`) — every
+  mutation in `src/server/graphql/resolvers/*.ts` for a synced entity.
+  Resolvers for non-synced concerns (auth, search, user profile,
+  webhook management, raw activity log reads) intentionally skip it
+  because they don't affect the client-replicated dataset.
 
 **Problem.** The mutation hot path runs
 
@@ -55,7 +58,7 @@ SyncAction itself is missing, delta sync has nothing to ship.
    `createSyncAction(orgId, action, modelName, modelId, data, tx?)`
    overload accepting the Prisma transaction client. Callers wrap the
    business write + sync write in `prisma.$transaction(async tx => ...)`.
-   Pro: bullet-proof atomicity. Con: 73 call sites; some mutations
+   Pro: bullet-proof atomicity. Con: 91 call sites; some mutations
    already have nested `$transaction` (Cycle rollover, Project create)
    so we'd need careful nesting.
 2. **Outbox pattern.** Keep mutations as-is, but write a `sync_outbox`
@@ -82,14 +85,17 @@ SyncAction itself is missing, delta sync has nothing to ship.
 ### 1.2 — TransactionQueue rollback (LIFO + stacking) (#21)
 
 **File entry points:**
-- `src/lib/transaction-queue.ts` (84 LOC, 0 tests)
-- 15 call sites: `src/components/issues/sub-issue-list.tsx:240`,
-  `src/components/issues/relations-section.tsx:133,162`,
-  `src/components/cycles/cycle-detail-view.tsx:381,481`,
-  `src/app/(workspace)/[workspace]/team/[key]/page.tsx:223,326,349`,
-  `src/app/(workspace)/[workspace]/team/[key]/backlog/page.tsx:344,403`,
-  + a few more in `tests/`.
-- `src/stores/issue-store.ts` (and other pool stores) — `optimisticUpdate`
+- `src/lib/transaction-queue.ts` (240 LOC, 0 tests; carries the
+  module-scoped singleton + IndexedDB persistence + session hydrate
+  flow added in the 2026-05-12 hardening pass)
+- 13 `.enqueue(` call sites in components/app:
+  `src/components/issues/sub-issue-list.tsx:216`,
+  `src/components/issues/relations-section.tsx:125,151`,
+  `src/components/cycles/cycle-detail-view.tsx:348,442`,
+  `src/components/documents/document-editor.tsx:42,66`,
+  `src/app/(workspace)/[workspace]/team/[key]/page.tsx:226,297,325,348`,
+  `src/app/(workspace)/[workspace]/team/[key]/backlog/page.tsx:324,382`.
+- `src/stores/issue-store.ts:99` (and other pool stores) — `optimisticUpdate`
 
 **Problem.** Today every call site captures a snapshot manually:
 
@@ -109,25 +115,41 @@ Two real holes:
    snapshot taken *after* the first patch already applied, which means
    later success keeps the older patch live.
 2. **Boilerplate per call site.** Easy to forget. Easy to capture the
-   wrong field. Already inconsistent across the 15 sites.
+   wrong field. Already inconsistent across the 13 sites.
 
-**Design.** Promote the snapshot dance into the store:
+**Design.** Promote the snapshot dance into the store. Two viable
+shapes:
 
-```ts
-// Returned closure rolls back to the entity state at the moment of call.
-const rollback = issueStore.applyOptimistic(id, patch);
-tq.enqueue(MUTATION, vars, {
-  onSuccess: rollback.commit,   // discard the snapshot
-  onError: rollback.revert,     // restore the snapshot
-});
-```
+1. **Closure-returning `applyOptimistic`.** The store returns a
+   `{ commit, revert }` pair scoped to the patch:
 
-Pool store internally maintains a per-entity stack of `(patch, before)`
-tuples. `revert()` removes its tuple from the stack and re-derives the
-entity by replaying remaining stack tuples on top of the current
-authoritative state. `commit()` pops without re-deriving.
+   ```ts
+   const rollback = issueStore.applyOptimistic(id, patch);
+   tq.enqueue(MUTATION, vars, {
+     onSuccess: rollback.commit,   // discard the snapshot
+     onError: rollback.revert,     // restore the snapshot
+   });
+   ```
 
-- **Effort:** Large. New API on the pool base store + 15-site sweep +
+   Pool store internally maintains a per-entity stack of
+   `(patch, before)` tuples. `revert()` removes its tuple from the
+   stack and re-derives the entity by replaying remaining stack
+   tuples on top of the current authoritative state. `commit()` pops
+   without re-deriving. Pro: idiomatic and explicit; pairs naturally
+   with the queue's `onSuccess`/`onError` callbacks. Con: callers
+   must remember to wire both ends.
+
+2. **Queue-owned rollback via patch handle.** `tq.enqueue` accepts an
+   `optimistic: { store, id, patch }` field and owns the lifecycle
+   end-to-end: pushes onto the store's stack, commits or reverts on
+   resolution. Pro: removes the 13-site boilerplate entirely. Con:
+   couples `TransactionQueue` to the store API; harder to use from
+   non-component code paths (e.g. tests, future server-side replay).
+
+Option 1 is the recommended path unless the boilerplate-elimination
+matters more than coupling.
+
+- **Effort:** Large. New API on the pool base store + 13-site sweep +
   concurrency tests for stacked ops.
 - **Risk:** High. Optimistic UI semantics are subtle; need fake-timer
   tests that simulate two enqueued mutations failing in different
@@ -135,22 +157,22 @@ authoritative state. `commit()` pops without re-deriving.
 - **Why deferred:** Concurrent-ops design needs to be locked in (and
   agreed on) before code.
 - **First-touch:** Implement `applyOptimistic` on `BasePoolStore`;
-  migrate `sub-issue-list.tsx:240` (a single onError site); add a
+  migrate `sub-issue-list.tsx:216` (a single onError site); add a
   test that two stacked optimistic patches roll back in LIFO order.
-- **Acceptance signal:** A new vitest suite `transaction-queue.test
-  .ts` that drives 3 stacked optimistic ops on the same entity, fails
-  the middle one, and asserts the post-state matches what would have
-  happened if only the first and third had run.
+- **Acceptance signal:** A new vitest suite
+  `transaction-queue.test.ts` that drives 3 stacked optimistic ops on
+  the same entity, fails the middle one, and asserts the post-state
+  matches what would have happened if only the first and third had run.
 
 ### 1.3 — Bootstrap ↔ WS race + self-echo filter
 
 **File entry points:**
-- `src/lib/sync-manager.ts:223-468` — `fullBootstrap`
-- `src/lib/sync-manager.ts:947-957` — WS message handler (after
+- `src/lib/sync-manager.ts:271-509` — `fullBootstrap`
+- `src/lib/sync-manager.ts:1022` — WS message handler (after
   `5b9c22e` it now handles `'resync'` too)
-- `src/server/services/sync.service.ts:14-44` — where the SyncAction
+- `src/server/services/sync.service.ts:73-102` — where the SyncAction
   is created (would need a `txId` echo)
-- `src/lib/transaction-queue.ts:24-41` — where a client `txId` would
+- `src/lib/transaction-queue.ts:59-84` — where a client `txId` would
   be generated
 
 **Problem.** Two distinct races:
@@ -169,13 +191,30 @@ authoritative state. `commit()` pops without re-deriving.
    patches.
 
 **Design.**
-- Race 1: open the WS *before* bootstrap fetches but **buffer**
-  incoming actions until the bootstrap response is fully applied. Then
-  drain the buffer keeping only entries with `id > bootstrapLastSyncId`.
-- Race 2: client generates a `txId` in `TransactionQueue.enqueue`,
-  threads it through the GraphQL mutation; server stores it on the
-  resulting `SyncAction` (new column) and echoes it. Client filters
-  WS messages by `txId` and skips its own.
+
+Race 1 — two options:
+
+1. **Open WS first, buffer until bootstrap drains.** Connect before
+   the `/api/sync/bootstrap` fetch, buffer incoming actions in
+   memory, then drain the buffer keeping only entries with
+   `id > bootstrapLastSyncId`. Pro: zero schema change. Con: requires
+   careful ordering in `SyncManager` so the WS handler doesn't apply
+   buffered actions before the bootstrap rows land in the stores.
+2. **Bootstrap-then-delta with no WS buffering.** Fetch bootstrap,
+   then immediately fire a delta from `bootstrapLastSyncId` before
+   opening the WS. Anything broadcast during the gap re-arrives via
+   delta. Pro: simpler control flow; reuses the delta path that
+   already exists. Con: extra round-trip on every (re)connect.
+
+Race 2 — `txId` echo:
+- Client generates a `txId` in `TransactionQueue.enqueue`, threads it
+  through the GraphQL mutation; server stores it on the resulting
+  `SyncAction` (new column) and echoes it. Client filters WS messages
+  by `txId` and skips its own.
+
+Option 1 for race 1 is recommended (lower per-connect cost), but
+option 2 is the cheaper migration if the buffering refactor proves
+hard to bound.
 
 - **Effort:** Medium-Large.
 - **Risk:** High. This is the heart of the sync model.
@@ -185,7 +224,9 @@ authoritative state. `commit()` pops without re-deriving.
 - **First-touch:** Schema migration adding `tx_id text NULL` to
   `sync_actions`; thread it through `createSyncAction`; smallest
   client change is to skip echoes whose `txId` matches a recently
-  enqueued tx (kept in a small ring buffer for ~30s).
+  enqueued tx (kept in a small ring buffer for ~30s). The
+  `committed_at` column added in the 2026-05-12 hardening pass
+  (`schema.prisma:411-422`) is a precedent for the migration shape.
 - **Acceptance signal:** Manual flow — drag an issue card; observe
   network tab shows `issueUpdate` mutation, then a WS message — and
   the issue position doesn't snap-back during the brief moment
@@ -194,17 +235,18 @@ authoritative state. `commit()` pops without re-deriving.
 ### 1.4 — Optimistic placeholder collision
 
 **File entry points:**
-- `src/stores/issue-store.ts:120-134` — `upsertMany` placeholder
-  matching
+- `src/stores/issue-store.ts:130-148` — `applySyncAction` placeholder
+  reconciliation
 - `src/components/issues/create-issue-modal.tsx` — issue creation
   optimistic write site
 
 **Problem.** When a create-issue mutation is enqueued, the client
-inserts a placeholder Issue with a synthesized id. Later, when the
-server's `IssueCreate` SyncAction lands over WS, the store de-dups by
-matching `(title, teamId)` — if the placeholder matches, swap real id
-for synthetic. Two rapid creates with identical title+team collide:
-the first placeholder gets matched against the second's server echo.
+inserts a placeholder Issue with an "optimistic identifier" (ends with
+`…`, e.g. `ENG-…`). Later, when the server's `IssueCreate` SyncAction
+lands over WS, the store de-dups by walking pool entries whose
+identifier is still optimistic and matching `(title, teamId)`. Two
+rapid creates with identical title+team collide: the first placeholder
+gets matched against the second's server echo.
 
 **Design.** Pass a client-issued `clientId` (UUID) through the
 `issueCreate` mutation. Server stores it transiently (or just echoes
@@ -214,9 +256,11 @@ by `clientId` instead of `(title, teamId)`. Couples nicely with the
 
 - **Effort:** Small-Medium.
 - **Risk:** Low.
+- **Why deferred:** Wants to land alongside or after §1.3's `txId`
+  work so we add a single correlation id, not two.
 - **First-touch:** Add `clientId` field to `IssueCreateInput`; have
   `IssueService.create` echo it back in the SyncAction `data` blob;
-  update `issue-store.ts:upsertMany` to prefer `clientId`-keyed
+  update `issue-store.ts:applySyncAction` to prefer `clientId`-keyed
   matching.
 - **Acceptance signal:** New e2e test creates two issues with
   identical titles in <100ms; both end up in the list with their
@@ -277,13 +321,6 @@ schema to expose enum types.
 
 Migration `20260512100000_db_hardening_constraints`. See §6 for details.
 
-### 2.5 SyncAction retention
-
-Not in this PR — flag for follow-up. Once volume warrants, partition
-`sync_actions` by `created_at` via `pg_partman` and add a daily job
-that drops partitions older than ~30d. Delta sync won't fetch them
-(clients past 30d offline get a full bootstrap regardless).
-
 - **Effort:** Medium (one migration, schema edits across ~10 models).
 - **Risk:** Low. Migration is additive; no row rewrites except enum
   type swaps which run as `USING role::"OrgRole"`-style casts.
@@ -299,6 +336,26 @@ that drops partitions older than ~30d. Delta sync won't fetch them
   description show ≥2× improvement on the inbox-unread query for an
   org with ≥10k notifications.
 
+### 2.6 SyncAction retention (deferred follow-up, not in the hardening PR)
+
+Once volume warrants, partition `sync_actions` by `created_at` via
+`pg_partman` and add a daily job that drops partitions older than
+~30d. Delta sync won't fetch them (clients past 30d offline get a
+full bootstrap regardless).
+
+- **Effort:** Medium.
+- **Risk:** Medium — partitioning swap requires careful coordination
+  with the BIGSERIAL `id` sequence and the `committed_at` watermark
+  query plan.
+- **Why deferred:** No measurable pressure on `sync_actions` size
+  yet; revisit when the table crosses ~10M rows or delta-page p99 on
+  catch-up reads regresses.
+- **First-touch:** Capture current row count + table size + p99 of
+  the delta query on prod; only proceed if the numbers warrant.
+- **Acceptance signal:** Delta-page p99 unchanged or improved post
+  partition; a 30-day-old row is no longer queryable; full bootstrap
+  still hydrates correctly for a client past the retention window.
+
 ---
 
 ## 3. Performance — bigger items
@@ -306,10 +363,10 @@ that drops partitions older than ~30d. Delta sync won't fetch them
 ### 3.1 Bootstrap pagination + streaming
 
 **File entry points:**
-- `src/server/services/sync.service.ts:43-132` — `getBootstrapData`
-- `src/app/api/sync/bootstrap/route.ts:38-95` — NDJSON serializer
+- `src/server/services/sync.service.ts:104` — `getBootstrapData`
+- `src/app/api/sync/bootstrap/route.ts` (~108 LOC) — NDJSON serializer
   buffered into `lines.join('\n')`
-- `src/lib/sync-manager.ts:218-410` — `fullBootstrap` reader
+- `src/lib/sync-manager.ts:271-509` — `fullBootstrap` reader
 
 **Problem.** Bootstrap returns every issue / label / cycle / etc. for
 the org in a single buffered NDJSON response. For a 10k-issue org this
@@ -345,7 +402,7 @@ it for issue *list* queries but not for bootstrap.
 
 **File entry points:**
 - `src/server/ws/connection-manager.ts:42-52` — per-client `ws.send`
-- `src/server/ws/index.ts:50-55` — Redis `message` → broadcast
+- `src/server/ws/index.ts:104-108` — Redis `message` → broadcast
 
 **Problem.** `broadcastToOrgAll` calls `ws.send` synchronously per
 client per SyncAction. No batching, no `bufferedAmount` checks. At
@@ -365,15 +422,28 @@ handling.
 - **Effort:** Medium.
 - **Risk:** Medium. Latency-sensitive UX (drag-drop) will see ~25ms
   more median delivery time.
+- **First-touch:** Wire the 50ms coalesce window in
+  `broadcastToOrgAll`; verify the client already handles `sync: [...]`
+  arrays in `sync-manager.ts:1022` handler.
+- **Acceptance signal:** A 1000-connection load test (Artillery or
+  k6) shows event-loop p99 unchanged at 10 mut/s; a deliberately-slow
+  client (paused tab) gets disconnected with the "slow client" code
+  rather than back-pressuring the org; drag-drop e2e spec still passes.
 
 ### 3.3 Smaller perf wins
 
 | Item | File / line | Estimated impact |
 | --- | --- | --- |
-| Native `ws.ping()` + pong-driven terminate timer (vs. app-level JSON pings) | `src/server/ws/index.ts:106-121` | Closes dead connections that survived TCP reset |
-| `IssueService.maybeCloseParent` / `maybeCloseChildren` skip team read when neither auto-close flag is set | `src/server/services/issue.service.ts:289-295, 335-438` | -5–30ms on every `issueUpdate` with state change |
+| Native `ws.ping()` + pong-driven terminate timer (vs. app-level JSON pings) | `src/server/ws/index.ts:187-215` | Closes dead connections that survived TCP reset |
+| `IssueService.maybeCloseParentTx` / `maybeCloseChildrenTx` skip the team-flag read when the issue's state change can't trigger an auto-close | `src/server/services/issue.service.ts:362-378, 436-547` | -5–30ms on every `issueUpdate` with state change |
 | MobX secondary indexes (`Map<teamId, Set<id>>`) on base pool store | `src/stores/issue-store.ts:18-29, 52-79` | Eliminates `Array.from(pool.values()).filter` in observer components — material on 10k-issue stores |
 | TipTap further code-split inside the lazy editor module | `src/components/editor/tiptap-editor.tsx` | Probably a no-op now that the editor is dynamically imported; verify with bundle inspector before doing more work |
+
+- **Acceptance signal:** Each item ships with a before/after measurement
+  in the PR description matching its "Estimated impact" column —
+  bundle-inspector diff for TipTap, microbenchmark on the
+  `Array.from(...).filter` filter selector for the MobX indexes, etc.
+  No item lands without numbers.
 
 ---
 
@@ -408,6 +478,12 @@ work *and* perceived UI responsiveness.
 
 **Effort:** Small per component, ~30min × 6 components.
 
+**Acceptance signal:** axe-core (or Playwright `@axe-core/playwright`)
+sweep on `/team/[key]` and `/issue/[id]` passes with zero combobox-
+related violations; a keyboard-only walkthrough opens each select,
+filters with type-ahead, selects an option, and closes with Esc
+without touching the mouse.
+
 ---
 
 ## 5. Test coverage gaps
@@ -429,7 +505,11 @@ Listed in priority order.
 - `TEST_AUTH_CODE` only honored when `NODE_ENV === 'test'` (boundary
   test in `auth.service.test.ts`).
 
-### 5.2 `sync-manager.ts` (950 LOC, 0 tests)
+**Acceptance signal:** `auth.service.test.ts` covers the four gaps
+above with deterministic assertions; the `NODE_ENV !== 'test'` case
+proves `TEST_AUTH_CODE` is rejected.
+
+### 5.2 `sync-manager.ts` (1078 LOC, 0 tests)
 
 Approach: extract the pure dispatch portion of `applyActions` into a
 new `apply-actions.ts` helper that takes `(actions, stores)` and has
@@ -441,7 +521,11 @@ no `db` / `fetch` / `WebSocket` side effects. Then unit-test:
 Integration test under `fake-indexeddb` for the bootstrap → load →
 delta sequence.
 
-### 5.3 `transaction-queue.ts` (84 LOC, 0 tests)
+**Acceptance signal:** `apply-actions.test.ts` reaches ≥80% line
+coverage on the extracted module; the integration test catches an
+intentionally-introduced bug (e.g. swap I/U dispatch) by failing.
+
+### 5.3 `transaction-queue.ts` (240 LOC, 0 tests)
 
 Pairs with §1.2. Test cases under `vi.useFakeTimers`:
 - One enqueued tx → mutation fires once → `onSuccess` called.
@@ -451,6 +535,15 @@ Pairs with §1.2. Test cases under `vi.useFakeTimers`:
 - Two enqueued mutations process sequentially (the second waits for
   the first to resolve).
 - Queue drains FIFO when both succeed.
+- `hydrate()` skips rows whose `(orgId, userId)` don't match the
+  active session and deletes them.
+- `setActiveSession` / `clearActiveSession` boundary: an enqueue
+  during the cleared window logs a warning and stamps empty IDs.
+
+**Acceptance signal:** `transaction-queue.test.ts` covers all 8
+cases above with `vi.useFakeTimers` driving the retry schedule; a
+fault-injected `gql()` rejection produces exactly the documented
+retry pattern.
 
 ### 5.4 WebSocket handshake + delivery
 
@@ -463,10 +556,17 @@ to import). Cases:
 - Org A's broadcast doesn't reach Org B's connections.
 - `resync` hint after Redis reconnect (commit `5b9c22e`) — exercise
   the reconnect path with a flaky Redis mock.
+- `ws-ticket` (2026-05-12) — a ticket older than 60s is rejected;
+  reused ticket is rejected on second handshake.
+
+**Acceptance signal:** `ws.test.ts` boots a real `ws` server bound
+to ephemeral ports; each case asserts the expected close code or
+delivery; the cross-org isolation case is the gate — without it,
+the test suite shouldn't ship.
 
 ### 5.5 Resolver auth-guard sweep
 
-Currently: 7 of 20 resolver files have any test coverage. Build a
+Currently: 6 of 25 resolver files have any test coverage. Build a
 parameterized helper:
 
 ```ts
@@ -480,6 +580,10 @@ testAuthGuard({
 
 Run the table for every mutation. Catches drift between service-layer
 typed errors and the GraphQL `extensions.code` discriminator.
+
+**Acceptance signal:** Every mutation in the 25 resolver files has at
+least one `testAuthGuard` row; deliberately removing a `requireAuth`
+call in any resolver fails the suite.
 
 ### 5.6 MobX store coverage
 
@@ -495,15 +599,25 @@ Currently: 2 of 17 store files have tests. Build a shared
 
 Run the helper across all 17 stores.
 
+**Acceptance signal:** All 17 stores import the shared helper; the
+suite catches an intentionally-broken `applySyncAction('U')` (e.g.
+overwrite instead of merge) by failing.
+
 ### 5.7 E2E gaps
 
 | Spec | Status | What to add |
 | --- | --- | --- |
-| `tests/e2e/issue-crud.spec.ts` | empty file | create / edit title / edit description / change state / assign / archive / delete |
+| `tests/e2e/issue-crud.spec.ts` | partial (4 tests: open modal, create+verify, open detail, close detail) | edit title / edit description / change state / assign / archive / delete |
 | `tests/e2e/drag-drop.spec.ts` | missing | drag a card across columns; verify position persists after reload |
-| `tests/e2e/offline-reload.spec.ts` | missing | offline → create issue → reconnect → reload page → issue persists |
+| `tests/e2e/offline.spec.ts` | partial (236 LOC) | confirm reload-survival path: offline → create issue → reconnect → reload page → issue persists |
+| `tests/e2e/optimistic-rollback.spec.ts` | partial (162 LOC) | audit coverage against the 13 `tq.enqueue` sites; add a stacked-ops case (pairs with §1.2) |
 | `tests/e2e/multi-user.spec.ts` | missing | two browser contexts in different orgs; org A's actions invisible to org B |
 | `tests/e2e/magic-link-signup.spec.ts` | missing | full magic-link signup flow (vs. existing `loginAs` shortcut) |
+
+**Acceptance signal:** Each row's `Status` column reads "complete"
+in a future revision of this doc, and the e2e suite covers a
+realistic regression path for the listed scenario (assert the
+post-state in the DB or store, not just visual presence).
 
 ---
 
@@ -511,6 +625,80 @@ Run the helper across all 17 stores.
 
 A condensed history of what landed in main. See `git log` for full
 details.
+
+### Hardening pass (2026-05-12)
+
+- WebSocket auth — `/api/auth/ws-ticket` issues a scoped 60s
+  `ws_ticket` JWT per (re)connect; the long-lived access token no
+  longer reaches client JS. `WsClient.connect()` fetches its own
+  ticket. (PATTERNS.md §18.)
+- `sync_actions.committed_at` column + BEFORE INSERT trigger; delta
+  sync now orders by `(committed_at, id)` and ignores rows newer than
+  500ms. (DATABASE_SCHEMA.md §2.22; `schema.prisma:411-422`.)
+- Tenant guards — `requireTeamMember` / `requireTeamOwner` take an
+  explicit `orgId` and verify the team belongs to it; `Issue
+  .findByIdentifier`, `Initiative.update/archive/delete/findById`,
+  `Webhook.update/archive/delete/rotateSecret/findById/listDeliveries`
+  rescoped to require `orgId`. Auto-close cascade now runs inside the
+  parent transaction and emits per-row SyncActions.
+- Webhook concurrency — `processDelivery` claims rows by transitioning
+  `pending → in_flight` atomically; stale `in_flight` rows reclaimed
+  by the sweep after the claim deadline elapses.
+- CSRF + per-IP caps — Apollo `csrfPrevention: true` + Origin
+  allow-list on `/api/graphql`; per-IP cap on magic-link verify;
+  client-IP fallback works without `TRUST_PROXY_HEADERS=1`.
+- `TransactionQueue` reload-survival — module-scoped singleton,
+  IndexedDB-persisted FIFO, per-session `hydrate()` / `setActiveSession()`.
+
+### DB hardening — misc constraints (2026-05-12, §2.4)
+
+Migration `20260512100000_db_hardening_constraints` closed the five
+items from §2.4. One item changed shape during implementation; the
+others landed as written.
+
+- `users.google_id` — UNIQUE constraint added. Pre-flight check
+  aborts the migration if any duplicate google_id exists.
+- `issues.previous_identifiers` — GIN index added. Not yet exercised
+  — `IssueService.findByIdentifier` currently matches only on the
+  live `identifier` column. The index ships ahead of a planned change
+  that adds a `previousIdentifiers` fallback so renamed issues remain
+  reachable by their old key; cheap to maintain in the meantime since
+  the column is only written on team-key renames.
+- `teams.default_issue_state_id` / `auto_close_state_id` — FKs to
+  `workflow_states(id)` with `ON DELETE SET NULL`; orphan references
+  are nulled out in the migration before the FK is added. Both
+  referencing columns also get a plain b-tree index so the FK's
+  `ON DELETE SET NULL` check doesn't seq-scan `teams` whenever a
+  workflow state is deleted.
+- `files.project_id` — FK to `projects(id)` with `ON DELETE SET
+  NULL`; same orphan-cleanup pattern.
+- `auth_tokens.token_hash` — **partial** UNIQUE (`WHERE type =
+  'refresh'`) rather than the blanket UNIQUE originally proposed.
+  Magic-link rows hash a 6-digit code (1M-value space) so cross-user
+  hash collisions are expected at any meaningful scale; a blanket
+  UNIQUE would randomly fail magic-link INSERTs in production. The
+  partial unique keeps the safety net for refresh tokens (which hash
+  long random strings) and uses a predicate that matches the runtime
+  lookup verbatim so the planner reliably picks it up. The legacy
+  non-unique `(token_hash)` index is replaced by two type-partitioned
+  indexes so both lookup paths stay on an index. If `api_key` (or any
+  similar long-random-string token type) is added later, extend the
+  predicate in a follow-up migration.
+
+The partial unique cannot be modeled in `schema.prisma`; comments on
+the `AuthToken.tokenHash` field document the constraint and point at
+the migration as the source of truth.
+
+### Features (2026-05-05)
+
+- Triage workflow — inbound issue queue at `/team/[key]/triage` with
+  accept / decline / snooze / duplicate. (PATTERNS.md §38.)
+- Initiatives — top-level strategic objects m:n with `Project`;
+  progress rolls up from linked projects. UI at `/initiatives`.
+  (PATTERNS.md §39.)
+- Webhooks — outbound HMAC-signed HTTP subscriptions, admin-only at
+  `/settings/webhooks`. Retry sweep runs in the WS server every 30s.
+  (PATTERNS.md §40; DATABASE_SCHEMA.md §2.21.)
 
 ### Security (7 commits — all 13 audit items closed)
 
@@ -560,51 +748,20 @@ details.
 
 ### Tests
 
-- 343 → 380. New suites for rate-limit, file IDOR, delta pagination,
-  OAuth state JWT, OrganizationService (`71e7e04`).
+- Initial unit-test push: 343 → 380. New suites for rate-limit, file
+  IDOR, delta pagination, OAuth state JWT, OrganizationService
+  (`71e7e04`); refresh-token family rotation + reuse detection
+  (`e826638`).
+- E2E expansion (`3d68c44` → `485de42` → `44d7240`): 35 e2e specs on
+  main covering issue CRUD, drag-drop adjacent flows, offline,
+  optimistic rollback, comments, search, permissions, docs,
+  custom fields, triage. The §5.7 table tracks the still-open gaps
+  (drag-drop, multi-user, magic-link signup; partial coverage on
+  issue-crud, offline, optimistic-rollback).
 
 ### Docs
 
 - This file (`4f1936c`); follow-up prune (`25f4f08`).
-
-### DB hardening — misc constraints (§2.4)
-
-Migration `20260512100000_db_hardening_constraints` closed the five
-items from §2.4. One item changed shape during implementation; the
-others landed as written.
-
-- `users.google_id` — UNIQUE constraint added. Pre-flight check
-  aborts the migration if any duplicate google_id exists.
-- `issues.previous_identifiers` — GIN index added. Not yet exercised
-  — `IssueService.findByIdentifier` currently matches only on the
-  live `identifier` column. The index ships ahead of a planned change
-  that adds a `previousIdentifiers` fallback so renamed issues remain
-  reachable by their old key; cheap to maintain in the meantime since
-  the column is only written on team-key renames.
-- `teams.default_issue_state_id` / `auto_close_state_id` — FKs to
-  `workflow_states(id)` with `ON DELETE SET NULL`; orphan references
-  are nulled out in the migration before the FK is added. Both
-  referencing columns also get a plain b-tree index so the FK's
-  `ON DELETE SET NULL` check doesn't seq-scan `teams` whenever a
-  workflow state is deleted.
-- `files.project_id` — FK to `projects(id)` with `ON DELETE SET
-  NULL`; same orphan-cleanup pattern.
-- `auth_tokens.token_hash` — **partial** UNIQUE (`WHERE type =
-  'refresh'`) rather than the blanket UNIQUE originally proposed.
-  Magic-link rows hash a 6-digit code (1M-value space) so cross-user
-  hash collisions are expected at any meaningful scale; a blanket
-  UNIQUE would randomly fail magic-link INSERTs in production. The
-  partial unique keeps the safety net for refresh tokens (which hash
-  long random strings) and uses a predicate that matches the runtime
-  lookup verbatim so the planner reliably picks it up. The legacy
-  non-unique `(token_hash)` index is replaced by two type-partitioned
-  indexes so both lookup paths stay on an index. If `api_key` (or any
-  similar long-random-string token type) is added later, extend the
-  predicate in a follow-up migration.
-
-The partial unique cannot be modeled in `schema.prisma`; comments on
-the `AuthToken.tokenHash` field document the constraint and point at
-the migration as the source of truth.
 
 ---
 
