@@ -6,6 +6,7 @@ import { customViewResolvers } from './custom-view';
 import { cycleResolvers } from './cycle';
 import { documentResolvers } from './document';
 import { fileResolvers } from './file';
+import { githubResolvers } from './github';
 import { initiativeResolvers } from './initiative';
 import { issueResolvers } from './issue';
 import { issueActivityResolvers } from './issue-activity';
@@ -92,6 +93,7 @@ export const resolvers = {
     ...issueResolvers.Issue,
     ...customFieldResolvers.Issue,
     ...fileResolvers.Issue,
+    ...githubResolvers.Issue,
   },
 
   IssueActivity: {
@@ -117,6 +119,7 @@ export const resolvers = {
     ...commentResolvers.Mutation,
     ...documentResolvers.Mutation,
     ...fileResolvers.Mutation,
+    ...githubResolvers.Mutation,
     ...initiativeResolvers.Mutation,
     ...notificationResolvers.Mutation,
     ...issueRelationResolvers.Mutation,
@@ -158,6 +161,7 @@ export const resolvers = {
     ...commentResolvers.Query,
     ...documentResolvers.Query,
     ...fileResolvers.Query,
+    ...githubResolvers.Query,
     ...initiativeResolvers.Query,
     ...issueActivityResolvers.Query,
     ...notificationResolvers.Query,

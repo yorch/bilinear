@@ -22,6 +22,7 @@ import { StatusSelect } from '../properties/status-select';
 import { ActivityTimeline } from './activity-timeline';
 import { CommentThread } from './comment-thread';
 import { FileAttachments } from './file-attachments';
+import { PullRequestsSection } from './pull-requests-section';
 import { RelationsSection } from './relations-section';
 import { SubIssueList } from './sub-issue-list';
 
@@ -361,6 +362,9 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
 
           {/* Relations */}
           <RelationsSection issueId={issue.id} />
+
+          {/* Pull Requests */}
+          <PullRequestsSection issueId={issue.id} />
 
           {/* Attachments */}
           <FileAttachments issueId={issue.id} />

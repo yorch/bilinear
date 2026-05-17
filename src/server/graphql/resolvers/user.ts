@@ -20,6 +20,7 @@ export const userResolvers = {
 
   User: {
     avatarBackgroundColor: (user: User) => user.avatarBgColor,
+    emailNotificationsEnabled: (user: User) => user.emailNotificationsEnabled,
     isMe: (user: User, _args: unknown, ctx: GraphQLContext) => user.id === ctx.userId,
   },
 };

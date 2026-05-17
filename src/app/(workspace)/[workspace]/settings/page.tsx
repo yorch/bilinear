@@ -352,6 +352,49 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
             )}
           </div>
         </section>
+
+        {/* Quick links to sub-settings */}
+        <section>
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+            Configuration
+          </h2>
+          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 overflow-hidden">
+            <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {[
+                {
+                  description: 'Connect GitHub and other services',
+                  href: `/${workspace}/settings/integrations`,
+                  label: 'Integrations',
+                },
+                {
+                  description: 'Send outbound HTTP events',
+                  href: `/${workspace}/settings/webhooks`,
+                  label: 'Webhooks',
+                },
+                {
+                  description: 'Share project status externally',
+                  href: `/${workspace}/settings/roadmap`,
+                  label: 'Public roadmap',
+                },
+              ].map(item => (
+                <li key={item.href}>
+                  <Link
+                    className="flex items-center justify-between px-5 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
+                    href={item.href}
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        {item.label}
+                      </p>
+                      <p className="text-xs text-zinc-400">{item.description}</p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
       </div>
     </div>
   );

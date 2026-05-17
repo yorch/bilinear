@@ -1,4 +1,13 @@
 import type { Notification, PrismaClient } from '../../generated/prisma';
+import {
+  sendAssignmentNotificationEmail,
+  sendCommentNotificationEmail,
+  sendMentionNotificationEmail,
+  sendStatusChangeNotificationEmail,
+} from '../lib/email';
+import { childLogger } from '../lib/logger';
+
+const log = childLogger({ module: 'notification' });
 
 export interface NotificationCreateInput {
   actorId?: string;
@@ -104,17 +113,23 @@ export class NotificationService {
     assigneeId: string,
     actorId: string,
   ): Promise<Notification | null> {
-    // Don't notify if user is assigning themselves
     if (assigneeId === actorId) {
       return null;
     }
-    return this.create(orgId, {
+    const notification = await this.create(orgId, {
       actorId,
       data: { issueId },
       issueId,
       type: 'ISSUE_ASSIGNED',
       userId: assigneeId,
     });
+
+    // Fire-and-forget email — never blocks mutation response
+    void this.sendAssignmentEmail(assigneeId, actorId, issueId).catch(err =>
+      log.error({ err }, 'Failed to send assignment notification email'),
+    );
+
+    return notification;
   }
 
   async createForStatusChange(
@@ -126,16 +141,12 @@ export class NotificationService {
   ): Promise<{ count: number }> {
     const subscribers = await this.getSubscribers(issueId);
 
-    // Don't notify the actor
     const recipientIds = subscribers.filter(id => id !== actorId);
     if (recipientIds.length === 0) {
       return { count: 0 };
     }
 
-    // Single INSERT instead of N round-trips — a popular issue with dozens
-    // of subscribers was paying 50-200ms of serial Prisma creates per
-    // status change before.
-    return this.prisma.notification.createMany({
+    const result = await this.prisma.notification.createMany({
       data: recipientIds.map(userId => ({
         actorId,
         data: { issueId, newStatus, oldStatus },
@@ -145,6 +156,38 @@ export class NotificationService {
         userId,
       })),
     });
+
+    // Fire-and-forget emails
+    void this.sendStatusChangeEmails(recipientIds, actorId, issueId, oldStatus, newStatus).catch(
+      err => log.error({ err }, 'Failed to send status change notification emails'),
+    );
+
+    return result;
+  }
+
+  async createForMention(
+    orgId: string,
+    issueId: string,
+    mentionedUserId: string,
+    actorId: string,
+    excerpt?: string,
+  ): Promise<Notification | null> {
+    if (mentionedUserId === actorId) {
+      return null;
+    }
+    const notification = await this.create(orgId, {
+      actorId,
+      data: { excerpt, issueId },
+      issueId,
+      type: 'ISSUE_MENTIONED',
+      userId: mentionedUserId,
+    });
+
+    void this.sendMentionEmail(mentionedUserId, actorId, issueId, excerpt).catch(err =>
+      log.error({ err }, 'Failed to send mention notification email'),
+    );
+
+    return notification;
   }
 
   async subscribe(userId: string, issueId: string): Promise<void> {
@@ -182,7 +225,6 @@ export class NotificationService {
     const existing = await this.prisma.notificationSubscription.findUnique({
       where: { userId_issueId: { issueId, userId } },
     });
-    // Only subscribe if no existing record — don't override an explicit unsubscribe
     if (!existing) {
       await this.prisma.notificationSubscription.create({
         data: { active: true, issueId, userId },
@@ -195,6 +237,7 @@ export class NotificationService {
     issueId: string,
     actorId: string,
     commentId: string,
+    excerpt?: string,
   ): Promise<{ count: number }> {
     const subscribers = await this.getSubscribers(issueId);
     const recipientIds = subscribers.filter(id => id !== actorId);
@@ -202,15 +245,199 @@ export class NotificationService {
       return { count: 0 };
     }
 
-    return this.prisma.notification.createMany({
+    const result = await this.prisma.notification.createMany({
       data: recipientIds.map(userId => ({
         actorId,
-        data: { commentId, issueId },
+        data: { commentId, excerpt, issueId },
         issueId,
         organizationId: orgId,
         type: 'ISSUE_COMMENT',
         userId,
       })),
     });
+
+    void this.sendCommentEmails(recipientIds, actorId, issueId, excerpt).catch(err =>
+      log.error({ err }, 'Failed to send comment notification emails'),
+    );
+
+    return result;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private email helpers — resolve user/issue data then call email.ts senders
+  // ---------------------------------------------------------------------------
+
+  private async resolveEmailContext(
+    recipientId: string,
+    actorId: string,
+    issueId: string,
+  ): Promise<{
+    recipientEmail: string;
+    actorName: string;
+    issueIdentifier: string;
+    issueTitle: string;
+    issueUrl: string;
+  } | null> {
+    const [recipient, actor, issue] = await Promise.all([
+      this.prisma.user.findUnique({
+        select: { email: true, emailNotificationsEnabled: true },
+        where: { id: recipientId },
+      }),
+      this.prisma.user.findUnique({ select: { displayName: true }, where: { id: actorId } }),
+      this.prisma.issue.findUnique({
+        select: {
+          identifier: true,
+          team: { select: { organization: { select: { urlKey: true } } } },
+          teamId: true,
+          title: true,
+        },
+        where: { id: issueId },
+      }),
+    ]);
+
+    if (!recipient?.emailNotificationsEnabled || !actor || !issue) {
+      return null;
+    }
+
+    const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
+    const workspaceKey = issue.team.organization.urlKey;
+
+    return {
+      actorName: actor.displayName,
+      issueIdentifier: issue.identifier,
+      issueTitle: issue.title,
+      issueUrl: `${appUrl}/${workspaceKey}/issue/${issue.identifier}`,
+      recipientEmail: recipient.email,
+    };
+  }
+
+  private async sendAssignmentEmail(
+    assigneeId: string,
+    actorId: string,
+    issueId: string,
+  ): Promise<void> {
+    const ctx = await this.resolveEmailContext(assigneeId, actorId, issueId);
+    if (!ctx) {
+      return;
+    }
+    await sendAssignmentNotificationEmail({
+      actorName: ctx.actorName,
+      issueIdentifier: ctx.issueIdentifier,
+      issueTitle: ctx.issueTitle,
+      issueUrl: ctx.issueUrl,
+      to: ctx.recipientEmail,
+    });
+  }
+
+  private async sendMentionEmail(
+    mentionedUserId: string,
+    actorId: string,
+    issueId: string,
+    excerpt?: string,
+  ): Promise<void> {
+    const ctx = await this.resolveEmailContext(mentionedUserId, actorId, issueId);
+    if (!ctx) {
+      return;
+    }
+    await sendMentionNotificationEmail({
+      actorName: ctx.actorName,
+      excerpt,
+      issueIdentifier: ctx.issueIdentifier,
+      issueTitle: ctx.issueTitle,
+      issueUrl: ctx.issueUrl,
+      to: ctx.recipientEmail,
+    });
+  }
+
+  private async sendCommentEmails(
+    recipientIds: string[],
+    actorId: string,
+    issueId: string,
+    excerpt?: string,
+  ): Promise<void> {
+    const actor = await this.prisma.user.findUnique({
+      select: { displayName: true },
+      where: { id: actorId },
+    });
+    const issue = await this.prisma.issue.findUnique({
+      select: {
+        identifier: true,
+        team: { select: { organization: { select: { urlKey: true } } } },
+        title: true,
+      },
+      where: { id: issueId },
+    });
+    if (!actor || !issue) {
+      return;
+    }
+
+    const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
+    const issueUrl = `${appUrl}/${issue.team.organization.urlKey}/issue/${issue.identifier}`;
+
+    const recipients = await this.prisma.user.findMany({
+      select: { email: true, emailNotificationsEnabled: true, id: true },
+      where: { emailNotificationsEnabled: true, id: { in: recipientIds } },
+    });
+
+    await Promise.allSettled(
+      recipients.map(r =>
+        sendCommentNotificationEmail({
+          actorName: actor.displayName,
+          excerpt,
+          issueIdentifier: issue.identifier,
+          issueTitle: issue.title,
+          issueUrl,
+          to: r.email,
+        }),
+      ),
+    );
+  }
+
+  private async sendStatusChangeEmails(
+    recipientIds: string[],
+    actorId: string,
+    issueId: string,
+    oldStateId: string,
+    newStateId: string,
+  ): Promise<void> {
+    const [actor, issue, oldState, newState] = await Promise.all([
+      this.prisma.user.findUnique({ select: { displayName: true }, where: { id: actorId } }),
+      this.prisma.issue.findUnique({
+        select: {
+          identifier: true,
+          team: { select: { organization: { select: { urlKey: true } } } },
+          title: true,
+        },
+        where: { id: issueId },
+      }),
+      this.prisma.workflowState.findUnique({ select: { name: true }, where: { id: oldStateId } }),
+      this.prisma.workflowState.findUnique({ select: { name: true }, where: { id: newStateId } }),
+    ]);
+
+    if (!actor || !issue || !oldState || !newState) {
+      return;
+    }
+
+    const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
+    const issueUrl = `${appUrl}/${issue.team.organization.urlKey}/issue/${issue.identifier}`;
+
+    const recipients = await this.prisma.user.findMany({
+      select: { email: true, emailNotificationsEnabled: true, id: true },
+      where: { emailNotificationsEnabled: true, id: { in: recipientIds } },
+    });
+
+    await Promise.allSettled(
+      recipients.map(r =>
+        sendStatusChangeNotificationEmail({
+          actorName: actor.displayName,
+          issueIdentifier: issue.identifier,
+          issueTitle: issue.title,
+          issueUrl,
+          newStateName: newState.name,
+          oldStateName: oldState.name,
+          to: r.email,
+        }),
+      ),
+    );
   }
 }

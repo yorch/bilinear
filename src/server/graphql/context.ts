@@ -11,6 +11,7 @@ import { CustomViewService } from '../services/custom-view.service';
 import { CycleService } from '../services/cycle.service';
 import { DocumentService } from '../services/document.service';
 import { FileService } from '../services/file.service';
+import { GitHubService } from '../services/github.service';
 import { InitiativeService } from '../services/initiative.service';
 import { IssueService } from '../services/issue.service';
 import { IssueActivityService } from '../services/issue-activity.service';
@@ -39,6 +40,7 @@ export interface GraphQLContext extends AuthContext {
   services: {
     auth: AuthService;
     comment: CommentService;
+    github: GitHubService;
     customField: CustomFieldService;
     customView: CustomViewService;
     cycle: CycleService;
@@ -99,6 +101,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
 
   const userService = new UserService(prisma);
   const authService = new AuthService(prisma, userService);
+  const githubService = new GitHubService(prisma);
   const documentService = new DocumentService(prisma);
   const fileService = new FileService(prisma);
   const commentService = new CommentService(prisma);
@@ -135,6 +138,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
       cycle: cycleService,
       document: documentService,
       file: fileService,
+      github: githubService,
       initiative: initiativeService,
       issue: issueService,
       issueActivity: issueActivityService,
