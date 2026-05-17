@@ -270,6 +270,10 @@ export const typeDefs = `
     lastSyncId: String!
   }
 
+  type BasicPayload {
+    success: Boolean!
+  }
+
   type DeletePayload {
     success: Boolean!
     lastSyncId: String!

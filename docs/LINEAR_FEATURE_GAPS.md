@@ -22,7 +22,7 @@ issues can be auto-closed on merge.
 - Webhook receiver: `POST /api/integrations/github/webhook` — validates HMAC-SHA256, handles `pull_request` events
 - Issue auto-linking: parse issue identifier from PR title or head branch (regex `[A-Z]+-\d+`)
 - Auto-close issue on PR merge (transitions to first `completed` workflow state)
-- GraphQL: `GitHubIntegration` type, `githubIntegration` query, `githubConnect`/`githubDisconnect` mutations
+- GraphQL: `GitHubIntegration` type, `githubIntegration` query, `githubDisconnect`/`githubRotateWebhookSecret` mutations
 - `Issue.pullRequests` resolver returns linked PRs
 - Settings page: `/settings/integrations` — Connect/Disconnect button, webhook instructions
 - Issue detail panel: linked PRs section (state badge, PR title, repo, link)
@@ -31,12 +31,13 @@ issues can be auto-closed on merge.
 ```
 GITHUB_CLIENT_ID=
 GITHUB_CLIENT_SECRET=
-GITHUB_WEBHOOK_SECRET=   # set in GitHub org/repo webhook settings
 ```
+
+Note: there is no global `GITHUB_WEBHOOK_SECRET`. Each workspace generates its own webhook secret at connect time and stores it in `github_integrations.webhook_secret`.
 
 **Files touched:**
 - `prisma/schema.prisma` — new models
-- `prisma/migrations/20260517000000_github_integration/migration.sql`
+- `prisma/migrations/20260517000000_github_integration_email_notifications/migration.sql`
 - `src/server/services/github.service.ts` _(new)_
 - `src/server/graphql/schema.ts` — new types/mutations/queries
 - `src/server/graphql/resolvers/github.ts` _(new)_

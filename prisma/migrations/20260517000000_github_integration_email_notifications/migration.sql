@@ -48,7 +48,7 @@ CREATE INDEX "github_pull_requests_issue_id_idx" ON "github_pull_requests"("issu
 CREATE INDEX "github_pull_requests_organization_id_idx" ON "github_pull_requests"("organization_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "github_pull_requests_integration_id_pr_number_repo_full_nam_key" ON "github_pull_requests"("integration_id", "pr_number", "repo_full_name");
+CREATE UNIQUE INDEX "github_pull_requests_pr_issue_uniq" ON "github_pull_requests"("integration_id", "pr_number", "repo_full_name", "issue_id");
 
 -- AddForeignKey
 ALTER TABLE "github_integrations" ADD CONSTRAINT "github_integrations_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;

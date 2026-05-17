@@ -34,6 +34,15 @@ function appUrl(): string {
   return process.env.APP_URL ?? 'http://localhost:3000';
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function fromAddress(): string {
   const host = process.env.SMTP_HOST ?? 'example.com';
   const domain = host.startsWith('smtp.') ? host.slice(5) : host;
@@ -50,8 +59,7 @@ function htmlWrap(bodyHtml: string): string {
       ${bodyHtml}
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:32px 0"/>
       <p style="color:#9ca3af;font-size:12px">
-        You're receiving this because you have notifications enabled in
-        <a href="${appUrl()}/settings" style="color:#6366f1">your settings</a>.
+        You're receiving this because you have notifications enabled.
         To stop, turn off email notifications in your account settings.
       </p>
     </div>
@@ -112,14 +120,18 @@ export async function sendAssignmentNotificationEmail(
   const transport = createTransport();
   const { to, actorName, issueIdentifier, issueTitle, issueUrl } = params;
 
+  const safeActor = escapeHtml(actorName);
+  const safeId = escapeHtml(issueIdentifier);
+  const safeTitle = escapeHtml(issueTitle);
+
   const info = await transport.sendMail({
     from: fromAddress(),
     html: htmlWrap(`
-      <p style="color:#374151"><strong>${actorName}</strong> assigned you to an issue:</p>
+      <p style="color:#374151"><strong>${safeActor}</strong> assigned you to an issue:</p>
       <div style="border-left:3px solid #6366f1;padding:12px 16px;margin:16px 0;background:#f9fafb;border-radius:4px">
         <a href="${issueUrl}" style="color:#111;font-weight:600;text-decoration:none">
-          <span style="color:#6b7280;font-size:13px">${issueIdentifier}</span>
-          &nbsp;${issueTitle}
+          <span style="color:#6b7280;font-size:13px">${safeId}</span>
+          &nbsp;${safeTitle}
         </a>
       </div>
       <a href="${issueUrl}" style="display:inline-block;background:#6366f1;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:500">View issue</a>
@@ -145,14 +157,17 @@ export async function sendMentionNotificationEmail(
   const transport = createTransport();
   const { to, actorName, issueIdentifier, issueTitle, issueUrl, excerpt } = params;
 
+  const safeActor = escapeHtml(actorName);
+  const safeId = escapeHtml(issueIdentifier);
+  const safeTitle = escapeHtml(issueTitle);
   const excerptHtml = excerpt
-    ? `<blockquote style="border-left:3px solid #d1d5db;margin:12px 0;padding:8px 12px;color:#4b5563;font-style:italic">${excerpt}</blockquote>`
+    ? `<blockquote style="border-left:3px solid #d1d5db;margin:12px 0;padding:8px 12px;color:#4b5563;font-style:italic">${escapeHtml(excerpt)}</blockquote>`
     : '';
 
   const info = await transport.sendMail({
     from: fromAddress(),
     html: htmlWrap(`
-      <p style="color:#374151"><strong>${actorName}</strong> mentioned you in <a href="${issueUrl}" style="color:#6366f1">${issueIdentifier}: ${issueTitle}</a>:</p>
+      <p style="color:#374151"><strong>${safeActor}</strong> mentioned you in <a href="${issueUrl}" style="color:#6366f1">${safeId}: ${safeTitle}</a>:</p>
       ${excerptHtml}
       <a href="${issueUrl}" style="display:inline-block;background:#6366f1;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:500">View issue</a>
     `),
@@ -177,14 +192,17 @@ export async function sendCommentNotificationEmail(
   const transport = createTransport();
   const { to, actorName, issueIdentifier, issueTitle, issueUrl, excerpt } = params;
 
+  const safeActor = escapeHtml(actorName);
+  const safeId = escapeHtml(issueIdentifier);
+  const safeTitle = escapeHtml(issueTitle);
   const excerptHtml = excerpt
-    ? `<blockquote style="border-left:3px solid #d1d5db;margin:12px 0;padding:8px 12px;color:#4b5563;font-style:italic">${excerpt}</blockquote>`
+    ? `<blockquote style="border-left:3px solid #d1d5db;margin:12px 0;padding:8px 12px;color:#4b5563;font-style:italic">${escapeHtml(excerpt)}</blockquote>`
     : '';
 
   const info = await transport.sendMail({
     from: fromAddress(),
     html: htmlWrap(`
-      <p style="color:#374151"><strong>${actorName}</strong> commented on <a href="${issueUrl}" style="color:#6366f1">${issueIdentifier}: ${issueTitle}</a>:</p>
+      <p style="color:#374151"><strong>${safeActor}</strong> commented on <a href="${issueUrl}" style="color:#6366f1">${safeId}: ${safeTitle}</a>:</p>
       ${excerptHtml}
       <a href="${issueUrl}" style="display:inline-block;background:#6366f1;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:500">View comment</a>
     `),
@@ -210,14 +228,20 @@ export async function sendStatusChangeNotificationEmail(
   const { to, actorName, issueIdentifier, issueTitle, issueUrl, oldStateName, newStateName } =
     params;
 
+  const safeActor = escapeHtml(actorName);
+  const safeId = escapeHtml(issueIdentifier);
+  const safeTitle = escapeHtml(issueTitle);
+  const safeOld = escapeHtml(oldStateName);
+  const safeNew = escapeHtml(newStateName);
+
   const info = await transport.sendMail({
     from: fromAddress(),
     html: htmlWrap(`
-      <p style="color:#374151"><strong>${actorName}</strong> updated the status of <a href="${issueUrl}" style="color:#6366f1">${issueIdentifier}: ${issueTitle}</a>:</p>
+      <p style="color:#374151"><strong>${safeActor}</strong> updated the status of <a href="${issueUrl}" style="color:#6366f1">${safeId}: ${safeTitle}</a>:</p>
       <p style="color:#374151">
-        <span style="color:#9ca3af">${oldStateName}</span>
+        <span style="color:#9ca3af">${safeOld}</span>
         &nbsp;→&nbsp;
-        <strong>${newStateName}</strong>
+        <strong>${safeNew}</strong>
       </p>
       <a href="${issueUrl}" style="display:inline-block;background:#6366f1;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:500">View issue</a>
     `),

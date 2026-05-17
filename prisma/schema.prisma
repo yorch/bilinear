@@ -1156,7 +1156,7 @@ model GitHubPullRequest {
   issue        Issue              @relation(fields: [issueId], references: [id], onDelete: Cascade)
   integration  GitHubIntegration  @relation(fields: [integrationId], references: [id], onDelete: Cascade)
 
-  @@unique([integrationId, prNumber, repoFullName])
+  @@unique([integrationId, prNumber, repoFullName, issueId], map: "github_pull_requests_pr_issue_uniq")
   @@index([issueId])
   @@index([organizationId])
   @@map("github_pull_requests")

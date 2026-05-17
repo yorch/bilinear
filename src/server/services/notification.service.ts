@@ -251,7 +251,7 @@ export class NotificationService {
         data: { commentId, excerpt, issueId },
         issueId,
         organizationId: orgId,
-        type: 'ISSUE_COMMENT',
+        type: 'ISSUE_COMMENTED',
         userId,
       })),
     });

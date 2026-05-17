@@ -201,8 +201,9 @@ export class GitHubService {
             title,
           },
           where: {
-            integrationId_prNumber_repoFullName: {
+            integrationId_prNumber_repoFullName_issueId: {
               integrationId: integration.id,
+              issueId: issue.id,
               prNumber,
               repoFullName,
             },

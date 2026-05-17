@@ -9,8 +9,8 @@ const log = childLogger({ module: 'github-webhook' });
 /**
  * POST /api/integrations/github/webhook
  *
- * Receives GitHub webhook events. The workspace is identified from the
- * X-Bilinear-Org-Id header that the user must set in their GitHub webhook URL,
+ * Receives GitHub webhook events. The workspace is identified via the `?org=`
+ * query param that the user appends to their GitHub webhook URL,
  * e.g.: https://app.example.com/api/integrations/github/webhook?org=<urlKey>
  *
  * Supports:

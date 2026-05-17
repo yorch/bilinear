@@ -1,13 +1,15 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { prisma } from '@/server/lib/prisma';
 import { verifyAccessToken } from '@/server/lib/jwt';
 
 /**
  * GET /api/integrations/github
  *
- * Initiates the GitHub OAuth flow. The caller must supply a `webhookSecret`
- * query param — this is the shared secret they will configure in GitHub's
- * webhook settings so we can validate incoming pull_request events.
+ * Initiates the GitHub OAuth flow. Caller must be an org owner or admin.
+ * The caller must supply a `webhookSecret` query param — this is the shared
+ * secret they will configure in GitHub's webhook settings so we can validate
+ * incoming pull_request events.
  *
  * Redirects to GitHub's authorize endpoint with a state param that encodes
  * {orgId, userId, webhookSecret} so the callback can complete the connection.
@@ -30,8 +32,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid access token' }, { status: 401 });
   }
 
-  const webhookSecret = req.nextUrl.searchParams.get('webhookSecret') ?? '';
-  if (webhookSecret.trim().length < 16) {
+  // Only org owners and admins may connect a GitHub integration
+  const membership = await prisma.organizationMember.findUnique({
+    select: { role: true },
+    where: { organizationId_userId: { organizationId: claims.orgId, userId: claims.userId } },
+  });
+  if (!membership || !['owner', 'admin'].includes(membership.role)) {
+    return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+  }
+
+  const webhookSecret = (req.nextUrl.searchParams.get('webhookSecret') ?? '').trim();
+  if (webhookSecret.length < 16) {
     return NextResponse.json(
       { error: 'webhookSecret must be at least 16 characters' },
       { status: 400 },
