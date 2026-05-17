@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { prisma } from '@/server/lib/prisma';
 import { verifyAccessToken } from '@/server/lib/jwt';
+import { prisma } from '@/server/lib/prisma';
 
 /**
  * GET /api/integrations/github
