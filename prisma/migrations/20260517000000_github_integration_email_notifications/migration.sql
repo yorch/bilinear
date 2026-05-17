@@ -1,61 +1,66 @@
--- GitHub Integration + User email notification preference
---
--- 1. users.email_notifications_enabled — per-user opt-out flag for outbound
---    notification emails. Defaults to true (opt-in on existing accounts).
---
--- 2. github_integrations — one OAuth connection per org, stores the access
---    token and the webhook secret used to validate incoming PR events.
---
--- 3. github_pull_requests — linked PRs per issue, upserted by the webhook
---    handler on pull_request events.
+-- AlterTable
+ALTER TABLE "users" ADD COLUMN     "email_notifications_enabled" BOOLEAN NOT NULL DEFAULT true;
 
--- ---------------------------------------------------------------------------
--- 1. users.email_notifications_enabled
--- ---------------------------------------------------------------------------
+-- CreateTable
+CREATE TABLE "github_integrations" (
+    "id" UUID NOT NULL,
+    "organization_id" UUID NOT NULL,
+    "access_token" VARCHAR(500) NOT NULL,
+    "github_login" VARCHAR(255) NOT NULL,
+    "github_user_id" INTEGER NOT NULL,
+    "webhook_secret" VARCHAR(255) NOT NULL,
+    "created_by_id" UUID NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
 
-ALTER TABLE users
-  ADD COLUMN email_notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE;
-
--- ---------------------------------------------------------------------------
--- 2. github_integrations
--- ---------------------------------------------------------------------------
-
-CREATE TABLE github_integrations (
-  id               UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-  organization_id  UUID        NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  access_token     VARCHAR(500) NOT NULL,
-  github_login     VARCHAR(255) NOT NULL,
-  github_user_id   INTEGER     NOT NULL,
-  webhook_secret   VARCHAR(255) NOT NULL,
-  created_by_id    UUID        NOT NULL REFERENCES users(id),
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT github_integrations_org_unique UNIQUE (organization_id)
+    CONSTRAINT "github_integrations_pkey" PRIMARY KEY ("id")
 );
 
--- ---------------------------------------------------------------------------
--- 3. github_pull_requests
--- ---------------------------------------------------------------------------
+-- CreateTable
+CREATE TABLE "github_pull_requests" (
+    "id" UUID NOT NULL,
+    "organization_id" UUID NOT NULL,
+    "issue_id" UUID NOT NULL,
+    "integration_id" UUID NOT NULL,
+    "pr_number" INTEGER NOT NULL,
+    "title" VARCHAR(500) NOT NULL,
+    "url" VARCHAR(1000) NOT NULL,
+    "state" VARCHAR(20) NOT NULL,
+    "draft" BOOLEAN NOT NULL DEFAULT false,
+    "head_branch" VARCHAR(500) NOT NULL,
+    "repo_full_name" VARCHAR(500) NOT NULL,
+    "author_login" VARCHAR(255) NOT NULL,
+    "merged_at" TIMESTAMPTZ,
+    "closed_at" TIMESTAMPTZ,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
 
-CREATE TABLE github_pull_requests (
-  id               UUID         NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-  organization_id  UUID         NOT NULL REFERENCES organizations(id),
-  issue_id         UUID         NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
-  integration_id   UUID         NOT NULL REFERENCES github_integrations(id) ON DELETE CASCADE,
-  pr_number        INTEGER      NOT NULL,
-  title            VARCHAR(500) NOT NULL,
-  url              VARCHAR(1000) NOT NULL,
-  state            VARCHAR(20)  NOT NULL,
-  draft            BOOLEAN      NOT NULL DEFAULT FALSE,
-  head_branch      VARCHAR(500) NOT NULL,
-  repo_full_name   VARCHAR(500) NOT NULL,
-  author_login     VARCHAR(255) NOT NULL,
-  merged_at        TIMESTAMPTZ,
-  closed_at        TIMESTAMPTZ,
-  created_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),
-  updated_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),
-  CONSTRAINT github_pull_requests_unique UNIQUE (integration_id, pr_number, repo_full_name)
+    CONSTRAINT "github_pull_requests_pkey" PRIMARY KEY ("id")
 );
 
-CREATE INDEX github_pull_requests_issue_id_idx ON github_pull_requests (issue_id);
-CREATE INDEX github_pull_requests_org_id_idx   ON github_pull_requests (organization_id);
+-- CreateIndex
+CREATE UNIQUE INDEX "github_integrations_organization_id_key" ON "github_integrations"("organization_id");
+
+-- CreateIndex
+CREATE INDEX "github_pull_requests_issue_id_idx" ON "github_pull_requests"("issue_id");
+
+-- CreateIndex
+CREATE INDEX "github_pull_requests_organization_id_idx" ON "github_pull_requests"("organization_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "github_pull_requests_integration_id_pr_number_repo_full_nam_key" ON "github_pull_requests"("integration_id", "pr_number", "repo_full_name");
+
+-- AddForeignKey
+ALTER TABLE "github_integrations" ADD CONSTRAINT "github_integrations_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "github_integrations" ADD CONSTRAINT "github_integrations_created_by_id_fkey" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "github_pull_requests" ADD CONSTRAINT "github_pull_requests_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "github_pull_requests" ADD CONSTRAINT "github_pull_requests_issue_id_fkey" FOREIGN KEY ("issue_id") REFERENCES "issues"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "github_pull_requests" ADD CONSTRAINT "github_pull_requests_integration_id_fkey" FOREIGN KEY ("integration_id") REFERENCES "github_integrations"("id") ON DELETE CASCADE ON UPDATE CASCADE;

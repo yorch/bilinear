@@ -1213,7 +1213,21 @@ await ctx.services.notification.create({
 - `NotificationStore` holds the pool; `NotificationInbox` component reads from it
 - Unread count badge: `notificationStore.unreadCount` (computed from `readAt === null`)
 - "Mark all read" calls `notificationMarkAllRead` mutation → updates all `readAt` fields → `SyncAction` propagates to store
-- Reference: `src/server/services/notification.service.ts`, `src/stores/notification-store.ts`, `src/components/notifications/notification-inbox.tsx`
+
+**High-level helpers** (use these instead of calling `create()` directly):
+
+| Method | Notification type | Email sent |
+|---|---|---|
+| `createForIssueAssignment(orgId, issueId, assigneeId, actorId)` | `ISSUE_ASSIGNED` | Yes — skipped if `assigneeId === actorId` |
+| `createForStatusChange(orgId, issueId, actorId, oldStatus, newStatus)` | `ISSUE_STATUS_CHANGED` | Yes — fan-out to all subscribers except actor |
+| `createForMention(orgId, issueId, mentionedUserId, actorId, excerpt?)` | `ISSUE_MENTIONED` | Yes — skipped if `mentionedUserId === actorId` |
+| `notifyCommentSubscribers(orgId, issueId, actorId, commentId, excerpt?)` | `ISSUE_COMMENT` | Yes — fan-out to all subscribers except actor |
+
+**Email opt-out.** `User.emailNotificationsEnabled` (boolean, default `true`) gates all outgoing notification emails. `resolveEmailContext()` checks the flag before calling any sender — no email is ever sent to an opted-out user. Users toggle the preference via `userUpdateNotificationPreferences` mutation.
+
+**Fire-and-forget.** Email sends are always `void ... .catch(log.error)` — they never block the mutation response. Failures are logged but do not surface to callers.
+
+- Reference: `src/server/services/notification.service.ts`, `src/server/lib/email.ts`, `src/stores/notification-store.ts`, `src/components/notifications/notification-inbox.tsx`
 
 ---
 
@@ -1350,3 +1364,64 @@ return { issue, lastSyncId: sync.id.toString(), success: true };
 **Field-level secret guard.** `Webhook.signingSecret` has a field-level resolver that re-checks org admin role; non-admins get `null` even if some future query path returns the row.
 
 Reference: `src/server/services/webhook.service.ts`, `src/server/graphql/resolvers/webhook.ts`, `src/server/ws/index.ts` (retry tick).
+
+---
+
+## 41. GitHub Integration Pattern (2026-05-17)
+
+One GitHub OAuth app per deployment; one integration row per organization (1:1 via `github_integrations.organization_id` unique constraint). The integration stores the user's access token, GitHub login, and the webhook secret the user configures in GitHub settings.
+
+### OAuth Connect Flow
+
+```
+GET /api/integrations/github
+  → encode { orgId, userId, webhookSecret } as base64url JSON → state param
+  → redirect to https://github.com/login/oauth/authorize?...
+
+GET /api/integrations/github/callback?code=...&state=...
+  → decode state, call GitHubService.connect(orgId, userId, { code, webhookSecret })
+  → exchangeCodeForToken(code) → fetchGitHubUser(accessToken)
+  → INSERT github_integrations row
+  → redirect to /settings/integrations?connected=1
+```
+
+Required env vars: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`.
+
+### Webhook URL Format
+
+Users configure GitHub to POST to:
+```
+https://<APP_URL>/api/integrations/github/webhook?org=<organization.urlKey>
+```
+
+The `?org=` query param identifies the workspace. The route validates the `X-Hub-Signature-256` HMAC before processing any payload.
+
+### PR Auto-Linking
+
+`handlePullRequestEvent` extracts issue identifiers from the combined string `"${pr.title} ${pr.head.ref}"` using:
+
+```
+/\b([A-Z][A-Z0-9]{1,9}-\d+)\b/g   (case-insensitive match on uppercased input)
+```
+
+Each matched identifier is resolved to an `Issue` in the org, then a `github_pull_requests` row is upserted (unique on `[integrationId, prNumber, repoFullName]`). Handled actions: `opened`, `reopened`, `synchronize`, `closed`.
+
+### PR Auto-Close on Merge
+
+When `action === 'closed'` and `pr.merged === true`, `autoCloseIssuesOnMerge` runs for all linked issues that are **not** already in a `completed` or `canceled` workflow state. Each such issue is transitioned to the team's first `completed`-type workflow state (lowest `position`). This mirrors Linear's "close issue on PR merge" behavior.
+
+### State Representation
+
+| `GitHubPullRequest.state` | Condition |
+|---|---|
+| `open` | PR is open (including reopened/synchronize) |
+| `closed` | PR closed without merge (`pr.merged === false`) |
+| `merged` | PR closed with merge (`pr.merged === true`) |
+
+### Frontend
+
+- `PullRequestsSection` component (`src/components/issues/pull-requests-section.tsx`) renders linked PRs inside `IssueDetailPanel` — hidden when there are no PRs.
+- Integration settings live at `/settings/integrations` — connect, disconnect, rotate webhook secret.
+- State badges: merged (purple), closed (red), open (green/gray draft).
+
+Reference: `src/server/services/github.service.ts`, `src/server/graphql/resolvers/github.ts`, `src/app/api/integrations/github/`, `src/app/(workspace)/[workspace]/settings/integrations/page.tsx`, `src/components/issues/pull-requests-section.tsx`.
