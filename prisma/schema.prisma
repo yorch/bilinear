@@ -38,9 +38,11 @@ model Organization {
   cycles         Cycle[]
   customViews    CustomView[]
   documents      Document[]
-  publicRoadmap  PublicRoadmap?
-  initiatives    Initiative[]
-  webhooks       Webhook[]
+  publicRoadmap       PublicRoadmap?
+  initiatives         Initiative[]
+  webhooks            Webhook[]
+  githubIntegration   GitHubIntegration?
+  githubPullRequests  GitHubPullRequest[]
 
   @@map("organizations")
 }
@@ -64,6 +66,8 @@ model User {
 
   passwordHash String? @map("password_hash")
   googleId     String? @unique @map("google_id") @db.VarChar(255)
+
+  emailNotificationsEnabled Boolean @default(true) @map("email_notifications_enabled")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
@@ -93,6 +97,7 @@ model User {
   ownedInitiatives          Initiative[]               @relation("InitiativeOwner")
   createdInitiatives        Initiative[]               @relation("InitiativeCreator")
   createdWebhooks           Webhook[]                  @relation("WebhookCreator")
+  githubIntegrations        GitHubIntegration[]        @relation("GitHubIntegrationCreator")
 
   @@map("users")
 }
@@ -371,6 +376,7 @@ model Issue {
   files             File[]
   comments          Comment[]
   customFieldValues CustomFieldValue[]
+  pullRequests      GitHubPullRequest[]
 
   @@unique([teamId, number])
   @@index([organizationId])
@@ -1089,4 +1095,69 @@ model WebhookDelivery {
   @@index([webhookId, createdAt])
   @@index([status, nextAttemptAt])
   @@map("webhook_deliveries")
+}
+
+// ---------------------------------------------------------------------------
+// GitHub Integration
+// ---------------------------------------------------------------------------
+
+model GitHubIntegration {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @unique @map("organization_id") @db.Uuid
+
+  // OAuth access token for making GitHub API calls on behalf of the connector.
+  // Stored in plaintext for now; encrypt at rest in a follow-up hardening pass.
+  accessToken  String @map("access_token") @db.VarChar(500)
+  // GitHub login (user or org) that connected the integration
+  githubLogin  String @map("github_login") @db.VarChar(255)
+  githubUserId Int    @map("github_user_id")
+
+  // HMAC-SHA256 secret shared with the GitHub webhook configuration.
+  // Set by the user in their GitHub org/repo webhook settings.
+  webhookSecret String @map("webhook_secret") @db.VarChar(255)
+
+  createdById String @map("created_by_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User               @relation("GitHubIntegrationCreator", fields: [createdById], references: [id])
+  pullRequests GitHubPullRequest[]
+
+  @@map("github_integrations")
+}
+
+model GitHubPullRequest {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  issueId        String @map("issue_id") @db.Uuid
+  integrationId  String @map("integration_id") @db.Uuid
+
+  // GitHub PR data
+  prNumber     Int    @map("pr_number")
+  title        String @db.VarChar(500)
+  url          String @db.VarChar(1000)
+  // open | closed | merged
+  state        String @db.VarChar(20)
+  draft        Boolean @default(false)
+  headBranch   String  @map("head_branch") @db.VarChar(500)
+  repoFullName String  @map("repo_full_name") @db.VarChar(500)
+  // GitHub user login who opened the PR
+  authorLogin  String @map("author_login") @db.VarChar(255)
+
+  mergedAt DateTime? @map("merged_at") @db.Timestamptz
+  closedAt DateTime? @map("closed_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  issue        Issue              @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  integration  GitHubIntegration  @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, prNumber, repoFullName, issueId], map: "github_pull_requests_pr_issue_uniq")
+  @@index([issueId])
+  @@index([organizationId])
+  @@map("github_pull_requests")
 }

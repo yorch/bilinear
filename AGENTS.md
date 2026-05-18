@@ -12,6 +12,11 @@ A Linear-style issue tracker built with Next.js 16 (App Router), Apollo Server G
 - **Initiatives** — top-level strategic objects above projects, m:n with `Project`. Progress rolls up from linked projects. UI at `/initiatives`. See PATTERNS.md §39.
 - **Webhooks** — outbound HMAC-signed HTTP subscriptions, admin-only at `/settings/webhooks`. Retry sweep runs in the WS server every 30s. See PATTERNS.md §40 and DATABASE_SCHEMA.md §2.21.
 
+### Feature drop (2026-05-17)
+
+- **GitHub integration** — OAuth connect/disconnect at `/settings/integrations`. Incoming webhooks at `/api/integrations/github/webhook?org=<urlKey>` auto-link PRs to issues by identifier regex and auto-close issues on PR merge. See PATTERNS.md §41 and DATABASE_SCHEMA.md §2.29.
+- **Email notifications** — `NotificationService` now fires transactional emails (assignment, mention, comment, status change) via nodemailer. Per-user opt-out via `User.emailNotificationsEnabled`; toggled through `userUpdateNotificationPreferences` mutation. See PATTERNS.md §35.
+
 ### Hardening pass (2026-05-12)
 
 - **WebSocket auth** — replaced the JWT-leaking `/api/auth/session` GET with `/api/auth/ws-ticket`. The long-lived access token never reaches client JavaScript; instead a scoped 60s `ws_ticket` JWT is issued per (re)connect. `WsClient.connect()` no longer takes a token — it fetches its own. See PATTERNS.md §18.

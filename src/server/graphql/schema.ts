@@ -22,6 +22,7 @@ export const typeDefs = `
     statusEmoji: String
     statusLabel: String
     statusUntilAt: DateTime
+    emailNotificationsEnabled: Boolean!
     createdAt: DateTime!
     updatedAt: DateTime!
   }
@@ -134,6 +135,7 @@ export const typeDefs = `
     cycleId: ID
     organizationId: ID!
     branchName: String
+    pullRequests: [GitHubPullRequest!]!
     cycle: Cycle
     startedAt: DateTime
     completedAt: DateTime
@@ -266,6 +268,10 @@ export const typeDefs = `
     success: Boolean!
     workflowState: WorkflowState
     lastSyncId: String!
+  }
+
+  type BasicPayload {
+    success: Boolean!
   }
 
   type DeletePayload {
@@ -1213,6 +1219,9 @@ export const typeDefs = `
     webhookDeliveries(webhookId: ID!, limit: Int): [WebhookDelivery!]!
     webhookEvents: [String!]!
 
+    # GitHub Integration
+    githubIntegration: GitHubIntegration
+
     """
     Begin a Google OAuth flow. Returns the consent URL (with
     server-controlled redirect_uri and a signed CSRF state) that the client
@@ -1351,5 +1360,51 @@ export const typeDefs = `
     webhookArchive(id: ID!): WebhookPayload!
     webhookDelete(id: ID!): WebhookDeletePayload!
     webhookRotateSecret(id: ID!): WebhookPayload!
+
+    # GitHub Integration
+    githubDisconnect: BasicPayload!
+    githubRotateWebhookSecret(newSecret: String!): GitHubIntegrationPayload!
+
+    # User notification preferences
+    userUpdateNotificationPreferences(emailNotificationsEnabled: Boolean!): UserPayload!
+  }
+
+  # ---------------------------------------------------------------------------
+  # GitHub Integration
+  # ---------------------------------------------------------------------------
+
+  type GitHubIntegration {
+    id: ID!
+    organizationId: ID!
+    githubLogin: String!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+  }
+
+  type GitHubPullRequest {
+    id: ID!
+    issueId: ID!
+    prNumber: Int!
+    title: String!
+    url: String!
+    state: String!
+    draft: Boolean!
+    headBranch: String!
+    repoFullName: String!
+    authorLogin: String!
+    mergedAt: DateTime
+    closedAt: DateTime
+    createdAt: DateTime!
+    updatedAt: DateTime!
+  }
+
+  type GitHubIntegrationPayload {
+    success: Boolean!
+    integration: GitHubIntegration
+  }
+
+  type UserPayload {
+    success: Boolean!
+    user: User
   }
 `;

@@ -2,8 +2,8 @@
 
 ## Issue Tracker — Linear Rebuild
 
-**Version:** 1.4
-**Date:** 2026-04-17
+**Version:** 1.5
+**Date:** 2026-05-17
 **Database:** PostgreSQL 18
 **Source of truth:** `prisma/schema.prisma` — this document describes both the
 implemented schema and design targets for unbuilt features. Read the Prisma
@@ -65,6 +65,7 @@ remains a design target.
 | 2.26 Team Member Roles    | ✅      |                                                                                                       |
 | 2.27 Custom Fields        | ✅      |                                                                                                       |
 | 2.28 Public Roadmaps      | ✅      |                                                                                                       |
+| 2.29 GitHub Integration   | ✅      | Shipped 2026-05-17 — `github_integrations` + `github_pull_requests`                                   |
 
 ---
 
@@ -130,6 +131,9 @@ CREATE TABLE users (
     -- Auth
     password_hash   TEXT,  -- null for OAuth-only users
     google_id       VARCHAR(255),
+
+    -- Notification preferences
+    email_notifications_enabled  BOOLEAN NOT NULL DEFAULT true,
 
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -1257,6 +1261,69 @@ Per-project exposure is controlled by `projects.roadmap_visible` (§2.9). The
 public endpoint joins the two: roadmap row must be `enabled`, project row must
 have `roadmap_visible = true` and not be archived / trashed.
 
+### 2.29 GitHub Integration ✅
+
+Shipped 2026-05-17. One OAuth connection per org. Linked pull requests are
+stored per-issue and updated by the inbound webhook.
+
+```sql
+-- One OAuth connection per workspace. Stores the access token used for
+-- GitHub API calls and the webhook secret used to validate inbound events.
+CREATE TABLE github_integrations (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id  UUID NOT NULL UNIQUE REFERENCES organizations(id) ON DELETE CASCADE,
+    access_token     VARCHAR(500) NOT NULL,  -- GitHub OAuth access token
+    github_login     VARCHAR(255) NOT NULL,  -- GitHub user or org login
+    github_user_id   INTEGER NOT NULL,       -- GitHub numeric user ID
+    webhook_secret   VARCHAR(255) NOT NULL,  -- HMAC secret for X-Hub-Signature-256 validation
+    created_by_id    UUID NOT NULL REFERENCES users(id),
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Pull requests linked to issues. One row per (integration, PR, issue) triple.
+-- Upserted by POST /api/integrations/github/webhook on pull_request events.
+-- state: 'open' | 'closed' | 'merged'
+CREATE TABLE github_pull_requests (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id  UUID NOT NULL REFERENCES organizations(id),
+    issue_id         UUID NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+    integration_id   UUID NOT NULL REFERENCES github_integrations(id) ON DELETE CASCADE,
+    pr_number        INTEGER NOT NULL,
+    title            VARCHAR(500) NOT NULL,
+    url              VARCHAR(1000) NOT NULL,
+    state            VARCHAR(20) NOT NULL,   -- open | closed | merged
+    draft            BOOLEAN NOT NULL DEFAULT false,
+    head_branch      VARCHAR(500) NOT NULL,
+    repo_full_name   VARCHAR(500) NOT NULL,  -- e.g. "acme/backend"
+    author_login     VARCHAR(255) NOT NULL,
+    merged_at        TIMESTAMPTZ,
+    closed_at        TIMESTAMPTZ,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT github_pull_requests_pr_issue_uniq UNIQUE (integration_id, pr_number, repo_full_name, issue_id)
+);
+CREATE INDEX github_pull_requests_issue_id_idx ON github_pull_requests (issue_id);
+CREATE INDEX github_pull_requests_org_id_idx   ON github_pull_requests (organization_id);
+```
+
+**Webhook URL format:** `POST /api/integrations/github/webhook?org=<urlKey>`
+
+The `org` query parameter identifies the workspace. GitHub signs each request
+with `X-Hub-Signature-256: sha256=<hex>`; the handler re-computes HMAC-SHA256
+over the raw body and rejects mismatches with 401.
+
+**PR auto-linking:** the webhook handler extracts issue identifiers (e.g.
+`ENG-123`) from the PR title and head branch via regex `/\b([A-Z][A-Z0-9]{1,9}-\d+)\b/g`,
+looks them up against `issues.identifier` for the org, and upserts a
+`github_pull_requests` row per match.
+
+**Auto-close on merge:** when a PR merges, matched issues whose current state
+category is not `completed` or `canceled` are transitioned to the team's first
+`completed` workflow state.
+
+See PATTERNS.md §41.
+
 ---
 
 ## 3. Entity Relationship Summary
@@ -1319,6 +1386,14 @@ users 1──* auth_tokens
 users 1──* custom_views (creator)
 users 1──* issue_templates (creator)
 users 1──* documents (creator)
+users 1──* github_integrations (creator)
+
+organizations 1──1 github_integrations
+organizations 1──* github_pull_requests
+
+issues 1──* github_pull_requests
+
+github_integrations 1──* github_pull_requests
 ```
 
 ---
@@ -1350,15 +1425,24 @@ prisma/
 ├── schema.prisma
 ├── prisma.config.ts            -- CLI datasource url (Prisma 7)
 └── migrations/
-    ├── 20260407000000_init/                -- consolidated baseline: all pre-Sprint-23 tables,
-    │                                       --   the FTS GIN index, and the partial unique index
-    │                                       --   on teams(organization_id, key) WHERE archived_at IS NULL
-    ├── 20260416120000_custom_fields/       -- custom_field_definitions, custom_field_values,
-    │                                       --   custom_field_type enum (Sprint 23-24)
-    ├── 20260417000001_documents/           -- documents table w/ parent hierarchy (Sprint 35-36)
-    └── 20260417000002_public_roadmaps/     -- public_roadmaps + projects.roadmap_visible (Sprint 53-54)
+    ├── 20260407000000_init/                        -- consolidated baseline: all pre-Sprint-23 tables,
+    │                                               --   the FTS GIN index, and the partial unique index
+    │                                               --   on teams(organization_id, key) WHERE archived_at IS NULL
+    ├── 20260416120000_custom_fields/               -- custom_field_definitions, custom_field_values,
+    │                                               --   custom_field_type enum (Sprint 23-24)
+    ├── 20260417000001_documents/                   -- documents table w/ parent hierarchy (Sprint 35-36)
+    ├── 20260417000002_public_roadmaps/             -- public_roadmaps + projects.roadmap_visible (Sprint 53-54)
+    ├── 20260421000000_drop_document_content_data/  -- remove unused document content_data column
+    ├── 20260422000000_auth_token_family/           -- auth_tokens family/chain columns for refresh rotation
+    ├── 20260505000000_initiatives_webhooks/        -- initiatives, initiative_projects, webhooks,
+    │                                               --   webhook_deliveries (2026-05-05 sprints)
+    ├── 20260512000000_sync_action_committed_at/    -- sync_actions.committed_at + BEFORE INSERT trigger
+    ├── 20260512100000_db_hardening_constraints/    -- check constraints, partial indexes, enum guards
+    └── 20260517000000_github_integration_email_notifications/
+                                                    -- github_integrations, github_pull_requests,
+                                                    --   users.email_notifications_enabled (2026-05-17)
 ```
 
-Tables tagged 📋 in §1.1 (Favorites, Initiatives, Attachments as linked
-resources, Webhooks, Audit Log) are **design targets** — kept in §2 as the
-canonical design reference for when those sprints land.
+Tables tagged 📋 in §1.1 (Favorites, Attachments as linked resources, Audit Log)
+are **design targets** — kept in §2 as the canonical design reference for when
+those sprints land.
