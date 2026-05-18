@@ -93,6 +93,7 @@ model User {
   comments                  Comment[]                  @relation("AuthoredComments")
   resolvedComments          Comment[]                  @relation("ResolvedComments")
   commentReactions          CommentReaction[]
+  issueReactions            IssueReaction[]
   teamMemberRoles           TeamMemberRole[]
   ownedInitiatives          Initiative[]               @relation("InitiativeOwner")
   createdInitiatives        Initiative[]               @relation("InitiativeCreator")
@@ -377,6 +378,7 @@ model Issue {
   comments          Comment[]
   customFieldValues CustomFieldValue[]
   pullRequests      GitHubPullRequest[]
+  reactions         IssueReaction[]
 
   @@unique([teamId, number])
   @@index([organizationId])
@@ -894,6 +896,22 @@ model CommentReaction {
   @@index([commentId])
   @@index([userId])
   @@map("comment_reactions")
+}
+
+model IssueReaction {
+  id        String   @id @default(uuid()) @db.Uuid
+  issueId   String   @map("issue_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  emoji     String   @db.VarChar(50)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([issueId, userId, emoji])
+  @@index([issueId])
+  @@index([userId])
+  @@map("issue_reactions")
 }
 
 model TeamMemberRole {

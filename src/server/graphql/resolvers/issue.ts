@@ -76,6 +76,9 @@ export const issueResolvers = {
       return ctx.services.issue.findById(issue.parentId);
     },
 
+    reactions: async (issue: Issue, _args: unknown, ctx: GraphQLContext) =>
+      ctx.services.issue.listReactions(issue.id),
+
     project: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
       if (!issue.projectId) {
         return null;
@@ -283,6 +286,67 @@ export const issueResolvers = {
         .dispatchEvent(ctx.orgId, 'issue.updated', issue, issue.teamId)
         .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.updated'));
       return { issue, lastSyncId: sync.id.toString(), success: true };
+    },
+
+    issueReactionAdd: async (
+      _parent: unknown,
+      { issueId, emoji }: { issueId: string; emoji: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+
+      const existing = await ctx.services.issue.findById(issueId);
+      if (!existing || existing.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Issue not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
+
+      const reaction = await ctx.services.issue.addReaction(issueId, ctx.userId, emoji);
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'I',
+        'IssueReaction',
+        reaction.id,
+        reaction,
+      );
+      return { lastSyncId: sync.id.toString(), reaction, success: true };
+    },
+
+    issueReactionRemove: async (
+      _parent: unknown,
+      { issueId, emoji }: { issueId: string; emoji: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+
+      const existing = await ctx.services.issue.findById(issueId);
+      if (!existing || existing.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Issue not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
+
+      try {
+        const result = await ctx.services.issue.removeReaction(issueId, ctx.userId, emoji);
+        const sync = await ctx.services.sync.createSyncAction(
+          ctx.orgId,
+          'D',
+          'IssueReaction',
+          result.id,
+          null,
+        );
+        return { lastSyncId: sync.id.toString(), success: true };
+      } catch (err) {
+        if ((err as Error).name === 'IssueReactionNotFoundError') {
+          throw new GraphQLError('Reaction not found', {
+            extensions: { code: 'NOT_FOUND' },
+          });
+        }
+        throw err;
+      }
     },
   },
 

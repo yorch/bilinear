@@ -153,6 +153,22 @@ export const typeDefs = `
     project: Project
     customFieldValues: [CustomFieldValue!]!
     files: [File!]!
+    reactions: [IssueReaction!]!
+  }
+
+  type IssueReaction {
+    id: ID!
+    issueId: ID!
+    userId: ID!
+    emoji: String!
+    user: User!
+    createdAt: DateTime!
+  }
+
+  type IssueReactionPayload {
+    success: Boolean!
+    reaction: IssueReaction
+    lastSyncId: String!
   }
 
   type IssueEdge {
@@ -1267,6 +1283,8 @@ export const typeDefs = `
     issueArchive(id: ID!): IssuePayload!
     issueUnarchive(id: ID!): IssuePayload!
     issueDelete(id: ID!): DeletePayload!
+    issueReactionAdd(issueId: ID!, emoji: String!): IssueReactionPayload!
+    issueReactionRemove(issueId: ID!, emoji: String!): DeletePayload!
 
     issueLabelCreate(input: IssueLabelCreateInput!): IssueLabelPayload!
     issueLabelUpdate(id: ID!, input: IssueLabelUpdateInput!): IssueLabelPayload!

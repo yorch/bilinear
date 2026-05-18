@@ -1,4 +1,4 @@
-import type { Issue, IssueLabel, PrismaClient } from '../../generated/prisma';
+import type { Issue, IssueLabel, IssueReaction, PrismaClient } from '../../generated/prisma';
 
 type PrismaLike = Pick<PrismaClient, 'issue' | 'issueLabelAssignment' | 'team'>;
 
@@ -590,6 +590,66 @@ export class IssueService {
     }
 
     return where;
+  }
+
+  async addReaction(
+    issueId: string,
+    userId: string,
+    emoji: string,
+  ): Promise<IssueReaction & { user: unknown }> {
+    const existing = await this.prisma.issue.findUnique({
+      where: { id: issueId },
+    });
+    if (!existing) {
+      throw new IssueNotFoundError();
+    }
+
+    return this.prisma.issueReaction.upsert({
+      create: { emoji, issueId, userId },
+      include: { user: true },
+      update: {},
+      where: { issueId_userId_emoji: { emoji, issueId, userId } },
+    }) as unknown as IssueReaction & { user: unknown };
+  }
+
+  async removeReaction(
+    issueId: string,
+    userId: string,
+    emoji: string,
+  ): Promise<{ id: string }> {
+    const reaction = await this.prisma.issueReaction.findUnique({
+      where: { issueId_userId_emoji: { emoji, issueId, userId } },
+    });
+    if (!reaction) {
+      throw new IssueReactionNotFoundError();
+    }
+
+    await this.prisma.issueReaction.delete({
+      where: { id: reaction.id },
+    });
+    return { id: reaction.id };
+  }
+
+  async listReactions(issueId: string): Promise<Array<IssueReaction & { user: unknown }>> {
+    return this.prisma.issueReaction.findMany({
+      include: { user: true },
+      orderBy: { createdAt: 'asc' },
+      where: { issueId },
+    }) as unknown as Array<IssueReaction & { user: unknown }>;
+  }
+}
+
+export class IssueNotFoundError extends Error {
+  constructor() {
+    super('Issue not found');
+    this.name = 'IssueNotFoundError';
+  }
+}
+
+export class IssueReactionNotFoundError extends Error {
+  constructor() {
+    super('Reaction not found');
+    this.name = 'IssueReactionNotFoundError';
   }
 }
 
