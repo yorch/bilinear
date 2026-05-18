@@ -1064,12 +1064,46 @@ export const typeDefs = `
     owner: User
     creator: User
     projects: [Project!]!
+    updates: [InitiativeUpdate!]!
     startedAt: DateTime
     completedAt: DateTime
     canceledAt: DateTime
     createdAt: DateTime!
     updatedAt: DateTime!
     archivedAt: DateTime
+  }
+
+  type InitiativeUpdate {
+    id: ID!
+    initiativeId: ID!
+    body: String!
+    bodyData: JSON!
+    health: String!
+    user: User!
+    editedAt: DateTime
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    archivedAt: DateTime
+  }
+
+  type InitiativeUpdatePayload {
+    success: Boolean!
+    initiativeUpdate: InitiativeUpdate
+    lastSyncId: String!
+  }
+
+  input InitiativeUpdateCreateInput {
+    id: String
+    initiativeId: String!
+    body: String!
+    bodyData: JSON!
+    health: String!
+  }
+
+  input InitiativeUpdateEditInput {
+    body: String
+    bodyData: JSON
+    health: String
   }
 
   type InitiativePayload {
@@ -1386,6 +1420,9 @@ export const typeDefs = `
     initiativeDelete(id: ID!): DeletePayload!
     initiativeAddProject(initiativeId: ID!, projectId: ID!): InitiativePayload!
     initiativeRemoveProject(initiativeId: ID!, projectId: ID!): InitiativePayload!
+    initiativeUpdateCreate(input: InitiativeUpdateCreateInput!): InitiativeUpdatePayload!
+    initiativeUpdateUpdate(id: ID!, input: InitiativeUpdateEditInput!): InitiativeUpdatePayload!
+    initiativeUpdateDelete(id: ID!): DeletePayload!
 
     webhookCreate(input: WebhookCreateInput!): WebhookPayload!
     webhookUpdate(id: ID!, input: WebhookUpdateInput!): WebhookPayload!

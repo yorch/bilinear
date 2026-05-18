@@ -612,11 +612,7 @@ export class IssueService {
     }) as unknown as IssueReaction & { user: unknown };
   }
 
-  async removeReaction(
-    issueId: string,
-    userId: string,
-    emoji: string,
-  ): Promise<{ id: string }> {
+  async removeReaction(issueId: string, userId: string, emoji: string): Promise<{ id: string }> {
     const reaction = await this.prisma.issueReaction.findUnique({
       where: { issueId_userId_emoji: { emoji, issueId, userId } },
     });

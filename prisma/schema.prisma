@@ -97,6 +97,7 @@ model User {
   teamMemberRoles           TeamMemberRole[]
   ownedInitiatives          Initiative[]               @relation("InitiativeOwner")
   createdInitiatives        Initiative[]               @relation("InitiativeCreator")
+  initiativeUpdates         InitiativeUpdate[]         @relation("InitiativeUpdateAuthor")
   createdWebhooks           Webhook[]                  @relation("WebhookCreator")
   githubIntegrations        GitHubIntegration[]        @relation("GitHubIntegrationCreator")
 
@@ -1020,11 +1021,34 @@ model Initiative {
   owner        User?               @relation("InitiativeOwner", fields: [ownerId], references: [id])
   creator      User?               @relation("InitiativeCreator", fields: [creatorId], references: [id])
   projects     InitiativeProject[]
+  updates      InitiativeUpdate[]
 
   @@index([organizationId])
   @@index([status])
   @@index([ownerId])
   @@map("initiatives")
+}
+
+/// Status update on an initiative (status report style). Mirrors ProjectUpdate
+/// for use in the initiative detail timeline.
+model InitiativeUpdate {
+  id           String    @id @default(uuid()) @db.Uuid
+  initiativeId String    @map("initiative_id") @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  body         String
+  bodyData     Json      @map("body_data")
+  health       String    @db.VarChar(20)
+  editedAt     DateTime? @map("edited_at") @db.Timestamptz
+
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz
+
+  initiative Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  user       User       @relation("InitiativeUpdateAuthor", fields: [userId], references: [id])
+
+  @@index([initiativeId])
+  @@map("initiative_updates")
 }
 
 /// Many-to-many join: each row associates a Project to an Initiative.

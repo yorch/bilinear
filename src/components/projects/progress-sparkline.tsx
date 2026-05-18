@@ -4,17 +4,17 @@ import { useCallback, useEffect, useState } from 'react';
 import { gql } from '@/lib/graphql';
 
 interface ProgressHistoryPoint {
-  date: string;
   completedIssueCount: number;
+  date: string;
   issueCount: number;
 }
 
 interface ProgressSparklineProps {
+  /** Pixel height of the rendered SVG. */
+  height?: number;
   projectId: string;
   /** Pixel width of the rendered SVG. */
   width?: number;
-  /** Pixel height of the rendered SVG. */
-  height?: number;
 }
 
 const PROGRESS_HISTORY_QUERY = `
@@ -30,11 +30,7 @@ const PROGRESS_HISTORY_QUERY = `
   }
 `;
 
-export function ProgressSparkline({
-  projectId,
-  width = 160,
-  height = 28,
-}: ProgressSparklineProps) {
+export function ProgressSparkline({ projectId, width = 160, height = 28 }: ProgressSparklineProps) {
   const [points, setPoints] = useState<ProgressHistoryPoint[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -59,9 +55,7 @@ export function ProgressSparkline({
   }
   if (points.length < 2) {
     return (
-      <span className="text-xs text-zinc-400">
-        Not enough history yet — check back tomorrow.
-      </span>
+      <span className="text-xs text-zinc-400">Not enough history yet — check back tomorrow.</span>
     );
   }
 

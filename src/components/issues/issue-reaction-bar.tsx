@@ -7,15 +7,15 @@ import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 
 interface Reaction {
-  id: string;
   emoji: string;
-  userId: string;
+  id: string;
   user: { id: string; displayName: string };
+  userId: string;
 }
 
 interface IssueReactionBarProps {
-  issueId: string;
   currentUserId: string | undefined;
+  issueId: string;
 }
 
 const QUICK_EMOJIS = ['👍', '👎', '❤️', '🎉', '😄', '🚀', '👀', '😕'];
@@ -77,19 +77,16 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
     return () => window.removeEventListener('mousedown', onDown);
   }, [showPicker]);
 
-  const counts = reactions.reduce<Record<string, { count: number; reacted: boolean }>>(
-    (acc, r) => {
-      if (!acc[r.emoji]) {
-        acc[r.emoji] = { count: 0, reacted: false };
-      }
-      acc[r.emoji].count++;
-      if (r.userId === currentUserId) {
-        acc[r.emoji].reacted = true;
-      }
-      return acc;
-    },
-    {},
-  );
+  const counts = reactions.reduce<Record<string, { count: number; reacted: boolean }>>((acc, r) => {
+    if (!acc[r.emoji]) {
+      acc[r.emoji] = { count: 0, reacted: false };
+    }
+    acc[r.emoji].count++;
+    if (r.userId === currentUserId) {
+      acc[r.emoji].reacted = true;
+    }
+    return acc;
+  }, {});
 
   const toggle = async (emoji: string, hasReacted: boolean) => {
     try {
