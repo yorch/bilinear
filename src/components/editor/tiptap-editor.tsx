@@ -17,6 +17,7 @@ import { TaskItem } from '@tiptap/extension-task-item';
 import { TaskList } from '@tiptap/extension-task-list';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Underline } from '@tiptap/extension-underline';
+import type { Editor } from '@tiptap/react';
 import { EditorContent, ReactRenderer, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 // `common` ships the ~35 most popular grammars (js/ts/py/go/rust/sql/etc)
@@ -35,6 +36,57 @@ import { SlashCommands } from './slash-commands';
 import './tiptap-editor.css';
 
 const lowlight = createLowlight(common);
+
+// Matches the server allow-list in /api/upload (PDFs and SVGs are accepted by
+// the endpoint but only raster/vector image formats make sense to embed via
+// paste/drop, so we filter client-side too).
+const PASTE_IMAGE_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'image/svg+xml',
+]);
+
+async function uploadAndInsertImage(file: File, editorRef: React.RefObject<Editor | null>) {
+  if (!PASTE_IMAGE_TYPES.has(file.type)) {
+    return;
+  }
+  const fd = new FormData();
+  fd.append('file', file);
+  let url: string | null = null;
+  try {
+    const res = await fetch('/api/upload', { body: fd, method: 'POST' });
+    if (!res.ok) {
+      return;
+    }
+    const json = (await res.json()) as { url?: string };
+    url = json.url ?? null;
+  } catch {
+    return;
+  }
+  const editor = editorRef.current;
+  if (url && editor) {
+    editor.chain().focus().setImage({ src: url }).run();
+  }
+}
+
+function uploadImagesFromList(
+  files: FileList | null | undefined,
+  editorRef: React.RefObject<Editor | null>,
+): boolean {
+  if (!files || files.length === 0) {
+    return false;
+  }
+  const images = Array.from(files).filter(f => f.type.startsWith('image/'));
+  if (images.length === 0) {
+    return false;
+  }
+  for (const file of images) {
+    uploadAndInsertImage(file, editorRef);
+  }
+  return true;
+}
 
 export interface TipTapEditorProps {
   autofocus?: boolean;
@@ -170,6 +222,9 @@ export function TipTapEditor({
   onChangeRef.current = onChange;
 
   const imageInputRef = useRef<HTMLInputElement>(null);
+  // Editor ref so the paste/drop handlers (captured at editor creation) can
+  // reach the live editor instance from inside an async upload callback.
+  const editorRef = useRef<Editor | null>(null);
 
   // Keep a ref to the latest mentionUsers so the suggestion `items` callback
   // always reads fresh data even though TipTap extensions cannot be hot-reloaded.
@@ -231,6 +286,33 @@ export function TipTapEditor({
           readOnly ? 'cursor-default' : 'cursor-text',
         ),
       },
+      handleDrop: (_view, event) => {
+        const files = (event as DragEvent).dataTransfer?.files;
+        return uploadImagesFromList(files, editorRef);
+      },
+      handlePaste: (_view, event) => {
+        const items = (event as ClipboardEvent).clipboardData?.items;
+        if (!items) {
+          return false;
+        }
+        const files: File[] = [];
+        for (const item of Array.from(items)) {
+          if (item.kind === 'file' && item.type.startsWith('image/')) {
+            const file = item.getAsFile();
+            if (file) {
+              files.push(file);
+            }
+          }
+        }
+        if (files.length === 0) {
+          return false;
+        }
+        event.preventDefault();
+        for (const file of files) {
+          uploadAndInsertImage(file, editorRef);
+        }
+        return true;
+      },
     },
     extensions,
     immediatelyRender: false,
@@ -239,6 +321,10 @@ export function TipTapEditor({
       onChangeRef.current?.(ed.getHTML());
     },
   });
+
+  useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
 
   useEffect(() => {
     if (!editor) {
