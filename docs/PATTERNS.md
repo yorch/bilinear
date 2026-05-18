@@ -1221,7 +1221,7 @@ await ctx.services.notification.create({
 | `createForIssueAssignment(orgId, issueId, assigneeId, actorId)` | `ISSUE_ASSIGNED` | Yes — skipped if `assigneeId === actorId` |
 | `createForStatusChange(orgId, issueId, actorId, oldStatus, newStatus)` | `ISSUE_STATUS_CHANGED` | Yes — fan-out to all subscribers except actor |
 | `createForMention(orgId, issueId, mentionedUserId, actorId, excerpt?)` | `ISSUE_MENTIONED` | Yes — skipped if `mentionedUserId === actorId` |
-| `notifyCommentSubscribers(orgId, issueId, actorId, commentId, excerpt?)` | `ISSUE_COMMENT` | Yes — fan-out to all subscribers except actor |
+| `notifyCommentSubscribers(orgId, issueId, actorId, commentId, excerpt?)` | `ISSUE_COMMENTED` | Yes — fan-out to all subscribers except actor |
 
 **Email opt-out.** `User.emailNotificationsEnabled` (boolean, default `true`) gates all outgoing notification emails. `resolveEmailContext()` checks the flag before calling any sender — no email is ever sent to an opted-out user. Users toggle the preference via `userUpdateNotificationPreferences` mutation.
 
@@ -1404,7 +1404,7 @@ The `?org=` query param identifies the workspace. The route validates the `X-Hub
 /\b([A-Z][A-Z0-9]{1,9}-\d+)\b/g   (case-insensitive match on uppercased input)
 ```
 
-Each matched identifier is resolved to an `Issue` in the org, then a `github_pull_requests` row is upserted (unique on `[integrationId, prNumber, repoFullName]`). Handled actions: `opened`, `reopened`, `synchronize`, `closed`.
+Each matched identifier is resolved to an `Issue` in the org, then a `github_pull_requests` row is upserted (unique on `[integrationId, prNumber, repoFullName, issueId]` — one row per PR+issue pair, so one PR can link to many issues). Handled actions: `opened`, `reopened`, `synchronize`, `closed`.
 
 ### PR Auto-Close on Merge
 

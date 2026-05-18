@@ -1301,7 +1301,7 @@ CREATE TABLE github_pull_requests (
     closed_at        TIMESTAMPTZ,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT github_pull_requests_unique UNIQUE (integration_id, pr_number, repo_full_name)
+    CONSTRAINT github_pull_requests_pr_issue_uniq UNIQUE (integration_id, pr_number, repo_full_name, issue_id)
 );
 CREATE INDEX github_pull_requests_issue_id_idx ON github_pull_requests (issue_id);
 CREATE INDEX github_pull_requests_org_id_idx   ON github_pull_requests (organization_id);
