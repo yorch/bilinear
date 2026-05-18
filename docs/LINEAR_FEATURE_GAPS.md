@@ -10,7 +10,7 @@ shipped.
 
 ## Priority 1 — High-impact, Core Differentiators
 
-### 1.1 GitHub Integration 🚧 _(PR: claude/audit-linear-features-0qIDa)_
+### 1.1 GitHub Integration ✅ _(PR #37, shipped 2026-05-17)_
 
 Connect a GitHub account to a workspace so PRs are automatically linked to issues and
 issues can be auto-closed on merge.
@@ -53,7 +53,7 @@ Note: there is no global `GITHUB_WEBHOOK_SECRET`. Each workspace generates its o
 
 ---
 
-### 1.2 Email Notifications 🚧 _(PR: claude/audit-linear-features-0qIDa)_
+### 1.2 Email Notifications ✅ _(PR #37, shipped 2026-05-17)_
 
 Send email notifications for assignment, @mention, new comment, and status change events
 to users who have email notifications enabled (default on, per-user opt-out).
@@ -410,3 +410,5 @@ Native apps that wrap the web experience with offline push and tighter OS integr
 | — | WebSocket auth hardening | #34 | 2026-05-12 |
 | — | SyncAction committed_at watermark | #34 | 2026-05-12 |
 | — | Tenant guard hardening | #34 | 2026-05-12 |
+| 1.1 | GitHub Integration | #37 | 2026-05-17 |
+| 1.2 | Email Notifications | #37 | 2026-05-17 |
