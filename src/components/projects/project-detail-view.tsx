@@ -3,6 +3,7 @@
 import { ArrowLeft, Calendar, CircleDot, Target, User } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
+import { ProgressSparkline } from '@/components/projects/progress-sparkline';
 import { ProjectUpdatesSection } from '@/components/projects/project-updates-section';
 import { SimpleSelect } from '@/components/ui/select';
 import { gql } from '@/lib/graphql';
@@ -156,6 +157,10 @@ export const ProjectDetailView = observer(function ProjectDetailView({
                 className="h-full rounded-full bg-indigo-500 transition-all"
                 style={{ width: `${progress}%` }}
               />
+            </div>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-xs text-zinc-400">Trend</span>
+              <ProgressSparkline projectId={project.id} />
             </div>
           </div>
           {milestones.length > 0 && (

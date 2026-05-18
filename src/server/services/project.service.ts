@@ -1,9 +1,41 @@
 import type {
+  Prisma,
   PrismaClient,
   Project,
   ProjectMilestone,
   ProjectUpdate,
 } from '../../generated/prisma';
+
+export interface ProgressHistoryEntry {
+  /** UTC date in YYYY-MM-DD form */
+  t: string;
+  v: number;
+}
+
+function parseHistory(value: unknown): ProgressHistoryEntry[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  return value.filter(
+    (e): e is ProgressHistoryEntry =>
+      typeof e === 'object' &&
+      e !== null &&
+      typeof (e as { t?: unknown }).t === 'string' &&
+      typeof (e as { v?: unknown }).v === 'number',
+  );
+}
+
+function appendOrReplaceToday(
+  history: ProgressHistoryEntry[],
+  today: string,
+  value: number,
+): ProgressHistoryEntry[] {
+  const last = history[history.length - 1];
+  if (last?.t === today) {
+    return [...history.slice(0, -1), { t: today, v: value }];
+  }
+  return [...history, { t: today, v: value }];
+}
 
 export interface ProjectCreateInput {
   color?: string;
@@ -283,6 +315,99 @@ export class ProjectService {
       }),
     ]);
     return { progress: total > 0 ? completed / total : 0, scope: total };
+  }
+
+  /**
+   * Append today's progress snapshot to the project's history JSONB columns
+   * if the most recent entry isn't already from today. Cheap to call on every
+   * progress read — a same-day call short-circuits without a write.
+   *
+   * Each history array stores entries of the shape `{ t: 'YYYY-MM-DD', v: number }`,
+   * one per UTC day. Same-day duplicates overwrite (latest value wins) so the
+   * sparkline reflects end-of-day state. Returns the freshly-stamped arrays.
+   */
+  async recordProgressSnapshotIfStale(projectId: string): Promise<{
+    completedIssueCountHistory: ProgressHistoryEntry[];
+    issueCountHistory: ProgressHistoryEntry[];
+    completedScopeHistory: ProgressHistoryEntry[];
+    scopeHistory: ProgressHistoryEntry[];
+  }> {
+    const project = await this.prisma.project.findUnique({
+      select: {
+        completedIssueCountHistory: true,
+        completedScopeHistory: true,
+        issueCountHistory: true,
+        scopeHistory: true,
+      },
+      where: { id: projectId },
+    });
+    const empty: ProgressHistoryEntry[] = [];
+    const completedIssueCountHistory = parseHistory(project?.completedIssueCountHistory) ?? empty;
+    const issueCountHistory = parseHistory(project?.issueCountHistory) ?? empty;
+    const completedScopeHistory = parseHistory(project?.completedScopeHistory) ?? empty;
+    const scopeHistory = parseHistory(project?.scopeHistory) ?? empty;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const lastIssueCount = issueCountHistory[issueCountHistory.length - 1];
+    if (lastIssueCount?.t === today) {
+      // We already wrote today's snapshot; skip the recompute + write entirely.
+      return {
+        completedIssueCountHistory,
+        completedScopeHistory,
+        issueCountHistory,
+        scopeHistory,
+      };
+    }
+
+    // Aggregate scope (sum of estimate, treating null as 0) and completed scope
+    // in two single round trips rather than per-issue.
+    const [issueCount, completedIssueCount, scopeAgg, completedScopeAgg] = await Promise.all([
+      this.prisma.issue.count({
+        where: { archivedAt: null, projectId, trashed: false },
+      }),
+      this.prisma.issue.count({
+        where: {
+          archivedAt: null,
+          completedAt: { not: null },
+          projectId,
+          trashed: false,
+        },
+      }),
+      this.prisma.issue.aggregate({
+        _sum: { estimate: true },
+        where: { archivedAt: null, projectId, trashed: false },
+      }),
+      this.prisma.issue.aggregate({
+        _sum: { estimate: true },
+        where: {
+          archivedAt: null,
+          completedAt: { not: null },
+          projectId,
+          trashed: false,
+        },
+      }),
+    ]);
+
+    const next = {
+      completedIssueCountHistory: appendOrReplaceToday(
+        completedIssueCountHistory,
+        today,
+        completedIssueCount,
+      ),
+      completedScopeHistory: appendOrReplaceToday(
+        completedScopeHistory,
+        today,
+        completedScopeAgg._sum.estimate ?? 0,
+      ),
+      issueCountHistory: appendOrReplaceToday(issueCountHistory, today, issueCount),
+      scopeHistory: appendOrReplaceToday(scopeHistory, today, scopeAgg._sum.estimate ?? 0),
+    };
+
+    await this.prisma.project.update({
+      data: next as unknown as Prisma.ProjectUpdateInput,
+      where: { id: projectId },
+    });
+    return next;
   }
 
   // ─── Milestones ──────────────────────────────────────────────────────────────

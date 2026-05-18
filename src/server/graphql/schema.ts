@@ -435,6 +435,20 @@ export const typeDefs = `
     members: [User!]!
     milestones: [ProjectMilestone!]!
     updates: [ProjectUpdate!]!
+    progressHistory: [ProgressHistoryPoint!]!
+  }
+
+  type ProgressHistoryPoint {
+    """UTC date (YYYY-MM-DD)"""
+    date: String!
+    """Number of completed issues on that date"""
+    completedIssueCount: Int!
+    """Total issue count (scope, by count) on that date"""
+    issueCount: Int!
+    """Sum of estimates for completed issues on that date"""
+    completedScope: Float!
+    """Sum of estimates for all in-scope issues on that date"""
+    scope: Float!
   }
 
   type PublicRoadmap {
