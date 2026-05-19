@@ -323,8 +323,10 @@ export class ProjectService {
    * progress read — a same-day call short-circuits without a write.
    *
    * Each history array stores entries of the shape `{ t: 'YYYY-MM-DD', v: number }`,
-   * one per UTC day. Same-day duplicates overwrite (latest value wins) so the
-   * sparkline reflects end-of-day state. Returns the freshly-stamped arrays.
+   * one per UTC day: the FIRST progress read of each UTC day stamps that day's
+   * value and subsequent reads return the cached numbers unchanged. Intra-day
+   * deltas are not captured by design — the sparkline shows day-resolution
+   * trend. Returns the (possibly freshly-stamped) arrays.
    */
   async recordProgressSnapshotIfStale(projectId: string): Promise<{
     completedIssueCountHistory: ProgressHistoryEntry[];

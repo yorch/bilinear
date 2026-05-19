@@ -292,6 +292,7 @@ export function CommentThread({
       {/* New comment composer */}
       <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
         <CommentComposer
+          issueId={issueId}
           mentionUsers={mentionUsers}
           onChange={setNewComment}
           onSubmit={body => submitComment(body)}
@@ -578,6 +579,7 @@ function CommentCard({
               content={editBody}
               onChange={setEditBody}
               showToolbar
+              uploadIssueId={issueId}
             />
             <div className="flex gap-2">
               <button
@@ -657,6 +659,7 @@ function CommentCard({
         <div className="ml-4 mt-2 border-l-2 border-zinc-200 pl-4 dark:border-zinc-700">
           <CommentComposer
             compact
+            issueId={issueId}
             mentionUsers={mentionUsers}
             onChange={setReplyBody}
             onSubmit={body => {
@@ -681,6 +684,7 @@ function CommentComposer({
   onChange,
   mentionUsers,
   compact = false,
+  issueId,
 }: {
   placeholder: string;
   onSubmit: (body: string) => void;
@@ -689,6 +693,7 @@ function CommentComposer({
   onChange: (v: string) => void;
   mentionUsers?: MentionItem[];
   compact?: boolean;
+  issueId?: string;
 }) {
   const isEmpty = !value || value === '<p></p>' || value.trim() === '';
 
@@ -706,6 +711,7 @@ function CommentComposer({
         onChange={onChange}
         placeholder={placeholder}
         showToolbar={!compact}
+        uploadIssueId={issueId}
       />
       <div className="mt-2 flex justify-end">
         <button

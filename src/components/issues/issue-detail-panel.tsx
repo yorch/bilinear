@@ -337,6 +337,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
                   placeholder="Add a description… (supports **markdown**, /slash commands, @mentions)"
                   readOnly={false}
                   showToolbar={true}
+                  uploadIssueId={issue.id}
                 />
               </div>
             ) : (

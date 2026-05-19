@@ -90,10 +90,11 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
 
   const toggle = async (emoji: string, hasReacted: boolean) => {
     try {
-      if (hasReacted) {
-        await gql(REACTION_REMOVE_MUTATION, { emoji, issueId });
-      } else {
-        await gql(REACTION_ADD_MUTATION, { emoji, issueId });
+      const res = hasReacted
+        ? await gql(REACTION_REMOVE_MUTATION, { emoji, issueId })
+        : await gql(REACTION_ADD_MUTATION, { emoji, issueId });
+      if (res.errors?.length) {
+        throw new Error('mutation failed');
       }
       await fetchReactions();
     } catch {

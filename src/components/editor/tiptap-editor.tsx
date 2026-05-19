@@ -48,32 +48,77 @@ const PASTE_IMAGE_TYPES = new Set([
   'image/svg+xml',
 ]);
 
-async function uploadAndInsertImage(file: File, editorRef: React.RefObject<Editor | null>) {
+interface UploadContext {
+  issueId?: string;
+  projectId?: string;
+}
+
+/**
+ * `/api/uploads/[...path]` only serves files attached to an issue or project
+ * inside the caller's org (`FileService.findByKeyInOrg`). Posting to
+ * `/api/upload` without `issueId` or `projectId` therefore creates an orphan
+ * `File` row whose URL 404s for everyone. The paste/drop path uses the
+ * server upload only when the caller provides a parent; otherwise we fall
+ * back to a base64 data URL (same as the toolbar button) so the image still
+ * renders inline.
+ */
+const PASTE_INLINE_LIMIT = 2 * 1024 * 1024; // 2 MB
+
+async function insertPastedImage(
+  file: File,
+  editorRef: React.RefObject<Editor | null>,
+  ctx: UploadContext,
+) {
   if (!PASTE_IMAGE_TYPES.has(file.type)) {
     return;
   }
-  const fd = new FormData();
-  fd.append('file', file);
-  let url: string | null = null;
-  try {
-    const res = await fetch('/api/upload', { body: fd, method: 'POST' });
-    if (!res.ok) {
-      return;
-    }
-    const json = (await res.json()) as { url?: string };
-    url = json.url ?? null;
-  } catch {
+  const editor = editorRef.current;
+  if (!editor) {
     return;
   }
-  const editor = editorRef.current;
-  if (url && editor) {
-    editor.chain().focus().setImage({ src: url }).run();
+
+  if (ctx.issueId || ctx.projectId) {
+    const fd = new FormData();
+    fd.append('file', file);
+    if (ctx.issueId) {
+      fd.append('issueId', ctx.issueId);
+    }
+    if (ctx.projectId) {
+      fd.append('projectId', ctx.projectId);
+    }
+    try {
+      const res = await fetch('/api/upload', { body: fd, method: 'POST' });
+      if (res.ok) {
+        const json = (await res.json()) as { url?: string };
+        if (json.url) {
+          editorRef.current?.chain().focus().setImage({ src: json.url }).run();
+          return;
+        }
+      }
+    } catch {
+      // fall through to inline fallback
+    }
   }
+
+  // No parent context (or upload failed): embed as base64 inline, matching
+  // the toolbar button behavior. 2 MB cap keeps row payloads sane.
+  if (file.size > PASTE_INLINE_LIMIT) {
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const src = e.target?.result as string;
+    if (src) {
+      editorRef.current?.chain().focus().setImage({ src }).run();
+    }
+  };
+  reader.readAsDataURL(file);
 }
 
 function uploadImagesFromList(
   files: FileList | null | undefined,
   editorRef: React.RefObject<Editor | null>,
+  ctx: UploadContext,
 ): boolean {
   if (!files || files.length === 0) {
     return false;
@@ -83,7 +128,7 @@ function uploadImagesFromList(
     return false;
   }
   for (const file of images) {
-    uploadAndInsertImage(file, editorRef);
+    insertPastedImage(file, editorRef, ctx);
   }
   return true;
 }
@@ -99,6 +144,14 @@ export interface TipTapEditorProps {
   placeholder?: string;
   readOnly?: boolean;
   showToolbar?: boolean;
+  /**
+   * Parent issue id for pasted/dropped image uploads. Required for the
+   * `/api/upload` path to attach the new File to a parent the caller can
+   * see; without it pastes fall back to base64 inline.
+   */
+  uploadIssueId?: string;
+  /** Parent project id for pasted/dropped image uploads. See `uploadIssueId`. */
+  uploadProjectId?: string;
 }
 
 // Popup dimensions match the MentionList CSS (w-48 / max-h-48)
@@ -217,9 +270,19 @@ export function TipTapEditor({
   autofocus = false,
   showToolbar = false,
   mentionUsers,
+  uploadIssueId,
+  uploadProjectId,
 }: TipTapEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+
+  // Capture the latest upload context in a ref so the paste/drop handlers
+  // (created once at editor mount) always see fresh ids.
+  const uploadCtxRef = useRef<UploadContext>({
+    issueId: uploadIssueId,
+    projectId: uploadProjectId,
+  });
+  uploadCtxRef.current = { issueId: uploadIssueId, projectId: uploadProjectId };
 
   const imageInputRef = useRef<HTMLInputElement>(null);
   // Editor ref so the paste/drop handlers (captured at editor creation) can
@@ -288,7 +351,7 @@ export function TipTapEditor({
       },
       handleDrop: (_view, event) => {
         const files = (event as DragEvent).dataTransfer?.files;
-        return uploadImagesFromList(files, editorRef);
+        return uploadImagesFromList(files, editorRef, uploadCtxRef.current);
       },
       handlePaste: (_view, event) => {
         const items = (event as ClipboardEvent).clipboardData?.items;
@@ -309,7 +372,7 @@ export function TipTapEditor({
         }
         event.preventDefault();
         for (const file of files) {
-          uploadAndInsertImage(file, editorRef);
+          insertPastedImage(file, editorRef, uploadCtxRef.current);
         }
         return true;
       },

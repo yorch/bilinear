@@ -223,18 +223,6 @@ function UpdateFormFields({
     <>
       <div className="mb-3 flex gap-1">
         <span className="mr-1 self-center text-xs text-zinc-500 dark:text-zinc-400">Health:</span>
-        <button
-          className={cn(
-            'rounded px-2 py-0.5 text-xs font-medium transition-colors',
-            health === ''
-              ? 'bg-zinc-300 text-zinc-700 dark:bg-zinc-600 dark:text-zinc-100'
-              : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700',
-          )}
-          onClick={() => onHealthChange('')}
-          type="button"
-        >
-          None
-        </button>
         {PROJECT_HEALTH_OPTIONS.map(h => (
           <button
             className={cn(
@@ -272,7 +260,7 @@ interface CreateUpdateFormProps {
 
 function CreateUpdateForm({ initiativeId, onClose, onCreated }: CreateUpdateFormProps) {
   const [body, setBody] = useState('');
-  const [health, setHealth] = useState('');
+  const [health, setHealth] = useState('onTrack');
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
@@ -285,7 +273,7 @@ function CreateUpdateForm({ initiativeId, onClose, onCreated }: CreateUpdateForm
         input: {
           body: body.trim(),
           bodyData: {},
-          health: health || 'onTrack',
+          health,
           initiativeId,
         },
       });
@@ -360,7 +348,7 @@ function EditUpdateForm({
   onSaved,
 }: EditUpdateFormProps) {
   const [body, setBody] = useState(initialBody);
-  const [health, setHealth] = useState(initialHealth);
+  const [health, setHealth] = useState(initialHealth || 'onTrack');
   const [submitting, setSubmitting] = useState(false);
 
   const handleSave = async () => {
@@ -371,7 +359,7 @@ function EditUpdateForm({
     try {
       const res = await gql(EDIT_MUTATION, {
         id: updateId,
-        input: { body: body.trim(), bodyData: {}, health: health || 'onTrack' },
+        input: { body: body.trim(), bodyData: {}, health },
       });
       if (res.errors?.length) {
         throw new Error('mutation failed');
@@ -423,7 +411,10 @@ function DeleteUpdateButton({ updateId, onDeleted }: { updateId: string; onDelet
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      await gql(DELETE_MUTATION, { id: updateId });
+      const res = await gql(DELETE_MUTATION, { id: updateId });
+      if (res.errors?.length) {
+        throw new Error('mutation failed');
+      }
       await onDeleted();
     } catch {
       toast.error('Failed to delete update');

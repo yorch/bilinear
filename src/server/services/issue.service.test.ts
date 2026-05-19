@@ -696,4 +696,80 @@ describe('IssueService', () => {
       expect(call.where.archivedAt).toBeUndefined();
     });
   });
+
+  describe('reactions', () => {
+    const REACTION = {
+      createdAt: new Date(),
+      emoji: '👍',
+      id: '00000000-0000-0000-0000-000000000900',
+      issueId: TEST_ISSUE.id,
+      userId: TEST_USER.id,
+    };
+
+    describe('addReaction', () => {
+      it('upserts on the (issueId,userId,emoji) tuple', async () => {
+        prisma.issue.findUnique.mockResolvedValue(TEST_ISSUE);
+        prisma.issueReaction.upsert.mockResolvedValue({ ...REACTION, user: TEST_USER });
+
+        const result = await service.addReaction(TEST_ISSUE.id, TEST_USER.id, '👍');
+
+        expect(prisma.issueReaction.upsert).toHaveBeenCalledWith({
+          create: { emoji: '👍', issueId: TEST_ISSUE.id, userId: TEST_USER.id },
+          include: { user: true },
+          update: {},
+          where: {
+            issueId_userId_emoji: {
+              emoji: '👍',
+              issueId: TEST_ISSUE.id,
+              userId: TEST_USER.id,
+            },
+          },
+        });
+        expect(result.emoji).toBe('👍');
+      });
+
+      it('rejects with IssueNotFoundError when issue is missing', async () => {
+        prisma.issue.findUnique.mockResolvedValue(null);
+        await expect(service.addReaction(TEST_ISSUE.id, TEST_USER.id, '👍')).rejects.toThrow(
+          'Issue not found',
+        );
+      });
+    });
+
+    describe('removeReaction', () => {
+      it('deletes the matching reaction row', async () => {
+        prisma.issueReaction.findUnique.mockResolvedValue(REACTION);
+        prisma.issueReaction.delete.mockResolvedValue(REACTION);
+
+        const result = await service.removeReaction(TEST_ISSUE.id, TEST_USER.id, '👍');
+
+        expect(prisma.issueReaction.delete).toHaveBeenCalledWith({
+          where: { id: REACTION.id },
+        });
+        expect(result).toEqual({ id: REACTION.id });
+      });
+
+      it('rejects with IssueReactionNotFoundError when nothing to remove', async () => {
+        prisma.issueReaction.findUnique.mockResolvedValue(null);
+        await expect(service.removeReaction(TEST_ISSUE.id, TEST_USER.id, '👍')).rejects.toThrow(
+          'Reaction not found',
+        );
+      });
+    });
+
+    describe('listReactions', () => {
+      it('returns reactions ordered by createdAt asc with user included', async () => {
+        prisma.issueReaction.findMany.mockResolvedValue([{ ...REACTION, user: TEST_USER }]);
+
+        const result = await service.listReactions(TEST_ISSUE.id);
+
+        expect(prisma.issueReaction.findMany).toHaveBeenCalledWith({
+          include: { user: true },
+          orderBy: { createdAt: 'asc' },
+          where: { issueId: TEST_ISSUE.id },
+        });
+        expect(result).toHaveLength(1);
+      });
+    });
+  });
 });

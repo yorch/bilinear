@@ -370,4 +370,87 @@ describe('InitiativeService', () => {
       });
     });
   });
+
+  describe('initiative updates (status reports)', () => {
+    const TEST_UPDATE = {
+      archivedAt: null,
+      body: 'Q2 is on track',
+      bodyData: {},
+      createdAt: new Date('2026-05-18T00:00:00Z'),
+      editedAt: null,
+      health: 'onTrack',
+      id: '00000000-0000-0000-0000-000000000a01',
+      initiativeId: TEST_INITIATIVE.id,
+      updatedAt: new Date('2026-05-18T00:00:00Z'),
+      userId: TEST_USER.id,
+    };
+
+    describe('createInitiativeUpdate', () => {
+      it('persists body, bodyData, and health under the initiative', async () => {
+        prisma.initiativeUpdate.create.mockResolvedValue(TEST_UPDATE);
+
+        const result = await service.createInitiativeUpdate({
+          body: 'Q2 is on track',
+          bodyData: {},
+          health: 'onTrack',
+          initiativeId: TEST_INITIATIVE.id,
+          userId: TEST_USER.id,
+        });
+
+        expect(prisma.initiativeUpdate.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            body: 'Q2 is on track',
+            health: 'onTrack',
+            initiativeId: TEST_INITIATIVE.id,
+            userId: TEST_USER.id,
+          }),
+        });
+        expect(result).toEqual(TEST_UPDATE);
+      });
+    });
+
+    describe('updateInitiativeUpdate', () => {
+      it('stamps editedAt and only writes provided fields', async () => {
+        prisma.initiativeUpdate.update.mockResolvedValue({ ...TEST_UPDATE, body: 'Updated' });
+
+        await service.updateInitiativeUpdate(TEST_UPDATE.id, { body: 'Updated' });
+
+        const call = prisma.initiativeUpdate.update.mock.calls[0][0];
+        expect(call.where).toEqual({ id: TEST_UPDATE.id });
+        expect(call.data.body).toBe('Updated');
+        expect(call.data.editedAt).toBeInstanceOf(Date);
+        // bodyData / health weren't passed — should not be in the data payload
+        expect(call.data.bodyData).toBeUndefined();
+        expect(call.data.health).toBeUndefined();
+      });
+    });
+
+    describe('deleteInitiativeUpdate', () => {
+      it('soft-deletes by stamping archivedAt (not a hard delete)', async () => {
+        prisma.initiativeUpdate.update.mockResolvedValue({
+          ...TEST_UPDATE,
+          archivedAt: new Date(),
+        });
+
+        await service.deleteInitiativeUpdate(TEST_UPDATE.id);
+
+        const call = prisma.initiativeUpdate.update.mock.calls[0][0];
+        expect(call.where).toEqual({ id: TEST_UPDATE.id });
+        expect(call.data.archivedAt).toBeInstanceOf(Date);
+      });
+    });
+
+    describe('getInitiativeUpdates', () => {
+      it('returns non-archived updates newest-first', async () => {
+        prisma.initiativeUpdate.findMany.mockResolvedValue([TEST_UPDATE]);
+
+        await service.getInitiativeUpdates(TEST_INITIATIVE.id);
+
+        expect(prisma.initiativeUpdate.findMany).toHaveBeenCalledWith({
+          orderBy: { createdAt: 'desc' },
+          where: { archivedAt: null, initiativeId: TEST_INITIATIVE.id },
+        });
+      });
+    });
+  });
 });

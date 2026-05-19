@@ -300,9 +300,13 @@ export const initiativeResolvers = {
       }
 
       await ctx.services.initiative.deleteInitiativeUpdate(id);
+      // Soft-delete (archivedAt is stamped server-side); client stores treat
+      // this as a removal from the timeline, matching the ProjectUpdate
+      // delete convention rather than the 'A' archive sync action which
+      // requires a payload to flip the cached row.
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
-        'A',
+        'D',
         'InitiativeUpdate',
         id,
         null,
