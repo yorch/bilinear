@@ -55,7 +55,10 @@
 > | Public Roadmap (`/r/:slug`, password-gated option, per-project `roadmapVisible` toggle) | ✅ Built | Sprint 53-54 (PR #28) |
 > | File uploads — `POST /api/upload` → `File` row + `/api/uploads/[...path]` serving; local disk in dev, S3-swappable | ✅ Built | Sprint 27-28 |
 > | BullMQ background queues | 🔲 Planned | Sprint 37+ |
-> | SAML / SCIM / API keys / webhooks | 🔲 Planned | Sprint 49-50 onward |
+> | Webhooks (outbound HMAC-signed HTTP), Initiatives (m:n with projects), Triage queue | ✅ Built | 2026-05-05 (PR #30) |
+> | GitHub integration (OAuth, PR auto-link, auto-close on merge), Email notifications | ✅ Built | 2026-05-17 (PR #37) |
+> | Issue reactions, Initiative update timeline, Project progress history sparkline, Editor image paste/drop | ✅ Built | 2026-05-18 (PR #38) |
+> | SAML / SCIM / API keys | 🔲 Planned | Sprint 49-50 onward |
 >
 > Everything below describes the **intended final architecture**. Sections referencing unbuilt components (SAML, webhooks, BullMQ queues, MeiliSearch, YJS) are design specs, not current reality.
 

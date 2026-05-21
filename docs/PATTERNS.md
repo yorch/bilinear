@@ -1425,3 +1425,132 @@ When `action === 'closed'` and `pr.merged === true`, `autoCloseIssuesOnMerge` ru
 - State badges: merged (purple), closed (red), open (green/gray draft).
 
 Reference: `src/server/services/github.service.ts`, `src/server/graphql/resolvers/github.ts`, `src/app/api/integrations/github/`, `src/app/(workspace)/[workspace]/settings/integrations/page.tsx`, `src/components/issues/pull-requests-section.tsx`.
+
+## 42. Issue Reaction Pattern (2026-05-18)
+
+Reactions on issues use the same normalized shape as comment reactions
+(§2.15 → §2.30 in DATABASE_SCHEMA.md): one row per `(issueId, userId, emoji)`
+tuple. The unique constraint plus `upsert` lets the same client tap the
+same emoji twice as an idempotent add — useful for racing optimistic UI.
+
+**Service** (`IssueService.addReaction / removeReaction / listReactions`):
+
+- `addReaction` checks the parent issue exists, then `prisma.issueReaction.upsert`
+  on the unique tuple with empty `update: {}` — i.e. a no-op on re-add.
+- `removeReaction` looks up the row by tuple and hard-deletes by `id`; throws
+  `IssueReactionNotFoundError` for callers that race a double-remove.
+- `listReactions` returns rows in insertion order with the `user` included
+  for the bar's hover label.
+
+**Resolver** (`src/server/graphql/resolvers/issue.ts`) checks org match +
+`requireTeamMember`, then emits an `'I'` or `'D'` SyncAction against the
+`IssueReaction` model. Note: client stores are NOT yet wired to apply these —
+the reaction bar re-fetches on every mutation rather than reading from sync.
+
+**UI**: `IssueReactionBar` (`src/components/issues/issue-reaction-bar.tsx`)
+renders chips for each emoji with the per-user "reacted" highlight, plus a
+quick-picker popover seeded with 8 common emojis. Slotted under the issue
+title in `IssueDetailPanel`.
+
+The legacy `Issue.reaction_data` JSONB column from §2.4 stays unused — the
+normalized table gives us per-user lookups (which the JSONB blob can't) and
+matches existing comment-reaction tooling.
+
+Reference: `src/server/services/issue.service.ts`, `src/server/graphql/resolvers/issue.ts`, `src/components/issues/issue-reaction-bar.tsx`.
+
+## 43. Initiative Updates Pattern (2026-05-18)
+
+Status reports on initiatives mirror §11 (`ProjectUpdate`) one for one. Each
+post stamps a `health` ("onTrack" | "atRisk" | "offTrack") and a TipTap body;
+edits set `editedAt` so the timeline can show "(edited)".
+
+**Author-only edit/delete** is enforced in the resolver, not the service:
+
+```ts
+const existing = await ctx.services.initiative.findInitiativeUpdateById(id);
+if (!existing) { throw NOT_FOUND }
+const initiative = await ctx.services.initiative.findById(ctx.orgId, existing.initiativeId);
+if (!initiative) { throw NOT_FOUND }  // tenant guard
+if (existing.userId !== ctx.userId) { throw FORBIDDEN }
+```
+
+**Soft-delete** sets `archivedAt` and emits a **`'D'`** SyncAction with `null`
+payload — NOT `'A'`. The ProjectUpdate code path uses the same convention:
+`'A'` requires the archived row payload so client stores can flip
+`archivedAt` on the cached entry, while `'D'` instructs consumers to drop
+the row entirely from the timeline. For a content feed where archive ==
+"hide", `'D'` is the right verb.
+
+**UI**: `InitiativeUpdatesSection`
+(`src/components/initiatives/initiative-updates-section.tsx`) renders inside
+the expanded row on `/initiatives`. Uses fetch-on-mount + refetch-after-mutate
+rather than the MobX store path; this is consistent with how reactions
+landed (§42) and keeps the feature additive without touching bootstrap /
+sync-manager.
+
+Reference: `src/server/services/initiative.service.ts`, `src/server/graphql/resolvers/initiative.ts`, `src/components/initiatives/initiative-updates-section.tsx`.
+
+## 44. Lazy Daily Snapshot Pattern — Project Progress History (2026-05-18)
+
+`Project` has had four JSONB history columns (`completed_issue_count_history`,
+`issue_count_history`, `completed_scope_history`, `scope_history`) since the
+init migration, all defaulting to `[]` and untouched until this drop. Rather
+than wire a writer into every mutation path that might change a project's
+completion ratio (issue create/update/archive × every state transition × etc.),
+the snapshot is computed lazily **on the read side**.
+
+`ProjectService.recordProgressSnapshotIfStale(projectId)`:
+
+1. Loads the four history arrays.
+2. Reads the last entry of `issueCountHistory`. If `last.t === todayUtc`,
+   short-circuits and returns the existing arrays — no SQL aggregate, no write.
+3. Otherwise runs four parallel aggregates (`count`, `count where completed`,
+   `sum(estimate)`, `sum(estimate) where completed`) and appends a new
+   `{ t: 'YYYY-MM-DD', v }` entry to each array.
+4. Writes the updated arrays back in a single `project.update`.
+
+The GraphQL field `Project.progressHistory: [ProgressHistoryPoint!]!`
+calls this from its resolver, then merges the four arrays by date so the
+client receives one row per day with all four metrics filled in.
+
+**Trade-offs deliberately taken:**
+
+- **No intra-day refinement.** Once today's entry is stamped (by the first
+  `progressHistory` query of the day), the value is fixed until tomorrow.
+  Sparkline shows day-resolution trend, not minute-resolution.
+- **No cron.** A project that's never opened never accrues history. A nightly
+  job that calls `recordProgressSnapshotIfStale` across all projects would
+  close that gap — flagged in §6.2 of LINEAR_FEATURE_GAPS as a follow-up.
+
+Reference: `src/server/services/project.service.ts`, `src/server/graphql/resolvers/project.ts`, `src/components/projects/progress-sparkline.tsx`.
+
+## 45. Editor Image Paste Pattern (2026-05-18)
+
+The TipTap editor accepts pasted/dropped image blobs via ProseMirror's
+`editorProps.handlePaste` / `handleDrop` hooks. The wrinkle: `/api/uploads`
+only serves files whose `File` row is attached to a parent issue/project the
+caller can see (`FileService.findByKeyInOrg`). Posting to `/api/upload`
+without a parent creates an orphan `File` row whose URL 404s for everyone.
+
+To avoid the orphan trap, the editor accepts two optional props:
+
+```ts
+<TipTapEditor
+  uploadIssueId={issue.id}    // or
+  uploadProjectId={project.id}
+/>
+```
+
+`insertPastedImage(file, editorRef, ctx)` branches:
+
+- **With parent context**: POST to `/api/upload` as multipart, append
+  `issueId` / `projectId` to the form, insert the returned CDN URL.
+- **Without parent context**: read the blob as a base64 data URL and embed
+  inline (same fallback as the toolbar button, capped at 2 MB).
+
+The upload context is captured in a ref so the paste handler — created once
+at editor mount — always sees fresh ids. Currently threaded through
+`IssueDetailPanel` description editor and `CommentComposer`; other call
+sites (ProjectUpdate / InitiativeUpdate composers) get the inline fallback.
+
+Reference: `src/components/editor/tiptap-editor.tsx`, `src/app/api/upload/route.ts`, `src/server/services/file.service.ts`.

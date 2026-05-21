@@ -165,6 +165,7 @@ Build a modern, high-performance issue tracking and project management platform 
 - Automatic progress summaries (delays, target changes, milestone advancement)
 - Configurable reminder cadence (daily/weekly/biweekly)
 - Staleness tracking with visual indicators
+- Per-day progress history sparkline rendered on project detail (shipped 2026-05-18; lazy daily snapshot via `recordProgressSnapshotIfStale`, see PATTERNS §44)
 
 ### 2.7 Cycles / Sprints (P1)
 
@@ -175,12 +176,13 @@ Build a modern, high-performance issue tracking and project management platform 
 - Capacity estimation based on 3-cycle velocity history
 - Calendar integration (Google Calendar, .ics, feed URL)
 
-### 2.8 Initiatives (P2) 🟡 BASE SHIPPED (2026-05-05)
+### 2.8 Initiatives (P2) 🟡 BASE + UPDATES TIMELINE SHIPPED (2026-05-18)
 
 - Highest-level planning: group projects by company objective ✅
 - Status: Planned, Active, Completed, Canceled ✅
-- Owner, target date ✅; health indicator (deferred)
+- Owner, target date ✅; health indicator (deferred — initiative-level health badge; update-level health shipped via timeline)
 - Cached progress rolled up from linked-project `Project.progress` ✅
+- Status update timeline (body + onTrack/atRisk/offTrack health, author-only edit/delete) ✅ shipped 2026-05-18
 - Sub-initiatives: nest up to 5 levels, multiple parents allowed (deferred)
 - Project inheritance from sub-initiatives (deferred)
 
@@ -273,13 +275,14 @@ Outbound HTTP webhook subscriptions for integrating with external systems.
 - [x] Embeds: YouTube, Loom, generic (`EmbedNode`)
 - [x] File attachments: persisted to `File` model via `POST /api/upload`; toolbar button + dedicated file-attachments block
 - [ ] @mentions for `@ISSUE-ID` and `@project`
-- [ ] Image / file drag-and-drop into the editor body
+- [x] Image / file drag-and-drop into the editor body (shipped 2026-05-18; pastes/drops go through `/api/upload` when a parent issue/project is in context, base64 inline otherwise)
 - [ ] Collaborative editing with live cursors (YJS)
 
 ### 2.15 Comments & Activity (P0) 🟡 MOSTLY SHIPPED (Sprint 29-30)
 
 - [x] Threaded comments (`Comment.parentId`) with TipTap rich text
-- [x] @mentions on users, emoji reactions (`CommentReaction`)
+- [x] @mentions on users, emoji reactions on comments (`CommentReaction`)
+- [x] Emoji reactions on issues (`IssueReaction`, shipped 2026-05-18)
 - [x] Comment resolution (`commentResolve` / `commentUnresolve`)
 - [x] Activity history (`IssueActivity`): field / oldValue / newValue per change
 - [ ] Convert comment to sub-issue

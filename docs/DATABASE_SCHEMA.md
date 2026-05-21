@@ -66,6 +66,8 @@ remains a design target.
 | 2.27 Custom Fields        | ✅      |                                                                                                       |
 | 2.28 Public Roadmaps      | ✅      |                                                                                                       |
 | 2.29 GitHub Integration   | ✅      | Shipped 2026-05-17 — `github_integrations` + `github_pull_requests`                                   |
+| 2.30 Issue Reactions      | ✅      | Shipped 2026-05-18 — `issue_reactions`, mirrors §2.15                                                 |
+| 2.31 Initiative Updates   | ✅      | Shipped 2026-05-18 — `initiative_updates`, mirrors §2.11                                              |
 
 ---
 
@@ -749,8 +751,8 @@ CREATE INDEX idx_attachments_issue ON attachments(issue_id);
 ### 2.15 Comment Reactions
 
 ```sql
--- Reactions on issues and project updates are planned but deferred.
--- Only comment reactions are currently implemented.
+-- Reactions on issues shipped 2026-05-18 — see §2.30 (issue_reactions).
+-- Reactions on project updates remain deferred.
 CREATE TABLE comment_reactions (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     comment_id  UUID NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
@@ -1323,6 +1325,64 @@ category is not `completed` or `canceled` are transitioned to the team's first
 `completed` workflow state.
 
 See PATTERNS.md §41.
+
+### 2.30 Issue Reactions ✅
+
+Emoji reactions on issues. Mirrors §2.15 (Comment Reactions) one-for-one — same
+normalized shape, same unique tuple semantics, FK CASCADE on both sides.
+
+```sql
+CREATE TABLE issue_reactions (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    issue_id   UUID NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    emoji      VARCHAR(50) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    UNIQUE(issue_id, user_id, emoji)
+);
+CREATE INDEX idx_issue_reactions_issue ON issue_reactions(issue_id);
+CREATE INDEX idx_issue_reactions_user  ON issue_reactions(user_id);
+```
+
+The unused `Issue.reaction_data` JSONB column is kept in place for backwards
+compatibility but no longer written or read. See PATTERNS.md §42.
+
+### 2.31 Initiative Updates ✅
+
+Status reports posted against an initiative — same shape as §2.11 (Project
+Updates), without the `diff` / `diffMarkdown` audit columns that ProjectUpdate
+inherited from earlier project-snapshot work. Soft-delete via `archived_at`.
+
+```sql
+CREATE TABLE initiative_updates (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    initiative_id UUID NOT NULL REFERENCES initiatives(id) ON DELETE CASCADE,
+    user_id       UUID NOT NULL REFERENCES users(id),
+    body          TEXT NOT NULL,
+    body_data     JSONB NOT NULL,
+    health        VARCHAR(20) NOT NULL,  -- onTrack | atRisk | offTrack
+    edited_at     TIMESTAMPTZ,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    archived_at   TIMESTAMPTZ
+);
+CREATE INDEX idx_initiative_updates_initiative ON initiative_updates(initiative_id);
+```
+
+Resolver enforces author-only edit / delete (`existing.userId === ctx.userId`).
+Soft-delete emits a `'D'` SyncAction with null payload, matching ProjectUpdate
+delete semantics. See PATTERNS.md §43.
+
+### 2.9a Project progress history columns
+
+The four JSONB history columns on `projects` — `completed_issue_count_history`,
+`issue_count_history`, `completed_scope_history`, `scope_history` — landed
+empty in §2.9 (`@default("[]")`). `ProjectService.recordProgressSnapshotIfStale`
+is the writer; it runs lazily on every `Project.progressHistory` read and
+no-ops when the latest entry's `t` is today's UTC date. Each entry has the
+shape `{ t: 'YYYY-MM-DD', v: <number> }`; once stamped, the day's value is
+fixed (no intra-day overwrite — sparkline shows day-resolution trend).
 
 ---
 
