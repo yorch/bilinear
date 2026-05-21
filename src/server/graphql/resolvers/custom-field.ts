@@ -1,6 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { CustomFieldDefinition, CustomFieldValue } from '../../../generated/prisma';
-import { requireAuth, requireTeamMember } from '../../middleware/auth';
+import { requireAuth, requireOrgRole, requireTeamMember } from '../../middleware/auth';
 import {
   type CustomFieldDefinitionCreateInput,
   CustomFieldDefinitionNotFoundError,
@@ -11,6 +11,17 @@ import {
   type CustomFieldValueInput,
 } from '../../services/custom-field.service';
 import type { GraphQLContext } from '../context';
+
+/** GraphQL input — `teamId` may be null for workspace-scoped definitions. */
+interface CustomFieldDefinitionCreateGqlInput {
+  description?: string;
+  name: string;
+  options?: Array<{ color?: string; label: string; value: string }>;
+  required?: boolean;
+  sortOrder?: number;
+  teamId: string | null;
+  type: CustomFieldDefinitionCreateInput['type'];
+}
 
 function mapServiceError(err: unknown): GraphQLError {
   if (err instanceof CustomFieldDefinitionNotFoundError) {
@@ -36,25 +47,24 @@ async function loadDefinitionForMutation(
 ): Promise<CustomFieldDefinition> {
   requireAuth(ctx);
   const existing = await ctx.services.customField.findDefinitionById(id);
-  if (!existing) {
+  if (!existing || existing.organizationId !== ctx.orgId) {
     throw new GraphQLError('Custom field not found', {
       extensions: { code: 'NOT_FOUND' },
     });
   }
-  const team = await ctx.services.team.findById(existing.teamId);
-  if (!team || team.organizationId !== ctx.orgId) {
-    throw new GraphQLError('Custom field not found', {
-      extensions: { code: 'NOT_FOUND' },
-    });
+  if (existing.teamId === null) {
+    // Workspace-scoped: only owners/admins can manage.
+    await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+  } else {
+    await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
   }
-  await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
   return existing;
 }
 
 export const customFieldResolvers = {
   CustomFieldDefinition: {
     team: async (def: CustomFieldDefinition, _args: unknown, ctx: GraphQLContext) =>
-      ctx.services.team.findById(def.teamId),
+      def.teamId ? ctx.services.team.findById(def.teamId) : null,
   },
   CustomFieldValue: {
     definition: async (value: CustomFieldValue, _args: unknown, ctx: GraphQLContext) =>
@@ -92,19 +102,27 @@ export const customFieldResolvers = {
     },
     customFieldDefinitionCreate: async (
       _p: unknown,
-      { input }: { input: CustomFieldDefinitionCreateInput },
+      { input }: { input: CustomFieldDefinitionCreateGqlInput },
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
-      const team = await ctx.services.team.findById(input.teamId);
-      if (!team || team.organizationId !== ctx.orgId) {
-        throw new GraphQLError('Team not found', {
-          extensions: { code: 'NOT_FOUND' },
-        });
+      if (input.teamId === null) {
+        // Workspace-scoped: owner/admin only — these fields show on every team.
+        await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+      } else {
+        await requireTeamMember(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
+        const team = await ctx.services.team.findById(input.teamId);
+        if (!team || team.organizationId !== ctx.orgId) {
+          throw new GraphQLError('Team not found', {
+            extensions: { code: 'NOT_FOUND' },
+          });
+        }
       }
       try {
-        const def = await ctx.services.customField.createDefinition(input);
+        const def = await ctx.services.customField.createDefinition({
+          ...input,
+          organizationId: ctx.orgId,
+        });
         const sync = await ctx.services.sync.createSyncAction(
           ctx.orgId,
           'I',
@@ -224,6 +242,14 @@ export const customFieldResolvers = {
       }
       await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
       return ctx.services.customField.findValuesByIssueIds([issueId]);
+    },
+    workspaceCustomFieldDefinitions: async (
+      _p: unknown,
+      { includeArchived }: { includeArchived?: boolean },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      return ctx.services.customField.findWorkspaceDefinitions(ctx.orgId, includeArchived ?? false);
     },
   },
 };

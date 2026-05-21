@@ -12,6 +12,15 @@ A Linear-style issue tracker built with Next.js 16 (App Router), Apollo Server G
 - **Initiatives** — top-level strategic objects above projects, m:n with `Project`. Progress rolls up from linked projects. UI at `/initiatives`. See PATTERNS.md §39.
 - **Webhooks** — outbound HMAC-signed HTTP subscriptions, admin-only at `/settings/webhooks`. Retry sweep runs in the WS server every 30s. See PATTERNS.md §40 and DATABASE_SCHEMA.md §2.21.
 
+### Quick-wins batch (2026-05-21)
+
+- **Issue snooze** — `issueSnooze(id, until)` / `issueUnsnooze(id)` mutations finally expose the existing `snoozed_until_at` / `snoozed_by_id` columns. Wakeup is read-time (no background worker). See PATTERNS.md §49.
+- **Bulk issue update** — `issuesBulkUpdate(ids, input)` mutation applies the same patch to up to 200 issues atomically. Auto-close cascades intentionally skipped; cross-team state changes rejected. See PATTERNS.md §50.
+- **Guest role enforcement (read path)** — `requireTeamMemberNotGuest` + `isTeamGuest` helpers in `src/server/middleware/auth.ts`. The `issues` query now scopes guests to creator-or-assignee via a server-derived `IssueFilter.guestUserId`. Write-path sweep still open. See PATTERNS.md §48.
+- **Workspace-level custom fields** — `CustomFieldDefinition.teamId` is nullable; null = workspace-scoped. Per-org cap of 30 active workspace fields; owner/admin-only create/edit. New `workspaceCustomFieldDefinitions` query. See DATABASE_SCHEMA.md §2.27.
+- **Favorites** — new `favorites` table, `FavoriteService`, `Favorite.entity` GraphQL union over Issue/Project/Initiative/CustomView/Cycle/Document/Team. Cross-org or deleted targets resolve to `null` (sidebar skips). Sidebar UI deferred. See PATTERNS.md §47 and DATABASE_SCHEMA.md §2.18.
+- **Sub-initiatives** — `Initiative.parentId` self-FK with max depth 5, cycle detection, cross-org rejection. Progress rollup averages projects AND children, propagates one level up the parent chain. See PATTERNS.md §46 and DATABASE_SCHEMA.md §2.32.
+
 ### Feature drop (2026-05-18)
 
 - **Issue reactions** — normalized `IssueReaction` table (mirrors `CommentReaction`, unique on `(issueId, userId, emoji)`). Mutations `issueReactionAdd`/`issueReactionRemove`, `Issue.reactions` field, and an `IssueReactionBar` slotted under the title in `IssueDetailPanel`. Fetch-on-mount — not yet in the sync/bootstrap path. See DATABASE_SCHEMA.md §2.30 and PATTERNS.md §42.

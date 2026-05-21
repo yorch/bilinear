@@ -2,8 +2,8 @@
 
 ## Issue Tracker — Linear Rebuild
 
-**Version:** 1.5
-**Date:** 2026-05-17
+**Version:** 1.6
+**Date:** 2026-05-21
 **Database:** PostgreSQL 18
 **Source of truth:** `prisma/schema.prisma` — this document describes both the
 implemented schema and design targets for unbuilt features. Read the Prisma
@@ -54,7 +54,7 @@ remains a design target.
 | 2.15 Comment Reactions    | ✅      |                                                                                                       |
 | 2.16 Notifications        | ⚠️      | Doc listed polymorphic FKs that were never added                                                      |
 | 2.17 Custom Views         | ⚠️      | Real columns use `filters/sort/layout`, not `filter_data/sort_by/columns`                             |
-| 2.18 Favorites            | 📋      |                                                                                                       |
+| 2.18 Favorites            | ✅      | Shipped 2026-05-21 — `favorites`, see §2.18                                                           |
 | 2.19 Documents            | ✅      | Parent hierarchy, editor output in `content` TEXT; no YJS yet                                         |
 | 2.20 Issue Templates      | ⚠️      | Real model is issue-only (not polymorphic)                                                            |
 | 2.21 Webhooks             | ✅      | Shipped 2026-05-05 — `webhooks` + `webhook_deliveries`                                                |
@@ -62,12 +62,13 @@ remains a design target.
 | 2.23 Auth Tokens          | ✅      |                                                                                                       |
 | 2.24 Audit Log            | 📋      |                                                                                                       |
 | 2.25 Files                | ✅      |                                                                                                       |
-| 2.26 Team Member Roles    | ✅      |                                                                                                       |
-| 2.27 Custom Fields        | ✅      |                                                                                                       |
+| 2.26 Team Member Roles    | ✅      | Enforcement helper `requireTeamMemberNotGuest` shipped 2026-05-21                                     |
+| 2.27 Custom Fields        | ✅      | Workspace-scope (team_id nullable) shipped 2026-05-21                                                 |
 | 2.28 Public Roadmaps      | ✅      |                                                                                                       |
 | 2.29 GitHub Integration   | ✅      | Shipped 2026-05-17 — `github_integrations` + `github_pull_requests`                                   |
 | 2.30 Issue Reactions      | ✅      | Shipped 2026-05-18 — `issue_reactions`, mirrors §2.15                                                 |
 | 2.31 Initiative Updates   | ✅      | Shipped 2026-05-18 — `initiative_updates`, mirrors §2.11                                              |
+| 2.32 Sub-Initiatives      | ✅      | Shipped 2026-05-21 — `initiatives.parent_id` self-relation, max depth 5                               |
 
 ---
 
@@ -335,6 +336,9 @@ CREATE TABLE issues (
 
     -- Soft delete
     trashed         BOOLEAN NOT NULL DEFAULT false,
+    -- Snooze (mutations shipped 2026-05-21): list/board views hide
+    -- snoozed issues until now() >= snoozed_until_at. No background
+    -- worker — wakeup is a function of read-time comparison.
     snoozed_by_id   UUID REFERENCES users(id),
     snoozed_until_at TIMESTAMPTZ,
 
@@ -663,10 +667,10 @@ scope by org without a join through teams.
 
 > **Shipped (2026-05-05).** Top-level strategic objects that group projects
 > toward multi-quarter goals. `Initiative.progress` is a cached roll-up
-> computed as the mean of associated projects' progress; recompute fires
-> on project create/archive/delete and on project status/progress changes.
-> The actual schema is flatter than the early sketch — no `parent_id` (no
-> sub-initiatives yet) and no `slug_id` (lookups by id only).
+> computed as the mean of associated projects' progress AND child initiative
+> progress (added 2026-05-21); recompute fires on project create/archive/delete,
+> on project status/progress changes, and propagates up the parent chain.
+> Sub-initiatives via `parent_id` shipped 2026-05-21 (see §2.32).
 
 ```sql
 CREATE TABLE initiatives (
@@ -689,8 +693,9 @@ CREATE TABLE initiatives (
 
     owner_id               UUID REFERENCES users(id) ON DELETE SET NULL,
     creator_id             UUID REFERENCES users(id) ON DELETE SET NULL,
+    parent_id              UUID REFERENCES initiatives(id) ON DELETE SET NULL,  -- sub-initiatives, max depth 5
 
-    progress               FLOAT NOT NULL DEFAULT 0,  -- 0..1, recomputed from linked projects
+    progress               FLOAT NOT NULL DEFAULT 0,  -- 0..1, recomputed from linked projects + child initiatives
 
     started_at             TIMESTAMPTZ,
     completed_at           TIMESTAMPTZ,
@@ -854,43 +859,38 @@ CREATE INDEX idx_custom_views_creator ON custom_views(creator_id);
 > Ownership today is "creator only" (`creator_id` + `shared` flag). A separate
 > `owner_id` / transfer-of-ownership flow is a design target, not shipped.
 
-### 2.18 Favorites 📋
+### 2.18 Favorites ✅
 
-> **Not yet in Prisma.** Favorites / sidebar pinning is planned; no table exists.
+> **Shipped 2026-05-21** — migration `20260521000000_quick_wins_snooze_favorites_subinitiatives`.
 
 ```sql
 CREATE TABLE favorites (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    owner_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    type            VARCHAR(50) NOT NULL,  -- 'issue', 'project', 'cycle', 'customView', 'document', 'label', 'folder', 'predefinedView'
-    title           VARCHAR(255) NOT NULL,
-    sort_order      FLOAT NOT NULL DEFAULT 0,
-    icon            VARCHAR(255),
-    color           VARCHAR(7),
-
-    -- Folder support
-    parent_id       UUID REFERENCES favorites(id) ON DELETE CASCADE,
-    folder_name     VARCHAR(255),
-
-    -- Polymorphic target (at most one non-null)
-    issue_id        UUID REFERENCES issues(id) ON DELETE CASCADE,
-    project_id      UUID,
-    cycle_id        UUID,
-    custom_view_id  UUID,
-    team_id         UUID REFERENCES teams(id) ON DELETE CASCADE,
-    label_id        UUID,
-    initiative_id   UUID,
-
-    -- For predefined views
-    predefined_view_type VARCHAR(50),
-    predefined_view_team_id UUID REFERENCES teams(id),
-
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    id              UUID PRIMARY KEY,
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    -- Issue | Project | Initiative | CustomView | Cycle | Document | Team
+    entity_type     VARCHAR(20) NOT NULL,
+    entity_id       UUID NOT NULL,
+    sort_order      DOUBLE PRECISION NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX idx_favorites_owner ON favorites(owner_id);
-CREATE INDEX idx_favorites_parent ON favorites(parent_id);
+CREATE UNIQUE INDEX favorites_user_entity_uniq
+  ON favorites(user_id, entity_type, entity_id);
+CREATE INDEX favorites_user_id_idx ON favorites(user_id);
+CREATE INDEX favorites_organization_id_idx ON favorites(organization_id);
 ```
+
+The simpler shape replaces the earlier polymorphic-fields proposal: instead
+of one nullable FK per target type, a single `(entity_type, entity_id)` pair
+identifies the target. The resolver layer dispatches per-type to fetch the
+row (see `src/server/graphql/resolvers/favorite.ts`); broken references
+(deleted entity / cross-org) resolve to `null` and are skipped silently in
+the sidebar.
+
+Folders (one level of nesting) are intentionally deferred — Linear's
+"folder" support adds non-trivial drag-drop complexity that's not worth the
+schema churn until users ask for it. When added, a `parent_id` self-FK
+will suffice and `entity_type = 'Folder'` rows will hold the folder name.
 
 ### 2.19 Documents ✅
 
@@ -1184,9 +1184,14 @@ CREATE INDEX idx_team_member_roles_user ON team_member_roles(user_id);
 
 ### 2.27 Custom Fields
 
+Definitions are scoped either to a single team (`team_id` non-null) or to
+the whole workspace (`team_id` null, `organization_id` non-null —
+shipped 2026-05-21). Workspace-scoped definitions surface on every team
+in the org; only org owners/admins can create/edit them. Values live in
+a separate table (`custom_field_values`) keyed by
+`(issue_id, definition_id)` so filter/sort stay indexable.
+
 ```sql
--- Team-scoped definitions. Values live in a separate table (custom_field_values)
--- keyed by (issue_id, definition_id) so filter/sort stay indexable.
 CREATE TYPE custom_field_type AS ENUM (
     'text', 'number', 'date',
     'select', 'multi_select',
@@ -1194,21 +1199,26 @@ CREATE TYPE custom_field_type AS ENUM (
 );
 
 CREATE TABLE custom_field_definitions (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    team_id     UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
-    name        VARCHAR(255) NOT NULL,
-    type        custom_field_type NOT NULL,
-    description TEXT,
-    required    BOOLEAN NOT NULL DEFAULT FALSE,
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    -- Null = workspace-scoped (applies to every team in organization_id).
+    team_id         UUID REFERENCES teams(id) ON DELETE CASCADE,
+    -- Denormalised from team.organization_id for team-scoped rows; required
+    -- for workspace-scoped rows so the tenant filter is a single column.
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    name            VARCHAR(255) NOT NULL,
+    type            custom_field_type NOT NULL,
+    description     TEXT,
+    required        BOOLEAN NOT NULL DEFAULT FALSE,
     -- For select / multi_select: JSONB array of { value, label, color? }.
     -- NULL for other types; service layer rejects options on non-select types.
-    options     JSONB,
-    sort_order  DOUBLE PRECISION NOT NULL DEFAULT 0,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    archived_at TIMESTAMPTZ
+    options         JSONB,
+    sort_order      DOUBLE PRECISION NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    archived_at     TIMESTAMPTZ
 );
 CREATE INDEX idx_custom_field_definitions_team ON custom_field_definitions(team_id);
+CREATE INDEX idx_custom_field_definitions_organization ON custom_field_definitions(organization_id);
 
 CREATE TABLE custom_field_values (
     id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1234,9 +1244,11 @@ CREATE INDEX idx_custom_field_values_definition ON custom_field_values(definitio
 **Validation** is enforced at the service layer (`CustomFieldService`):
 
 - Max 20 active definitions per team
+- Max 30 active workspace-scoped (`team_id IS NULL`) definitions per org
 - `select` / `multi_select` types require at least one option; option values must be unique per field
 - Non-select types reject options
 - Value type and allowed-option membership are validated before upsert
+- Workspace-scoped create/edit requires `OrganizationMember.role IN ('owner', 'admin')`
 
 ### 2.28 Public Roadmaps
 
@@ -1373,6 +1385,36 @@ CREATE INDEX idx_initiative_updates_initiative ON initiative_updates(initiative_
 Resolver enforces author-only edit / delete (`existing.userId === ctx.userId`).
 Soft-delete emits a `'D'` SyncAction with null payload, matching ProjectUpdate
 delete semantics. See PATTERNS.md §43.
+
+### 2.32 Sub-initiatives ✅
+
+> **Shipped 2026-05-21** — migration `20260521000000_quick_wins_snooze_favorites_subinitiatives`.
+
+A single nullable self-FK on `initiatives.parent_id` enables hierarchical
+strategic trees. The progress rollup in §2.13 averages direct projects AND
+non-archived child initiatives equally (i.e. one child counts the same as
+one direct project), and propagates one level up the parent chain after
+each recompute — recursion terminates naturally when a level reports
+"no change".
+
+```sql
+ALTER TABLE initiatives ADD COLUMN parent_id UUID;
+CREATE INDEX initiatives_parent_id_idx ON initiatives(parent_id);
+ALTER TABLE initiatives ADD CONSTRAINT initiatives_parent_id_fkey
+  FOREIGN KEY (parent_id) REFERENCES initiatives(id) ON DELETE SET NULL;
+```
+
+**Service-layer invariants** (enforced in `InitiativeService.assertParent`
+AcceptsChild`):
+
+- max depth = 5 (constant `MAX_INITIATIVE_DEPTH`)
+- no cycles: a re-parent that would put the initiative under one of its
+  own descendants throws `InitiativeInvalidParentError`
+- cross-org rejected: parent must belong to the same `organization_id`
+
+`ON DELETE SET NULL` is intentional: deleting a parent re-roots its
+children rather than cascading the delete — losing strategic tree branches
+on accidental parent deletion is too destructive.
 
 ### 2.9a Project progress history columns
 

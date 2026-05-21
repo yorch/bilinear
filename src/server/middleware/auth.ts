@@ -109,6 +109,74 @@ export async function requireTeamOwner(
   }
 }
 
+/**
+ * Returns the caller's role on `teamId` (admin | member | guest), or null if
+ * they are not a team member. `team_member_roles` is the per-team role table
+ * (separate from `team_memberships`, which only carries `isOwner`). Absence
+ * of a role row defaults to `member`. A caller from a different org returns
+ * null even if a `team_member_roles` row exists.
+ */
+export async function getTeamRole(
+  prisma: PrismaClient,
+  teamId: string,
+  userId: string,
+  orgId: string,
+): Promise<'admin' | 'member' | 'guest' | null> {
+  const membership = await prisma.teamMembership.findUnique({
+    include: { team: { select: { organizationId: true } } },
+    where: { teamId_userId: { teamId, userId } },
+  });
+  if (!membership || membership.team.organizationId !== orgId) {
+    return null;
+  }
+  const roleRow = await prisma.teamMemberRole.findUnique({
+    where: { teamId_userId: { teamId, userId } },
+  });
+  const role = (roleRow?.role as 'admin' | 'member' | 'guest' | undefined) ?? 'member';
+  return role;
+}
+
+/**
+ * Team-member guard that ALSO rejects guests. Use for write paths and for
+ * read paths whose data isn't pre-filtered to guest-visible issues.
+ * Guests can still call `requireTeamMember` for the issues they own or
+ * are assigned to — but they can't author state changes, create
+ * sub-issues, etc.
+ */
+export async function requireTeamMemberNotGuest(
+  prisma: PrismaClient,
+  teamId: string,
+  userId: string,
+  orgId: string,
+): Promise<void> {
+  const role = await getTeamRole(prisma, teamId, userId, orgId);
+  if (role === null) {
+    throw new GraphQLError('Not a member of this team', {
+      extensions: { code: 'FORBIDDEN' },
+    });
+  }
+  if (role === 'guest') {
+    throw new GraphQLError('Guests cannot perform this action', {
+      extensions: { code: 'FORBIDDEN' },
+    });
+  }
+}
+
+/**
+ * Returns true if `userId` is a guest on `teamId`. Read paths use this to
+ * apply the guest visibility filter (only issues the guest created or is
+ * assigned to). Returns false for non-members so callers don't accidentally
+ * widen access to outsiders.
+ */
+export async function isTeamGuest(
+  prisma: PrismaClient,
+  teamId: string,
+  userId: string,
+  orgId: string,
+): Promise<boolean> {
+  return (await getTeamRole(prisma, teamId, userId, orgId)) === 'guest';
+}
+
 function extractBearerToken(authHeader: string | null): string | null {
   if (!authHeader) {
     return null;

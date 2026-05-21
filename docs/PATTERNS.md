@@ -1554,3 +1554,147 @@ at editor mount — always sees fresh ids. Currently threaded through
 sites (ProjectUpdate / InitiativeUpdate composers) get the inline fallback.
 
 Reference: `src/components/editor/tiptap-editor.tsx`, `src/app/api/upload/route.ts`, `src/server/services/file.service.ts`.
+
+## 46. Sub-Initiative Hierarchy Pattern (2026-05-21)
+
+`Initiative.parentId` is a self-FK with `ON DELETE SET NULL` — deleting a
+parent re-roots its children rather than cascading. Max nesting depth is
+five levels, enforced server-side by `InitiativeService.assertParentAccepts
+Child(orgId, parentId, childId | null)` which walks the parent chain
+counting depth, detecting cycles (would-be ancestor = the child itself),
+and rejecting cross-org parents.
+
+```ts
+// Both create and update paths run the guard before writing parent_id.
+if (input.parentId) {
+  await this.assertParentAcceptsChild(orgId, input.parentId, /* childId */ id ?? null);
+}
+```
+
+**Progress rollup** averages projects AND child initiatives equally:
+
+```ts
+const totalCount = eligibleProjects.length + eligibleChildren.length;
+const progress = totalCount === 0
+  ? 0
+  : (sumProjectProgress + sumChildProgress) / totalCount;
+```
+
+After persisting the new value, recompute propagates one level up the
+parent chain (fire-and-forget, since a slow ancestor chain shouldn't
+block the originating mutation). Recursion stops naturally when a level
+reports "no change" (the existing `<1e-9` early return).
+
+Reference: `src/server/services/initiative.service.ts`, DATABASE_SCHEMA.md §2.32.
+
+## 47. Sidebar Favorites Pattern (2026-05-21)
+
+A user's pinned entities live in `favorites` keyed by
+`(userId, organizationId, entityType, entityId)` with a unique constraint
+on `(userId, entityType, entityId)`. Re-favoriting is idempotent via
+`upsert`; reorders bulk-update `sortOrder` inside a single transaction
+that pre-verifies every row belongs to the caller.
+
+The GraphQL `Favorite.entity` field is a union (`Issue | Project |
+Initiative | CustomView | Cycle | Document | Team`). Resolution dispatches
+per `entityType` and returns `null` for missing or cross-org targets — the
+sidebar component skips null entries rather than 404ing. This makes
+cleanup of stale references entirely a read-time concern: no background
+job, no FK to maintain across seven entity tables.
+
+```sql
+CREATE UNIQUE INDEX favorites_user_entity_uniq
+  ON favorites(user_id, entity_type, entity_id);
+```
+
+**Why not polymorphic FKs?** The earlier draft (DATABASE_SCHEMA.md §2.18,
+pre-2026-05-21) had one nullable FK per target type. That requires schema
+churn every time a new favorite-able entity ships, and the FK enforcement
+catches a class of bug (cross-org reference) that the per-resolver
+`organizationId !== ctx.orgId` check already catches with the same effect.
+
+Reference: `src/server/services/favorite.service.ts`,
+`src/server/graphql/resolvers/favorite.ts`.
+
+## 48. Guest Role Enforcement Pattern (2026-05-21)
+
+`TeamMemberRole.role` carries one of `admin | member | guest`. The
+middleware layer exposes three helpers:
+
+- `requireTeamMember(prisma, teamId, userId, orgId)` — passes for any role
+  (legacy; kept for paths that gate by team membership but don't
+  differentiate guests)
+- `requireTeamMemberNotGuest(...)` — same as above but rejects guests
+  with `FORBIDDEN`; used for write mutations
+- `isTeamGuest(...)` — boolean lookup; read paths use this to apply a
+  scoped filter (`IssueFilter.guestUserId`) so the guest only sees issues
+  they created or are assigned to
+
+**Critical invariant:** `IssueFilter.guestUserId` is server-derived from
+`isTeamGuest`; never accepted from clients. A client-supplied value would
+let a member pose as a guest to scope a query — harmless on its own, but
+the principle is "trust nothing from the wire about role state".
+
+```ts
+// Issues query (the read-path enforcement point):
+await requireTeamMember(ctx.prisma, filter.teamId, ctx.userId, ctx.orgId);
+const guest = await isTeamGuest(ctx.prisma, filter.teamId, ctx.userId, ctx.orgId);
+const effectiveFilter = guest ? { ...filter, guestUserId: ctx.userId } : filter;
+```
+
+**Open items** (tracked in LINEAR_FEATURE_GAPS.md §8.2): the write-path
+sweep — adding `requireTeamMemberNotGuest` to every issueUpdate, comment,
+relation, etc. — isn't done yet. Today a guest could call those mutations
+on issues they don't own.
+
+Reference: `src/server/middleware/auth.ts`, `src/server/graphql/resolvers/issue.ts`.
+
+## 49. Issue Snooze Pattern (2026-05-21)
+
+`issues.snoozed_until_at` / `snoozed_by_id` columns existed since schema
+inception but had no API. Mutations `issueSnooze(id, until)` and
+`issueUnsnooze(id)` thread through `IssueService.snooze` / `unsnooze` —
+just sets / clears the columns.
+
+**Wakeup is a read-time concern:** there is no background worker that
+flips snoozed issues back into the active set on the wake timestamp.
+List/board views hide snoozed issues client-side via
+`issue.snoozedUntilAt > now()`. The DB row stays the same throughout the
+snooze window; only the read interpretation changes.
+
+**Validation:** the resolver rejects `until` values that are non-ISO,
+`NaN`, or `<= now()`. A snooze "to the past" silently no-ops in Linear,
+but here we'd rather surface the input mistake (likely a timezone bug
+in the client) than absorb it.
+
+Reference: `src/server/services/issue.service.ts:snooze`,
+`src/server/graphql/resolvers/issue.ts:issueSnooze`.
+
+## 50. Bulk Update Pattern (2026-05-21)
+
+`issuesBulkUpdate(ids, input)` applies the same `IssueUpdateInput` patch
+to up to 200 issues atomically.
+
+**Three deliberate design choices:**
+
+1. **Auto-close cascades are skipped.** Bulk operations are manual
+   reorganisations (drag-select 50 backlog issues into a project, change
+   priority on an entire backlog). Running per-row cascades would silently
+   transition unrelated parents/children — the opposite of what the user
+   intended.
+
+2. **Hard cap of 200.** Matches Linear's bulk-toolbar cap. Past this, the
+   request slot is held too long; the client should batch into multiple
+   calls.
+
+3. **stateId is cross-team-checked.** If a target state is supplied, every
+   issue in the batch must belong to the team that owns the state. Mixed-
+   team batches with a state change throw `BAD_USER_INPUT` rather than
+   succeed-partially.
+
+The resolver emits one SyncAction + one webhook event per row sequentially
+to preserve commit ordering across the batch (and so subscribers see each
+row update live, not as one batched WS message).
+
+Reference: `src/server/services/issue.service.ts:bulkUpdate`,
+`src/server/graphql/resolvers/issue.ts:issuesBulkUpdate`.

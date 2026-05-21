@@ -1,0 +1,158 @@
+import { GraphQLError } from 'graphql';
+import type { Favorite } from '../../../generated/prisma';
+import { requireAuth } from '../../middleware/auth';
+import {
+  type FavoriteCreateInput,
+  FavoriteInvalidEntityTypeError,
+  FavoriteNotFoundError,
+  type FavoriteReorderEntry,
+} from '../../services/favorite.service';
+import type { GraphQLContext } from '../context';
+
+function mapError(err: unknown): never {
+  if (err instanceof FavoriteNotFoundError) {
+    throw new GraphQLError(err.message, {
+      extensions: { code: 'NOT_FOUND' },
+    });
+  }
+  if (err instanceof FavoriteInvalidEntityTypeError) {
+    throw new GraphQLError(err.message, {
+      extensions: { code: 'BAD_USER_INPUT' },
+    });
+  }
+  throw err;
+}
+
+/**
+ * Resolve the favorite's target entity to the matching union member. Returns
+ * null when the row was deleted or moved to a different org (the caller's
+ * Favorite row carries a dangling `entityId`); the sidebar component skips
+ * null entries silently rather than 404ing. Best-effort: no batching here
+ * because the typical user has <50 favorites and entity types are mixed.
+ */
+async function resolveEntity(
+  fav: Favorite,
+  ctx: GraphQLContext,
+): Promise<{ __typename: string; id: string } | null> {
+  const orgId = ctx.orgId;
+  if (!orgId) {
+    return null;
+  }
+  switch (fav.entityType) {
+    case 'Issue': {
+      const issue = await ctx.services.issue.findById(fav.entityId);
+      if (!issue || issue.organizationId !== orgId) {
+        return null;
+      }
+      return { ...issue, __typename: 'Issue' };
+    }
+    case 'Project': {
+      const project = await ctx.loaders.project.load(fav.entityId);
+      if (!project || project.organizationId !== orgId) {
+        return null;
+      }
+      return { ...project, __typename: 'Project' };
+    }
+    case 'Initiative': {
+      const initiative = await ctx.services.initiative.findById(orgId, fav.entityId);
+      return initiative ? { ...initiative, __typename: 'Initiative' } : null;
+    }
+    case 'CustomView': {
+      const view = await ctx.services.customView.findById(fav.entityId);
+      if (!view || view.organizationId !== orgId) {
+        return null;
+      }
+      return { ...view, __typename: 'CustomView' };
+    }
+    case 'Cycle': {
+      const cycle = await ctx.loaders.cycle.load(fav.entityId);
+      if (!cycle || cycle.organizationId !== orgId) {
+        return null;
+      }
+      return { ...cycle, __typename: 'Cycle' };
+    }
+    case 'Document': {
+      const doc = await ctx.services.document.findById(fav.entityId);
+      if (!doc || doc.organizationId !== orgId) {
+        return null;
+      }
+      return { ...doc, __typename: 'Document' };
+    }
+    case 'Team': {
+      const team = await ctx.loaders.team.load(fav.entityId);
+      if (!team || team.organizationId !== orgId) {
+        return null;
+      }
+      return { ...team, __typename: 'Team' };
+    }
+    default:
+      return null;
+  }
+}
+
+export const favoriteResolvers = {
+  Favorite: {
+    entity: (fav: Favorite, _args: unknown, ctx: GraphQLContext) => resolveEntity(fav, ctx),
+  },
+  Mutation: {
+    favoriteCreate: async (
+      _parent: unknown,
+      { input }: { input: FavoriteCreateInput },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      try {
+        const fav = await ctx.services.favorite.create(ctx.orgId, ctx.userId, input);
+        const sync = await ctx.services.sync.createSyncAction(
+          ctx.orgId,
+          'I',
+          'Favorite',
+          fav.id,
+          fav,
+        );
+        return { favorite: fav, lastSyncId: sync.id.toString(), success: true };
+      } catch (err) {
+        mapError(err);
+      }
+    },
+    favoriteDelete: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+      try {
+        await ctx.services.favorite.delete(ctx.orgId, ctx.userId, id);
+        const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Favorite', id, null);
+        return { lastSyncId: sync.id.toString(), success: true };
+      } catch (err) {
+        mapError(err);
+      }
+    },
+    favoriteReorder: async (
+      _parent: unknown,
+      { entries }: { entries: FavoriteReorderEntry[] },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      try {
+        const favs = await ctx.services.favorite.reorder(ctx.orgId, ctx.userId, entries);
+        // Emit one 'U' per row so other sessions of the same user see the
+        // new order. Favorites are per-user so other clients in the org
+        // ignore the broadcast — cheap.
+        const lastSync = await Promise.all(
+          favs.map(f => ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Favorite', f.id, f)),
+        );
+        const lastSyncId =
+          lastSync.length > 0
+            ? lastSync[lastSync.length - 1].id.toString()
+            : await ctx.services.sync.getLastSyncId(ctx.orgId);
+        return { favorites: favs, lastSyncId, success: true };
+      } catch (err) {
+        mapError(err);
+      }
+    },
+  },
+  Query: {
+    favorites: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+      return ctx.services.favorite.findByUser(ctx.orgId, ctx.userId);
+    },
+  },
+};

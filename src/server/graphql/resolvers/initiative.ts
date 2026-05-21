@@ -10,17 +10,41 @@ import type { GraphQLContext } from '../context';
 import { mapServiceError } from '../types/errors';
 
 const INITIATIVE_ERROR_MAP = {
-  BAD_USER_INPUT: ['InitiativeInvalidStatusError', 'InitiativeProjectNotFoundError'],
+  BAD_USER_INPUT: [
+    'InitiativeInvalidStatusError',
+    'InitiativeProjectNotFoundError',
+    'InitiativeInvalidParentError',
+    'InitiativeMaxDepthError',
+  ],
   NOT_FOUND: ['InitiativeNotFoundError'],
 } as const;
 
 export const initiativeResolvers = {
   Initiative: {
+    children: async (initiative: Initiative, _args: unknown, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+      return ctx.prisma.initiative.findMany({
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        where: {
+          archivedAt: null,
+          organizationId: ctx.orgId,
+          parentId: initiative.id,
+        },
+      });
+    },
+
     creator: async (initiative: Initiative, _args: unknown, ctx: GraphQLContext) =>
       initiative.creatorId ? ctx.loaders.user.load(initiative.creatorId) : null,
 
     owner: async (initiative: Initiative, _args: unknown, ctx: GraphQLContext) =>
       initiative.ownerId ? ctx.loaders.user.load(initiative.ownerId) : null,
+
+    parent: async (initiative: Initiative, _args: unknown, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+      return initiative.parentId
+        ? ctx.services.initiative.findById(ctx.orgId, initiative.parentId)
+        : null;
+    },
 
     projects: async (initiative: Initiative, _args: unknown, ctx: GraphQLContext) => {
       // Use the project DataLoader so the full Project row flows through
