@@ -47,6 +47,13 @@ export interface IssueFilter {
    */
   guestUserId?: string;
   includeArchived?: boolean;
+  /**
+   * When false (default), snoozed issues that haven't woken up yet are
+   * hidden from the result set — wakeup is computed at read-time as
+   * `snoozedUntilAt IS NULL OR snoozedUntilAt <= now()`. Set true to
+   * include snoozed issues (used by the "snoozed" view).
+   */
+  includeSnoozed?: boolean;
   priority?: number;
   stateId?: string;
   teamId?: string;
@@ -490,6 +497,15 @@ export class IssueService {
       data.cycleId = input.cycleId;
       data.addedToCycleAt = input.cycleId ? new Date() : null;
     }
+    if ('parentId' in input) {
+      data.parentId = input.parentId;
+    }
+    if (input.sortOrder !== undefined) {
+      data.sortOrder = input.sortOrder;
+    }
+    if (input.prioritySortOrder !== undefined) {
+      data.prioritySortOrder = input.prioritySortOrder;
+    }
 
     return this.prisma.$transaction(async tx => {
       // Verify every id belongs to the org before touching anything. A row
@@ -727,11 +743,27 @@ export class IssueService {
       where.assigneeId = filter.assigneeId;
     }
 
-    // Guest visibility: restrict to creator or assignee. Combined with any
-    // existing `assigneeId` filter via AND — a guest filtering by another
-    // assignee will see an empty list, which matches Linear's behavior.
+    // Multi-predicate filters collide on a single `where.OR` slot, so we
+    // combine them under AND. Today this matters for two filters:
+    //   * guest visibility (creator-or-assignee)
+    //   * snooze hiding (snoozedUntilAt IS NULL OR <= now)
+    // Each is added as its own AND clause with an internal OR.
+    const ands: Array<Record<string, unknown>> = [];
+
     if (filter.guestUserId) {
-      where.OR = [{ creatorId: filter.guestUserId }, { assigneeId: filter.guestUserId }];
+      ands.push({
+        OR: [{ creatorId: filter.guestUserId }, { assigneeId: filter.guestUserId }],
+      });
+    }
+
+    if (!filter.includeSnoozed) {
+      ands.push({
+        OR: [{ snoozedUntilAt: null }, { snoozedUntilAt: { lte: new Date() } }],
+      });
+    }
+
+    if (ands.length > 0) {
+      where.AND = ands;
     }
 
     return where;

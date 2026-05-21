@@ -332,14 +332,17 @@ export class InitiativeService {
       update: {},
       where: { initiativeId_projectId: { initiativeId, projectId } },
     });
-    await this.recomputeProgress(initiativeId);
+    // Recompute progress is the caller's responsibility (via
+    // recomputeProgressCascade) so ancestor SyncActions reach the wire.
+    // Calling it here would emit only the directly-affected row.
     return link;
   }
 
   /**
    * Remove a project link. Idempotent — silently no-ops if the link is
    * already gone. Returns the deleted link id (or null) so the resolver
-   * can emit a `'D' InitiativeProject` SyncAction.
+   * can emit a `'D' InitiativeProject` SyncAction. As with `addProject`,
+   * the caller drives `recomputeProgressCascade` for SyncAction emission.
    */
   async removeProject(initiativeId: string, projectId: string): Promise<string | null> {
     let removedId: string | null = null;
@@ -351,7 +354,6 @@ export class InitiativeService {
     } catch {
       // Already removed — idempotent.
     }
-    await this.recomputeProgress(initiativeId);
     return removedId;
   }
 
@@ -398,17 +400,37 @@ export class InitiativeService {
   }
 
   /**
-   * Recompute and persist `Initiative.progress` as the mean progress of
-   * non-archived linked projects AND non-archived child initiatives,
-   * weighted equally. Returns the updated row so the caller can emit a
-   * `'U' Initiative` SyncAction. Returns `null` if the initiative no
-   * longer exists or if the recomputed value is unchanged (no-op skip —
-   * saves a wasteful SyncAction broadcast on the common projectUpdate
-   * path). After updating self, propagates one level up to keep ancestor
-   * rollups in sync — recursion stops naturally when a level reports
-   * "no change".
+   * Backwards-compatible alias of `recomputeProgressCascade` that returns
+   * only the directly-recomputed row. Prefer the cascade form in new code
+   * so ancestor changes also reach the SyncAction stream — without that,
+   * connected clients see stale parent.progress until next bootstrap.
+   *
+   * Existing callers that don't emit SyncActions for the returned
+   * ancestors are listed in PATTERNS.md §46.
    */
   async recomputeProgress(initiativeId: string): Promise<Initiative | null> {
+    const { self } = await this.recomputeProgressCascade(initiativeId);
+    return self;
+  }
+
+  /**
+   * Recompute and persist `Initiative.progress` as the mean progress of
+   * non-archived linked projects AND non-archived child initiatives,
+   * weighted equally. Then walk up the parent chain, recomputing each
+   * ancestor the same way, stopping naturally when a level reports
+   * "no change" (rounded progress is identical).
+   *
+   * Returns `{ self, ancestors }` so the caller can emit one SyncAction
+   * per updated row — broadcasting only `self` would let ancestor
+   * progress drift silently on connected clients.
+   *
+   * `self` is null if the initiative no longer exists or its progress
+   * didn't move. `ancestors` are ordered nearest-first (parent, then
+   * grandparent, …).
+   */
+  async recomputeProgressCascade(
+    initiativeId: string,
+  ): Promise<{ self: Initiative | null; ancestors: Initiative[] }> {
     // Sub-initiative rollup: include children's progress alongside direct
     // projects in the mean. Wrapped in try/Promise.resolve so existing
     // initiative tests (which don't mock this findMany call) continue to
@@ -439,7 +461,7 @@ export class InitiativeService {
       }),
     ]);
     if (!current) {
-      return null;
+      return { ancestors: [], self: null };
     }
     const eligible = links.filter(l => l.project && !l.project.archivedAt && !l.project.trashed);
     const eligibleChildren = (children ?? []).filter(c => !c.archivedAt);
@@ -454,28 +476,41 @@ export class InitiativeService {
     // Skip the write when the rolled-up value didn't actually move.
     // 1e-9 tolerance covers floating-point round-trip jitter.
     if (Math.abs(progress - current.progress) < 1e-9) {
-      return null;
+      return { ancestors: [], self: null };
     }
 
+    let updated: Initiative;
     try {
-      const updated = await this.prisma.initiative.update({
+      updated = await this.prisma.initiative.update({
         data: { progress },
         where: { id: initiativeId },
       });
-      // Propagate the new value up one level. If the parent's progress
-      // doesn't actually move (e.g. weighted average rounds the same)
-      // recomputeProgress short-circuits via the no-op check above and
-      // recursion stops. Fire-and-forget so a slow ancestor chain
-      // doesn't block the projectUpdate response.
-      if (updated.parentId) {
-        void this.recomputeProgress(updated.parentId).catch(() => {
-          /* swallow — best-effort propagation */
-        });
-      }
-      return updated;
     } catch {
-      return null;
+      return { ancestors: [], self: null };
     }
+
+    // Propagate up the parent chain. Each ancestor whose progress moves
+    // is returned so the caller can emit one SyncAction per row — without
+    // that, connected clients would see stale ancestor.progress until
+    // next bootstrap. Recursion stops when an ancestor's rolled-up value
+    // didn't change (the recursive call returns self: null) OR when the
+    // chain runs out (no more parentId). Visited set is a defense against
+    // a cyclic ancestor chain — the create/update guard prevents cycles
+    // but bad data (raw SQL, restored backup) shouldn't loop forever.
+    const ancestors: Initiative[] = [];
+    const visited = new Set<string>([initiativeId]);
+    let cursor: string | null = updated.parentId;
+    while (cursor && !visited.has(cursor)) {
+      visited.add(cursor);
+      const { self: ancestor }: { self: Initiative | null } =
+        await this.recomputeProgressCascade(cursor);
+      if (!ancestor) {
+        break;
+      }
+      ancestors.push(ancestor);
+      cursor = ancestor.parentId;
+    }
+    return { ancestors, self: updated };
   }
 
   /**

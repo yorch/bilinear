@@ -9,6 +9,55 @@ import {
 } from '../../services/favorite.service';
 import type { GraphQLContext } from '../context';
 
+/**
+ * Confirm an entityId belongs to a row of the right type AND to ctx.orgId
+ * before allowing it to be favorited. Mirrors `resolveEntity` minus the
+ * union-return wrapping — keeping the two in lockstep avoids the case
+ * where a new favoritable type is added to one but not the other.
+ */
+async function entityBelongsToOrg(
+  entityType: string,
+  entityId: string,
+  ctx: GraphQLContext,
+): Promise<boolean> {
+  const orgId = ctx.orgId;
+  if (!orgId) {
+    return false;
+  }
+  switch (entityType) {
+    case 'Issue': {
+      const issue = await ctx.services.issue.findById(entityId);
+      return !!issue && issue.organizationId === orgId;
+    }
+    case 'Project': {
+      const project = await ctx.loaders.project.load(entityId);
+      return !!project && project.organizationId === orgId;
+    }
+    case 'Initiative': {
+      const initiative = await ctx.services.initiative.findById(orgId, entityId);
+      return !!initiative;
+    }
+    case 'CustomView': {
+      const view = await ctx.services.customView.findById(entityId);
+      return !!view && view.organizationId === orgId;
+    }
+    case 'Cycle': {
+      const cycle = await ctx.loaders.cycle.load(entityId);
+      return !!cycle && cycle.organizationId === orgId;
+    }
+    case 'Document': {
+      const doc = await ctx.services.document.findById(entityId);
+      return !!doc && doc.organizationId === orgId;
+    }
+    case 'Team': {
+      const team = await ctx.loaders.team.load(entityId);
+      return !!team && team.organizationId === orgId;
+    }
+    default:
+      return false;
+  }
+}
+
 function mapError(err: unknown): never {
   if (err instanceof FavoriteNotFoundError) {
     throw new GraphQLError(err.message, {
@@ -101,6 +150,16 @@ export const favoriteResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+      // Validate the entity exists in the caller's org BEFORE persisting.
+      // Without this, a client could favorite any UUID (cross-org probe
+      // for valid ids, or just pollute the SyncAction stream with
+      // entities that resolve to null on every other client).
+      const exists = await entityBelongsToOrg(input.entityType, input.entityId, ctx);
+      if (!exists) {
+        throw new GraphQLError('Entity not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
       try {
         const fav = await ctx.services.favorite.create(ctx.orgId, ctx.userId, input);
         const sync = await ctx.services.sync.createSyncAction(

@@ -257,6 +257,11 @@ export const typeDefs = `
     assigneeId: String
     priority: Int
     trashed: Boolean
+    """
+    Include snoozed issues that haven't woken up yet. Default false —
+    snoozed issues are hidden from lists until now() reaches snoozedUntilAt.
+    """
+    includeSnoozed: Boolean
   }
 
   input IssueLabelCreateInput {

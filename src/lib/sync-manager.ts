@@ -602,12 +602,14 @@ export class SyncManager {
       customFieldDefinitions: object[];
       customFieldValues: object[];
       issueActivities: object[];
+      favorites: object[];
     } = {
       customFieldDefinitions: [],
       customFieldValues: [],
       customViews: [],
       cycles: [],
       documents: [],
+      favorites: [],
       initiativeProjects: [],
       initiatives: [],
       issueActivities: [],
@@ -643,7 +645,8 @@ export class SyncManager {
         | 'issueRelations'
         | 'issueTemplates'
         | 'customFieldDefinitions'
-        | 'issueActivities';
+        | 'issueActivities'
+        | 'favorites';
       id: string;
     }[] = [];
     /**
@@ -886,6 +889,17 @@ export class SyncManager {
             dexieUpserts.initiativeProjects.push(data);
           }
           break;
+        case 'Favorite':
+          // No MobX store yet — favorites are queried on demand by the
+          // sidebar via `favorites` GraphQL query. We still persist to
+          // Dexie so the offline-first cache stays consistent and a
+          // future sidebar component can read from it without a refetch.
+          if (act === 'D') {
+            dexieDeletes.push({ id: modelId, table: 'favorites' });
+          } else if (data) {
+            dexieUpserts.favorites.push(data);
+          }
+          break;
       }
 
       // Update max sync cursor — `(committedAt, id)` tuple comparison.
@@ -921,6 +935,7 @@ export class SyncManager {
         db.customFieldDefinitions,
         db.customFieldValues,
         db.issueActivities,
+        db.favorites,
         db.syncMetadata,
       ],
       async () => {
@@ -990,6 +1005,10 @@ export class SyncManager {
           dexieUpserts.issueActivities.length > 0 &&
             db.issueActivities.bulkPut(
               dexieUpserts.issueActivities as Parameters<typeof db.issueActivities.bulkPut>[0],
+            ),
+          dexieUpserts.favorites.length > 0 &&
+            db.favorites.bulkPut(
+              dexieUpserts.favorites as Parameters<typeof db.favorites.bulkPut>[0],
             ),
           db.syncMetadata.put({ key: 'lastSyncId', value: maxId }),
         ]);

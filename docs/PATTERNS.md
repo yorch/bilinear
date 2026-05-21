@@ -1555,7 +1555,7 @@ sites (ProjectUpdate / InitiativeUpdate composers) get the inline fallback.
 
 Reference: `src/components/editor/tiptap-editor.tsx`, `src/app/api/upload/route.ts`, `src/server/services/file.service.ts`.
 
-## 46. Sub-Initiative Hierarchy Pattern (2026-05-21)
+## 46. Sub-Initiative Hierarchy Pattern (2026-05-21, hardened post-review)
 
 `Initiative.parentId` is a self-FK with `ON DELETE SET NULL` — deleting a
 parent re-roots its children rather than cascading. Max nesting depth is
@@ -1580,12 +1580,28 @@ const progress = totalCount === 0
   : (sumProjectProgress + sumChildProgress) / totalCount;
 ```
 
-After persisting the new value, recompute propagates one level up the
-parent chain (fire-and-forget, since a slow ancestor chain shouldn't
-block the originating mutation). Recursion stops naturally when a level
-reports "no change" (the existing `<1e-9` early return).
+**Cascade contract.** `recomputeProgressCascade(id)` returns
+`{ self, ancestors }` so the caller can emit one SyncAction per updated
+row. The original `recomputeProgress(id)` is preserved as a thin alias
+that returns only `self` — but it's a footgun for nested chains
+because ancestor SyncActions get dropped. Every project / initiative
+write path that triggers a recompute now goes through the cascade form
+and iterates `[self, ...ancestors]` emitting one `'U' Initiative` per
+row. Recursion stops when an ancestor's rolled-up value didn't change
+(the `<1e-9` early return), or when the chain runs out, or on a cycle
+(visited-set guard against bad data).
 
-Reference: `src/server/services/initiative.service.ts`, DATABASE_SCHEMA.md §2.32.
+```ts
+// Resolver pattern after a project change:
+const { self, ancestors } = await ctx.services.initiative.recomputeProgressCascade(init.id);
+for (const updated of [self, ...ancestors].filter((i): i is Initiative => i !== null)) {
+  await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Initiative', updated.id, updated);
+}
+```
+
+Reference: `src/server/services/initiative.service.ts:recomputeProgressCascade`,
+`src/server/graphql/resolvers/project.ts`,
+`src/server/graphql/resolvers/initiative.ts`, DATABASE_SCHEMA.md §2.32.
 
 ## 47. Sidebar Favorites Pattern (2026-05-21)
 
@@ -1616,19 +1632,26 @@ catches a class of bug (cross-org reference) that the per-resolver
 Reference: `src/server/services/favorite.service.ts`,
 `src/server/graphql/resolvers/favorite.ts`.
 
-## 48. Guest Role Enforcement Pattern (2026-05-21)
+## 48. Guest Role Enforcement Pattern (2026-05-21, hardened post-review)
 
 `TeamMemberRole.role` carries one of `admin | member | guest`. The
-middleware layer exposes three helpers:
+middleware layer exposes four guards:
 
 - `requireTeamMember(prisma, teamId, userId, orgId)` — passes for any role
   (legacy; kept for paths that gate by team membership but don't
   differentiate guests)
 - `requireTeamMemberNotGuest(...)` — same as above but rejects guests
-  with `FORBIDDEN`; used for write mutations
-- `isTeamGuest(...)` — boolean lookup; read paths use this to apply a
-  scoped filter (`IssueFilter.guestUserId`) so the guest only sees issues
-  they created or are assigned to
+  with `FORBIDDEN`; used when an action shouldn't be available to
+  guests at all (none today — guests can still interact with their
+  own work via the helper below)
+- `requireIssueAccessNotGuestOrOwn(prisma, issue, userId, orgId)` —
+  per-issue write guard: passes for non-guests; for guests, passes
+  only when `issue.creatorId === userId || issue.assigneeId === userId`.
+  Every per-issue mutation (snooze, unsnooze, update, archive,
+  delete, reactions, bulk update) goes through this.
+- `isTeamGuest(...)` / `getGuestTeamIds(prisma, userId, orgId)` —
+  boolean lookups; read paths use these to narrow result sets so the
+  guest only sees issues they created/are assigned to.
 
 **Critical invariant:** `IssueFilter.guestUserId` is server-derived from
 `isTeamGuest`; never accepted from clients. A client-supplied value would
@@ -1636,18 +1659,35 @@ let a member pose as a guest to scope a query — harmless on its own, but
 the principle is "trust nothing from the wire about role state".
 
 ```ts
-// Issues query (the read-path enforcement point):
+// Top-level issues query (the primary read-path enforcement):
 await requireTeamMember(ctx.prisma, filter.teamId, ctx.userId, ctx.orgId);
 const guest = await isTeamGuest(ctx.prisma, filter.teamId, ctx.userId, ctx.orgId);
 const effectiveFilter = guest ? { ...filter, guestUserId: ctx.userId } : filter;
 ```
 
-**Open items** (tracked in LINEAR_FEATURE_GAPS.md §8.2): the write-path
-sweep — adding `requireTeamMemberNotGuest` to every issueUpdate, comment,
-relation, etc. — isn't done yet. Today a guest could call those mutations
-on issues they don't own.
+**Relation resolvers** (Project.issues, Cycle.issues, Issue.children,
+Issue.parent) independently re-check guest status — without that, those
+paths are backdoors around the top-level filter. The Project.issues
+path is the tricky one: a project can span teams, so it asks
+`getGuestTeamIds` once and applies an `OR` clause that allows full
+visibility for non-guest teams and creator-or-assignee for guest teams.
 
-Reference: `src/server/middleware/auth.ts`, `src/server/graphql/resolvers/issue.ts`.
+```ts
+// Project.issues — guest-scoped where clause:
+const guestTeamIds = await getGuestTeamIds(ctx.prisma, userId, orgId);
+where.OR = guestTeamIds.length > 0
+  ? [
+      { teamId: { notIn: guestTeamIds } },
+      { creatorId: userId },
+      { assigneeId: userId },
+    ]
+  : undefined;
+```
+
+Reference: `src/server/middleware/auth.ts`,
+`src/server/graphql/resolvers/issue.ts`,
+`src/server/graphql/resolvers/project.ts`,
+`src/server/graphql/resolvers/cycle.ts`.
 
 ## 49. Issue Snooze Pattern (2026-05-21)
 
@@ -1658,9 +1698,18 @@ just sets / clears the columns.
 
 **Wakeup is a read-time concern:** there is no background worker that
 flips snoozed issues back into the active set on the wake timestamp.
-List/board views hide snoozed issues client-side via
-`issue.snoozedUntilAt > now()`. The DB row stays the same throughout the
-snooze window; only the read interpretation changes.
+The `IssueService.buildWhere` query helper enforces the hide rule
+server-side as
+
+```sql
+snoozed_until_at IS NULL OR snoozed_until_at <= now()
+```
+
+added under an `AND` clause so it composes cleanly with the guest-
+visibility filter (also AND'd). Clients pass `IssueFilter.includeSnoozed:
+true` to opt in (e.g. a dedicated "snoozed" view). The DB row stays
+the same throughout the snooze window; only the read interpretation
+changes.
 
 **Validation:** the resolver rejects `until` values that are non-ISO,
 `NaN`, or `<= now()`. A snooze "to the past" silently no-ops in Linear,
@@ -1668,6 +1717,7 @@ but here we'd rather surface the input mistake (likely a timezone bug
 in the client) than absorb it.
 
 Reference: `src/server/services/issue.service.ts:snooze`,
+`src/server/services/issue.service.ts:buildWhere`,
 `src/server/graphql/resolvers/issue.ts:issueSnooze`.
 
 ## 50. Bulk Update Pattern (2026-05-21)

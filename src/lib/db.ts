@@ -261,9 +261,11 @@ export interface DBCustomFieldDefinition {
   id: string;
   name: string;
   options?: Array<{ value: string; label: string; color?: string }> | null;
+  organizationId: string;
   required: boolean;
   sortOrder: number;
-  teamId: string;
+  /** Null = workspace-scoped (applies to every team in organizationId). */
+  teamId: string | null;
   type: 'text' | 'number' | 'date' | 'select' | 'multi_select' | 'url' | 'checkbox';
   updatedAt: string;
 }
@@ -327,6 +329,17 @@ export interface DBInitiativeProject {
   sortOrder: number;
 }
 
+export interface DBFavorite {
+  createdAt: string;
+  // Issue | Project | Initiative | CustomView | Cycle | Document | Team
+  entityId: string;
+  entityType: string;
+  id: string;
+  organizationId: string;
+  sortOrder: number;
+  userId: string;
+}
+
 export interface DBSyncMetadata {
   key: string;
   value: unknown;
@@ -372,6 +385,7 @@ export class AppDatabase extends Dexie {
   projectUpdates!: Table<DBProjectUpdate, string>;
   customViews!: Table<DBCustomView, string>;
   notifications!: Table<DBNotification, string>;
+  favorites!: Table<DBFavorite, string>;
   pendingTransactions!: Table<DBPendingTransaction, string>;
   syncMetadata!: Table<DBSyncMetadata, string>;
 
@@ -383,13 +397,18 @@ export class AppDatabase extends Dexie {
     // pool would conflict.
     // TODO(pre-launch): once we have real users, switch to `.version(N)`
     // blocks with `.upgrade()` migrations and stop bumping the DB name.
-    super('issue-tracker-v2');
+    //
+    // v3 (2026-05-21): added `favorites` table; widened
+    // `customFieldDefinitions` index to include `organizationId` so
+    // workspace-scoped lookups (teamId IS NULL) are indexable.
+    super('issue-tracker-v3');
     this.version(1).stores({
-      customFieldDefinitions: 'id, teamId',
+      customFieldDefinitions: 'id, teamId, organizationId',
       customFieldValues: 'id, issueId, definitionId, [issueId+definitionId]',
       customViews: 'id, organizationId, teamId, creatorId',
       cycles: 'id, teamId, organizationId',
       documents: 'id, organizationId, teamId, projectId, parentId',
+      favorites: 'id, userId, organizationId, [userId+entityType+entityId]',
       initiativeProjects: 'id, initiativeId, projectId, [initiativeId+projectId]',
       initiatives: 'id, organizationId, status, ownerId',
       issueActivities: 'id, issueId',

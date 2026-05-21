@@ -112,14 +112,18 @@ export class FavoriteService {
       if (claim.length !== entries.length) {
         throw new FavoriteNotFoundError();
       }
-      await Promise.all(
-        entries.map(e =>
-          tx.favorite.update({
-            data: { sortOrder: e.sortOrder },
-            where: { id: e.id },
-          }),
-        ),
-      );
+      // Sequential updates: Prisma's interactive transaction client
+      // serializes commands over a single connection, and concurrent
+      // statement issuance (Promise.all) is documented as unsafe — it
+      // can throw "Transaction already closed" or apply writes out of
+      // order under load. Sequential is correct and fast enough for the
+      // worst realistic reorder (<= 100 entries).
+      for (const e of entries) {
+        await tx.favorite.update({
+          data: { sortOrder: e.sortOrder },
+          where: { id: e.id },
+        });
+      }
       return tx.favorite.findMany({
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
         where: { organizationId: orgId, userId },

@@ -38,8 +38,15 @@ export class CustomFieldStore {
     return this.definitions.get(id) ?? null;
   }
 
+  /**
+   * Returns team-scoped definitions for `teamId` PLUS workspace-scoped
+   * definitions (teamId IS NULL) in the same org. Workspace definitions
+   * surface on every team's issue panel — matching the server's
+   * `findDefinitionsByTeamId`. Caller's team belongs to `organizationId`
+   * so we don't need to re-filter org here.
+   */
   findDefinitionsByTeamId(teamId: string): DBCustomFieldDefinition[] {
-    return this.activeDefinitions.filter(d => d.teamId === teamId);
+    return this.activeDefinitions.filter(d => d.teamId === teamId || d.teamId === null);
   }
 
   findValue(issueId: string, definitionId: string): DBCustomFieldValue | null {

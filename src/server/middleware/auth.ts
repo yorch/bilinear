@@ -177,6 +177,57 @@ export async function isTeamGuest(
   return (await getTeamRole(prisma, teamId, userId, orgId)) === 'guest';
 }
 
+/**
+ * Issue-level write/access guard. Used by per-issue mutations
+ * (issueUpdate, issueArchive, issueDelete, issueSnooze/Unsnooze,
+ * reactions, …) to enforce: any team member can act, EXCEPT a guest can
+ * only act on issues they created or are assigned to. Mirrors Linear's
+ * "guests interact with their own work" rule.
+ *
+ * Caller has already verified the issue belongs to `orgId`. We re-call
+ * `requireTeamMember` here so the helper is self-contained — passing a
+ * raw issue from outside a tenant guard would otherwise let a caller
+ * bypass team checks entirely.
+ */
+export async function requireIssueAccessNotGuestOrOwn(
+  prisma: PrismaClient,
+  issue: { teamId: string; creatorId: string | null; assigneeId: string | null },
+  userId: string,
+  orgId: string,
+): Promise<void> {
+  await requireTeamMember(prisma, issue.teamId, userId, orgId);
+  if (await isTeamGuest(prisma, issue.teamId, userId, orgId)) {
+    if (issue.creatorId !== userId && issue.assigneeId !== userId) {
+      throw new GraphQLError('Guests can only modify issues they created or are assigned to', {
+        extensions: { code: 'FORBIDDEN' },
+      });
+    }
+  }
+}
+
+/**
+ * Returns the set of team ids in `orgId` where `userId` is a guest. Used
+ * by relation resolvers (Project.issues, Cycle.issues, Issue.children) to
+ * narrow result sets so a guest only sees issues from their own teams or
+ * issues they created/are assigned to in teams where they are a guest.
+ * Returns an empty array when the user has no guest roles anywhere.
+ */
+export async function getGuestTeamIds(
+  prisma: PrismaClient,
+  userId: string,
+  orgId: string,
+): Promise<string[]> {
+  const rows = await prisma.teamMemberRole.findMany({
+    select: { teamId: true },
+    where: {
+      role: 'guest',
+      team: { organizationId: orgId },
+      userId,
+    },
+  });
+  return rows.map(r => r.teamId);
+}
+
 function extractBearerToken(authHeader: string | null): string | null {
   if (!authHeader) {
     return null;

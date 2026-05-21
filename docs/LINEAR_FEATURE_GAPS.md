@@ -334,22 +334,32 @@ the sidebar.
 - Bootstrap payload inclusion (currently fetch-on-mount via `favorites` query)
 - Folder grouping (one level of nesting) — deferred until users ask
 
-### 8.2 Guest Role Enforcement ✅ _(shipped 2026-05-21)_
+### 8.2 Guest Role Enforcement ✅ _(shipped 2026-05-21, hardened same day)_
 
 Guests on a team see only issues they created or are assigned to; cannot
-perform write actions that aren't on their own issues.
+perform write actions that aren't on their own issues. Both read and
+per-issue write paths are enforced.
 
 **Shipped:**
-- `getTeamRole`, `requireTeamMemberNotGuest`, `isTeamGuest` helpers in
-  `src/server/middleware/auth.ts`
-- `Issue.findMany` honors `IssueFilter.guestUserId` (set server-side from
-  `isTeamGuest`; never accepted from clients)
+- Helpers in `src/server/middleware/auth.ts`: `getTeamRole`,
+  `requireTeamMemberNotGuest`, `requireIssueAccessNotGuestOrOwn`,
+  `isTeamGuest`, `getGuestTeamIds`
+- Read path: `Issue.findMany` honors `IssueFilter.guestUserId`
+  (server-derived; never accepted from clients)
+- Relation read paths gated: `Project.issues`, `Cycle.issues`,
+  `Issue.children`, `Issue.parent` re-check guest status so they
+  aren't backdoors around the top-level filter
+- Per-issue write path: every issue mutation (`issueUpdate`, `Archive`,
+  `Unarchive`, `Delete`, `Snooze`, `Unsnooze`, `ReactionAdd`/`Remove`,
+  `issuesBulkUpdate`) runs `requireIssueAccessNotGuestOrOwn` — guests
+  can only act on issues they created or are assigned to
 - See PATTERNS.md §48
 
-**Not yet shipped (broader rollout):**
-- Apply `requireTeamMemberNotGuest` to all write mutations (issueUpdate, comment, etc.)
-  — currently the `issues` query is the only enforced path
-- Project / Initiative / Document visibility for guests
+**Still TODO (separate PR):**
+- Comment / IssueRelation / search resolvers — guests can still read
+  comments and create relations on issues they don't own
+- Project / Initiative / Document scoping for guests (currently a
+  guest can see every project and initiative in their org)
 
 ### 8.3 Issue Reactions ✅ _(PR #38, shipped 2026-05-18)_
 

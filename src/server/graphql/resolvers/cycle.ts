@@ -1,14 +1,32 @@
 import { GraphQLError } from 'graphql';
 import type { Cycle } from '../../../generated/prisma';
 import { logger } from '../../lib/logger';
-import { requireAuth, requireTeamMember } from '../../middleware/auth';
+import { isTeamGuest, requireAuth, requireTeamMember } from '../../middleware/auth';
 import type { CycleCreateInput, CycleUpdateInput } from '../../services/cycle.service';
 import type { GraphQLContext } from '../context';
 
 export const cycleResolvers = {
   Cycle: {
-    issues: async (cycle: Cycle, _args: unknown, ctx: GraphQLContext) =>
-      ctx.services.issue.findActiveByCycleId(cycle.id),
+    issues: async (cycle: Cycle, _args: unknown, ctx: GraphQLContext) => {
+      // Guest visibility: a guest on the cycle's team only sees issues
+      // they created or are assigned to. Non-guests see the full set.
+      // Without this check, Cycle.issues is a backdoor around the
+      // top-level `issues` query's guest filter.
+      const userId = ctx.userId;
+      const orgId = ctx.orgId;
+      if (userId && orgId && (await isTeamGuest(ctx.prisma, cycle.teamId, userId, orgId))) {
+        return ctx.prisma.issue.findMany({
+          orderBy: { sortOrder: 'asc' },
+          where: {
+            archivedAt: null,
+            cycleId: cycle.id,
+            OR: [{ creatorId: userId }, { assigneeId: userId }],
+            trashed: false,
+          },
+        });
+      }
+      return ctx.services.issue.findActiveByCycleId(cycle.id);
+    },
 
     team: async (cycle: Cycle, _args: unknown, ctx: GraphQLContext) =>
       ctx.loaders.team.load(cycle.teamId),

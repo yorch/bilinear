@@ -244,11 +244,6 @@ describe('InitiativeService', () => {
         initiativeId: TEST_INITIATIVE.id,
         projectId: 'p-1',
       });
-      prisma.initiativeProject.findMany.mockResolvedValue([
-        { project: { archivedAt: null, progress: 0.4, trashed: false } },
-      ]);
-      prisma.initiative.findUnique.mockResolvedValue({ progress: 0 });
-      prisma.initiative.update.mockResolvedValue({ ...TEST_INITIATIVE, progress: 0.4 });
 
       const result = await service.addProject(TEST_ORG.id, TEST_INITIATIVE.id, 'p-1');
 
@@ -260,11 +255,10 @@ describe('InitiativeService', () => {
           initiativeId_projectId: { initiativeId: TEST_INITIATIVE.id, projectId: 'p-1' },
         },
       });
-      // recompute fired
-      expect(prisma.initiative.update).toHaveBeenCalledWith({
-        data: { progress: 0.4 },
-        where: { id: TEST_INITIATIVE.id },
-      });
+      // Recompute is now the caller's responsibility (cascade form, so
+      // ancestor SyncActions are emitted). addProject itself doesn't
+      // touch `prisma.initiative.update` anymore.
+      expect(prisma.initiative.update).not.toHaveBeenCalled();
     });
 
     it('refuses when the project belongs to a different org', async () => {
