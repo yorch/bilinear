@@ -1,4 +1,9 @@
-import type { Initiative, InitiativeProject, PrismaClient } from '../../generated/prisma';
+import type {
+  Initiative,
+  InitiativeProject,
+  InitiativeUpdate,
+  PrismaClient,
+} from '../../generated/prisma';
 
 export interface InitiativeCreateInput {
   color?: string;
@@ -411,6 +416,67 @@ export class InitiativeService {
     } catch {
       return null;
     }
+  }
+
+  // ─── Initiative Updates ──────────────────────────────────────────────────
+
+  async createInitiativeUpdate(input: {
+    body: string;
+    bodyData: Record<string, unknown>;
+    health: string;
+    id?: string;
+    initiativeId: string;
+    userId: string;
+  }): Promise<InitiativeUpdate> {
+    return this.prisma.initiativeUpdate.create({
+      data: {
+        body: input.body,
+        bodyData: input.bodyData as object,
+        health: input.health,
+        id: input.id ?? undefined,
+        initiativeId: input.initiativeId,
+        userId: input.userId,
+      },
+    });
+  }
+
+  async updateInitiativeUpdate(
+    id: string,
+    input: {
+      body?: string;
+      bodyData?: Record<string, unknown>;
+      health?: string;
+    },
+  ): Promise<InitiativeUpdate> {
+    const data: Record<string, unknown> = { editedAt: new Date() };
+    if (input.body !== undefined) {
+      data.body = input.body;
+    }
+    if (input.bodyData !== undefined) {
+      data.bodyData = input.bodyData;
+    }
+    if (input.health !== undefined) {
+      data.health = input.health;
+    }
+    return this.prisma.initiativeUpdate.update({ data, where: { id } });
+  }
+
+  async deleteInitiativeUpdate(id: string): Promise<InitiativeUpdate> {
+    return this.prisma.initiativeUpdate.update({
+      data: { archivedAt: new Date() },
+      where: { id },
+    });
+  }
+
+  async findInitiativeUpdateById(id: string): Promise<InitiativeUpdate | null> {
+    return this.prisma.initiativeUpdate.findUnique({ where: { id } });
+  }
+
+  async getInitiativeUpdates(initiativeId: string): Promise<InitiativeUpdate[]> {
+    return this.prisma.initiativeUpdate.findMany({
+      orderBy: { createdAt: 'desc' },
+      where: { archivedAt: null, initiativeId },
+    });
   }
 }
 

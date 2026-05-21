@@ -22,6 +22,7 @@ import { StatusSelect } from '../properties/status-select';
 import { ActivityTimeline } from './activity-timeline';
 import { CommentThread } from './comment-thread';
 import { FileAttachments } from './file-attachments';
+import { IssueReactionBar } from './issue-reaction-bar';
 import { PullRequestsSection } from './pull-requests-section';
 import { RelationsSection } from './relations-section';
 import { SubIssueList } from './sub-issue-list';
@@ -336,6 +337,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
                   placeholder="Add a description… (supports **markdown**, /slash commands, @mentions)"
                   readOnly={false}
                   showToolbar={true}
+                  uploadIssueId={issue.id}
                 />
               </div>
             ) : (
@@ -355,6 +357,11 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
                 />
               </button>
             )}
+          </div>
+
+          {/* Reactions */}
+          <div className="mt-3">
+            <IssueReactionBar currentUserId={currentUserId} issueId={issue.id} />
           </div>
 
           {/* Sub-issues */}

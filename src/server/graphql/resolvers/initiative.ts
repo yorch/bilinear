@@ -1,5 +1,5 @@
 import { GraphQLError } from 'graphql';
-import type { Initiative } from '../../../generated/prisma';
+import type { Initiative, InitiativeUpdate } from '../../../generated/prisma';
 import { logger } from '../../lib/logger';
 import { requireAuth } from '../../middleware/auth';
 import type {
@@ -34,6 +34,14 @@ export const initiativeResolvers = {
           p !== null && p.organizationId === ctx.orgId && !p.archivedAt && !p.trashed,
       );
     },
+
+    updates: async (initiative: Initiative, _args: unknown, ctx: GraphQLContext) =>
+      ctx.services.initiative.getInitiativeUpdates(initiative.id),
+  },
+
+  InitiativeUpdate: {
+    user: async (update: InitiativeUpdate, _args: unknown, ctx: GraphQLContext) =>
+      ctx.loaders.user.load(update.userId),
   },
 
   Mutation: {
@@ -222,6 +230,134 @@ export const initiativeResolvers = {
       } catch (err) {
         mapServiceError(err, INITIATIVE_ERROR_MAP);
       }
+    },
+
+    initiativeUpdateCreate: async (
+      _parent: unknown,
+      {
+        input,
+      }: {
+        input: {
+          id?: string;
+          initiativeId: string;
+          body: string;
+          bodyData: Record<string, unknown>;
+          health: string;
+        };
+      },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+
+      const initiative = await ctx.services.initiative.findById(ctx.orgId, input.initiativeId);
+      if (!initiative) {
+        throw new GraphQLError('Initiative not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+
+      const update = await ctx.services.initiative.createInitiativeUpdate({
+        ...input,
+        userId: ctx.userId,
+      });
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'I',
+        'InitiativeUpdate',
+        update.id,
+        update,
+      );
+      return {
+        initiativeUpdate: update,
+        lastSyncId: sync.id.toString(),
+        success: true,
+      };
+    },
+
+    initiativeUpdateDelete: async (
+      _parent: unknown,
+      { id }: { id: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+
+      const existing = await ctx.services.initiative.findInitiativeUpdateById(id);
+      if (!existing) {
+        throw new GraphQLError('Update not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+      const initiative = await ctx.services.initiative.findById(ctx.orgId, existing.initiativeId);
+      if (!initiative) {
+        throw new GraphQLError('Initiative not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+      if (existing.userId !== ctx.userId) {
+        throw new GraphQLError('Only the author can delete this update', {
+          extensions: { code: 'FORBIDDEN' },
+        });
+      }
+
+      await ctx.services.initiative.deleteInitiativeUpdate(id);
+      // Soft-delete (archivedAt is stamped server-side); client stores treat
+      // this as a removal from the timeline, matching the ProjectUpdate
+      // delete convention rather than the 'A' archive sync action which
+      // requires a payload to flip the cached row.
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'D',
+        'InitiativeUpdate',
+        id,
+        null,
+      );
+      return { lastSyncId: sync.id.toString(), success: true };
+    },
+
+    initiativeUpdateUpdate: async (
+      _parent: unknown,
+      {
+        id,
+        input,
+      }: {
+        id: string;
+        input: { body?: string; bodyData?: Record<string, unknown>; health?: string };
+      },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+
+      const existing = await ctx.services.initiative.findInitiativeUpdateById(id);
+      if (!existing) {
+        throw new GraphQLError('Update not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+      const initiative = await ctx.services.initiative.findById(ctx.orgId, existing.initiativeId);
+      if (!initiative) {
+        throw new GraphQLError('Initiative not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+      if (existing.userId !== ctx.userId) {
+        throw new GraphQLError('Only the author can edit this update', {
+          extensions: { code: 'FORBIDDEN' },
+        });
+      }
+
+      const update = await ctx.services.initiative.updateInitiativeUpdate(id, input);
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'U',
+        'InitiativeUpdate',
+        id,
+        update,
+      );
+      return {
+        initiativeUpdate: update,
+        lastSyncId: sync.id.toString(),
+        success: true,
+      };
     },
   },
 

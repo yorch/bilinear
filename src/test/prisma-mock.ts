@@ -46,10 +46,12 @@ export type MockPrismaClient = {
     | 'file'
     | 'initiative'
     | 'initiativeProject'
+    | 'initiativeUpdate'
     | 'issue'
     | 'issueActivity'
     | 'issueLabel'
     | 'issueLabelAssignment'
+    | 'issueReaction'
     | 'issueRelation'
     | 'issueTemplate'
     | 'notification'
@@ -91,10 +93,12 @@ export function createMockPrisma(): MockPrismaClient {
     file: createMockModel(),
     initiative: createMockModel(),
     initiativeProject: createMockModel(),
+    initiativeUpdate: createMockModel(),
     issue: createMockModel(),
     issueActivity: createMockModel(),
     issueLabel: createMockModel(),
     issueLabelAssignment: createMockModel(),
+    issueReaction: createMockModel(),
     issueRelation: createMockModel(),
     issueTemplate: createMockModel(),
     notification: createMockModel(),

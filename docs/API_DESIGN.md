@@ -125,6 +125,8 @@ Payloads in the live schema:
 | `DocumentMutationResult`       | `document`                                |
 | `CommentPayload`               | `comment`                                 |
 | `CommentReactionPayload`       | `reaction`                                |
+| `IssueReactionPayload`         | `reaction`                                |
+| `InitiativeUpdatePayload`      | `initiativeUpdate`                        |
 | `NotificationPayload`          | `notification`                            |
 | `IssueRelationPayload`         | `issueRelation`                           |
 | `IssueTemplatePayload`         | `issueTemplate`                           |
@@ -304,6 +306,22 @@ type Issue {
   project: Project
   customFieldValues: [CustomFieldValue!]!
   files: [File!]!
+  reactions: [IssueReaction!]!     # since 2026-05-18
+}
+
+type IssueReaction {
+  id: ID!
+  issueId: ID!
+  userId: ID!
+  emoji: String!
+  user: User!
+  createdAt: DateTime!
+}
+
+type IssueReactionPayload {
+  success: Boolean!
+  reaction: IssueReaction
+  lastSyncId: String!
 }
 
 type IssueEdge { node: Issue!, cursor: String! }
@@ -417,6 +435,18 @@ type Project {
   members: [User!]!
   milestones: [ProjectMilestone!]!
   updates: [ProjectUpdate!]!
+  progressHistory: [ProgressHistoryPoint!]!   # since 2026-05-18
+}
+
+# Per-day progress snapshot. Stamped once per UTC day on the first
+# `progressHistory` read; intra-day reads return the cached value
+# (see PATTERNS.md §44).
+type ProgressHistoryPoint {
+  date: String!                # YYYY-MM-DD
+  completedIssueCount: Int!
+  issueCount: Int!
+  completedScope: Float!       # sum of estimate for completed issues
+  scope: Float!                # sum of estimate for all in-scope issues
 }
 
 type ProjectEdge { node: Project!, cursor: String! }
@@ -768,6 +798,7 @@ issueCreate, issueUpdate, issueArchive, issueUnarchive, issueDelete
 issueLabelCreate, issueLabelUpdate, issueLabelArchive
 issueRelationCreate, issueRelationDelete
 issueTemplateCreate, issueTemplateUpdate, issueTemplateArchive, issueTemplateDelete
+issueReactionAdd(issueId, emoji), issueReactionRemove(issueId, emoji)   # since 2026-05-18
 
 # Triage queue actions (triage-enabled teams only)
 issueTriageAccept(issueId, input: { stateId, assigneeId?, priority?, cycleId? })
@@ -837,8 +868,64 @@ initiativeCreate, initiativeUpdate, initiativeArchive, initiativeDelete
 initiativeAddProject(initiativeId, projectId)
 initiativeRemoveProject(initiativeId, projectId)
 
+# Status reports posted against an initiative (since 2026-05-18).
+# Mirrors ProjectUpdate semantics. Author-only edit/delete enforced
+# in the resolver; soft-delete emits a 'D' SyncAction. See PATTERNS §43.
+initiativeUpdateCreate(input: InitiativeUpdateCreateInput!)
+initiativeUpdateUpdate(id, input: InitiativeUpdateEditInput!)
+initiativeUpdateDelete(id)
+
 # Queries
 initiative(id), initiatives(includeArchived?)
+```
+
+```graphql
+type InitiativeUpdate {
+  id: ID!
+  initiativeId: ID!
+  body: String!
+  bodyData: JSON!
+  health: String!         # 'onTrack' | 'atRisk' | 'offTrack'
+  user: User!
+  editedAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+}
+
+type InitiativeUpdatePayload {
+  success: Boolean!
+  initiativeUpdate: InitiativeUpdate
+  lastSyncId: String!
+}
+
+input InitiativeUpdateCreateInput {
+  id: String
+  initiativeId: String!
+  body: String!
+  bodyData: JSON!
+  health: String!
+}
+
+input InitiativeUpdateEditInput {
+  body: String
+  bodyData: JSON
+  health: String
+}
+
+# `Initiative.updates: [InitiativeUpdate!]!` returns non-archived
+# updates newest-first.
+```
+
+### Issue Reactions
+
+Emoji reactions on issues (since 2026-05-18). Unique per
+`(issueId, userId, emoji)`; add is idempotent via upsert. See PATTERNS §42.
+
+```
+issueReactionAdd(issueId, emoji)        # IssueReactionPayload
+issueReactionRemove(issueId, emoji)     # DeletePayload
+# Reactions are read inline via Issue.reactions: [IssueReaction!]!
 ```
 
 ### Webhooks (admin-only)
@@ -1148,7 +1235,7 @@ one, delete its row here and add a §4 entry above.
 | ----------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------ |
 | `Attachment`, `attachmentCreate/...`                                          | 📋      | Linked external resources (Figma, Google Doc). `File` covers raw uploads only. |
 | `Favorite`, `favoriteCreate/...`                                              | 📋      | Sidebar pinning (Sprint 43-44).                                                |
-| `Initiative`, `initiativeCreate/...`                                          | 📋      | Enterprise roadmap tier (P2).                                                  |
+| ~~`Initiative`, `initiativeCreate/...`~~                                      | ✅      | Shipped 2026-05-05; see §6.7 above. InitiativeUpdate timeline shipped 2026-05-18.|
 | `Template` (polymorphic)                                                      | 📋      | Project / document templates. Issue-only today via `IssueTemplate`.            |
 | `Webhook`, `webhookCreate/...`                                                | 📋      | Outbound HMAC-signed webhooks (Sprint 49-50).                                  |
 | `apiKeyCreate / apiKeyDelete`                                                 | 📋      | Personal API keys.                                                             |

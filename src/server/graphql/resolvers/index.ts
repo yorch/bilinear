@@ -89,6 +89,10 @@ export const resolvers = {
     ...initiativeResolvers.Initiative,
   },
 
+  InitiativeUpdate: {
+    ...initiativeResolvers.InitiativeUpdate,
+  },
+
   Issue: {
     ...issueResolvers.Issue,
     ...customFieldResolvers.Issue,

@@ -153,6 +153,22 @@ export const typeDefs = `
     project: Project
     customFieldValues: [CustomFieldValue!]!
     files: [File!]!
+    reactions: [IssueReaction!]!
+  }
+
+  type IssueReaction {
+    id: ID!
+    issueId: ID!
+    userId: ID!
+    emoji: String!
+    user: User!
+    createdAt: DateTime!
+  }
+
+  type IssueReactionPayload {
+    success: Boolean!
+    reaction: IssueReaction
+    lastSyncId: String!
   }
 
   type IssueEdge {
@@ -419,6 +435,20 @@ export const typeDefs = `
     members: [User!]!
     milestones: [ProjectMilestone!]!
     updates: [ProjectUpdate!]!
+    progressHistory: [ProgressHistoryPoint!]!
+  }
+
+  type ProgressHistoryPoint {
+    """UTC date (YYYY-MM-DD)"""
+    date: String!
+    """Number of completed issues on that date"""
+    completedIssueCount: Int!
+    """Total issue count (scope, by count) on that date"""
+    issueCount: Int!
+    """Sum of estimates for completed issues on that date"""
+    completedScope: Float!
+    """Sum of estimates for all in-scope issues on that date"""
+    scope: Float!
   }
 
   type PublicRoadmap {
@@ -1034,12 +1064,46 @@ export const typeDefs = `
     owner: User
     creator: User
     projects: [Project!]!
+    updates: [InitiativeUpdate!]!
     startedAt: DateTime
     completedAt: DateTime
     canceledAt: DateTime
     createdAt: DateTime!
     updatedAt: DateTime!
     archivedAt: DateTime
+  }
+
+  type InitiativeUpdate {
+    id: ID!
+    initiativeId: ID!
+    body: String!
+    bodyData: JSON!
+    health: String!
+    user: User!
+    editedAt: DateTime
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    archivedAt: DateTime
+  }
+
+  type InitiativeUpdatePayload {
+    success: Boolean!
+    initiativeUpdate: InitiativeUpdate
+    lastSyncId: String!
+  }
+
+  input InitiativeUpdateCreateInput {
+    id: String
+    initiativeId: String!
+    body: String!
+    bodyData: JSON!
+    health: String!
+  }
+
+  input InitiativeUpdateEditInput {
+    body: String
+    bodyData: JSON
+    health: String
   }
 
   type InitiativePayload {
@@ -1267,6 +1331,8 @@ export const typeDefs = `
     issueArchive(id: ID!): IssuePayload!
     issueUnarchive(id: ID!): IssuePayload!
     issueDelete(id: ID!): DeletePayload!
+    issueReactionAdd(issueId: ID!, emoji: String!): IssueReactionPayload!
+    issueReactionRemove(issueId: ID!, emoji: String!): DeletePayload!
 
     issueLabelCreate(input: IssueLabelCreateInput!): IssueLabelPayload!
     issueLabelUpdate(id: ID!, input: IssueLabelUpdateInput!): IssueLabelPayload!
@@ -1354,6 +1420,9 @@ export const typeDefs = `
     initiativeDelete(id: ID!): DeletePayload!
     initiativeAddProject(initiativeId: ID!, projectId: ID!): InitiativePayload!
     initiativeRemoveProject(initiativeId: ID!, projectId: ID!): InitiativePayload!
+    initiativeUpdateCreate(input: InitiativeUpdateCreateInput!): InitiativeUpdatePayload!
+    initiativeUpdateUpdate(id: ID!, input: InitiativeUpdateEditInput!): InitiativeUpdatePayload!
+    initiativeUpdateDelete(id: ID!): DeletePayload!
 
     webhookCreate(input: WebhookCreateInput!): WebhookPayload!
     webhookUpdate(id: ID!, input: WebhookUpdateInput!): WebhookPayload!

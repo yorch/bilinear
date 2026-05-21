@@ -534,6 +534,44 @@ export const projectResolvers = {
       return result.progress;
     },
 
+    progressHistory: async (project: Project, _args: unknown, ctx: GraphQLContext) => {
+      const snapshot = await ctx.services.project.recordProgressSnapshotIfStale(project.id);
+      // Each history array is daily-aligned by `t`; merge them on date so the
+      // client receives one row per day with all four metrics.
+      const byDate = new Map<
+        string,
+        {
+          completedIssueCount: number;
+          issueCount: number;
+          completedScope: number;
+          scope: number;
+        }
+      >();
+      const ensure = (t: string) => {
+        let row = byDate.get(t);
+        if (!row) {
+          row = { completedIssueCount: 0, completedScope: 0, issueCount: 0, scope: 0 };
+          byDate.set(t, row);
+        }
+        return row;
+      };
+      for (const e of snapshot.completedIssueCountHistory) {
+        ensure(e.t).completedIssueCount = e.v;
+      }
+      for (const e of snapshot.issueCountHistory) {
+        ensure(e.t).issueCount = e.v;
+      }
+      for (const e of snapshot.completedScopeHistory) {
+        ensure(e.t).completedScope = e.v;
+      }
+      for (const e of snapshot.scopeHistory) {
+        ensure(e.t).scope = e.v;
+      }
+      return Array.from(byDate.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, v]) => ({ date, ...v }));
+    },
+
     scope: async (project: Project, _args: unknown, ctx: GraphQLContext) => {
       const result = await getProgressCached(ctx, project.id);
       return result.scope;

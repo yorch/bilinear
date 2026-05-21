@@ -2,6 +2,7 @@
 
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
+import { InitiativeUpdatesSection } from '@/components/initiatives/initiative-updates-section';
 import type { DBInitiative } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -66,7 +67,8 @@ const STATUS_LABELS: Record<string, string> = {
 const STATUS_ORDER = ['active', 'planned', 'completed', 'canceled'];
 
 function InitiativeRow({ initiative }: { initiative: DBInitiative }) {
-  const { initiativeStore, projectStore } = useStore();
+  const { initiativeStore, projectStore, userStore } = useStore();
+  const viewerId = userStore.currentUser?.id ?? '';
   const [expanded, setExpanded] = useState(false);
   const [adding, setAdding] = useState(false);
   const projectIds = initiativeStore.getProjectIds(initiative.id);
@@ -207,6 +209,7 @@ function InitiativeRow({ initiative }: { initiative: DBInitiative }) {
               </button>
             ))}
           </div>
+          <InitiativeUpdatesSection initiativeId={initiative.id} viewerId={viewerId} />
         </div>
       ) : null}
     </div>

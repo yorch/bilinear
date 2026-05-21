@@ -12,6 +12,13 @@ A Linear-style issue tracker built with Next.js 16 (App Router), Apollo Server G
 - **Initiatives** — top-level strategic objects above projects, m:n with `Project`. Progress rolls up from linked projects. UI at `/initiatives`. See PATTERNS.md §39.
 - **Webhooks** — outbound HMAC-signed HTTP subscriptions, admin-only at `/settings/webhooks`. Retry sweep runs in the WS server every 30s. See PATTERNS.md §40 and DATABASE_SCHEMA.md §2.21.
 
+### Feature drop (2026-05-18)
+
+- **Issue reactions** — normalized `IssueReaction` table (mirrors `CommentReaction`, unique on `(issueId, userId, emoji)`). Mutations `issueReactionAdd`/`issueReactionRemove`, `Issue.reactions` field, and an `IssueReactionBar` slotted under the title in `IssueDetailPanel`. Fetch-on-mount — not yet in the sync/bootstrap path. See DATABASE_SCHEMA.md §2.30 and PATTERNS.md §42.
+- **Initiative updates** — `InitiativeUpdate` table mirroring `ProjectUpdate` (body, bodyData, health, soft-delete via `archivedAt`). CRUD via `initiativeUpdateCreate/Update/Delete`, `Initiative.updates` field, and an `InitiativeUpdatesSection` rendered inside the expanded initiative row. Author-only edit/delete enforced in the resolver; delete emits `'D'` SyncAction (not `'A'`) to match ProjectUpdate convention. See DATABASE_SCHEMA.md §2.31 and PATTERNS.md §43.
+- **Project progress history** — no schema changes. `ProjectService.recordProgressSnapshotIfStale()` lazily stamps the four existing JSONB history columns once per UTC day on read; the GraphQL `Project.progressHistory` field merges the arrays into per-day rows. `ProgressSparkline` renders the completion ratio next to the progress bar.
+- **Image paste in editor** — `TipTapEditor` now accepts `uploadIssueId` / `uploadProjectId`; paste & drop POST to `/api/upload` when a parent is supplied (otherwise fall back to base64 inline so files don't end up orphaned and 404). Props threaded from `IssueDetailPanel` and `CommentComposer`.
+
 ### Feature drop (2026-05-17)
 
 - **GitHub integration** — OAuth connect/disconnect at `/settings/integrations`. Incoming webhooks at `/api/integrations/github/webhook?org=<urlKey>` auto-link PRs to issues by identifier regex and auto-close issues on PR merge. See PATTERNS.md §41 and DATABASE_SCHEMA.md §2.29.

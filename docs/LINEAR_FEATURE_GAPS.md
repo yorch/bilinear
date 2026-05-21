@@ -10,7 +10,7 @@ shipped.
 
 ## Priority 1 — High-impact, Core Differentiators
 
-### 1.1 GitHub Integration 🚧 _(PR: claude/audit-linear-features-0qIDa)_
+### 1.1 GitHub Integration ✅ _(PR #37, shipped 2026-05-17)_
 
 Connect a GitHub account to a workspace so PRs are automatically linked to issues and
 issues can be auto-closed on merge.
@@ -53,7 +53,7 @@ Note: there is no global `GITHUB_WEBHOOK_SECRET`. Each workspace generates its o
 
 ---
 
-### 1.2 Email Notifications 🚧 _(PR: claude/audit-linear-features-0qIDa)_
+### 1.2 Email Notifications ✅ _(PR #37, shipped 2026-05-17)_
 
 Send email notifications for assignment, @mention, new comment, and status change events
 to users who have email notifications enabled (default on, per-user opt-out).
@@ -137,7 +137,7 @@ Allow initiatives to be nested (up to 5 levels deep) for large strategic hierarc
 
 **Estimated size:** Medium (1 sprint)
 
-### 3.3 Initiative Updates Timeline 🔲
+### 3.3 Initiative Updates Timeline ✅ _(PR #38, shipped 2026-05-18)_
 
 A feed of status updates on each initiative (same pattern as `ProjectUpdate`).
 
@@ -248,7 +248,7 @@ date range selector, cross-team aggregates.
 
 **Estimated size:** Large (2 sprint equivalents)
 
-### 6.2 Project Progress History Charts 🔲
+### 6.2 Project Progress History Charts ✅ _(PR #38, shipped 2026-05-18)_
 
 The `completedIssueCountHistory` / `scopeHistory` JSONB columns exist on `Project`
 but are never populated. Wire up the writer and add sparkline charts.
@@ -274,7 +274,7 @@ Real-time live cursors and conflict-free co-editing on issue descriptions and do
 
 **Estimated size:** Large (2 sprint equivalents)
 
-### 7.2 Image Paste into Editor 🔲
+### 7.2 Image Paste into Editor ✅ _(PR #38, shipped 2026-05-18)_
 
 Currently images can only be inserted via the toolbar button. Paste/drag-drop from
 clipboard should also trigger upload.
@@ -325,7 +325,7 @@ Guests should only see issues assigned to them or issues they created.
 
 **Estimated size:** Small (0.5 sprint)
 
-### 8.3 Issue Reactions 🔲
+### 8.3 Issue Reactions ✅ _(PR #38, shipped 2026-05-18)_
 
 `Issue.reactionData JSONB` column exists but is never populated or exposed in GraphQL.
 
@@ -410,3 +410,9 @@ Native apps that wrap the web experience with offline push and tighter OS integr
 | — | WebSocket auth hardening | #34 | 2026-05-12 |
 | — | SyncAction committed_at watermark | #34 | 2026-05-12 |
 | — | Tenant guard hardening | #34 | 2026-05-12 |
+| 1.1 | GitHub Integration | #37 | 2026-05-17 |
+| 1.2 | Email Notifications | #37 | 2026-05-17 |
+| 3.3 | Initiative Updates Timeline | #38 | 2026-05-18 |
+| 6.2 | Project Progress History Charts | #38 | 2026-05-18 |
+| 7.2 | Image Paste in Editor | #38 | 2026-05-18 |
+| 8.3 | Issue Reactions | #38 | 2026-05-18 |
