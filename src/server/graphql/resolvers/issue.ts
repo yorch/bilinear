@@ -12,6 +12,7 @@ import {
   IssueBulkLimitExceededError,
   IssueInvalidStateError,
   IssueNotFoundError,
+  IssueService,
   IssueStateRequiredError,
 } from '../../services/issue.service';
 import type { IssueActivityCreateInput } from '../../services/issue-activity.service';
@@ -53,18 +54,17 @@ export const issueResolvers = {
 
     children: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
       // Guest visibility: hide sub-issues on the same team unless the
-      // guest created or is assigned to them. The parent issue had to
-      // pass guest auth already (top-level `issue` query), so we only
-      // need to gate the children.
+      // guest created or is assigned to them. Snooze hide is applied
+      // uniformly so children doesn't bypass the global snooze filter.
       const userId = ctx.userId;
       const orgId = ctx.orgId;
-      const where: Record<string, unknown> = { parentId: issue.id, trashed: false };
+      const ands: Array<Record<string, unknown>> = [IssueService.snoozeHideClause()];
       if (userId && orgId && (await isTeamGuest(ctx.prisma, issue.teamId, userId, orgId))) {
-        where.OR = [{ creatorId: userId }, { assigneeId: userId }];
+        ands.push({ OR: [{ creatorId: userId }, { assigneeId: userId }] });
       }
       return ctx.prisma.issue.findMany({
         orderBy: { subIssueSortOrder: 'asc' },
-        where,
+        where: { AND: ands, parentId: issue.id, trashed: false },
       });
     },
 
@@ -330,11 +330,42 @@ export const issueResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      // Per-issue access check: every team is verified (via the helper)
-      // AND a guest is gated to issues they created or are assigned to.
-      // Done per-row so a single ineligible issue rejects the whole batch.
+      // Per-issue access check: every team is verified AND a guest is
+      // gated to issues they created or are assigned to. Done in-memory
+      // off two preloads (one membership query, one role query) instead
+      // of per-row — the naive form was 2 × N DB round-trips, which on
+      // a 200-issue batch becomes 400 sequential queries on the request
+      // path.
+      const teamIds = Array.from(new Set(issues.map(i => i.teamId)));
+      const [memberships, roleRows] = await Promise.all([
+        ctx.prisma.teamMembership.findMany({
+          select: { team: { select: { organizationId: true } }, teamId: true },
+          where: { teamId: { in: teamIds }, userId: ctx.userId },
+        }),
+        ctx.prisma.teamMemberRole.findMany({
+          select: { role: true, teamId: true },
+          where: { teamId: { in: teamIds }, userId: ctx.userId },
+        }),
+      ]);
+      const memberTeamIds = new Set(
+        memberships.filter(m => m.team.organizationId === ctx.orgId).map(m => m.teamId),
+      );
+      const guestTeamIds = new Set(roleRows.filter(r => r.role === 'guest').map(r => r.teamId));
       for (const issue of issues) {
-        await requireIssueAccessNotGuestOrOwn(ctx.prisma, issue, ctx.userId, ctx.orgId);
+        if (!memberTeamIds.has(issue.teamId)) {
+          throw new GraphQLError('Not a member of this team', {
+            extensions: { code: 'FORBIDDEN' },
+          });
+        }
+        if (
+          guestTeamIds.has(issue.teamId) &&
+          issue.creatorId !== ctx.userId &&
+          issue.assigneeId !== ctx.userId
+        ) {
+          throw new GraphQLError('Guests can only modify issues they created or are assigned to', {
+            extensions: { code: 'FORBIDDEN' },
+          });
+        }
       }
 
       let updated: Issue[];

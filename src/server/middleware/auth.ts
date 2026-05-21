@@ -116,12 +116,15 @@ export async function requireTeamOwner(
  * of a role row defaults to `member`. A caller from a different org returns
  * null even if a `team_member_roles` row exists.
  */
+const VALID_TEAM_ROLES = new Set<TeamRole>(['admin', 'member', 'guest']);
+type TeamRole = 'admin' | 'member' | 'guest';
+
 export async function getTeamRole(
   prisma: PrismaClient,
   teamId: string,
   userId: string,
   orgId: string,
-): Promise<'admin' | 'member' | 'guest' | null> {
+): Promise<TeamRole | null> {
   const membership = await prisma.teamMembership.findUnique({
     include: { team: { select: { organizationId: true } } },
     where: { teamId_userId: { teamId, userId } },
@@ -132,8 +135,16 @@ export async function getTeamRole(
   const roleRow = await prisma.teamMemberRole.findUnique({
     where: { teamId_userId: { teamId, userId } },
   });
-  const role = (roleRow?.role as 'admin' | 'member' | 'guest' | undefined) ?? 'member';
-  return role;
+  // Validate against the allowlist instead of blind-casting the VARCHAR.
+  // An unknown value (typo, future role, bad backfill) should NOT silently
+  // grant non-guest access — default to the safest interpretation 'member'
+  // when no row exists, but a present-but-unrecognised value falls back to
+  // 'guest' so a misconfigured role is least-privilege, not most.
+  const raw = roleRow?.role;
+  if (raw == null) {
+    return 'member';
+  }
+  return VALID_TEAM_ROLES.has(raw as TeamRole) ? (raw as TeamRole) : 'guest';
 }
 
 /**

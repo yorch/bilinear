@@ -431,10 +431,48 @@ export class InitiativeService {
   async recomputeProgressCascade(
     initiativeId: string,
   ): Promise<{ self: Initiative | null; ancestors: Initiative[] }> {
-    // Sub-initiative rollup: include children's progress alongside direct
-    // projects in the mean. Wrapped in try/Promise.resolve so existing
-    // initiative tests (which don't mock this findMany call) continue to
-    // pass — vi.fn() returns undefined synchronously and breaks `.then()`.
+    const self = await this.recomputeProgressOnce(initiativeId);
+    if (!self) {
+      return { ancestors: [], self: null };
+    }
+
+    // Walk up one ancestor at a time, recomputing each in isolation.
+    // Iterative (no recursion into recomputeProgressCascade) so the
+    // outer caller gets every changed ancestor in one collected list —
+    // a recursive form throws away the inner call's ancestors.
+    // Visited set defends against cyclic ancestor chains in bad data.
+    const ancestors: Initiative[] = [];
+    const visited = new Set<string>([initiativeId]);
+    let cursor: string | null = self.parentId;
+    while (cursor && !visited.has(cursor)) {
+      visited.add(cursor);
+      const ancestor: Initiative | null = await this.recomputeProgressOnce(cursor);
+      if (!ancestor) {
+        break;
+      }
+      ancestors.push(ancestor);
+      cursor = ancestor.parentId;
+    }
+    return { ancestors, self };
+  }
+
+  /**
+   * Single-step progress recompute for one initiative — does NOT walk
+   * the parent chain. Returns the updated row, or null when:
+   *   - the initiative doesn't exist
+   *   - the recomputed value is unchanged (no-op skip)
+   *   - the update query failed (deleted mid-flight, etc.)
+   *
+   * Used as the building block for `recomputeProgressCascade`. Kept
+   * separate so the cascade can be iterative — letting one method
+   * both write self and recurse loses ancestor rows.
+   */
+  private async recomputeProgressOnce(initiativeId: string): Promise<Initiative | null> {
+    // The `?? []` wrapper around `prisma.initiative.findMany` accommodates
+    // existing service-level test mocks that don't stub this call. Prisma
+    // itself always returns a Promise — the wrapper is defensive against
+    // `vi.fn()` returning undefined synchronously. Replaced by typed mocks
+    // when the wider mock-prisma refactor lands; see TODO in test/prisma-mock.ts.
     const childrenPromise: Promise<Array<{ archivedAt: Date | null; progress: number }>> =
       Promise.resolve(
         (this.prisma.initiative.findMany({
@@ -461,7 +499,7 @@ export class InitiativeService {
       }),
     ]);
     if (!current) {
-      return { ancestors: [], self: null };
+      return null;
     }
     const eligible = links.filter(l => l.project && !l.project.archivedAt && !l.project.trashed);
     const eligibleChildren = (children ?? []).filter(c => !c.archivedAt);
@@ -476,41 +514,17 @@ export class InitiativeService {
     // Skip the write when the rolled-up value didn't actually move.
     // 1e-9 tolerance covers floating-point round-trip jitter.
     if (Math.abs(progress - current.progress) < 1e-9) {
-      return { ancestors: [], self: null };
+      return null;
     }
 
-    let updated: Initiative;
     try {
-      updated = await this.prisma.initiative.update({
+      return await this.prisma.initiative.update({
         data: { progress },
         where: { id: initiativeId },
       });
     } catch {
-      return { ancestors: [], self: null };
+      return null;
     }
-
-    // Propagate up the parent chain. Each ancestor whose progress moves
-    // is returned so the caller can emit one SyncAction per row — without
-    // that, connected clients would see stale ancestor.progress until
-    // next bootstrap. Recursion stops when an ancestor's rolled-up value
-    // didn't change (the recursive call returns self: null) OR when the
-    // chain runs out (no more parentId). Visited set is a defense against
-    // a cyclic ancestor chain — the create/update guard prevents cycles
-    // but bad data (raw SQL, restored backup) shouldn't loop forever.
-    const ancestors: Initiative[] = [];
-    const visited = new Set<string>([initiativeId]);
-    let cursor: string | null = updated.parentId;
-    while (cursor && !visited.has(cursor)) {
-      visited.add(cursor);
-      const { self: ancestor }: { self: Initiative | null } =
-        await this.recomputeProgressCascade(cursor);
-      if (!ancestor) {
-        break;
-      }
-      ancestors.push(ancestor);
-      cursor = ancestor.parentId;
-    }
-    return { ancestors, self: updated };
   }
 
   /**

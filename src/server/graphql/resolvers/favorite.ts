@@ -192,16 +192,21 @@ export const favoriteResolvers = {
       requireAuth(ctx);
       try {
         const favs = await ctx.services.favorite.reorder(ctx.orgId, ctx.userId, entries);
-        // Emit one 'U' per row so other sessions of the same user see the
-        // new order. Favorites are per-user so other clients in the org
-        // ignore the broadcast — cheap.
-        const lastSync = await Promise.all(
-          favs.map(f => ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Favorite', f.id, f)),
-        );
-        const lastSyncId =
-          lastSync.length > 0
-            ? lastSync[lastSync.length - 1].id.toString()
-            : await ctx.services.sync.getLastSyncId(ctx.orgId);
+        // Emit one 'U' per row sequentially so the returned `lastSyncId`
+        // is genuinely the highest id. Promise.all here lets sync_actions
+        // commit in an order that diverges from the favs array, and
+        // taking `lastSync[length-1]` would return a non-max watermark.
+        let lastSyncId = await ctx.services.sync.getLastSyncId(ctx.orgId);
+        for (const f of favs) {
+          const sync = await ctx.services.sync.createSyncAction(
+            ctx.orgId,
+            'U',
+            'Favorite',
+            f.id,
+            f,
+          );
+          lastSyncId = sync.id.toString();
+        }
         return { favorites: favs, lastSyncId, success: true };
       } catch (err) {
         mapError(err);

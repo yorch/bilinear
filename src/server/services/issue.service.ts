@@ -536,12 +536,13 @@ export class IssueService {
       }
 
       if (input.labelIds !== undefined) {
-        // Bulk label replacement: wipe then re-add per row. Could be a
-        // single createMany with `(issueId, labelId)` rows for all ids,
-        // but the deletion has to be per-row anyway.
-        await Promise.all(
-          ids.map(id => this.syncLabels(tx as unknown as PrismaLike, id, input.labelIds ?? [])),
-        );
+        // Bulk label replacement: sequential per-row because Prisma's
+        // interactive transaction client serialises commands over one
+        // connection — Promise.all here can throw "Transaction already
+        // closed" or apply writes out of order under load.
+        for (const id of ids) {
+          await this.syncLabels(tx as unknown as PrismaLike, id, input.labelIds ?? []);
+        }
       }
 
       await tx.issue.updateMany({
@@ -564,8 +565,30 @@ export class IssueService {
     return this.prisma.issue.findMany({
       omit: { descriptionState: true },
       orderBy: { sortOrder: 'asc' },
-      where: { archivedAt: null, cycleId, trashed: false },
+      // Hide snoozed-not-yet-woken issues here too, for consistency with
+      // the top-level `issues` query. Relation resolvers (Cycle.issues,
+      // Project.issues, etc.) read this method so the predicate has to
+      // live at the service layer, not duplicated per resolver.
+      where: {
+        archivedAt: null,
+        cycleId,
+        trashed: false,
+        ...IssueService.snoozeHideClause(),
+      },
     });
+  }
+
+  /**
+   * Where-fragment that hides snoozed-not-yet-woken issues. Returns
+   * `{ OR: [...] }` so it composes via spread into any where object.
+   * Centralised so relation resolvers (Project.issues, Cycle.issues,
+   * Issue.children) and the main query stay in sync — there's exactly
+   * one definition of "what counts as snoozed".
+   */
+  static snoozeHideClause(): { OR: Array<Record<string, unknown>> } {
+    return {
+      OR: [{ snoozedUntilAt: null }, { snoozedUntilAt: { lte: new Date() } }],
+    };
   }
 
   /** Fetch a set of issues by id, scoped to a single org. Used by the cycle

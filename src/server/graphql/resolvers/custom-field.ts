@@ -106,6 +106,21 @@ export const customFieldResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+      // teamId is `String` (nullable) in the SDL: clients can pass null
+      // (workspace-scope) or a UUID. Omitting the key entirely arrives
+      // as undefined — surface that as BAD_USER_INPUT instead of letting
+      // undefined fall through into requireTeamMember and crash with an
+      // internal error.
+      if (input.teamId === undefined) {
+        throw new GraphQLError('teamId is required; pass null for a workspace-scoped definition', {
+          extensions: { code: 'BAD_USER_INPUT' },
+        });
+      }
+      if (typeof input.teamId === 'string' && input.teamId.length === 0) {
+        throw new GraphQLError('teamId must be null or a non-empty UUID', {
+          extensions: { code: 'BAD_USER_INPUT' },
+        });
+      }
       if (input.teamId === null) {
         // Workspace-scoped: owner/admin only — these fields show on every team.
         await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);

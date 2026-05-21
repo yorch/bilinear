@@ -453,9 +453,13 @@ and `issueUnsnooze(id)` mutations.
 - GraphQL mutations validate `until` is in the future
 - See PATTERNS.md §49
 
-**Not yet shipped:** Hiding snoozed issues from list views (requires a filter
-extension; the `Issue.snoozedUntilAt` field is exposed so clients can hide
-client-side in the meantime).
+**Read-time hiding shipped:** `IssueService.buildWhere` filters out
+snoozed-not-yet-woken rows via `snoozedUntilAt IS NULL OR <= now()` under
+an `AND` clause (composes with the guest filter). Clients pass
+`IssueFilter.includeSnoozed: true` to opt in. Coverage extends to the
+relation resolvers — `Project.issues`, `Cycle.issues`, `Issue.children`
+all delegate to `IssueService.snoozeHideClause()` so they aren't
+backdoors. See PATTERNS.md §49.
 
 ### 9.2 Bulk Issue Update ✅ _(shipped 2026-05-21)_
 

@@ -2,6 +2,7 @@ import { GraphQLError } from 'graphql';
 import type { Project, ProjectUpdate } from '../../../generated/prisma';
 import { logger } from '../../lib/logger';
 import { getGuestTeamIds, requireAuth } from '../../middleware/auth';
+import { IssueService } from '../../services/issue.service';
 import type {
   ProjectCreateInput,
   ProjectMilestoneCreateInput,
@@ -524,27 +525,28 @@ export const projectResolvers = {
     issues: async (project: Project, _args: unknown, ctx: GraphQLContext) => {
       // Guest visibility: if the caller is a guest on ANY team in their
       // org, narrow results so they only see issues from non-guest teams
-      // PLUS issues they created or are assigned to in guest teams. The
-      // top-level `issues` query already enforces this; the relation
-      // resolver has to do it independently because Project spans teams.
+      // PLUS issues they created or are assigned to in guest teams.
+      //
+      // Snooze hide is applied uniformly via IssueService.snoozeHideClause
+      // — without it, Project.issues is a backdoor that surfaces snoozed
+      // rows the top-level `issues` query would hide.
       const userId = ctx.userId;
       const orgId = ctx.orgId;
       const guestTeamIds = userId && orgId ? await getGuestTeamIds(ctx.prisma, userId, orgId) : [];
-      const where: Record<string, unknown> = {
-        archivedAt: null,
-        projectId: project.id,
-        trashed: false,
-      };
+      const ands: Array<Record<string, unknown>> = [IssueService.snoozeHideClause()];
       if (guestTeamIds.length > 0 && userId) {
-        where.OR = [
-          { teamId: { notIn: guestTeamIds } },
-          { creatorId: userId },
-          { assigneeId: userId },
-        ];
+        ands.push({
+          OR: [{ teamId: { notIn: guestTeamIds } }, { creatorId: userId }, { assigneeId: userId }],
+        });
       }
       return ctx.prisma.issue.findMany({
         orderBy: { sortOrder: 'asc' },
-        where,
+        where: {
+          AND: ands,
+          archivedAt: null,
+          projectId: project.id,
+          trashed: false,
+        },
       });
     },
 

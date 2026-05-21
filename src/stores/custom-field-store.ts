@@ -41,12 +41,27 @@ export class CustomFieldStore {
   /**
    * Returns team-scoped definitions for `teamId` PLUS workspace-scoped
    * definitions (teamId IS NULL) in the same org. Workspace definitions
-   * surface on every team's issue panel — matching the server's
-   * `findDefinitionsByTeamId`. Caller's team belongs to `organizationId`
-   * so we don't need to re-filter org here.
+   * render first (matching the server's `orderBy: [{ teamId: 'asc' }, …]`)
+   * so workspace-wide fields stay grouped at the top of the picker UI
+   * instead of intermixing with team-scoped ones.
    */
   findDefinitionsByTeamId(teamId: string): DBCustomFieldDefinition[] {
-    return this.activeDefinitions.filter(d => d.teamId === teamId || d.teamId === null);
+    return this.activeDefinitions
+      .filter(d => d.teamId === teamId || d.teamId === null)
+      .sort((a, b) => {
+        // Workspace-scoped (null) first
+        if (a.teamId === null && b.teamId !== null) {
+          return -1;
+        }
+        if (a.teamId !== null && b.teamId === null) {
+          return 1;
+        }
+        // Then by sortOrder, then by name (matches server ordering).
+        if (a.sortOrder !== b.sortOrder) {
+          return a.sortOrder - b.sortOrder;
+        }
+        return a.name.localeCompare(b.name);
+      });
   }
 
   findValue(issueId: string, definitionId: string): DBCustomFieldValue | null {
