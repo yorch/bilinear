@@ -40,7 +40,20 @@ export interface IssueUpdateInput {
 
 export interface IssueFilter {
   assigneeId?: string | null;
+  /**
+   * Guest visibility scope. When set, the query is restricted to issues
+   * the guest created OR is assigned to. The resolver layer derives this
+   * from the caller's team_member_roles row; never set by the client.
+   */
+  guestUserId?: string;
   includeArchived?: boolean;
+  /**
+   * When false (default), snoozed issues that haven't woken up yet are
+   * hidden from the result set — wakeup is computed at read-time as
+   * `snoozedUntilAt IS NULL OR snoozedUntilAt <= now()`. Set true to
+   * include snoozed issues (used by the "snoozed" view).
+   */
+  includeSnoozed?: boolean;
   priority?: number;
   stateId?: string;
   teamId?: string;
@@ -405,13 +418,177 @@ export class IssueService {
     return this.prisma.issue.delete({ where: { id } });
   }
 
+  /**
+   * Snooze an issue until `until`. The `snoozed_until_at` / `snoozed_by_id`
+   * columns already exist on the issue row — this method just sets them.
+   * List/board queries hide snoozed issues that haven't woken up yet
+   * (the SnoozedIssues view in IssueFilter); waking up is purely a
+   * function of `now() >= snoozedUntilAt`, no background job needed.
+   */
+  async snooze(id: string, userId: string, until: Date): Promise<Issue> {
+    return this.prisma.issue.update({
+      data: { snoozedById: userId, snoozedUntilAt: until },
+      where: { id },
+    });
+  }
+
+  async unsnooze(id: string): Promise<Issue> {
+    return this.prisma.issue.update({
+      data: { snoozedById: null, snoozedUntilAt: null },
+      where: { id },
+    });
+  }
+
+  /**
+   * Apply the same `IssueUpdateInput` to every id in `ids`, all inside a
+   * single transaction so a partial failure rolls back. The auto-close
+   * cascade is intentionally skipped here — bulk operations are typically
+   * a manual reorganisation (move 50 issues into a project, change
+   * priority on a backlog batch) and running cascades per row would
+   * silently transition unrelated parents/children. Caller emits one
+   * SyncAction per row from the returned array.
+   *
+   * Returns the updated rows in input order; throws if any id doesn't
+   * belong to the issuer's team (caller pre-checks team membership).
+   */
+  async bulkUpdate(orgId: string, ids: string[], input: IssueUpdateInput): Promise<Issue[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    // Hard cap on bulk size so a runaway client can't take a request slot
+    // for minutes. 200 matches Linear's UI cap for the bulk toolbar.
+    if (ids.length > 200) {
+      throw new IssueBulkLimitExceededError();
+    }
+
+    const data: Parameters<PrismaClient['issue']['update']>[0]['data'] = {};
+    if (input.title !== undefined) {
+      data.title = input.title;
+    }
+    if (input.description !== undefined) {
+      data.description = input.description;
+    }
+    if (input.stateId !== undefined) {
+      data.stateId = input.stateId;
+    }
+    if ('assigneeId' in input) {
+      data.assigneeId = input.assigneeId;
+    }
+    if (input.priority !== undefined) {
+      data.priority = input.priority;
+    }
+    if ('estimate' in input) {
+      data.estimate = input.estimate;
+    }
+    if ('dueDate' in input) {
+      data.dueDate = input.dueDate ? new Date(input.dueDate) : null;
+    }
+    if (input.trashed !== undefined) {
+      data.trashed = input.trashed;
+    }
+    if ('projectId' in input) {
+      data.projectId = input.projectId;
+      data.addedToProjectAt = input.projectId ? new Date() : null;
+    }
+    if ('projectMilestoneId' in input) {
+      data.projectMilestoneId = input.projectMilestoneId;
+    }
+    if ('cycleId' in input) {
+      data.cycleId = input.cycleId;
+      data.addedToCycleAt = input.cycleId ? new Date() : null;
+    }
+    if ('parentId' in input) {
+      data.parentId = input.parentId;
+    }
+    if (input.sortOrder !== undefined) {
+      data.sortOrder = input.sortOrder;
+    }
+    if (input.prioritySortOrder !== undefined) {
+      data.prioritySortOrder = input.prioritySortOrder;
+    }
+
+    return this.prisma.$transaction(async tx => {
+      // Verify every id belongs to the org before touching anything. A row
+      // count mismatch means at least one id is cross-tenant or missing —
+      // either way, abort the whole batch.
+      const claim = await tx.issue.findMany({
+        select: { id: true, teamId: true },
+        where: { id: { in: ids }, organizationId: orgId },
+      });
+      if (claim.length !== ids.length) {
+        throw new IssueNotFoundError();
+      }
+
+      // stateId validation: if a target state was supplied, every issue
+      // must belong to a team that owns that state. Mixing teams in a
+      // single bulk state change is a no-op the caller must prevent.
+      if (input.stateId !== undefined) {
+        const state = await tx.workflowState.findFirst({
+          select: { teamId: true },
+          where: { archivedAt: null, id: input.stateId },
+        });
+        if (!state) {
+          throw new IssueInvalidStateError();
+        }
+        if (claim.some(c => c.teamId !== state.teamId)) {
+          throw new IssueInvalidStateError();
+        }
+      }
+
+      if (input.labelIds !== undefined) {
+        // Bulk label replacement: sequential per-row because Prisma's
+        // interactive transaction client serialises commands over one
+        // connection — Promise.all here can throw "Transaction already
+        // closed" or apply writes out of order under load.
+        for (const id of ids) {
+          await this.syncLabels(tx as unknown as PrismaLike, id, input.labelIds ?? []);
+        }
+      }
+
+      await tx.issue.updateMany({
+        data,
+        where: { id: { in: ids }, organizationId: orgId },
+      });
+
+      // Re-read so the caller can emit one SyncAction per updated row.
+      // Ordered by input position so the SyncAction sequence is deterministic.
+      const updated = await tx.issue.findMany({
+        where: { id: { in: ids } },
+      });
+      const byId = new Map(updated.map(u => [u.id, u]));
+      return ids.map(id => byId.get(id)).filter((u): u is Issue => u !== undefined);
+    });
+  }
+
   /** Active issues currently scoped to a cycle, ordered for list display. */
   async findActiveByCycleId(cycleId: string): Promise<IssueListRow[]> {
     return this.prisma.issue.findMany({
       omit: { descriptionState: true },
       orderBy: { sortOrder: 'asc' },
-      where: { archivedAt: null, cycleId, trashed: false },
+      // Hide snoozed-not-yet-woken issues here too, for consistency with
+      // the top-level `issues` query. Relation resolvers (Cycle.issues,
+      // Project.issues, etc.) read this method so the predicate has to
+      // live at the service layer, not duplicated per resolver.
+      where: {
+        archivedAt: null,
+        cycleId,
+        trashed: false,
+        ...IssueService.snoozeHideClause(),
+      },
     });
+  }
+
+  /**
+   * Where-fragment that hides snoozed-not-yet-woken issues. Returns
+   * `{ OR: [...] }` so it composes via spread into any where object.
+   * Centralised so relation resolvers (Project.issues, Cycle.issues,
+   * Issue.children) and the main query stay in sync — there's exactly
+   * one definition of "what counts as snoozed".
+   */
+  static snoozeHideClause(): { OR: Array<Record<string, unknown>> } {
+    return {
+      OR: [{ snoozedUntilAt: null }, { snoozedUntilAt: { lte: new Date() } }],
+    };
   }
 
   /** Fetch a set of issues by id, scoped to a single org. Used by the cycle
@@ -589,6 +766,29 @@ export class IssueService {
       where.assigneeId = filter.assigneeId;
     }
 
+    // Multi-predicate filters collide on a single `where.OR` slot, so we
+    // combine them under AND. Today this matters for two filters:
+    //   * guest visibility (creator-or-assignee)
+    //   * snooze hiding (snoozedUntilAt IS NULL OR <= now)
+    // Each is added as its own AND clause with an internal OR.
+    const ands: Array<Record<string, unknown>> = [];
+
+    if (filter.guestUserId) {
+      ands.push({
+        OR: [{ creatorId: filter.guestUserId }, { assigneeId: filter.guestUserId }],
+      });
+    }
+
+    if (!filter.includeSnoozed) {
+      ands.push({
+        OR: [{ snoozedUntilAt: null }, { snoozedUntilAt: { lte: new Date() } }],
+      });
+    }
+
+    if (ands.length > 0) {
+      where.AND = ands;
+    }
+
     return where;
   }
 
@@ -660,5 +860,12 @@ export class IssueInvalidStateError extends Error {
   constructor() {
     super('Workflow state must belong to the same team as the issue');
     this.name = 'IssueInvalidStateError';
+  }
+}
+
+export class IssueBulkLimitExceededError extends Error {
+  constructor() {
+    super('Bulk update is capped at 200 issues per request');
+    this.name = 'IssueBulkLimitExceededError';
   }
 }

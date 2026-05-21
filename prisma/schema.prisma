@@ -40,9 +40,11 @@ model Organization {
   documents      Document[]
   publicRoadmap       PublicRoadmap?
   initiatives         Initiative[]
-  webhooks            Webhook[]
-  githubIntegration   GitHubIntegration?
-  githubPullRequests  GitHubPullRequest[]
+  webhooks               Webhook[]
+  githubIntegration      GitHubIntegration?
+  githubPullRequests     GitHubPullRequest[]
+  favorites              Favorite[]
+  customFieldDefinitions CustomFieldDefinition[]
 
   @@map("organizations")
 }
@@ -100,6 +102,7 @@ model User {
   initiativeUpdates         InitiativeUpdate[]         @relation("InitiativeUpdateAuthor")
   createdWebhooks           Webhook[]                  @relation("WebhookCreator")
   githubIntegrations        GitHubIntegration[]        @relation("GitHubIntegrationCreator")
+  favorites                 Favorite[]
 
   @@map("users")
 }
@@ -792,26 +795,36 @@ enum CustomFieldType {
   @@map("custom_field_type")
 }
 
-/// Team-scoped custom field definition.
-/// `options` holds `[{ value, label, color? }]` for select/multi_select types;
-/// null for other types.
+/// Custom field definition. Scoped to a team (`teamId` non-null) OR to the
+/// whole workspace (`teamId` null) — workspace-scoped definitions surface on
+/// every team in the org. `options` holds `[{ value, label, color? }]` for
+/// select/multi_select types; null for other types.
 model CustomFieldDefinition {
-  id          String          @id @default(uuid()) @db.Uuid
-  teamId      String          @map("team_id") @db.Uuid
-  name        String          @db.VarChar(255)
-  type        CustomFieldType
-  description String?
-  required    Boolean         @default(false)
-  options     Json?
-  sortOrder   Float           @default(0) @map("sort_order")
-  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz
-  archivedAt  DateTime?       @map("archived_at") @db.Timestamptz
+  id             String          @id @default(uuid()) @db.Uuid
+  // Nullable for workspace-scope. When null the definition applies to
+  // every team in the org; organizationId is the tenant guard in that case
+  // (looked up via the parent team for team-scoped rows).
+  teamId         String?         @map("team_id") @db.Uuid
+  // organizationId is denormalised so the workspace-scoped lookup
+  // (teamId IS NULL) has a clean tenant filter; for team-scoped rows it
+  // mirrors team.organizationId.
+  organizationId String          @map("organization_id") @db.Uuid
+  name           String          @db.VarChar(255)
+  type           CustomFieldType
+  description    String?
+  required       Boolean         @default(false)
+  options        Json?
+  sortOrder      Float           @default(0) @map("sort_order")
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt     DateTime?       @map("archived_at") @db.Timestamptz
 
-  team   Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  values CustomFieldValue[]
+  team         Team?              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  values       CustomFieldValue[]
 
   @@index([teamId])
+  @@index([organizationId])
   @@map("custom_field_definitions")
 }
 
@@ -1006,6 +1019,12 @@ model Initiative {
   ownerId   String? @map("owner_id") @db.Uuid
   creatorId String? @map("creator_id") @db.Uuid
 
+  // Hierarchy — sub-initiatives nest under a parent for large strategic
+  // trees. Max depth is enforced in the service layer (5 levels) so the
+  // UI breadcrumb stays readable. SetNull on parent delete re-roots
+  // orphans rather than cascading the delete.
+  parentId String? @map("parent_id") @db.Uuid
+
   // Cached roll-up — recomputed when projects change
   progress Float @default(0)
 
@@ -1020,12 +1039,15 @@ model Initiative {
   organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   owner        User?               @relation("InitiativeOwner", fields: [ownerId], references: [id])
   creator      User?               @relation("InitiativeCreator", fields: [creatorId], references: [id])
+  parent       Initiative?         @relation("InitiativeHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Initiative[]        @relation("InitiativeHierarchy")
   projects     InitiativeProject[]
   updates      InitiativeUpdate[]
 
   @@index([organizationId])
   @@index([status])
   @@index([ownerId])
+  @@index([parentId])
   @@map("initiatives")
 }
 
@@ -1137,6 +1159,31 @@ model WebhookDelivery {
   @@index([webhookId, createdAt])
   @@index([status, nextAttemptAt])
   @@map("webhook_deliveries")
+}
+
+/// Pin an entity (issue, project, initiative, view, cycle, document, team)
+/// to the user's sidebar. One row per (user, entity_type, entity_id);
+/// `sortOrder` controls vertical position within the Favorites section.
+/// Org-scoped so a workspace switch clears the favorites view; cleanup of
+/// stale entityId references is the responsibility of the read path
+/// (resolvers filter out missing/wrong-org targets via DataLoader).
+model Favorite {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  // Issue | Project | Initiative | CustomView | Cycle | Document | Team
+  entityType     String   @map("entity_type") @db.VarChar(20)
+  entityId       String   @map("entity_id") @db.Uuid
+  sortOrder      Float    @default(0) @map("sort_order")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, entityType, entityId], map: "favorites_user_entity_uniq")
+  @@index([userId])
+  @@index([organizationId])
+  @@map("favorites")
 }
 
 // ---------------------------------------------------------------------------

@@ -626,6 +626,31 @@ post-state in the DB or store, not just visual presence).
 A condensed history of what landed in main. See `git log` for full
 details.
 
+### Quick-wins batch (2026-05-21)
+
+Migration `20260521000000_quick_wins_snooze_favorites_subinitiatives`
+plus matching services / resolvers / SDL:
+
+- **Issue snooze mutations** — `issueSnooze(id, until)`, `issueUnsnooze(id)`;
+  the existing `snoozed_until_at` / `snoozed_by_id` columns finally get
+  an API. Wakeup is a read-time concern (no worker). PATTERNS.md §49.
+- **Bulk issue update** — `issuesBulkUpdate(ids, input)` for up to 200
+  rows per call, atomic, with auto-close cascades intentionally skipped
+  and cross-team state changes rejected. PATTERNS.md §50.
+- **Guest role enforcement** — `requireTeamMemberNotGuest` + `isTeamGuest`
+  helpers; `IssueFilter.guestUserId` scopes the `issues` query to
+  creator-or-assignee for guest users. Write-path sweep still TODO
+  (LINEAR_FEATURE_GAPS.md §8.2). PATTERNS.md §48.
+- **Workspace-level custom fields** — `custom_field_definitions.team_id`
+  now nullable, plus a new `organization_id` column for the
+  workspace-scope tenant filter. New 30-per-org cap; owner/admin-only
+  create/edit; `workspaceCustomFieldDefinitions` query.
+- **Favorites** — new `favorites` table + `FavoriteService` + GraphQL
+  union for the resolved entity. Sidebar UI deferred. PATTERNS.md §47.
+- **Sub-initiatives** — `initiatives.parent_id` self-FK with cycle/depth
+  guards (max 5 levels). Progress rollup now includes children and
+  propagates up the parent chain. PATTERNS.md §46.
+
 ### Hardening pass (2026-05-12)
 
 - WebSocket auth — `/api/auth/ws-ticket` issues a scoped 60s

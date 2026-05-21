@@ -1,8 +1,20 @@
 import { GraphQLError } from 'graphql';
 import type { Issue } from '../../../generated/prisma';
 import { logger } from '../../lib/logger';
-import { requireAuth, requireTeamMember } from '../../middleware/auth';
+import {
+  isTeamGuest,
+  requireAuth,
+  requireIssueAccessNotGuestOrOwn,
+  requireTeamMember,
+} from '../../middleware/auth';
 import type { IssueCreateInput, IssueFilter, IssueUpdateInput } from '../../services/issue.service';
+import {
+  IssueBulkLimitExceededError,
+  IssueInvalidStateError,
+  IssueNotFoundError,
+  IssueService,
+  IssueStateRequiredError,
+} from '../../services/issue.service';
 import type { IssueActivityCreateInput } from '../../services/issue-activity.service';
 import type { GraphQLContext } from '../context';
 
@@ -40,11 +52,21 @@ export const issueResolvers = {
       return ctx.loaders.user.load(issue.assigneeId);
     },
 
-    children: async (issue: Issue, _args: unknown, ctx: GraphQLContext) =>
-      ctx.prisma.issue.findMany({
+    children: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
+      // Guest visibility: hide sub-issues on the same team unless the
+      // guest created or is assigned to them. Snooze hide is applied
+      // uniformly so children doesn't bypass the global snooze filter.
+      const userId = ctx.userId;
+      const orgId = ctx.orgId;
+      const ands: Array<Record<string, unknown>> = [IssueService.snoozeHideClause()];
+      if (userId && orgId && (await isTeamGuest(ctx.prisma, issue.teamId, userId, orgId))) {
+        ands.push({ OR: [{ creatorId: userId }, { assigneeId: userId }] });
+      }
+      return ctx.prisma.issue.findMany({
         orderBy: { subIssueSortOrder: 'asc' },
-        where: { parentId: issue.id, trashed: false },
-      }),
+        where: { AND: ands, parentId: issue.id, trashed: false },
+      });
+    },
 
     creator: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
       if (!issue.creatorId) {
@@ -73,7 +95,21 @@ export const issueResolvers = {
       if (!issue.parentId) {
         return null;
       }
-      return ctx.services.issue.findById(issue.parentId);
+      const parent = await ctx.services.issue.findById(issue.parentId);
+      if (!parent) {
+        return null;
+      }
+      // Guest visibility: if the caller is a guest on the parent's team
+      // and doesn't own the parent issue, return null rather than the
+      // row. Same rule as the top-level `issue` query.
+      const userId = ctx.userId;
+      const orgId = ctx.orgId;
+      if (userId && orgId && (await isTeamGuest(ctx.prisma, parent.teamId, userId, orgId))) {
+        if (parent.creatorId !== userId && parent.assigneeId !== userId) {
+          return null;
+        }
+      }
+      return parent;
     },
 
     project: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
@@ -105,7 +141,7 @@ export const issueResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, existing, ctx.userId, ctx.orgId);
 
       const issue = await ctx.services.issue.archive(id);
       const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'A', 'Issue', id, issue);
@@ -170,7 +206,7 @@ export const issueResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, existing, ctx.userId, ctx.orgId);
 
       await ctx.services.issue.delete(id);
       const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Issue', id, null);
@@ -193,7 +229,7 @@ export const issueResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, existing, ctx.userId, ctx.orgId);
 
       const reaction = await ctx.services.issue.addReaction(issueId, ctx.userId, emoji);
       const sync = await ctx.services.sync.createSyncAction(
@@ -219,7 +255,7 @@ export const issueResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, existing, ctx.userId, ctx.orgId);
 
       try {
         const result = await ctx.services.issue.removeReaction(issueId, ctx.userId, emoji);
@@ -241,6 +277,139 @@ export const issueResolvers = {
       }
     },
 
+    issueSnooze: async (
+      _parent: unknown,
+      { id, until }: { id: string; until: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      const parsed = new Date(until);
+      if (Number.isNaN(parsed.getTime())) {
+        throw new GraphQLError('until must be a valid ISO timestamp', {
+          extensions: { code: 'BAD_USER_INPUT' },
+        });
+      }
+      if (parsed.getTime() <= Date.now()) {
+        throw new GraphQLError('Snooze deadline must be in the future', {
+          extensions: { code: 'BAD_USER_INPUT' },
+        });
+      }
+      const existing = await ctx.services.issue.findById(id);
+      if (!existing || existing.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Issue not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, existing, ctx.userId, ctx.orgId);
+
+      const issue = await ctx.services.issue.snooze(id, ctx.userId, parsed);
+      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', id, issue);
+      return { issue, lastSyncId: sync.id.toString(), success: true };
+    },
+
+    issuesBulkUpdate: async (
+      _parent: unknown,
+      { ids, input }: { ids: string[]; input: IssueUpdateInput },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      if (ids.length === 0) {
+        return {
+          issues: [],
+          lastSyncId: await ctx.services.sync.getLastSyncId(ctx.orgId),
+          success: true,
+        };
+      }
+
+      // Pre-flight: every issue must belong to this org, and the caller
+      // must be a member of every distinct team. One findMany + a Set walk
+      // is cheaper than re-checking on each id.
+      const issues = await ctx.services.issue.findByIdsInOrg(ids, ctx.orgId);
+      if (issues.length !== ids.length) {
+        throw new GraphQLError('Issue not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+      // Per-issue access check: every team is verified AND a guest is
+      // gated to issues they created or are assigned to. Done in-memory
+      // off two preloads (one membership query, one role query) instead
+      // of per-row — the naive form was 2 × N DB round-trips, which on
+      // a 200-issue batch becomes 400 sequential queries on the request
+      // path.
+      const teamIds = Array.from(new Set(issues.map(i => i.teamId)));
+      const [memberships, roleRows] = await Promise.all([
+        ctx.prisma.teamMembership.findMany({
+          select: { team: { select: { organizationId: true } }, teamId: true },
+          where: { teamId: { in: teamIds }, userId: ctx.userId },
+        }),
+        ctx.prisma.teamMemberRole.findMany({
+          select: { role: true, teamId: true },
+          where: { teamId: { in: teamIds }, userId: ctx.userId },
+        }),
+      ]);
+      const memberTeamIds = new Set(
+        memberships.filter(m => m.team.organizationId === ctx.orgId).map(m => m.teamId),
+      );
+      const guestTeamIds = new Set(roleRows.filter(r => r.role === 'guest').map(r => r.teamId));
+      for (const issue of issues) {
+        if (!memberTeamIds.has(issue.teamId)) {
+          throw new GraphQLError('Not a member of this team', {
+            extensions: { code: 'FORBIDDEN' },
+          });
+        }
+        if (
+          guestTeamIds.has(issue.teamId) &&
+          issue.creatorId !== ctx.userId &&
+          issue.assigneeId !== ctx.userId
+        ) {
+          throw new GraphQLError('Guests can only modify issues they created or are assigned to', {
+            extensions: { code: 'FORBIDDEN' },
+          });
+        }
+      }
+
+      let updated: Issue[];
+      try {
+        updated = await ctx.services.issue.bulkUpdate(ctx.orgId, ids, input);
+      } catch (err) {
+        if (err instanceof IssueBulkLimitExceededError) {
+          throw new GraphQLError(err.message, {
+            extensions: { code: 'BAD_USER_INPUT' },
+          });
+        }
+        if (err instanceof IssueInvalidStateError || err instanceof IssueStateRequiredError) {
+          throw new GraphQLError(err.message, {
+            extensions: { code: 'BAD_USER_INPUT' },
+          });
+        }
+        if (err instanceof IssueNotFoundError) {
+          throw new GraphQLError(err.message, {
+            extensions: { code: 'NOT_FOUND' },
+          });
+        }
+        throw err;
+      }
+
+      // Emit one SyncAction per row so subscribers see each change live.
+      // Sequential to preserve commit ordering across the batch.
+      let lastSyncId = await ctx.services.sync.getLastSyncId(ctx.orgId);
+      for (const issue of updated) {
+        const sync = await ctx.services.sync.createSyncAction(
+          ctx.orgId,
+          'U',
+          'Issue',
+          issue.id,
+          issue,
+        );
+        lastSyncId = sync.id.toString();
+        void ctx.services.webhook
+          .dispatchEvent(ctx.orgId, 'issue.updated', issue, issue.teamId)
+          .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.updated (bulk)'));
+      }
+
+      return { issues: updated, lastSyncId, success: true };
+    },
+
     issueUnarchive: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
@@ -250,9 +419,24 @@ export const issueResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, existing, ctx.userId, ctx.orgId);
 
       const issue = await ctx.services.issue.unarchive(id);
+      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', id, issue);
+      return { issue, lastSyncId: sync.id.toString(), success: true };
+    },
+
+    issueUnsnooze: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+      const existing = await ctx.services.issue.findById(id);
+      if (!existing || existing.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Issue not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, existing, ctx.userId, ctx.orgId);
+
+      const issue = await ctx.services.issue.unsnooze(id);
       const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', id, issue);
       return { issue, lastSyncId: sync.id.toString(), success: true };
     },
@@ -270,7 +454,7 @@ export const issueResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, existing, ctx.userId, ctx.orgId);
 
       const { issue, cascaded } = await ctx.services.issue.update(id, input);
 
@@ -388,9 +572,18 @@ export const issueResolvers = {
       }
       await requireTeamMember(ctx.prisma, filter.teamId, ctx.userId, ctx.orgId);
 
+      // Guest visibility: a guest sees only issues they created or are
+      // assigned to. Member/admin/owner roles see everything. Applied as
+      // a filter override so we still benefit from the team's other
+      // narrowing (state, priority, etc).
+      const guest = await isTeamGuest(ctx.prisma, filter.teamId, ctx.userId, ctx.orgId);
+      const effectiveFilter: IssueFilter & { guestUserId?: string } = guest
+        ? { ...filter, guestUserId: ctx.userId }
+        : filter;
+
       const page = await ctx.services.issue.findMany(
         ctx.orgId,
-        filter,
+        effectiveFilter,
         { after, before, first, last },
         includeArchived,
       );

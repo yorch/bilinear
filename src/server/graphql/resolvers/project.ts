@@ -1,7 +1,8 @@
 import { GraphQLError } from 'graphql';
 import type { Project, ProjectUpdate } from '../../../generated/prisma';
 import { logger } from '../../lib/logger';
-import { requireAuth } from '../../middleware/auth';
+import { getGuestTeamIds, requireAuth } from '../../middleware/auth';
+import { IssueService } from '../../services/issue.service';
 import type {
   ProjectCreateInput,
   ProjectMilestoneCreateInput,
@@ -122,13 +123,18 @@ export const projectResolvers = {
       // current.
       const initiatives = await ctx.services.initiative.getInitiativesForProject(id);
       for (const init of initiatives) {
-        const updated = await ctx.services.initiative.recomputeProgress(init.id);
-        if (updated) {
+        // Cascade up the parent chain — without this, ancestor progress
+        // drifts on connected clients until next bootstrap (see
+        // PATTERNS.md §46).
+        const { self, ancestors } = await ctx.services.initiative.recomputeProgressCascade(init.id);
+        for (const updated of [self, ...ancestors].filter(
+          (i): i is NonNullable<typeof i> => i !== null,
+        )) {
           sync = await ctx.services.sync.createSyncAction(
             ctx.orgId,
             'U',
             'Initiative',
-            init.id,
+            updated.id,
             updated,
           );
         }
@@ -196,13 +202,15 @@ export const projectResolvers = {
       await ctx.services.project.delete(id);
       let sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Project', id, null);
       for (const init of initiatives) {
-        const updated = await ctx.services.initiative.recomputeProgress(init.id);
-        if (updated) {
+        const { self, ancestors } = await ctx.services.initiative.recomputeProgressCascade(init.id);
+        for (const updated of [self, ...ancestors].filter(
+          (i): i is NonNullable<typeof i> => i !== null,
+        )) {
           sync = await ctx.services.sync.createSyncAction(
             ctx.orgId,
             'U',
             'Initiative',
-            init.id,
+            updated.id,
             updated,
           );
         }
@@ -388,13 +396,17 @@ export const projectResolvers = {
       if (existing.progress !== project.progress || existing.statusType !== project.statusType) {
         const initiatives = await ctx.services.initiative.getInitiativesForProject(id);
         for (const init of initiatives) {
-          const updated = await ctx.services.initiative.recomputeProgress(init.id);
-          if (updated) {
+          const { self, ancestors } = await ctx.services.initiative.recomputeProgressCascade(
+            init.id,
+          );
+          for (const updated of [self, ...ancestors].filter(
+            (i): i is NonNullable<typeof i> => i !== null,
+          )) {
             sync = await ctx.services.sync.createSyncAction(
               ctx.orgId,
               'U',
               'Initiative',
-              init.id,
+              updated.id,
               updated,
             );
           }
@@ -510,11 +522,33 @@ export const projectResolvers = {
       return ctx.loaders.user.load(project.creatorId);
     },
 
-    issues: async (project: Project, _args: unknown, ctx: GraphQLContext) =>
-      ctx.prisma.issue.findMany({
+    issues: async (project: Project, _args: unknown, ctx: GraphQLContext) => {
+      // Guest visibility: if the caller is a guest on ANY team in their
+      // org, narrow results so they only see issues from non-guest teams
+      // PLUS issues they created or are assigned to in guest teams.
+      //
+      // Snooze hide is applied uniformly via IssueService.snoozeHideClause
+      // — without it, Project.issues is a backdoor that surfaces snoozed
+      // rows the top-level `issues` query would hide.
+      const userId = ctx.userId;
+      const orgId = ctx.orgId;
+      const guestTeamIds = userId && orgId ? await getGuestTeamIds(ctx.prisma, userId, orgId) : [];
+      const ands: Array<Record<string, unknown>> = [IssueService.snoozeHideClause()];
+      if (guestTeamIds.length > 0 && userId) {
+        ands.push({
+          OR: [{ teamId: { notIn: guestTeamIds } }, { creatorId: userId }, { assigneeId: userId }],
+        });
+      }
+      return ctx.prisma.issue.findMany({
         orderBy: { sortOrder: 'asc' },
-        where: { archivedAt: null, projectId: project.id, trashed: false },
-      }),
+        where: {
+          AND: ands,
+          archivedAt: null,
+          projectId: project.id,
+          trashed: false,
+        },
+      });
+    },
 
     lead: async (project: Project, _args: unknown, ctx: GraphQLContext) => {
       if (!project.leadId) {

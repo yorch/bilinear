@@ -38,8 +38,30 @@ export class CustomFieldStore {
     return this.definitions.get(id) ?? null;
   }
 
+  /**
+   * Returns team-scoped definitions for `teamId` PLUS workspace-scoped
+   * definitions (teamId IS NULL) in the same org. Workspace definitions
+   * render first (matching the server's `orderBy: [{ teamId: 'asc' }, …]`)
+   * so workspace-wide fields stay grouped at the top of the picker UI
+   * instead of intermixing with team-scoped ones.
+   */
   findDefinitionsByTeamId(teamId: string): DBCustomFieldDefinition[] {
-    return this.activeDefinitions.filter(d => d.teamId === teamId);
+    return this.activeDefinitions
+      .filter(d => d.teamId === teamId || d.teamId === null)
+      .sort((a, b) => {
+        // Workspace-scoped (null) first
+        if (a.teamId === null && b.teamId !== null) {
+          return -1;
+        }
+        if (a.teamId !== null && b.teamId === null) {
+          return 1;
+        }
+        // Then by sortOrder, then by name (matches server ordering).
+        if (a.sortOrder !== b.sortOrder) {
+          return a.sortOrder - b.sortOrder;
+        }
+        return a.name.localeCompare(b.name);
+      });
   }
 
   findValue(issueId: string, definitionId: string): DBCustomFieldValue | null {

@@ -135,6 +135,8 @@ export const typeDefs = `
     cycleId: ID
     organizationId: ID!
     branchName: String
+    snoozedById: ID
+    snoozedUntilAt: DateTime
     pullRequests: [GitHubPullRequest!]!
     cycle: Cycle
     startedAt: DateTime
@@ -154,6 +156,12 @@ export const typeDefs = `
     customFieldValues: [CustomFieldValue!]!
     files: [File!]!
     reactions: [IssueReaction!]!
+  }
+
+  type IssueBulkUpdatePayload {
+    success: Boolean!
+    issues: [Issue!]!
+    lastSyncId: String!
   }
 
   type IssueReaction {
@@ -249,6 +257,11 @@ export const typeDefs = `
     assigneeId: String
     priority: Int
     trashed: Boolean
+    """
+    Include snoozed issues that haven't woken up yet. Default false —
+    snoozed issues are hidden from lists until now() reaches snoozedUntilAt.
+    """
+    includeSnoozed: Boolean
   }
 
   input IssueLabelCreateInput {
@@ -898,7 +911,12 @@ export const typeDefs = `
 
   type CustomFieldDefinition {
     id: ID!
-    teamId: ID!
+    """
+    Team this definition is scoped to. Null for workspace-scoped
+    definitions (apply to every team in the org).
+    """
+    teamId: ID
+    organizationId: ID!
     name: String!
     type: CustomFieldType!
     description: String
@@ -908,7 +926,8 @@ export const typeDefs = `
     createdAt: DateTime!
     updatedAt: DateTime!
     archivedAt: DateTime
-    team: Team!
+    """Null for workspace-scoped definitions."""
+    team: Team
   }
 
   type CustomFieldValue {
@@ -940,7 +959,11 @@ export const typeDefs = `
   }
 
   input CustomFieldDefinitionCreateInput {
-    teamId: String!
+    """
+    Team to attach the definition to. Pass null to create a workspace-scoped
+    definition that shows on every team (owner/admin only).
+    """
+    teamId: String
     name: String!
     type: CustomFieldType!
     description: String
@@ -1061,8 +1084,11 @@ export const typeDefs = `
     progress: Float!
     ownerId: ID
     creatorId: ID
+    parentId: ID
     owner: User
     creator: User
+    parent: Initiative
+    children: [Initiative!]!
     projects: [Project!]!
     updates: [InitiativeUpdate!]!
     startedAt: DateTime
@@ -1126,6 +1152,7 @@ export const typeDefs = `
     startDateResolution: String
     targetDateResolution: String
     ownerId: String
+    parentId: String
     projectIds: [String!]
   }
 
@@ -1143,6 +1170,7 @@ export const typeDefs = `
     startDateResolution: String
     targetDateResolution: String
     ownerId: String
+    parentId: String
   }
 
   type Webhook {
@@ -1264,6 +1292,8 @@ export const typeDefs = `
     issueTemplates(teamId: String!, includeArchived: Boolean): [IssueTemplate!]!
     issueTemplate(id: ID!): IssueTemplate!
     customFieldDefinitions(teamId: String!, includeArchived: Boolean): [CustomFieldDefinition!]!
+    """Workspace-scoped custom fields (teamId IS NULL) — apply to every team."""
+    workspaceCustomFieldDefinitions(includeArchived: Boolean): [CustomFieldDefinition!]!
     customFieldDefinition(id: ID!): CustomFieldDefinition!
     customFieldValuesForIssue(issueId: ID!): [CustomFieldValue!]!
     comments(issueId: ID!, includeArchived: Boolean): [Comment!]!
@@ -1282,6 +1312,9 @@ export const typeDefs = `
     webhooks(includeArchived: Boolean): [Webhook!]!
     webhookDeliveries(webhookId: ID!, limit: Int): [WebhookDelivery!]!
     webhookEvents: [String!]!
+
+    # Favorites — sidebar pinning, per user
+    favorites: [Favorite!]!
 
     # GitHub Integration
     githubIntegration: GitHubIntegration
@@ -1333,6 +1366,19 @@ export const typeDefs = `
     issueDelete(id: ID!): DeletePayload!
     issueReactionAdd(issueId: ID!, emoji: String!): IssueReactionPayload!
     issueReactionRemove(issueId: ID!, emoji: String!): DeletePayload!
+    """
+    Snooze an issue until the given ISO timestamp (must be in the future).
+    Snoozed issues stay in the DB but are hidden from list views until
+    the timestamp passes — no background job involved.
+    """
+    issueSnooze(id: ID!, until: DateTime!): IssuePayload!
+    issueUnsnooze(id: ID!): IssuePayload!
+    """
+    Apply the same patch to up to 200 issues in a single transaction.
+    State transitions, label changes, assignee/project moves all work.
+    Auto-close cascades are intentionally skipped — see service docs.
+    """
+    issuesBulkUpdate(ids: [ID!]!, input: IssueUpdateInput!): IssueBulkUpdatePayload!
 
     issueLabelCreate(input: IssueLabelCreateInput!): IssueLabelPayload!
     issueLabelUpdate(id: ID!, input: IssueLabelUpdateInput!): IssueLabelPayload!
@@ -1430,6 +1476,11 @@ export const typeDefs = `
     webhookDelete(id: ID!): WebhookDeletePayload!
     webhookRotateSecret(id: ID!): WebhookPayload!
 
+    # Favorites
+    favoriteCreate(input: FavoriteCreateInput!): FavoritePayload!
+    favoriteDelete(id: ID!): DeletePayload!
+    favoriteReorder(entries: [FavoriteReorderEntryInput!]!): FavoriteListPayload!
+
     # GitHub Integration
     githubDisconnect: BasicPayload!
     githubRotateWebhookSecret(newSecret: String!): GitHubIntegrationPayload!
@@ -1475,5 +1526,59 @@ export const typeDefs = `
   type UserPayload {
     success: Boolean!
     user: User
+  }
+
+  # ---------------------------------------------------------------------------
+  # Favorites (sidebar pinning)
+  # ---------------------------------------------------------------------------
+
+  enum FavoriteEntityType {
+    Issue
+    Project
+    Initiative
+    CustomView
+    Cycle
+    Document
+    Team
+  }
+
+  union FavoriteEntity = Issue | Project | Initiative | CustomView | Cycle | Document | Team
+
+  type Favorite {
+    id: ID!
+    userId: ID!
+    organizationId: ID!
+    entityType: FavoriteEntityType!
+    entityId: ID!
+    sortOrder: Float!
+    createdAt: DateTime!
+    """
+    Resolved target entity. Null if the referenced row was deleted or
+    moved to a different org — the sidebar component skips null entries.
+    """
+    entity: FavoriteEntity
+  }
+
+  type FavoritePayload {
+    success: Boolean!
+    favorite: Favorite
+    lastSyncId: String!
+  }
+
+  type FavoriteListPayload {
+    success: Boolean!
+    favorites: [Favorite!]!
+    lastSyncId: String!
+  }
+
+  input FavoriteCreateInput {
+    entityType: FavoriteEntityType!
+    entityId: ID!
+    sortOrder: Float
+  }
+
+  input FavoriteReorderEntryInput {
+    id: ID!
+    sortOrder: Float!
   }
 `;

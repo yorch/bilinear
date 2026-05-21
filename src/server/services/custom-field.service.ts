@@ -7,6 +7,7 @@ import type {
 import { Prisma } from '../../generated/prisma';
 
 export const MAX_CUSTOM_FIELDS_PER_TEAM = 20;
+export const MAX_CUSTOM_FIELDS_PER_ORG = 30;
 
 export interface CustomFieldOption {
   color?: string;
@@ -18,9 +19,14 @@ export interface CustomFieldDefinitionCreateInput {
   description?: string;
   name: string;
   options?: CustomFieldOption[];
+  organizationId: string;
   required?: boolean;
   sortOrder?: number;
-  teamId: string;
+  /**
+   * Team to attach the definition to. `null` creates a workspace-scoped
+   * definition that surfaces on every team in `organizationId`.
+   */
+  teamId: string | null;
   type: CustomFieldType;
 }
 
@@ -162,10 +168,22 @@ export class CustomFieldService {
     validateOptionsForType(input.type, input.options);
 
     return this.prisma.$transaction(async tx => {
+      // Per-scope active-fields cap. Team-scoped honours the original
+      // 20-per-team limit; workspace-scoped uses a separate 30-per-org cap
+      // because those fields apply to every team and dominate the picker
+      // UI density.
       const activeCount = await tx.customFieldDefinition.count({
-        where: { archivedAt: null, teamId: input.teamId },
+        where:
+          input.teamId === null
+            ? {
+                archivedAt: null,
+                organizationId: input.organizationId,
+                teamId: null,
+              }
+            : { archivedAt: null, teamId: input.teamId },
       });
-      if (activeCount >= MAX_CUSTOM_FIELDS_PER_TEAM) {
+      const cap = input.teamId === null ? MAX_CUSTOM_FIELDS_PER_ORG : MAX_CUSTOM_FIELDS_PER_TEAM;
+      if (activeCount >= cap) {
         throw new CustomFieldLimitExceededError();
       }
 
@@ -176,6 +194,7 @@ export class CustomFieldService {
           options: input.options
             ? (input.options as unknown as Prisma.InputJsonValue)
             : Prisma.JsonNull,
+          organizationId: input.organizationId,
           required: input.required ?? false,
           sortOrder: input.sortOrder ?? activeCount,
           teamId: input.teamId,
@@ -249,15 +268,46 @@ export class CustomFieldService {
     return this.prisma.customFieldDefinition.findUnique({ where: { id } });
   }
 
+  /**
+   * Definitions visible on `teamId`'s issues: team-scoped (teamId match) +
+   * workspace-scoped (teamId IS NULL && organizationId matches the team's org).
+   * Ordered so workspace fields render at the top, team fields below — matches
+   * Linear's "shared fields first" convention in the issue properties panel.
+   */
   async findDefinitionsByTeamId(
     teamId: string,
+    includeArchived = false,
+  ): Promise<CustomFieldDefinition[]> {
+    const team = await this.prisma.team.findUnique({
+      select: { organizationId: true },
+      where: { id: teamId },
+    });
+    if (!team) {
+      return [];
+    }
+    return this.prisma.customFieldDefinition.findMany({
+      orderBy: [{ teamId: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+      where: {
+        ...(includeArchived ? {} : { archivedAt: null }),
+        OR: [{ teamId }, { organizationId: team.organizationId, teamId: null }],
+      },
+    });
+  }
+
+  /**
+   * All workspace-scoped definitions in an org (teamId IS NULL). Used by
+   * the workspace settings UI to manage cross-team fields.
+   */
+  async findWorkspaceDefinitions(
+    organizationId: string,
     includeArchived = false,
   ): Promise<CustomFieldDefinition[]> {
     return this.prisma.customFieldDefinition.findMany({
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
       where: {
         ...(includeArchived ? {} : { archivedAt: null }),
-        teamId,
+        organizationId,
+        teamId: null,
       },
     });
   }
@@ -267,7 +317,7 @@ export class CustomFieldService {
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
       where: {
         archivedAt: null,
-        team: { organizationId },
+        organizationId,
       },
     });
   }

@@ -6,6 +6,14 @@ shipped.
 
 **Legend:** 🔲 Not started · 🚧 In progress · ✅ Done
 
+> **Doc consolidation note (2026-05-21):** `LINEAR_RESEARCH.md` and
+> `LINEAR_RESEARCH_2.md` are competitive-research source material that
+> seeded this gap list. They drift independently of code and should be
+> treated as snapshots. Future research updates: add an addendum at the
+> top of `LINEAR_RESEARCH_2.md` rather than editing in place, so the
+> "as of date X" of any claim stays clear. Consolidate the two into one
+> file the next time either is materially edited.
+
 ---
 
 ## Priority 1 — High-impact, Core Differentiators
@@ -126,16 +134,23 @@ and per-project.
 
 **Estimated size:** Large (2 sprint equivalents)
 
-### 3.2 Sub-Initiatives 🔲
+### 3.2 Sub-Initiatives ✅ _(shipped 2026-05-21)_
 
-Allow initiatives to be nested (up to 5 levels deep) for large strategic hierarchies.
+Initiatives nest up to 5 levels via `Initiative.parentId`. Progress rollup
+includes both linked projects AND child initiatives, weighted equally, and
+propagates one level up on each recompute.
 
-**Planned scope:**
-- `Initiative.parentId` self-relation (already designed in PATTERNS §39 comments)
-- Progress rollup up the tree
-- UI: nested list in `/initiatives` page, breadcrumb in detail panel
+**Shipped:**
+- `Initiative.parentId` self-FK (`ON DELETE SET NULL` — children re-root, never cascade-delete)
+- `assertParentAcceptsChild` guard: cycle detection + `MAX_INITIATIVE_DEPTH = 5`
+- `recomputeProgress` includes children's `progress` in the mean and propagates upward
+- GraphQL: `Initiative.parent` + `Initiative.children` fields, `parentId` on
+  create/update inputs
+- See DATABASE_SCHEMA.md §2.32, PATTERNS.md §46
 
-**Estimated size:** Medium (1 sprint)
+**Not yet shipped (separate UI PR):**
+- Nested list rendering on `/initiatives`
+- Breadcrumb in initiative detail panel
 
 ### 3.3 Initiative Updates Timeline ✅ _(PR #38, shipped 2026-05-18)_
 
@@ -301,29 +316,50 @@ and projects (by name).
 
 ## Priority 8 — Smaller / UX Polish
 
-### 8.1 Favorites / Sidebar Pinning 🔲
+### 8.1 Favorites / Sidebar Pinning ✅ _(shipped 2026-05-21)_
 
-Pin issues, views, and projects to the sidebar for quick access.
+Pin issues, projects, initiatives, views, cycles, documents, and teams to
+the sidebar.
 
-**Planned scope:**
-- `Favorite` DB model: `userId`, `entityType`, `entityId`, `sortOrder`
-- GraphQL: `favoriteCreate/Delete` + `favorites` query
-- Sidebar "Favorites" section above Teams
-- Included in bootstrap payload
+**Shipped:**
+- `Favorite` table — `(userId, organizationId, entityType, entityId, sortOrder)`,
+  unique on `(userId, entityType, entityId)`
+- GraphQL: `favoriteCreate` / `favoriteDelete` / `favoriteReorder` mutations,
+  `favorites` query, `FavoriteEntity` union resolves the target
+- Service: `FavoriteService` (in-place upsert, atomic reorder, cross-tenant guard)
+- See DATABASE_SCHEMA.md §2.18, PATTERNS.md §47
 
-**Estimated size:** Small (0.5 sprint)
+**Not yet shipped (separate UI PR):**
+- Sidebar "Favorites" section UI above Teams
+- Bootstrap payload inclusion (currently fetch-on-mount via `favorites` query)
+- Folder grouping (one level of nesting) — deferred until users ask
 
-### 8.2 Guest Role Enforcement 🔲
+### 8.2 Guest Role Enforcement ✅ _(shipped 2026-05-21, hardened same day)_
 
-`TeamMemberRole.guest` is defined but visibility/write checks don't test it anywhere.
-Guests should only see issues assigned to them or issues they created.
+Guests on a team see only issues they created or are assigned to; cannot
+perform write actions that aren't on their own issues. Both read and
+per-issue write paths are enforced.
 
-**Planned scope:**
-- Add `isGuestInTeam(userId, teamId)` helper
-- Gate `issues` query to exclude guest-inaccessible issues
-- Block guest users from creating issues in teams they don't own issues in
+**Shipped:**
+- Helpers in `src/server/middleware/auth.ts`: `getTeamRole`,
+  `requireTeamMemberNotGuest`, `requireIssueAccessNotGuestOrOwn`,
+  `isTeamGuest`, `getGuestTeamIds`
+- Read path: `Issue.findMany` honors `IssueFilter.guestUserId`
+  (server-derived; never accepted from clients)
+- Relation read paths gated: `Project.issues`, `Cycle.issues`,
+  `Issue.children`, `Issue.parent` re-check guest status so they
+  aren't backdoors around the top-level filter
+- Per-issue write path: every issue mutation (`issueUpdate`, `Archive`,
+  `Unarchive`, `Delete`, `Snooze`, `Unsnooze`, `ReactionAdd`/`Remove`,
+  `issuesBulkUpdate`) runs `requireIssueAccessNotGuestOrOwn` — guests
+  can only act on issues they created or are assigned to
+- See PATTERNS.md §48
 
-**Estimated size:** Small (0.5 sprint)
+**Still TODO (separate PR):**
+- Comment / IssueRelation / search resolvers — guests can still read
+  comments and create relations on issues they don't own
+- Project / Initiative / Document scoping for guests (currently a
+  guest can see every project and initiative in their org)
 
 ### 8.3 Issue Reactions ✅ _(PR #38, shipped 2026-05-18)_
 
@@ -361,18 +397,21 @@ Create a new project pre-populated from a saved template.
 
 **Estimated size:** Small (0.5 sprint)
 
-### 8.6 Workspace-Level Custom Fields 🔲
+### 8.6 Workspace-Level Custom Fields ✅ _(shipped 2026-05-21)_
 
-Currently `CustomFieldDefinition` is always scoped to a team (`teamId` NOT NULL).
-Workspace-level fields (`teamId NULL`) would allow consistent fields across all teams.
+`CustomFieldDefinition.teamId` is now nullable. Null = workspace-scoped,
+applies to every team in the org. Owner/admin-only create/edit.
 
-**Planned scope:**
-- Make `teamId` nullable on `CustomFieldDefinition` (already nullable in schema, just
-  not exposed via API)
-- Update `customFieldDefinitionCreate` to accept `teamId: null`
-- UI: "Workspace fields" section in `/settings`
-
-**Estimated size:** Small (0.5 sprint)
+**Shipped:**
+- Migration adds `team_id NULL`, `organization_id` (denormalised for clean
+  workspace lookups), and matching FKs/indexes
+- Service: `findDefinitionsByTeamId` returns team-scoped + workspace-scoped
+  in one list; `findWorkspaceDefinitions` for the settings UI; separate
+  per-org cap of 30 active workspace fields
+- GraphQL: `customFieldDefinitionCreate.teamId` accepts null;
+  `workspaceCustomFieldDefinitions` query; `CustomFieldDefinition.team` now
+  nullable
+- See DATABASE_SCHEMA.md §2.27
 
 ### 8.7 Notification Email Digest 🔲
 
@@ -398,6 +437,211 @@ Native apps that wrap the web experience with offline push and tighter OS integr
 
 ---
 
+## Priority 9 — Newly Identified Gaps (audit 2026-05-21)
+
+The 2026-05-21 audit surfaced these items that Linear ships but the doc
+hadn't tracked. They're partitioned into "shipped now" and "still open".
+
+### 9.1 Issue Snooze ✅ _(shipped 2026-05-21)_
+
+`snoozed_until_at` / `snoozed_by_id` columns existed on `issues` since
+schema inception but had no API. Now exposed via `issueSnooze(id, until)`
+and `issueUnsnooze(id)` mutations.
+
+**Shipped:**
+- `IssueService.snooze` / `unsnooze`
+- GraphQL mutations validate `until` is in the future
+- See PATTERNS.md §49
+
+**Read-time hiding shipped:** `IssueService.buildWhere` filters out
+snoozed-not-yet-woken rows via `snoozedUntilAt IS NULL OR <= now()` under
+an `AND` clause (composes with the guest filter). Clients pass
+`IssueFilter.includeSnoozed: true` to opt in. Coverage extends to the
+relation resolvers — `Project.issues`, `Cycle.issues`, `Issue.children`
+all delegate to `IssueService.snoozeHideClause()` so they aren't
+backdoors. See PATTERNS.md §49.
+
+### 9.2 Bulk Issue Update ✅ _(shipped 2026-05-21)_
+
+`issuesBulkUpdate(ids, input)` mutation applies the same patch to up to
+200 issues in a single transaction. Auto-close cascades intentionally
+skipped — bulk operations are a manual reorganisation.
+
+**Shipped:**
+- `IssueService.bulkUpdate` — tenant pre-flight, cross-team state guard,
+  per-row label sync, hard cap of 200
+- GraphQL: `issuesBulkUpdate(ids: [ID!]!, input: IssueUpdateInput!)`
+  returns `IssueBulkUpdatePayload` with `issues + lastSyncId`
+- One SyncAction + one webhook dispatch per row
+- See PATTERNS.md §50
+
+**Not yet shipped (separate UI PR):** Bulk-action toolbar in list view
+(select-via-X, action-bar appears with status / assignee / priority / etc.).
+
+### 9.3 Drafts 🔲
+
+Linear keeps unsent issues and comments around when you close the composer
+or accidentally navigate away.
+
+**Planned scope:**
+- `IssueDraft` table — `(userId, teamId, title, description, parentId?,
+  ...)` keyed by `(userId, teamId)` so each user has at most one in-flight
+  draft per team
+- `CommentDraft` table — `(userId, issueId, body)`
+- GraphQL: `issueDraftUpsert` / `issueDraftDelete`, `commentDraftUpsert` /
+  `commentDraftDelete`
+- Bootstrap payload includes both
+
+**Estimated size:** Small-Medium (server is simple; UI requires composer
+state plumbing across CreateIssueModal + CommentComposer)
+
+### 9.4 @mention Issues and Projects 🔲
+
+Currently `@` in the editor only suggests users. Extend to suggest issues
+(by identifier) and projects (by name).
+
+**Planned scope:**
+- Separate TipTap mention extension instances per type (users, issues,
+  projects)
+- Client-side fuzzy search against `issueStore` / `projectStore`
+- Render as pill with icon + identifier
+
+**Estimated size:** Small (frontend-only — no schema)
+
+### 9.5 Keyboard Shortcuts Coverage 🔲
+
+Basic letter shortcuts (c, s/a/p/l/d/q, escape) are wired. Missing the
+Linear staples that define the "feels-like-Linear" bar.
+
+**Gaps:**
+- `Cmd+K` command palette coverage (nested commands: Set status → status
+  list; Go to → entity)
+- `j`/`k` vim-style navigation between list rows
+- `e` to edit the focused row inline
+- `x` to archive / `Cmd+Backspace` to delete
+- `?` global help / shortcuts modal
+- `g i` (Inbox), `g m` (My Issues), `g p` (Projects) chord nav
+
+**Estimated size:** Medium (frontend-only — keymap infrastructure exists)
+
+### 9.6 Issue Activity Log Query 🚧
+
+`IssueActivity` rows are written on every tracked field change (see
+`TRACKED_ACTIVITY_FIELDS` in `src/server/graphql/resolvers/issue.ts`) and
+exposed via the `issueActivities(issueId)` query. The internal component
+already exists — but tracked-field coverage is narrower than Linear's
+audit log:
+
+**Gap:** Linear logs git events, label add/remove, project move, cycle
+change, comment-resolved, etc. We only track stateId/assigneeId/priority/
+title/estimate/dueDate/projectId/trashed/cycleId/parentId.
+
+**Estimated size:** Small (add fields to the tracked list, write activity
+rows from comment / label resolvers).
+
+### 9.7 Linear "Asks" — Public Intake Forms 🔲
+
+Public, link-shared forms that non-workspace users can fill out to create
+an issue in triage.
+
+**Planned scope:**
+- `IntakeForm` model — `(orgId, teamId, slug, title, schema, allowedDomains,
+  requireAuth)`
+- Public-facing route `GET /asks/[slug]`, `POST /asks/[slug]/submit`
+- Submissions land in the team's triage queue with a structured
+  `intake_form_response` payload
+
+**Estimated size:** Medium
+
+### 9.8 Customer Requests / CRM Linking 🔲
+
+Linear's customer-facing feedback loop: attach customers to issues to
+count requests, notify on resolution.
+
+**Planned scope:**
+- `Customer` model — `(orgId, name, domain, externalRef)`
+- `CustomerNeed` join — `(customerId, issueId, requestedAt, notes)`
+- GraphQL CRUD + `Issue.customerNeeds` field
+
+**Estimated size:** Medium-Large
+
+### 9.9 AI Features 🔲
+
+Linear's AI surface: auto-title from description, summarisation,
+duplicate-detection, triage suggestions.
+
+**Planned scope:**
+- Anthropic Claude SDK integration in a new `AiService`
+- Server-side endpoints: `aiSuggestTitle(description)`, `aiSummariseIssue(id)`,
+  `aiFindDuplicates(issueId)`
+- Per-org enable toggle in `Organization.aiSettings`
+
+**Estimated size:** Large (each feature is a separate prompt + UI flow)
+
+### 9.10 Custom Emojis 🔲
+
+Workspace-scoped emoji that users can react with. Currently reaction
+`emoji` is a free-form VARCHAR(50); a `WorkspaceEmoji` table would give
+admins control and a picker.
+
+**Planned scope:**
+- `WorkspaceEmoji` — `(orgId, name, imageUrl, createdBy)`
+- Bootstrap inclusion; emoji picker reads workspace + builtin set
+- Reaction services validate against the union
+
+**Estimated size:** Small
+
+### 9.11 Dependency Graph View 🔲
+
+Visual dependency tree for `IssueRelation` blocks/blocked-by chains.
+Currently Mermaid embeds in descriptions cover one-off diagrams but no
+auto-rendered graph exists.
+
+**Planned scope:**
+- `/team/[key]/dependencies` route
+- Server: `issueDependencyGraph(rootIssueId, depth)` returns nodes + edges
+- Client: D3 / React Flow renderer
+
+**Estimated size:** Medium
+
+### 9.12 Mobile Responsive UX 🚧
+
+`sm:` Tailwind breakpoints exist but the layout is desktop-first. The
+detail panel, command palette, and board view all break < 768px width.
+
+**Planned scope:**
+- Sidebar collapses to bottom nav < `md`
+- Board view falls back to list < `md`
+- Detail panel becomes a full-screen modal route on mobile
+
+**Estimated size:** Medium-Large
+
+### 9.13 Roadmap Drag Reorder 🔲
+
+`/[workspace]/projects` shows projects on a date axis but bars aren't
+drag-resizable / drag-shiftable. Linear's roadmap is fully interactive.
+
+**Planned scope:**
+- `@dnd-kit` on the project bar component
+- Server: `projectUpdate({ startDate, targetDate })` already exists; client
+  just needs to wire drag-end → mutation
+
+**Estimated size:** Small-Medium (frontend-only)
+
+### 9.14 Notion-Style Collapsible Sidebar Sections 🔲
+
+Sidebar currently has fixed sections (Teams, Settings). Linear lets users
+collapse / expand / reorder their sections.
+
+**Planned scope:**
+- `UserSidebarPreferences` JSONB column on `User` (collapsed-section ids,
+  custom order)
+- Drag-reorder via `@dnd-kit`
+
+**Estimated size:** Small
+
+---
+
 ## Completed Items
 
 | # | Feature | PR | Date |
@@ -416,3 +660,9 @@ Native apps that wrap the web experience with offline push and tighter OS integr
 | 6.2 | Project Progress History Charts | #38 | 2026-05-18 |
 | 7.2 | Image Paste in Editor | #38 | 2026-05-18 |
 | 8.3 | Issue Reactions | #38 | 2026-05-18 |
+| 3.2 | Sub-Initiatives | (pending) | 2026-05-21 |
+| 8.1 | Favorites / Sidebar Pinning (server) | (pending) | 2026-05-21 |
+| 8.2 | Guest Role Enforcement (read path) | (pending) | 2026-05-21 |
+| 8.6 | Workspace-Level Custom Fields | (pending) | 2026-05-21 |
+| 9.1 | Issue Snooze | (pending) | 2026-05-21 |
+| 9.2 | Bulk Issue Update | (pending) | 2026-05-21 |

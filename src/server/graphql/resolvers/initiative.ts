@@ -10,17 +10,41 @@ import type { GraphQLContext } from '../context';
 import { mapServiceError } from '../types/errors';
 
 const INITIATIVE_ERROR_MAP = {
-  BAD_USER_INPUT: ['InitiativeInvalidStatusError', 'InitiativeProjectNotFoundError'],
+  BAD_USER_INPUT: [
+    'InitiativeInvalidStatusError',
+    'InitiativeProjectNotFoundError',
+    'InitiativeInvalidParentError',
+    'InitiativeMaxDepthError',
+  ],
   NOT_FOUND: ['InitiativeNotFoundError'],
 } as const;
 
 export const initiativeResolvers = {
   Initiative: {
+    children: async (initiative: Initiative, _args: unknown, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+      return ctx.prisma.initiative.findMany({
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        where: {
+          archivedAt: null,
+          organizationId: ctx.orgId,
+          parentId: initiative.id,
+        },
+      });
+    },
+
     creator: async (initiative: Initiative, _args: unknown, ctx: GraphQLContext) =>
       initiative.creatorId ? ctx.loaders.user.load(initiative.creatorId) : null,
 
     owner: async (initiative: Initiative, _args: unknown, ctx: GraphQLContext) =>
       initiative.ownerId ? ctx.loaders.user.load(initiative.ownerId) : null,
+
+    parent: async (initiative: Initiative, _args: unknown, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+      return initiative.parentId
+        ? ctx.services.initiative.findById(ctx.orgId, initiative.parentId)
+        : null;
+    },
 
     projects: async (initiative: Initiative, _args: unknown, ctx: GraphQLContext) => {
       // Use the project DataLoader so the full Project row flows through
@@ -54,10 +78,11 @@ export const initiativeResolvers = {
 
       try {
         const link = await ctx.services.initiative.addProject(ctx.orgId, initiativeId, projectId);
-        const updated = await ctx.services.initiative.findById(ctx.orgId, initiativeId);
-        // Emit both an InitiativeProject 'I' (so other clients populate the
-        // project link map) and an Initiative 'U' (so the recomputed
-        // progress propagates).
+        // Cascade so ancestor initiatives also get their progress
+        // recomputed AND broadcast — without this, parent rollups drift
+        // on connected clients until next bootstrap.
+        const { self, ancestors } =
+          await ctx.services.initiative.recomputeProgressCascade(initiativeId);
         await ctx.services.sync.createSyncAction(
           ctx.orgId,
           'I',
@@ -65,19 +90,37 @@ export const initiativeResolvers = {
           link.id,
           link,
         );
-        const sync = await ctx.services.sync.createSyncAction(
+        const recomputed = [self, ...ancestors].filter(
+          (i): i is NonNullable<typeof i> => i !== null,
+        );
+        // If recompute produced no rows (no-op skip), fall back to a
+        // findById so the resolver still returns the current state.
+        const primary =
+          recomputed.find(r => r.id === initiativeId) ??
+          (await ctx.services.initiative.findById(ctx.orgId, initiativeId));
+        let sync = await ctx.services.sync.createSyncAction(
           ctx.orgId,
           'U',
           'Initiative',
           initiativeId,
-          updated,
+          primary,
         );
-        if (updated) {
+        // One SyncAction per ancestor whose progress actually moved.
+        for (const ancestor of recomputed.filter(r => r.id !== initiativeId)) {
+          sync = await ctx.services.sync.createSyncAction(
+            ctx.orgId,
+            'U',
+            'Initiative',
+            ancestor.id,
+            ancestor,
+          );
+        }
+        if (primary) {
           void ctx.services.webhook
-            .dispatchEvent(ctx.orgId, 'initiative.updated', updated)
+            .dispatchEvent(ctx.orgId, 'initiative.updated', primary)
             .catch(err => logger.error({ err }, 'webhook dispatch failed: initiative.updated'));
         }
-        return { initiative: updated, lastSyncId: sync.id.toString(), success: true };
+        return { initiative: primary, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         mapServiceError(err, INITIATIVE_ERROR_MAP);
       }
@@ -180,9 +223,8 @@ export const initiativeResolvers = {
       }
 
       const removedId = await ctx.services.initiative.removeProject(initiativeId, projectId);
-      const updated = await ctx.services.initiative.findById(ctx.orgId, initiativeId);
-      // Emit a 'D' for the link row (so other clients drop it from their
-      // store) and a 'U' for the initiative (recomputed progress).
+      const { self, ancestors } =
+        await ctx.services.initiative.recomputeProgressCascade(initiativeId);
       if (removedId) {
         await ctx.services.sync.createSyncAction(
           ctx.orgId,
@@ -192,19 +234,32 @@ export const initiativeResolvers = {
           null,
         );
       }
-      const sync = await ctx.services.sync.createSyncAction(
+      const recomputed = [self, ...ancestors].filter((i): i is NonNullable<typeof i> => i !== null);
+      const primary =
+        recomputed.find(r => r.id === initiativeId) ??
+        (await ctx.services.initiative.findById(ctx.orgId, initiativeId));
+      let sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
         'U',
         'Initiative',
         initiativeId,
-        updated,
+        primary,
       );
-      if (updated) {
+      for (const ancestor of recomputed.filter(r => r.id !== initiativeId)) {
+        sync = await ctx.services.sync.createSyncAction(
+          ctx.orgId,
+          'U',
+          'Initiative',
+          ancestor.id,
+          ancestor,
+        );
+      }
+      if (primary) {
         void ctx.services.webhook
-          .dispatchEvent(ctx.orgId, 'initiative.updated', updated)
+          .dispatchEvent(ctx.orgId, 'initiative.updated', primary)
           .catch(err => logger.error({ err }, 'webhook dispatch failed: initiative.updated'));
       }
-      return { initiative: updated, lastSyncId: sync.id.toString(), success: true };
+      return { initiative: primary, lastSyncId: sync.id.toString(), success: true };
     },
 
     initiativeUpdate: async (

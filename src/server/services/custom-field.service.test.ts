@@ -56,6 +56,7 @@ describe('CustomFieldService', () => {
           { label: 'Low', value: 'low' },
           { label: 'High', value: 'high' },
         ],
+        organizationId: TEST_TEAM.organizationId,
         teamId: TEST_TEAM.id,
         type: 'select',
       });
@@ -64,6 +65,7 @@ describe('CustomFieldService', () => {
       expect(prisma.customFieldDefinition.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           name: 'Severity',
+          organizationId: TEST_TEAM.organizationId,
           sortOrder: 3,
           teamId: TEST_TEAM.id,
           type: 'select',
@@ -76,6 +78,7 @@ describe('CustomFieldService', () => {
       await expect(
         service.createDefinition({
           name: 'X',
+          organizationId: TEST_TEAM.organizationId,
           teamId: TEST_TEAM.id,
           type: 'select',
         }),
@@ -87,6 +90,7 @@ describe('CustomFieldService', () => {
         service.createDefinition({
           name: 'X',
           options: [{ label: 'A', value: 'a' }],
+          organizationId: TEST_TEAM.organizationId,
           teamId: TEST_TEAM.id,
           type: 'text',
         }),
@@ -101,6 +105,7 @@ describe('CustomFieldService', () => {
             { label: 'A', value: 'a' },
             { label: 'Also A', value: 'a' },
           ],
+          organizationId: TEST_TEAM.organizationId,
           teamId: TEST_TEAM.id,
           type: 'select',
         }),
@@ -112,6 +117,7 @@ describe('CustomFieldService', () => {
       await expect(
         service.createDefinition({
           name: 'X',
+          organizationId: TEST_TEAM.organizationId,
           teamId: TEST_TEAM.id,
           type: 'text',
         }),
@@ -169,15 +175,22 @@ describe('CustomFieldService', () => {
   });
 
   describe('findDefinitionsByTeamId', () => {
-    it('orders by sortOrder then name, excludes archived', async () => {
+    it('orders by sortOrder then name, excludes archived, includes workspace-scoped', async () => {
+      prisma.team.findUnique.mockResolvedValue({ organizationId: TEST_TEAM.organizationId });
       prisma.customFieldDefinition.findMany.mockResolvedValue([TEST_DEF]);
 
       const result = await service.findDefinitionsByTeamId(TEST_TEAM.id);
 
       expect(result).toEqual([TEST_DEF]);
       expect(prisma.customFieldDefinition.findMany).toHaveBeenCalledWith({
-        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-        where: { archivedAt: null, teamId: TEST_TEAM.id },
+        orderBy: [{ teamId: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+        where: {
+          archivedAt: null,
+          OR: [
+            { teamId: TEST_TEAM.id },
+            { organizationId: TEST_TEAM.organizationId, teamId: null },
+          ],
+        },
       });
     });
   });

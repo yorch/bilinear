@@ -1,14 +1,41 @@
 import { GraphQLError } from 'graphql';
 import type { Cycle } from '../../../generated/prisma';
 import { logger } from '../../lib/logger';
-import { requireAuth, requireTeamMember } from '../../middleware/auth';
+import { isTeamGuest, requireAuth, requireTeamMember } from '../../middleware/auth';
 import type { CycleCreateInput, CycleUpdateInput } from '../../services/cycle.service';
+import { IssueService } from '../../services/issue.service';
 import type { GraphQLContext } from '../context';
 
 export const cycleResolvers = {
   Cycle: {
-    issues: async (cycle: Cycle, _args: unknown, ctx: GraphQLContext) =>
-      ctx.services.issue.findActiveByCycleId(cycle.id),
+    issues: async (cycle: Cycle, _args: unknown, ctx: GraphQLContext) => {
+      // Guest visibility: a guest on the cycle's team only sees issues
+      // they created or are assigned to. Non-guests see the full set.
+      // Without this check, Cycle.issues is a backdoor around the
+      // top-level `issues` query's guest filter.
+      //
+      // Snooze hide is applied to both branches — the non-guest branch
+      // delegates to `findActiveByCycleId` which now includes the
+      // predicate; the guest branch composes it via AND so it stacks
+      // cleanly with the creator/assignee OR.
+      const userId = ctx.userId;
+      const orgId = ctx.orgId;
+      if (userId && orgId && (await isTeamGuest(ctx.prisma, cycle.teamId, userId, orgId))) {
+        return ctx.prisma.issue.findMany({
+          orderBy: { sortOrder: 'asc' },
+          where: {
+            AND: [
+              { OR: [{ creatorId: userId }, { assigneeId: userId }] },
+              IssueService.snoozeHideClause(),
+            ],
+            archivedAt: null,
+            cycleId: cycle.id,
+            trashed: false,
+          },
+        });
+      }
+      return ctx.services.issue.findActiveByCycleId(cycle.id);
+    },
 
     team: async (cycle: Cycle, _args: unknown, ctx: GraphQLContext) =>
       ctx.loaders.team.load(cycle.teamId),

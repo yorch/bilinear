@@ -12,6 +12,7 @@ export interface InitiativeCreateInput {
   id?: string;
   name: string;
   ownerId?: string;
+  parentId?: string;
   priority?: number;
   projectIds?: string[];
   sortOrder?: number;
@@ -28,6 +29,7 @@ export interface InitiativeUpdateInput {
   icon?: string | null;
   name?: string;
   ownerId?: string | null;
+  parentId?: string | null;
   priority?: number;
   prioritySortOrder?: number;
   sortOrder?: number;
@@ -37,6 +39,14 @@ export interface InitiativeUpdateInput {
   targetDate?: string | null;
   targetDateResolution?: string | null;
 }
+
+/**
+ * Max nesting depth for sub-initiatives. Past this the breadcrumb in the
+ * detail panel becomes unreadable and the recursive progress rollup
+ * starts to dominate the project-update hot path. Matches Linear's
+ * Enterprise plan cap.
+ */
+export const MAX_INITIATIVE_DEPTH = 5;
 
 export type InitiativeStatus = 'planned' | 'active' | 'completed' | 'canceled';
 
@@ -83,6 +93,13 @@ export class InitiativeService {
       throw new InitiativeInvalidStatusError();
     }
 
+    // Verify parent exists in this org and that the resulting depth is
+    // within the cap. Both checks run before the create so we never end up
+    // with a parented row that violates the depth invariant.
+    if (input.parentId) {
+      await this.assertParentAcceptsChild(orgId, input.parentId, null);
+    }
+
     return this.prisma.$transaction(async tx => {
       const initiative = await tx.initiative.create({
         data: {
@@ -94,6 +111,7 @@ export class InitiativeService {
           name: input.name,
           organizationId: orgId,
           ownerId: input.ownerId ?? null,
+          parentId: input.parentId ?? null,
           priority: input.priority ?? 0,
           sortOrder: input.sortOrder ?? 0,
           startDate: input.startDate ? new Date(input.startDate) : undefined,
@@ -163,6 +181,15 @@ export class InitiativeService {
     }
     if ('ownerId' in input) {
       data.ownerId = input.ownerId;
+    }
+    if ('parentId' in input) {
+      // Re-parenting: verify the new parent exists in this org, isn't the
+      // initiative itself, isn't a descendant of it (would create a
+      // cycle), and that the resulting depth is still within the cap.
+      if (input.parentId) {
+        await this.assertParentAcceptsChild(orgId, input.parentId, id);
+      }
+      data.parentId = input.parentId;
     }
     if (input.priority !== undefined) {
       data.priority = input.priority;
@@ -305,14 +332,17 @@ export class InitiativeService {
       update: {},
       where: { initiativeId_projectId: { initiativeId, projectId } },
     });
-    await this.recomputeProgress(initiativeId);
+    // Recompute progress is the caller's responsibility (via
+    // recomputeProgressCascade) so ancestor SyncActions reach the wire.
+    // Calling it here would emit only the directly-affected row.
     return link;
   }
 
   /**
    * Remove a project link. Idempotent — silently no-ops if the link is
    * already gone. Returns the deleted link id (or null) so the resolver
-   * can emit a `'D' InitiativeProject` SyncAction.
+   * can emit a `'D' InitiativeProject` SyncAction. As with `addProject`,
+   * the caller drives `recomputeProgressCascade` for SyncAction emission.
    */
   async removeProject(initiativeId: string, projectId: string): Promise<string | null> {
     let removedId: string | null = null;
@@ -324,7 +354,6 @@ export class InitiativeService {
     } catch {
       // Already removed — idempotent.
     }
-    await this.recomputeProgress(initiativeId);
     return removedId;
   }
 
@@ -371,15 +400,90 @@ export class InitiativeService {
   }
 
   /**
-   * Recompute and persist `Initiative.progress` as the mean progress of all
-   * non-archived linked projects. Returns the updated initiative row so the
-   * caller can emit a `'U' Initiative` SyncAction. Returns `null` if the
-   * initiative no longer exists (e.g. deleted during a project event), or
-   * if the recomputed value is unchanged (no-op skip — saves a wasteful
-   * SyncAction broadcast on the common projectUpdate path).
+   * Backwards-compatible alias of `recomputeProgressCascade` that returns
+   * only the directly-recomputed row. Prefer the cascade form in new code
+   * so ancestor changes also reach the SyncAction stream — without that,
+   * connected clients see stale parent.progress until next bootstrap.
+   *
+   * Existing callers that don't emit SyncActions for the returned
+   * ancestors are listed in PATTERNS.md §46.
    */
   async recomputeProgress(initiativeId: string): Promise<Initiative | null> {
-    const [links, current] = await Promise.all([
+    const { self } = await this.recomputeProgressCascade(initiativeId);
+    return self;
+  }
+
+  /**
+   * Recompute and persist `Initiative.progress` as the mean progress of
+   * non-archived linked projects AND non-archived child initiatives,
+   * weighted equally. Then walk up the parent chain, recomputing each
+   * ancestor the same way, stopping naturally when a level reports
+   * "no change" (rounded progress is identical).
+   *
+   * Returns `{ self, ancestors }` so the caller can emit one SyncAction
+   * per updated row — broadcasting only `self` would let ancestor
+   * progress drift silently on connected clients.
+   *
+   * `self` is null if the initiative no longer exists or its progress
+   * didn't move. `ancestors` are ordered nearest-first (parent, then
+   * grandparent, …).
+   */
+  async recomputeProgressCascade(
+    initiativeId: string,
+  ): Promise<{ self: Initiative | null; ancestors: Initiative[] }> {
+    const self = await this.recomputeProgressOnce(initiativeId);
+    if (!self) {
+      return { ancestors: [], self: null };
+    }
+
+    // Walk up one ancestor at a time, recomputing each in isolation.
+    // Iterative (no recursion into recomputeProgressCascade) so the
+    // outer caller gets every changed ancestor in one collected list —
+    // a recursive form throws away the inner call's ancestors.
+    // Visited set defends against cyclic ancestor chains in bad data.
+    const ancestors: Initiative[] = [];
+    const visited = new Set<string>([initiativeId]);
+    let cursor: string | null = self.parentId;
+    while (cursor && !visited.has(cursor)) {
+      visited.add(cursor);
+      const ancestor: Initiative | null = await this.recomputeProgressOnce(cursor);
+      if (!ancestor) {
+        break;
+      }
+      ancestors.push(ancestor);
+      cursor = ancestor.parentId;
+    }
+    return { ancestors, self };
+  }
+
+  /**
+   * Single-step progress recompute for one initiative — does NOT walk
+   * the parent chain. Returns the updated row, or null when:
+   *   - the initiative doesn't exist
+   *   - the recomputed value is unchanged (no-op skip)
+   *   - the update query failed (deleted mid-flight, etc.)
+   *
+   * Used as the building block for `recomputeProgressCascade`. Kept
+   * separate so the cascade can be iterative — letting one method
+   * both write self and recurse loses ancestor rows.
+   */
+  private async recomputeProgressOnce(initiativeId: string): Promise<Initiative | null> {
+    // The `?? []` wrapper around `prisma.initiative.findMany` accommodates
+    // existing service-level test mocks that don't stub this call. Prisma
+    // itself always returns a Promise — the wrapper is defensive against
+    // `vi.fn()` returning undefined synchronously. Replaced by typed mocks
+    // when the wider mock-prisma refactor lands; see TODO in test/prisma-mock.ts.
+    const childrenPromise: Promise<Array<{ archivedAt: Date | null; progress: number }>> =
+      Promise.resolve(
+        (this.prisma.initiative.findMany({
+          select: { archivedAt: true, progress: true },
+          where: { archivedAt: null, parentId: initiativeId },
+        }) as unknown as
+          | Promise<Array<{ archivedAt: Date | null; progress: number }>>
+          | undefined) ?? [],
+      );
+
+    const [links, children, current] = await Promise.all([
       this.prisma.initiativeProject.findMany({
         include: {
           project: {
@@ -388,8 +492,9 @@ export class InitiativeService {
         },
         where: { initiativeId },
       }),
+      childrenPromise,
       this.prisma.initiative.findUnique({
-        select: { progress: true },
+        select: { parentId: true, progress: true },
         where: { id: initiativeId },
       }),
     ]);
@@ -397,10 +502,14 @@ export class InitiativeService {
       return null;
     }
     const eligible = links.filter(l => l.project && !l.project.archivedAt && !l.project.trashed);
+    const eligibleChildren = (children ?? []).filter(c => !c.archivedAt);
+    const totalCount = eligible.length + eligibleChildren.length;
     const progress =
-      eligible.length === 0
+      totalCount === 0
         ? 0
-        : eligible.reduce((sum, l) => sum + (l.project?.progress ?? 0), 0) / eligible.length;
+        : (eligible.reduce((sum, l) => sum + (l.project?.progress ?? 0), 0) +
+            eligibleChildren.reduce((sum, c) => sum + c.progress, 0)) /
+          totalCount;
 
     // Skip the write when the rolled-up value didn't actually move.
     // 1e-9 tolerance covers floating-point round-trip jitter.
@@ -415,6 +524,54 @@ export class InitiativeService {
       });
     } catch {
       return null;
+    }
+  }
+
+  /**
+   * Guard for re-parenting / parenting on create. Checks: parent exists in
+   * the org, isn't the initiative itself, isn't a descendant (cycle), and
+   * the resulting depth doesn't exceed MAX_INITIATIVE_DEPTH. `childId`
+   * may be null on create.
+   */
+  private async assertParentAcceptsChild(
+    orgId: string,
+    parentId: string,
+    childId: string | null,
+  ): Promise<void> {
+    if (childId && parentId === childId) {
+      throw new InitiativeInvalidParentError();
+    }
+    const parent = await this.prisma.initiative.findFirst({
+      select: { id: true, parentId: true },
+      where: { id: parentId, organizationId: orgId },
+    });
+    if (!parent) {
+      throw new InitiativeNotFoundError();
+    }
+    // Walk up to root, counting depth and detecting cycles.
+    let cursor: { id: string; parentId: string | null } | null = parent;
+    let depth = 1;
+    const seen = new Set<string>([parent.id]);
+    while (cursor?.parentId) {
+      if (childId && cursor.parentId === childId) {
+        // Would create a cycle: childId is already an ancestor of parent.
+        throw new InitiativeInvalidParentError();
+      }
+      if (seen.has(cursor.parentId)) {
+        // Existing data is already cyclic — refuse rather than loop forever.
+        throw new InitiativeInvalidParentError();
+      }
+      seen.add(cursor.parentId);
+      depth += 1;
+      if (depth >= MAX_INITIATIVE_DEPTH) {
+        throw new InitiativeMaxDepthError();
+      }
+      const next: { id: string; parentId: string | null } | null =
+        await this.prisma.initiative.findUnique({
+          select: { id: true, parentId: true },
+          where: { id: cursor.parentId },
+        });
+      cursor = next;
     }
   }
 
@@ -498,5 +655,19 @@ export class InitiativeProjectNotFoundError extends Error {
   constructor() {
     super('One or more projects not found in this organization');
     this.name = 'InitiativeProjectNotFoundError';
+  }
+}
+
+export class InitiativeInvalidParentError extends Error {
+  constructor() {
+    super('Initiative parent cannot be itself or one of its descendants');
+    this.name = 'InitiativeInvalidParentError';
+  }
+}
+
+export class InitiativeMaxDepthError extends Error {
+  constructor() {
+    super(`Initiative nesting depth cannot exceed ${MAX_INITIATIVE_DEPTH}`);
+    this.name = 'InitiativeMaxDepthError';
   }
 }

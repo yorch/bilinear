@@ -179,7 +179,11 @@ export class SyncService {
         where: { archivedAt: null, team: { organizationId: orgId } },
       }),
       this.prisma.customFieldDefinition.findMany({
-        where: { archivedAt: null, team: { organizationId: orgId } },
+        // Include workspace-scoped definitions (team_id IS NULL) alongside
+        // team-scoped ones. organization_id is denormalised onto every row
+        // (NOT NULL since the 2026-05-21 migration), so the workspace tenant
+        // filter is a single column lookup.
+        where: { archivedAt: null, organizationId: orgId },
       }),
       this.prisma.customFieldValue.findMany({
         where: {

@@ -5,6 +5,7 @@ import { customFieldResolvers } from './custom-field';
 import { customViewResolvers } from './custom-view';
 import { cycleResolvers } from './cycle';
 import { documentResolvers } from './document';
+import { favoriteResolvers } from './favorite';
 import { fileResolvers } from './file';
 import { githubResolvers } from './github';
 import { initiativeResolvers } from './initiative';
@@ -85,6 +86,10 @@ export const resolvers = {
 
   DateTime: DateTimeScalar,
 
+  Favorite: {
+    ...favoriteResolvers.Favorite,
+  },
+
   Initiative: {
     ...initiativeResolvers.Initiative,
   },
@@ -122,6 +127,7 @@ export const resolvers = {
     ...authResolvers.Mutation,
     ...commentResolvers.Mutation,
     ...documentResolvers.Mutation,
+    ...favoriteResolvers.Mutation,
     ...fileResolvers.Mutation,
     ...githubResolvers.Mutation,
     ...initiativeResolvers.Mutation,
@@ -164,6 +170,7 @@ export const resolvers = {
     ...userResolvers.Query,
     ...commentResolvers.Query,
     ...documentResolvers.Query,
+    ...favoriteResolvers.Query,
     ...fileResolvers.Query,
     ...githubResolvers.Query,
     ...initiativeResolvers.Query,
