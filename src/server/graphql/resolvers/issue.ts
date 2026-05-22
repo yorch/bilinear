@@ -189,6 +189,9 @@ export const issueResolvers = {
         void ctx.services.webhook
           .dispatchEvent(ctx.orgId, 'issue.created', issue, issue.teamId)
           .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.created'));
+        void ctx.services.automation
+          .evaluateForIssue(ctx.orgId, { issue, type: 'issue_created' }, ctx.userId)
+          .catch(err => logger.error({ err }, 'automation evaluate failed: issue_created'));
         return { issue, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         const error = err as Error;
@@ -534,6 +537,34 @@ export const issueResolvers = {
       void ctx.services.webhook
         .dispatchEvent(ctx.orgId, 'issue.updated', issue, issue.teamId)
         .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.updated'));
+
+      // Automation triggers — fire one per kind of change. The service
+      // de-dupes by trigger_type so a single field change can only match
+      // one rule shape (e.g. assignee change doesn't re-fire state rules).
+      const fireAutomation = (
+        type: 'issue_state_changed' | 'issue_priority_changed' | 'issue_assignee_changed',
+        changes: Record<string, { newValue: unknown; oldValue: unknown }>,
+      ) => {
+        void ctx.services.automation
+          .evaluateForIssue(ctx.orgId, { changes, issue, type }, ctx.userId)
+          .catch(err => logger.error({ err, type }, 'automation evaluate failed'));
+      };
+      if (input.stateId && input.stateId !== existing.stateId) {
+        fireAutomation('issue_state_changed', {
+          stateId: { newValue: input.stateId, oldValue: existing.stateId },
+        });
+      }
+      if (input.priority !== undefined && input.priority !== existing.priority) {
+        fireAutomation('issue_priority_changed', {
+          priority: { newValue: input.priority, oldValue: existing.priority },
+        });
+      }
+      if ('assigneeId' in input && input.assigneeId !== existing.assigneeId) {
+        fireAutomation('issue_assignee_changed', {
+          assigneeId: { newValue: input.assigneeId, oldValue: existing.assigneeId },
+        });
+      }
+
       return { issue, lastSyncId: sync.id.toString(), success: true };
     },
   },

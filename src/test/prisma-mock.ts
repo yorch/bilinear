@@ -36,6 +36,7 @@ function createMockModel(): MockModel {
 export type MockPrismaClient = {
   [K in keyof PrismaClient]: K extends
     | 'authToken'
+    | 'automationRule'
     | 'comment'
     | 'commentReaction'
     | 'customFieldDefinition'
@@ -83,6 +84,7 @@ export function createMockPrisma(): MockPrismaClient {
       return fn(mock as MockPrismaClient);
     }),
     authToken: createMockModel(),
+    automationRule: createMockModel(),
     comment: createMockModel(),
     commentReaction: createMockModel(),
     customFieldDefinition: createMockModel(),

@@ -45,6 +45,7 @@ model Organization {
   githubPullRequests     GitHubPullRequest[]
   favorites              Favorite[]
   customFieldDefinitions CustomFieldDefinition[]
+  automationRules        AutomationRule[]
 
   @@map("organizations")
 }
@@ -240,6 +241,7 @@ model Team {
   memberRoles            TeamMemberRole[]
   customFieldDefinitions CustomFieldDefinition[]
   documents              Document[]
+  automationRules        AutomationRule[]
 
   // Unique on (organizationId, key) is enforced via a partial index in the DB
   // (WHERE archived_at IS NULL) so archived teams don't block key reuse.
@@ -1250,4 +1252,58 @@ model GitHubPullRequest {
   @@index([issueId])
   @@index([organizationId])
   @@map("github_pull_requests")
+}
+
+/// Rule-based automation. Triggers fire on resolver events (issue_created,
+/// issue_state_changed, etc.) and execute one or more actions if the rule's
+/// optional condition predicate evaluates to true. Rules are evaluated
+/// fire-and-forget from the issue / comment resolvers; failures are logged
+/// but never block the originating mutation.
+///
+/// triggerConfig / actionConfig shapes live in
+/// src/server/services/automation.service.ts and are documented there.
+model AutomationRule {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @map("organization_id") @db.Uuid
+  // teamId scopes the rule to a single team; null = workspace-wide. The
+  // service layer enforces tenant guards on either side.
+  teamId         String? @map("team_id") @db.Uuid
+
+  name        String  @db.VarChar(255)
+  description String?
+
+  // Trigger: event name that fires this rule. See TRIGGER_TYPES in the
+  // automation service for the enumerable set.
+  triggerType   String                  @map("trigger_type") @db.VarChar(50)
+  // JSONB config interpreted per trigger type (e.g. for issue_state_changed,
+  // { fromCategory?: string, toCategory?: string }).
+  triggerConfig Json                    @default("{}") @map("trigger_config")
+
+  // Optional filter predicate evaluated before actions run. JSON-encoded
+  // tree of { field, op, value } leaves; same shape as IssueFilter.
+  conditions    Json?                   @map("conditions")
+
+  // One or more actions executed in array order. Each action carries its
+  // own type + config. See ACTION_TYPES in the automation service.
+  actions       Json                    @default("[]") @map("actions")
+
+  enabled       Boolean                 @default(true)
+  // Higher sortOrder runs first. Lets admins prioritize rules.
+  sortOrder     Float                   @default(0) @map("sort_order")
+  // Statistics for the admin UI — purely informational.
+  lastRunAt     DateTime?               @map("last_run_at") @db.Timestamptz
+  runCount      Int                     @default(0) @map("run_count")
+
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt  DateTime? @map("archived_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team         Team?        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, enabled])
+  @@index([teamId, enabled])
+  @@index([triggerType])
+  @@map("automation_rules")
 }

@@ -5,6 +5,7 @@ import { redis } from '../lib/redis';
 import type { AuthContext } from '../middleware/auth';
 import { extractAuthContext } from '../middleware/auth';
 import { AuthService } from '../services/auth.service';
+import { AutomationService } from '../services/automation.service';
 import { CommentService } from '../services/comment.service';
 import { CustomFieldService } from '../services/custom-field.service';
 import { CustomViewService } from '../services/custom-view.service';
@@ -40,6 +41,7 @@ export interface GraphQLContext extends AuthContext {
   prisma: PrismaClient;
   services: {
     auth: AuthService;
+    automation: AutomationService;
     comment: CommentService;
     github: GitHubService;
     customField: CustomFieldService;
@@ -103,6 +105,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
 
   const userService = new UserService(prisma);
   const authService = new AuthService(prisma, userService);
+  const automationService = new AutomationService(prisma);
   const githubService = new GitHubService(prisma);
   const documentService = new DocumentService(prisma);
   const favoriteService = new FavoriteService(prisma);
@@ -135,6 +138,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
     prisma,
     services: {
       auth: authService,
+      automation: automationService,
       comment: commentService,
       customField: customFieldService,
       customView: customViewService,

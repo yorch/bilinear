@@ -1251,6 +1251,57 @@ export const typeDefs = `
     cycleId: String
   }
 
+  # ------------------------------------------------------------------
+  # Automation rules (PRD §2.23, gap §2.1)
+  # ------------------------------------------------------------------
+  type AutomationRule {
+    id: ID!
+    organizationId: ID!
+    teamId: ID
+    name: String!
+    description: String
+    triggerType: String!
+    triggerConfig: JSON!
+    conditions: JSON
+    actions: JSON!
+    enabled: Boolean!
+    sortOrder: Float!
+    lastRunAt: DateTime
+    runCount: Int!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    archivedAt: DateTime
+  }
+
+  type AutomationRulePayload {
+    success: Boolean!
+    rule: AutomationRule
+    lastSyncId: String!
+  }
+
+  input AutomationRuleCreateInput {
+    name: String!
+    description: String
+    teamId: String
+    triggerType: String!
+    triggerConfig: JSON
+    conditions: JSON
+    actions: JSON!
+    enabled: Boolean
+    sortOrder: Float
+  }
+
+  input AutomationRuleUpdateInput {
+    name: String
+    description: String
+    triggerType: String
+    triggerConfig: JSON
+    conditions: JSON
+    actions: JSON
+    enabled: Boolean
+    sortOrder: Float
+  }
+
   type Query {
     viewer: User!
     organization: Organization!
@@ -1315,6 +1366,12 @@ export const typeDefs = `
     webhooks(includeArchived: Boolean): [Webhook!]!
     webhookDeliveries(webhookId: ID!, limit: Int): [WebhookDelivery!]!
     webhookEvents: [String!]!
+
+    # Automation rules
+    automationRule(id: ID!): AutomationRule!
+    automationRules: [AutomationRule!]!
+    automationTriggerTypes: [String!]!
+    automationActionTypes: [String!]!
 
     # Favorites — sidebar pinning, per user
     favorites: [Favorite!]!
@@ -1478,6 +1535,11 @@ export const typeDefs = `
     webhookArchive(id: ID!): WebhookPayload!
     webhookDelete(id: ID!): WebhookDeletePayload!
     webhookRotateSecret(id: ID!): WebhookPayload!
+
+    # Automation rules
+    automationRuleCreate(input: AutomationRuleCreateInput!): AutomationRulePayload!
+    automationRuleUpdate(id: ID!, input: AutomationRuleUpdateInput!): AutomationRulePayload!
+    automationRuleArchive(id: ID!): AutomationRulePayload!
 
     # Favorites
     favoriteCreate(input: FavoriteCreateInput!): FavoritePayload!
