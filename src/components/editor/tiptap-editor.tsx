@@ -50,7 +50,7 @@ const YJS_SERVER_URL = process.env.NEXT_PUBLIC_YJS_SERVER_URL ?? 'ws://localhost
 // scoped JWT that the YJS server accepts without needing the long-lived access
 // cookie — same pattern as the sync WebSocket (PATTERNS.md §18).
 async function fetchWsTicket(): Promise<string> {
-  const res = await fetch('/api/auth/ws-ticket');
+  const res = await fetch('/api/auth/ws-ticket', { cache: 'no-store', credentials: 'include' });
   if (!res.ok) {
     throw new Error('Failed to fetch ws-ticket for YJS');
   }
@@ -359,6 +359,11 @@ export function TipTapEditor({
   const providerRef = useRef<HocuspocusProvider | null>(null);
   // Seed flag: true once we've inserted initial content into an empty YJS doc.
   const seededRef = useRef(false);
+  // Set to true when onSynced fires before the editor ref is assigned; the
+  // editorRef effect will complete the seed on next render.
+  const needsSeedRef = useRef(false);
+  // Cursor color is chosen once per session and reused for awareness updates.
+  const cursorColorRef = useRef('');
   // Capture the initial content once so the onSynced seed callback never reads
   // a stale prop value.
   const initialContentRef = useRef(content);
@@ -367,6 +372,7 @@ export function TipTapEditor({
     const ydoc = new Y.Doc();
     ydocRef.current = ydoc;
     const cursorColor = sessionColor();
+    cursorColorRef.current = cursorColor;
 
     providerRef.current = new HocuspocusProvider({
       document: ydoc,
@@ -387,10 +393,18 @@ export function TipTapEditor({
         // The YJS fragment named 'default' is what TipTap's Collaboration
         // extension binds to.
         const frag = ydoc.getXmlFragment('default');
-        if (frag.length === 0 && initialContentRef.current && editorRef.current) {
-          editorRef.current.commands.setContent(initialContentRef.current);
+        if (frag.length > 0 || !initialContentRef.current) {
+          // Doc already has content or nothing to seed — done.
+          seededRef.current = true;
+          return;
         }
-        seededRef.current = true;
+        if (editorRef.current) {
+          editorRef.current.commands.setContent(initialContentRef.current);
+          seededRef.current = true;
+        } else {
+          // Editor not yet mounted; flag so the editorRef effect seeds it.
+          needsSeedRef.current = true;
+        }
       },
       // Async token provider: fetches a fresh 60s ws_ticket on every
       // (re)connection, same rotation pattern as the sync WebSocket.
@@ -405,6 +419,17 @@ export function TipTapEditor({
     });
   }
 
+  // Keep the cursor label current when collabUserName changes after mount
+  // (e.g. displayName loaded asynchronously after the provider was created).
+  useEffect(() => {
+    if (collabEnabled && providerRef.current && cursorColorRef.current) {
+      providerRef.current.setAwarenessField('user', {
+        color: cursorColorRef.current,
+        name: collabUserName,
+      });
+    }
+  }, [collabEnabled, collabUserName]);
+
   // Destroy provider and YJS doc on unmount.
   useEffect(
     () => () => {
@@ -413,6 +438,7 @@ export function TipTapEditor({
       ydocRef.current?.destroy();
       ydocRef.current = null;
       seededRef.current = false;
+      needsSeedRef.current = false;
     },
     [],
   ); // eslint-disable-line react-hooks/exhaustive-deps
@@ -526,6 +552,15 @@ export function TipTapEditor({
 
   useEffect(() => {
     editorRef.current = editor;
+    // Complete deferred seeding if onSynced fired before the editor mounted.
+    if (editor && needsSeedRef.current && !seededRef.current) {
+      const frag = ydocRef.current?.getXmlFragment('default');
+      if (frag && frag.length === 0 && initialContentRef.current) {
+        editor.commands.setContent(initialContentRef.current);
+      }
+      seededRef.current = true;
+      needsSeedRef.current = false;
+    }
   }, [editor]);
 
   // Sync external content changes into the editor — but only when collab is

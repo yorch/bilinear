@@ -107,15 +107,15 @@ export const server = new Server<HookContext>({
 
     const issue = await prisma.issue.findFirst({
       select: { descriptionState: true },
-      where: { id: parsed.id },
+      where: { archivedAt: null, id: parsed.id, organizationId: (context as HookContext).orgId },
     });
 
     const stateBytes = issue?.descriptionState;
     if (stateBytes && stateBytes.length > 0) {
       Y.applyUpdate(document, stateBytes);
-      log.info({ bytes: stateBytes.length, documentName }, 'Loaded YJS state from DB');
+      log.debug({ bytes: stateBytes.length, documentName }, 'Loaded YJS state from DB');
     } else {
-      log.info(
+      log.debug(
         { documentName, userId: context.userId },
         'No stored YJS state — client will seed on first connect',
       );
@@ -137,7 +137,7 @@ export const server = new Server<HookContext>({
         data: { descriptionState: state },
         where: { id: parsed.id },
       });
-      log.info({ bytes: state.length, documentName }, 'Persisted YJS state to DB');
+      log.debug({ bytes: state.length, documentName }, 'Persisted YJS state to DB');
     } catch (err) {
       log.error({ documentName, err }, 'Failed to persist YJS state');
     }

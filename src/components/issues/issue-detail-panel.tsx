@@ -95,6 +95,9 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
     if (issue) {
       setTitleDraft(issue.title);
       setDescDraft(issue.description ?? '');
+      // Collapse the description editor when switching issues so the collab
+      // provider is remounted for the correct document room.
+      setEditingDesc(false);
     }
   }, [issue]);
 

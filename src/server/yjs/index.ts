@@ -28,7 +28,11 @@ server
     process.exit(1);
   });
 
-process.on('SIGTERM', async () => {
+async function shutdown() {
   await server.destroy();
   process.exit(0);
-});
+}
+
+process.on('SIGTERM', shutdown);
+// SIGINT handles Ctrl+C in local dev / some container runtimes
+process.on('SIGINT', shutdown);
