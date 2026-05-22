@@ -21,6 +21,7 @@
 > | SyncAction table + generation on every mutation | ✅ Built | Sprint 7-8 |
 > | REST sync endpoints (`/api/sync/bootstrap`, `/api/sync/delta`) | ✅ Built | Sprint 7-8 |
 > | Standalone WebSocket server (`yarn ws:server`, port 3001) | ✅ Built | Sprint 7-8 |
+> | Hocuspocus YJS collaborative editing server (`yarn yjs:server`, port 1234) | ✅ Built | 2026-05-22 |
 > | Redis pub/sub for real-time broadcast | ✅ Built | Sprint 7-8 |
 > | MobX stores — core (IssueStore, TeamStore, UserStore, LabelStore, WorkflowStateStore, SyncStore, UIStore) | ✅ Built | Sprint 7-8 |
 > | MobX stores — extended (CycleStore, ProjectStore, CustomViewStore, NotificationStore, IssueRelationStore, IssueTemplateStore, CustomFieldStore, DocumentStore) | ✅ Built | Sprints 13-36 — see `src/stores/` |

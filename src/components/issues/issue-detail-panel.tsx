@@ -68,6 +68,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
 }: IssueDetailPanelProps) {
   const { userStore, teamStore } = useStore();
   const currentUserId = userStore.currentUser?.id;
+  const currentUserName = userStore.currentUser?.displayName ?? 'User';
   const mentionUsers = useMemo(() => users.map(u => ({ id: u.id, label: u.displayName })), [users]);
   // Resolve estimation type from team so the correct scale displays
   const estimationType = teamStore.findById(issue?.teamId ?? '')?.issueEstimationType ?? 'notUsed';
@@ -94,6 +95,9 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
     if (issue) {
       setTitleDraft(issue.title);
       setDescDraft(issue.description ?? '');
+      // Collapse the description editor when switching issues so the collab
+      // provider is remounted for the correct document room.
+      setEditingDesc(false);
     }
   }, [issue]);
 
@@ -330,6 +334,8 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
               <div className="rounded-md border border-indigo-400 bg-transparent p-2 transition-colors">
                 <TipTapEditor
                   className="text-sm"
+                  collabDocId={`issue:${issue.id}`}
+                  collabUserName={currentUserName}
                   content={descDraft}
                   mentionUsers={mentionUsers}
                   onBlur={saveDesc}

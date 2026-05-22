@@ -348,50 +348,42 @@ but are never populated. Wire up the writer and add sparkline charts.
 
 ## Priority 7 — Collaboration & Editor
 
-### 7.1 Collaborative Editing (YJS) 🔲
+### 7.1 Collaborative Editing (YJS) 🟡 _(MVP scaffolded 2026-05-22)_
 
 Real-time live cursors and conflict-free co-editing on issue descriptions
 and documents.
 
-**Current state (2026-05-21 audit):**
-- `Issue.descriptionState Bytes?` column exists (`schema.prisma:313`)
-  and is intentionally omitted from list queries to avoid shipping the
-  YJS blob to every list-view client (`issue.service.ts:240,270,575`).
-- `IssueListRow = Omit<Issue, 'descriptionState'>` already typed
-  (`issue.service.ts:68`).
-- No code reads or writes the column. The editor (`TipTapEditor`) is
-  single-source-of-truth markdown + the `description` column.
+**Shipped (MVP scaffold 2026-05-22):**
+- `@hocuspocus/server` v4 + `@hocuspocus/provider` added as dependencies
+- `src/server/yjs/server.ts` — Hocuspocus server with auth, load, and store
+  hooks; `src/server/yjs/index.ts` — entry point (starts on `yarn yjs:server`)
+- Auth: reuses existing `ws_ticket` JWT via `verifyWsTicket` — same 60s scoped
+  token as the sync WebSocket (PATTERNS.md §18)
+- Tenant guard: `onAuthenticate` verifies `issue:<uuid>` belongs to the org
+  from the ticket; rejects archived issues
+- Persistence: `onLoadDocument` loads `Issue.descriptionState` via `Y.applyUpdate`;
+  `onStoreDocument` saves via `Y.encodeStateAsUpdate` (debounced 2s / 20s cap)
+- Cold-start seeding: client seeds empty YJS doc from `Issue.description` HTML
+  after first `onSynced` (the `description` column is not modified by the server)
+- Resolution policy: existing `onBlur` saves `editor.getHTML()` (merged YJS state)
+  to `Issue.description` via `issueUpdate` — search/sync/webhooks unaffected
+- `TipTapEditor` gains `collabDocId` + `collabUserName` props; uses
+  `Collaboration` + `CollaborationCursor` extensions when enabled
+- `IssueDetailPanel` passes `collabDocId={`issue:${issue.id}`}` and
+  `collabUserName` to the edit-mode TipTapEditor
+- Feature flag: `NEXT_PUBLIC_COLLAB_ENABLED=true` (default off)
+- Env vars: `YJS_PORT`, `NEXT_PUBLIC_YJS_SERVER_URL` added to `.env.example`
+- See PATTERNS.md §51 for full implementation notes
 
-**Why deferred past the Priority 1 batch:**
-- Requires a second long-lived server process (`@hocuspocus/server`)
-  alongside the existing WebSocket fan-out. The current `yarn ws:server`
-  process can't double as a YJS server cleanly — different message
-  format, different auth handshake, different lifecycle (per-doc room
-  vs. per-org broadcast).
-- Auth integration is non-trivial: the existing `ws_ticket` (60s scoped
-  JWT, PATTERNS §18) needs to be reused or extended for the YJS
-  handshake. A per-room access check has to run on every connect.
-- Deployment doc + Docker Compose need a third service entry.
-- `description` (markdown) and `descriptionState` (YJS bytes) need a
-  resolution policy when both diverge — e.g. server-authoritative cron
-  that re-extracts markdown from the YJS doc, vs. client-side write-on-
-  blur. Picking the wrong one loses edits on schema migrations.
+**Still open (separate PR):**
+- `Document.contentState Bytes?` migration + Document editor collab
+- "Users editing now" avatar stack in the issue header
+- View-only collaborator role (authenticated but non-editable sessions)
+- Persistent cursor colors across reloads
+- Docker Compose third service entry (`ws-yjs`)
 
-**Concrete implementation plan when picked up:**
-1. Add `@hocuspocus/server` to dependencies; new `src/server/ws/yjs.ts`
-   bootstraps the server reading from / persisting to
-   `Issue.descriptionState` and `Document.contentState`.
-2. Extend `/api/auth/ws-ticket` to issue a Hocuspocus-scoped variant
-   that embeds the entity id + access role.
-3. TipTap `Collaboration` + `CollaborationCursor` extensions wired into
-   `tiptap-editor.tsx`; awareness state carries cursor + selection.
-4. Resolution policy: write-on-blur extracts markdown from YJS doc and
-   updates `Issue.description` so existing search / sync / webhooks
-   continue to work unchanged.
-5. Docker Compose: add `ws-yjs` service; document the port + env vars.
-
-**Estimated size:** Large (2 sprint equivalents). Don't start without
-a brainstorming pass on the resolution policy.
+**Estimated remaining size:** Medium (avatar stack + Document collab are the
+main items; each is roughly a half-sprint).
 
 ### 7.2 Image Paste into Editor ✅ _(PR #38, shipped 2026-05-18)_
 
@@ -1047,3 +1039,4 @@ the issue identifier) breaks every external link that used the old key.
 | 3.1 | Timeline / Gantt View — projects roadmap + Issue.startDate | (pending) | 2026-05-21 |
 | 6.1 | Comprehensive Analytics (MVP) | (pending) | 2026-05-21 |
 | 9.13 | Roadmap Drag Reorder | (pending) | 2026-05-21 |
+| 7.1 | Collaborative Editing YJS (MVP scaffold) | (pending) | 2026-05-22 |
