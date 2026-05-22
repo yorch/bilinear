@@ -3,7 +3,7 @@ import { startServerAndCreateNextHandler } from '@as-integrations/next';
 import { GraphQLError } from 'graphql';
 import depthLimit from 'graphql-depth-limit';
 import { getComplexity, simpleEstimator } from 'graphql-query-complexity';
-import type { NextRequest } from 'next/server';
+import { NextRequest } from 'next/server';
 import type { GraphQLContext } from '../../../server/graphql/context';
 import { createContext } from '../../../server/graphql/context';
 import { resolvers } from '../../../server/graphql/resolvers';
