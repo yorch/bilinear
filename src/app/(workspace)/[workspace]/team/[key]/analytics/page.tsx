@@ -3,6 +3,7 @@
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { useMemo } from 'react';
+import { InsightsSection } from '@/components/analytics/insights-section';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -457,6 +458,13 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
             </div>
           </Section>
         </div>
+
+        {teamId && (
+          <InsightsSection
+            states={states.map(s => ({ color: s.color, id: s.id, name: s.name }))}
+            teamId={teamId}
+          />
+        )}
       </div>
     </div>
   );

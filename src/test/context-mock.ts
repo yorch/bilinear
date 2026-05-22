@@ -1,5 +1,7 @@
 import { createLoaders, type Loaders } from '../server/graphql/loaders';
+import { AnalyticsService } from '../server/services/analytics.service';
 import { AuthService } from '../server/services/auth.service';
+import { AutomationService } from '../server/services/automation.service';
 import { InitiativeService } from '../server/services/initiative.service';
 import { IssueService } from '../server/services/issue.service';
 import { IssueActivityService } from '../server/services/issue-activity.service';
@@ -42,7 +44,9 @@ export interface MockGraphQLContext {
   orgId: string | null;
   prisma: MockPrismaClient;
   services: {
+    analytics: AnalyticsService;
     auth: AuthService;
+    automation: AutomationService;
     initiative: InitiativeService;
     issue: IssueService;
     issueActivity: IssueActivityService;
@@ -72,7 +76,9 @@ export function createMockContext(
     orgId,
     prisma,
     services: {
+      analytics: new AnalyticsService(prisma as never),
       auth: new AuthService(prisma as never, userService),
+      automation: new AutomationService(prisma as never),
       initiative: new InitiativeService(prisma as never),
       issue: new IssueService(prisma as never),
       issueActivity: new IssueActivityService(prisma as never),

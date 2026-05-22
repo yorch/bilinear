@@ -121,6 +121,7 @@ export const typeDefs = `
     description: String
     priority: Int!
     estimate: Float
+    startDate: Date
     dueDate: Date
     sortOrder: Float!
     prioritySortOrder: Float!
@@ -224,6 +225,7 @@ export const typeDefs = `
     assigneeId: String
     priority: Int
     estimate: Float
+    startDate: Date
     dueDate: Date
     labelIds: [String!]
     parentId: String
@@ -240,6 +242,7 @@ export const typeDefs = `
     assigneeId: String
     priority: Int
     estimate: Float
+    startDate: Date
     dueDate: Date
     labelIds: [String!]
     parentId: String
@@ -1248,6 +1251,87 @@ export const typeDefs = `
     cycleId: String
   }
 
+  # ------------------------------------------------------------------
+  # Analytics (PRD §2.24, gap §6.1)
+  # ------------------------------------------------------------------
+  input AnalyticsInput {
+    # Required so every analytics query is scoped to a single team's issue
+    # set. Without this, an unbounded org-wide aggregate scan over millions
+    # of issues costs the GraphQL complexity estimator only 1 — leaving a
+    # cheap DoS vector for any authenticated caller. See PRD §2.24.
+    teamId: String!
+    from: Date
+    to: Date
+  }
+
+  type AnalyticsHistogramBucket {
+    bucketStart: Float!
+    bucketEnd: Float!
+    count: Int!
+  }
+
+  type AnalyticsThroughputPoint {
+    weekStart: String!
+    count: Int!
+  }
+
+  type AnalyticsTimeInStateRow {
+    stateId: ID!
+    avgHours: Float!
+    sampleSize: Int!
+  }
+
+  # ------------------------------------------------------------------
+  # Automation rules (PRD §2.23, gap §2.1)
+  # ------------------------------------------------------------------
+  type AutomationRule {
+    id: ID!
+    organizationId: ID!
+    teamId: ID
+    name: String!
+    description: String
+    triggerType: String!
+    triggerConfig: JSON!
+    conditions: JSON
+    actions: JSON!
+    enabled: Boolean!
+    sortOrder: Float!
+    lastRunAt: DateTime
+    runCount: Int!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    archivedAt: DateTime
+  }
+
+  type AutomationRulePayload {
+    success: Boolean!
+    rule: AutomationRule
+    lastSyncId: String!
+  }
+
+  input AutomationRuleCreateInput {
+    name: String!
+    description: String
+    teamId: String
+    triggerType: String!
+    triggerConfig: JSON
+    conditions: JSON
+    actions: JSON!
+    enabled: Boolean
+    sortOrder: Float
+  }
+
+  input AutomationRuleUpdateInput {
+    name: String
+    description: String
+    triggerType: String
+    triggerConfig: JSON
+    conditions: JSON
+    actions: JSON
+    enabled: Boolean
+    sortOrder: Float
+  }
+
   type Query {
     viewer: User!
     organization: Organization!
@@ -1312,6 +1396,18 @@ export const typeDefs = `
     webhooks(includeArchived: Boolean): [Webhook!]!
     webhookDeliveries(webhookId: ID!, limit: Int): [WebhookDelivery!]!
     webhookEvents: [String!]!
+
+    # Automation rules
+    automationRule(id: ID!): AutomationRule!
+    automationRules: [AutomationRule!]!
+    automationTriggerTypes: [String!]!
+    automationActionTypes: [String!]!
+
+    # Analytics / Insights (PRD §2.24)
+    analyticsLeadTimeHistogram(input: AnalyticsInput): [AnalyticsHistogramBucket!]!
+    analyticsCycleTimeHistogram(input: AnalyticsInput): [AnalyticsHistogramBucket!]!
+    analyticsThroughputByWeek(input: AnalyticsInput): [AnalyticsThroughputPoint!]!
+    analyticsTimeInState(input: AnalyticsInput): [AnalyticsTimeInStateRow!]!
 
     # Favorites — sidebar pinning, per user
     favorites: [Favorite!]!
@@ -1475,6 +1571,11 @@ export const typeDefs = `
     webhookArchive(id: ID!): WebhookPayload!
     webhookDelete(id: ID!): WebhookDeletePayload!
     webhookRotateSecret(id: ID!): WebhookPayload!
+
+    # Automation rules
+    automationRuleCreate(input: AutomationRuleCreateInput!): AutomationRulePayload!
+    automationRuleUpdate(id: ID!, input: AutomationRuleUpdateInput!): AutomationRulePayload!
+    automationRuleArchive(id: ID!): AutomationRulePayload!
 
     # Favorites
     favoriteCreate(input: FavoriteCreateInput!): FavoritePayload!

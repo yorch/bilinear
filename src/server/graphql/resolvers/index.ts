@@ -1,5 +1,7 @@
 import { DateTimeScalar, JSONScalar, UUIDScalar } from '../types/scalars';
+import { analyticsResolvers } from './analytics';
 import { authResolvers } from './auth';
+import { automationResolvers } from './automation';
 import { commentResolvers } from './comment';
 import { customFieldResolvers } from './custom-field';
 import { customViewResolvers } from './custom-view';
@@ -125,6 +127,7 @@ export const resolvers = {
 
   Mutation: {
     ...authResolvers.Mutation,
+    ...automationResolvers.Mutation,
     ...commentResolvers.Mutation,
     ...documentResolvers.Mutation,
     ...favoriteResolvers.Mutation,
@@ -166,7 +169,9 @@ export const resolvers = {
   },
 
   Query: {
+    ...analyticsResolvers.Query,
     ...authResolvers.Query,
+    ...automationResolvers.Query,
     ...userResolvers.Query,
     ...commentResolvers.Query,
     ...documentResolvers.Query,

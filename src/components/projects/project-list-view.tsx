@@ -26,18 +26,6 @@ export const ProjectListView = observer(function ProjectListView({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex h-12 items-center justify-between border-b border-zinc-200 px-4 dark:border-zinc-800">
-        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Projects</h1>
-        <button
-          className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-700"
-          onClick={() => uiStore.openCreateProjectModal()}
-          type="button"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          New Project
-        </button>
-      </div>
-
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {projects.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">

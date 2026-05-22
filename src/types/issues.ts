@@ -32,6 +32,7 @@ export interface IssueBase {
   identifier: string;
   labels: IssueLabel[];
   priority: number;
+  startDate?: string | null;
   stateId: string;
   title: string;
 }

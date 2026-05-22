@@ -4,7 +4,9 @@ import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 import type { AuthContext } from '../middleware/auth';
 import { extractAuthContext } from '../middleware/auth';
+import { AnalyticsService } from '../services/analytics.service';
 import { AuthService } from '../services/auth.service';
+import { AutomationService } from '../services/automation.service';
 import { CommentService } from '../services/comment.service';
 import { CustomFieldService } from '../services/custom-field.service';
 import { CustomViewService } from '../services/custom-view.service';
@@ -39,7 +41,9 @@ export interface GraphQLContext extends AuthContext {
   loaders: Loaders;
   prisma: PrismaClient;
   services: {
+    analytics: AnalyticsService;
     auth: AuthService;
+    automation: AutomationService;
     comment: CommentService;
     github: GitHubService;
     customField: CustomFieldService;
@@ -103,6 +107,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
 
   const userService = new UserService(prisma);
   const authService = new AuthService(prisma, userService);
+  const analyticsService = new AnalyticsService(prisma);
   const githubService = new GitHubService(prisma);
   const documentService = new DocumentService(prisma);
   const favoriteService = new FavoriteService(prisma);
@@ -127,6 +132,14 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const searchService = new SearchService(prisma);
   const triageService = new TriageService(prisma);
   const webhookService = new WebhookService(prisma);
+  // AutomationService wraps issueService.update + syncService.createSyncAction
+  // for action side effects, so other clients see automation writes in real
+  // time and lifecycle stamping happens identically to user-initiated updates.
+  // Constructed after its deps; the engine itself is otherwise stateless.
+  const automationService = new AutomationService(prisma, {
+    issue: issueService,
+    sync: syncService,
+  });
 
   return {
     ...auth,
@@ -134,7 +147,9 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
     loaders: createLoaders(prisma, auth.orgId),
     prisma,
     services: {
+      analytics: analyticsService,
       auth: authService,
+      automation: automationService,
       comment: commentService,
       customField: customFieldService,
       customView: customViewService,

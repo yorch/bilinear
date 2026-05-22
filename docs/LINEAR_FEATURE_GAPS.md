@@ -97,42 +97,83 @@ SMTP_SECURE=
 
 ## Priority 2 — Workflow Automations
 
-### 2.1 Rule-Based Automations 🔲
+### 2.1 Rule-Based Automations 🟡 _(MVP shipped 2026-05-21)_
 
-Linear's automation engine: "When [trigger] → [action]". Enables PM/ops teams to
-automate repetitive triage and routing tasks.
+Linear's automation engine: "When [trigger] → [action]". Enables PM/ops
+teams to automate repetitive triage and routing tasks.
 
-**Planned scope:**
-- `AutomationRule` DB model: `triggerType`, `triggerConfig` (JSONB), `actionType`,
-  `actionConfig` (JSONB), `teamId`, `enabled`
-- Triggers: issue_created, issue_updated (field_changed), issue_state_changed,
-  cycle_started, cycle_completed, comment_created
-- Actions: set_state, set_assignee, set_priority, set_label, add_to_cycle,
-  add_to_project, send_notification, create_sub_issue
-- Evaluation engine: `AutomationService.evaluateForIssue(issue, event)` — called
-  from issue/comment resolvers fire-and-forget
-- Admin UI: `/settings/automations` — rule builder
+**Shipped (MVP):**
+- `automation_rules` table — `(organization_id, team_id?, trigger_type,
+  trigger_config JSONB, conditions JSONB, actions JSONB, enabled,
+  sort_order, last_run_at, run_count)`
+- 5 triggers: `issue_created`, `issue_state_changed`,
+  `issue_priority_changed`, `issue_assignee_changed`, `comment_created`
+  (last one is defined but not yet emitted from the comment resolver)
+- 5 actions: `set_state` (tenant-guarded against cross-team states),
+  `set_assignee`, `set_priority`, `add_label`, `post_comment`
+- Conditions: simple AND-of-leaves on `teamId / stateId / priority /
+  assigneeId`. Schema-stable so a full filter-tree drops in later.
+- `AutomationService.evaluateForIssue` fired from `issue.ts` resolvers
+  fire-and-forget — never blocks the originating mutation. Errors are
+  logged and swallowed.
+- GraphQL: `automationRule(id)`, `automationRules`,
+  `automationTriggerTypes`, `automationActionTypes` queries;
+  `automationRuleCreate/Update/Archive` mutations (owner/admin only).
+- Admin UI: `/settings/automations` — minimal CRUD list with trigger +
+  action selectors and JSON action-config textarea.
+- 13 unit-test specs covering validation, tenant guards, condition +
+  trigger-config matching, set_state cross-team refusal, and the
+  never-throws contract.
 
-**Estimated size:** Large (2–3 sprint equivalents)
+**Still open (separate PR):**
+- Cycle / project lifecycle triggers (`cycle_started`, `cycle_completed`)
+- SLA-driven escalation trigger
+- `add_to_cycle` / `add_to_project` / `send_notification` /
+  `create_sub_issue` actions
+- Comment trigger emission from comment resolver
+- Visual rule builder UI (currently raw JSON for action config)
+- Dry-run mode + per-action audit log (currently only `last_run_at` +
+  `run_count` are tracked)
+- Drag-to-reorder rule priority in the UI
+
+**Estimated remaining size:** Medium-Large for the open scope above.
 
 ---
 
 ## Priority 3 — Views & Planning
 
-### 3.1 Timeline / Gantt View 🔲
+### 3.1 Timeline / Gantt View 🟡 _(projects roadmap shipped 2026-05-21)_
 
-Gantt-style view showing issues and projects on a date axis. Linear shows this per-team
-and per-project.
+Gantt-style view showing issues and projects on a date axis. Linear
+shows this per-team and per-project.
 
-**Planned scope:**
-- New `layout: 'timeline'` option in `CustomView.layout`
-- `TimelineView` React component using `@dnd-kit` for drag-resize
-- Issue date bars rendered from `startDate` / `dueDate` (add `startDate` to Issue if
-  needed)
-- Project timeline: uses `project.startDate` / `project.targetDate`
-- Cycle swimlanes: overlay cycle date ranges
+**Shipped:**
+- `GanttView` shared component (`src/components/roadmap/gantt-view.tsx`)
+  — month-axis timeline with draggable bar (shift dates) and resizable
+  edges (extend either side). Pure mouse events, no @dnd-kit dep.
+- `ProjectRoadmapView` wires active projects (statusType not completed
+  / canceled) to the Gantt and dispatches `projectUpdate(startDate,
+  targetDate)` via `TransactionQueue` with optimistic store updates and
+  rollback on error.
+- View toggle on `/projects` (List ↔ Roadmap) with localStorage
+  persistence per browser.
+- `Issue.startDate` column + GraphQL field for the upcoming issue
+  timeline layout. Threaded through `IssueService` create/update and
+  added to the activity-tracked field list.
+- Migration `20260521010000_priority_one_features`.
 
-**Estimated size:** Large (2 sprint equivalents)
+**Still open (separate PR):**
+- `layout: 'timeline'` option in `CustomView.layout` + timeline layout
+  on the team issue list view (uses the same `GanttView` component;
+  client just needs to provide `IssueGanttItem` rows from
+  `startDate`/`dueDate`)
+- Cycle swimlanes overlaid on the roadmap (`cycle.startsAt`/`endsAt`)
+- Initiative-axis grouping
+- Bar-tap → detail panel open (currently the row below the chart links
+  to the project; bars are drag-only)
+
+**Estimated remaining size:** Small-Medium (the heavy component is
+done; remaining is data plumbing per entity type).
 
 ### 3.2 Sub-Initiatives ✅ _(shipped 2026-05-21)_
 
@@ -244,24 +285,53 @@ Migrate data from Jira, GitHub Issues, and CSV.
 
 **Estimated size:** Large (2–3 sprint equivalents)
 
+### 5.3 Additional Integrations 🔲
+
+PRD §2.17 enumerates a P2 long-tail beyond GitHub/Slack. None are scoped or
+started.
+
+**Planned scope (each is its own PR):**
+- **GitLab** — mirror of GitHub integration (OAuth, webhook, PR ↔ issue link, auto-close on merge). Reuse `GitHubIntegration` shape.
+- **Sentry** — issue auto-create from Sentry alerts; link back from issue to Sentry event
+- **Figma** — embed Figma frames in issue descriptions (oEmbed-style)
+- **Zendesk / Intercom** — feeds customer tickets into triage; pairs with §9.8 Customer Requests
+- **Generic OAuth2 inbound** — covered by §4.4
+
+**Estimated size:** Medium per integration
+
 ---
 
 ## Priority 6 — Analytics & Insights
 
-### 6.1 Comprehensive Analytics 🔲
+### 6.1 Comprehensive Analytics 🟡 _(MVP shipped 2026-05-21)_
 
-Linear's Insights page: lead-time histogram, cycle-time distribution, flow metrics,
-date range selector, cross-team aggregates.
+Linear's Insights page: lead-time histogram, cycle-time distribution,
+flow metrics, date range selector, cross-team aggregates.
 
-**Planned scope (additive to existing analytics):**
-- Lead-time and cycle-time histograms (SQL window functions over `started_at` / `completed_at`)
-- Time-in-state breakdown per issue (requires state change events logged with timestamps)
-- Date range selector (all analytics currently show all-time only)
-- Cross-team aggregate view
-- Throughput trend (weekly/monthly)
+**Shipped:**
+- New `AnalyticsService` with server-side `$queryRaw` queries:
+  - `leadTimeHistogram` — created → completed, Fibonacci-ish day buckets
+  - `cycleTimeHistogram` — started → completed
+  - `throughputByWeek` — count of issues completed per ISO week
+  - `timeInStateApprox` — coarse avg-hours-in-state from lifecycle
+    timestamps (full audit log is the upgrade path)
+- GraphQL: `AnalyticsInput` (teamId + from + to), four queries with
+  `requireTeamMember` guard.
+- `InsightsSection` component rendered below existing analytics charts
+  on `/team/[key]/analytics`. Date-range presets: 30d / 90d / 180d /
+  All. Uses the existing CSS bar primitives — no new chart dep.
+
+**Still open (separate PR):**
+- Cross-team aggregate dashboard (server queries are already org-scoped
+  with optional teamId; just needs a workspace-level UI route)
 - Cycle metrics: scope creep %, carryover rate, commitment vs delivery
+  (requires augmenting the queries with cycle joins)
+- Higher-fidelity time-in-state (needs an `issue_state_history` table
+  written on every state change — currently approximated)
+- Custom date-range picker (today only the 4 presets)
+- CSV export of insights data
 
-**Estimated size:** Large (2 sprint equivalents)
+**Estimated remaining size:** Medium.
 
 ### 6.2 Project Progress History Charts ✅ _(PR #38, shipped 2026-05-18)_
 
@@ -280,14 +350,48 @@ but are never populated. Wire up the writer and add sparkline charts.
 
 ### 7.1 Collaborative Editing (YJS) 🔲
 
-Real-time live cursors and conflict-free co-editing on issue descriptions and documents.
+Real-time live cursors and conflict-free co-editing on issue descriptions
+and documents.
 
-**Planned scope:**
-- Add `hocuspocus` server (or Liveblocks) alongside the WebSocket server
-- TipTap `CollaborationCursor` extension
-- `descriptionState Bytes` column already exists on `Issue`; use it for YJS document state
+**Current state (2026-05-21 audit):**
+- `Issue.descriptionState Bytes?` column exists (`schema.prisma:313`)
+  and is intentionally omitted from list queries to avoid shipping the
+  YJS blob to every list-view client (`issue.service.ts:240,270,575`).
+- `IssueListRow = Omit<Issue, 'descriptionState'>` already typed
+  (`issue.service.ts:68`).
+- No code reads or writes the column. The editor (`TipTapEditor`) is
+  single-source-of-truth markdown + the `description` column.
 
-**Estimated size:** Large (2 sprint equivalents)
+**Why deferred past the Priority 1 batch:**
+- Requires a second long-lived server process (`@hocuspocus/server`)
+  alongside the existing WebSocket fan-out. The current `yarn ws:server`
+  process can't double as a YJS server cleanly — different message
+  format, different auth handshake, different lifecycle (per-doc room
+  vs. per-org broadcast).
+- Auth integration is non-trivial: the existing `ws_ticket` (60s scoped
+  JWT, PATTERNS §18) needs to be reused or extended for the YJS
+  handshake. A per-room access check has to run on every connect.
+- Deployment doc + Docker Compose need a third service entry.
+- `description` (markdown) and `descriptionState` (YJS bytes) need a
+  resolution policy when both diverge — e.g. server-authoritative cron
+  that re-extracts markdown from the YJS doc, vs. client-side write-on-
+  blur. Picking the wrong one loses edits on schema migrations.
+
+**Concrete implementation plan when picked up:**
+1. Add `@hocuspocus/server` to dependencies; new `src/server/ws/yjs.ts`
+   bootstraps the server reading from / persisting to
+   `Issue.descriptionState` and `Document.contentState`.
+2. Extend `/api/auth/ws-ticket` to issue a Hocuspocus-scoped variant
+   that embeds the entity id + access role.
+3. TipTap `Collaboration` + `CollaborationCursor` extensions wired into
+   `tiptap-editor.tsx`; awareness state carries cursor + selection.
+4. Resolution policy: write-on-blur extracts markdown from YJS doc and
+   updates `Issue.description` so existing search / sync / webhooks
+   continue to work unchanged.
+5. Docker Compose: add `ws-yjs` service; document the port + env vars.
+
+**Estimated size:** Large (2 sprint equivalents). Don't start without
+a brainstorming pass on the resolution policy.
 
 ### 7.2 Image Paste into Editor ✅ _(PR #38, shipped 2026-05-18)_
 
@@ -616,17 +720,11 @@ detail panel, command palette, and board view all break < 768px width.
 
 **Estimated size:** Medium-Large
 
-### 9.13 Roadmap Drag Reorder 🔲
+### 9.13 Roadmap Drag Reorder ✅ _(shipped 2026-05-21)_
 
-`/[workspace]/projects` shows projects on a date axis but bars aren't
-drag-resizable / drag-shiftable. Linear's roadmap is fully interactive.
-
-**Planned scope:**
-- `@dnd-kit` on the project bar component
-- Server: `projectUpdate({ startDate, targetDate })` already exists; client
-  just needs to wire drag-end → mutation
-
-**Estimated size:** Small-Medium (frontend-only)
+Shipped as part of §3.1 Timeline. `/projects` has a roadmap layout
+toggle with draggable, resizable bars wired to `projectUpdate`. See
+§3.1 for the full implementation notes.
 
 ### 9.14 Notion-Style Collapsible Sidebar Sections 🔲
 
@@ -637,6 +735,285 @@ collapse / expand / reorder their sections.
 - `UserSidebarPreferences` JSONB column on `User` (collapsed-section ids,
   custom order)
 - Drag-reorder via `@dnd-kit`
+
+**Estimated size:** Small
+
+### 9.15 Duplicate Relation Auto-Cancel 🔲
+
+PRD §2.1.4 specifies that marking an issue as a duplicate "auto-sets status
+to Canceled." Today `IssueRelationService.create` with `type='duplicate'`
+just persists the relation and its inverse — it never transitions the
+source issue's state.
+
+**Planned scope:**
+- In `IssueRelationService.create`, when `type === 'duplicate'`, transition
+  the `issueId` (the duplicate, not the canonical) to the team's first
+  workflow state in the `canceled` category in the same transaction
+- Skip if the issue is already in a `canceled`/`completed` state
+- Emit the state-change `SyncAction` + `IssueActivity` row alongside the
+  relation insert
+- Reverse on `IssueRelationService.delete` is **out of scope** — once
+  canceled, manual re-open
+
+**Files:** `src/server/services/issue-relation.service.ts`
+
+**Estimated size:** Small
+
+### 9.16 Auto-Create "Related" From Issue-ID References 🔲
+
+PRD §2.1.4 specifies "Auto-create 'Related' when referencing issue ID in
+description/comments." Not implemented anywhere — `ENG-123` in a comment
+body is a plain string.
+
+**Planned scope:**
+- After-write hook in `IssueService.create`/`update` and `CommentService.create`/`update`
+  that scans the text body for `[A-Z]+-\d+` matches
+- For each match resolving to a real issue in the same org, upsert an
+  `IssueRelation(type='related')` (skip self-refs, skip if any directed
+  relation already exists between the pair)
+- Idempotent — re-saving the same description doesn't create dupes (handled
+  by the existing unique index on `(issueId, relatedIssueId, type)`)
+
+**Files:** `src/server/services/issue.service.ts`, `src/server/services/comment.service.ts`,
+new helper in `src/server/lib/issue-refs.ts`
+
+**Estimated size:** Small-Medium
+
+### 9.17 Label Group Enforcement 🔲
+
+PRD §2.3 describes label groups as "one nesting level, single-select per
+group, max 250 per group." The schema models the hierarchy
+(`IssueLabel.parentId`, schema.prisma:430), but no service enforces the
+two semantic rules.
+
+**Planned scope:**
+- `LabelService.create/update` rejects depth > 1 (a label whose parent has
+  a parent)
+- `LabelService.create` rejects when the prospective parent already has
+  250 children
+- `IssueService` label-assignment path: when assigning a label whose
+  parent has other children already assigned to the issue, atomically
+  remove the siblings (single-select semantics)
+- Cover by unit tests in `label.service.test.ts` + `issue.service.test.ts`
+
+**Files:** `src/server/services/label.service.ts`,
+`src/server/services/issue.service.ts`
+
+**Estimated size:** Small
+
+### 9.18 T-Shirt Estimate Analytics Mapping 🔲
+
+PRD §2.5 specifies the t-shirt scale "maps to Fibonacci for analytics
+(XS=1, S=2, M=3, L=5, XL=8)" so velocity math stays comparable across
+teams using different scales. No code performs this mapping today —
+`Team.issueEstimationType` is a free-form string and analytics summing
+`Issue.estimate` over a t-shirt team gets nonsense.
+
+**Planned scope:**
+- Promote `Team.issueEstimationType` to a Prisma enum (covered by
+  `REVIEW_BACKLOG.md §2.3`)
+- New `src/server/lib/estimates.ts` with `toAnalyticsPoints(estimate,
+  scale)` mapping function
+- Cycle / project / team analytics aggregations call through the mapping
+  instead of summing raw values
+- Optional: extended scale + zero-estimate flags from PRD §2.5
+
+**Files:** `prisma/schema.prisma`, new `src/server/lib/estimates.ts`,
+analytics resolvers
+
+**Estimated size:** Small-Medium
+
+### 9.19 Backlog "Ready" Toggle 🔲
+
+PRD §2.21.2 promises a "Ready" toggle to mark issues as groomed and ready
+to pull into a sprint. No column exists on `Issue` and no UI exposes it.
+
+**Planned scope:**
+- `issues.ready_at TIMESTAMPTZ NULL` column (so backlog views can sort by
+  recency of grooming as well as filter `IS NOT NULL`)
+- `issueMarkReady(id)` / `issueMarkNotReady(id)` mutations (or fold into
+  `issueUpdate` with a `ready: boolean` input)
+- Filter chip on `/team/[key]/backlog`; checkbox in `IssueDetailPanel`
+  properties
+- "Move to cycle" bulk action surface should default to ready-only
+
+**Estimated size:** Small
+
+### 9.20 Manual Drag-to-Reorder Within Priority Bands 🔲
+
+PRD §2.4 specifies "Manual drag-to-reorder within priority-sorted views
+(workspace-wide ordering)." Today `Issue.sortOrder` is per-state for
+board view; there's no workspace-wide ordering anchor that survives
+state transitions.
+
+**Planned scope (design decision needed first):**
+- **Option A:** Add `Issue.workspaceSortOrder DOUBLE PRECISION` plus a
+  `WHERE priority IS NOT NULL` partial index; drag-end mutation rewrites
+  only the moved row using a midpoint between neighbors
+- **Option B:** Keep `sortOrder` but reinterpret it globally per priority
+  band; requires a backfill that resequences existing data
+- Wire the backlog and "My Issues" views to use the new order field when
+  the active sort is "Priority"
+
+**Risk:** Medium. Drag-reorder UIs are sensitive to floating-point drift;
+periodic re-sequencing (every ~1000 inserts between two rows) needs a
+plan.
+
+**Estimated size:** Medium
+
+### 9.21 Passkeys / WebAuthn 🔲
+
+PRD §2.16 lists passkeys as P1 — not started. Magic link + Google OAuth
+are the only auth methods today.
+
+**Planned scope:**
+- `WebauthnCredential` model: `(userId, credentialId, publicKey, counter,
+  transports[], createdAt, lastUsedAt)`
+- `@simplewebauthn/server` for registration + assertion ceremonies
+- New auth routes: `/api/auth/webauthn/register/{options,verify}`,
+  `/api/auth/webauthn/login/{options,verify}`
+- Settings UI: `/settings/security` — manage registered passkeys
+
+**Estimated size:** Medium
+
+### 9.22 Private Teams & Sub-Teams 🔲
+
+PRD §2.11.2 P2. Today every team in an org is visible to every member;
+no privacy flag or hierarchical relationship between teams exists.
+
+**Planned scope:**
+- `Team.private BOOLEAN @default(false)` — when true, team is invisible
+  to non-members (filter at resolver layer, not just UI)
+- `Team.parentId TEXT NULL` self-FK for sub-teams; max depth 3; child
+  teams inherit private + workflow defaults from parent unless overridden
+- Sweep every team-scoped resolver (`Issue`, `Project`, `Label`,
+  `WorkflowState`, `CustomView`, `IssueTemplate`) to honor the private
+  flag for non-members
+- Settings UI: privacy toggle in team settings; sub-team picker on team
+  create
+
+**Risk:** Medium. Private-team enforcement is a tenant-isolation problem
+on the same level as the guest sweep (§8.2); needs the same care.
+
+**Estimated size:** Medium-Large
+
+### 9.23 iCal / Calendar Feed for Cycles 🔲
+
+PRD §2.7 specifies "Calendar integration (Google Calendar, .ics, feed
+URL)." No code exists; cycle start/end dates are only visible in-app.
+
+**Planned scope:**
+- New route `GET /api/cycles/feed/[token].ics` — per-user signed token in
+  URL (long random string, stored hashed on `User.calendarFeedToken`)
+- Emits VEVENTs for every upcoming cycle on every team the user is a
+  member of; one event per cycle, start = `cycle.startsAt`, end = `cycle.endsAt`
+- Settings UI: "Copy calendar URL" + "Rotate" button under user profile
+- Google Calendar add-on can subscribe to the same URL
+
+**Estimated size:** Small-Medium
+
+### 9.24 Org-Wide Audit Log 🔲
+
+PRD §3.3 lists audit logging as an Enterprise requirement (free for
+self-hosted). Today `IssueActivity` tracks per-issue field changes only;
+there's no record of org-level events (member added/removed, role
+changed, integration connected, webhook created, settings modified).
+
+**Planned scope:**
+- `AuditEvent` model: `(orgId, actorUserId, action, targetType, targetId,
+  metadata JSONB, ipAddress, userAgent, createdAt)`
+- Write helper `AuditService.record(...)` called from
+  `OrganizationService`, `TeamService.{add,removeMember,changeRole}`,
+  `WebhookService.*`, `GitHubService.*`, auth flows (login, logout,
+  failed-login)
+- Owner/admin-only GraphQL query + UI at `/settings/audit-log` with
+  date-range filter, actor filter, action filter, CSV export
+- Retention: 1 year default; configurable via env
+
+**Estimated size:** Medium
+
+### 9.25 Initiative-Level Health Badge 🔲
+
+PRD §2.8 calls for a top-level health indicator on the initiative
+itself (separate from per-update health, which shipped 2026-05-18 as
+part of `InitiativeUpdate`). Today the initiative card has no badge
+summarizing rollup health.
+
+**Planned scope:**
+- Derive `Initiative.health` from the latest `InitiativeUpdate.health`
+  (if any in last 30d), or fall back to a project-rollup heuristic
+  (worst-of-children clamped by `progress`)
+- New GraphQL field `Initiative.health: 'onTrack' | 'atRisk' | 'offTrack' | 'unknown'`
+- Badge in `/initiatives` list and detail header
+- No new column required — pure resolver derivation
+
+**Estimated size:** Small
+
+### 9.26 Project Update Reminder Cadence 🔲
+
+PRD §2.6.3 specifies "Configurable reminder cadence (daily / weekly /
+biweekly)" for project updates. Schema has no cadence column; no cron
+sends reminder notifications.
+
+**Planned scope:**
+- `Project.updateReminderFrequency` enum: `none | weekly | biweekly | monthly`
+- `Project.updateReminderDayOfWeek` int (0-6)
+- Sweep job (in WS server, alongside webhook retry sweep) checks once an
+  hour for projects whose last `ProjectUpdate` is older than the cadence
+  and emits an in-app notification to the project lead
+- Settings UI: cadence picker on project edit
+- Pairs cleanly with §8.7 email digest
+
+**Estimated size:** Small-Medium
+
+### 9.27 Comment → Sub-Issue + Quote Reply + Activity Collapsing 🔲
+
+PRD §2.15 lists three comment UX items not yet shipped (the rest of §2.15
+landed in Sprint 29-30 + the 2026-05-18 drop).
+
+**Planned scope:**
+- **Convert comment → sub-issue:** menu item on a comment that POSTs an
+  `issueCreate` mutation with `parentId = comment.issueId`, prefills
+  description with the comment body, and posts a follow-up comment
+  linking the new issue
+- **Quote reply:** prepend the selected comment body as a blockquote into
+  the composer (frontend-only, no schema)
+- **Activity collapsing:** in the activity timeline, group consecutive
+  same-actor field changes within a 5-minute window into a single
+  collapsible row
+
+**Estimated size:** Small-Medium (each)
+
+### 9.28 Async Standup / "Pulse" Digest 🔲
+
+Linear's Pulse: daily auto-generated summary of "what your team
+shipped, what's in flight, what's blocked" sent to a Slack channel or
+email. No equivalent exists today.
+
+**Planned scope:**
+- Cron in WS server, daily at team-configurable hour
+- Aggregates per team: issues completed in last 24h, issues started,
+  issues newly blocked, overdue issues
+- Renders to HTML email (reuse §1.2 email infra) and/or Slack message
+  (depends on §5.1 Slack integration)
+- Team-level enable toggle + delivery channel config
+
+**Estimated size:** Medium. Blocked partially on §5.1 (for Slack
+delivery); email-only delivery can ship independently.
+
+### 9.29 GraphQL `findByIdentifier` Fallback to `previousIdentifiers` 🔲
+
+The `issues.previous_identifiers` GIN index was shipped in the 2026-05-12
+DB hardening pass (see `REVIEW_BACKLOG.md §6`) ahead of a planned reader
+change. The reader change hasn't landed: renaming a team key (and thus
+the issue identifier) breaks every external link that used the old key.
+
+**Planned scope:**
+- Extend `IssueService.findByIdentifier` to query
+  `identifier = $1 OR previous_identifiers @> ARRAY[$1]`
+- Cover with a unit test in `issue.service.test.ts` that renames a
+  team's key and asserts the old identifier still resolves
+- No schema changes — column + index already exist
 
 **Estimated size:** Small
 
@@ -666,3 +1043,7 @@ collapse / expand / reorder their sections.
 | 8.6 | Workspace-Level Custom Fields | (pending) | 2026-05-21 |
 | 9.1 | Issue Snooze | (pending) | 2026-05-21 |
 | 9.2 | Bulk Issue Update | (pending) | 2026-05-21 |
+| 2.1 | Rule-Based Automations (MVP) | (pending) | 2026-05-21 |
+| 3.1 | Timeline / Gantt View — projects roadmap + Issue.startDate | (pending) | 2026-05-21 |
+| 6.1 | Comprehensive Analytics (MVP) | (pending) | 2026-05-21 |
+| 9.13 | Roadmap Drag Reorder | (pending) | 2026-05-21 |

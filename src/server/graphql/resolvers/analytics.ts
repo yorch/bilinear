@@ -1,0 +1,60 @@
+import { GraphQLError } from 'graphql';
+import { requireAuth, requireTeamMember } from '../../middleware/auth';
+import type { AnalyticsRange } from '../../services/analytics.service';
+import type { GraphQLContext } from '../context';
+
+interface AnalyticsInput {
+  from?: string | null;
+  teamId?: string | null;
+  to?: string | null;
+}
+
+async function buildFilter(
+  ctx: GraphQLContext,
+  input: AnalyticsInput | null | undefined,
+): Promise<{ orgId: string; range: AnalyticsRange; teamId: string }> {
+  requireAuth(ctx);
+  // teamId is non-null in the GraphQL input, but the GraphQL layer can be
+  // bypassed by code that builds AnalyticsInput directly (e.g. a future
+  // CLI report). Re-check here so the unbounded scan is impossible.
+  const teamId = input?.teamId ?? null;
+  if (!teamId) {
+    throw new GraphQLError('teamId is required — analytics queries must be team-scoped', {
+      extensions: { code: 'BAD_USER_INPUT' },
+    });
+  }
+  await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
+  return {
+    orgId: ctx.orgId,
+    range: { from: input?.from ?? null, to: input?.to ?? null },
+    teamId,
+  };
+}
+
+export const analyticsResolvers = {
+  Query: {
+    analyticsCycleTimeHistogram: async (
+      _p: unknown,
+      { input }: { input?: AnalyticsInput | null },
+      ctx: GraphQLContext,
+    ) => ctx.services.analytics.cycleTimeHistogram(await buildFilter(ctx, input)),
+
+    analyticsLeadTimeHistogram: async (
+      _p: unknown,
+      { input }: { input?: AnalyticsInput | null },
+      ctx: GraphQLContext,
+    ) => ctx.services.analytics.leadTimeHistogram(await buildFilter(ctx, input)),
+
+    analyticsThroughputByWeek: async (
+      _p: unknown,
+      { input }: { input?: AnalyticsInput | null },
+      ctx: GraphQLContext,
+    ) => ctx.services.analytics.throughputByWeek(await buildFilter(ctx, input)),
+
+    analyticsTimeInState: async (
+      _p: unknown,
+      { input }: { input?: AnalyticsInput | null },
+      ctx: GraphQLContext,
+    ) => ctx.services.analytics.timeInStateApprox(await buildFilter(ctx, input)),
+  },
+};
