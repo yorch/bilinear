@@ -1,9 +1,9 @@
 'use client';
 
-import { Kanban, List } from 'lucide-react';
+import { GanttChartSquare, Kanban, List } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type ViewMode = 'list' | 'board';
+export type ViewMode = 'list' | 'board' | 'timeline';
 
 interface ViewToggleProps {
   mode: ViewMode;
@@ -28,7 +28,7 @@ export function ViewToggle({ mode, onChange }: ViewToggleProps) {
       </button>
       <button
         className={cn(
-          'flex items-center justify-center rounded-r-md px-2 py-1 transition-colors',
+          'flex items-center justify-center px-2 py-1 transition-colors',
           mode === 'board'
             ? 'bg-zinc-200 text-zinc-900 dark:bg-zinc-700 dark:text-zinc-50'
             : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300',
@@ -38,6 +38,19 @@ export function ViewToggle({ mode, onChange }: ViewToggleProps) {
         type="button"
       >
         <Kanban className="h-4 w-4" />
+      </button>
+      <button
+        className={cn(
+          'flex items-center justify-center rounded-r-md px-2 py-1 transition-colors',
+          mode === 'timeline'
+            ? 'bg-zinc-200 text-zinc-900 dark:bg-zinc-700 dark:text-zinc-50'
+            : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300',
+        )}
+        onClick={() => onChange('timeline')}
+        title="Timeline view (Alt+3)"
+        type="button"
+      >
+        <GanttChartSquare className="h-4 w-4" />
       </button>
     </div>
   );

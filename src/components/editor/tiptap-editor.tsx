@@ -185,6 +185,8 @@ export interface TipTapEditorProps {
   /** Display name shown in the collaborative cursor label. */
   collabUserName?: string;
   content?: string;
+  /** Issues available for #mentions (identifier + title search). */
+  mentionIssues?: MentionItem[];
   /** Users available for @mentions */
   mentionUsers?: MentionItem[];
   onBlur?: () => void;
@@ -308,6 +310,75 @@ function buildMentionExtension(usersRef: React.RefObject<MentionItem[]>) {
   });
 }
 
+/**
+ * Issue mention extension — triggered by `#`. Items are `{ id, label: identifier, sub: title }`.
+ * Uses its own Mention instance with a `name` override so it coexists with the user mention.
+ */
+function buildIssueMentionExtension(issuesRef: React.RefObject<MentionItem[]>) {
+  return Mention.extend({ name: 'issueMention' }).configure({
+    HTMLAttributes: { class: 'issue-mention' },
+    renderLabel: ({ node }) => `#${node.attrs.label ?? node.attrs.id}`,
+    suggestion: {
+      char: '#',
+      items: ({ query }: { query: string }) => {
+        const q = query.toLowerCase();
+        return (issuesRef.current ?? [])
+          .filter(i => i.label.toLowerCase().includes(q) || (i.sub ?? '').toLowerCase().includes(q))
+          .slice(0, 8);
+      },
+      render: () => {
+        let component: ReactRenderer<MentionListHandle> | null = null;
+        let popup: HTMLDivElement | null = null;
+
+        return {
+          onExit() {
+            component?.destroy();
+            popup?.remove();
+            popup = null;
+            component = null;
+          },
+          onKeyDown({ event }: { event: KeyboardEvent }) {
+            if (event.key === 'Escape') {
+              popup?.remove();
+              popup = null;
+              component?.destroy();
+              component = null;
+              return true;
+            }
+            return component?.ref?.onKeyDown(event) ?? false;
+          },
+          onStart(props: {
+            editor: unknown;
+            items: MentionItem[];
+            command: (item: MentionItem) => void;
+            clientRect?: (() => DOMRect | null) | null;
+          }) {
+            popup = document.createElement('div');
+            popup.style.cssText = 'position:fixed;z-index:9999;pointer-events:auto;';
+            document.body.appendChild(popup);
+            component = new ReactRenderer(MentionList, {
+              editor: props.editor as never,
+              props: { command: props.command, items: props.items },
+            });
+            popup.appendChild(component.element);
+            positionPopup(popup, props.clientRect);
+          },
+          onUpdate(props: {
+            items: MentionItem[];
+            command: (item: MentionItem) => void;
+            clientRect?: (() => DOMRect | null) | null;
+          }) {
+            component?.updateProps({ command: props.command, items: props.items });
+            if (popup) {
+              positionPopup(popup, props.clientRect);
+            }
+          },
+        };
+      },
+    },
+  });
+}
+
 export function TipTapEditor({
   content = '',
   placeholder = 'Add a description…',
@@ -317,6 +388,7 @@ export function TipTapEditor({
   readOnly = false,
   autofocus = false,
   showToolbar = false,
+  mentionIssues,
   mentionUsers,
   uploadIssueId,
   uploadProjectId,
@@ -339,12 +411,17 @@ export function TipTapEditor({
   // reach the live editor instance from inside an async upload callback.
   const editorRef = useRef<Editor | null>(null);
 
-  // Keep a ref to the latest mentionUsers so the suggestion `items` callback
-  // always reads fresh data even though TipTap extensions cannot be hot-reloaded.
+  // Keep refs to the latest mention arrays so suggestion callbacks always see
+  // fresh data even though TipTap extensions cannot be hot-reloaded.
   const mentionUsersRef = useRef<MentionItem[]>(mentionUsers ?? []);
   useEffect(() => {
     mentionUsersRef.current = mentionUsers ?? [];
   }, [mentionUsers]);
+
+  const mentionIssuesRef = useRef<MentionItem[]>(mentionIssues ?? []);
+  useEffect(() => {
+    mentionIssuesRef.current = mentionIssues ?? [];
+  }, [mentionIssues]);
 
   // ─── Collaborative editing setup ───────────────────────────────────────────
   // YJS doc and Hocuspocus provider are created once per mount (guarded by the
@@ -482,6 +559,8 @@ export function TipTapEditor({
       // Only add the Mention extension when the caller opts in by providing users.
       // The extension reads from mentionUsersRef so suggestions stay current.
       ...(mentionUsers != null ? [buildMentionExtension(mentionUsersRef)] : []),
+      // Issue mentions triggered by '#'. Coexists with the user mention via name override.
+      ...(mentionIssues != null ? [buildIssueMentionExtension(mentionIssuesRef)] : []),
       // Collaborative editing extensions — only added when a collabDocId is
       // provided and NEXT_PUBLIC_COLLAB_ENABLED=true. Collaboration replaces
       // the Yjs-incompatible StarterKit history (disabled above).

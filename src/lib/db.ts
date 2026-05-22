@@ -309,6 +309,7 @@ export interface DBInitiative {
   name: string;
   organizationId: string;
   ownerId?: string | null;
+  parentId?: string | null;
   priority: number;
   prioritySortOrder: number;
   progress: number;

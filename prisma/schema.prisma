@@ -976,6 +976,7 @@ model Document {
   parentId       String?   @map("parent_id") @db.Uuid
   title          String    @db.VarChar(255)
   content        String?
+  contentState   Bytes?    @map("content_state")
   icon           String?   @db.VarChar(255)
   sortOrder      Float     @default(0) @map("sort_order")
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz

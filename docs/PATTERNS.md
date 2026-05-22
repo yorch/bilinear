@@ -1768,8 +1768,7 @@ yarn yjs:server  # Hocuspocus YJS server, port 1234
 Each collaborative document has a unique name used by the Hocuspocus room:
 
 - **Issue description:** `issue:<uuid>` (e.g. `issue:abc-123-...`)
-- **Document content:** `document:<uuid>` — reserved, not yet active (needs
-  `Document.contentState Bytes?` migration in a follow-up)
+- **Document content:** `document:<uuid>` — active as of 2026-05-22 (`Document.contentState Bytes?` added in migration `20260522000000`)
 
 ### Auth: ws_ticket reuse
 
@@ -1848,7 +1847,39 @@ When `NEXT_PUBLIC_COLLAB_ENABLED=true` and `collabDocId` is provided AND
 
 ### Deferred
 
-- `Document.contentState` collaborative editing (needs schema migration)
 - "Users editing now" avatar stack
 - View-only collaborator role
 - Persistent cursor colors across sessions
+
+## 52. Favorites Sidebar (2026-05-22)
+
+Favorites are fetched via `favorites { favorites { ... } }` GraphQL query on sidebar mount.
+`FavoriteStore` holds the pool; `applySyncAction` keeps it live via WebSocket deltas.
+The sidebar renders a "Favorites" section above Teams when any favorites exist.
+Remove via the × button that appears on hover. Bootstrap does not include favorites
+(they're user-scoped and low-volume, so fetch-on-mount is fine).
+
+## 53. Sub-Initiatives Tree (2026-05-22)
+
+`InitiativeStore.roots` returns only top-level items (no `parentId`).
+`InitiativeStore.getChildren(parentId)` returns direct children sorted by `sortOrder`.
+`InitiativeRow` renders recursively at `depth + 1` so sub-initiatives appear indented.
+Sub-initiatives are always visible (not hidden behind the expand toggle — the toggle
+only controls the projects + updates panel for the current initiative).
+
+## 54. Issue Timeline View (2026-05-22)
+
+A third view mode (`'timeline'`) added to `ViewToggle` (Alt+3).
+`GanttView` is wired to the team issue list using `startDate` / `dueDate`.
+Only issues that have at least one of those set are shown.
+`onChange` dispatches `issueUpdate({ startDate, dueDate })` via the existing
+`handleUpdate` callback with optimistic MobX updates and rollback on error.
+
+## 55. Issue Mentions in Editor (2026-05-22)
+
+`TipTapEditor` accepts an optional `mentionIssues?: MentionItem[]` prop.
+When provided, a second Mention extension instance (name: `'issueMention'`)
+is added with `#` as the trigger character, allowing inline issue references.
+Items are `{ id, label: identifier, sub: title }` — the dropdown shows the
+identifier on the left and title on the right. The `@` trigger for user
+mentions is unchanged.
