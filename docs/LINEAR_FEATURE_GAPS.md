@@ -97,42 +97,83 @@ SMTP_SECURE=
 
 ## Priority 2 — Workflow Automations
 
-### 2.1 Rule-Based Automations 🔲
+### 2.1 Rule-Based Automations 🟡 _(MVP shipped 2026-05-21)_
 
-Linear's automation engine: "When [trigger] → [action]". Enables PM/ops teams to
-automate repetitive triage and routing tasks.
+Linear's automation engine: "When [trigger] → [action]". Enables PM/ops
+teams to automate repetitive triage and routing tasks.
 
-**Planned scope:**
-- `AutomationRule` DB model: `triggerType`, `triggerConfig` (JSONB), `actionType`,
-  `actionConfig` (JSONB), `teamId`, `enabled`
-- Triggers: issue_created, issue_updated (field_changed), issue_state_changed,
-  cycle_started, cycle_completed, comment_created
-- Actions: set_state, set_assignee, set_priority, set_label, add_to_cycle,
-  add_to_project, send_notification, create_sub_issue
-- Evaluation engine: `AutomationService.evaluateForIssue(issue, event)` — called
-  from issue/comment resolvers fire-and-forget
-- Admin UI: `/settings/automations` — rule builder
+**Shipped (MVP):**
+- `automation_rules` table — `(organization_id, team_id?, trigger_type,
+  trigger_config JSONB, conditions JSONB, actions JSONB, enabled,
+  sort_order, last_run_at, run_count)`
+- 5 triggers: `issue_created`, `issue_state_changed`,
+  `issue_priority_changed`, `issue_assignee_changed`, `comment_created`
+  (last one is defined but not yet emitted from the comment resolver)
+- 5 actions: `set_state` (tenant-guarded against cross-team states),
+  `set_assignee`, `set_priority`, `add_label`, `post_comment`
+- Conditions: simple AND-of-leaves on `teamId / stateId / priority /
+  assigneeId`. Schema-stable so a full filter-tree drops in later.
+- `AutomationService.evaluateForIssue` fired from `issue.ts` resolvers
+  fire-and-forget — never blocks the originating mutation. Errors are
+  logged and swallowed.
+- GraphQL: `automationRule(id)`, `automationRules`,
+  `automationTriggerTypes`, `automationActionTypes` queries;
+  `automationRuleCreate/Update/Archive` mutations (owner/admin only).
+- Admin UI: `/settings/automations` — minimal CRUD list with trigger +
+  action selectors and JSON action-config textarea.
+- 13 unit-test specs covering validation, tenant guards, condition +
+  trigger-config matching, set_state cross-team refusal, and the
+  never-throws contract.
 
-**Estimated size:** Large (2–3 sprint equivalents)
+**Still open (separate PR):**
+- Cycle / project lifecycle triggers (`cycle_started`, `cycle_completed`)
+- SLA-driven escalation trigger
+- `add_to_cycle` / `add_to_project` / `send_notification` /
+  `create_sub_issue` actions
+- Comment trigger emission from comment resolver
+- Visual rule builder UI (currently raw JSON for action config)
+- Dry-run mode + per-action audit log (currently only `last_run_at` +
+  `run_count` are tracked)
+- Drag-to-reorder rule priority in the UI
+
+**Estimated remaining size:** Medium-Large for the open scope above.
 
 ---
 
 ## Priority 3 — Views & Planning
 
-### 3.1 Timeline / Gantt View 🔲
+### 3.1 Timeline / Gantt View 🟡 _(projects roadmap shipped 2026-05-21)_
 
-Gantt-style view showing issues and projects on a date axis. Linear shows this per-team
-and per-project.
+Gantt-style view showing issues and projects on a date axis. Linear
+shows this per-team and per-project.
 
-**Planned scope:**
-- New `layout: 'timeline'` option in `CustomView.layout`
-- `TimelineView` React component using `@dnd-kit` for drag-resize
-- Issue date bars rendered from `startDate` / `dueDate` (add `startDate` to Issue if
-  needed)
-- Project timeline: uses `project.startDate` / `project.targetDate`
-- Cycle swimlanes: overlay cycle date ranges
+**Shipped:**
+- `GanttView` shared component (`src/components/roadmap/gantt-view.tsx`)
+  — month-axis timeline with draggable bar (shift dates) and resizable
+  edges (extend either side). Pure mouse events, no @dnd-kit dep.
+- `ProjectRoadmapView` wires active projects (statusType not completed
+  / canceled) to the Gantt and dispatches `projectUpdate(startDate,
+  targetDate)` via `TransactionQueue` with optimistic store updates and
+  rollback on error.
+- View toggle on `/projects` (List ↔ Roadmap) with localStorage
+  persistence per browser.
+- `Issue.startDate` column + GraphQL field for the upcoming issue
+  timeline layout. Threaded through `IssueService` create/update and
+  added to the activity-tracked field list.
+- Migration `20260521010000_priority_one_features`.
 
-**Estimated size:** Large (2 sprint equivalents)
+**Still open (separate PR):**
+- `layout: 'timeline'` option in `CustomView.layout` + timeline layout
+  on the team issue list view (uses the same `GanttView` component;
+  client just needs to provide `IssueGanttItem` rows from
+  `startDate`/`dueDate`)
+- Cycle swimlanes overlaid on the roadmap (`cycle.startsAt`/`endsAt`)
+- Initiative-axis grouping
+- Bar-tap → detail panel open (currently the row below the chart links
+  to the project; bars are drag-only)
+
+**Estimated remaining size:** Small-Medium (the heavy component is
+done; remaining is data plumbing per entity type).
 
 ### 3.2 Sub-Initiatives ✅ _(shipped 2026-05-21)_
 
@@ -262,20 +303,35 @@ started.
 
 ## Priority 6 — Analytics & Insights
 
-### 6.1 Comprehensive Analytics 🔲
+### 6.1 Comprehensive Analytics 🟡 _(MVP shipped 2026-05-21)_
 
-Linear's Insights page: lead-time histogram, cycle-time distribution, flow metrics,
-date range selector, cross-team aggregates.
+Linear's Insights page: lead-time histogram, cycle-time distribution,
+flow metrics, date range selector, cross-team aggregates.
 
-**Planned scope (additive to existing analytics):**
-- Lead-time and cycle-time histograms (SQL window functions over `started_at` / `completed_at`)
-- Time-in-state breakdown per issue (requires state change events logged with timestamps)
-- Date range selector (all analytics currently show all-time only)
-- Cross-team aggregate view
-- Throughput trend (weekly/monthly)
+**Shipped:**
+- New `AnalyticsService` with server-side `$queryRaw` queries:
+  - `leadTimeHistogram` — created → completed, Fibonacci-ish day buckets
+  - `cycleTimeHistogram` — started → completed
+  - `throughputByWeek` — count of issues completed per ISO week
+  - `timeInStateApprox` — coarse avg-hours-in-state from lifecycle
+    timestamps (full audit log is the upgrade path)
+- GraphQL: `AnalyticsInput` (teamId + from + to), four queries with
+  `requireTeamMember` guard.
+- `InsightsSection` component rendered below existing analytics charts
+  on `/team/[key]/analytics`. Date-range presets: 30d / 90d / 180d /
+  All. Uses the existing CSS bar primitives — no new chart dep.
+
+**Still open (separate PR):**
+- Cross-team aggregate dashboard (server queries are already org-scoped
+  with optional teamId; just needs a workspace-level UI route)
 - Cycle metrics: scope creep %, carryover rate, commitment vs delivery
+  (requires augmenting the queries with cycle joins)
+- Higher-fidelity time-in-state (needs an `issue_state_history` table
+  written on every state change — currently approximated)
+- Custom date-range picker (today only the 4 presets)
+- CSV export of insights data
 
-**Estimated size:** Large (2 sprint equivalents)
+**Estimated remaining size:** Medium.
 
 ### 6.2 Project Progress History Charts ✅ _(PR #38, shipped 2026-05-18)_
 
@@ -294,14 +350,48 @@ but are never populated. Wire up the writer and add sparkline charts.
 
 ### 7.1 Collaborative Editing (YJS) 🔲
 
-Real-time live cursors and conflict-free co-editing on issue descriptions and documents.
+Real-time live cursors and conflict-free co-editing on issue descriptions
+and documents.
 
-**Planned scope:**
-- Add `hocuspocus` server (or Liveblocks) alongside the WebSocket server
-- TipTap `CollaborationCursor` extension
-- `descriptionState Bytes` column already exists on `Issue`; use it for YJS document state
+**Current state (2026-05-21 audit):**
+- `Issue.descriptionState Bytes?` column exists (`schema.prisma:313`)
+  and is intentionally omitted from list queries to avoid shipping the
+  YJS blob to every list-view client (`issue.service.ts:240,270,575`).
+- `IssueListRow = Omit<Issue, 'descriptionState'>` already typed
+  (`issue.service.ts:68`).
+- No code reads or writes the column. The editor (`TipTapEditor`) is
+  single-source-of-truth markdown + the `description` column.
 
-**Estimated size:** Large (2 sprint equivalents)
+**Why deferred past the Priority 1 batch:**
+- Requires a second long-lived server process (`@hocuspocus/server`)
+  alongside the existing WebSocket fan-out. The current `yarn ws:server`
+  process can't double as a YJS server cleanly — different message
+  format, different auth handshake, different lifecycle (per-doc room
+  vs. per-org broadcast).
+- Auth integration is non-trivial: the existing `ws_ticket` (60s scoped
+  JWT, PATTERNS §18) needs to be reused or extended for the YJS
+  handshake. A per-room access check has to run on every connect.
+- Deployment doc + Docker Compose need a third service entry.
+- `description` (markdown) and `descriptionState` (YJS bytes) need a
+  resolution policy when both diverge — e.g. server-authoritative cron
+  that re-extracts markdown from the YJS doc, vs. client-side write-on-
+  blur. Picking the wrong one loses edits on schema migrations.
+
+**Concrete implementation plan when picked up:**
+1. Add `@hocuspocus/server` to dependencies; new `src/server/ws/yjs.ts`
+   bootstraps the server reading from / persisting to
+   `Issue.descriptionState` and `Document.contentState`.
+2. Extend `/api/auth/ws-ticket` to issue a Hocuspocus-scoped variant
+   that embeds the entity id + access role.
+3. TipTap `Collaboration` + `CollaborationCursor` extensions wired into
+   `tiptap-editor.tsx`; awareness state carries cursor + selection.
+4. Resolution policy: write-on-blur extracts markdown from YJS doc and
+   updates `Issue.description` so existing search / sync / webhooks
+   continue to work unchanged.
+5. Docker Compose: add `ws-yjs` service; document the port + env vars.
+
+**Estimated size:** Large (2 sprint equivalents). Don't start without
+a brainstorming pass on the resolution policy.
 
 ### 7.2 Image Paste into Editor ✅ _(PR #38, shipped 2026-05-18)_
 
@@ -630,17 +720,11 @@ detail panel, command palette, and board view all break < 768px width.
 
 **Estimated size:** Medium-Large
 
-### 9.13 Roadmap Drag Reorder 🔲
+### 9.13 Roadmap Drag Reorder ✅ _(shipped 2026-05-21)_
 
-`/[workspace]/projects` shows projects on a date axis but bars aren't
-drag-resizable / drag-shiftable. Linear's roadmap is fully interactive.
-
-**Planned scope:**
-- `@dnd-kit` on the project bar component
-- Server: `projectUpdate({ startDate, targetDate })` already exists; client
-  just needs to wire drag-end → mutation
-
-**Estimated size:** Small-Medium (frontend-only)
+Shipped as part of §3.1 Timeline. `/projects` has a roadmap layout
+toggle with draggable, resizable bars wired to `projectUpdate`. See
+§3.1 for the full implementation notes.
 
 ### 9.14 Notion-Style Collapsible Sidebar Sections 🔲
 
@@ -959,3 +1043,7 @@ the issue identifier) breaks every external link that used the old key.
 | 8.6 | Workspace-Level Custom Fields | (pending) | 2026-05-21 |
 | 9.1 | Issue Snooze | (pending) | 2026-05-21 |
 | 9.2 | Bulk Issue Update | (pending) | 2026-05-21 |
+| 2.1 | Rule-Based Automations (MVP) | (pending) | 2026-05-21 |
+| 3.1 | Timeline / Gantt View — projects roadmap + Issue.startDate | (pending) | 2026-05-21 |
+| 6.1 | Comprehensive Analytics (MVP) | (pending) | 2026-05-21 |
+| 9.13 | Roadmap Drag Reorder | (pending) | 2026-05-21 |
