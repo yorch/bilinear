@@ -58,8 +58,12 @@ export const ProjectRoadmapView = observer(function ProjectRoadmapView({
       if (!project) {
         return;
       }
+      // Snapshot only the two fields we mutate. On rollback we re-read the
+      // store rather than reusing the closure-captured `project`, so any
+      // concurrent WS SyncAction that touched other fields (status, lead,
+      // name) between optimistic apply and the failed mutation is
+      // preserved instead of clobbered.
       const snapshot = { startDate: project.startDate, targetDate: project.targetDate };
-      // Optimistic update
       projectStore.applySyncAction('U', id, {
         ...project,
         startDate,
@@ -70,7 +74,10 @@ export const ProjectRoadmapView = observer(function ProjectRoadmapView({
         { id, input: { startDate, targetDate: endDate } },
         {
           onError: () => {
-            projectStore.applySyncAction('U', id, { ...project, ...snapshot });
+            const current = projectStore.findById(id);
+            if (current) {
+              projectStore.applySyncAction('U', id, { ...current, ...snapshot });
+            }
             toast.error('Failed to update project dates');
           },
         },

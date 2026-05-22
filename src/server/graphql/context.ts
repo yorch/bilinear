@@ -107,7 +107,6 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
 
   const userService = new UserService(prisma);
   const authService = new AuthService(prisma, userService);
-  const automationService = new AutomationService(prisma);
   const analyticsService = new AnalyticsService(prisma);
   const githubService = new GitHubService(prisma);
   const documentService = new DocumentService(prisma);
@@ -133,6 +132,14 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const searchService = new SearchService(prisma);
   const triageService = new TriageService(prisma);
   const webhookService = new WebhookService(prisma);
+  // AutomationService wraps issueService.update + syncService.createSyncAction
+  // for action side effects, so other clients see automation writes in real
+  // time and lifecycle stamping happens identically to user-initiated updates.
+  // Constructed after its deps; the engine itself is otherwise stateless.
+  const automationService = new AutomationService(prisma, {
+    issue: issueService,
+    sync: syncService,
+  });
 
   return {
     ...auth,

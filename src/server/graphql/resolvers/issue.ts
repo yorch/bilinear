@@ -526,12 +526,27 @@ export const issueResolvers = {
       // Auto-close cascade may have touched parent/child issues inside the
       // same transaction. Emit one SyncAction per row so remote clients
       // see the cascaded state changes in real time (instead of next
-      // bootstrap), and fire webhook events for each.
+      // bootstrap), and fire webhook events for each. Cascaded rows also
+      // feed the automation engine so an `issue_state_changed` rule fires
+      // for the parent that was auto-closed exactly as it would for a
+      // user-initiated close; otherwise rules see only the leaf change
+      // and the parent transition silently bypasses them.
       for (const row of cascaded) {
         await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', row.id, row);
         void ctx.services.webhook
           .dispatchEvent(ctx.orgId, 'issue.updated', row, row.teamId)
           .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.updated (cascade)'));
+        void ctx.services.automation
+          .evaluateForIssue(
+            ctx.orgId,
+            {
+              changes: { stateId: { newValue: row.stateId, oldValue: existing.stateId } },
+              issue: row,
+              type: 'issue_state_changed',
+            },
+            ctx.userId,
+          )
+          .catch(err => logger.error({ err }, 'automation evaluate failed (cascade)'));
       }
 
       void ctx.services.webhook
@@ -559,7 +574,15 @@ export const issueResolvers = {
           priority: { newValue: input.priority, oldValue: existing.priority },
         });
       }
-      if ('assigneeId' in input && input.assigneeId !== existing.assigneeId) {
+      // Mirror the notification guard above: `undefined` slips past
+      // `'assigneeId' in input` when a partial input keeps the key but
+      // strips the value, which would fire an automation with a garbage
+      // newValue while the notification path stayed silent.
+      if (
+        'assigneeId' in input &&
+        input.assigneeId !== undefined &&
+        input.assigneeId !== existing.assigneeId
+      ) {
         fireAutomation('issue_assignee_changed', {
           assigneeId: { newValue: input.assigneeId, oldValue: existing.assigneeId },
         });

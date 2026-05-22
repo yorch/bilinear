@@ -1,3 +1,4 @@
+import { GraphQLError } from 'graphql';
 import { requireAuth, requireTeamMember } from '../../middleware/auth';
 import type { AnalyticsRange } from '../../services/analytics.service';
 import type { GraphQLContext } from '../context';
@@ -11,12 +12,18 @@ interface AnalyticsInput {
 async function buildFilter(
   ctx: GraphQLContext,
   input: AnalyticsInput | null | undefined,
-): Promise<{ orgId: string; range: AnalyticsRange; teamId?: string | null }> {
+): Promise<{ orgId: string; range: AnalyticsRange; teamId: string }> {
   requireAuth(ctx);
+  // teamId is non-null in the GraphQL input, but the GraphQL layer can be
+  // bypassed by code that builds AnalyticsInput directly (e.g. a future
+  // CLI report). Re-check here so the unbounded scan is impossible.
   const teamId = input?.teamId ?? null;
-  if (teamId) {
-    await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
+  if (!teamId) {
+    throw new GraphQLError('teamId is required — analytics queries must be team-scoped', {
+      extensions: { code: 'BAD_USER_INPUT' },
+    });
   }
+  await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
   return {
     orgId: ctx.orgId,
     range: { from: input?.from ?? null, to: input?.to ?? null },

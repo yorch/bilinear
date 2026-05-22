@@ -20,6 +20,16 @@ function mapError(err: unknown): never {
   throw err as Error;
 }
 
+/**
+ * AutomationRule lives only in the admin settings page, which fetches rules
+ * via gql on every mount. No client store, Dexie table, or sync-manager case
+ * exists for the model; emitting SyncActions would broadcast a payload every
+ * connected client silently ignores. Mutations return a placeholder lastSyncId
+ * — the payload contract still matches `{ success, rule, lastSyncId }`, and
+ * any concurrent real SyncAction continues to advance the actual watermark.
+ */
+const PLACEHOLDER_LAST_SYNC_ID = '0';
+
 export const automationResolvers = {
   Mutation: {
     automationRuleArchive: async (_p: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
@@ -27,14 +37,7 @@ export const automationResolvers = {
       await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
       try {
         const rule = await ctx.services.automation.archive(id, ctx.orgId);
-        const sync = await ctx.services.sync.createSyncAction(
-          ctx.orgId,
-          'A',
-          'AutomationRule',
-          rule.id,
-          rule,
-        );
-        return { lastSyncId: sync.id.toString(), rule, success: true };
+        return { lastSyncId: PLACEHOLDER_LAST_SYNC_ID, rule, success: true };
       } catch (err) {
         mapError(err);
       }
@@ -49,16 +52,10 @@ export const automationResolvers = {
       try {
         const rule = await ctx.services.automation.create({
           ...input,
+          createdById: ctx.userId,
           organizationId: ctx.orgId,
         });
-        const sync = await ctx.services.sync.createSyncAction(
-          ctx.orgId,
-          'I',
-          'AutomationRule',
-          rule.id,
-          rule,
-        );
-        return { lastSyncId: sync.id.toString(), rule, success: true };
+        return { lastSyncId: PLACEHOLDER_LAST_SYNC_ID, rule, success: true };
       } catch (err) {
         mapError(err);
       }
@@ -72,14 +69,7 @@ export const automationResolvers = {
       await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
       try {
         const rule = await ctx.services.automation.update(id, ctx.orgId, input);
-        const sync = await ctx.services.sync.createSyncAction(
-          ctx.orgId,
-          'U',
-          'AutomationRule',
-          rule.id,
-          rule,
-        );
-        return { lastSyncId: sync.id.toString(), rule, success: true };
+        return { lastSyncId: PLACEHOLDER_LAST_SYNC_ID, rule, success: true };
       } catch (err) {
         mapError(err);
       }

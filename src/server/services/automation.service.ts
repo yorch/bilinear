@@ -1,6 +1,8 @@
 import type { AutomationRule, Issue, PrismaClient } from '../../generated/prisma';
 import { Prisma } from '../../generated/prisma';
 import { logger } from '../lib/logger';
+import type { IssueService, IssueUpdateInput as ServiceIssueUpdateInput } from './issue.service';
+import type { SyncService } from './sync.service';
 
 /**
  * Rule-based automation engine. Triggers are emitted from resolvers (issue.ts,
@@ -60,6 +62,7 @@ export interface AutomationConditions {
 export interface RuleCreateInput {
   actions: AutomationAction[];
   conditions?: AutomationConditions | null;
+  createdById?: string | null;
   description?: string;
   enabled?: boolean;
   name: string;
@@ -124,8 +127,22 @@ export function validateActions(actions: AutomationAction[]): void {
   }
 }
 
+/**
+ * Deps the engine needs to apply action side effects through the same write
+ * paths used by user-initiated mutations. Injecting them keeps the engine
+ * decoupled from GraphQLContext (so it stays unit-testable) but ensures every
+ * action emits SyncActions and stamps lifecycle columns identically.
+ */
+export interface AutomationDeps {
+  issue: Pick<IssueService, 'update'>;
+  sync: Pick<SyncService, 'createSyncAction'>;
+}
+
 export class AutomationService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(
+    private prisma: PrismaClient,
+    private deps?: AutomationDeps,
+  ) {}
 
   async create(input: RuleCreateInput): Promise<AutomationRule> {
     if (!isTriggerType(input.triggerType)) {
@@ -145,6 +162,7 @@ export class AutomationService {
       data: {
         actions: input.actions as object,
         conditions: input.conditions as object | undefined,
+        createdById: input.createdById ?? null,
         description: input.description,
         enabled: input.enabled ?? true,
         name: input.name,
@@ -306,15 +324,40 @@ export class AutomationService {
     const actions = (rule.actions ?? []) as unknown as AutomationAction[];
     for (const action of actions) {
       try {
-        await this.executeAction(orgId, action, event, actorUserId);
+        await this.executeAction(orgId, rule, action, event, actorUserId);
       } catch (err) {
         logger.error({ actionType: action.type, err, ruleId: rule.id }, 'Automation action failed');
       }
     }
   }
 
+  /**
+   * Apply an Issue-targeted update through {@link IssueService.update} when
+   * deps are wired (production path) so lifecycle stamping, label syncing,
+   * and the auto-close cascade run identically to a user-initiated update.
+   * Falls back to a raw prisma write only when deps are absent (legacy unit
+   * tests instantiate AutomationService with prisma only). Every successful
+   * production write emits a SyncAction so connected clients reflect the
+   * change in real time.
+   */
+  private async applyIssueUpdate(
+    orgId: string,
+    issueId: string,
+    _teamId: string,
+    data: ServiceIssueUpdateInput,
+    rawData: Prisma.IssueUncheckedUpdateInput,
+  ): Promise<void> {
+    if (this.deps) {
+      const { issue } = await this.deps.issue.update(issueId, data);
+      await this.deps.sync.createSyncAction(orgId, 'U', 'Issue', issueId, issue);
+      return;
+    }
+    await this.prisma.issue.update({ data: rawData, where: { id: issueId } });
+  }
+
   private async executeAction(
     orgId: string,
+    rule: AutomationRule,
     action: AutomationAction,
     event: TriggerEvent,
     actorUserId: string,
@@ -332,18 +375,45 @@ export class AutomationService {
         if (!state) {
           return;
         }
-        await this.prisma.issue.update({
-          data: { stateId },
-          where: { id: event.issue.id },
-        });
+        await this.applyIssueUpdate(
+          orgId,
+          event.issue.id,
+          event.issue.teamId,
+          { stateId },
+          {
+            stateId,
+          },
+        );
         return;
       }
       case 'set_assignee': {
         const assigneeId = action.config.assigneeId as string | null | undefined;
-        await this.prisma.issue.update({
-          data: { assigneeId: assigneeId ?? null },
-          where: { id: event.issue.id },
-        });
+        // Tenant safety: a foreign-org UUID would otherwise be written
+        // straight into the issue's assignee_id (and resolve into our
+        // org via DataLoader). Mirror the team-membership check the
+        // GraphQL issueUpdate resolver depends on for human callers.
+        if (assigneeId) {
+          const membership = await this.prisma.teamMembership.findFirst({
+            where: {
+              team: { id: event.issue.teamId, organizationId: orgId },
+              userId: assigneeId,
+            },
+          });
+          if (!membership) {
+            logger.warn(
+              { assigneeId, issueId: event.issue.id, ruleId: rule.id },
+              'Automation set_assignee rejected: user not a member of issue team',
+            );
+            return;
+          }
+        }
+        await this.applyIssueUpdate(
+          orgId,
+          event.issue.id,
+          event.issue.teamId,
+          { assigneeId: assigneeId ?? null },
+          { assigneeId: assigneeId ?? null },
+        );
         return;
       }
       case 'set_priority': {
@@ -351,10 +421,15 @@ export class AutomationService {
         if (priority === undefined) {
           return;
         }
-        await this.prisma.issue.update({
-          data: { priority },
-          where: { id: event.issue.id },
-        });
+        await this.applyIssueUpdate(
+          orgId,
+          event.issue.id,
+          event.issue.teamId,
+          { priority },
+          {
+            priority,
+          },
+        );
         return;
       }
       case 'add_label': {
@@ -371,11 +446,21 @@ export class AutomationService {
         if (!label) {
           return;
         }
-        await this.prisma.issueLabelAssignment.upsert({
+        const assignment = await this.prisma.issueLabelAssignment.upsert({
           create: { issueId: event.issue.id, labelId },
           update: {},
           where: { issueId_labelId: { issueId: event.issue.id, labelId } },
         });
+        // Re-fetch the issue so connected clients reflect the new label
+        // set via the standard Issue SyncAction (the client's label
+        // resolver reads from labelAssignments).
+        if (this.deps) {
+          const issue = await this.prisma.issue.findUnique({ where: { id: event.issue.id } });
+          if (issue) {
+            await this.deps.sync.createSyncAction(orgId, 'U', 'Issue', issue.id, issue);
+          }
+        }
+        void assignment;
         return;
       }
       case 'post_comment': {
@@ -383,14 +468,24 @@ export class AutomationService {
         if (!body) {
           return;
         }
-        await this.prisma.comment.create({
+        // Attribute the auto-comment to the rule's author rather than
+        // the user who triggered the rule. The triggerer may be a guest
+        // who never agreed to post on the rule's behalf, and attaching
+        // their identity pollutes the audit trail. Fall back to the
+        // triggerer only if the rule's creator has been removed (the
+        // FK is ON DELETE SET NULL).
+        const authorId = rule.createdById ?? actorUserId;
+        const comment = await this.prisma.comment.create({
           data: {
-            authorId: actorUserId,
+            authorId,
             body,
             issueId: event.issue.id,
             organizationId: orgId,
           },
         });
+        if (this.deps) {
+          await this.deps.sync.createSyncAction(orgId, 'I', 'Comment', comment.id, comment);
+        }
         return;
       }
       default: {

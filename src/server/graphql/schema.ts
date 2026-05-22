@@ -1255,7 +1255,11 @@ export const typeDefs = `
   # Analytics (PRD §2.24, gap §6.1)
   # ------------------------------------------------------------------
   input AnalyticsInput {
-    teamId: String
+    # Required so every analytics query is scoped to a single team's issue
+    # set. Without this, an unbounded org-wide aggregate scan over millions
+    # of issues costs the GraphQL complexity estimator only 1 — leaving a
+    # cheap DoS vector for any authenticated caller. See PRD §2.24.
+    teamId: String!
     from: Date
     to: Date
   }

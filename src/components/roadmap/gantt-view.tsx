@@ -99,12 +99,31 @@ export function GanttView({
       const we = addMonths(ws, 3);
       return { totalDays: differenceInDays(we, ws), windowEnd: we, windowStart: ws };
     }
-    const starts = resolved.map(r => r._effectiveStart.getTime());
-    const ends = resolved.map(r => r._effectiveEnd.getTime());
-    const minStart = new Date(Math.min(...starts));
-    const maxEnd = new Date(Math.max(...ends));
-    const ws = startOfMonth(addMonths(minStart, -1));
-    const we = startOfMonth(addMonths(maxEnd, 2));
+    // Use reduce rather than Math.min(...starts) — spreading thousands of
+    // arguments hits engine argument-count caps on large workspaces, and
+    // a single NaN element silently poisons the entire window. The reduce
+    // keeps the time complexity the same with bounded stack usage and
+    // lets us drop NaN rows defensively.
+    let minStartMs = Number.POSITIVE_INFINITY;
+    let maxEndMs = Number.NEGATIVE_INFINITY;
+    for (const r of resolved) {
+      const s = r._effectiveStart.getTime();
+      const e = r._effectiveEnd.getTime();
+      if (Number.isFinite(s) && s < minStartMs) {
+        minStartMs = s;
+      }
+      if (Number.isFinite(e) && e > maxEndMs) {
+        maxEndMs = e;
+      }
+    }
+    if (!Number.isFinite(minStartMs) || !Number.isFinite(maxEndMs)) {
+      const today = new Date();
+      const ws0 = startOfMonth(addMonths(today, -1));
+      const we0 = addMonths(ws0, 3);
+      return { totalDays: differenceInDays(we0, ws0), windowEnd: we0, windowStart: ws0 };
+    }
+    const ws = startOfMonth(addMonths(new Date(minStartMs), -1));
+    const we = startOfMonth(addMonths(new Date(maxEndMs), 2));
     return { totalDays: differenceInDays(we, ws), windowEnd: we, windowStart: ws };
   }, [resolved]);
 
@@ -185,11 +204,17 @@ export function GanttView({
     }
     e.preventDefault();
     e.stopPropagation();
+    // Fall back to the effective (synthesized) date when the underlying
+    // item has only one side set or none at all. Without this, dragging
+    // a resize handle on a one-sided bar produces a moving visual
+    // preview but `newStart = null ? addDays(...) : null` short-circuits
+    // to null on mouseup, so the change is silently discarded.
+    const effective = resolved.find(r => r.id === item.id);
     setDrag({
-      endDateInitial: parseDate(item.endDate),
+      endDateInitial: parseDate(item.endDate) ?? effective?._effectiveEnd ?? null,
       id: item.id,
       mode,
-      startDateInitial: parseDate(item.startDate),
+      startDateInitial: parseDate(item.startDate) ?? effective?._effectiveStart ?? null,
       startX: e.clientX,
     });
   };

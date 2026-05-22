@@ -351,20 +351,42 @@ export class IssueService {
       // Validate stateId belongs to the same team as the issue. Create
       // already does this; the update path must too, or a member can move
       // their issue into another team's workflow state.
+      // Also stamp lifecycle timestamps so analytics (lead/cycle time,
+      // throughput) and the project progress rollup stay accurate
+      // regardless of how the state transition is initiated (user,
+      // automation, GitHub PR merge).
       if (input.stateId !== undefined) {
         const existing = await tx.issue.findUnique({
-          select: { teamId: true },
+          select: {
+            canceledAt: true,
+            completedAt: true,
+            startedAt: true,
+            stateId: true,
+            teamId: true,
+          },
           where: { id },
         });
         if (!existing) {
           throw new IssueInvalidStateError();
         }
         const state = await tx.workflowState.findFirst({
-          select: { teamId: true },
+          select: { teamId: true, type: true },
           where: { archivedAt: null, id: input.stateId },
         });
         if (!state || state.teamId !== existing.teamId) {
           throw new IssueInvalidStateError();
+        }
+        if (input.stateId !== existing.stateId) {
+          const now = new Date();
+          // First-set semantics for startedAt/completedAt/canceledAt:
+          // stamp on transition into the matching category, clear when
+          // moving back out of it. Mirrors the cascade path
+          // (maybeCloseParentTx / maybeCloseChildrenTx) so user-initiated
+          // and cascaded transitions converge on the same shape.
+          data.startedAt =
+            state.type === 'started' && !existing.startedAt ? now : existing.startedAt;
+          data.completedAt = state.type === 'completed' ? now : null;
+          data.canceledAt = state.type === 'canceled' ? now : null;
         }
       }
 
