@@ -313,6 +313,7 @@ model Issue {
   // Properties
   priority          Int       @default(0) @db.SmallInt
   estimate          Float?
+  startDate         DateTime? @map("start_date") @db.Date
   dueDate           DateTime? @map("due_date") @db.Date
   sortOrder         Float     @default(0) @map("sort_order")
   prioritySortOrder Float     @default(0) @map("priority_sort_order")

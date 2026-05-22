@@ -90,6 +90,7 @@ export interface DBIssue {
   snoozedById?: string | null;
   snoozedUntilAt?: string | null;
   sortOrder: number;
+  startDate?: string | null;
   startedAt?: string | null;
   startedTriageAt?: string | null;
   stateId: string;

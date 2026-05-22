@@ -26,6 +26,7 @@ const TRACKED_ACTIVITY_FIELDS = [
   'title',
   'estimate',
   'dueDate',
+  'startDate',
   'projectId',
   'trashed',
   'cycleId',
@@ -125,6 +126,9 @@ export const issueResolvers = {
 
     reactions: async (issue: Issue, _args: unknown, ctx: GraphQLContext) =>
       ctx.services.issue.listReactions(issue.id),
+
+    startDate: (issue: Issue) =>
+      issue.startDate ? issue.startDate.toISOString().split('T')[0] : null,
 
     state: async (issue: Issue, _args: unknown, ctx: GraphQLContext) =>
       ctx.loaders.workflowState.load(issue.stateId),

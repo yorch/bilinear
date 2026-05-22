@@ -121,6 +121,7 @@ export const typeDefs = `
     description: String
     priority: Int!
     estimate: Float
+    startDate: Date
     dueDate: Date
     sortOrder: Float!
     prioritySortOrder: Float!
@@ -224,6 +225,7 @@ export const typeDefs = `
     assigneeId: String
     priority: Int
     estimate: Float
+    startDate: Date
     dueDate: Date
     labelIds: [String!]
     parentId: String
@@ -240,6 +242,7 @@ export const typeDefs = `
     assigneeId: String
     priority: Int
     estimate: Float
+    startDate: Date
     dueDate: Date
     labelIds: [String!]
     parentId: String

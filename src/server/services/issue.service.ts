@@ -15,6 +15,7 @@ export interface IssueCreateInput {
   projectId?: string;
   projectMilestoneId?: string;
   sortOrder?: number;
+  startDate?: string; // ISO date string YYYY-MM-DD
   stateId?: string;
   teamId: string;
   title: string;
@@ -33,6 +34,7 @@ export interface IssueUpdateInput {
   projectId?: string | null;
   projectMilestoneId?: string | null;
   sortOrder?: number;
+  startDate?: string | null;
   stateId?: string;
   title?: string;
   trashed?: boolean;
@@ -176,6 +178,7 @@ export class IssueService {
           projectId: inheritedProjectId,
           projectMilestoneId: inheritedProjectMilestoneId,
           sortOrder: input.sortOrder ?? 0,
+          startDate: input.startDate ? new Date(input.startDate) : undefined,
           startedTriageAt: enteringTriage ? new Date() : undefined,
           stateId,
           teamId: input.teamId,
@@ -305,6 +308,9 @@ export class IssueService {
     }
     if ('dueDate' in input) {
       data.dueDate = input.dueDate ? new Date(input.dueDate) : null;
+    }
+    if ('startDate' in input) {
+      data.startDate = input.startDate ? new Date(input.startDate) : null;
     }
     if ('parentId' in input) {
       data.parentId = input.parentId;
@@ -482,6 +488,9 @@ export class IssueService {
     }
     if ('dueDate' in input) {
       data.dueDate = input.dueDate ? new Date(input.dueDate) : null;
+    }
+    if ('startDate' in input) {
+      data.startDate = input.startDate ? new Date(input.startDate) : null;
     }
     if (input.trashed !== undefined) {
       data.trashed = input.trashed;
