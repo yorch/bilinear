@@ -15,14 +15,26 @@ export interface GanttItem {
   subtitle?: string | null;
 }
 
+export type GanttZoom = 'day' | 'week' | 'month';
+
+const ZOOM_PX: Record<GanttZoom, number> = {
+  day: 48,
+  month: 4,
+  week: 14,
+};
+
+const ZOOM_LABELS: Record<GanttZoom, string> = {
+  day: 'Day',
+  month: 'Month',
+  week: 'Week',
+};
+
 interface GanttViewProps {
   /** Default span (in days) used when an item has only a start or only an end. */
   defaultSpanDays?: number;
   emptyMessage?: string;
   items: GanttItem[];
   onChange?: (id: string, startDate: string | null, endDate: string | null) => void;
-  /** Day width in pixels. Defaults to 12 (≈1 month spans ~360px). */
-  pxPerDay?: number;
 }
 
 type DragMode = 'move' | 'resize-start' | 'resize-end';
@@ -56,13 +68,15 @@ function fmtIso(date: Date): string {
 export function GanttView({
   items,
   onChange,
-  pxPerDay = 12,
   defaultSpanDays = 14,
   emptyMessage = 'No items with dates yet. Add start and target dates to populate the roadmap.',
 }: GanttViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const [zoom, setZoom] = useState<GanttZoom>('week');
   const [drag, setDrag] = useState<DragState | null>(null);
   const [dragDelta, setDragDelta] = useState(0);
+
+  const pxPerDay = ZOOM_PX[zoom];
 
   // Resolve effective (start, end) per item — if one side is missing, the bar
   // still renders with a sensible default span anchored to the present side.
@@ -139,10 +153,56 @@ export function GanttView({
     return markers;
   }, [windowStart, windowEnd, pxPerDay]);
 
+  // Week tick marks — one every 7 days from windowStart.
+  const weekMarkers = useMemo(() => {
+    if (zoom !== 'week') {
+      return [];
+    }
+    const markers: Array<{ label: string; x: number }> = [];
+    let cur = windowStart;
+    while (cur < windowEnd) {
+      markers.push({
+        label: format(cur, 'd'),
+        x: differenceInDays(cur, windowStart) * pxPerDay,
+      });
+      cur = addDays(cur, 7);
+    }
+    return markers;
+  }, [windowStart, windowEnd, zoom, pxPerDay]);
+
+  // Day tick marks — one per day.
+  const dayMarkers = useMemo(() => {
+    if (zoom !== 'day') {
+      return [];
+    }
+    const markers: Array<{ isMonthStart: boolean; label: string; x: number }> = [];
+    let cur = windowStart;
+    while (cur < windowEnd) {
+      markers.push({
+        isMonthStart: cur.getDate() === 1,
+        label: format(cur, 'd'),
+        x: differenceInDays(cur, windowStart) * pxPerDay,
+      });
+      cur = addDays(cur, 1);
+    }
+    return markers;
+  }, [windowStart, windowEnd, zoom, pxPerDay]);
+
   const dayToX = useCallback(
     (date: Date) => differenceInDays(date, windowStart) * pxPerDay,
     [windowStart, pxPerDay],
   );
+
+  // Scroll to keep "today" in view when zoom changes.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+    const todayX = differenceInDays(new Date(), windowStart) * pxPerDay;
+    const halfW = container.clientWidth / 2;
+    container.scrollLeft = Math.max(0, todayX - halfW);
+  }, [windowStart, pxPerDay]);
 
   const onMouseMove = useCallback(
     (e: MouseEvent) => {
@@ -230,110 +290,200 @@ export function GanttView({
   const todayX = dayToX(new Date());
   const totalWidth = totalDays * pxPerDay;
   const rowHeight = 36;
+  const hasSubRow = zoom !== 'month';
 
   return (
-    <div className="overflow-x-auto" ref={containerRef}>
-      <div style={{ minWidth: totalWidth }}>
-        {/* Month header */}
-        <div className="sticky top-0 z-10 flex h-8 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-          {monthMarkers.map((m, i) => {
-            const nextX = monthMarkers[i + 1]?.x ?? totalWidth;
-            return (
-              <div
-                className="border-r border-zinc-100 px-2 text-xs font-medium leading-8 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400"
-                key={m.label}
-                style={{ width: nextX - m.x }}
-              >
-                {m.label}
-              </div>
-            );
-          })}
-        </div>
+    <div className="flex flex-col">
+      {/* Zoom controls */}
+      <div className="flex items-center justify-end border-b border-zinc-200 px-3 py-1.5 dark:border-zinc-800">
+        <fieldset
+          aria-label="Zoom level"
+          className="flex gap-0.5 rounded-md border border-zinc-200 p-0.5 dark:border-zinc-700"
+        >
+          {(['month', 'week', 'day'] as GanttZoom[]).map(z => (
+            <button
+              aria-pressed={zoom === z}
+              className={cn(
+                'rounded px-2.5 py-0.5 text-xs font-medium transition-colors',
+                zoom === z
+                  ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200',
+              )}
+              key={z}
+              onClick={() => setZoom(z)}
+              type="button"
+            >
+              {ZOOM_LABELS[z]}
+            </button>
+          ))}
+        </fieldset>
+      </div>
 
-        <div className="relative" style={{ height: items.length * rowHeight }}>
-          {/* Today line */}
-          {todayX >= 0 && todayX <= totalWidth && (
+      {/* Scrollable timeline */}
+      <div className="overflow-x-auto" ref={containerRef}>
+        <div style={{ minWidth: totalWidth }}>
+          {/* Header */}
+          <div className="sticky top-0 z-10 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+            {/* Month row */}
             <div
-              aria-hidden="true"
-              className="absolute top-0 z-0 w-px bg-red-400/60"
-              style={{ height: items.length * rowHeight, left: todayX }}
-            />
-          )}
+              className={cn(
+                'flex border-b border-zinc-100 dark:border-zinc-800',
+                hasSubRow ? 'h-6' : 'h-8',
+              )}
+            >
+              {monthMarkers.map((m, i) => {
+                const nextX = monthMarkers[i + 1]?.x ?? totalWidth;
+                return (
+                  <div
+                    className="overflow-hidden border-r border-zinc-100 px-2 text-xs font-medium leading-6 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400"
+                    key={m.label}
+                    style={{ width: nextX - m.x }}
+                  >
+                    {m.label}
+                  </div>
+                );
+              })}
+            </div>
 
-          {resolved.map((item, idx) => {
-            const baseX = dayToX(item._effectiveStart);
-            const baseWidth =
-              (differenceInDays(item._effectiveEnd, item._effectiveStart) + 1) * pxPerDay;
-
-            // Apply drag preview transform
-            let x = baseX;
-            let w = baseWidth;
-            if (drag && drag.id === item.id && dragDelta !== 0) {
-              const px = dragDelta * pxPerDay;
-              if (drag.mode === 'move') {
-                x = baseX + px;
-              } else if (drag.mode === 'resize-start') {
-                x = baseX + px;
-                w = Math.max(pxPerDay, baseWidth - px);
-              } else if (drag.mode === 'resize-end') {
-                w = Math.max(pxPerDay, baseWidth + px);
-              }
-            }
-
-            const color = item.color ?? '#6366f1';
-            const isDragging = drag?.id === item.id;
-
-            return (
-              <div
-                className="group absolute flex items-center"
-                key={item.id}
-                style={{ height: rowHeight, top: idx * rowHeight, width: totalWidth }}
-              >
-                {/* biome-ignore lint/a11y/useSemanticElements: contains nested <button> resize handles; nesting <button> in <button> is invalid HTML */}
-                <div
-                  aria-label={`Drag ${item.name} timeline bar`}
-                  className={cn(
-                    'absolute flex h-6 items-center gap-1.5 rounded-md border px-2 text-xs font-medium text-white shadow-sm transition-shadow',
-                    !isDragging && 'cursor-grab',
-                    isDragging && 'cursor-grabbing shadow-md',
-                  )}
-                  onMouseDown={e => startDrag(item, 'move', e)}
-                  role="button"
-                  style={{
-                    backgroundColor: color,
-                    borderColor: color,
-                    left: x,
-                    width: Math.max(w, pxPerDay * 1.5),
-                  }}
-                  tabIndex={0}
-                >
-                  {/* Resize handle - left */}
-                  <button
-                    aria-label="Resize start"
-                    className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize rounded-l-md bg-black/10 opacity-0 transition-opacity group-hover:opacity-100"
-                    onMouseDown={e => startDrag(item, 'resize-start', e)}
-                    tabIndex={-1}
-                    type="button"
-                  />
-                  <span className="truncate">
-                    {item.icon ? `${item.icon} ` : ''}
-                    {item.name}
-                  </span>
-                  {item.subtitle && (
-                    <span className="ml-1 truncate text-[10px] opacity-80">{item.subtitle}</span>
-                  )}
-                  {/* Resize handle - right */}
-                  <button
-                    aria-label="Resize end"
-                    className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize rounded-r-md bg-black/10 opacity-0 transition-opacity group-hover:opacity-100"
-                    onMouseDown={e => startDrag(item, 'resize-end', e)}
-                    tabIndex={-1}
-                    type="button"
-                  />
-                </div>
+            {/* Sub-row: week ticks or day numbers */}
+            {hasSubRow && (
+              <div className="relative h-5">
+                {zoom === 'week' &&
+                  weekMarkers.map(wm => (
+                    <div
+                      className="absolute top-0 border-l border-zinc-100 px-1 text-[10px] leading-5 text-zinc-400 dark:border-zinc-800 dark:text-zinc-500"
+                      key={wm.x}
+                      style={{ left: wm.x }}
+                    >
+                      {wm.label}
+                    </div>
+                  ))}
+                {zoom === 'day' &&
+                  dayMarkers.map(dm => (
+                    <div
+                      className={cn(
+                        'absolute top-0 border-l px-0.5 text-[10px] leading-5 text-zinc-400 dark:text-zinc-500',
+                        dm.isMonthStart
+                          ? 'border-zinc-300 font-semibold dark:border-zinc-600'
+                          : 'border-zinc-100 dark:border-zinc-800',
+                      )}
+                      key={dm.x}
+                      style={{ left: dm.x, width: pxPerDay }}
+                    >
+                      {dm.label}
+                    </div>
+                  ))}
               </div>
-            );
-          })}
+            )}
+          </div>
+
+          <div className="relative" style={{ height: items.length * rowHeight }}>
+            {/* Today line */}
+            {todayX >= 0 && todayX <= totalWidth && (
+              <div
+                aria-hidden="true"
+                className="absolute top-0 z-0 w-px bg-red-400/60"
+                style={{ height: items.length * rowHeight, left: todayX }}
+              />
+            )}
+
+            {/* Subtle vertical grid lines for week/day zoom */}
+            {zoom === 'week' &&
+              weekMarkers.map(wm => (
+                <div
+                  aria-hidden="true"
+                  className="absolute top-0 w-px bg-zinc-100 dark:bg-zinc-800"
+                  key={wm.x}
+                  style={{ height: items.length * rowHeight, left: wm.x }}
+                />
+              ))}
+            {zoom === 'day' &&
+              dayMarkers
+                .filter(dm => dm.isMonthStart)
+                .map(dm => (
+                  <div
+                    aria-hidden="true"
+                    className="absolute top-0 w-px bg-zinc-200 dark:bg-zinc-700"
+                    key={dm.x}
+                    style={{ height: items.length * rowHeight, left: dm.x }}
+                  />
+                ))}
+
+            {resolved.map((item, idx) => {
+              const baseX = dayToX(item._effectiveStart);
+              const baseWidth =
+                (differenceInDays(item._effectiveEnd, item._effectiveStart) + 1) * pxPerDay;
+
+              // Apply drag preview transform
+              let x = baseX;
+              let w = baseWidth;
+              if (drag && drag.id === item.id && dragDelta !== 0) {
+                const px = dragDelta * pxPerDay;
+                if (drag.mode === 'move') {
+                  x = baseX + px;
+                } else if (drag.mode === 'resize-start') {
+                  x = baseX + px;
+                  w = Math.max(pxPerDay, baseWidth - px);
+                } else if (drag.mode === 'resize-end') {
+                  w = Math.max(pxPerDay, baseWidth + px);
+                }
+              }
+
+              const color = item.color ?? '#6366f1';
+              const isDragging = drag?.id === item.id;
+
+              return (
+                <div
+                  className="group absolute flex items-center"
+                  key={item.id}
+                  style={{ height: rowHeight, top: idx * rowHeight, width: totalWidth }}
+                >
+                  {/* biome-ignore lint/a11y/useSemanticElements: contains nested <button> resize handles; nesting <button> in <button> is invalid HTML */}
+                  <div
+                    aria-label={`Drag ${item.name} timeline bar`}
+                    className={cn(
+                      'absolute flex h-6 items-center gap-1.5 rounded-md border px-2 text-xs font-medium text-white shadow-sm transition-shadow',
+                      !isDragging && 'cursor-grab',
+                      isDragging && 'cursor-grabbing shadow-md',
+                    )}
+                    onMouseDown={e => startDrag(item, 'move', e)}
+                    role="button"
+                    style={{
+                      backgroundColor: color,
+                      borderColor: color,
+                      left: x,
+                      width: Math.max(w, pxPerDay * 1.5),
+                    }}
+                    tabIndex={0}
+                  >
+                    {/* Resize handle - left */}
+                    <button
+                      aria-label="Resize start"
+                      className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize rounded-l-md bg-black/10 opacity-0 transition-opacity group-hover:opacity-100"
+                      onMouseDown={e => startDrag(item, 'resize-start', e)}
+                      tabIndex={-1}
+                      type="button"
+                    />
+                    <span className="truncate">
+                      {item.icon ? `${item.icon} ` : ''}
+                      {item.name}
+                    </span>
+                    {item.subtitle && (
+                      <span className="ml-1 truncate text-[10px] opacity-80">{item.subtitle}</span>
+                    )}
+                    {/* Resize handle - right */}
+                    <button
+                      aria-label="Resize end"
+                      className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize rounded-r-md bg-black/10 opacity-0 transition-opacity group-hover:opacity-100"
+                      onMouseDown={e => startDrag(item, 'resize-end', e)}
+                      tabIndex={-1}
+                      type="button"
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
