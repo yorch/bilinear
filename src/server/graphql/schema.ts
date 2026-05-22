@@ -1252,6 +1252,32 @@ export const typeDefs = `
   }
 
   # ------------------------------------------------------------------
+  # Analytics (PRD §2.24, gap §6.1)
+  # ------------------------------------------------------------------
+  input AnalyticsInput {
+    teamId: String
+    from: Date
+    to: Date
+  }
+
+  type AnalyticsHistogramBucket {
+    bucketStart: Float!
+    bucketEnd: Float!
+    count: Int!
+  }
+
+  type AnalyticsThroughputPoint {
+    weekStart: String!
+    count: Int!
+  }
+
+  type AnalyticsTimeInStateRow {
+    stateId: ID!
+    avgHours: Float!
+    sampleSize: Int!
+  }
+
+  # ------------------------------------------------------------------
   # Automation rules (PRD §2.23, gap §2.1)
   # ------------------------------------------------------------------
   type AutomationRule {
@@ -1372,6 +1398,12 @@ export const typeDefs = `
     automationRules: [AutomationRule!]!
     automationTriggerTypes: [String!]!
     automationActionTypes: [String!]!
+
+    # Analytics / Insights (PRD §2.24)
+    analyticsLeadTimeHistogram(input: AnalyticsInput): [AnalyticsHistogramBucket!]!
+    analyticsCycleTimeHistogram(input: AnalyticsInput): [AnalyticsHistogramBucket!]!
+    analyticsThroughputByWeek(input: AnalyticsInput): [AnalyticsThroughputPoint!]!
+    analyticsTimeInState(input: AnalyticsInput): [AnalyticsTimeInStateRow!]!
 
     # Favorites — sidebar pinning, per user
     favorites: [Favorite!]!

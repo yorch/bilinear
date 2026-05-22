@@ -85,6 +85,9 @@ describe('AutomationService', () => {
   });
 
   describe('evaluateForIssue', () => {
+    // Cast once via `unknown` so spreads are still allowed; the cast is
+    // valid here because Issue's other required fields aren't read by the
+    // code under test.
     const issue = {
       assigneeId: null,
       id: 'issue-1',
@@ -92,7 +95,7 @@ describe('AutomationService', () => {
       priority: 0,
       stateId: 'state-1',
       teamId: 'team-1',
-    } as never;
+    } as unknown as import('../../generated/prisma').Issue;
 
     it('is a no-op when no rules match', async () => {
       prisma.automationRule.findMany.mockResolvedValue([]);

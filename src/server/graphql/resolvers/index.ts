@@ -1,4 +1,5 @@
 import { DateTimeScalar, JSONScalar, UUIDScalar } from '../types/scalars';
+import { analyticsResolvers } from './analytics';
 import { authResolvers } from './auth';
 import { automationResolvers } from './automation';
 import { commentResolvers } from './comment';
@@ -168,6 +169,7 @@ export const resolvers = {
   },
 
   Query: {
+    ...analyticsResolvers.Query,
     ...authResolvers.Query,
     ...automationResolvers.Query,
     ...userResolvers.Query,

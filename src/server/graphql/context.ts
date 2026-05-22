@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 import type { AuthContext } from '../middleware/auth';
 import { extractAuthContext } from '../middleware/auth';
+import { AnalyticsService } from '../services/analytics.service';
 import { AuthService } from '../services/auth.service';
 import { AutomationService } from '../services/automation.service';
 import { CommentService } from '../services/comment.service';
@@ -40,6 +41,7 @@ export interface GraphQLContext extends AuthContext {
   loaders: Loaders;
   prisma: PrismaClient;
   services: {
+    analytics: AnalyticsService;
     auth: AuthService;
     automation: AutomationService;
     comment: CommentService;
@@ -106,6 +108,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const userService = new UserService(prisma);
   const authService = new AuthService(prisma, userService);
   const automationService = new AutomationService(prisma);
+  const analyticsService = new AnalyticsService(prisma);
   const githubService = new GitHubService(prisma);
   const documentService = new DocumentService(prisma);
   const favoriteService = new FavoriteService(prisma);
@@ -137,6 +140,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
     loaders: createLoaders(prisma, auth.orgId),
     prisma,
     services: {
+      analytics: analyticsService,
       auth: authService,
       automation: automationService,
       comment: commentService,
