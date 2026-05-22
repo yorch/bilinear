@@ -193,8 +193,15 @@ export function GanttView({
     [windowStart, pxPerDay],
   );
 
-  // Scroll to keep "today" in view when zoom changes.
+  // Scroll to centre "today" only when the zoom level (and therefore pxPerDay)
+  // actually changes — not on windowStart updates caused by item mutations.
+  // prevPxRef is null on first render so the initial mount always centres today.
+  const prevPxRef = useRef<number | null>(null);
   useEffect(() => {
+    if (pxPerDay === prevPxRef.current) {
+      return;
+    }
+    prevPxRef.current = pxPerDay;
     const container = containerRef.current;
     if (!container) {
       return;
