@@ -1748,3 +1748,107 @@ row update live, not as one batched WS message).
 
 Reference: `src/server/services/issue.service.ts:bulkUpdate`,
 `src/server/graphql/resolvers/issue.ts:issuesBulkUpdate`.
+
+---
+
+## 51. YJS Collaborative Editing (2026-05-22)
+
+Real-time multi-cursor co-editing on issue descriptions via Hocuspocus + YJS.
+
+### Three-process dev setup
+
+```
+yarn dev         # Next.js, port 3000
+yarn ws:server   # Sync WebSocket, port 3001
+yarn yjs:server  # Hocuspocus YJS server, port 1234
+```
+
+### Document naming
+
+Each collaborative document has a unique name used by the Hocuspocus room:
+
+- **Issue description:** `issue:<uuid>` (e.g. `issue:abc-123-...`)
+- **Document content:** `document:<uuid>` — reserved, not yet active (needs
+  `Document.contentState Bytes?` migration in a follow-up)
+
+### Auth: ws_ticket reuse
+
+The Hocuspocus `onAuthenticate` hook receives the token sent by
+`HocuspocusProvider` on the client. The client calls `fetchWsTicket()`
+(which hits `GET /api/auth/ws-ticket`) and passes the 60s ticket as the
+provider's `token` option. The server verifies with `verifyWsTicket` (same
+function used by the sync WebSocket) — same secret, same 60s expiry, same
+scoped `type: 'ws_ticket'` claim (§18).
+
+On reconnect, `HocuspocusProvider` re-calls the async `token` function,
+which re-fetches a fresh ticket. This mirrors the sync WebSocket's
+per-reconnect ticket refresh.
+
+### Persistence: `Issue.descriptionState Bytes?`
+
+`onLoadDocument`: loads the stored YJS state bytes and applies them to the
+in-memory YJS doc with `Y.applyUpdate`.
+
+`onStoreDocument`: encodes the full YJS state with `Y.encodeStateAsUpdate`
+and writes to `Issue.descriptionState` as a `Buffer`. Debounced 2s,
+hard-capped at 20s, so fast typing doesn't hammer the DB.
+
+### Tenant guard
+
+`onAuthenticate` verifies the document entity (`issue:<id>`) belongs to
+the `orgId` from the ws_ticket. Archived issues are rejected
+(`archivedAt: null` in the WHERE). The context object (`{ orgId, userId }`)
+is stamped and forwarded to subsequent hooks.
+
+### Cold-start seeding
+
+When the first client connects to an issue that has no stored `descriptionState`,
+`onLoadDocument` returns without applying any bytes (doc stays empty).
+After the provider syncs (`onSynced: { state: true }`), the client checks
+if the YJS fragment `'default'` is empty. If so AND the `content` prop
+(the saved HTML from the `description` column) is non-empty, the client
+calls `editor.commands.setContent(content)` to seed the YJS doc. This
+triggers `onStoreDocument` (debounced), which persists the YJS state.
+Subsequent clients then load the seeded state from `descriptionState`.
+
+### Resolution policy
+
+The existing `onBlur` callback in `IssueDetailPanel` saves the editor's
+current HTML (`editor.getHTML()`) to `Issue.description` via `issueUpdate`
+GraphQL mutation. Since `editor.getHTML()` reflects the merged YJS state
+(including remote updates from collaborators), this keeps the plain-text
+`description` column in sync with the collaborative state. Search, sync
+broadcasts, webhooks, and email notifications all continue to use the
+`description` column unchanged.
+
+### Feature flag
+
+Set `NEXT_PUBLIC_COLLAB_ENABLED=true` and `NEXT_PUBLIC_YJS_SERVER_URL`
+to enable collaborative editing in the UI. Without the flag, `TipTapEditor`
+behaves exactly as before (no YJS connection, no performance overhead).
+
+### Client integration
+
+`TipTapEditor` accepts two new optional props:
+
+```typescript
+collabDocId?: string;    // e.g. "issue:<uuid>"
+collabUserName?: string; // display name for the presence cursor
+```
+
+When `NEXT_PUBLIC_COLLAB_ENABLED=true` and `collabDocId` is provided AND
+`readOnly=false`, the editor:
+
+1. Creates a `Y.Doc` and `HocuspocusProvider` (synchronously at mount, so
+   they're available for `useMemo` extensions).
+2. Includes `Collaboration.configure({ document: ydoc })` which replaces
+   the StarterKit's `undoRedo` extension (Yjs provides its own undo/redo).
+3. Includes `CollaborationCursor.configure({ provider })` for presence indicators.
+4. Stamps cursor awareness: `{ color: <random session color>, name: collabUserName }`.
+
+### Deferred
+
+- `Document.contentState` collaborative editing (needs schema migration)
+- "Users editing now" avatar stack
+- View-only collaborator role
+- Persistent cursor colors across sessions

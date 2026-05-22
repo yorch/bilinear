@@ -1,7 +1,10 @@
 'use client';
 
+import { HocuspocusProvider } from '@hocuspocus/provider';
 import { CharacterCount } from '@tiptap/extension-character-count';
 import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight';
+import { Collaboration } from '@tiptap/extension-collaboration';
+import { CollaborationCursor } from '@tiptap/extension-collaboration-cursor';
 import { Color } from '@tiptap/extension-color';
 import { Highlight } from '@tiptap/extension-highlight';
 import { HorizontalRule } from '@tiptap/extension-horizontal-rule';
@@ -26,6 +29,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { common, createLowlight } from 'lowlight';
 import { ImageIcon, Link2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
+import * as Y from 'yjs';
 import { cn } from '@/lib/utils';
 import { Details, DetailsSummary } from './details-node';
 import { EmbedNode } from './embed-node';
@@ -36,6 +40,41 @@ import { SlashCommands } from './slash-commands';
 import './tiptap-editor.css';
 
 const lowlight = createLowlight(common);
+
+// Collaborative editing feature flag — set NEXT_PUBLIC_COLLAB_ENABLED=true to
+// activate. Also requires NEXT_PUBLIC_YJS_SERVER_URL and yarn yjs:server.
+const COLLAB_ENABLED = process.env.NEXT_PUBLIC_COLLAB_ENABLED === 'true';
+const YJS_SERVER_URL = process.env.NEXT_PUBLIC_YJS_SERVER_URL ?? 'ws://localhost:1234';
+
+// Fetch a short-lived ws_ticket from the Next.js API. The ticket is a 60s
+// scoped JWT that the YJS server accepts without needing the long-lived access
+// cookie — same pattern as the sync WebSocket (PATTERNS.md §18).
+async function fetchWsTicket(): Promise<string> {
+  const res = await fetch('/api/auth/ws-ticket');
+  if (!res.ok) {
+    throw new Error('Failed to fetch ws-ticket for YJS');
+  }
+  const json = (await res.json()) as { ticket: string };
+  return json.ticket;
+}
+
+// Deterministic-but-varied cursor color per session. Not persisted —
+// changes on reload, which is acceptable for ephemeral presence.
+const CURSOR_COLORS = [
+  '#6366f1',
+  '#8b5cf6',
+  '#ec4899',
+  '#f43f5e',
+  '#f97316',
+  '#eab308',
+  '#22c55e',
+  '#14b8a6',
+  '#3b82f6',
+  '#06b6d4',
+];
+function sessionColor(): string {
+  return CURSOR_COLORS[Math.floor(Math.random() * CURSOR_COLORS.length)];
+}
 
 // Matches the server allow-list in /api/upload (PDFs and SVGs are accepted by
 // the endpoint but only raster/vector image formats make sense to embed via
@@ -136,6 +175,15 @@ function uploadImagesFromList(
 export interface TipTapEditorProps {
   autofocus?: boolean;
   className?: string;
+  /**
+   * When set (format: "issue:<uuid>" or "document:<uuid>") and
+   * NEXT_PUBLIC_COLLAB_ENABLED=true, activates real-time multi-cursor
+   * collaborative editing via Hocuspocus + YJS (PATTERNS.md §51).
+   * The caller must also provide `collabUserName` for the presence cursor.
+   */
+  collabDocId?: string;
+  /** Display name shown in the collaborative cursor label. */
+  collabUserName?: string;
   content?: string;
   /** Users available for @mentions */
   mentionUsers?: MentionItem[];
@@ -272,6 +320,8 @@ export function TipTapEditor({
   mentionUsers,
   uploadIssueId,
   uploadProjectId,
+  collabDocId,
+  collabUserName = 'User',
 }: TipTapEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -296,6 +346,77 @@ export function TipTapEditor({
     mentionUsersRef.current = mentionUsers ?? [];
   }, [mentionUsers]);
 
+  // ─── Collaborative editing setup ───────────────────────────────────────────
+  // YJS doc and Hocuspocus provider are created once per mount (guarded by the
+  // null-check). They must exist before the extensions memo so the extensions
+  // can reference them. Cleanup runs in the effect at the bottom.
+  //
+  // The collabEnabled check includes readOnly because read-only views don't
+  // need a live YJS session (they show the saved description, not the YJS doc).
+  const collabEnabled = COLLAB_ENABLED && !!collabDocId && !readOnly;
+
+  const ydocRef = useRef<Y.Doc | null>(null);
+  const providerRef = useRef<HocuspocusProvider | null>(null);
+  // Seed flag: true once we've inserted initial content into an empty YJS doc.
+  const seededRef = useRef(false);
+  // Capture the initial content once so the onSynced seed callback never reads
+  // a stale prop value.
+  const initialContentRef = useRef(content);
+
+  if (collabEnabled && ydocRef.current === null) {
+    const ydoc = new Y.Doc();
+    ydocRef.current = ydoc;
+    const cursorColor = sessionColor();
+
+    providerRef.current = new HocuspocusProvider({
+      document: ydoc,
+      name: collabDocId,
+      onAuthenticated: () => {
+        // noop — auth success is logged server-side
+      },
+      onAuthenticationFailed: ({ reason }) => {
+        // eslint-disable-next-line no-console
+        console.warn('[collab] Authentication failed:', reason);
+      },
+      onSynced: ({ state }) => {
+        if (!state || seededRef.current) {
+          return;
+        }
+        // If the YJS document is empty (first collaborative session on this
+        // issue) and we have existing content, seed from the saved description.
+        // The YJS fragment named 'default' is what TipTap's Collaboration
+        // extension binds to.
+        const frag = ydoc.getXmlFragment('default');
+        if (frag.length === 0 && initialContentRef.current && editorRef.current) {
+          editorRef.current.commands.setContent(initialContentRef.current);
+        }
+        seededRef.current = true;
+      },
+      // Async token provider: fetches a fresh 60s ws_ticket on every
+      // (re)connection, same rotation pattern as the sync WebSocket.
+      token: fetchWsTicket,
+      url: YJS_SERVER_URL,
+    });
+
+    // Stamp cursor awareness with user identity for CollaborationCursor.
+    providerRef.current.setAwarenessField('user', {
+      color: cursorColor,
+      name: collabUserName,
+    });
+  }
+
+  // Destroy provider and YJS doc on unmount.
+  useEffect(
+    () => () => {
+      providerRef.current?.destroy();
+      providerRef.current = null;
+      ydocRef.current?.destroy();
+      ydocRef.current = null;
+      seededRef.current = false;
+    },
+    [],
+  ); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Extensions are built once — TipTap does not support hot-reloading them.
   // Mutable state (mentionUsers) is accessed via mentionUsersRef at call time.
   // biome-ignore lint/correctness/useExhaustiveDependencies: extensions must be stable after editor creation
@@ -304,6 +425,9 @@ export function TipTapEditor({
       StarterKit.configure({
         codeBlock: false,
         horizontalRule: false,
+        // Disable StarterKit's UndoRedo when Collaboration is active — Yjs
+        // provides its own undo/redo stack via the yUndoPlugin.
+        undoRedo: collabEnabled ? false : undefined,
       }),
       Placeholder.configure({ placeholder }),
       TaskList,
@@ -332,6 +456,17 @@ export function TipTapEditor({
       // Only add the Mention extension when the caller opts in by providing users.
       // The extension reads from mentionUsersRef so suggestions stay current.
       ...(mentionUsers != null ? [buildMentionExtension(mentionUsersRef)] : []),
+      // Collaborative editing extensions — only added when a collabDocId is
+      // provided and NEXT_PUBLIC_COLLAB_ENABLED=true. Collaboration replaces
+      // the Yjs-incompatible StarterKit history (disabled above).
+      ...(collabEnabled && ydocRef.current && providerRef.current
+        ? [
+            Collaboration.configure({ document: ydocRef.current }),
+            CollaborationCursor.configure({
+              provider: providerRef.current,
+            }),
+          ]
+        : []),
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
@@ -339,7 +474,11 @@ export function TipTapEditor({
 
   const editor = useEditor({
     autofocus,
-    content,
+    // When collaborative editing is active the Yjs document is the source of
+    // truth — pass no initial content so the Collaboration extension controls
+    // the document state. Seeding from the saved description happens in the
+    // onSynced callback above.
+    content: collabEnabled ? undefined : content,
     editable: !readOnly,
     editorProps: {
       attributes: {
@@ -389,15 +528,18 @@ export function TipTapEditor({
     editorRef.current = editor;
   }, [editor]);
 
+  // Sync external content changes into the editor — but only when collab is
+  // disabled. With collaborative editing the Yjs document owns the content;
+  // applying the stale prop would overwrite in-flight collaborative updates.
   useEffect(() => {
-    if (!editor) {
+    if (!editor || collabEnabled) {
       return;
     }
     const current = editor.getHTML();
     if (current !== content && !editor.isFocused) {
       editor.commands.setContent(content ?? '');
     }
-  }, [editor, content]);
+  }, [editor, content, collabEnabled]);
 
   const setLink = useCallback(() => {
     if (!editor) {
