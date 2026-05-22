@@ -3,7 +3,7 @@ import { startServerAndCreateNextHandler } from '@as-integrations/next';
 import { GraphQLError } from 'graphql';
 import depthLimit from 'graphql-depth-limit';
 import { getComplexity, simpleEstimator } from 'graphql-query-complexity';
-import type { NextRequest } from 'next/server';
+import { NextRequest } from 'next/server';
 import type { GraphQLContext } from '../../../server/graphql/context';
 import { createContext } from '../../../server/graphql/context';
 import { resolvers } from '../../../server/graphql/resolvers';
@@ -126,15 +126,20 @@ const handler = startServerAndCreateNextHandler<NextRequest, GraphQLContext>(ser
 });
 
 async function handleRequest(req: NextRequest): Promise<Response> {
-  // Build context once and cache it so Apollo doesn't rebuild it.
+  // Build context once — createContext only reads headers/cookies, never the body.
   const ctx = await createContext(req);
-  requestContextCache.set(req, ctx);
 
   // Rate-limit authenticated requests only.
   if (ctx.userId) {
+    // req.body is a one-shot ReadableStream. Avoid req.clone() — tee semantics
+    // are unreliable in some Node.js / Next.js versions and can leave Apollo's
+    // handler with an empty body (SyntaxError: Unexpected end of JSON input).
+    // Instead, read the body text once and reconstruct a fresh request for Apollo.
+    let bodyText = '';
     let body: { query?: string; variables?: Record<string, unknown> } = {};
     try {
-      body = (await req.clone().json()) as typeof body;
+      bodyText = await req.text();
+      body = JSON.parse(bodyText) as typeof body;
     } catch {
       // Non-JSON or empty body — proceed without complexity estimate.
     }
@@ -147,12 +152,20 @@ async function handleRequest(req: NextRequest): Promise<Response> {
       return buildRateLimitedResponse(headers);
     }
 
-    const response = await handler(req);
+    // Reconstruct a new request with the buffered body so Apollo can read it.
+    const reqForApollo = new NextRequest(req.url, {
+      body: bodyText || null,
+      headers: req.headers,
+      method: req.method,
+    });
+    requestContextCache.set(reqForApollo, ctx);
+    const response = await handler(reqForApollo);
     logger.info({ complexity, method: req.method, userId: ctx.userId }, 'GraphQL request');
     // Return a cloned response with rate-limit headers (Response is immutable).
     return withRateLimitHeaders(response, headers);
   }
 
+  requestContextCache.set(req, ctx);
   return handler(req);
 }
 
