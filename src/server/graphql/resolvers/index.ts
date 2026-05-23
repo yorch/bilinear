@@ -129,6 +129,7 @@ export const resolvers = {
     ...authResolvers.Mutation,
     ...automationResolvers.Mutation,
     ...commentResolvers.Mutation,
+    ...userResolvers.Mutation,
     ...documentResolvers.Mutation,
     ...favoriteResolvers.Mutation,
     ...fileResolvers.Mutation,

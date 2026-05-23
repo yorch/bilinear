@@ -72,6 +72,8 @@ model User {
 
   emailNotificationsEnabled Boolean @default(true) @map("email_notifications_enabled")
 
+  calendarFeedToken String? @unique @map("calendar_feed_token") @db.VarChar(64)
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 

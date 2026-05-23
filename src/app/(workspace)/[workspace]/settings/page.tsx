@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronRight, Lock, Users } from 'lucide-react';
+import { Calendar, ChevronRight, Copy, Lock, RefreshCw, Users } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -34,6 +34,33 @@ const ORGANIZATION_QUERY = `
 const UPDATE_ORG_MEMBER_ROLE_MUTATION = `
   mutation UpdateOrgMemberRole($userId: ID!, $role: String!) {
     organizationMemberUpdateRole(userId: $userId, role: $role) {
+      success
+    }
+  }
+`;
+
+const VIEWER_QUERY = `
+  query ViewerCalendar {
+    viewer {
+      id
+      emailNotificationsEnabled
+      calendarFeedUrl
+    }
+  }
+`;
+
+const ROTATE_CALENDAR_TOKEN_MUTATION = `
+  mutation RotateCalendarToken {
+    userCalendarFeedTokenRotate {
+      success
+      user { calendarFeedUrl }
+    }
+  }
+`;
+
+const UPDATE_NOTIFICATION_PREFS_MUTATION = `
+  mutation UpdateNotificationPrefs($emailNotificationsEnabled: Boolean!) {
+    userUpdateNotificationPreferences(emailNotificationsEnabled: $emailNotificationsEnabled) {
       success
     }
   }
@@ -85,6 +112,9 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [updatingRole, setUpdatingRole] = useState<string | null>(null);
   const [memberRoles, setMemberRoles] = useState<Record<string, OrgRole>>({});
+  const [calendarFeedUrl, setCalendarFeedUrl] = useState<string | null>(null);
+  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true);
+  const [rotatingToken, setRotatingToken] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,6 +154,49 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    gql(VIEWER_QUERY)
+      .then(result => {
+        const data = result.data as
+          | { viewer?: { calendarFeedUrl?: string | null; emailNotificationsEnabled?: boolean } }
+          | undefined;
+        if (data?.viewer) {
+          setCalendarFeedUrl(data.viewer.calendarFeedUrl ?? null);
+          setEmailNotificationsEnabled(data.viewer.emailNotificationsEnabled ?? true);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  async function rotateCalendarToken() {
+    setRotatingToken(true);
+    try {
+      const result = await gql(ROTATE_CALENDAR_TOKEN_MUTATION);
+      const url =
+        (
+          result.data as
+            | { userCalendarFeedTokenRotate?: { user?: { calendarFeedUrl?: string } } }
+            | undefined
+        )?.userCalendarFeedTokenRotate?.user?.calendarFeedUrl ?? null;
+      setCalendarFeedUrl(url);
+      toast.success('Calendar feed URL rotated');
+    } catch {
+      toast.error('Failed to rotate calendar URL');
+    } finally {
+      setRotatingToken(false);
+    }
+  }
+
+  async function toggleEmailNotifications(enabled: boolean) {
+    setEmailNotificationsEnabled(enabled);
+    try {
+      await gql(UPDATE_NOTIFICATION_PREFS_MUTATION, { emailNotificationsEnabled: enabled });
+    } catch {
+      setEmailNotificationsEnabled(!enabled);
+      toast.error('Failed to update notification preferences');
+    }
+  }
 
   const members = userStore.all;
   const allTeams = teamStore.all;
@@ -350,6 +423,90 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                 })}
               </ul>
             )}
+          </div>
+        </section>
+
+        {/* Personal preferences */}
+        <section>
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+            My Preferences
+          </h2>
+          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 divide-y divide-zinc-100 dark:divide-zinc-800">
+            {/* Email notifications toggle */}
+            <div className="flex items-center justify-between px-5 py-3">
+              <div>
+                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                  Email notifications
+                </p>
+                <p className="text-xs text-zinc-400">
+                  Receive emails for assignments, mentions, and status changes
+                </p>
+              </div>
+              <button
+                aria-checked={emailNotificationsEnabled}
+                className={cn(
+                  'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors',
+                  'focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2',
+                  emailNotificationsEnabled ? 'bg-indigo-600' : 'bg-zinc-200 dark:bg-zinc-700',
+                )}
+                onClick={() => toggleEmailNotifications(!emailNotificationsEnabled)}
+                role="switch"
+                type="button"
+              >
+                <span
+                  className={cn(
+                    'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform',
+                    emailNotificationsEnabled ? 'translate-x-4' : 'translate-x-0',
+                  )}
+                />
+              </button>
+            </div>
+
+            {/* iCal cycle feed */}
+            <div className="px-5 py-3">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-zinc-400" />
+                    Cycle calendar feed
+                  </p>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Subscribe to your cycles in Google Calendar, Apple Calendar, or any .ics client.
+                  </p>
+                  {calendarFeedUrl && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <code className="truncate max-w-xs text-xs bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-zinc-600 dark:text-zinc-300">
+                        {calendarFeedUrl}
+                      </code>
+                      <button
+                        className="shrink-0 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(calendarFeedUrl);
+                          toast.success('Copied to clipboard');
+                        }}
+                        title="Copy URL"
+                        type="button"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <button
+                  className={cn(
+                    'shrink-0 flex items-center gap-1.5 rounded-md border border-zinc-200 dark:border-zinc-700',
+                    'px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300',
+                    'hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50',
+                  )}
+                  disabled={rotatingToken}
+                  onClick={rotateCalendarToken}
+                  type="button"
+                >
+                  <RefreshCw className={cn('h-3 w-3', rotatingToken && 'animate-spin')} />
+                  {calendarFeedUrl ? 'Rotate' : 'Generate'}
+                </button>
+              </div>
+            </div>
           </div>
         </section>
 

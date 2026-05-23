@@ -1,7 +1,11 @@
 import { GraphQLError } from 'graphql';
 import type { Comment, CommentReaction } from '../../../generated/prisma';
 import { logger } from '../../lib/logger';
-import { requireAuth, requireTeamMember } from '../../middleware/auth';
+import {
+  requireAuth,
+  requireIssueAccessNotGuestOrOwn,
+  requireTeamMember,
+} from '../../middleware/auth';
 import type { CommentCreateInput, CommentUpdateInput } from '../../services/comment.service';
 import type { GraphQLContext } from '../context';
 
@@ -73,7 +77,7 @@ export const commentResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, issue, ctx.userId, ctx.orgId);
 
       const comment = await ctx.services.comment.create(ctx.userId, input);
       const sync = await ctx.services.sync.createSyncAction(
@@ -161,6 +165,14 @@ export const commentResolvers = {
           comment.id,
           comment,
         );
+        void ctx.services.issueActivity
+          .create({
+            actorId: ctx.userId,
+            field: 'commentResolved',
+            issueId: comment.issueId,
+            newValue: id,
+          })
+          .catch(() => {});
         return { comment, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         handleCommentError(err);
@@ -178,6 +190,14 @@ export const commentResolvers = {
           comment.id,
           comment,
         );
+        void ctx.services.issueActivity
+          .create({
+            actorId: ctx.userId,
+            field: 'commentUnresolved',
+            issueId: comment.issueId,
+            oldValue: id,
+          })
+          .catch(() => {});
         return { comment, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         handleCommentError(err);

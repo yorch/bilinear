@@ -1,6 +1,10 @@
 import { GraphQLError } from 'graphql';
 import type { IssueRelation } from '../../../generated/prisma';
-import { requireAuth, requireTeamMember } from '../../middleware/auth';
+import {
+  requireAuth,
+  requireIssueAccessNotGuestOrOwn,
+  requireTeamMember,
+} from '../../middleware/auth';
 import type { IssueRelationCreateInput } from '../../services/issue-relation.service';
 import type { GraphQLContext } from '../context';
 
@@ -24,7 +28,7 @@ export const issueRelationResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, issue, ctx.userId, ctx.orgId);
       const relatedIssue = await ctx.services.issue.findById(input.relatedIssueId);
       if (!relatedIssue || relatedIssue.organizationId !== ctx.orgId) {
         throw new GraphQLError('Related issue not found', {
@@ -33,7 +37,7 @@ export const issueRelationResolvers = {
       }
       await requireTeamMember(ctx.prisma, relatedIssue.teamId, ctx.userId, ctx.orgId);
       try {
-        const relation = await ctx.services.issueRelation.create(input);
+        const { relation, canceledIssue } = await ctx.services.issueRelation.create(input);
         const sync = await ctx.services.sync.createSyncAction(
           ctx.orgId,
           'I',
@@ -41,6 +45,26 @@ export const issueRelationResolvers = {
           relation.id,
           relation,
         );
+        // Duplicate auto-cancel: emit a SyncAction + activity record for the
+        // issue that was transitioned, so all clients see the state change.
+        if (canceledIssue) {
+          await ctx.services.sync.createSyncAction(
+            ctx.orgId,
+            'U',
+            'Issue',
+            canceledIssue.id,
+            canceledIssue,
+          );
+          void ctx.services.issueActivity
+            .create({
+              actorId: ctx.userId,
+              field: 'stateId',
+              issueId: canceledIssue.id,
+              newValue: canceledIssue.stateId,
+              oldValue: issue.stateId,
+            })
+            .catch(() => {});
+        }
         return {
           issueRelation: relation,
           lastSyncId: sync.id.toString(),

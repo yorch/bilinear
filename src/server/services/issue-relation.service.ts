@@ -1,4 +1,4 @@
-import type { IssueRelation, PrismaClient } from '../../generated/prisma';
+import type { Issue, IssueRelation, PrismaClient } from '../../generated/prisma';
 
 export type IssueRelationType = 'related' | 'blocks' | 'blocked_by' | 'duplicate';
 
@@ -45,7 +45,9 @@ function inverseType(type: IssueRelationType): IssueRelationType | null {
 export class IssueRelationService {
   constructor(private prisma: PrismaClient) {}
 
-  async create(input: IssueRelationCreateInput): Promise<IssueRelation> {
+  async create(
+    input: IssueRelationCreateInput,
+  ): Promise<{ relation: IssueRelation; canceledIssue: Issue | null }> {
     const { issueId, relatedIssueId, type } = input;
 
     // Self-relation check can stay outside — no race risk here
@@ -108,7 +110,39 @@ export class IssueRelationService {
         }
       }
 
-      return relation;
+      // Auto-cancel the duplicate issue (issueId is the duplicate, relatedIssueId
+      // is the canonical). Skip if the issue is already done or canceled.
+      let canceledIssue: Issue | null = null;
+      if (type === 'duplicate') {
+        const dup = await tx.issue.findUnique({
+          select: { stateId: true, teamId: true },
+          where: { id: issueId },
+        });
+        if (dup) {
+          const currentState = await tx.workflowState.findUnique({
+            select: { type: true },
+            where: { id: dup.stateId },
+          });
+          if (
+            currentState &&
+            currentState.type !== 'completed' &&
+            currentState.type !== 'canceled'
+          ) {
+            const canceledState = await tx.workflowState.findFirst({
+              orderBy: { position: 'asc' },
+              where: { archivedAt: null, teamId: dup.teamId, type: 'canceled' },
+            });
+            if (canceledState) {
+              canceledIssue = await tx.issue.update({
+                data: { canceledAt: new Date(), stateId: canceledState.id },
+                where: { id: issueId },
+              });
+            }
+          }
+        }
+      }
+
+      return { canceledIssue, relation };
     });
   }
 

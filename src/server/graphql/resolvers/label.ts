@@ -4,6 +4,14 @@ import { requireAuth, requireTeamMember } from '../../middleware/auth';
 import type { LabelCreateInput, LabelUpdateInput } from '../../services/label.service';
 import type { GraphQLContext } from '../context';
 
+function handleLabelError(err: unknown): never {
+  const error = err as Error;
+  if (error.name === 'LabelGroupDepthError' || error.name === 'LabelGroupCapacityError') {
+    throw new GraphQLError(error.message, { extensions: { code: 'BAD_USER_INPUT' } });
+  }
+  throw err;
+}
+
 export const labelResolvers = {
   IssueLabel: {
     children: async (label: IssueLabel, _args: unknown, ctx: GraphQLContext) =>
@@ -57,7 +65,12 @@ export const labelResolvers = {
         await requireTeamMember(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
       }
 
-      const label = await ctx.services.label.create(ctx.orgId, ctx.userId, input);
+      let label: IssueLabel;
+      try {
+        label = await ctx.services.label.create(ctx.orgId, ctx.userId, input);
+      } catch (err) {
+        handleLabelError(err);
+      }
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
         'I',

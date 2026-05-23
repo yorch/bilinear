@@ -55,19 +55,6 @@ export const githubResolvers = {
         mapServiceError(err, GITHUB_ERROR_MAP);
       }
     },
-
-    userUpdateNotificationPreferences: async (
-      _parent: unknown,
-      { emailNotificationsEnabled }: { emailNotificationsEnabled: boolean },
-      ctx: GraphQLContext,
-    ) => {
-      requireAuth(ctx);
-      const user = await ctx.prisma.user.update({
-        data: { emailNotificationsEnabled },
-        where: { id: ctx.userId },
-      });
-      return { success: true, user };
-    },
   },
 
   Query: {

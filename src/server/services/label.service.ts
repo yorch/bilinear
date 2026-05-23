@@ -17,10 +17,44 @@ export interface LabelUpdateInput {
   parentId?: string | null;
 }
 
+const MAX_GROUP_CHILDREN = 250;
+
+export class LabelGroupDepthError extends Error {
+  constructor() {
+    super('Labels can only be nested one level deep inside a group');
+    this.name = 'LabelGroupDepthError';
+  }
+}
+
+export class LabelGroupCapacityError extends Error {
+  constructor() {
+    super(`Label groups are capped at ${MAX_GROUP_CHILDREN} children`);
+    this.name = 'LabelGroupCapacityError';
+  }
+}
+
 export class LabelService {
   constructor(private prisma: PrismaClient) {}
 
   async create(orgId: string, creatorId: string, input: LabelCreateInput): Promise<IssueLabel> {
+    if (input.parentId) {
+      const parent = await this.prisma.issueLabel.findUnique({
+        select: { parentId: true },
+        where: { id: input.parentId },
+      });
+      // Depth guard: the parent must itself be a root label (no grandparent).
+      if (parent?.parentId) {
+        throw new LabelGroupDepthError();
+      }
+      // Capacity guard: each group may have at most MAX_GROUP_CHILDREN children.
+      const siblingCount = await this.prisma.issueLabel.count({
+        where: { archivedAt: null, parentId: input.parentId },
+      });
+      if (siblingCount >= MAX_GROUP_CHILDREN) {
+        throw new LabelGroupCapacityError();
+      }
+    }
+
     return this.prisma.issueLabel.create({
       data: {
         color: input.color,
@@ -49,6 +83,40 @@ export class LabelService {
         // Return workspace-global labels + optionally team-scoped ones
         ...(teamId ? { OR: [{ teamId: null }, { teamId }] } : { teamId: null }),
       },
+    });
+  }
+
+  /**
+   * Given a desired set of labelIds, enforce single-select-per-group semantics:
+   * if two or more labels share the same group parent, keep only the last one in
+   * the input order (caller's intent wins). Returns the deduplicated list.
+   * Falls back to the input unchanged when no labels have a parent.
+   */
+  async enforceSingleSelectPerGroup(labelIds: string[]): Promise<string[]> {
+    if (labelIds.length === 0) {
+      return [];
+    }
+    const labels = await this.prisma.issueLabel.findMany({
+      select: { id: true, parentId: true },
+      where: { id: { in: labelIds } },
+    });
+    const byId = new Map(labels.map(l => [l.id, l]));
+    // Walk the input list in order; last writer per group wins.
+    const seenGroup = new Map<string, string>(); // parentId → last labelId
+    for (const id of labelIds) {
+      const label = byId.get(id);
+      if (label?.parentId) {
+        seenGroup.set(label.parentId, id);
+      }
+    }
+    // Rebuild preserving input order but dropping superseded siblings.
+    const survivorSet = new Set(seenGroup.values());
+    return labelIds.filter(id => {
+      const label = byId.get(id);
+      if (!label?.parentId) {
+        return true; // root labels are always kept
+      }
+      return survivorSet.has(id);
     });
   }
 
