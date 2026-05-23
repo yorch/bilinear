@@ -77,11 +77,18 @@ export const server = new Server<HookContext>({
         log.warn({ documentName, orgId: claims.orgId }, 'YJS connection rejected: issue not found');
         throw new Error('Not found');
       }
-    }
-    // 'document' type: reserved for future Document.contentState migration.
-    // Reject for now to prevent silent no-ops on unsupported entity types.
-    else {
-      throw new Error('Document collaborative editing not yet available');
+    } else {
+      const doc = await prisma.document.findFirst({
+        select: { id: true },
+        where: { archivedAt: null, id: parsed.id, organizationId: claims.orgId },
+      });
+      if (!doc) {
+        log.warn(
+          { documentName, orgId: claims.orgId },
+          'YJS connection rejected: document not found',
+        );
+        throw new Error('Not found');
+      }
     }
 
     // Stamp context so downstream hooks can read orgId/userId without
@@ -101,16 +108,26 @@ export const server = new Server<HookContext>({
   // Called once per document name when the first client connects.
   async onLoadDocument({ document, documentName, context }) {
     const parsed = parseDocName(documentName);
-    if (!parsed || parsed.type !== 'issue') {
+    if (!parsed) {
       return;
     }
 
-    const issue = await prisma.issue.findFirst({
-      select: { descriptionState: true },
-      where: { archivedAt: null, id: parsed.id, organizationId: (context as HookContext).orgId },
-    });
+    let stateBytes: Buffer | null | undefined;
 
-    const stateBytes = issue?.descriptionState;
+    if (parsed.type === 'issue') {
+      const issue = await prisma.issue.findFirst({
+        select: { descriptionState: true },
+        where: { archivedAt: null, id: parsed.id, organizationId: (context as HookContext).orgId },
+      });
+      stateBytes = issue?.descriptionState as Buffer | null | undefined;
+    } else {
+      const doc = await prisma.document.findFirst({
+        select: { contentState: true },
+        where: { archivedAt: null, id: parsed.id, organizationId: (context as HookContext).orgId },
+      });
+      stateBytes = doc?.contentState as Buffer | null | undefined;
+    }
+
     if (stateBytes && stateBytes.length > 0) {
       Y.applyUpdate(document, stateBytes);
       log.debug({ bytes: stateBytes.length, documentName }, 'Loaded YJS state from DB');
@@ -127,16 +144,26 @@ export const server = new Server<HookContext>({
   // so we don't hammer Postgres on every keystroke.
   async onStoreDocument({ document, documentName }) {
     const parsed = parseDocName(documentName);
-    if (!parsed || parsed.type !== 'issue') {
+    if (!parsed) {
       return;
     }
 
+    // Tenant isolation is enforced at connection time in onAuthenticate. The
+    // connection is bound to a single document room so the id alone is the
+    // correct unique selector for Prisma's update (which requires @id/@unique).
     const state = Buffer.from(Y.encodeStateAsUpdate(document));
     try {
-      await prisma.issue.update({
-        data: { descriptionState: state },
-        where: { id: parsed.id },
-      });
+      if (parsed.type === 'issue') {
+        await prisma.issue.update({
+          data: { descriptionState: state },
+          where: { id: parsed.id },
+        });
+      } else {
+        await prisma.document.update({
+          data: { contentState: state },
+          where: { id: parsed.id },
+        });
+      }
       log.debug({ bytes: state.length, documentName }, 'Persisted YJS state to DB');
     } catch (err) {
       log.error({ documentName, err }, 'Failed to persist YJS state');

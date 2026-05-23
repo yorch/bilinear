@@ -15,6 +15,7 @@ import { IssueListView } from '@/components/issues/issue-list-view';
 import type { OpenProperty } from '@/components/issues/issue-row';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
 import { type ViewMode, ViewToggle } from '@/components/issues/view-toggle';
+import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { type SaveViewInput, SaveViewModal } from '@/components/views/save-view-modal';
 import { useChord, useHotkeys } from '@/hooks/use-hotkeys';
 import { useRecentItems } from '@/hooks/use-recent-items';
@@ -32,7 +33,7 @@ import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
 // ---------------------------------------------------------------------------
 
 const ISSUE_FIELDS = `
-  id identifier number title description priority estimate dueDate
+  id identifier number title description priority estimate dueDate startDate
   sortOrder prioritySortOrder trashed
   teamId organizationId stateId assigneeId creatorId parentId
   projectId cycleId branchName
@@ -467,9 +468,10 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     [selectedId, handleArchive, hasSelection],
   );
 
-  // Alt+1 — list view, Alt+2 — board view
+  // Alt+1 — list view, Alt+2 — board view, Alt+3 — timeline view
   useHotkeys('alt+1', () => setViewMode('list'), {}, []);
   useHotkeys('alt+2', () => setViewMode('board'), {}, []);
+  useHotkeys('alt+3', () => setViewMode('timeline'), {}, []);
 
   // G then I — go to my issues (placeholder navigation)
   useChord('g', 'i', () => router.push(`/${workspace}/my-issues`), [workspace]);
@@ -621,7 +623,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         )}
       </div>
 
-      {/* Issue list / board */}
+      {/* Issue list / board / timeline */}
       <div className="flex-1 overflow-y-auto">
         {viewMode === 'list' ? (
           <IssueListView
@@ -643,6 +645,22 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
             states={states}
             teamId={teamId ?? undefined}
             users={users}
+          />
+        ) : viewMode === 'timeline' ? (
+          <GanttView
+            emptyMessage="No issues with start or due dates. Add dates to issues to populate the timeline."
+            items={issues
+              .filter(i => i.startDate ?? i.dueDate)
+              .map<GanttItem>(i => ({
+                endDate: i.dueDate ?? null,
+                id: i.id,
+                name: `${i.identifier} ${i.title}`,
+                startDate: i.startDate ?? null,
+                subtitle: states.find(s => s.id === i.stateId)?.name ?? undefined,
+              }))}
+            onChange={(id, startDate, endDate) => {
+              handleUpdate(id, { dueDate: endDate, startDate });
+            }}
           />
         ) : (
           <BoardView

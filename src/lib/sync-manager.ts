@@ -194,6 +194,7 @@ export class SyncManager {
       customFieldValues,
       initiatives,
       initiativeProjects,
+      favorites,
       meta,
     ] = await Promise.all([
       db.organizations.toArray(),
@@ -215,6 +216,7 @@ export class SyncManager {
       db.customFieldValues.toArray(),
       db.initiatives.toArray(),
       db.initiativeProjects.toArray(),
+      db.favorites.toArray(),
       db.syncMetadata.get('lastSyncId'),
     ]);
 
@@ -230,6 +232,7 @@ export class SyncManager {
       issueStore,
       cycleStore,
       documentStore,
+      favoriteStore,
       initiativeStore,
       projectStore,
       customViewStore,
@@ -251,6 +254,7 @@ export class SyncManager {
       issueStore.upsertMany(issues);
       cycleStore.upsertMany(cycles);
       documentStore.upsertMany(documents);
+      favoriteStore.upsertMany(favorites as Parameters<typeof favoriteStore.upsertMany>[0]);
       initiativeStore.upsertMany(initiatives);
       initiativeStore.upsertProjectLinks(initiativeProjects);
       projectStore.upsertMany(projects);
@@ -568,6 +572,7 @@ export class SyncManager {
       issueStore,
       cycleStore,
       documentStore,
+      favoriteStore,
       initiativeStore,
       projectStore,
       customViewStore,
@@ -890,10 +895,11 @@ export class SyncManager {
           }
           break;
         case 'Favorite':
-          // No MobX store yet — favorites are queried on demand by the
-          // sidebar via `favorites` GraphQL query. We still persist to
-          // Dexie so the offline-first cache stays consistent and a
-          // future sidebar component can read from it without a refetch.
+          favoriteStore.applySyncAction(
+            act,
+            modelId,
+            data as Parameters<typeof favoriteStore.applySyncAction>[2],
+          );
           if (act === 'D') {
             dexieDeletes.push({ id: modelId, table: 'favorites' });
           } else if (data) {

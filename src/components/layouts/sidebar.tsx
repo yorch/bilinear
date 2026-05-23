@@ -3,25 +3,105 @@
 import {
   Archive,
   BarChart2,
+  BookOpen,
   Eye,
   FileText,
+  Flag,
   Inbox,
+  Layers,
   LogOut,
   PanelLeft,
   Plus,
   RefreshCw,
   Settings,
+  Star,
   Target,
   User,
   Users,
+  X,
 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useAuth } from '@/hooks/use-auth';
+import { gql } from '@/lib/graphql';
+import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
+
+const FAVORITES_QUERY = `
+  query SidebarFavorites {
+    favorites {
+      id
+      entityType
+      entityId
+      sortOrder
+      entity {
+        ... on Issue { id identifier title teamId }
+        ... on Project { id name icon color slugId }
+        ... on Initiative { id name color }
+        ... on CustomView { id name teamId }
+        ... on Cycle { id name teamId }
+        ... on Document { id title teamId }
+        ... on Team { id name key icon }
+      }
+    }
+  }
+`;
+
+const FAVORITE_DELETE_MUTATION = `
+  mutation FavoriteDelete($id: ID!) {
+    favoriteDelete(id: $id) {
+      success
+      lastSyncId
+    }
+  }
+`;
+
+interface FavoriteMeta {
+  entity:
+    | { __typename: 'Issue'; id: string; identifier: string; title: string; teamId: string }
+    | {
+        __typename: 'Project';
+        id: string;
+        name: string;
+        icon?: string | null;
+        color?: string | null;
+        slugId: string;
+      }
+    | { __typename: 'Initiative'; id: string; name: string; color?: string | null }
+    | { __typename: 'CustomView'; id: string; name: string; teamId: string }
+    | { __typename: 'Cycle'; id: string; name: string; teamId: string }
+    | { __typename: 'Document'; id: string; title: string; teamId: string }
+    | { __typename: 'Team'; id: string; name: string; key: string; icon?: string | null }
+    | null;
+  entityType: string;
+  id: string;
+  sortOrder: number;
+}
+
+function favoriteIcon(entityType: string) {
+  switch (entityType) {
+    case 'Issue':
+      return <Layers className="h-3 w-3" />;
+    case 'Project':
+      return <Target className="h-3 w-3" />;
+    case 'Initiative':
+      return <Flag className="h-3 w-3" />;
+    case 'CustomView':
+      return <Eye className="h-3 w-3" />;
+    case 'Cycle':
+      return <RefreshCw className="h-3 w-3" />;
+    case 'Document':
+      return <BookOpen className="h-3 w-3" />;
+    case 'Team':
+      return <Users className="h-3 w-3" />;
+    default:
+      return <Star className="h-3 w-3" />;
+  }
+}
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -34,9 +114,97 @@ export const Sidebar = observer(function Sidebar({
   onToggle,
   workspaceKey,
 }: SidebarProps) {
-  const { customViewStore, teamStore, uiStore, syncStore } = useStore();
+  const { customViewStore, favoriteStore, teamStore, uiStore, syncStore } = useStore();
   const pathname = usePathname();
   const base = workspaceKey ? `/${workspaceKey}` : '';
+
+  const [favorites, setFavorites] = useState<FavoriteMeta[]>([]);
+
+  // Derive a stable string from the MobX store that changes on any insert,
+  // delete, or sortOrder update so the sidebar re-fetches full entity data.
+  // observer() tracks the .all read; the biome-ignore is needed because the
+  // dep isn't referenced inside the callback (it's a pure reactive trigger).
+  const favStoreKey = favoriteStore.all.map(f => `${f.id}:${f.sortOrder}`).join(',');
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: favStoreKey is a MobX-derived reactive trigger, not used inside the callback
+  useEffect(() => {
+    gql(FAVORITES_QUERY, {})
+      .then(res => {
+        const data = res.data as { favorites?: FavoriteMeta[] } | undefined;
+        const list = data?.favorites ?? [];
+        setFavorites(list.filter(f => f.entity !== null).sort((a, b) => a.sortOrder - b.sortOrder));
+      })
+      .catch(() => {});
+  }, [favStoreKey]);
+
+  async function removeFavorite(id: string) {
+    try {
+      const res = await gql(FAVORITE_DELETE_MUTATION, { id });
+      if (res.errors?.length) {
+        toast.error('Failed to remove favorite');
+      } else {
+        setFavorites(prev => prev.filter(f => f.id !== id));
+      }
+    } catch {
+      toast.error('Failed to remove favorite');
+    }
+  }
+
+  function favoriteHref(fav: FavoriteMeta): string {
+    const e = fav.entity;
+    if (!e) {
+      return '#';
+    }
+    switch (e.__typename) {
+      case 'Issue': {
+        const key = teamStore.findById(e.teamId)?.key;
+        return key ? `${base}/team/${key}/issues/${e.id}` : '#';
+      }
+      case 'Project':
+        return `${base}/project/${e.slugId}`;
+      case 'Initiative':
+        return `${base}/initiatives`;
+      case 'CustomView': {
+        const key = teamStore.findById(e.teamId)?.key;
+        return key ? `${base}/team/${key}/view/${e.id}` : '#';
+      }
+      case 'Cycle': {
+        const key = teamStore.findById(e.teamId)?.key;
+        return key ? `${base}/team/${key}/cycles` : '#';
+      }
+      case 'Document':
+        return `${base}/docs/${e.id}`;
+      case 'Team':
+        return `${base}/team/${e.key}`;
+      default:
+        return '#';
+    }
+  }
+
+  function favoriteLabel(fav: FavoriteMeta): string {
+    const e = fav.entity;
+    if (!e) {
+      return '';
+    }
+    switch (e.__typename) {
+      case 'Issue':
+        return `${e.identifier} ${e.title}`;
+      case 'Project':
+        return e.name;
+      case 'Initiative':
+        return e.name;
+      case 'CustomView':
+        return e.name;
+      case 'Cycle':
+        return e.name;
+      case 'Document':
+        return e.title;
+      case 'Team':
+        return e.name;
+      default:
+        return '';
+    }
+  }
 
   const globalNavItems = [
     {
@@ -120,6 +288,50 @@ export const Sidebar = observer(function Sidebar({
             </li>
           ))}
         </ul>
+
+        {/* Favorites section */}
+        {!collapsed && favorites.length > 0 && (
+          <div className="mt-4 px-1.5">
+            <div className="flex items-center px-2 mb-1">
+              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                Favorites
+              </span>
+            </div>
+            <ul className="flex flex-col gap-0.5">
+              {favorites.map(fav => {
+                const href = favoriteHref(fav);
+                const label = favoriteLabel(fav);
+                const isActive = pathname === href;
+                return (
+                  <li className="group flex items-center" key={fav.id}>
+                    <Link
+                      className={cn(
+                        'flex flex-1 min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+                        isActive
+                          ? 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
+                          : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
+                      )}
+                      href={href}
+                      title={label}
+                    >
+                      <span className="shrink-0 text-zinc-400">{favoriteIcon(fav.entityType)}</span>
+                      <span className="truncate text-xs">{label}</span>
+                    </Link>
+                    <button
+                      aria-label={`Remove ${label} from favorites`}
+                      className="mr-1 hidden shrink-0 rounded p-0.5 text-zinc-400 hover:text-zinc-700 group-hover:flex dark:hover:text-zinc-200"
+                      onClick={() => void removeFavorite(fav.id)}
+                      title="Remove from favorites"
+                      type="button"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
 
         {/* Teams section */}
         {!collapsed && (

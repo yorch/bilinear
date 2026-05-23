@@ -43,6 +43,7 @@ interface CommentItem {
 interface CommentThreadProps {
   currentUserId?: string;
   issueId: string;
+  mentionIssues?: MentionItem[];
   mentionUsers?: MentionItem[];
   teamId?: string;
 }
@@ -155,6 +156,7 @@ export function CommentThread({
   issueId,
   teamId,
   currentUserId,
+  mentionIssues,
   mentionUsers,
 }: CommentThreadProps) {
   const [comments, setComments] = useState<CommentItem[]>([]);
@@ -274,6 +276,7 @@ export function CommentThread({
           currentUserId={currentUserId}
           issueId={issueId}
           key={comment.id}
+          mentionIssues={mentionIssues}
           mentionUsers={mentionUsers}
           onConvertToSubIssue={id => setComments(prev => prev.filter(c => c.id !== id))}
           onDelete={deleteComment}
@@ -293,10 +296,11 @@ export function CommentThread({
       <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
         <CommentComposer
           issueId={issueId}
+          mentionIssues={mentionIssues}
           mentionUsers={mentionUsers}
           onChange={setNewComment}
           onSubmit={body => submitComment(body)}
-          placeholder="Write a comment… (supports **markdown**, @mentions)"
+          placeholder="Write a comment… (supports **markdown**, @mentions, #issues)"
           submitting={submitting}
           value={newComment}
         />
@@ -308,6 +312,7 @@ export function CommentThread({
 function CommentCard({
   comment,
   currentUserId,
+  mentionIssues,
   mentionUsers,
   issueId,
   teamId,
@@ -323,6 +328,7 @@ function CommentCard({
 }: {
   comment: CommentItem;
   currentUserId?: string;
+  mentionIssues?: MentionItem[];
   mentionUsers?: MentionItem[];
   issueId: string;
   teamId?: string;
@@ -639,6 +645,7 @@ function CommentCard({
               depth={1}
               issueId={issueId}
               key={reply.id}
+              mentionIssues={mentionIssues}
               mentionUsers={mentionUsers}
               onConvertToSubIssue={onConvertToSubIssue}
               onDelete={onDelete}
@@ -660,6 +667,7 @@ function CommentCard({
           <CommentComposer
             compact
             issueId={issueId}
+            mentionIssues={mentionIssues}
             mentionUsers={mentionUsers}
             onChange={setReplyBody}
             onSubmit={body => {
@@ -682,6 +690,7 @@ function CommentComposer({
   submitting,
   value,
   onChange,
+  mentionIssues,
   mentionUsers,
   compact = false,
   issueId,
@@ -691,6 +700,7 @@ function CommentComposer({
   submitting: boolean;
   value: string;
   onChange: (v: string) => void;
+  mentionIssues?: MentionItem[];
   mentionUsers?: MentionItem[];
   compact?: boolean;
   issueId?: string;
@@ -707,6 +717,7 @@ function CommentComposer({
       <TipTapEditor
         className={cn('text-sm', compact ? 'min-h-[40px]' : 'min-h-[80px]')}
         content={value}
+        mentionIssues={mentionIssues}
         mentionUsers={mentionUsers}
         onChange={onChange}
         placeholder={placeholder}

@@ -66,10 +66,12 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
   onClose,
   onUpdate,
 }: IssueDetailPanelProps) {
-  const { userStore, teamStore } = useStore();
+  const { userStore, teamStore, issueStore } = useStore();
   const currentUserId = userStore.currentUser?.id;
   const currentUserName = userStore.currentUser?.displayName ?? 'User';
   const mentionUsers = useMemo(() => users.map(u => ({ id: u.id, label: u.displayName })), [users]);
+  // observer() tracks issueStore.all reads reactively; plain map is correct here.
+  const mentionIssues = issueStore.all.map(i => ({ id: i.id, label: i.identifier, sub: i.title }));
   // Resolve estimation type from team so the correct scale displays
   const estimationType = teamStore.findById(issue?.teamId ?? '')?.issueEstimationType ?? 'notUsed';
   const [editingTitle, setEditingTitle] = useState(false);
@@ -337,10 +339,11 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
                   collabDocId={`issue:${issue.id}`}
                   collabUserName={currentUserName}
                   content={descDraft}
+                  mentionIssues={mentionIssues}
                   mentionUsers={mentionUsers}
                   onBlur={saveDesc}
                   onChange={html => setDescDraft(html)}
-                  placeholder="Add a description… (supports **markdown**, /slash commands, @mentions)"
+                  placeholder="Add a description… (supports **markdown**, /slash commands, @mentions, #issues)"
                   readOnly={false}
                   showToolbar={true}
                   uploadIssueId={issue.id}
@@ -388,6 +391,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
             <CommentThread
               currentUserId={currentUserId}
               issueId={issue.id}
+              mentionIssues={mentionIssues}
               mentionUsers={mentionUsers}
               teamId={issue.teamId}
             />

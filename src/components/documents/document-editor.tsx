@@ -2,6 +2,7 @@
 
 import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { MentionItem } from '@/components/editor/mention-list';
 import { TipTapEditor } from '@/components/editor/tiptap-editor.lazy';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
@@ -13,8 +14,12 @@ interface DocumentEditorProps {
 export const DocumentEditor = observer(function DocumentEditor({
   documentId,
 }: DocumentEditorProps) {
-  const { documentStore } = useStore();
+  const { documentStore, userStore } = useStore();
   const txQueue = useMemo(() => new TransactionQueue(), []);
+
+  const mentionUsers: MentionItem[] = userStore.all.map(u => ({ id: u.id, label: u.displayName }));
+
+  const currentUserName = userStore.currentUser?.displayName ?? 'User';
 
   const doc = documentStore.findById(documentId);
 
@@ -109,7 +114,10 @@ export const DocumentEditor = observer(function DocumentEditor({
       </div>
       <div className="flex-1 overflow-y-auto px-8 py-4">
         <TipTapEditor
+          collabDocId={`document:${documentId}`}
+          collabUserName={currentUserName}
           content={doc.content ?? ''}
+          mentionUsers={mentionUsers}
           onChange={handleContentChange}
           placeholder="Start writing..."
           showToolbar

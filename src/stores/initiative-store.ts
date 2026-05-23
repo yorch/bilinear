@@ -14,6 +14,7 @@ export class InitiativeStore {
       optimisticUpdate: action,
       pool: observable,
       projectLinks: observable,
+      roots: computed,
       upsertMany: action,
       upsertProjectLinks: action,
     });
@@ -34,8 +35,18 @@ export class InitiativeStore {
     return this.all.filter(i => i.status === 'active' || i.status === 'planned');
   }
 
+  /** Root initiatives (no parent). */
+  get roots(): DBInitiative[] {
+    return this.all.filter(i => !i.parentId);
+  }
+
   findById(id: string): DBInitiative | null {
     return this.pool.get(id) ?? null;
+  }
+
+  /** Direct children of an initiative, sorted. */
+  getChildren(parentId: string): DBInitiative[] {
+    return this.all.filter(i => i.parentId === parentId);
   }
 
   /** Project ids associated with this initiative, ordered by sortOrder. */

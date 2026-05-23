@@ -66,11 +66,12 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUS_ORDER = ['active', 'planned', 'completed', 'canceled'];
 
-function InitiativeRow({ initiative }: { initiative: DBInitiative }) {
+function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: DBInitiative }) {
   const { initiativeStore, projectStore, userStore } = useStore();
   const viewerId = userStore.currentUser?.id ?? '';
   const [expanded, setExpanded] = useState(false);
   const [adding, setAdding] = useState(false);
+  const children = initiativeStore.getChildren(initiative.id);
   const projectIds = initiativeStore.getProjectIds(initiative.id);
   const projects = projectIds
     .map(id => projectStore.findById(id))
@@ -78,15 +79,24 @@ function InitiativeRow({ initiative }: { initiative: DBInitiative }) {
 
   const allProjects = projectStore.all.filter(p => !projectIds.includes(p.id));
 
+  const indentPx = depth * 20;
   return (
     <div className="border-b border-zinc-100 dark:border-zinc-800">
       <button
         className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
         onClick={() => setExpanded(e => !e)}
+        style={{ paddingLeft: `${16 + indentPx}px` }}
         type="button"
       >
+        {children.length > 0 && (
+          <span
+            className={`text-zinc-400 text-xs shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`}
+          >
+            ▶
+          </span>
+        )}
         <span
-          className="inline-block h-3 w-3 rounded"
+          className="inline-block h-3 w-3 shrink-0 rounded"
           style={{ backgroundColor: initiative.color }}
         />
         <span className="min-w-0 flex-1">
@@ -212,6 +222,10 @@ function InitiativeRow({ initiative }: { initiative: DBInitiative }) {
           <InitiativeUpdatesSection initiativeId={initiative.id} viewerId={viewerId} />
         </div>
       ) : null}
+      {/* Sub-initiatives — rendered regardless of expansion so the tree is always visible */}
+      {children.map(child => (
+        <InitiativeRow depth={depth + 1} initiative={child} key={child.id} />
+      ))}
     </div>
   );
 }
@@ -228,10 +242,10 @@ const InitiativesPage = observer(function InitiativesPage() {
     }
   }, [creating]);
 
-  const initiatives = initiativeStore.all;
-  // Group by status, with a stable ordering: active → planned → completed → canceled.
+  // Only top-level (root) initiatives — children render recursively inside InitiativeRow.
+  const rootInitiatives = initiativeStore.roots;
   const grouped = STATUS_ORDER.map(status => ({
-    items: initiatives.filter(i => i.status === status),
+    items: rootInitiatives.filter(i => i.status === status),
     status,
   })).filter(g => g.items.length > 0);
 
