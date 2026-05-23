@@ -276,6 +276,7 @@ export function CommentThread({
           currentUserId={currentUserId}
           issueId={issueId}
           key={comment.id}
+          mentionIssues={mentionIssues}
           mentionUsers={mentionUsers}
           onConvertToSubIssue={id => setComments(prev => prev.filter(c => c.id !== id))}
           onDelete={deleteComment}
@@ -311,6 +312,7 @@ export function CommentThread({
 function CommentCard({
   comment,
   currentUserId,
+  mentionIssues,
   mentionUsers,
   issueId,
   teamId,
@@ -326,6 +328,7 @@ function CommentCard({
 }: {
   comment: CommentItem;
   currentUserId?: string;
+  mentionIssues?: MentionItem[];
   mentionUsers?: MentionItem[];
   issueId: string;
   teamId?: string;
@@ -642,6 +645,7 @@ function CommentCard({
               depth={1}
               issueId={issueId}
               key={reply.id}
+              mentionIssues={mentionIssues}
               mentionUsers={mentionUsers}
               onConvertToSubIssue={onConvertToSubIssue}
               onDelete={onDelete}
@@ -663,6 +667,7 @@ function CommentCard({
           <CommentComposer
             compact
             issueId={issueId}
+            mentionIssues={mentionIssues}
             mentionUsers={mentionUsers}
             onChange={setReplyBody}
             onSubmit={body => {

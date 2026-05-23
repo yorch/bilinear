@@ -142,23 +142,24 @@ export const server = new Server<HookContext>({
   // ─── Store ────────────────────────────────────────────────────────────────
   // Persist the YJS document state to the DB. Debounced by the config above
   // so we don't hammer Postgres on every keystroke.
-  async onStoreDocument({ document, documentName }) {
+  async onStoreDocument({ lastContext, document, documentName }) {
     const parsed = parseDocName(documentName);
     if (!parsed) {
       return;
     }
 
+    const orgId = (lastContext as HookContext).orgId;
     const state = Buffer.from(Y.encodeStateAsUpdate(document));
     try {
       if (parsed.type === 'issue') {
         await prisma.issue.update({
           data: { descriptionState: state },
-          where: { id: parsed.id },
+          where: { id: parsed.id, organizationId: orgId },
         });
       } else {
         await prisma.document.update({
           data: { contentState: state },
-          where: { id: parsed.id },
+          where: { id: parsed.id, organizationId: orgId },
         });
       }
       log.debug({ bytes: state.length, documentName }, 'Persisted YJS state to DB');

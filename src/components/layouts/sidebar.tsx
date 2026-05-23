@@ -117,19 +117,27 @@ export const Sidebar = observer(function Sidebar({
   onToggle,
   workspaceKey,
 }: SidebarProps) {
-  const { customViewStore, teamStore, uiStore, syncStore } = useStore();
+  const { customViewStore, favoriteStore, teamStore, uiStore, syncStore } = useStore();
   const pathname = usePathname();
   const base = workspaceKey ? `/${workspaceKey}` : '';
 
   const [favorites, setFavorites] = useState<FavoriteMeta[]>([]);
 
+  // Re-fetch whenever the MobX store changes (real-time WS adds/removes).
+  // favoriteStore.pool.size is tracked by observer() so changes trigger a re-render,
+  // making this dep run the effect again with fresh entity data from the server.
+  const favPoolSize = favoriteStore.pool.size;
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: favPoolSize is a MobX reactive trigger, not used inside the callback
   useEffect(() => {
-    gql(FAVORITES_QUERY, {}).then(res => {
-      const data = res.data as { favorites?: { favorites?: FavoriteMeta[] } } | undefined;
-      const list = data?.favorites?.favorites ?? [];
-      setFavorites(list.filter(f => f.entity !== null).sort((a, b) => a.sortOrder - b.sortOrder));
-    });
-  }, []);
+    gql(FAVORITES_QUERY, {})
+      .then(res => {
+        const data = res.data as { favorites?: { favorites?: FavoriteMeta[] } } | undefined;
+        const list = data?.favorites?.favorites ?? [];
+        setFavorites(list.filter(f => f.entity !== null).sort((a, b) => a.sortOrder - b.sortOrder));
+      })
+      .catch(() => {});
+  }, [favPoolSize]);
 
   async function removeFavorite(id: string) {
     const res = await gql(FAVORITE_DELETE_MUTATION, { id });

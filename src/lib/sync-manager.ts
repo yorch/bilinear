@@ -287,6 +287,7 @@ export class SyncManager {
       issueStore,
       cycleStore,
       documentStore,
+      favoriteStore,
       initiativeStore,
       projectStore,
       customViewStore,
@@ -317,6 +318,7 @@ export class SyncManager {
         customViews: [] as object[],
         cycles: [] as object[],
         documents: [] as object[],
+        favorites: [] as object[],
         initiativeProjects: [] as object[],
         initiatives: [] as object[],
         issueLabels: [] as object[],
@@ -367,6 +369,7 @@ export class SyncManager {
           db.issues,
           db.cycles,
           db.documents,
+          db.favorites,
           db.initiatives,
           db.initiativeProjects,
           db.projects,
@@ -390,6 +393,7 @@ export class SyncManager {
             db.issues.clear(),
             db.cycles.clear(),
             db.documents.clear(),
+            db.favorites.clear(),
             db.initiatives.clear(),
             db.initiativeProjects.clear(),
             db.projects.clear(),
@@ -417,6 +421,7 @@ export class SyncManager {
             db.issues.bulkPut(batches.issues as Parameters<typeof db.issues.bulkPut>[0]),
             db.cycles.bulkPut(batches.cycles as Parameters<typeof db.cycles.bulkPut>[0]),
             db.documents.bulkPut(batches.documents as Parameters<typeof db.documents.bulkPut>[0]),
+            db.favorites.bulkPut(batches.favorites as Parameters<typeof db.favorites.bulkPut>[0]),
             db.projects.bulkPut(batches.projects as Parameters<typeof db.projects.bulkPut>[0]),
             db.projectMilestones.bulkPut(
               batches.projectMilestones as Parameters<typeof db.projectMilestones.bulkPut>[0],
@@ -469,6 +474,7 @@ export class SyncManager {
       issueStore.upsertMany(batches.issues as Parameters<typeof issueStore.upsertMany>[0]);
       cycleStore.upsertMany(batches.cycles as Parameters<typeof cycleStore.upsertMany>[0]);
       documentStore.upsertMany(batches.documents as Parameters<typeof documentStore.upsertMany>[0]);
+      favoriteStore.upsertMany(batches.favorites as Parameters<typeof favoriteStore.upsertMany>[0]);
       projectStore.upsertMany(batches.projects as Parameters<typeof projectStore.upsertMany>[0]);
       projectStore.upsertMilestones(
         batches.projectMilestones as Parameters<typeof projectStore.upsertMilestones>[0],
