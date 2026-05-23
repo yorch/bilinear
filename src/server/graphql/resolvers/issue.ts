@@ -488,10 +488,12 @@ export const issueResolvers = {
         }
       }
 
-      // Label add/remove activity entries
+      // Label add/remove activity entries — diff against the actual persisted
+      // set (not raw input) so enforceSingleSelectPerGroup drops are not logged.
       if (input.labelIds !== undefined) {
+        const newLabels = await ctx.services.issue.getLabels(id);
         const oldLabelIds = new Set(oldLabels.map(l => l.id));
-        const newLabelIds = new Set(input.labelIds);
+        const newLabelIds = new Set(newLabels.map(l => l.id));
         for (const l of oldLabels) {
           if (!newLabelIds.has(l.id)) {
             activities.push({
@@ -502,13 +504,13 @@ export const issueResolvers = {
             });
           }
         }
-        for (const labelId of input.labelIds) {
-          if (!oldLabelIds.has(labelId)) {
+        for (const l of newLabels) {
+          if (!oldLabelIds.has(l.id)) {
             activities.push({
               actorId: ctx.userId,
               field: 'labelAdded',
               issueId: id,
-              newValue: labelId,
+              newValue: l.id,
             });
           }
         }

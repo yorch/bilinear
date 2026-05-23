@@ -37,36 +37,39 @@ export class LabelService {
   constructor(private prisma: PrismaClient) {}
 
   async create(orgId: string, creatorId: string, input: LabelCreateInput): Promise<IssueLabel> {
-    if (input.parentId) {
-      const parent = await this.prisma.issueLabel.findUnique({
-        select: { parentId: true },
-        where: { id: input.parentId },
-      });
-      // Depth guard: the parent must itself be a root label (no grandparent).
-      if (parent?.parentId) {
-        throw new LabelGroupDepthError();
+    return this.prisma.$transaction(async tx => {
+      if (input.parentId) {
+        const parent = await tx.issueLabel.findUnique({
+          select: { parentId: true },
+          where: { id: input.parentId },
+        });
+        // Depth guard: the parent must itself be a root label (no grandparent).
+        if (parent?.parentId) {
+          throw new LabelGroupDepthError();
+        }
+        // Capacity guard: each group may have at most MAX_GROUP_CHILDREN children.
+        // Runs inside the transaction to close the TOCTOU window.
+        const siblingCount = await tx.issueLabel.count({
+          where: { archivedAt: null, parentId: input.parentId },
+        });
+        if (siblingCount >= MAX_GROUP_CHILDREN) {
+          throw new LabelGroupCapacityError();
+        }
       }
-      // Capacity guard: each group may have at most MAX_GROUP_CHILDREN children.
-      const siblingCount = await this.prisma.issueLabel.count({
-        where: { archivedAt: null, parentId: input.parentId },
-      });
-      if (siblingCount >= MAX_GROUP_CHILDREN) {
-        throw new LabelGroupCapacityError();
-      }
-    }
 
-    return this.prisma.issueLabel.create({
-      data: {
-        color: input.color,
-        creatorId,
-        description: input.description,
-        id: input.id ?? undefined,
-        isGroup: input.isGroup ?? false,
-        name: input.name,
-        organizationId: orgId,
-        parentId: input.parentId,
-        teamId: input.teamId,
-      },
+      return tx.issueLabel.create({
+        data: {
+          color: input.color,
+          creatorId,
+          description: input.description,
+          id: input.id ?? undefined,
+          isGroup: input.isGroup ?? false,
+          name: input.name,
+          organizationId: orgId,
+          parentId: input.parentId,
+          teamId: input.teamId,
+        },
+      });
     });
   }
 
@@ -121,14 +124,43 @@ export class LabelService {
   }
 
   async update(id: string, input: LabelUpdateInput): Promise<IssueLabel> {
-    return this.prisma.issueLabel.update({
-      data: {
-        color: input.color,
-        description: input.description,
-        name: input.name,
-        parentId: input.parentId,
-      },
-      where: { id },
+    return this.prisma.$transaction(async tx => {
+      // Re-run depth + capacity guards whenever parentId is being set to a group.
+      if (input.parentId != null) {
+        const parent = await tx.issueLabel.findUnique({
+          select: { parentId: true },
+          where: { id: input.parentId },
+        });
+        if (parent?.parentId) {
+          throw new LabelGroupDepthError();
+        }
+        // Exclude self from the sibling count in case this label already belongs
+        // to the same group (moving within the group doesn't increase capacity).
+        const current = await tx.issueLabel.findUnique({
+          select: { parentId: true },
+          where: { id },
+        });
+        const siblingCount = await tx.issueLabel.count({
+          where: {
+            archivedAt: null,
+            parentId: input.parentId,
+            ...(current?.parentId === input.parentId ? { id: { not: id } } : {}),
+          },
+        });
+        if (siblingCount >= MAX_GROUP_CHILDREN) {
+          throw new LabelGroupCapacityError();
+        }
+      }
+
+      return tx.issueLabel.update({
+        data: {
+          color: input.color,
+          description: input.description,
+          name: input.name,
+          parentId: input.parentId,
+        },
+        where: { id },
+      });
     });
   }
 

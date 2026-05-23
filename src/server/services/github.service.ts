@@ -159,11 +159,15 @@ export class GitHubService {
       return;
     }
 
-    // Resolve identifiers → issue IDs
+    // Resolve identifiers → issue IDs, checking both current and previous
+    // identifiers so renamed/moved issues are still matched.
     const issues = await this.prisma.issue.findMany({
       select: { id: true, identifier: true, teamId: true },
       where: {
-        identifier: { in: identifiers },
+        OR: [
+          { identifier: { in: identifiers } },
+          { previousIdentifiers: { hasSome: identifiers } },
+        ],
         organizationId: orgId,
       },
     });

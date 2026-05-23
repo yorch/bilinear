@@ -131,6 +131,28 @@ describe('LabelService', () => {
         where: { id: TEST_LABEL.id },
       });
     });
+
+    it('throws LabelGroupDepthError when reparenting to a group that itself has a parent', async () => {
+      const parentLabelId = '00000000-0000-0000-0000-000000000600';
+      // Parent has a grandparent → depth = 2, forbidden
+      prisma.issueLabel.findUnique.mockResolvedValueOnce({ parentId: 'grandparent-id' });
+
+      await expect(service.update(TEST_LABEL.id, { parentId: parentLabelId })).rejects.toThrow(
+        'Labels can only be nested one level deep inside a group',
+      );
+    });
+
+    it('throws LabelGroupCapacityError when reparenting to a full group', async () => {
+      const parentLabelId = '00000000-0000-0000-0000-000000000600';
+      // Parent is root, capacity is full
+      prisma.issueLabel.findUnique.mockResolvedValueOnce({ parentId: null }); // parent depth check
+      prisma.issueLabel.findUnique.mockResolvedValueOnce({ parentId: null }); // current label
+      prisma.issueLabel.count.mockResolvedValue(250);
+
+      await expect(service.update(TEST_LABEL.id, { parentId: parentLabelId })).rejects.toThrow(
+        'Label groups are capped at',
+      );
+    });
   });
 
   describe('archive', () => {

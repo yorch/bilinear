@@ -37,7 +37,8 @@ export const issueRelationResolvers = {
       }
       await requireTeamMember(ctx.prisma, relatedIssue.teamId, ctx.userId, ctx.orgId);
       try {
-        const { relation, canceledIssue } = await ctx.services.issueRelation.create(input);
+        const { canceledIssue, canceledIssueOldStateId, relation } =
+          await ctx.services.issueRelation.create(input);
         const sync = await ctx.services.sync.createSyncAction(
           ctx.orgId,
           'I',
@@ -61,9 +62,18 @@ export const issueRelationResolvers = {
               field: 'stateId',
               issueId: canceledIssue.id,
               newValue: canceledIssue.stateId,
-              oldValue: issue.stateId,
+              oldValue: canceledIssueOldStateId ?? undefined,
             })
             .catch(() => {});
+          // Trigger the autoCloseParentIssues / autoCloseChildIssues cascade that
+          // the service's direct tx.issue.update bypassed. We call IssueService.update
+          // with the same stateId so only the cascade runs (state itself is a no-op).
+          const { cascaded } = await ctx.services.issue.update(canceledIssue.id, {
+            stateId: canceledIssue.stateId,
+          });
+          for (const c of cascaded) {
+            await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', c.id, c);
+          }
         }
         return {
           issueRelation: relation,
@@ -99,7 +109,7 @@ export const issueRelationResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, issue, ctx.userId, ctx.orgId);
       await ctx.services.issueRelation.delete(id);
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,

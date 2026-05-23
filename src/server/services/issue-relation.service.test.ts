@@ -54,6 +54,7 @@ describe('IssueRelationService', () => {
 
       expect(result.relation).toMatchObject({ type: 'blocks' });
       expect(result.canceledIssue).toBeNull();
+      expect(result.canceledIssueOldStateId).toBeNull();
       expect(prisma.issueRelation.create).toHaveBeenCalledTimes(2);
       expect(prisma.issueRelation.create).toHaveBeenCalledWith(
         expect.objectContaining({
