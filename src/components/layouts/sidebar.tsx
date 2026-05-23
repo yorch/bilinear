@@ -34,21 +34,18 @@ import { useStore } from '@/providers/store-provider';
 const FAVORITES_QUERY = `
   query SidebarFavorites {
     favorites {
-      success
-      favorites {
-        id
-        entityType
-        entityId
-        sortOrder
-        entity {
-          ... on Issue { id identifier title teamId }
-          ... on Project { id name icon color slugId }
-          ... on Initiative { id name color }
-          ... on CustomView { id name teamId }
-          ... on Cycle { id name teamId }
-          ... on Document { id title teamId }
-          ... on Team { id name key icon }
-        }
+      id
+      entityType
+      entityId
+      sortOrder
+      entity {
+        ... on Issue { id identifier title teamId }
+        ... on Project { id name icon color slugId }
+        ... on Initiative { id name color }
+        ... on CustomView { id name teamId }
+        ... on Cycle { id name teamId }
+        ... on Document { id title teamId }
+        ... on Team { id name key icon }
       }
     }
   }
@@ -123,28 +120,33 @@ export const Sidebar = observer(function Sidebar({
 
   const [favorites, setFavorites] = useState<FavoriteMeta[]>([]);
 
-  // Re-fetch whenever the MobX store changes (real-time WS adds/removes).
-  // favoriteStore.pool.size is tracked by observer() so changes trigger a re-render,
-  // making this dep run the effect again with fresh entity data from the server.
-  const favPoolSize = favoriteStore.pool.size;
+  // Derive a stable string from the MobX store that changes on any insert,
+  // delete, or sortOrder update so the sidebar re-fetches full entity data.
+  // observer() tracks the .all read; the biome-ignore is needed because the
+  // dep isn't referenced inside the callback (it's a pure reactive trigger).
+  const favStoreKey = favoriteStore.all.map(f => `${f.id}:${f.sortOrder}`).join(',');
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: favPoolSize is a MobX reactive trigger, not used inside the callback
+  // biome-ignore lint/correctness/useExhaustiveDependencies: favStoreKey is a MobX-derived reactive trigger, not used inside the callback
   useEffect(() => {
     gql(FAVORITES_QUERY, {})
       .then(res => {
-        const data = res.data as { favorites?: { favorites?: FavoriteMeta[] } } | undefined;
-        const list = data?.favorites?.favorites ?? [];
+        const data = res.data as { favorites?: FavoriteMeta[] } | undefined;
+        const list = data?.favorites ?? [];
         setFavorites(list.filter(f => f.entity !== null).sort((a, b) => a.sortOrder - b.sortOrder));
       })
       .catch(() => {});
-  }, [favPoolSize]);
+  }, [favStoreKey]);
 
   async function removeFavorite(id: string) {
-    const res = await gql(FAVORITE_DELETE_MUTATION, { id });
-    if (res.errors?.length) {
+    try {
+      const res = await gql(FAVORITE_DELETE_MUTATION, { id });
+      if (res.errors?.length) {
+        toast.error('Failed to remove favorite');
+      } else {
+        setFavorites(prev => prev.filter(f => f.id !== id));
+      }
+    } catch {
       toast.error('Failed to remove favorite');
-    } else {
-      setFavorites(prev => prev.filter(f => f.id !== id));
     }
   }
 
@@ -154,16 +156,22 @@ export const Sidebar = observer(function Sidebar({
       return '#';
     }
     switch (e.__typename) {
-      case 'Issue':
-        return `${base}/team/${teamKeyById(e.teamId)}/issues/${e.id}`;
+      case 'Issue': {
+        const key = teamStore.findById(e.teamId)?.key;
+        return key ? `${base}/team/${key}/issues/${e.id}` : '#';
+      }
       case 'Project':
         return `${base}/project/${e.slugId}`;
       case 'Initiative':
         return `${base}/initiatives`;
-      case 'CustomView':
-        return `${base}/team/${teamKeyById(e.teamId)}/view/${e.id}`;
-      case 'Cycle':
-        return `${base}/team/${teamKeyById(e.teamId)}/cycles`;
+      case 'CustomView': {
+        const key = teamStore.findById(e.teamId)?.key;
+        return key ? `${base}/team/${key}/view/${e.id}` : '#';
+      }
+      case 'Cycle': {
+        const key = teamStore.findById(e.teamId)?.key;
+        return key ? `${base}/team/${key}/cycles` : '#';
+      }
       case 'Document':
         return `${base}/docs/${e.id}`;
       case 'Team':
@@ -196,10 +204,6 @@ export const Sidebar = observer(function Sidebar({
       default:
         return '';
     }
-  }
-
-  function teamKeyById(teamId: string): string {
-    return teamStore.findById(teamId)?.key ?? teamId;
   }
 
   const globalNavItems = [

@@ -142,24 +142,26 @@ export const server = new Server<HookContext>({
   // ─── Store ────────────────────────────────────────────────────────────────
   // Persist the YJS document state to the DB. Debounced by the config above
   // so we don't hammer Postgres on every keystroke.
-  async onStoreDocument({ lastContext, document, documentName }) {
+  async onStoreDocument({ document, documentName }) {
     const parsed = parseDocName(documentName);
     if (!parsed) {
       return;
     }
 
-    const orgId = (lastContext as HookContext).orgId;
+    // Tenant isolation is enforced at connection time in onAuthenticate. The
+    // connection is bound to a single document room so the id alone is the
+    // correct unique selector for Prisma's update (which requires @id/@unique).
     const state = Buffer.from(Y.encodeStateAsUpdate(document));
     try {
       if (parsed.type === 'issue') {
         await prisma.issue.update({
           data: { descriptionState: state },
-          where: { id: parsed.id, organizationId: orgId },
+          where: { id: parsed.id },
         });
       } else {
         await prisma.document.update({
           data: { contentState: state },
-          where: { id: parsed.id, organizationId: orgId },
+          where: { id: parsed.id },
         });
       }
       log.debug({ bytes: state.length, documentName }, 'Persisted YJS state to DB');

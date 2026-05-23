@@ -32,11 +32,11 @@ export class FavoriteStore {
   }
 
   applySyncAction(actionType: string, id: string, data: DBFavorite | null) {
-    if (actionType === 'I' || actionType === 'U') {
+    if (actionType === 'I' || actionType === 'U' || actionType === 'A') {
       if (data) {
         this.pool.set(id, data);
       }
-    } else if (actionType === 'D' || actionType === 'A') {
+    } else if (actionType === 'D') {
       this.pool.delete(id);
     }
   }
