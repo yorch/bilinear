@@ -41,7 +41,7 @@ yarn install
 yarn docker:infra:up
 ```
 
-This starts PostgreSQL on port `5432` and Redis on port `6379` using `docker-compose.infra.yaml`.
+This starts PostgreSQL on port `5432` and Redis on port `6379` using `docker-compose.infra.yml`.
 
 ### 3. Configure environment
 
