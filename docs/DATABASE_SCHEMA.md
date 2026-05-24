@@ -69,6 +69,7 @@ remains a design target.
 | 2.30 Issue Reactions      | ✅      | Shipped 2026-05-18 — `issue_reactions`, mirrors §2.15                                                 |
 | 2.31 Initiative Updates   | ✅      | Shipped 2026-05-18 — `initiative_updates`, mirrors §2.11                                              |
 | 2.32 Sub-Initiatives      | ✅      | Shipped 2026-05-21 — `initiatives.parent_id` self-relation, max depth 5                               |
+| 2.33 Automation Rules     | ✅      | Shipped 2026-05-24 — `automation_rules` with JSONB conditions/actions; no separate log table           |
 
 ---
 
@@ -1418,6 +1419,73 @@ AcceptsChild`):
 `ON DELETE SET NULL` is intentional: deleting a parent re-roots its
 children rather than cascading the delete — losing strategic tree branches
 on accidental parent deletion is too destructive.
+
+### 2.33 Automation Rules ✅
+
+> **Shipped 2026-05-24** — migration adds `automation_rules` table.
+
+Rules engine with JSONB-embedded conditions and actions; no separate
+condition/action rows. Conditions and actions are stored as typed JSON
+arrays evaluated at trigger time by `AutomationService`.
+
+```sql
+CREATE TABLE automation_rules (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  team_id         UUID REFERENCES teams(id) ON DELETE CASCADE,  -- NULL = workspace-wide rule
+
+  name            VARCHAR(255) NOT NULL,
+  description     TEXT,
+
+  trigger_type    VARCHAR(50) NOT NULL,
+  trigger_config  JSONB NOT NULL DEFAULT '{}',
+
+  -- JSON array of condition objects: { field, operator, value }
+  conditions      JSONB,
+
+  -- JSON array of action objects: { type, config }
+  actions         JSONB NOT NULL DEFAULT '[]',
+
+  enabled         BOOLEAN NOT NULL DEFAULT true,
+  sort_order      FLOAT NOT NULL DEFAULT 0,
+
+  -- Aggregate run stats stored on the rule; no separate log table
+  last_run_at     TIMESTAMPTZ,
+  run_count       INTEGER NOT NULL DEFAULT 0,
+
+  created_by_id   UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL,
+  archived_at     TIMESTAMPTZ
+);
+
+CREATE INDEX automation_rules_org_enabled_idx ON automation_rules(organization_id, enabled);
+CREATE INDEX automation_rules_team_enabled_idx ON automation_rules(team_id, enabled);
+CREATE INDEX automation_rules_trigger_type_idx ON automation_rules(trigger_type);
+```
+
+**Trigger types** (string constant in `AutomationService`):
+
+| Trigger | Fires when |
+|---------|-----------|
+| `issue_created` | New issue is created |
+| `issue_state_changed` | Issue workflow state changes |
+| `issue_priority_changed` | Issue priority changes |
+| `issue_assignee_changed` | Issue assignee changes |
+| `comment_created` | Comment is posted on an issue |
+
+**Condition fields**: `assigneeId`, `labelId`, `priority`, `stateCategory`, `stateId`, `teamId`
+
+**Action types**: `set_state`, `set_assignee`, `set_priority`, `add_label`, `post_comment`
+
+**Design notes:**
+
+- `team_id IS NULL` = workspace-wide rule (applies to all teams in the org). Org admins only.
+- `trigger_config` holds trigger-specific parameters (e.g. which state the issue must transition *to*).
+- `conditions` is a nullable array — if null the rule fires unconditionally on the trigger.
+- Rule execution runs inline in the mutation path; a BullMQ `automation-dispatch` queue is planned but not yet wired (Sprint 39-40 note).
+- No separate audit log table — `last_run_at` + `run_count` on the rule are the only telemetry. Full execution logs are a future §2.24-style addition.
+- SyncAction is emitted with `modelName: 'AutomationRule'` on every create/update/archive so the client store stays in sync.
 
 ### 2.9a Project progress history columns
 

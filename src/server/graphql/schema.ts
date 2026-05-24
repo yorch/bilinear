@@ -724,6 +724,7 @@ export const typeDefs = `
     date: String!
     remaining: Int!
     completed: Int!
+    scope: Int!
   }
 
   input CycleCreateInput {

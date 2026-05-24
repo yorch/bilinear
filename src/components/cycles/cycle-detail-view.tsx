@@ -4,6 +4,7 @@ import { ArrowLeft, Calendar, RefreshCw, RotateCcw } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BurnupChart } from '@/components/cycles/burnup-chart';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
@@ -37,7 +38,7 @@ const CYCLE_ROLLOVER_MUTATION = `
 
 const CYCLE_BURNDOWN_QUERY = `
   query CycleBurndown($cycleId: ID!) {
-    cycleBurndown(cycleId: $cycleId) { date remaining completed }
+    cycleBurndown(cycleId: $cycleId) { date remaining completed scope }
   }
 `;
 
@@ -58,6 +59,7 @@ interface BurndownPoint {
   completed: number;
   date: string;
   remaining: number;
+  scope: number;
 }
 
 interface VelocityCycle {
@@ -296,9 +298,10 @@ export const CycleDetailView = observer(function CycleDetailView({
   // Rollover state
   const [rollingOver, setRollingOver] = useState(false);
 
-  // Burndown state
+  // Burndown/burnup state
   const [burndown, setBurndown] = useState<BurndownPoint[] | null>(null);
   const [burndownLoading, setBurndownLoading] = useState(false);
+  const [chartView, setChartView] = useState<'burndown' | 'burnup'>('burndown');
 
   // Velocity state
   const [velocity, setVelocity] = useState<VelocityResult | null>(null);
@@ -543,16 +546,37 @@ export const CycleDetailView = observer(function CycleDetailView({
             </div>
           </div>
 
-          {/* Burndown chart — active or completed cycles */}
+          {/* Burndown / burnup chart — active or completed cycles */}
           {(isActive || isCompleted) && (
             <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                Burndown
-              </h3>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                  {chartView === 'burndown' ? 'Burndown' : 'Burnup'}
+                </h3>
+                <div className="flex rounded-md border border-zinc-200 text-xs dark:border-zinc-700">
+                  {(['burndown', 'burnup'] as const).map(v => (
+                    <button
+                      className={cn(
+                        'px-2.5 py-1 first:rounded-l last:rounded-r',
+                        chartView === v
+                          ? 'bg-zinc-100 font-medium text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
+                          : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200',
+                      )}
+                      key={v}
+                      onClick={() => setChartView(v)}
+                      type="button"
+                    >
+                      {v.charAt(0).toUpperCase() + v.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
               {burndownLoading ? (
                 <div className="h-[300px] animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
-              ) : (
+              ) : chartView === 'burndown' ? (
                 <BurndownChart data={burndown ?? []} />
+              ) : (
+                <BurnupChart data={burndown ?? []} />
               )}
             </div>
           )}

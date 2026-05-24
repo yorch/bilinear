@@ -368,7 +368,7 @@ export class CycleService {
    */
   async getBurndown(
     cycleId: string,
-  ): Promise<Array<{ date: string; remaining: number; completed: number }>> {
+  ): Promise<Array<{ date: string; remaining: number; completed: number; scope: number }>> {
     const cycle = await this.prisma.cycle.findUnique({
       where: { id: cycleId },
     });
@@ -377,38 +377,52 @@ export class CycleService {
     }
 
     const issues = await this.prisma.issue.findMany({
-      select: { completedAt: true, id: true },
+      select: { addedToCycleAt: true, completedAt: true, id: true },
       where: { archivedAt: null, cycleId, trashed: false },
     });
 
-    const totalIssues = issues.length;
-    if (totalIssues === 0) {
+    if (issues.length === 0) {
       return [];
     }
 
     const start = new Date(cycle.startsAt);
     const end = new Date(Math.min(cycle.endsAt.getTime(), Date.now()));
 
-    // Sort completed timestamps ascending once — O(n log n) — then walk a
-    // single pointer through them as days advance, giving O(days + n) total
-    // instead of O(days × n).
+    // Sort completed timestamps ascending — walk a single pointer as days
+    // advance: O(days + n) instead of O(days × n).
     const completedDates = issues
       .filter(i => i.completedAt !== null)
       .map(i => i.completedAt as Date)
+      .sort((a, b) => a.getTime() - b.getTime());
+
+    // Scope tracking: issues with no addedToCycleAt were in scope from cycle
+    // start; issues with a timestamp entered scope on that day.
+    const baseScope = issues.filter(i => i.addedToCycleAt == null).length;
+    const scopeAdditions = issues
+      .filter(i => i.addedToCycleAt != null)
+      .map(i => i.addedToCycleAt as Date)
       .sort((a, b) => a.getTime() - b.getTime());
 
     const points: Array<{
       date: string;
       remaining: number;
       completed: number;
+      scope: number;
     }> = [];
     const current = new Date(start);
     current.setUTCHours(0, 0, 0, 0);
     let completedIdx = 0;
+    let scopeIdx = 0;
+    let scopeOnDay = baseScope;
 
     while (current <= end) {
       const dayEnd = new Date(current);
       dayEnd.setUTCHours(23, 59, 59, 999);
+
+      while (scopeIdx < scopeAdditions.length && scopeAdditions[scopeIdx] <= dayEnd) {
+        scopeOnDay++;
+        scopeIdx++;
+      }
 
       while (completedIdx < completedDates.length && completedDates[completedIdx] <= dayEnd) {
         completedIdx++;
@@ -417,13 +431,45 @@ export class CycleService {
       points.push({
         completed: completedIdx,
         date: current.toISOString().slice(0, 10),
-        remaining: totalIssues - completedIdx,
+        remaining: scopeOnDay - completedIdx,
+        scope: scopeOnDay,
       });
 
       current.setUTCDate(current.getUTCDate() + 1);
     }
 
     return points;
+  }
+
+  /**
+   * Auto-rollover all cycles whose endsAt has passed but haven't been
+   * completed yet. Called by the WS server on a scheduled interval.
+   * Returns one entry per rolled-over cycle for the caller to emit
+   * SyncActions.
+   */
+  async processDueRollovers(): Promise<
+    Array<{ cycleId: string; orgId: string; movedIssueIds: string[] }>
+  > {
+    const now = new Date();
+    const due = await this.prisma.cycle.findMany({
+      select: { id: true, organizationId: true },
+      where: { archivedAt: null, completedAt: null, endsAt: { lte: now } },
+    });
+
+    const results: Array<{ cycleId: string; orgId: string; movedIssueIds: string[] }> = [];
+    for (const cycle of due) {
+      try {
+        const result = await this.rollover(cycle.organizationId, cycle.id);
+        results.push({
+          cycleId: cycle.id,
+          movedIssueIds: result.movedIssueIds,
+          orgId: cycle.organizationId,
+        });
+      } catch {
+        // Log via the caller; continue with remaining cycles
+      }
+    }
+    return results;
   }
 
   async addIssueToCycle(cycleId: string, issueId: string): Promise<void> {

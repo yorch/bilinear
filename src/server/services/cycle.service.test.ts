@@ -356,8 +356,8 @@ describe('CycleService', () => {
       const cycle = { ...TEST_CYCLE, endsAt: end, startsAt: start };
       prisma.cycle.findUnique.mockResolvedValue(cycle);
       prisma.issue.findMany.mockResolvedValue([
-        { completedAt: new Date('2026-03-01T12:00:00Z'), id: 'i1' },
-        { completedAt: null, id: 'i2' },
+        { addedToCycleAt: null, completedAt: new Date('2026-03-01T12:00:00Z'), id: 'i1' },
+        { addedToCycleAt: null, completedAt: null, id: 'i2' },
       ]);
 
       const result = await service.getBurndown(TEST_CYCLE.id);
@@ -365,10 +365,11 @@ describe('CycleService', () => {
       // Expect a data point for each day from start up to min(end, now)
       expect(result.length).toBeGreaterThan(0);
       expect(result[0].date).toBe('2026-03-01');
-      // After day 1: 1 issue completed, 1 remaining
+      // After day 1: 1 issue completed, 1 remaining, scope = 2
       const day1 = result.find(p => p.date === '2026-03-01');
       expect(day1?.completed).toBe(1);
       expect(day1?.remaining).toBe(1);
+      expect(day1?.scope).toBe(2);
     });
   });
 });
