@@ -463,6 +463,9 @@ export const issueResolvers = {
       }
       await requireIssueAccessNotGuestOrOwn(ctx.prisma, existing, ctx.userId, ctx.orgId);
 
+      // Snapshot old label set before mutation for diff
+      const oldLabels = input.labelIds !== undefined ? await ctx.services.issue.getLabels(id) : [];
+
       const { issue, cascaded } = await ctx.services.issue.update(id, input);
 
       // Record an activity entry for each changed tracked field
@@ -484,6 +487,35 @@ export const issueResolvers = {
           });
         }
       }
+
+      // Label add/remove activity entries — diff against the actual persisted
+      // set (not raw input) so enforceSingleSelectPerGroup drops are not logged.
+      if (input.labelIds !== undefined) {
+        const newLabels = await ctx.services.issue.getLabels(id);
+        const oldLabelIds = new Set(oldLabels.map(l => l.id));
+        const newLabelIds = new Set(newLabels.map(l => l.id));
+        for (const l of oldLabels) {
+          if (!newLabelIds.has(l.id)) {
+            activities.push({
+              actorId: ctx.userId,
+              field: 'labelRemoved',
+              issueId: id,
+              oldValue: l.id,
+            });
+          }
+        }
+        for (const l of newLabels) {
+          if (!oldLabelIds.has(l.id)) {
+            activities.push({
+              actorId: ctx.userId,
+              field: 'labelAdded',
+              issueId: id,
+              newValue: l.id,
+            });
+          }
+        }
+      }
+
       if (activities.length > 0) {
         await ctx.services.issueActivity.createMany(activities);
       }

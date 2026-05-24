@@ -1,9 +1,42 @@
+import crypto from 'node:crypto';
 import { GraphQLError } from 'graphql';
 import type { User } from '../../../generated/prisma';
 import { requireAuth } from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
 
+function buildCalendarFeedUrl(token: string | null, appUrl: string): string | null {
+  if (!token) {
+    return null;
+  }
+  return `${appUrl}/api/cycles/feed/${token}.ics`;
+}
+
 export const userResolvers = {
+  Mutation: {
+    userCalendarFeedTokenRotate: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+      const token = crypto.randomBytes(32).toString('hex');
+      const user = await ctx.prisma.user.update({
+        data: { calendarFeedToken: token },
+        where: { id: ctx.userId },
+      });
+      return { success: true, user };
+    },
+
+    userUpdateNotificationPreferences: async (
+      _parent: unknown,
+      { emailNotificationsEnabled }: { emailNotificationsEnabled: boolean },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      const user = await ctx.prisma.user.update({
+        data: { emailNotificationsEnabled },
+        where: { id: ctx.userId },
+      });
+      return { success: true, user };
+    },
+  },
+
   Query: {
     viewer: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
@@ -20,6 +53,13 @@ export const userResolvers = {
 
   User: {
     avatarBackgroundColor: (user: User) => user.avatarBgColor,
+    calendarFeedUrl: (user: User, _args: unknown, ctx: GraphQLContext) => {
+      if (user.id !== ctx.userId) {
+        return null;
+      }
+      const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
+      return buildCalendarFeedUrl(user.calendarFeedToken ?? null, appUrl);
+    },
     emailNotificationsEnabled: (user: User) => user.emailNotificationsEnabled,
     isMe: (user: User, _args: unknown, ctx: GraphQLContext) => user.id === ctx.userId,
   },

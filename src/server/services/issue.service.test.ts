@@ -225,6 +225,7 @@ describe('IssueService', () => {
       const labelId = '00000000-0000-0000-0000-000000000500';
       prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1 });
       prisma.issue.create.mockResolvedValue(TEST_ISSUE);
+      prisma.issueLabel.findMany.mockResolvedValue([{ id: labelId, parentId: null }]);
       prisma.issueLabelAssignment.deleteMany.mockResolvedValue({ count: 0 });
       prisma.issueLabelAssignment.createMany.mockResolvedValue({ count: 1 });
 
@@ -296,6 +297,7 @@ describe('IssueService', () => {
     it('syncs labels when labelIds provided', async () => {
       const labelId = '00000000-0000-0000-0000-000000000500';
       prisma.issue.update.mockResolvedValue(TEST_ISSUE);
+      prisma.issueLabel.findMany.mockResolvedValue([{ id: labelId, parentId: null }]);
       prisma.issueLabelAssignment.deleteMany.mockResolvedValue({ count: 0 });
       prisma.issueLabelAssignment.createMany.mockResolvedValue({ count: 1 });
 
@@ -770,6 +772,30 @@ describe('IssueService', () => {
         });
         expect(result).toHaveLength(1);
       });
+    });
+  });
+
+  describe('findByIdentifier', () => {
+    it('queries by identifier and previousIdentifiers', async () => {
+      prisma.issue.findFirst.mockResolvedValue(TEST_ISSUE);
+
+      const result = await service.findByIdentifier(TEST_ORG.id, 'ENG-42');
+
+      expect(result).toEqual(TEST_ISSUE);
+      expect(prisma.issue.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: [{ identifier: 'ENG-42' }, { previousIdentifiers: { has: 'ENG-42' } }],
+            organizationId: TEST_ORG.id,
+          }),
+        }),
+      );
+    });
+
+    it('returns null when not found', async () => {
+      prisma.issue.findFirst.mockResolvedValue(null);
+      const result = await service.findByIdentifier(TEST_ORG.id, 'ENG-99');
+      expect(result).toBeNull();
     });
   });
 });

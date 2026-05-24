@@ -187,6 +187,8 @@ export interface TipTapEditorProps {
   content?: string;
   /** Issues available for #mentions (identifier + title search). */
   mentionIssues?: MentionItem[];
+  /** Projects available for ~mentions (name search). */
+  mentionProjects?: MentionItem[];
   /** Users available for @mentions */
   mentionUsers?: MentionItem[];
   onBlur?: () => void;
@@ -379,6 +381,71 @@ function buildIssueMentionExtension(issuesRef: React.RefObject<MentionItem[]>) {
   });
 }
 
+function buildProjectMentionExtension(projectsRef: React.RefObject<MentionItem[]>) {
+  return Mention.extend({ name: 'projectMention' }).configure({
+    HTMLAttributes: { class: 'project-mention' },
+    renderLabel: ({ node }) => `~${node.attrs.label ?? node.attrs.id}`,
+    suggestion: {
+      char: '~',
+      items: ({ query }: { query: string }) => {
+        const q = query.toLowerCase();
+        return (projectsRef.current ?? [])
+          .filter(p => p.label.toLowerCase().includes(q) || (p.sub ?? '').toLowerCase().includes(q))
+          .slice(0, 8);
+      },
+      render: () => {
+        let component: ReactRenderer<MentionListHandle> | null = null;
+        let popup: HTMLDivElement | null = null;
+
+        return {
+          onExit() {
+            component?.destroy();
+            popup?.remove();
+            popup = null;
+            component = null;
+          },
+          onKeyDown({ event }: { event: KeyboardEvent }) {
+            if (event.key === 'Escape') {
+              popup?.remove();
+              popup = null;
+              component?.destroy();
+              component = null;
+              return true;
+            }
+            return component?.ref?.onKeyDown(event) ?? false;
+          },
+          onStart(props: {
+            editor: unknown;
+            items: MentionItem[];
+            command: (item: MentionItem) => void;
+            clientRect?: (() => DOMRect | null) | null;
+          }) {
+            popup = document.createElement('div');
+            popup.style.cssText = 'position:fixed;z-index:9999;pointer-events:auto;';
+            document.body.appendChild(popup);
+            component = new ReactRenderer(MentionList, {
+              editor: props.editor as never,
+              props: { command: props.command, items: props.items },
+            });
+            popup.appendChild(component.element);
+            positionPopup(popup, props.clientRect);
+          },
+          onUpdate(props: {
+            items: MentionItem[];
+            command: (item: MentionItem) => void;
+            clientRect?: (() => DOMRect | null) | null;
+          }) {
+            component?.updateProps({ command: props.command, items: props.items });
+            if (popup) {
+              positionPopup(popup, props.clientRect);
+            }
+          },
+        };
+      },
+    },
+  });
+}
+
 export function TipTapEditor({
   content = '',
   placeholder = 'Add a description…',
@@ -389,6 +456,7 @@ export function TipTapEditor({
   autofocus = false,
   showToolbar = false,
   mentionIssues,
+  mentionProjects,
   mentionUsers,
   uploadIssueId,
   uploadProjectId,
@@ -422,6 +490,11 @@ export function TipTapEditor({
   useEffect(() => {
     mentionIssuesRef.current = mentionIssues ?? [];
   }, [mentionIssues]);
+
+  const mentionProjectsRef = useRef<MentionItem[]>(mentionProjects ?? []);
+  useEffect(() => {
+    mentionProjectsRef.current = mentionProjects ?? [];
+  }, [mentionProjects]);
 
   // ─── Collaborative editing setup ───────────────────────────────────────────
   // YJS doc and Hocuspocus provider are created once per mount (guarded by the
@@ -561,6 +634,8 @@ export function TipTapEditor({
       ...(mentionUsers != null ? [buildMentionExtension(mentionUsersRef)] : []),
       // Issue mentions triggered by '#'. Coexists with the user mention via name override.
       ...(mentionIssues != null ? [buildIssueMentionExtension(mentionIssuesRef)] : []),
+      // Project mentions triggered by '~'.
+      ...(mentionProjects != null ? [buildProjectMentionExtension(mentionProjectsRef)] : []),
       // Collaborative editing extensions — only added when a collabDocId is
       // provided and NEXT_PUBLIC_COLLAB_ENABLED=true. Collaboration replaces
       // the Yjs-incompatible StarterKit history (disabled above).

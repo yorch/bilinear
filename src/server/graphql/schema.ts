@@ -23,6 +23,7 @@ export const typeDefs = `
     statusLabel: String
     statusUntilAt: DateTime
     emailNotificationsEnabled: Boolean!
+    calendarFeedUrl: String
     createdAt: DateTime!
     updatedAt: DateTime!
   }
@@ -1094,6 +1095,7 @@ export const typeDefs = `
     children: [Initiative!]!
     projects: [Project!]!
     updates: [InitiativeUpdate!]!
+    health: String!
     startedAt: DateTime
     completedAt: DateTime
     canceledAt: DateTime
@@ -1588,6 +1590,10 @@ export const typeDefs = `
 
     # User notification preferences
     userUpdateNotificationPreferences(emailNotificationsEnabled: Boolean!): UserPayload!
+
+    # Rotate the per-user iCal feed token. Returns the updated user so the
+    # caller can immediately display the new feed URL.
+    userCalendarFeedTokenRotate: UserPayload!
   }
 
   # ---------------------------------------------------------------------------

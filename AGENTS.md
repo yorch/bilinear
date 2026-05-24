@@ -16,10 +16,21 @@ A Linear-style issue tracker built with Next.js 16 (App Router), Apollo Server G
 
 - **Issue snooze** — `issueSnooze(id, until)` / `issueUnsnooze(id)` mutations finally expose the existing `snoozed_until_at` / `snoozed_by_id` columns. Wakeup is read-time (no background worker). See PATTERNS.md §49.
 - **Bulk issue update** — `issuesBulkUpdate(ids, input)` mutation applies the same patch to up to 200 issues atomically. Auto-close cascades intentionally skipped; cross-team state changes rejected. See PATTERNS.md §50.
-- **Guest role enforcement (read path)** — `requireTeamMemberNotGuest` + `isTeamGuest` helpers in `src/server/middleware/auth.ts`. The `issues` query now scopes guests to creator-or-assignee via a server-derived `IssueFilter.guestUserId`. Write-path sweep still open. See PATTERNS.md §48.
+- **Guest role enforcement (read path)** — `requireTeamMemberNotGuest` + `isTeamGuest` helpers in `src/server/middleware/auth.ts`. The `issues` query now scopes guests to creator-or-assignee via a server-derived `IssueFilter.guestUserId`. Write-path sweep completed 2026-05-24. See PATTERNS.md §48.
 - **Workspace-level custom fields** — `CustomFieldDefinition.teamId` is nullable; null = workspace-scoped. Per-org cap of 30 active workspace fields; owner/admin-only create/edit. New `workspaceCustomFieldDefinitions` query. See DATABASE_SCHEMA.md §2.27.
 - **Favorites** — new `favorites` table, `FavoriteService`, `Favorite.entity` GraphQL union over Issue/Project/Initiative/CustomView/Cycle/Document/Team. Cross-org or deleted targets resolve to `null` (sidebar skips). Sidebar UI deferred. See PATTERNS.md §47 and DATABASE_SCHEMA.md §2.18.
 - **Sub-initiatives** — `Initiative.parentId` self-FK with max depth 5, cycle detection, cross-org rejection. Progress rollup averages projects AND children, propagates one level up the parent chain. See PATTERNS.md §46 and DATABASE_SCHEMA.md §2.32.
+
+### Tier 5 completions (2026-05-24)
+
+- **Duplicate relation auto-cancel** — `IssueRelationService.create()` returns `{ relation, canceledIssue, canceledIssueOldStateId }` captured inside the transaction. Resolver triggers the `autoCloseParentIssues` cascade via `IssueService.update` and emits the activity log entry using the pre-cancel `stateId`. See PATTERNS.md §58.
+- **Label group enforcement** — `LabelService.create()` and `update()` wrapped in `$transaction`; both enforce max-1-deep nesting and a 250-child cap atomically. `IssueService.syncLabels` calls `enforceSingleSelectPerGroup` after every label sync (last-writer-wins on group siblings). See PATTERNS.md §57.
+- **Activity log accuracy** — `issueUpdate` resolver re-fetches labels via `getLabels()` after the write so the `labelAdded`/`labelRemoved` diff reflects the actual persisted set. `commentResolve`/`commentUnresolve` now emit `commentResolved`/`commentUnresolved` activity entries.
+- **Guest write-path sweep** — `requireIssueAccessNotGuestOrOwn` guard applied to `commentCreate`, `issueRelationCreate`, and `issueRelationDelete`. Write-path enforcement is now complete. See PATTERNS.md §48.
+- **Project `~`-mentions in TipTap** — `mentionProjects` prop on `TipTapEditor`; `buildProjectMentionExtension` backed by a Suggestion dropdown; `~` triggers it. See PATTERNS.md §56.
+- **iCal cycle feed** — `calendar_feed_token VARCHAR(64) UNIQUE` on `users`; `userCalendarFeedTokenRotate` mutation; route `/api/cycles/feed/[token].ics` returns RFC 5545 iCal with `DTEND` equal to the exclusive `endsAt`. See PATTERNS.md §59.
+- **Initiative health** — `Initiative.health: String!` GraphQL resolver derives health from the latest `InitiativeUpdate` within 30 days, falling back to a progress heuristic (`'onTrack'` / `'atRisk'` / `'offTrack'` / `'unknown'`). No DB column; no UI component yet. See PATTERNS.md §60.
+- **GitHub `previousIdentifiers` fallback** — `GithubService.linkPullRequest()` finds issues via `identifier IN [...] OR previousIdentifiers hasSome [...]`, so renamed issues are still linked.
 
 ### Feature drop (2026-05-18)
 

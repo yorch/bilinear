@@ -1,6 +1,6 @@
 import type { Issue, IssueLabel, IssueReaction, PrismaClient } from '../../generated/prisma';
 
-type PrismaLike = Pick<PrismaClient, 'issue' | 'issueLabelAssignment' | 'team'>;
+type PrismaLike = Pick<PrismaClient, 'issue' | 'issueLabelAssignment' | 'issueLabel' | 'team'>;
 
 export interface IssueCreateInput {
   assigneeId?: string;
@@ -212,7 +212,10 @@ export class IssueService {
   async findByIdentifier(orgId: string, identifier: string): Promise<Issue | null> {
     return this.prisma.issue.findFirst({
       include: { labelAssignments: { include: { label: true } } },
-      where: { identifier, organizationId: orgId },
+      where: {
+        OR: [{ identifier }, { previousIdentifiers: { has: identifier } }],
+        organizationId: orgId,
+      },
     });
   }
 
@@ -762,15 +765,43 @@ export class IssueService {
   }
 
   private async syncLabels(tx: PrismaLike, issueId: string, labelIds: string[]): Promise<void> {
-    // Remove all existing label assignments
+    // Enforce single-select-per-group: if two labels share the same group
+    // parent, keep only the last one in input order so group labels behave
+    // as radio buttons, not checkboxes.
+    const effectiveIds = await this.enforceSingleSelectPerGroup(tx, labelIds);
+
     await tx.issueLabelAssignment.deleteMany({ where: { issueId } });
 
-    if (labelIds.length > 0) {
+    if (effectiveIds.length > 0) {
       await tx.issueLabelAssignment.createMany({
-        data: labelIds.map(labelId => ({ issueId, labelId })),
+        data: effectiveIds.map(labelId => ({ issueId, labelId })),
         skipDuplicates: true,
       });
     }
+  }
+
+  private async enforceSingleSelectPerGroup(tx: PrismaLike, labelIds: string[]): Promise<string[]> {
+    if (labelIds.length === 0) {
+      return [];
+    }
+    const labels = await tx.issueLabel.findMany({
+      select: { id: true, parentId: true },
+      where: { id: { in: labelIds } },
+    });
+    const byId = new Map(labels.map(l => [l.id, l]));
+    // Walk input order; last writer per group parent wins.
+    const seenGroup = new Map<string, string>();
+    for (const id of labelIds) {
+      const label = byId.get(id);
+      if (label?.parentId) {
+        seenGroup.set(label.parentId, id);
+      }
+    }
+    const survivorSet = new Set(seenGroup.values());
+    return labelIds.filter(id => {
+      const label = byId.get(id);
+      return !label?.parentId || survivorSet.has(id);
+    });
   }
 
   private buildWhere(orgId: string, filter: IssueFilter, includeArchived: boolean) {

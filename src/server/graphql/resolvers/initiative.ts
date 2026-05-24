@@ -19,6 +19,8 @@ const INITIATIVE_ERROR_MAP = {
   NOT_FOUND: ['InitiativeNotFoundError'],
 } as const;
 
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
 export const initiativeResolvers = {
   Initiative: {
     children: async (initiative: Initiative, _args: unknown, ctx: GraphQLContext) => {
@@ -35,6 +37,30 @@ export const initiativeResolvers = {
 
     creator: async (initiative: Initiative, _args: unknown, ctx: GraphQLContext) =>
       initiative.creatorId ? ctx.loaders.user.load(initiative.creatorId) : null,
+
+    health: async (initiative: Initiative, _args: unknown, ctx: GraphQLContext) => {
+      const since = new Date(Date.now() - THIRTY_DAYS_MS);
+      const latest = await ctx.prisma.initiativeUpdate.findFirst({
+        orderBy: { createdAt: 'desc' },
+        select: { health: true },
+        where: { archivedAt: null, createdAt: { gte: since }, initiativeId: initiative.id },
+      });
+      if (latest) {
+        return latest.health;
+      }
+      // Fall back to a progress-based heuristic when no recent update exists.
+      const p = initiative.progress;
+      if (p >= 0.67) {
+        return 'onTrack';
+      }
+      if (p >= 0.33) {
+        return 'atRisk';
+      }
+      if (p > 0) {
+        return 'offTrack';
+      }
+      return 'unknown';
+    },
 
     owner: async (initiative: Initiative, _args: unknown, ctx: GraphQLContext) =>
       initiative.ownerId ? ctx.loaders.user.load(initiative.ownerId) : null,

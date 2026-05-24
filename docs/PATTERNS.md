@@ -1684,8 +1684,15 @@ where.OR = guestTeamIds.length > 0
   : undefined;
 ```
 
+**Write-path sweep (2026-05-24):** `commentCreate`, `issueRelationCreate`,
+and `issueRelationDelete` also call `requireIssueAccessNotGuestOrOwn` so
+guests cannot create comments, create relations, or delete relations on
+issues they don't own or aren't assigned to.
+
 Reference: `src/server/middleware/auth.ts`,
 `src/server/graphql/resolvers/issue.ts`,
+`src/server/graphql/resolvers/comment.ts`,
+`src/server/graphql/resolvers/issue-relation.ts`,
 `src/server/graphql/resolvers/project.ts`,
 `src/server/graphql/resolvers/cycle.ts`.
 
@@ -1883,3 +1890,111 @@ is added with `#` as the trigger character, allowing inline issue references.
 Items are `{ id, label: identifier, sub: title }` — the dropdown shows the
 identifier on the left and title on the right. The `@` trigger for user
 mentions is unchanged.
+
+## 56. Project Mentions in Editor (2026-05-24)
+
+Extends the §55 pattern. `TipTapEditor` gains an optional
+`mentionProjects?: MentionItem[]` prop. When provided,
+`buildProjectMentionExtension` adds a third Mention extension instance
+(name: `'projectMention'`) with `~` as the trigger character.
+
+The three triggers are independent — `@` users, `#` issues, `~` projects.
+Items for project mentions are `{ id, label: projectName }`. The extension
+is omitted from the editor entirely when `mentionProjects` is not passed,
+keeping the bundle impact zero for editors that don't need it.
+
+## 57. Label Group Enforcement Pattern (2026-05-24)
+
+Three constraints enforce Linear's label-group semantics:
+
+1. **Depth guard** — `LabelService.create` and `LabelService.update` both
+   reject `parentId` when the prospective parent itself has a `parentId`
+   (max 1 nesting level). Error: `LabelGroupDepthError` → `BAD_USER_INPUT`.
+
+2. **Capacity guard** — `LabelService.create` rejects when the parent already
+   has ≥ 250 non-archived children. The count and insert are wrapped in a
+   `$transaction` so two concurrent creates cannot both pass the 249 → 250
+   threshold. `LabelService.update` runs the same check when `parentId`
+   changes, excluding the label being moved from the sibling count.
+   Error: `LabelGroupCapacityError` → `BAD_USER_INPUT`.
+
+3. **Single-select per group** — `IssueService.syncLabels` calls the private
+   `enforceSingleSelectPerGroup(tx, labelIds)` helper before writing
+   `issueLabelAssignment` rows. It fetches the `parentId` of each requested
+   label and, for any group that appears more than once, keeps only the
+   last label in the caller's input order (last-writer-wins).
+
+The label activity diff in `issueUpdate` re-fetches the persisted label set
+after `syncLabels` runs, so labels dropped by single-select deduplication
+are not logged as added.
+
+## 58. Duplicate Relation Auto-Cancel Pattern (2026-05-24)
+
+When `IssueRelationService.create` is called with `type='duplicate'`:
+
+1. Inside the existing `$transaction`, after inserting the relation, the
+   service fetches the duplicate issue (`issueId`) and its current workflow
+   state. If the state type is neither `completed` nor `canceled`, it
+   transitions the issue to the team's first `canceled` workflow state via
+   `tx.issue.update`.
+
+2. The service captures `dup.stateId` as `canceledIssueOldStateId` **before**
+   the update — this is the source-of-truth `oldValue` for the activity
+   record and avoids a TOCTOU race where a concurrent state change between
+   the resolver's `findById` and the transaction commit would produce the
+   wrong audit trail.
+
+3. The resolver emits a `SyncAction('U', 'Issue')` for the canceled issue,
+   then calls `ctx.services.issue.update(canceledIssue.id, { stateId })` with
+   the same stateId. This call is effectively a no-op for the state column but
+   triggers the `autoCloseParentIssues` / `autoCloseChildIssues` cascade path
+   inside `IssueService.update`. Any cascade-closed issues receive their own
+   SyncActions.
+
+4. The inverse (re-opening the issue when the duplicate relation is deleted)
+   is intentionally out of scope — once canceled, manual re-open is required.
+
+## 59. iCal Cycle Feed Pattern (2026-05-24)
+
+Per-user calendar subscription for cycle dates:
+
+- `users.calendar_feed_token VARCHAR(64) UNIQUE` — stores a 32-byte random
+  hex token in plaintext. Rotating the token (`userCalendarFeedTokenRotate`
+  mutation, `crypto.randomBytes(32).toString('hex')`) invalidates the old
+  URL. No hashing — the token is low-value (exposes only cycle dates, not
+  issue content).
+- `GET /api/cycles/feed/[token].ics` (`runtime: 'nodejs'`) — looks up the
+  user by token, fetches non-archived/non-completed cycles for all teams the
+  user belongs to, and emits a RFC 5545 VCALENDAR. `DTEND;VALUE=DATE` uses
+  `cycle.endsAt` directly (exclusive semantics — the next cycle starts at
+  `endsAt`, so no +1 offset is needed).
+- `User.calendarFeedUrl` field resolver returns null for any viewer other
+  than the authenticated user, preventing token leakage via nested User
+  queries.
+- Settings page "My Preferences" section exposes a read-only URL input with
+  a copy-to-clipboard button and a rotate button that calls the mutation and
+  updates local state.
+
+## 60. Initiative Health Badge Pattern (2026-05-24)
+
+`Initiative.health` is a pure GraphQL resolver derivation — no DB column:
+
+```ts
+health: async (initiative, _args, ctx) => {
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const latest = await ctx.prisma.initiativeUpdate.findFirst({
+    orderBy: { createdAt: 'desc' },
+    select: { health: true },
+    where: { archivedAt: null, createdAt: { gte: since }, initiativeId: initiative.id },
+  });
+  if (latest) return latest.health;
+  const p = initiative.progress; // persisted Float
+  if (p >= 0.67) return 'onTrack';
+  if (p >= 0.33) return 'atRisk';
+  if (p > 0) return 'offTrack';
+  return 'unknown';
+},
+```
+
+`initiative.progress` is always present on the DB row (Float `@default(0)`),
+so the fallback never throws even on newly created initiatives.

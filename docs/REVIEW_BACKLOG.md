@@ -626,6 +626,36 @@ post-state in the DB or store, not just visual presence).
 A condensed history of what landed in main. See `git log` for full
 details.
 
+### Tier 5 feature completions (2026-05-24, PR #47)
+
+- **findByIdentifier fallback** — `IssueService.findByIdentifier` now
+  queries `previousIdentifiers: { has }` OR clause; `GitHubService` PR
+  auto-link uses `hasSome`. (LINEAR_FEATURE_GAPS.md §9.29)
+- **Duplicate relation auto-cancel** — `IssueRelationService.create` with
+  `type='duplicate'` transitions the source issue to the team's first
+  `canceled` state in the same transaction; emits SyncAction + activity with
+  the correct pre-cancel `oldStateId`; triggers `autoCloseParentIssues`
+  cascade via follow-up `IssueService.update`. (§9.15)
+- **Label group enforcement** — `LabelService.create`/`update` enforce max
+  1 nesting depth (`LabelGroupDepthError`) and 250-child cap
+  (`LabelGroupCapacityError`); create wraps count+insert in a transaction;
+  update excludes the moved label from the sibling count.
+  `IssueService.syncLabels` deduplicates same-group labels (single-select
+  semantics, last-writer-wins). (§9.17)
+- **Initiative health badge** — `Initiative.health: String!` GraphQL field;
+  resolver returns latest `InitiativeUpdate.health` (last 30d) or a
+  progress heuristic. No new column. (§9.25)
+- **Activity log expansion** — `issueUpdate` diffs actual persisted label
+  set (not raw input) and emits `labelAdded`/`labelRemoved`; `commentResolve`
+  / `commentUnresolve` emit `commentResolved`/`commentUnresolved`. (§9.6)
+- **Guest write-path sweep** — `commentCreate`, `issueRelationCreate`, and
+  `issueRelationDelete` use `requireIssueAccessNotGuestOrOwn`. (§8.2)
+- **Project `~`-mentions in editor** — `TipTapEditor` gains `mentionProjects`
+  prop + `buildProjectMentionExtension` with `~` trigger. (§9.4)
+- **iCal cycle feed** — `User.calendarFeedToken VARCHAR(64) UNIQUE`;
+  `GET /api/cycles/feed/[token].ics`; `userCalendarFeedTokenRotate` mutation;
+  `calendarFeedUrl` field; settings UI with copy + rotate. (§9.23)
+
 ### Quick-wins batch (2026-05-21)
 
 Migration `20260521000000_quick_wins_snooze_favorites_subinitiatives`
@@ -639,8 +669,9 @@ plus matching services / resolvers / SDL:
   and cross-team state changes rejected. PATTERNS.md §50.
 - **Guest role enforcement** — `requireTeamMemberNotGuest` + `isTeamGuest`
   helpers; `IssueFilter.guestUserId` scopes the `issues` query to
-  creator-or-assignee for guest users. Write-path sweep still TODO
-  (LINEAR_FEATURE_GAPS.md §8.2). PATTERNS.md §48.
+  creator-or-assignee for guest users. PATTERNS.md §48. Write-path sweep
+  completed 2026-05-24 (commentCreate, issueRelationCreate/Delete now use
+  `requireIssueAccessNotGuestOrOwn`).
 - **Workspace-level custom fields** — `custom_field_definitions.team_id`
   now nullable, plus a new `organization_id` column for the
   workspace-scope tenant filter. New 30-per-org cap; owner/admin-only
@@ -683,12 +714,11 @@ others landed as written.
 
 - `users.google_id` — UNIQUE constraint added. Pre-flight check
   aborts the migration if any duplicate google_id exists.
-- `issues.previous_identifiers` — GIN index added. Not yet exercised
-  — `IssueService.findByIdentifier` currently matches only on the
-  live `identifier` column. The index ships ahead of a planned change
-  that adds a `previousIdentifiers` fallback so renamed issues remain
-  reachable by their old key; cheap to maintain in the meantime since
-  the column is only written on team-key renames.
+- `issues.previous_identifiers` — GIN index added. `IssueService
+  .findByIdentifier` now queries `identifier = $1 OR previous_identifiers
+  @> ARRAY[$1]` (shipped 2026-05-24). `GitHubService` PR auto-link also
+  updated to use `previousIdentifiers: { hasSome }` so renamed issues are
+  matched in PR titles and branch names.
 - `teams.default_issue_state_id` / `auto_close_state_id` — FKs to
   `workflow_states(id)` with `ON DELETE SET NULL`; orphan references
   are nulled out in the migration before the FK is added. Both
