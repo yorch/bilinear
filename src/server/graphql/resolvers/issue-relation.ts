@@ -35,7 +35,7 @@ export const issueRelationResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, relatedIssue.teamId, ctx.userId, ctx.orgId);
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, relatedIssue, ctx.userId, ctx.orgId);
       try {
         const { canceledIssue, canceledIssueOldStateId, relation } =
           await ctx.services.issueRelation.create(input);

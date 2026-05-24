@@ -29,7 +29,7 @@ A Linear-style issue tracker built with Next.js 16 (App Router), Apollo Server G
 - **Guest write-path sweep** — `requireIssueAccessNotGuestOrOwn` guard applied to `commentCreate`, `issueRelationCreate`, and `issueRelationDelete`. Write-path enforcement is now complete. See PATTERNS.md §48.
 - **Project `~`-mentions in TipTap** — `mentionProjects` prop on `TipTapEditor`; `buildProjectMentionExtension` backed by a Suggestion dropdown; `~` triggers it. See PATTERNS.md §56.
 - **iCal cycle feed** — `calendar_feed_token VARCHAR(64) UNIQUE` on `users`; `userCalendarFeedTokenRotate` mutation; route `/api/cycles/feed/[token].ics` returns RFC 5545 iCal with `DTEND` equal to the exclusive `endsAt`. See PATTERNS.md §59.
-- **Initiative health badge** — `Initiative.health` computed from the latest non-archived `InitiativeUpdate.health`; `HealthBadge` renders inline in the initiatives list. See PATTERNS.md §60.
+- **Initiative health** — `Initiative.health: String!` GraphQL resolver derives health from the latest `InitiativeUpdate` within 30 days, falling back to a progress heuristic (`'onTrack'` / `'atRisk'` / `'offTrack'` / `'unknown'`). No DB column; no UI component yet. See PATTERNS.md §60.
 - **GitHub `previousIdentifiers` fallback** — `GithubService.linkPullRequest()` finds issues via `identifier IN [...] OR previousIdentifiers hasSome [...]`, so renamed issues are still linked.
 
 ### Feature drop (2026-05-18)

@@ -102,7 +102,12 @@ export const labelResolvers = {
         await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
       }
 
-      const label = await ctx.services.label.update(id, input);
+      let label: IssueLabel;
+      try {
+        label = await ctx.services.label.update(id, input);
+      } catch (err) {
+        handleLabelError(err);
+      }
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
         'U',

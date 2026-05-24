@@ -55,6 +55,9 @@ export async function GET(
     where: {
       archivedAt: null,
       completedAt: null,
+      // Exclude cycles that ended more than 30 days ago so stale cycles
+      // don't accumulate in subscribed calendars indefinitely.
+      endsAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
       teamId: { in: teamIds },
     },
   });

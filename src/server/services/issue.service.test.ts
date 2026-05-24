@@ -774,4 +774,28 @@ describe('IssueService', () => {
       });
     });
   });
+
+  describe('findByIdentifier', () => {
+    it('queries by identifier and previousIdentifiers', async () => {
+      prisma.issue.findFirst.mockResolvedValue(TEST_ISSUE);
+
+      const result = await service.findByIdentifier(TEST_ORG.id, 'ENG-42');
+
+      expect(result).toEqual(TEST_ISSUE);
+      expect(prisma.issue.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: [{ identifier: 'ENG-42' }, { previousIdentifiers: { has: 'ENG-42' } }],
+            organizationId: TEST_ORG.id,
+          }),
+        }),
+      );
+    });
+
+    it('returns null when not found', async () => {
+      prisma.issue.findFirst.mockResolvedValue(null);
+      const result = await service.findByIdentifier(TEST_ORG.id, 'ENG-99');
+      expect(result).toBeNull();
+    });
+  });
 });

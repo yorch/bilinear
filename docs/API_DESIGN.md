@@ -677,7 +677,7 @@ type Initiative {
   icon: String
   color: String
   status: String!         # 'planned' | 'started' | 'paused' | 'completed' | 'canceled'
-  health: String          # derived from latest non-archived InitiativeUpdate.health; null if no updates
+  health: String!         # derived: latest InitiativeUpdate.health (30-day window) or progress heuristic; 'unknown' when no updates and progress = 0
   progress: Float!        # averaged from linked projects and child initiatives
   targetDate: Date
   startDate: Date
