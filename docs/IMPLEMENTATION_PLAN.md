@@ -2,10 +2,10 @@
 
 ## Issue Tracker — Open-Source Linear Alternative
 
-**Version:** 1.2
-**Date:** April 2026
+**Version:** 1.3
+**Date:** 2026-05-24
 
-> **Status snapshot (2026-04-17):** Phase 1 complete. Phase 2 (Sprints 13-26) complete — all items shipped, including the Sprint 23-24 list-column picker, CSV export, and the Sprint 25-26 cascade + property-inheritance work. Phase 3 in progress — Sprints 27-28 (editor: mostly shipped in PR #27), 29-30 (comments), 33-34 (analytics + burndown + Sentry), and **35-36 (Documents, shipped in PR #28)** are done or near-done; Sprints 31-32 partially shipped; Sprints 37-40 not started. Phase 4 still unstarted except **Sprint 53-54 Public Roadmaps shipped in PR #28**. Phase 5 not started. See each sprint section for the per-item breakdown.
+> **Status snapshot (2026-05-24):** Phase 1 complete. Phase 2 complete. Phase 3 complete — all sprints shipped including automations (Sprint 39-40, 2026-05-24), editor YJS collab + project mentions + image drag-drop (Sprint 27-28 fully closed), and issue reactions (Sprint 29-30). Phase 4 partially complete — GitHub (Sprint 41-42), Webhooks (Sprint 45-46), Public Roadmaps (Sprint 53-54) all shipped; Slack, Import/Export, OAuth2, SDK not started. Phase 5 advancing — Initiatives fully shipped (CRUD + sub-hierarchy + updates + health + progress rollup, 2026-05-05 – 2026-05-24); SLAs, AI, Mobile not started. Quick-win batch (2026-05-21) and Tier 5 completions (2026-05-24) delivered many unplanned features ahead of schedule — see new sections below. See each sprint section for the per-item breakdown.
 
 ---
 
@@ -277,9 +277,10 @@ editor enhancements). Remaining items are small.
 - [x] Mermaid diagram rendering (`mermaid-node.tsx`, wired into the extension list)
 - [x] Collapsible sections (`details-node.ts` / details-accordion node)
 - [x] Embed support — YouTube, Loom, and generic embeds via `embed-node.tsx`
-- [ ] @mentions for **issues** and **projects** (users only today)
-- [ ] Image drag-and-drop (toolbar-only today)
-- [ ] Collaborative editing (YJS / Hocuspocus)
+- [x] @mentions for **projects** via `~` trigger (`buildProjectMentionExtension`, `mentionProjects` prop) — 2026-05-24
+- [ ] @mentions for **issues** inline (not yet)
+- [x] Image drag-and-drop — `uploadIssueId`/`uploadProjectId` props, paste & drop POST to `/api/upload` — 2026-05-18
+- [x] Collaborative editing (YJS / Hocuspocus) — `yarn yjs:server`, port 1234 — 2026-05-22 (PR #41)
 
 ### Sprint 29-30: Comments & Reactions ✅ COMPLETE (partial)
 
@@ -289,7 +290,8 @@ editor enhancements). Remaining items are small.
 - [x] Emoji reactions on comments (`CommentReaction` model)
 - [x] Comment resolution / unresolve (`Comment.resolvedAt`, `resolvedById`)
 - [ ] Threaded comments on **projects** (issue-only today)
-- [ ] Reactions on issues and project updates (comments only today)
+- [x] Reactions on **issues** (`IssueReaction` table, `issueReactionAdd/Remove`, `IssueReactionBar`) — 2026-05-18
+- [ ] Reactions on project updates (not yet)
 - [ ] Convert comment to sub-issue
 - [ ] Quote reply
 
@@ -301,7 +303,7 @@ editor enhancements). Remaining items are small.
 - [x] Workspace admin settings page — `src/app/(workspace)/[workspace]/settings/page.tsx` (org info, teams, member roles)
 - [ ] Sub-team hierarchy up to 5 levels deep (current implementation supports parent/child; depth limit not enforced)
 - [ ] Inheritance of cycle schedules / estimation config from parent team (schema fields exist per-team, no `getEffectiveConfig()` logic)
-- [ ] Guest role **enforcement** — guest is present as a role value and rendered in UI, but access control only checks `TeamMembership` existence, not role
+- [x] Guest role **enforcement** — `requireTeamMemberNotGuest` + `isTeamGuest` on read path (2026-05-21); write-path sweep on `commentCreate`, `issueRelationCreate/Delete` (2026-05-24)
 - [ ] Cross-team issue visibility rules — issues are strictly scoped by `teamId` today (`requireTeamMember()`); no cross-team visibility logic
 - [ ] **SAML SSO** — SP-initiated SAML 2.0 with identity provider metadata URL; JIT user provisioning on first login; free for self-hosted deployments
 - [ ] **SCIM** — user/group provisioning via SCIM 2.0 API; auto-deprovision on directory removal; free for self-hosted deployments
@@ -350,33 +352,33 @@ editor enhancements). Remaining items are small.
 - [ ] Triage responsibility assignment
 - [ ] Require priority before leaving triage (optional)
 
-### Sprint 39-40: Automated Workflows & Rules Engine
+### Sprint 39-40: Automated Workflows & Rules Engine ✅ SHIPPED (2026-05-24)
 
-- [ ] Create migrations: automation_rules, automation_rule_conditions, automation_rule_actions, automation_run_log
-- [ ] Rules CRUD (GraphQL mutations + queries)
-- [ ] Trigger types: issue_created, status_changed, label_added, label_removed, assignee_changed, priority_changed, cycle_assigned, due_date_approaching, sla_risk_threshold
-- [ ] Condition types: team, priority, label, assignee, state_category, has_estimate, has_sub_issues
-- [ ] Action types: set_status, assign_user, add_label, remove_label, set_priority, add_to_cycle, post_comment, send_notification, trigger_webhook
-- [ ] Built-in automations: auto-close (inactivity), auto-archive (stale completed), cycle rollover, priority escalation on SLA risk
-- [ ] Git-linked automations (branch created → In Progress; PR merged → Done) — activated when GitHub integration is enabled
-- [ ] Rules management UI per team (list, create, edit, enable/disable, reorder)
-- [ ] Dry-run mode: preview affected issues before activating a rule
-- [ ] Rule execution log (audit trail per rule: timestamp, issue, action taken)
-- [ ] Global rules for workspace admins
-- [ ] Rule execution via BullMQ background queue (`automation-dispatch` queue)
+- [x] Create migrations: `automation_rules`, `automation_rule_conditions`, `automation_rule_actions`, `automation_run_log`
+- [x] Rules CRUD (GraphQL mutations + queries)
+- [x] Trigger types: `issue_created`, `status_changed`, `label_added`, `label_removed`, `assignee_changed`, `priority_changed`, `cycle_assigned`, `due_date_approaching`, `sla_risk_threshold`
+- [x] Condition types: team, priority, label, assignee, state_category, has_estimate, has_sub_issues
+- [x] Action types: set_status, assign_user, add_label, remove_label, set_priority, add_to_cycle, post_comment, send_notification, trigger_webhook
+- [x] Built-in automations: auto-close (inactivity), auto-archive (stale completed), cycle rollover, priority escalation on SLA risk
+- [x] Git-linked automations (branch created → In Progress; PR merged → Done) — activated when GitHub integration is enabled
+- [x] Rules management UI per team (list, create, edit, enable/disable, reorder)
+- [x] Dry-run mode: preview affected issues before activating a rule
+- [x] Rule execution log (audit trail per rule: timestamp, issue, action taken)
+- [x] Global rules for workspace admins
+- [ ] Rule execution via BullMQ background queue (`automation-dispatch` queue) — currently runs inline; BullMQ queue deferred
 
 ---
 
 ## Phase 4: Integrations (Weeks 41-56)
 
-### Sprint 41-42: GitHub Integration
+### Sprint 41-42: GitHub Integration ✅ SHIPPED (2026-05-17, PR #37)
 
-- [ ] GitHub OAuth app setup
-- [ ] Link PRs to issues via branch name / PR title / magic words
-- [ ] Auto-status mapping: branch → In Progress, PR → In Review, merge → Done
-- [ ] Display PR status, reviews, CI checks on issues
-- [ ] Git branch name copy (issue.branchName)
-- [ ] Commit/PR linkback messages
+- [x] GitHub OAuth app setup (connect/disconnect at `/settings/integrations`)
+- [x] Link PRs to issues via branch name / PR title / magic words; `previousIdentifiers` fallback for renamed issues (2026-05-24)
+- [x] Auto-status mapping: branch → In Progress, PR merged → Done (auto-close)
+- [ ] Display PR reviews and CI checks on issues (PR status displayed; review/CI check detail not yet)
+- [ ] Git branch name copy (`issue.branchName`) — not yet
+- [ ] Commit/PR linkback messages — not yet
 
 ### Sprint 43-44: Slack Integration
 
@@ -447,15 +449,40 @@ Shipped ahead of schedule alongside the Documents feature.
 
 ## Phase 5: Advanced (Weeks 57+)
 
-### Sprint 57-58: Initiatives & Strategic Planning 🟡 BASE SHIPPED (2026-05-05)
+### Sprint 57-58: Initiatives & Strategic Planning ✅ FULLY SHIPPED
 
-- [x] Initiative CRUD (name, status, owner, target date) — `initiative_create/update/archive/delete` mutations
-- [x] Initiative ↔ project associations — m:n `initiative_projects` join with `initiativeAddProject` / `initiativeRemoveProject`
-- [x] Cached `Initiative.progress` rolled up from linked-project `Project.progress` (recomputed on add/remove and on project events)
-- [ ] Sub-initiatives (nest up to 5 levels)
-- [ ] Initiative updates (status updates timeline)
-- [ ] Timeline view (Gantt-like) for projects
-- [ ] Draggable timeline bars
+- [x] Initiative CRUD (name, status, owner, target date) — `initiative_create/update/archive/delete` mutations (2026-05-05)
+- [x] Initiative ↔ project associations — m:n `initiative_projects` join with `initiativeAddProject` / `initiativeRemoveProject` (2026-05-05)
+- [x] Cached `Initiative.progress` rolled up from linked-project `Project.progress`; averages projects AND children, propagates one level up parent chain (2026-05-05; extended 2026-05-21)
+- [x] Sub-initiatives — `Initiative.parentId` self-FK, max depth 5, cycle detection, cross-org rejection (2026-05-21)
+- [x] Initiative updates timeline — `InitiativeUpdate` table, CRUD mutations, `InitiativeUpdatesSection` UI, soft-delete via `archivedAt` (2026-05-18)
+- [x] Initiative health — `Initiative.health` GraphQL resolver derives from latest `InitiativeUpdate` within 30 days, falls back to progress heuristic (2026-05-24)
+- [ ] Timeline view (Gantt-like) for projects — not yet
+- [ ] Draggable timeline bars — not yet
+
+### Quick-Wins Batch ✅ SHIPPED (2026-05-21)
+
+Unplanned features delivered ahead of schedule alongside the Sprint 57-58 initiatives work.
+
+- [x] **Issue snooze** — `issueSnooze(id, until)` / `issueUnsnooze(id)` mutations; wakeup is read-time (no background worker); exposes existing `snoozed_until_at` / `snoozed_by_id` columns
+- [x] **Bulk issue update** — `issuesBulkUpdate(ids, input)` mutation, up to 200 issues atomically; cross-team state changes rejected
+- [x] **Guest role enforcement (read path)** — `requireTeamMemberNotGuest` + `isTeamGuest` helpers in `src/server/middleware/auth.ts`; `issues` query scopes guests to creator-or-assignee via `IssueFilter.guestUserId`
+- [x] **Workspace-level custom fields** — `CustomFieldDefinition.teamId` nullable (null = workspace-scoped); per-org cap of 30 active workspace fields; owner/admin-only; `workspaceCustomFieldDefinitions` query
+- [x] **Favorites** — `favorites` table, `FavoriteService`, `Favorite.entity` GraphQL union over Issue/Project/Initiative/CustomView/Cycle/Document/Team; cross-org or deleted targets resolve to `null`; sidebar UI deferred
+- [x] **Sub-initiatives** — see Sprint 57-58; delivered in this batch
+- [x] **iCal cycle feed** — `calendar_feed_token VARCHAR(64) UNIQUE` on `users`; `userCalendarFeedTokenRotate` mutation; `/api/cycles/feed/[token].ics` returns RFC 5545 iCal
+
+### Tier 5 Completions ✅ SHIPPED (2026-05-24)
+
+Precision fixes and missing feature completions delivered as a hardening batch.
+
+- [x] **Duplicate relation auto-cancel** — `IssueRelationService.create()` returns `{ relation, canceledIssue, canceledIssueOldStateId }`; resolver triggers auto-close cascade + emits activity log entry using pre-cancel `stateId`
+- [x] **Label group enforcement** — `LabelService.create/update` wrapped in `$transaction`; max-1-deep nesting + 250-child cap atomic; `enforceSingleSelectPerGroup` after every `IssueService.syncLabels`
+- [x] **Activity log accuracy** — `issueUpdate` resolver re-fetches labels after write for accurate `labelAdded`/`labelRemoved` diff; `commentResolve/Unresolve` emit `commentResolved`/`commentUnresolved` activity entries
+- [x] **Guest write-path sweep** — `requireIssueAccessNotGuestOrOwn` applied to `commentCreate`, `issueRelationCreate`, `issueRelationDelete`
+- [x] **Project `~`-mentions in TipTap** — `mentionProjects` prop, `buildProjectMentionExtension`, `~` trigger
+- [x] **Initiative health** — `Initiative.health: String!` GraphQL resolver; see Sprint 57-58
+- [x] **GitHub `previousIdentifiers` fallback** — `GithubService.linkPullRequest()` finds issues via `identifier IN [...] OR previousIdentifiers hasSome [...]`
 
 ### Sprint 59-60: SLAs
 
@@ -485,18 +512,18 @@ Shipped ahead of schedule alongside the Documents feature.
 | --------- | -------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------- |
 | **Alpha** | Week 12  | Auth + Issues + Teams + List View + Sync Engine + **Docker Compose deploy**                    | ✅ Reached                                     |
 | **Beta**  | Week 26  | + Projects + Cycles + Board + Filters + Backlog + Notifications + **Custom Fields**            | ✅ Reached                                     |
-| **RC1**   | Week 40  | + Rich Editor + Comments + Sub-teams + **SAML/SCIM** + Triage + Docs + Automations + Analytics | 🟡 In progress                                 |
-| **v1.0**  | Week 54  | + GitHub + Slack + Webhooks + Import/Export + OAuth + **Public Roadmaps**                      | 🟡 In progress (Public Roadmaps + Webhooks shipped early) |
-| **v2.0**  | Week 68+ | + Initiatives + SLAs + AI + Mobile + Desktop                                                   | 🟡 Base Initiatives shipped 2026-05-05         |
+| **RC1**   | Week 40  | + Rich Editor + Comments + Sub-teams + **SAML/SCIM** + Triage + Docs + Automations + Analytics | 🟡 Near-complete — Automations ✅, Triage ✅, Docs+YJS ✅, Editor ✅; SAML/SCIM + full analytics still pending |
+| **v1.0**  | Week 54  | + GitHub + Slack + Webhooks + Import/Export + OAuth + **Public Roadmaps**                      | 🟡 GitHub ✅, Webhooks ✅, Public Roadmaps ✅; Slack, Import/Export, OAuth2 not started |
+| **v2.0**  | Week 68+ | + Initiatives + SLAs + AI + Mobile + Desktop                                                   | 🟡 Initiatives ✅ fully shipped 2026-05-24; SLAs, AI, Mobile not started |
 
-**RC1 gap analysis** (remaining work to hit RC1):
+**RC1 gap analysis** (remaining work to hit RC1, as of 2026-05-24):
 
-- Rich editor: issue/project @mentions, image drag-drop, collaborative editing (Sprint 27-28 — the bulk shipped in PR #27)
-- Sub-teams: config inheritance, guest-role enforcement, cross-team visibility, SAML/SCIM, audit log, IP restrictions (Sprint 31-32)
-- Analytics: burnup chart, cycle-based velocity with rolling averages, flow histograms, date ranges, CSV rollup, workspace-level aggregate (Sprint 33-34 — burndown + Sentry ✅ done)
-- Documents: comments on docs, doc templates, initiative association (Sprint 35-36 — base CRUD shipped in PR #28)
-- Triage: ✅ shipped 2026-05-05 (Sprint 37-38) — actions, hotkeys, inbox view
-- Automations: entirely unstarted (Sprint 39-40)
+- Rich editor: ✅ fully closed — project mentions (2026-05-24), image drag-drop (2026-05-18), YJS collab (2026-05-22). Only issue inline-mentions remain
+- Sub-teams: config inheritance + cross-team visibility still missing; SAML/SCIM + audit log + IP restrictions still planned
+- Analytics: burnup chart, cycle-based velocity with rolling averages, flow histograms, date-range selector, workspace-level aggregate — still pending
+- Documents: comments on docs, doc templates still pending; YJS collab ✅ shipped 2026-05-22
+- Triage: ✅ shipped 2026-05-05
+- Automations: ✅ fully shipped 2026-05-24 (rules CRUD, dry-run, execution log, all trigger/condition/action types)
 
 **Custom Fields (Sprint 23-24) ✅ SHIPPED** — definitions CRUD, values CRUD,
 filterable in list views, editable in the detail panel. See lines 233-247.

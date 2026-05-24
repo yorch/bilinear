@@ -2,10 +2,10 @@
 
 ## Issue Tracker — Linear Rebuild
 
-**Version:** 1.4
-**Date:** 2026-04-17
+**Version:** 1.5
+**Date:** 2026-05-24
 
-> **Implementation Status (as of Sprint 35-36 + public roadmap)**
+> **Implementation Status (as of 2026-05-24)**
 >
 > This document describes the **target architecture** for the full system. The table below tracks what is actually built:
 >
@@ -43,25 +43,38 @@
 > | Filter builder, custom views, backlog page, column picker, CSV export | ✅ Built | Sprint 19-20, 23-24 |
 > | Notifications + inbox + issue activity timeline + notification snooze | ✅ Built | Sprint 21-22 |
 > | Sub-issues (`Issue.parentId`), issue relations, issue templates, parent/child auto-close cascade, project/cycle inheritance from parent | ✅ Built | Sprint 25-26 |
-> | TipTap rich text editor: markdown, @mentions, image upload persisted to `File` model, tables, code highlighting, embeds (YouTube/Loom) | ✅ Built | Sprint 27-28 (PR #27) |
-> | TipTap — slash commands, Mermaid, YJS collaborative editing | 🔲 Planned | Not started |
+> | TipTap rich text editor: markdown, @mentions (users + `~` project mentions), image upload + drag/drop persisted to `File` model, tables, code highlighting, embeds (YouTube/Loom), slash commands, Mermaid diagrams, collapsible sections | ✅ Built | Sprint 27-28 (PR #27); image drag-drop 2026-05-18; project mentions 2026-05-24 |
+> | TipTap — YJS collaborative editing (Hocuspocus, `yarn yjs:server`, port 1234) | ✅ Built | 2026-05-22 (PR #41) |
 > | Threaded comments with reactions and resolution (`Comment`, `CommentReaction`) | ✅ Built | Sprint 29-30 |
+> | Issue reactions (`IssueReaction` table, `issueReactionAdd/Remove` mutations, `IssueReactionBar` UI) | ✅ Built | 2026-05-18 (PR #38) |
 > | Sub-team hierarchy (`Team.parentId`), private teams, team roles (`TeamMemberRole`) | 🟡 Partial | Sprint 31-32 — no config inheritance or cross-team visibility yet |
 > | Team analytics — burndown charts (hand-rolled SVG), cycle velocity | ✅ Built | Sprint 33-34 |
 > | Sentry error tracking (`@sentry/nextjs`, `sentry.{client,edge,server}.config.ts`) | ✅ Built | Sprint 33-34 |
 > | Cycle rollover (manual-trigger mutation), cycle burndown/velocity | ✅ Built | Sprint 33-34 |
 > | Custom fields (team-scoped, editable in detail panel, filterable, list view) | ✅ Built | Sprint 23-24 |
 > | Workspace admin settings page | ✅ Built | Sprint 31-32 |
-> | Documents (workspace-wide rich-text docs with nested hierarchy, no YJS) | ✅ Built | Sprint 35-36 (PR #28) |
+> | Documents (workspace-wide rich-text docs with nested hierarchy, YJS collaborative editing via Hocuspocus) | ✅ Built | Sprint 35-36 (PR #28); YJS 2026-05-22 (PR #41) |
 > | Public Roadmap (`/r/:slug`, password-gated option, per-project `roadmapVisible` toggle) | ✅ Built | Sprint 53-54 (PR #28) |
 > | File uploads — `POST /api/upload` → `File` row + `/api/uploads/[...path]` serving; local disk in dev, S3-swappable | ✅ Built | Sprint 27-28 |
 > | BullMQ background queues | 🔲 Planned | Sprint 37+ |
 > | Webhooks (outbound HMAC-signed HTTP), Initiatives (m:n with projects), Triage queue | ✅ Built | 2026-05-05 (PR #30) |
-> | GitHub integration (OAuth, PR auto-link, auto-close on merge), Email notifications | ✅ Built | 2026-05-17 (PR #37) |
-> | Issue reactions, Initiative update timeline, Project progress history sparkline, Editor image paste/drop | ✅ Built | 2026-05-18 (PR #38) |
+> | GitHub integration (OAuth, PR auto-link, auto-close on merge, `previousIdentifiers` fallback), Email notifications | ✅ Built | 2026-05-17 (PR #37); fallback 2026-05-24 |
+> | Initiative update timeline, Project progress history sparkline, Editor image paste/drop | ✅ Built | 2026-05-18 (PR #38) |
+> | Workspace-level custom fields (`CustomFieldDefinition.teamId` nullable, 30-field cap, `workspaceCustomFieldDefinitions` query) | ✅ Built | 2026-05-21 |
+> | Issue snooze (`issueSnooze` / `issueUnsnooze` mutations, read-time wakeup) | ✅ Built | 2026-05-21 |
+> | Bulk issue update (`issuesBulkUpdate`, up to 200 issues atomically) | ✅ Built | 2026-05-21 |
+> | Favorites (`favorites` table, `FavoriteService`, `Favorite.entity` union over 7 entity types) | ✅ Built | 2026-05-21 |
+> | Sub-initiatives (`Initiative.parentId` self-FK, max depth 5, cycle detection, progress rollup) | ✅ Built | 2026-05-21 |
+> | iCal cycle feed (`calendar_feed_token`, `userCalendarFeedTokenRotate` mutation, `/api/cycles/feed/[token].ics`) | ✅ Built | 2026-05-21 |
+> | Guest role enforcement — read path (`requireTeamMemberNotGuest`, `isTeamGuest`, `guestUserId` scope) + write path sweep | ✅ Built | Read path 2026-05-21; write path 2026-05-24 |
+> | Label group enforcement (`$transaction` in `LabelService`, 250-child cap, `enforceSingleSelectPerGroup`) | ✅ Built | 2026-05-24 |
+> | Duplicate relation auto-cancel (resolver triggers auto-close cascade + emits activity log) | ✅ Built | 2026-05-24 |
+> | Activity log accuracy (post-write label diff, `commentResolved`/`commentUnresolved` entries) | ✅ Built | 2026-05-24 |
+> | Automation rules engine (`AutomationService`, triggers/conditions/actions, dry-run, execution log) | ✅ Built | 2026-05-24 |
+> | Initiative health (`Initiative.health` GraphQL resolver, latest `InitiativeUpdate` within 30 days + heuristic fallback) | ✅ Built | 2026-05-24 |
 > | SAML / SCIM / API keys | 🔲 Planned | Sprint 49-50 onward |
 >
-> Everything below describes the **intended final architecture**. Sections referencing unbuilt components (SAML, webhooks, BullMQ queues, MeiliSearch, YJS) are design specs, not current reality.
+> Everything below describes the **intended final architecture**. Sections referencing unbuilt components (SAML, BullMQ queues, MeiliSearch) are design specs, not current reality.
 
 ---
 
@@ -329,7 +342,7 @@ App
 │           │   ├── MyIssues
 │           │   ├── Inbox                    ← notifications
 │           │   ├── Documents                ← workspace docs tree
-│           │   ├── Favorites                 🔲 Planned
+│           │   ├── Favorites                ← FavoriteService, entity union (sidebar UI deferred)
 │           │   └── TeamNav (per team)
 │           │       ├── Issues
 │           │       ├── Cycles
@@ -387,6 +400,8 @@ class RootStore {
 
   customFieldStore: CustomFieldStore;  // definitions + values (Sprint 23-24)
   documentStore: DocumentStore;        // Sprint 35-36
+  initiativeStore: InitiativeStore;    // 2026-05-05 (PR #30)
+  favoriteStore: FavoriteStore;        // 2026-05-21
 }
 
 // Each entity store follows a common pattern:
@@ -562,10 +577,22 @@ type Mutation {
 │                                 (atomic CAS on stateId)   │
 │  initiative.service          — initiatives CRUD, m:n      │
 │                                 project link, progress    │
-│                                 rollup (mean of linked)   │
+│                                 rollup, sub-hierarchy,    │
+│                                 updates, health resolver  │
 │  webhook.service             — outbound HTTP webhooks,    │
 │                                 HMAC signing, SSRF guard, │
 │                                 retry sweep (in WS srv)   │
+│  github.service              — OAuth, PR auto-link,       │
+│                                 auto-close on merge,      │
+│                                 previousIdentifiers       │
+│                                 fallback                  │
+│  automation.service          — rules CRUD, trigger eval,  │
+│                                 conditions, actions,      │
+│                                 dry-run, execution log    │
+│  favorite.service            — favorites CRUD, entity     │
+│                                 union (7 types)           │
+│  analytics.service           — velocity, workload,        │
+│                                 burndown aggregations     │
 │  organization.service        — workspace mgmt, members,   │
 │                                 settings                  │
 └───────────────────────┬──────────────────────────────────┘
@@ -576,8 +603,7 @@ type Mutation {
 └──────────────────────────────────────────────────────────┘
 ```
 
-Not yet extracted: **IntegrationService** (Slack / GitHub), **ApiKeyService**
-— planned.
+Not yet extracted: **SlackService**, **ApiKeyService** — planned.
 
 ### 5.3 Sync Broadcast Pipeline
 
@@ -710,7 +736,8 @@ Permission checks in resolvers:
 - **Input validation:** GraphQL input types + service-layer checks (Zod where applicable)
 - **SQL injection:** Prevented by Prisma parameterized queries
 - **XSS:** React auto-escaping + CSP headers + sanitized TipTap / markdown rendering
-- **API keys / webhook HMAC signing:** 🔲 Planned (see §5.4)
+- **Webhook HMAC signing:** ✅ Built — `X-Bilinear-Signature: sha256=<hex>` on every outbound delivery
+- **API keys:** 🔲 Planned (see §5.4)
 
 ---
 
