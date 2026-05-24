@@ -260,17 +260,23 @@ const cycleRolloverTimer = setInterval(() => {
     .then(async results => {
       for (const { cycleId, orgId, movedIssueIds } of results) {
         log.info({ cycleId, movedCount: movedIssueIds.length }, 'Auto-rolled over cycle');
-        await syncService.createSyncAction(orgId, 'U', 'Cycle', cycleId, {
-          completedAt: new Date().toISOString(),
-          id: cycleId,
-        });
-        if (movedIssueIds.length > 0) {
-          const movedIssues = await prisma.issue.findMany({
-            where: { id: { in: movedIssueIds } },
-          });
-          for (const issue of movedIssues) {
-            await syncService.createSyncAction(orgId, 'U', 'Issue', issue.id, issue);
+        try {
+          // Fetch the full cycle record so the SyncAction data replaces the
+          // client's cached entity correctly (not just 2 fields).
+          const cycle = await prisma.cycle.findUnique({ where: { id: cycleId } });
+          if (cycle) {
+            await syncService.createSyncAction(orgId, 'U', 'Cycle', cycleId, cycle);
           }
+          if (movedIssueIds.length > 0) {
+            const movedIssues = await prisma.issue.findMany({
+              where: { id: { in: movedIssueIds } },
+            });
+            for (const issue of movedIssues) {
+              await syncService.createSyncAction(orgId, 'U', 'Issue', issue.id, issue);
+            }
+          }
+        } catch (err) {
+          log.error({ cycleId, err, orgId }, 'Failed to emit SyncActions for rolled-over cycle');
         }
       }
     })
@@ -279,8 +285,8 @@ const cycleRolloverTimer = setInterval(() => {
     });
 }, CYCLE_ROLLOVER_INTERVAL_MS);
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
+// Graceful shutdown — handle both SIGTERM (process manager) and SIGINT (Ctrl-C in dev)
+function shutdown() {
   clearInterval(webhookTimer);
   clearInterval(cycleRolloverTimer);
   wss.close();
@@ -288,4 +294,6 @@ process.on('SIGTERM', () => {
   redisPublisher.disconnect();
   httpServer.close();
   process.exit(0);
-});
+}
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);

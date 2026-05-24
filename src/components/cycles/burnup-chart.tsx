@@ -37,9 +37,13 @@ export function BurnupChart({ data }: BurnupChartProps) {
   const toPath = (pts: Array<{ x: number; y: number }>) =>
     pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
 
-  // Ideal: linear from 0 to finalScope over the cycle duration
+  // Ideal: linear from 0 to finalScope over the cycle duration.
+  // For a single data point (1-day cycle) the ideal is finalScope (all done by end of day).
   const idealPath = toPath(
-    data.map((_, i) => ({ x: xScale(i), y: yScale((finalScope / (n - 1 || 1)) * i) })),
+    data.map((_, i) => ({
+      x: xScale(i),
+      y: yScale(n === 1 ? finalScope : (finalScope / (n - 1)) * i),
+    })),
   );
   const scopePath = toPath(data.map((d, i) => ({ x: xScale(i), y: yScale(d.scope) })));
   const completedPath = toPath(data.map((d, i) => ({ x: xScale(i), y: yScale(d.completed) })));
@@ -113,7 +117,15 @@ export function BurnupChart({ data }: BurnupChartProps) {
 
         {/* Legend */}
         <g transform={`translate(${paddingLeft + 8}, ${paddingTop + 8})`}>
-          <line stroke="#a1a1aa" strokeDasharray="4 3" strokeWidth={1.5} x1={0} x2={16} y1={5} y2={5} />
+          <line
+            stroke="#a1a1aa"
+            strokeDasharray="4 3"
+            strokeWidth={1.5}
+            x1={0}
+            x2={16}
+            y1={5}
+            y2={5}
+          />
           <text className="fill-zinc-500 dark:fill-zinc-400" fontSize={9} x={20} y={9}>
             Ideal
           </text>

@@ -100,14 +100,15 @@ function BurndownChart({ data }: BurndownChartProps) {
   const chartWidth = width - paddingLeft - paddingRight;
   const chartHeight = height - paddingTop - paddingBottom;
 
-  const maxY = Math.max(...data.map(d => Math.max(d.remaining, d.completed)), 1);
+  const maxY = Math.max(...data.map(d => Math.max(d.remaining, d.completed, d.scope)), 1);
   const n = data.length;
 
   const xScale = (i: number) => paddingLeft + (n > 1 ? (i / (n - 1)) * chartWidth : chartWidth / 2);
   const yScale = (v: number) => paddingTop + chartHeight - (v / maxY) * chartHeight;
 
-  // Ideal burndown: linear from total issues (first remaining + first completed) down to 0
-  const totalIssues = data[0].remaining + data[0].completed;
+  // Ideal burndown: linear from final scope down to 0 over the cycle duration.
+  // Using final scope (not day-1 scope) so the ideal accounts for mid-sprint additions.
+  const totalIssues = data[data.length - 1].scope;
   const idealPoints = data.map((_, i) => ({
     x: xScale(i),
     y: yScale(totalIssues - (totalIssues / (n - 1 || 1)) * i),

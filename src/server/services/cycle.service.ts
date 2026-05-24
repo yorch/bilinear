@@ -1,4 +1,7 @@
 import type { Cycle, PrismaClient } from '../../generated/prisma';
+import { childLogger } from '../lib/logger';
+
+const log = childLogger({ module: 'cycle-service' });
 
 export interface CycleCreateInput {
   description?: string;
@@ -431,7 +434,7 @@ export class CycleService {
       points.push({
         completed: completedIdx,
         date: current.toISOString().slice(0, 10),
-        remaining: scopeOnDay - completedIdx,
+        remaining: Math.max(0, scopeOnDay - completedIdx),
         scope: scopeOnDay,
       });
 
@@ -465,8 +468,11 @@ export class CycleService {
           movedIssueIds: result.movedIssueIds,
           orgId: cycle.organizationId,
         });
-      } catch {
-        // Log via the caller; continue with remaining cycles
+      } catch (err) {
+        log.error(
+          { cycleId: cycle.id, err, orgId: cycle.organizationId },
+          'Auto-rollover failed for cycle',
+        );
       }
     }
     return results;

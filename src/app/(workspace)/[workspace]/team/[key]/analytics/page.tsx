@@ -275,7 +275,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
   // ── Velocity: closed per week within the selected range ──────────────────
 
   const velocityData = useMemo(() => {
-    const weekCount = preset === '30d' ? 4 : preset === '180d' ? 12 : 8;
+    const weekCount = preset === '30d' ? 4 : preset === '90d' ? 13 : preset === '180d' ? 26 : 52;
     const now = new Date();
     const weeks: Array<{ start: Date; count: number }> = [];
     for (let i = weekCount - 1; i >= 0; i--) {
@@ -484,7 +484,9 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
               ) : (
                 byStateData.map(item => {
                   const pct =
-                    issues.length > 0 ? Math.round((item.value / issues.length) * 100) : 0;
+                    rangeIssues.length > 0
+                      ? Math.round((item.value / rangeIssues.length) * 100)
+                      : 0;
                   return (
                     <div className="flex flex-col gap-1" key={item.label}>
                       <div className="flex items-center justify-between text-xs">
