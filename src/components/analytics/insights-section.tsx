@@ -28,6 +28,8 @@ interface InsightsData {
 }
 
 interface InsightsSectionProps {
+  onPresetChange?: (preset: RangePreset) => void;
+  preset?: RangePreset;
   states: Array<{ color: string; id: string; name: string }>;
   teamId: string;
 }
@@ -175,8 +177,18 @@ function TimeInStateChart({
   );
 }
 
-export function InsightsSection({ states, teamId }: InsightsSectionProps) {
-  const [preset, setPreset] = useState<RangePreset>('90d');
+export function InsightsSection({
+  onPresetChange,
+  preset: presetProp,
+  states,
+  teamId,
+}: InsightsSectionProps) {
+  const [localPreset, setLocalPreset] = useState<RangePreset>(presetProp ?? '90d');
+  const preset = presetProp ?? localPreset;
+  const setPreset = (p: RangePreset) => {
+    setLocalPreset(p);
+    onPresetChange?.(p);
+  };
   const [data, setData] = useState<InsightsData | null>(null);
   const [loading, setLoading] = useState(true);
 

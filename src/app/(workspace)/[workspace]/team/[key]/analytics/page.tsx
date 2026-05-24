@@ -2,7 +2,7 @@
 
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { InsightsSection } from '@/components/analytics/insights-section';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -167,6 +167,22 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
   const team = teamStore.findByKey(teamKey);
   const teamId = team?.id ?? null;
 
+  // ── Date-range preset ─────────────────────────────────────────────────────
+
+  type RangePreset = '30d' | '90d' | '180d' | 'all';
+  const [preset, setPreset] = useState<RangePreset>('90d');
+
+  const cutoff = useMemo<Date | null>(() => {
+    if (preset === 'all') {
+      return null;
+    }
+    const days = { '30d': 30, '90d': 90, '180d': 180 }[preset];
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - days);
+    d.setUTCHours(0, 0, 0, 0);
+    return d;
+  }, [preset]);
+
   // ── Raw data ─────────────────────────────────────────────────────────────
 
   const issues = useMemo(
@@ -174,6 +190,19 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [teamId, issueStore.findByTeamId],
   );
+
+  // Issues filtered by date range (created or completed within the window).
+  // Workload (open issues) is intentionally kept all-time below.
+  const rangeIssues = useMemo(() => {
+    if (!cutoff) {
+      return issues;
+    }
+    return issues.filter(i => {
+      const created = new Date(i.createdAt);
+      const completed = i.completedAt ? new Date(i.completedAt) : null;
+      return created >= cutoff || (completed !== null && completed >= cutoff);
+    });
+  }, [issues, cutoff]);
 
   const states = useMemo(
     () => (teamId ? workflowStateStore.findByTeamId(teamId) : []),
@@ -191,7 +220,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
 
   const byStateData = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const issue of issues) {
+    for (const issue of rangeIssues) {
       counts.set(issue.stateId, (counts.get(issue.stateId) ?? 0) + 1);
     }
     return states
@@ -201,7 +230,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
         label: s.name,
         value: counts.get(s.id) ?? 0,
       }));
-  }, [issues, states]);
+  }, [rangeIssues, states]);
 
   // ── Completion rate ────────────────────────────────────────────────────────
 
@@ -218,7 +247,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
     let inProgress = 0;
     let open = 0;
     let canceled = 0;
-    for (const i of issues) {
+    for (const i of rangeIssues) {
       if (completedStateIds.has(i.stateId)) {
         completed++;
       } else if (canceledStateIds.has(i.stateId)) {
@@ -238,16 +267,18 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
       inProgressCount: inProgress,
       openCount: open,
     };
-  }, [issues, completedStateIds, canceledStateIds, states]);
+  }, [rangeIssues, completedStateIds, canceledStateIds, states]);
 
-  const completionRate = issues.length > 0 ? Math.round((completedCount / issues.length) * 100) : 0;
+  const completionRate =
+    rangeIssues.length > 0 ? Math.round((completedCount / rangeIssues.length) * 100) : 0;
 
-  // ── Velocity: closed per week (last 8 weeks) ───────────────────────────────
+  // ── Velocity: closed per week within the selected range ──────────────────
 
   const velocityData = useMemo(() => {
+    const weekCount = preset === '30d' ? 4 : preset === '90d' ? 13 : preset === '180d' ? 26 : 52;
     const now = new Date();
     const weeks: Array<{ start: Date; count: number }> = [];
-    for (let i = 7; i >= 0; i--) {
+    for (let i = weekCount - 1; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i * 7);
       weeks.push({ count: 0, start: weekStart(d) });
@@ -269,7 +300,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
       label: fmtShort(w.start),
       value: w.count,
     }));
-  }, [issues]);
+  }, [issues, preset]);
 
   const avgVelocity = useMemo(() => {
     const nonZero = velocityData.filter(w => w.value > 0);
@@ -315,7 +346,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
 
   const avgCycleTimeDays = useMemo(() => {
     const durations: number[] = [];
-    for (const issue of issues) {
+    for (const issue of rangeIssues) {
       if (issue.startedAt && issue.completedAt) {
         const ms = new Date(issue.completedAt).getTime() - new Date(issue.startedAt).getTime();
         if (ms > 0) {
@@ -327,7 +358,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
       return null;
     }
     return (durations.reduce((s, d) => s + d, 0) / durations.length).toFixed(1);
-  }, [issues]);
+  }, [rangeIssues]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -351,19 +382,45 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
     <div className="flex flex-1 flex-col overflow-y-auto">
       {/* Page header */}
       <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
-        <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Analytics</h1>
-        <p className="mt-0.5 text-xs text-zinc-400">
-          {team.displayName || team.name} · all-time data from local store
-        </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Analytics</h1>
+            <p className="mt-0.5 text-xs text-zinc-400">
+              {team.displayName || team.name}
+              {preset !== 'all' ? ` · last ${preset}` : ' · all time'}
+            </p>
+          </div>
+          <div className="flex shrink-0 rounded-md border border-zinc-200 p-0.5 dark:border-zinc-800">
+            {(['30d', '90d', '180d', 'all'] as const).map(p => (
+              <button
+                className={cn(
+                  'rounded px-2.5 py-1 text-xs',
+                  preset === p
+                    ? 'bg-zinc-100 font-medium text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
+                    : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100',
+                )}
+                key={p}
+                onClick={() => setPreset(p)}
+                type="button"
+              >
+                {p === 'all' ? 'All' : p}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-5">
         {/* Summary stats row */}
         <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard label="Total issues" value={issues.length} />
+          <StatCard
+            label="Total issues"
+            sub={preset !== 'all' ? `last ${preset}` : 'all time'}
+            value={rangeIssues.length}
+          />
           <StatCard
             label="Completion rate"
-            sub={`${completedCount} of ${issues.length} closed`}
+            sub={`${completedCount} of ${rangeIssues.length} closed`}
             value={`${completionRate}%`}
           />
           <StatCard
@@ -427,7 +484,9 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
               ) : (
                 byStateData.map(item => {
                   const pct =
-                    issues.length > 0 ? Math.round((item.value / issues.length) * 100) : 0;
+                    rangeIssues.length > 0
+                      ? Math.round((item.value / rangeIssues.length) * 100)
+                      : 0;
                   return (
                     <div className="flex flex-col gap-1" key={item.label}>
                       <div className="flex items-center justify-between text-xs">
@@ -461,6 +520,8 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
 
         {teamId && (
           <InsightsSection
+            onPresetChange={setPreset}
+            preset={preset}
             states={states.map(s => ({ color: s.color, id: s.id, name: s.name }))}
             teamId={teamId}
           />

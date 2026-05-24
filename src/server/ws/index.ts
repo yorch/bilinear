@@ -17,6 +17,8 @@ import { type WebSocket, WebSocketServer } from 'ws';
 import { verifyWsTicket } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
+import { CycleService } from '@/server/services/cycle.service';
+import { SyncService } from '@/server/services/sync.service';
 import { WebhookService } from '@/server/services/webhook.service';
 import { ConnectionManager } from './connection-manager';
 
@@ -33,6 +35,8 @@ const PONG_TIMEOUT_MS = PING_INTERVAL_MS * 2 + 5_000;
 // with the WS server (instead of the Next request path) keeps retries
 // running between requests on serverless deployments.
 const WEBHOOK_RETRY_INTERVAL_MS = 30_000;
+// Check for cycles past their endsAt every 5 minutes and roll them over.
+const CYCLE_ROLLOVER_INTERVAL_MS = 5 * 60_000;
 
 // verifyWsTicket() reads JWT_SECRET via getSecret() and throws if unset
 if (!process.env.JWT_SECRET) {
@@ -243,11 +247,53 @@ const webhookTimer = setInterval(() => {
   });
 }, WEBHOOK_RETRY_INTERVAL_MS);
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
+// ─── Cycle auto-rollover scheduler ──────────────────────────────────────────
+// Find cycles whose endsAt has passed but haven't been marked completed and
+// roll them over automatically — same logic as the manual cycleRollover
+// mutation, but triggered by time rather than user action.
+const redisPublisher = new Redis(REDIS_URL, { lazyConnect: false });
+const syncService = new SyncService(prisma, redisPublisher);
+const cycleService = new CycleService(prisma);
+const cycleRolloverTimer = setInterval(() => {
+  cycleService
+    .processDueRollovers()
+    .then(async results => {
+      for (const { cycleId, orgId, movedIssueIds } of results) {
+        log.info({ cycleId, movedCount: movedIssueIds.length }, 'Auto-rolled over cycle');
+        try {
+          // Fetch the full cycle record so the SyncAction data replaces the
+          // client's cached entity correctly (not just 2 fields).
+          const cycle = await prisma.cycle.findUnique({ where: { id: cycleId } });
+          if (cycle) {
+            await syncService.createSyncAction(orgId, 'U', 'Cycle', cycleId, cycle);
+          }
+          if (movedIssueIds.length > 0) {
+            const movedIssues = await prisma.issue.findMany({
+              where: { id: { in: movedIssueIds } },
+            });
+            for (const issue of movedIssues) {
+              await syncService.createSyncAction(orgId, 'U', 'Issue', issue.id, issue);
+            }
+          }
+        } catch (err) {
+          log.error({ cycleId, err, orgId }, 'Failed to emit SyncActions for rolled-over cycle');
+        }
+      }
+    })
+    .catch((err: Error) => {
+      log.error({ err }, 'Cycle auto-rollover sweep failed');
+    });
+}, CYCLE_ROLLOVER_INTERVAL_MS);
+
+// Graceful shutdown — handle both SIGTERM (process manager) and SIGINT (Ctrl-C in dev)
+function shutdown() {
   clearInterval(webhookTimer);
+  clearInterval(cycleRolloverTimer);
   wss.close();
   redisSubscriber.disconnect();
+  redisPublisher.disconnect();
   httpServer.close();
   process.exit(0);
-});
+}
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
