@@ -449,11 +449,11 @@ per-issue write paths are enforced.
   `Unarchive`, `Delete`, `Snooze`, `Unsnooze`, `ReactionAdd`/`Remove`,
   `issuesBulkUpdate`) runs `requireIssueAccessNotGuestOrOwn` — guests
   can only act on issues they created or are assigned to
+- `commentCreate` and `issueRelationCreate`/`issueRelationDelete` also
+  use `requireIssueAccessNotGuestOrOwn` (shipped 2026-05-24)
 - See PATTERNS.md §48
 
 **Still TODO (separate PR):**
-- Comment / IssueRelation / search resolvers — guests can still read
-  comments and create relations on issues they don't own
 - Project / Initiative / Document scoping for guests (currently a
   guest can see every project and initiative in their org)
 
@@ -591,18 +591,18 @@ or accidentally navigate away.
 **Estimated size:** Small-Medium (server is simple; UI requires composer
 state plumbing across CreateIssueModal + CommentComposer)
 
-### 9.4 @mention Issues and Projects 🔲
+### 9.4 @mention Issues and Projects ✅ _(shipped 2026-05-24)_
 
-Currently `@` in the editor only suggests users. Extend to suggest issues
-(by identifier) and projects (by name).
+Issue `#` mentions shipped 2026-05-22 (PATTERNS.md §55). Project mentions
+(`~` trigger) shipped 2026-05-24.
 
-**Planned scope:**
-- Separate TipTap mention extension instances per type (users, issues,
-  projects)
-- Client-side fuzzy search against `issueStore` / `projectStore`
-- Render as pill with icon + identifier
-
-**Estimated size:** Small (frontend-only — no schema)
+**Shipped:**
+- `TipTapEditor` accepts `mentionProjects?: MentionItem[]` prop
+- `buildProjectMentionExtension` with `~` trigger — same pattern as the
+  issue mention extension; items `{ id, label: name, sub: teamName }`
+- Three independent Mention extension instances: `@` users, `#` issues,
+  `~` projects — each with its own name, trigger, and suggestion list
+- No schema change — client-side only
 
 ### 9.5 Keyboard Shortcuts Coverage 🔲
 
@@ -620,20 +620,21 @@ Linear staples that define the "feels-like-Linear" bar.
 
 **Estimated size:** Medium (frontend-only — keymap infrastructure exists)
 
-### 9.6 Issue Activity Log Query 🚧
+### 9.6 Issue Activity Log Query ✅ _(shipped 2026-05-24)_
 
-`IssueActivity` rows are written on every tracked field change (see
-`TRACKED_ACTIVITY_FIELDS` in `src/server/graphql/resolvers/issue.ts`) and
-exposed via the `issueActivities(issueId)` query. The internal component
-already exists — but tracked-field coverage is narrower than Linear's
-audit log:
+`IssueActivity` rows are written on every tracked field change and exposed
+via the `issueActivities(issueId)` query.
 
-**Gap:** Linear logs git events, label add/remove, project move, cycle
-change, comment-resolved, etc. We only track stateId/assigneeId/priority/
-title/estimate/dueDate/projectId/trashed/cycleId/parentId.
+**Shipped (2026-05-24):**
+- `labelAdded` / `labelRemoved` — diffed from the actual persisted label
+  set (not raw input) so single-select deduplication is not falsely logged
+- `commentResolved` / `commentUnresolved` — emitted in `commentResolve` /
+  `commentUnresolve` resolvers
 
-**Estimated size:** Small (add fields to the tracked list, write activity
-rows from comment / label resolvers).
+**Still missing vs. Linear:**
+- Git event (PR linked/merged/closed) in the activity log
+- Project move, cycle change entries (these fields are in
+  `TRACKED_ACTIVITY_FIELDS` but no dedicated activity type exists)
 
 ### 9.7 Linear "Asks" — Public Intake Forms 🔲
 
@@ -730,26 +731,19 @@ collapse / expand / reorder their sections.
 
 **Estimated size:** Small
 
-### 9.15 Duplicate Relation Auto-Cancel 🔲
+### 9.15 Duplicate Relation Auto-Cancel ✅ _(shipped 2026-05-24)_
 
-PRD §2.1.4 specifies that marking an issue as a duplicate "auto-sets status
-to Canceled." Today `IssueRelationService.create` with `type='duplicate'`
-just persists the relation and its inverse — it never transitions the
-source issue's state.
-
-**Planned scope:**
-- In `IssueRelationService.create`, when `type === 'duplicate'`, transition
-  the `issueId` (the duplicate, not the canonical) to the team's first
-  workflow state in the `canceled` category in the same transaction
-- Skip if the issue is already in a `canceled`/`completed` state
-- Emit the state-change `SyncAction` + `IssueActivity` row alongside the
-  relation insert
-- Reverse on `IssueRelationService.delete` is **out of scope** — once
-  canceled, manual re-open
-
-**Files:** `src/server/services/issue-relation.service.ts`
-
-**Estimated size:** Small
+**Shipped:**
+- `IssueRelationService.create` with `type='duplicate'` transitions the
+  `issueId` (the duplicate) to the team's first `canceled` workflow state
+  inside the same transaction; skips if already `completed`/`canceled`
+- Returns `{ relation, canceledIssue, canceledIssueOldStateId }` so the
+  resolver can emit a SyncAction and `IssueActivity(field='stateId')` with
+  the correct pre-cancel `oldValue` (captured in-transaction)
+- Auto-cancel triggers the `autoCloseParentIssues`/`autoCloseChildIssues`
+  cascade via a follow-up `IssueService.update()` call in the resolver
+- Reverse on `IssueRelationService.delete` is intentionally out of scope —
+  once canceled, manual re-open is required
 
 ### 9.16 Auto-Create "Related" From Issue-ID References 🔲
 
@@ -771,27 +765,22 @@ new helper in `src/server/lib/issue-refs.ts`
 
 **Estimated size:** Small-Medium
 
-### 9.17 Label Group Enforcement 🔲
+### 9.17 Label Group Enforcement ✅ _(shipped 2026-05-24)_
 
-PRD §2.3 describes label groups as "one nesting level, single-select per
-group, max 250 per group." The schema models the hierarchy
-(`IssueLabel.parentId`, schema.prisma:430), but no service enforces the
-two semantic rules.
-
-**Planned scope:**
-- `LabelService.create/update` rejects depth > 1 (a label whose parent has
-  a parent)
-- `LabelService.create` rejects when the prospective parent already has
-  250 children
-- `IssueService` label-assignment path: when assigning a label whose
-  parent has other children already assigned to the issue, atomically
-  remove the siblings (single-select semantics)
-- Cover by unit tests in `label.service.test.ts` + `issue.service.test.ts`
-
-**Files:** `src/server/services/label.service.ts`,
-`src/server/services/issue.service.ts`
-
-**Estimated size:** Small
+**Shipped:**
+- `LabelService.create` and `LabelService.update` both throw
+  `LabelGroupDepthError` if `input.parentId` points to a label that itself
+  has a parent (max 1 nesting level). The capacity check and create are
+  wrapped in a `$transaction` to prevent TOCTOU races.
+- `LabelService.create` throws `LabelGroupCapacityError` when the
+  prospective parent already has ≥ 250 non-archived children.
+- `LabelService.update` excludes the label being moved from the sibling
+  count when it already belongs to the target group.
+- `IssueService.syncLabels` calls `enforceSingleSelectPerGroup` (private
+  method): last-writer-wins deduplication within each group; only the
+  final label in input order is persisted.
+- Resolver catches `LabelGroupDepthError` / `LabelGroupCapacityError` and
+  maps them to `BAD_USER_INPUT` GraphQL errors.
 
 ### 9.18 T-Shirt Estimate Analytics Mapping 🔲
 
@@ -889,20 +878,23 @@ on the same level as the guest sweep (§8.2); needs the same care.
 
 **Estimated size:** Medium-Large
 
-### 9.23 iCal / Calendar Feed for Cycles 🔲
+### 9.23 iCal / Calendar Feed for Cycles ✅ _(shipped 2026-05-24)_
 
-PRD §2.7 specifies "Calendar integration (Google Calendar, .ics, feed
-URL)." No code exists; cycle start/end dates are only visible in-app.
-
-**Planned scope:**
-- New route `GET /api/cycles/feed/[token].ics` — per-user signed token in
-  URL (long random string, stored hashed on `User.calendarFeedToken`)
-- Emits VEVENTs for every upcoming cycle on every team the user is a
-  member of; one event per cycle, start = `cycle.startsAt`, end = `cycle.endsAt`
-- Settings UI: "Copy calendar URL" + "Rotate" button under user profile
-- Google Calendar add-on can subscribe to the same URL
-
-**Estimated size:** Small-Medium
+**Shipped:**
+- `User.calendarFeedToken VARCHAR(64) UNIQUE` — 32-byte random hex string,
+  stored in plaintext (rotation invalidates old URL). Migration
+  `20260523000000_tier5_quickwins`.
+- `GET /api/cycles/feed/[token].ics` — looks up user by token, fetches all
+  non-archived, non-completed cycles for every team the user belongs to,
+  emits RFC 5545 VCALENDAR with one VEVENT per cycle. `DTEND;VALUE=DATE`
+  uses `cycle.endsAt` directly (exclusive semantics — consistent with how
+  cycle dates are stored).
+- `userCalendarFeedTokenRotate` mutation — generates a new token and
+  returns the updated `calendarFeedUrl`.
+- `User.calendarFeedUrl` field resolver — returns null for any user other
+  than the authenticated viewer.
+- Settings page UI: "My Preferences" section with email notification
+  toggle, feed URL display with copy-to-clipboard and rotate buttons.
 
 ### 9.24 Org-Wide Audit Log 🔲
 
@@ -924,22 +916,16 @@ changed, integration connected, webhook created, settings modified).
 
 **Estimated size:** Medium
 
-### 9.25 Initiative-Level Health Badge 🔲
+### 9.25 Initiative-Level Health Badge ✅ _(shipped 2026-05-24)_
 
-PRD §2.8 calls for a top-level health indicator on the initiative
-itself (separate from per-update health, which shipped 2026-05-18 as
-part of `InitiativeUpdate`). Today the initiative card has no badge
-summarizing rollup health.
-
-**Planned scope:**
-- Derive `Initiative.health` from the latest `InitiativeUpdate.health`
-  (if any in last 30d), or fall back to a project-rollup heuristic
-  (worst-of-children clamped by `progress`)
-- New GraphQL field `Initiative.health: 'onTrack' | 'atRisk' | 'offTrack' | 'unknown'`
-- Badge in `/initiatives` list and detail header
-- No new column required — pure resolver derivation
-
-**Estimated size:** Small
+**Shipped:**
+- `Initiative.health: String!` GraphQL field (schema.ts).
+- Resolver in `src/server/graphql/resolvers/initiative.ts`: if a
+  non-archived `InitiativeUpdate` exists within the last 30 days, returns
+  its `health` value; otherwise falls back to a progress heuristic:
+  `onTrack` (≥ 67%), `atRisk` (≥ 33%), `offTrack` (> 0%), `unknown` (0%).
+- No new DB column — pure resolver derivation from `initiative.progress`
+  (the persisted rollup float) and `initiativeUpdate` rows.
 
 ### 9.26 Project Update Reminder Cadence 🔲
 
@@ -993,21 +979,16 @@ email. No equivalent exists today.
 **Estimated size:** Medium. Blocked partially on §5.1 (for Slack
 delivery); email-only delivery can ship independently.
 
-### 9.29 GraphQL `findByIdentifier` Fallback to `previousIdentifiers` 🔲
+### 9.29 GraphQL `findByIdentifier` Fallback to `previousIdentifiers` ✅ _(shipped 2026-05-24)_
 
-The `issues.previous_identifiers` GIN index was shipped in the 2026-05-12
-DB hardening pass (see `REVIEW_BACKLOG.md §6`) ahead of a planned reader
-change. The reader change hasn't landed: renaming a team key (and thus
-the issue identifier) breaks every external link that used the old key.
-
-**Planned scope:**
-- Extend `IssueService.findByIdentifier` to query
-  `identifier = $1 OR previous_identifiers @> ARRAY[$1]`
-- Cover with a unit test in `issue.service.test.ts` that renames a
-  team's key and asserts the old identifier still resolves
-- No schema changes — column + index already exist
-
-**Estimated size:** Small
+**Shipped:**
+- `IssueService.findByIdentifier` now includes
+  `OR: [{ identifier }, { previousIdentifiers: { has: identifier } }]`
+  in its Prisma query, backed by the existing GIN index.
+- `GitHubService.handlePullRequestEvent` also updated: the identifier
+  resolution query uses
+  `OR: [{ identifier: { in } }, { previousIdentifiers: { hasSome } }]`
+  so PR auto-links survive team key renames.
 
 ---
 
@@ -1040,3 +1021,11 @@ the issue identifier) breaks every external link that used the old key.
 | 6.1 | Comprehensive Analytics (MVP) | (pending) | 2026-05-21 |
 | 9.13 | Roadmap Drag Reorder | (pending) | 2026-05-21 |
 | 7.1 | Collaborative Editing YJS (MVP scaffold) | (pending) | 2026-05-22 |
+| 8.2 | Guest write-path sweep (comment + relation) | #47 | 2026-05-24 |
+| 9.4 | Project `~`-mentions in TipTap editor | #47 | 2026-05-24 |
+| 9.6 | Activity log: labelAdded/Removed, commentResolved/Unresolved | #47 | 2026-05-24 |
+| 9.15 | Duplicate relation auto-cancel | #47 | 2026-05-24 |
+| 9.17 | Label group enforcement (depth, cap, single-select) | #47 | 2026-05-24 |
+| 9.23 | iCal cycle feed + calendarFeedToken | #47 | 2026-05-24 |
+| 9.25 | Initiative health badge (resolver derivation) | #47 | 2026-05-24 |
+| 9.29 | findByIdentifier fallback to previousIdentifiers | #47 | 2026-05-24 |

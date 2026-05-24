@@ -138,6 +138,9 @@ CREATE TABLE users (
     -- Notification preferences
     email_notifications_enabled  BOOLEAN NOT NULL DEFAULT true,
 
+    -- iCal cycle feed token (32-byte random hex, rotated via userCalendarFeedTokenRotate)
+    calendar_feed_token          VARCHAR(64) UNIQUE,
+
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );

@@ -202,6 +202,8 @@ type User {
   statusEmoji: String
   statusLabel: String
   statusUntilAt: DateTime
+  emailNotificationsEnabled: Boolean!   # toggled via userUpdateNotificationPreferences
+  calendarFeedUrl: String               # null until userCalendarFeedTokenRotate is called
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -395,9 +397,12 @@ type IssueTemplate {
 }
 ```
 
-Issues carry **no** `url`, `priorityLabel`, `subIssueSortOrder`,
-`snoozedUntilAt`, `previousIdentifiers`, or SLA fields in GraphQL today —
-those live on the DB row but aren't exposed yet.
+Issues carry **no** `url`, `priorityLabel`, `subIssueSortOrder`, or SLA
+fields in GraphQL today — those live on the DB row but aren't exposed yet.
+`snoozedUntilAt` is set via the `issueSnooze`/`issueUnsnooze` mutations but
+is not currently returned as a field on `Issue`. `previousIdentifiers` is a
+DB array used by the GitHub integration for re-link after rename but is not
+exposed as a GraphQL field.
 
 ### 4.5 Project, ProjectMilestone, ProjectUpdate
 
@@ -662,25 +667,66 @@ type PublicRoadmapPage {
 }
 ```
 
-### 4.10 Custom Fields
+### 4.10 Initiative
+
+```graphql
+type Initiative {
+  id: ID!
+  name: String!
+  description: String
+  icon: String
+  color: String
+  status: String!         # 'planned' | 'started' | 'paused' | 'completed' | 'canceled'
+  health: String          # derived from latest non-archived InitiativeUpdate.health; null if no updates
+  progress: Float!        # averaged from linked projects and child initiatives
+  targetDate: Date
+  startDate: Date
+  organizationId: ID!
+  creatorId: ID
+  ownerId: ID
+  parentId: ID            # self-FK for sub-initiatives; max depth 5 (see PATTERNS §46)
+  sortOrder: Float!
+  creator: User
+  owner: User
+  parent: Initiative
+  children: [Initiative!]!
+  projects: [Project!]!
+  updates: [InitiativeUpdate!]!  # newest-first, non-archived
+  archivedAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+```
+
+`Initiative.health` is computed by the resolver from the latest
+`InitiativeUpdate.health` (`'onTrack' | 'atRisk' | 'offTrack'`). It is `null`
+when no updates have been posted. See PATTERNS §60.
+
+`Initiative.progress` averages the `progress` of directly linked projects plus
+the `progress` of child initiatives (equal weight). A parent initiative's
+progress is recomputed one level up the chain after any child write. See
+PATTERNS §46.
+
+### 4.11 Custom Fields
 
 ```graphql
 enum CustomFieldType { text, number, date, select, multi_select, url, checkbox }
 
 type CustomFieldDefinition {
   id: ID!
-  teamId: ID!
+  teamId: ID              # null = workspace-scoped (visible to all teams in the org)
   name: String!
   type: CustomFieldType!
   description: String
   required: Boolean!
-  options: JSON             # [{ value, label, color? }] for select/multi_select; null otherwise
+  options: JSON           # [{ value, label, color? }] for select/multi_select; null otherwise
   sortOrder: Float!
   createdAt: DateTime!
   updatedAt: DateTime!
   archivedAt: DateTime
-  team: Team!
+  team: Team              # null when workspace-scoped
 }
+
 
 type CustomFieldValue {
   id: ID!
@@ -755,8 +801,16 @@ type Query {
 
   # Custom fields
   customFieldDefinitions(teamId: String!, includeArchived: Boolean): [CustomFieldDefinition!]!
+  workspaceCustomFieldDefinitions(includeArchived: Boolean): [CustomFieldDefinition!]!  # workspace-scoped (teamId null)
   customFieldDefinition(id: ID!): CustomFieldDefinition!
   customFieldValuesForIssue(issueId: ID!): [CustomFieldValue!]!
+
+  # Initiatives
+  initiative(id: ID!): Initiative!
+  initiatives(includeArchived: Boolean): [Initiative!]!
+
+  # Favorites
+  favorites: [Favorite!]!
 
   # Public roadmap
   publicRoadmap: PublicRoadmap                              # authed; current org's config
@@ -795,6 +849,9 @@ workflowStateCreate, workflowStateUpdate, workflowStateArchive
 
 ```
 issueCreate, issueUpdate, issueArchive, issueUnarchive, issueDelete
+issuesBulkUpdate(ids: [ID!]!, input: IssueUpdateInput!): BulkIssuePayload!   # up to 200; atomic; no cascade
+issueSnooze(id: ID!, until: DateTime!): IssuePayload!    # sets snoozedUntilAt; wakeup is read-time
+issueUnsnooze(id: ID!): IssuePayload!
 issueLabelCreate, issueLabelUpdate, issueLabelArchive
 issueRelationCreate, issueRelationDelete
 issueTemplateCreate, issueTemplateUpdate, issueTemplateArchive, issueTemplateDelete
@@ -850,6 +907,23 @@ notificationSubscribe(issueId), notificationUnsubscribe(issueId)
 customFieldDefinitionCreate / Update / Archive / Delete
 customFieldValuesSet(issueId, values: [CustomFieldValueInput!]!)   # upsert + delete absent values in one call
 ```
+
+### User settings
+
+```
+userUpdateNotificationPreferences(emailNotificationsEnabled: Boolean!): UserPayload!
+userCalendarFeedTokenRotate: UserPayload!   # generates/rotates calendarFeedToken; returns updated User
+```
+
+### Favorites
+
+```
+favoriteCreate(input: FavoriteCreateInput!): FavoritePayload!
+favoriteDelete(id: ID!): DeletePayload!
+```
+
+`Favorite.entity` is a union over `Issue | Project | Initiative | CustomView | Cycle | Document | Team`.
+Cross-org or deleted targets resolve to `null`; the sidebar skips those entries. See PATTERNS §47.
 
 ### Org admin
 
@@ -1231,20 +1305,20 @@ The following types / operations appeared in earlier versions of this doc as
 design targets; they are **not** in `schema.ts` today. When a sprint lands
 one, delete its row here and add a §4 entry above.
 
-| Surface                                                                       | Status | Notes                                                                          |
-| ----------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------ |
-| `Attachment`, `attachmentCreate/...`                                          | 📋      | Linked external resources (Figma, Google Doc). `File` covers raw uploads only. |
-| `Favorite`, `favoriteCreate/...`                                              | 📋      | Sidebar pinning (Sprint 43-44).                                                |
-| ~~`Initiative`, `initiativeCreate/...`~~                                      | ✅      | Shipped 2026-05-05; see §6.7 above. InitiativeUpdate timeline shipped 2026-05-18.|
-| `Template` (polymorphic)                                                      | 📋      | Project / document templates. Issue-only today via `IssueTemplate`.            |
-| `Webhook`, `webhookCreate/...`                                                | 📋      | Outbound HMAC-signed webhooks (Sprint 49-50).                                  |
-| `apiKeyCreate / apiKeyDelete`                                                 | 📋      | Personal API keys.                                                             |
-| `Reaction` on issues / project updates                                        | 📋      | Only comment reactions shipped.                                                |
-| Rich `IssueFilter` comparators (AND/OR trees, string/number/date comparators) | 📋      | Client-side only today; server accepts the minimal filter above.               |
-| `subscription` GraphQL operations                                             | 📋      | Real-time is over a dedicated WS side-channel.                                 |
-| User-visible audit log (`auditEntries`)                                       | 📋      | Enterprise feature.                                                            |
-| SAML / SCIM auth flows                                                        | 📋      | Enterprise tier.                                                               |
-| SLA / snooze fields on `Issue`                                                | ⚠️      | DB columns exist; GraphQL exposure pending.                                    |
+| Surface                                                                       | Status | Notes                                                                                        |
+| ----------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------- |
+| `Attachment`, `attachmentCreate/...`                                          | 📋      | Linked external resources (Figma, Google Doc). `File` covers raw uploads only.               |
+| ~~`Favorite`, `favoriteCreate/...`~~                                          | ✅      | Shipped 2026-05-21; see §6 "Favorites" above. Sidebar UI deferred.                           |
+| ~~`Initiative`, `initiativeCreate/...`~~                                      | ✅      | Shipped 2026-05-05; see §4.10 and §6. InitiativeUpdate timeline shipped 2026-05-18.          |
+| `Template` (polymorphic)                                                      | 📋      | Project / document templates. Issue-only today via `IssueTemplate`.                          |
+| ~~`Webhook`, `webhookCreate/...`~~                                            | ✅      | Shipped 2026-05-05; see §6 "Webhooks (admin-only)" above.                                    |
+| `apiKeyCreate / apiKeyDelete`                                                 | 📋      | Personal API keys.                                                                           |
+| ~~`Reaction` on issues / project updates~~                                    | ✅      | Issue reactions shipped 2026-05-18 (`issueReactionAdd/Remove`). Project-update reactions TBD.|
+| Rich `IssueFilter` comparators (AND/OR trees, string/number/date comparators) | 📋      | Client-side only today; server accepts the minimal filter above.                             |
+| `subscription` GraphQL operations                                             | 📋      | Real-time is over a dedicated WS side-channel.                                               |
+| User-visible audit log (`auditEntries`)                                       | 📋      | Enterprise feature.                                                                          |
+| SAML / SCIM auth flows                                                        | 📋      | Enterprise tier.                                                                             |
+| ~~SLA / snooze fields on `Issue`~~                                            | ✅      | `issueSnooze`/`issueUnsnooze` mutations shipped 2026-05-21. `snoozedUntilAt` not yet on `Issue` type. |
 
 The REST sync endpoints, WebSocket protocol, and rate-limit surface may also
 pick up enhancements (HTTP/2, operation cost limits, per-org WS quotas). These
