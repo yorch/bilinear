@@ -151,12 +151,18 @@ test.describe('Offline Support', () => {
     await expect(dialog).not.toBeVisible();
     await expect(page.getByText(issueTitle)).toBeVisible({ timeout: 10_000 });
 
-    // Focus the fresh row via its hidden checkbox — clicking the row falls
-    // onto the title button and opens the detail panel.
+    // Wait for the optimistic temp identifier (suffix '…') to reconcile to
+    // the real ENG-N before clicking the checkbox. Clicking on the temp-id row
+    // sets selectedId to the temp id which is then orphaned when the store
+    // atomically swaps the placeholder for the real issue.
     const freshRow = page
       .locator('[data-testid="issue-row"]')
       .filter({ hasText: issueTitle })
       .first();
+    await expect(freshRow.getByText(/^ENG-\d+$/)).toBeVisible({ timeout: 10_000 });
+
+    // Focus the fresh row via its hidden checkbox — clicking the row falls
+    // onto the title button and opens the detail panel.
     await freshRow.locator('input[type="checkbox"]').click({ force: true });
     await expect(freshRow).toHaveAttribute('data-selected', 'true');
     // Blur the checkbox so subsequent keyboard shortcuts (S, Backspace) are not
