@@ -9,8 +9,11 @@ function createTransport() {
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
 
-  if (!host) {
-    // In development, log emails to console instead of sending
+  // In test mode (TEST_AUTH_CODE set by playwright.config.ts) or when no
+  // SMTP host is configured in a non-production environment, log emails to
+  // console rather than attempting a real SMTP connection. This prevents
+  // test suites from failing when Mailpit is not running.
+  if (!host || process.env.TEST_AUTH_CODE) {
     if (process.env.NODE_ENV !== 'production') {
       return nodemailer.createTransport({ jsonTransport: true });
     }
