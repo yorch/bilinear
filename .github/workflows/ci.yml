@@ -48,3 +48,76 @@ jobs:
 
       - name: Build
         run: yarn build
+
+  e2e:
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: issue_tracker_test
+          POSTGRES_PASSWORD: password
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-retries 5
+          --health-timeout 5s
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-retries 5
+          --health-timeout 5s
+        ports:
+          - 6379:6379
+
+    env:
+      APP_URL: http://localhost:3000
+      DATABASE_URL: postgresql://postgres:password@localhost:5432/issue_tracker_test
+      JWT_REFRESH_SECRET: test-refresh-secret-min-32-chars-long
+      JWT_SECRET: test-jwt-secret-min-32-chars-long-here
+      REDIS_URL: redis://localhost:6379
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Install Playwright browsers
+        run: yarn playwright install --with-deps chromium firefox
+
+      - name: Generate Prisma client
+        run: yarn prisma generate
+
+      - name: Run database migrations
+        run: yarn prisma migrate deploy
+
+      - name: Seed test database
+        run: yarn db:seed
+
+      - name: Run E2E tests
+        run: yarn test:e2e
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
