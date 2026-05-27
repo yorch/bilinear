@@ -1,0 +1,34 @@
+# Overlay for deploying behind an existing Traefik instance.
+#   docker compose -f docker-compose.prod.yml -f docker-compose.infra.yml \
+#                  -f docker-compose.traefik.yml up -d
+#
+# Assumes Traefik is already running with an external network named `traefik`
+# and a `websecure` entrypoint + `webcert` certificate resolver.
+# Set DOMAIN_APP (and rename TRAEFIK_NAME per deployment so router/service
+# names stay unique across apps sharing one Traefik).
+services:
+  app:
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      - "traefik.http.services.${TRAEFIK_NAME:-bilinear}.loadbalancer.server.port=3000"
+      - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}.rule=Host(`${DOMAIN_APP}`)"
+      - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}.entrypoints=websecure"
+      - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}.tls=true"
+      - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}.tls.certResolver=webcert"
+      - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}.service=${TRAEFIK_NAME:-bilinear}"
+
+  postgres:
+    networks:
+      - default
+
+  redis:
+    networks:
+      - default
+
+networks:
+  traefik:
+    external: true
