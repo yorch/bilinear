@@ -74,7 +74,10 @@ export default defineConfig({
       stderr: 'pipe',
       stdout: 'pipe',
       timeout: 180_000,
-      url: 'http://127.0.0.1:3000',
+      // `/health` returns 200; Playwright's webServer only accepts 2xx/3xx as
+      // "ready". `/` redirects through onboarding/auth and returns 404 on this
+      // app, so the probe would otherwise poll until timeout.
+      url: 'http://127.0.0.1:3000/health',
     },
     {
       command: 'yarn ws:server',
