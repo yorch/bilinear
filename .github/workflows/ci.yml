@@ -55,6 +55,14 @@ jobs:
     timeout-minutes: 20
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
 
+    # Use the official Playwright image so chromium/firefox come pre-installed.
+    # `playwright install --with-deps` on the bare ubuntu-latest runner hangs
+    # reliably during chromium extraction after the download completes; this
+    # image bypasses that entirely. Tag is pinned to the @playwright/test
+    # version used by the repo.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+
     services:
       postgres:
         image: postgres:18
@@ -67,8 +75,6 @@ jobs:
           --health-interval 10s
           --health-retries 5
           --health-timeout 5s
-        ports:
-          - 5432:5432
       redis:
         image: redis:7
         options: >-
@@ -76,15 +82,16 @@ jobs:
           --health-interval 10s
           --health-retries 5
           --health-timeout 5s
-        ports:
-          - 6379:6379
 
     env:
       APP_URL: http://localhost:3000
-      DATABASE_URL: postgresql://postgres:password@localhost:5432/issue_tracker_test
+      # When the job runs in a container, service containers are reachable
+      # by their service key name as hostname (not localhost). Port mappings
+      # are not needed in this mode.
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/issue_tracker_test
       JWT_REFRESH_SECRET: test-refresh-secret-min-32-chars-long
       JWT_SECRET: test-jwt-secret-min-32-chars-long-here
-      REDIS_URL: redis://localhost:6379
+      REDIS_URL: redis://redis:6379
 
     steps:
       - name: Checkout
@@ -98,30 +105,6 @@ jobs:
 
       - name: Install dependencies
         run: yarn install --immutable
-
-      # Playwright's browser download/extract is flaky on GH runners — it
-      # downloads in seconds but then hangs in post-download (~50% of runs hit
-      # the 20-min job timeout). Caching the binaries skips the download
-      # entirely on cache hit; the install-deps step still runs to install the
-      # system apt packages, which are cheap.
-      - name: Get installed Playwright version
-        id: playwright-version
-        run: |
-          version=$(node -p "require('./package.json').devDependencies['@playwright/test']")
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
-      - name: Cache Playwright browsers
-        id: playwright-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
-
-      - name: Install Playwright browsers
-        run: yarn playwright install --with-deps chromium firefox
-        # --with-deps installs apt packages (cheap, always runs). Playwright
-        # detects cached browser binaries via the cache step above and skips
-        # the slow download/extract on cache hit.
 
       - name: Generate Prisma client
         run: yarn prisma generate
