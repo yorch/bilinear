@@ -2,7 +2,6 @@ services:
   app:
     build:
       context: .
-      dockerfile: deployment/Dockerfile
     init: true
     restart: unless-stopped
     ports:
