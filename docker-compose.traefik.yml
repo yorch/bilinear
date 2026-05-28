@@ -8,6 +8,9 @@
 # names stay unique across apps sharing one Traefik).
 services:
   app:
+    # Reached only via Traefik in this overlay — clear the inherited
+    # host port mapping from docker-compose.prod.yml.
+    ports: !reset []
     networks:
       - default
       - traefik
@@ -15,7 +18,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik"
       - "traefik.http.services.${TRAEFIK_NAME:-bilinear}.loadbalancer.server.port=3000"
-      - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}.rule=Host(`${DOMAIN_APP}`)"
+      - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}.rule=Host(`${DOMAIN_APP:?DOMAIN_APP must be set when using docker-compose.traefik.yml}`)"
       - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}.entrypoints=websecure"
       - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}.tls=true"
       - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}.tls.certResolver=webcert"
