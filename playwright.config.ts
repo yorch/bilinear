@@ -57,7 +57,11 @@ export default defineConfig({
    * updates across browser contexts. */
   webServer: [
     {
-      command: 'NODE_ENV=test TEST_AUTH_CODE=000000 yarn dev',
+      // -H 127.0.0.1 pins IPv4. Without it, Next 16's default `localhost` resolves
+      // to ::1 (IPv6) on Node ≥17, and Playwright's URL probe — which goes to
+      // 127.0.0.1 — never gets an answer. The webServer just hangs until timeout
+      // with no output. stdout/stderr piping surfaces server logs in the CI log.
+      command: 'NODE_ENV=test TEST_AUTH_CODE=000000 yarn next dev -H 127.0.0.1',
       env: {
         JWT_REFRESH_SECRET:
           process.env.JWT_REFRESH_SECRET ?? 'e2e-test-refresh-secret-for-testing-purposes-only-xyz',
@@ -67,8 +71,13 @@ export default defineConfig({
         TEST_AUTH_CODE: '000000',
       },
       reuseExistingServer: !process.env.CI,
-      timeout: 120_000,
-      url: 'http://localhost:3000',
+      stderr: 'pipe',
+      stdout: 'pipe',
+      timeout: 180_000,
+      // `/health` returns 200; Playwright's webServer only accepts 2xx/3xx as
+      // "ready". `/` redirects through onboarding/auth and returns 404 on this
+      // app, so the probe would otherwise poll until timeout.
+      url: 'http://127.0.0.1:3000/health',
     },
     {
       command: 'yarn ws:server',
@@ -79,8 +88,10 @@ export default defineConfig({
         REDIS_URL: process.env.REDIS_URL ?? 'redis://localhost:6379',
       },
       reuseExistingServer: !process.env.CI,
+      stderr: 'pipe',
+      stdout: 'pipe',
       timeout: 30_000,
-      url: 'http://localhost:3001',
+      url: 'http://127.0.0.1:3001',
     },
   ],
 
