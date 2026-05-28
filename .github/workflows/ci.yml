@@ -116,7 +116,10 @@ jobs:
         run: yarn db:seed
 
       - name: Run E2E tests
-        run: yarn test:e2e
+        # CI runs chromium only. The Playwright container runs as root with
+        # $HOME owned by pwuser; firefox refuses that combo with a sandbox
+        # EPERM error. Local `yarn test:e2e` still runs both browsers.
+        run: yarn test:e2e --project=chromium
 
       - name: Upload Playwright report
         if: always()
