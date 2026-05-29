@@ -209,17 +209,28 @@ See `docs/PATTERNS.md` for conventions used throughout the codebase.
 
 ## Deployment
 
-The `deployment/` directory contains a production Docker Compose setup that builds and runs the full stack (app, PostgreSQL, Redis).
+This repo follows the workspace's standard docker-compose overlay set —
+`docker-compose.{infra,app,prod,traefik,watchtower}.yml` at the repo root, built
+and published via `.github/workflows/docker.yml` (GHCR + optional custom
+registry). The image runs `prisma migrate deploy` on boot via
+`docker-entrypoint.sh`, so a fresh container catches up on schema before serving
+traffic.
 
 ```bash
-cd deployment
-# Copy and fill in environment variables
-cp ../.env.example .env
-# Build and start all services (runs migrations automatically)
-docker compose up -d
+# Local full-stack build (builds from source)
+yarn docker:infra:up
+docker compose -f docker-compose.app.yml -f docker-compose.infra.yml up --build
+
+# Production (pulls the published image)
+cp .env.example .env
+docker compose -f docker-compose.prod.yml -f docker-compose.infra.yml up -d
+
+# Behind Traefik (TLS, custom domain — set DOMAIN_APP first)
+docker compose -f docker-compose.prod.yml -f docker-compose.infra.yml \
+               -f docker-compose.traefik.yml up -d
 ```
 
-Required environment variables (in addition to defaults): `JWT_SECRET`, `JWT_REFRESH_SECRET`, `APP_URL`, `REDIS_URL`, and optionally `POSTGRES_PASSWORD`, `WS_PORT` (default 3001), SMTP / Google OAuth settings.
+Required environment variables (in addition to defaults): `JWT_SECRET`, `JWT_REFRESH_SECRET`, `APP_URL`, `REDIS_URL`, and optionally `POSTGRES_PASSWORD`, `WS_PORT` (default 3001), SMTP / Google OAuth settings. See `.env.example` for the full list.
 
 The WebSocket server (`yarn ws:server`) runs as a separate process. In production, run it alongside the Next.js app and ensure `NEXT_PUBLIC_WS_PORT` is set if the WS server is on a non-default port.
 

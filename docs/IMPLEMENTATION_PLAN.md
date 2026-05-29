@@ -145,10 +145,10 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [x] E2E tests for critical paths (auth, issue CRUD, sync, offline, keyboard shortcuts)
 - [x] API rate limiting implementation (Redis fixed-window, 5 000 req/hr + complexity budget)
 - [x] Structured logging (pino + pino-pretty, `src/server/lib/logger.ts`; Sentry integration deferred)
-- [x] **Docker Compose packaging** — `deployment/docker-compose.yaml` builds full stack (app + ws-server + PostgreSQL + Redis); `README.md` points to it
+- [x] **Docker Compose packaging** — root-level `docker-compose.{app,infra,prod,traefik,watchtower}.yml` overlays per workspace convention (single image built and published via `.github/workflows/docker.yml`); `README.md` documents usage
 - [x] `.env.example` covering every required variable with documentation
 - [ ] Startup migration check: warn if pending migrations on boot
-- [x] `README.md` self-hosting section: prerequisites, `docker compose up`, first-run walkthrough (`deployment/` section)
+- [x] `README.md` self-hosting section: prerequisites, `docker compose up`, first-run walkthrough
 - [ ] Backup/restore documentation for PostgreSQL volume
 - [ ] Minimum resource validation: documented requirements for $6/mo VPS (1 vCPU / 1GB RAM)
 
