@@ -181,7 +181,7 @@
 
 | Layer   | Technology                                              | Status    | Rationale                                                          |
 | ------- | ------------------------------------------------------- | --------- | ------------------------------------------------------------------ |
-| Hosting | **Vercel** (frontend) + **Docker Compose** self-hosting | ✅         | `deployment/` has the full-stack compose file; Vercel deploy wired |
+| Hosting | **Vercel** (frontend) + **Docker Compose** self-hosting | ✅         | Root-level `docker-compose.{infra,app,prod,traefik,watchtower}.yml` overlays + `docker.yml` publish workflow; Vercel deploy wired |
 | CI/CD   | **GitHub Actions**                                      | ✅         | Unit + E2E + lint + typecheck + build on push                      |
 | Errors  | **Sentry** (`@sentry/nextjs`)                           | ✅         | `sentry.{client,edge,server}.config.ts`                            |
 | Metrics | **Prometheus / Grafana**                                | 🔲 Planned | Not wired yet                                                      |
