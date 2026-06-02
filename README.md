@@ -232,7 +232,18 @@ docker compose -f docker-compose.prod.yml -f docker-compose.infra.yml \
 
 Required environment variables (in addition to defaults): `JWT_SECRET`, `JWT_REFRESH_SECRET`, `APP_URL`, `REDIS_URL`, and optionally `POSTGRES_PASSWORD`, `WS_PORT` (default 3001), SMTP / Google OAuth settings. See `.env.example` for the full list.
 
-The WebSocket server (`yarn ws:server`) runs as a separate process. In production, run it alongside the Next.js app and ensure `NEXT_PUBLIC_WS_PORT` is set if the WS server is on a non-default port.
+### Production process requirements
+
+Two long-running processes are required in production alongside the Next.js app:
+
+| Process | Command | Responsibilities |
+| ------- | ------- | ---------------- |
+| **WebSocket server** | `yarn ws:server` | Real-time sync fan-out (Redis Pub/Sub → connected clients), webhook retry sweep (every 30s), cycle auto-rollover |
+| **YJS server** *(optional)* | `yarn yjs:server` | Collaborative editing — only needed when `NEXT_PUBLIC_COLLAB_ENABLED=true` |
+
+**Neither server is wired into the Docker Compose files** — run them as separate services or background processes in your deployment. Set `NEXT_PUBLIC_WS_PORT` (and `NEXT_PUBLIC_YJS_SERVER_URL` for YJS) before `yarn build` so the values are inlined at build time.
+
+> **Warning:** The webhook retry sweep and cycle auto-rollover run exclusively inside the WS server process. If it is not running, scheduled webhooks will not be retried and cycles will not roll over automatically.
 
 ---
 

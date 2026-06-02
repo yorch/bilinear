@@ -141,6 +141,7 @@ export async function checkFixedWindow(
   bucketKey: string,
   limit: number,
   windowSeconds: number,
+  failClosed = false,
 ): Promise<{ exceeded: boolean; count: number }> {
   const bucket = Math.floor(Date.now() / 1000 / windowSeconds);
   const key = `${bucketKey}:${bucket}`;
@@ -158,8 +159,17 @@ export async function checkFixedWindow(
     const count = incrRes[1];
     return { count, exceeded: count > limit };
   } catch (err) {
-    logger.error({ err, key }, 'Rate limit check failed — allowing request');
-    return { count: 0, exceeded: false };
+    // Default policy is fail-open (a Redis outage shouldn't lock everyone
+    // out). For brute-force-sensitive paths the caller can opt into
+    // fail-closed via `failClosed` (see AUTH_RATE_LIMIT_FAIL_CLOSED) so an
+    // outage doesn't silently disable the limiter on, e.g., magic-link verify.
+    logger.error(
+      { err, failClosed, key },
+      failClosed
+        ? 'Rate limit check failed — rejecting request (fail-closed)'
+        : 'Rate limit check failed — allowing request (fail-open)',
+    );
+    return { count: 0, exceeded: failClosed };
   }
 }
 
@@ -195,17 +205,28 @@ export async function checkAuthMutationLimit(
   const emailKey = `rl:auth:${kind}:email:${email.toLowerCase()}`;
   const ipKey = clientIp ? `rl:auth:${kind}:ip:${clientIp}` : null;
 
+  // Auth mutations gate credential-guessing, so an operator can opt into
+  // fail-closed (reject when Redis is unreachable) rather than the default
+  // fail-open. Defends the magic-link `verify` brute-force cap (6-digit code,
+  // ~1M space) during a Redis outage. Off by default to preserve login
+  // availability; see AUTH_RATE_LIMIT_FAIL_CLOSED in .env.example.
+  const failClosed = process.env.AUTH_RATE_LIMIT_FAIL_CLOSED === '1';
+
   if (kind === 'login') {
     const [byEmail, byIp] = await Promise.all([
-      checkFixedWindow(emailKey, 5, 60 * 60),
-      ipKey ? checkFixedWindow(ipKey, 20, 60 * 60) : Promise.resolve({ count: 0, exceeded: false }),
+      checkFixedWindow(emailKey, 5, 60 * 60, failClosed),
+      ipKey
+        ? checkFixedWindow(ipKey, 20, 60 * 60, failClosed)
+        : Promise.resolve({ count: 0, exceeded: false }),
     ]);
     return { exceeded: byEmail.exceeded || byIp.exceeded };
   }
 
   const [byEmail, byIp] = await Promise.all([
-    checkFixedWindow(emailKey, 10, 15 * 60),
-    ipKey ? checkFixedWindow(ipKey, 50, 15 * 60) : Promise.resolve({ count: 0, exceeded: false }),
+    checkFixedWindow(emailKey, 10, 15 * 60, failClosed),
+    ipKey
+      ? checkFixedWindow(ipKey, 50, 15 * 60, failClosed)
+      : Promise.resolve({ count: 0, exceeded: false }),
   ]);
   return { exceeded: byEmail.exceeded || byIp.exceeded };
 }
