@@ -63,17 +63,16 @@ export const cycleResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      // A cycle belongs to a single team; an issue can only join a cycle on
-      // its own team. Without this, a same-org issue from another team could
-      // be attached to this cycle, breaking the team-consistency invariant
-      // that issueCreate/issueUpdate enforce for workflow state.
-      if (issue.teamId !== cycle.teamId) {
-        throw new GraphQLError('Issue and cycle belong to different teams', {
-          extensions: { code: 'BAD_USER_INPUT' },
-        });
+      // The service enforces the team-consistency invariant (CycleCrossTeamError).
+      try {
+        await ctx.services.cycle.addIssueToCycle(cycleId, issueId, cycle.teamId, issue.teamId);
+      } catch (err) {
+        const error = err as Error;
+        if (error.name === 'CycleCrossTeamError') {
+          throw new GraphQLError(error.message, { extensions: { code: 'BAD_USER_INPUT' } });
+        }
+        throw err;
       }
-
-      await ctx.services.cycle.addIssueToCycle(cycleId, issueId);
       const updatedIssue = await ctx.services.issue.findById(issueId);
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,

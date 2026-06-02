@@ -40,6 +40,13 @@ export class CycleInvalidDatesError extends Error {
   }
 }
 
+export class CycleCrossTeamError extends Error {
+  constructor() {
+    super('Issue and cycle belong to different teams');
+    this.name = 'CycleCrossTeamError';
+  }
+}
+
 export class CycleService {
   constructor(private prisma: PrismaClient) {}
 
@@ -483,7 +490,15 @@ export class CycleService {
     return results;
   }
 
-  async addIssueToCycle(cycleId: string, issueId: string): Promise<void> {
+  async addIssueToCycle(
+    cycleId: string,
+    issueId: string,
+    cycleTeamId: string,
+    issueTeamId: string,
+  ): Promise<void> {
+    if (cycleTeamId !== issueTeamId) {
+      throw new CycleCrossTeamError();
+    }
     await this.prisma.issue.update({
       data: { addedToCycleAt: new Date(), cycleId },
       where: { id: issueId },

@@ -80,9 +80,11 @@ export const issueRelationResolvers = {
             const { cascaded } = await ctx.services.issue.update(canceledIssue.id, {
               stateId: canceledIssue.stateId,
             });
-            for (const c of cascaded) {
-              await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', c.id, c);
-            }
+            await Promise.all(
+              cascaded.map(c =>
+                ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', c.id, c),
+              ),
+            );
           } catch (cascadeErr) {
             logger.error(
               { canceledIssueId: canceledIssue.id, err: cascadeErr },

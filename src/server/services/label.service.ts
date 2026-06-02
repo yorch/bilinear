@@ -166,7 +166,7 @@ export class LabelService {
           where: {
             archivedAt: null,
             parentId: input.parentId,
-            ...(current?.parentId === input.parentId ? { id: { not: id } } : {}),
+            ...(current.parentId === input.parentId ? { id: { not: id } } : {}),
           },
         });
         if (siblingCount >= MAX_GROUP_CHILDREN) {

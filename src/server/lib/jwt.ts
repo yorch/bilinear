@@ -127,6 +127,30 @@ export async function verifyWsTicket(token: string): Promise<WsTicketPayload> {
   };
 }
 
+// Shared JWT machinery for all OAuth "state" tokens (Google, GitHub, …).
+// The `provider` claim discriminates tokens so a Google state cannot be
+// presented as a GitHub state and vice-versa.
+async function signOAuthStateJWT(claims: Record<string, unknown>): Promise<string> {
+  return new SignJWT({ ...claims, type: 'oauth_state' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime(OAUTH_STATE_EXPIRY)
+    .sign(getSecret('JWT_SECRET'));
+}
+
+async function verifyOAuthStateJWT(
+  state: string,
+  provider: string,
+): Promise<Record<string, unknown>> {
+  const { payload } = await jwtVerify(state, getSecret('JWT_SECRET'), {
+    algorithms: ALLOWED_ALGORITHMS,
+  });
+  if (payload.type !== 'oauth_state' || payload.provider !== provider) {
+    throw new Error('Invalid OAuth state token');
+  }
+  return payload as Record<string, unknown>;
+}
+
 /**
  * Sign a short-lived OAuth "state" JWT used to prevent CSRF on the
  * Google OAuth redirect chain. The token carries a random nonce and a
@@ -138,21 +162,12 @@ export async function signOAuthState(
   provider: 'google',
 ): Promise<{ state: string; nonce: string }> {
   const nonce = crypto.randomBytes(24).toString('base64url');
-  const state = await new SignJWT({ nonce, provider, type: 'oauth_state' })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt()
-    .setExpirationTime(OAUTH_STATE_EXPIRY)
-    .sign(getSecret('JWT_SECRET'));
+  const state = await signOAuthStateJWT({ nonce, provider });
   return { nonce, state };
 }
 
 export async function verifyOAuthState(state: string, provider: 'google'): Promise<void> {
-  const { payload } = await jwtVerify(state, getSecret('JWT_SECRET'), {
-    algorithms: ALLOWED_ALGORITHMS,
-  });
-  if (payload.type !== 'oauth_state' || payload.provider !== provider) {
-    throw new Error('Invalid OAuth state token');
-  }
+  await verifyOAuthStateJWT(state, provider);
 }
 
 export interface GithubOAuthStatePayload {
@@ -172,20 +187,11 @@ export interface GithubOAuthStatePayload {
  * narrow `type`/`provider` claims prevent substitution for another token.
  */
 export async function signGithubOAuthState(payload: GithubOAuthStatePayload): Promise<string> {
-  return new SignJWT({ ...payload, provider: 'github', type: 'oauth_state' })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt()
-    .setExpirationTime(OAUTH_STATE_EXPIRY)
-    .sign(getSecret('JWT_SECRET'));
+  return signOAuthStateJWT({ ...payload, provider: 'github' });
 }
 
 export async function verifyGithubOAuthState(state: string): Promise<GithubOAuthStatePayload> {
-  const { payload } = await jwtVerify(state, getSecret('JWT_SECRET'), {
-    algorithms: ALLOWED_ALGORITHMS,
-  });
-  if (payload.type !== 'oauth_state' || payload.provider !== 'github') {
-    throw new Error('Invalid OAuth state token');
-  }
+  const payload = await verifyOAuthStateJWT(state, 'github');
   return {
     orgId: payload.orgId as string,
     userId: payload.userId as string,

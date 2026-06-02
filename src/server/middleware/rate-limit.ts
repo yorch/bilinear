@@ -191,6 +191,7 @@ export async function checkAuthMutationLimit(
   kind: 'login' | 'verify',
   email: string,
   clientIp: string | null,
+  failClosed = process.env.AUTH_RATE_LIMIT_FAIL_CLOSED === '1',
 ): Promise<{ exceeded: boolean }> {
   // E2E tests reuse a single fixture email and exceed the per-email
   // login cap (5/hour) within the first batch. The TEST_AUTH_CODE
@@ -204,13 +205,6 @@ export async function checkAuthMutationLimit(
 
   const emailKey = `rl:auth:${kind}:email:${email.toLowerCase()}`;
   const ipKey = clientIp ? `rl:auth:${kind}:ip:${clientIp}` : null;
-
-  // Auth mutations gate credential-guessing, so an operator can opt into
-  // fail-closed (reject when Redis is unreachable) rather than the default
-  // fail-open. Defends the magic-link `verify` brute-force cap (6-digit code,
-  // ~1M space) during a Redis outage. Off by default to preserve login
-  // availability; see AUTH_RATE_LIMIT_FAIL_CLOSED in .env.example.
-  const failClosed = process.env.AUTH_RATE_LIMIT_FAIL_CLOSED === '1';
 
   if (kind === 'login') {
     const [byEmail, byIp] = await Promise.all([
