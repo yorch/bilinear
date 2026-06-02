@@ -105,6 +105,7 @@ model User {
   initiativeUpdates         InitiativeUpdate[]         @relation("InitiativeUpdateAuthor")
   createdWebhooks           Webhook[]                  @relation("WebhookCreator")
   githubIntegrations        GitHubIntegration[]        @relation("GitHubIntegrationCreator")
+  createdAutomationRules    AutomationRule[]           @relation("AutomationRuleCreator")
   favorites                 Favorite[]
 
   @@map("users")
@@ -366,6 +367,13 @@ model Issue {
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   archivedAt DateTime? @map("archived_at") @db.Timestamptz
 
+  // organization/team/state intentionally keep the default RESTRICT (not
+  // Cascade). Issues are never hard-deleted in normal operation — they soft
+  // delete via `archivedAt`/`trashed`. RESTRICT means a Team or Organization
+  // cannot be hard-deleted while issues exist, which is the desired guard:
+  // it prevents an accidental team delete from silently wiping every issue.
+  // A deliberate org/team purge must delete issues (and their state refs) in
+  // dependency order first; there is no implicit cascade by design.
   organization      Organization               @relation(fields: [organizationId], references: [id])
   team              Team                       @relation(fields: [teamId], references: [id])
   state             WorkflowState              @relation(fields: [stateId], references: [id])
@@ -401,13 +409,12 @@ model Issue {
   @@index([teamId, priority])
   @@index([teamId, createdAt])
   @@index([updatedAt])
-  // GIN index over the previous-identifier history array. Currently
-  // unused — `IssueService.findByIdentifier` only matches on the live
-  // `identifier` column. The index ships ahead of a planned change
-  // that will fall back to a `previousIdentifiers` lookup so renamed
-  // issues stay reachable by their old key (e.g. a team-key change
-  // moving ENG-123 → PLAT-123). Cheap to maintain in the meantime;
-  // writes to `previousIdentifiers` happen only on team-key renames.
+  // GIN index over the previous-identifier history array. Load-bearing:
+  // `IssueService.findByIdentifier` falls back to a `previousIdentifiers`
+  // lookup (OR clause) and `GithubService.linkPullRequest` matches with
+  // `hasSome`, so renamed issues stay reachable by their old key (e.g. a
+  // team-key change moving ENG-123 → PLAT-123). Do not drop. Writes to
+  // `previousIdentifiers` happen only on team-key renames.
   @@index([previousIdentifiers], type: Gin)
   @@map("issues")
 }
@@ -453,13 +460,17 @@ model SyncAction {
   data           Json?
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-  // Statement-time timestamp set at COMMIT inside a trigger
-  // (`set_sync_action_committed_at`). Delta-sync orders by `committedAt`
-  // and ignores rows newer than `now() - SAFETY_WINDOW_MS` so a slow
-  // commit cannot leave a gap in the sequence — without this, BIGSERIAL
-  // ids can commit out of order and a client that records lastSyncId=N
-  // would silently skip an earlier-id-but-later-commit row. See
-  // `SyncService.getDeltaSyncActions`.
+  // statement_timestamp() stamped by the BEFORE INSERT trigger
+  // `set_sync_action_committed_at`, which assigns it UNCONDITIONALLY and so
+  // overrides the `@default(now())` column default below (a BEFORE INSERT
+  // trigger runs after the default is materialized). The default is kept only
+  // so Prisma's create input doesn't require the column. Delta-sync orders by
+  // `committedAt` and ignores rows newer than `now() - SAFETY_WINDOW_MS` so a
+  // slow commit cannot leave a gap in the sequence — without this, BIGSERIAL
+  // ids can commit out of order and a client that records lastSyncId=N would
+  // silently skip an earlier-id-but-later-commit row. See
+  // `SyncService.getDeltaSyncActions` and migration
+  // 00000000000002_fix_sync_action_committed_at.
   committedAt DateTime @default(now()) @map("committed_at") @db.Timestamptz
 
   organization Organization @relation(fields: [organizationId], references: [id])
@@ -1304,6 +1315,10 @@ model AutomationRule {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   team         Team?        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  // Match the referential integrity of sibling created_by columns
+  // (webhooks, github_integrations): a real FK that nulls out when the
+  // author's user row is deleted, rather than a dangling id with no FK.
+  createdBy    User?        @relation("AutomationRuleCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([organizationId, enabled])
   @@index([teamId, enabled])
