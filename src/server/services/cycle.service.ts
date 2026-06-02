@@ -169,16 +169,21 @@ export class CycleService {
    * that no longer exists until the next bootstrap).
    */
   async delete(id: string): Promise<{ cycle: Cycle; unassignedIssueIds: string[] }> {
-    const affected = await this.prisma.issue.findMany({
-      select: { id: true },
-      where: { cycleId: id },
+    // Wrap the unassign + delete in one transaction: otherwise a failure
+    // after updateMany but before delete would silently strip issues off a
+    // cycle that still exists (partial-write window).
+    return this.prisma.$transaction(async tx => {
+      const affected = await tx.issue.findMany({
+        select: { id: true },
+        where: { cycleId: id },
+      });
+      await tx.issue.updateMany({
+        data: { addedToCycleAt: null, cycleId: null },
+        where: { cycleId: id },
+      });
+      const cycle = await tx.cycle.delete({ where: { id } });
+      return { cycle, unassignedIssueIds: affected.map(i => i.id) };
     });
-    await this.prisma.issue.updateMany({
-      data: { addedToCycleAt: null, cycleId: null },
-      where: { cycleId: id },
-    });
-    const cycle = await this.prisma.cycle.delete({ where: { id } });
-    return { cycle, unassignedIssueIds: affected.map(i => i.id) };
   }
 
   async findById(id: string): Promise<Cycle | null> {

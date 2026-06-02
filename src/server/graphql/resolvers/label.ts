@@ -1,6 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { IssueLabel } from '../../../generated/prisma';
-import { requireAuth, requireTeamMember } from '../../middleware/auth';
+import { requireAuth, requireOrgRole, requireTeamMember } from '../../middleware/auth';
 import type { LabelCreateInput, LabelUpdateInput } from '../../services/label.service';
 import type { GraphQLContext } from '../context';
 
@@ -9,7 +9,26 @@ function handleLabelError(err: unknown): never {
   if (error.name === 'LabelGroupDepthError' || error.name === 'LabelGroupCapacityError') {
     throw new GraphQLError(error.message, { extensions: { code: 'BAD_USER_INPUT' } });
   }
+  if (error.name === 'LabelParentNotFoundError') {
+    throw new GraphQLError(error.message, { extensions: { code: 'NOT_FOUND' } });
+  }
   throw err;
+}
+
+/**
+ * Authorize a label write. Team-scoped labels require team membership;
+ * workspace-scoped labels (no teamId) apply org-wide, so — like workspace
+ * custom fields — they are owner/admin-only.
+ */
+async function requireLabelWriteAccess(
+  ctx: GraphQLContext & { userId: string; orgId: string },
+  teamId: string | null | undefined,
+): Promise<void> {
+  if (teamId) {
+    await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
+  } else {
+    await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+  }
 }
 
 export const labelResolvers = {
@@ -36,9 +55,7 @@ export const labelResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      if (existing.teamId) {
-        await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
-      }
+      await requireLabelWriteAccess(ctx, existing.teamId);
 
       const label = await ctx.services.label.archive(id);
       const sync = await ctx.services.sync.createSyncAction(
@@ -61,9 +78,7 @@ export const labelResolvers = {
     ) => {
       requireAuth(ctx);
 
-      if (input.teamId) {
-        await requireTeamMember(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
-      }
+      await requireLabelWriteAccess(ctx, input.teamId);
 
       let label: IssueLabel;
       try {
@@ -98,9 +113,7 @@ export const labelResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      if (existing.teamId) {
-        await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
-      }
+      await requireLabelWriteAccess(ctx, existing.teamId);
 
       let label: IssueLabel;
       try {

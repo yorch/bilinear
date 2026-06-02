@@ -61,6 +61,19 @@ describe('LabelService', () => {
         data: expect.objectContaining({ isGroup: true }),
       });
     });
+
+    it('rejects nesting under a parent from another org', async () => {
+      // Scoped parent lookup misses → parent is not in this org.
+      prisma.issueLabel.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, {
+          color: '#ef4444',
+          name: 'Child',
+          parentId: '00000000-0000-0000-0000-000000000600',
+        }),
+      ).rejects.toThrow('Parent label not found');
+    });
   });
 
   describe('findById', () => {
@@ -134,8 +147,12 @@ describe('LabelService', () => {
 
     it('throws LabelGroupDepthError when reparenting to a group that itself has a parent', async () => {
       const parentLabelId = '00000000-0000-0000-0000-000000000600';
+      prisma.issueLabel.findUnique.mockResolvedValueOnce({
+        organizationId: TEST_ORG.id,
+        parentId: null,
+      }); // current label
       // Parent has a grandparent → depth = 2, forbidden
-      prisma.issueLabel.findUnique.mockResolvedValueOnce({ parentId: 'grandparent-id' });
+      prisma.issueLabel.findFirst.mockResolvedValueOnce({ parentId: 'grandparent-id' });
 
       await expect(service.update(TEST_LABEL.id, { parentId: parentLabelId })).rejects.toThrow(
         'Labels can only be nested one level deep inside a group',
@@ -144,13 +161,30 @@ describe('LabelService', () => {
 
     it('throws LabelGroupCapacityError when reparenting to a full group', async () => {
       const parentLabelId = '00000000-0000-0000-0000-000000000600';
+      prisma.issueLabel.findUnique.mockResolvedValueOnce({
+        organizationId: TEST_ORG.id,
+        parentId: null,
+      }); // current label
       // Parent is root, capacity is full
-      prisma.issueLabel.findUnique.mockResolvedValueOnce({ parentId: null }); // parent depth check
-      prisma.issueLabel.findUnique.mockResolvedValueOnce({ parentId: null }); // current label
+      prisma.issueLabel.findFirst.mockResolvedValueOnce({ parentId: null });
       prisma.issueLabel.count.mockResolvedValue(250);
 
       await expect(service.update(TEST_LABEL.id, { parentId: parentLabelId })).rejects.toThrow(
         'Label groups are capped at',
+      );
+    });
+
+    it('rejects reparenting under a label from another org', async () => {
+      const parentLabelId = '00000000-0000-0000-0000-000000000600';
+      prisma.issueLabel.findUnique.mockResolvedValueOnce({
+        organizationId: TEST_ORG.id,
+        parentId: null,
+      }); // current label
+      // Parent is not visible within the label's org → scoped findFirst misses
+      prisma.issueLabel.findFirst.mockResolvedValueOnce(null);
+
+      await expect(service.update(TEST_LABEL.id, { parentId: parentLabelId })).rejects.toThrow(
+        'Parent label not found',
       );
     });
   });

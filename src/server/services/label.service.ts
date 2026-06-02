@@ -33,18 +33,31 @@ export class LabelGroupCapacityError extends Error {
   }
 }
 
+export class LabelParentNotFoundError extends Error {
+  constructor() {
+    super('Parent label not found in this organization');
+    this.name = 'LabelParentNotFoundError';
+  }
+}
+
 export class LabelService {
   constructor(private prisma: PrismaClient) {}
 
   async create(orgId: string, creatorId: string, input: LabelCreateInput): Promise<IssueLabel> {
     return this.prisma.$transaction(async tx => {
       if (input.parentId) {
-        const parent = await tx.issueLabel.findUnique({
+        // Scope the parent to the same org — otherwise a caller could nest a
+        // new label under another org's group label (the FK only checks
+        // existence, not tenancy).
+        const parent = await tx.issueLabel.findFirst({
           select: { parentId: true },
-          where: { id: input.parentId },
+          where: { id: input.parentId, organizationId: orgId },
         });
+        if (!parent) {
+          throw new LabelParentNotFoundError();
+        }
         // Depth guard: the parent must itself be a root label (no grandparent).
-        if (parent?.parentId) {
+        if (parent.parentId) {
           throw new LabelGroupDepthError();
         }
         // Capacity guard: each group may have at most MAX_GROUP_CHILDREN children.
@@ -127,19 +140,28 @@ export class LabelService {
     return this.prisma.$transaction(async tx => {
       // Re-run depth + capacity guards whenever parentId is being set to a group.
       if (input.parentId != null) {
-        const parent = await tx.issueLabel.findUnique({
-          select: { parentId: true },
-          where: { id: input.parentId },
+        // Load the label being updated first so we can scope the parent to the
+        // same org (a parent from another org must not be linkable) and reuse
+        // its parentId for the self-exclusion in the sibling count below.
+        const current = await tx.issueLabel.findUnique({
+          select: { organizationId: true, parentId: true },
+          where: { id },
         });
-        if (parent?.parentId) {
+        if (!current) {
+          throw new LabelParentNotFoundError();
+        }
+        const parent = await tx.issueLabel.findFirst({
+          select: { parentId: true },
+          where: { id: input.parentId, organizationId: current.organizationId },
+        });
+        if (!parent) {
+          throw new LabelParentNotFoundError();
+        }
+        if (parent.parentId) {
           throw new LabelGroupDepthError();
         }
         // Exclude self from the sibling count in case this label already belongs
         // to the same group (moving within the group doesn't increase capacity).
-        const current = await tx.issueLabel.findUnique({
-          select: { parentId: true },
-          where: { id },
-        });
         const siblingCount = await tx.issueLabel.count({
           where: {
             archivedAt: null,

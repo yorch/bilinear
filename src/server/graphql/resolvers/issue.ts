@@ -6,6 +6,7 @@ import {
   requireAuth,
   requireIssueAccessNotGuestOrOwn,
   requireTeamMember,
+  requireTeamMemberNotGuest,
 } from '../../middleware/auth';
 import type { IssueCreateInput, IssueFilter, IssueUpdateInput } from '../../services/issue.service';
 import {
@@ -160,7 +161,10 @@ export const issueResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
+      // Guests must not author issues (write-path guest enforcement). Every
+      // other issue write path uses a guest-blocking guard; issueCreate must
+      // too, otherwise a guest can create issues (incl. sub-issues) on a team.
+      await requireTeamMemberNotGuest(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
 
       try {
         const issue = await ctx.services.issue.create(ctx.orgId, ctx.userId, input);

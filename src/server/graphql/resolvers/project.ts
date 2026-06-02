@@ -1,7 +1,7 @@
 import { GraphQLError } from 'graphql';
 import type { Project, ProjectUpdate } from '../../../generated/prisma';
 import { logger } from '../../lib/logger';
-import { getGuestTeamIds, requireAuth } from '../../middleware/auth';
+import { getGuestTeamIds, requireAuth, requireOrgRole } from '../../middleware/auth';
 import { IssueService } from '../../services/issue.service';
 import type {
   ProjectCreateInput,
@@ -52,6 +52,8 @@ export const projectResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
+      // Restructuring a project's membership is not a guest capability.
+      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin', 'member']);
 
       const isOrgMember = await ctx.services.organization.isMember(ctx.orgId, userId);
       if (!isOrgMember) {
@@ -85,6 +87,8 @@ export const projectResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
+
+      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin', 'member']);
 
       const team = await ctx.services.team.findById(teamId);
       if (!team || team.organizationId !== ctx.orgId) {
@@ -331,6 +335,8 @@ export const projectResolvers = {
         });
       }
 
+      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin', 'member']);
+
       await ctx.services.project.removeMember(projectId, userId);
       const project = await ctx.services.project.findById(projectId);
       const sync = await ctx.services.sync.createSyncAction(
@@ -356,6 +362,8 @@ export const projectResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
+
+      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin', 'member']);
 
       await ctx.services.project.removeTeam(projectId, teamId);
       const project = await ctx.services.project.findById(projectId);
@@ -389,11 +397,19 @@ export const projectResolvers = {
         .dispatchEvent(ctx.orgId, 'project.updated', project)
         .catch(err => logger.error({ err }, 'webhook dispatch failed: project.updated'));
 
-      // Project progress drives initiative roll-up — recompute every linked
-      // initiative whenever a project's progress, status, or archive state
-      // changes. Each recomputed initiative gets its own SyncAction so
-      // remote clients see the updated progress without a full bootstrap.
-      if (existing.progress !== project.progress || existing.statusType !== project.statusType) {
+      // A project's statusType feeds initiative roll-up — recompute every
+      // linked initiative when it changes. Each recomputed initiative gets its
+      // own SyncAction so remote clients see the change without a full
+      // bootstrap.
+      //
+      // NOTE: we intentionally do NOT compare `progress` here — `Project.update`
+      // never writes the stored `progress` column (it is recomputed on read),
+      // so `existing.progress === project.progress` always. Progress actually
+      // moves when an issue's state changes, which today does not cascade to
+      // initiative roll-up; that gap is tracked in REVIEW_BACKLOG (§ initiative
+      // progress refresh on issue change) because doing it on every issue
+      // mutation needs a perf pass first.
+      if (existing.statusType !== project.statusType) {
         const initiatives = await ctx.services.initiative.getInitiativesForProject(id);
         for (const init of initiatives) {
           const { self, ancestors } = await ctx.services.initiative.recomputeProgressCascade(

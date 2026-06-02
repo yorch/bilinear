@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { IssueRelation } from '../../../generated/prisma';
+import { logger } from '../../lib/logger';
 import {
   requireAuth,
   requireIssueAccessNotGuestOrOwn,
@@ -68,11 +69,25 @@ export const issueRelationResolvers = {
           // Trigger the autoCloseParentIssues / autoCloseChildIssues cascade that
           // the service's direct tx.issue.update bypassed. We call IssueService.update
           // with the same stateId so only the cascade runs (state itself is a no-op).
-          const { cascaded } = await ctx.services.issue.update(canceledIssue.id, {
-            stateId: canceledIssue.stateId,
-          });
-          for (const c of cascaded) {
-            await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', c.id, c);
+          //
+          // The relation + cancel are already committed in the service tx by this
+          // point, so a failure here must NOT surface as a mutation error (the
+          // client would see failure for an operation that actually succeeded).
+          // The parent/child auto-close is a recoverable downstream effect — log
+          // and continue; a later state touch on the cascade target re-triggers it.
+          // (Full single-transaction atomicity is tracked in REVIEW_BACKLOG §1.1.)
+          try {
+            const { cascaded } = await ctx.services.issue.update(canceledIssue.id, {
+              stateId: canceledIssue.stateId,
+            });
+            for (const c of cascaded) {
+              await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', c.id, c);
+            }
+          } catch (cascadeErr) {
+            logger.error(
+              { canceledIssueId: canceledIssue.id, err: cascadeErr },
+              'Duplicate-cancel auto-close cascade failed after relation committed',
+            );
           }
         }
         return {
