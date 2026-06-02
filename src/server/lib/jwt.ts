@@ -154,3 +154,41 @@ export async function verifyOAuthState(state: string, provider: 'google'): Promi
     throw new Error('Invalid OAuth state token');
   }
 }
+
+export interface GithubOAuthStatePayload {
+  orgId: string;
+  userId: string;
+  webhookSecret: string;
+}
+
+/**
+ * Sign the GitHub OAuth "state" param. Unlike the Google flow (where the
+ * authenticated client re-supplies its own identity on callback), GitHub
+ * redirects straight back to our server-side callback, so the state must
+ * carry the initiating org/user and the webhook secret. Signing it with
+ * `JWT_SECRET` makes it unforgeable — an attacker can no longer craft a
+ * callback that binds an attacker-controlled `webhookSecret` (or a foreign
+ * `orgId`) to a victim org. The 10-minute expiry bounds replay and the
+ * narrow `type`/`provider` claims prevent substitution for another token.
+ */
+export async function signGithubOAuthState(payload: GithubOAuthStatePayload): Promise<string> {
+  return new SignJWT({ ...payload, provider: 'github', type: 'oauth_state' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime(OAUTH_STATE_EXPIRY)
+    .sign(getSecret('JWT_SECRET'));
+}
+
+export async function verifyGithubOAuthState(state: string): Promise<GithubOAuthStatePayload> {
+  const { payload } = await jwtVerify(state, getSecret('JWT_SECRET'), {
+    algorithms: ALLOWED_ALGORITHMS,
+  });
+  if (payload.type !== 'oauth_state' || payload.provider !== 'github') {
+    throw new Error('Invalid OAuth state token');
+  }
+  return {
+    orgId: payload.orgId as string,
+    userId: payload.userId as string,
+    webhookSecret: payload.webhookSecret as string,
+  };
+}

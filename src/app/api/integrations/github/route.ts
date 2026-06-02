@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { verifyAccessToken } from '@/server/lib/jwt';
+import { signGithubOAuthState, verifyAccessToken } from '@/server/lib/jwt';
 import { prisma } from '@/server/lib/prisma';
 
 /**
@@ -49,10 +49,15 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // Encode state as base64 JSON so the callback can extract orgId + webhookSecret
-  const statePayload = Buffer.from(
-    JSON.stringify({ orgId: claims.orgId, userId: claims.userId, webhookSecret }),
-  ).toString('base64url');
+  // Sign the state as a short-lived JWT so the callback can trust the
+  // orgId/userId/webhookSecret it carries. An unsigned base64 blob would let
+  // an attacker forge a callback binding an attacker-known webhookSecret to a
+  // victim org (which would then validate forged inbound webhooks).
+  const statePayload = await signGithubOAuthState({
+    orgId: claims.orgId,
+    userId: claims.userId,
+    webhookSecret,
+  });
 
   const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
   const redirectUri = `${appUrl}/api/integrations/github/callback`;

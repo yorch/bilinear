@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { verifyGithubOAuthState } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { GitHubService } from '@/server/services/github.service';
@@ -29,16 +30,23 @@ export async function GET(req: NextRequest) {
   let webhookSecret: string;
 
   try {
-    const decoded = JSON.parse(Buffer.from(stateParam, 'base64url').toString('utf8')) as {
-      orgId: string;
-      userId: string;
-      webhookSecret: string;
-    };
+    const decoded = await verifyGithubOAuthState(stateParam);
     orgId = decoded.orgId;
     userId = decoded.userId;
     webhookSecret = decoded.webhookSecret;
   } catch {
     return NextResponse.redirect(`${fallbackUrl}?error=invalid_state`);
+  }
+
+  // Defense in depth: confirm the initiating user is still an owner/admin of
+  // the org before completing the connection (the signed state proves they
+  // were at initiation; this guards against a role change in between).
+  const membership = await prisma.organizationMember.findUnique({
+    select: { role: true },
+    where: { organizationId_userId: { organizationId: orgId, userId } },
+  });
+  if (!membership || !['owner', 'admin'].includes(membership.role)) {
+    return NextResponse.redirect(`${fallbackUrl}?error=forbidden`);
   }
 
   // Resolve workspace URL key so we can redirect to the correct scoped settings page
