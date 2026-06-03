@@ -469,8 +469,8 @@ model SyncAction {
   // slow commit cannot leave a gap in the sequence — without this, BIGSERIAL
   // ids can commit out of order and a client that records lastSyncId=N would
   // silently skip an earlier-id-but-later-commit row. See
-  // `SyncService.getDeltaSyncActions` and migration
-  // 00000000000002_fix_sync_action_committed_at.
+  // `SyncService.getDeltaSyncActions` and the `sync_action_set_committed_at`
+  // trigger in migration 00000000000001_custom_constraints_and_triggers.
   committedAt DateTime @default(now()) @map("committed_at") @db.Timestamptz
 
   organization Organization @relation(fields: [organizationId], references: [id])

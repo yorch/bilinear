@@ -1602,18 +1602,10 @@ prisma/
     │                                             --   index on teams(org, key) WHERE
     │                                             --   archived_at IS NULL, and all
     │                                             --   pre-review application schema
-    ├── 00000000000001_custom_constraints_and_triggers/
-    │                                             -- custom DDL that Prisma can't express:
-    │                                             --   partial indexes, FTS trigger,
-    │                                             --   check constraints, enum guards
-    ├── 00000000000002_fix_sync_action_committed_at/
-    │                                             -- repairs the committed_at BEFORE INSERT
-    │                                             --   trigger to assign UNCONDITIONALLY
-    │                                             --   (overrides DEFAULT; was dead code
-    │                                             --   before this fix — see §2.22)
-    └── 00000000000003_automation_rule_created_by_fk/
-                                                  -- adds FK + orphan cleanup for
-                                                    --   automation_rules.created_by_id
+    └── 00000000000001_custom_constraints_and_triggers/
+                                                  -- custom DDL that Prisma can't express:
+                                                  --   partial indexes, FTS trigger,
+                                                  --   check constraints, enum guards
 ```
 
 > **Note:** `yarn db:push` re-applies schema.prisma but silently drops all custom DDL
