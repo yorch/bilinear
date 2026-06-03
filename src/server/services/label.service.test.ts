@@ -193,9 +193,9 @@ describe('LabelService', () => {
       // The label being updated was deleted between the resolver check and the tx.
       prisma.issueLabel.findUnique.mockResolvedValueOnce(null);
 
-      await expect(
-        service.update(TEST_LABEL.id, { parentId: parentLabelId }),
-      ).rejects.toThrow('Label not found');
+      await expect(service.update(TEST_LABEL.id, { parentId: parentLabelId })).rejects.toThrow(
+        'Label not found',
+      );
     });
   });
 
