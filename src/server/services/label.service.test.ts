@@ -187,6 +187,16 @@ describe('LabelService', () => {
         'Parent label not found',
       );
     });
+
+    it('throws LabelNotFoundError (not parent-not-found) when the label being updated is gone', async () => {
+      const parentLabelId = '00000000-0000-0000-0000-000000000600';
+      // The label being updated was deleted between the resolver check and the tx.
+      prisma.issueLabel.findUnique.mockResolvedValueOnce(null);
+
+      await expect(
+        service.update(TEST_LABEL.id, { parentId: parentLabelId }),
+      ).rejects.toThrow('Label not found');
+    });
   });
 
   describe('archive', () => {

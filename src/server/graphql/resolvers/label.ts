@@ -9,7 +9,7 @@ function handleLabelError(err: unknown): never {
   if (error.name === 'LabelGroupDepthError' || error.name === 'LabelGroupCapacityError') {
     throw new GraphQLError(error.message, { extensions: { code: 'BAD_USER_INPUT' } });
   }
-  if (error.name === 'LabelParentNotFoundError') {
+  if (error.name === 'LabelParentNotFoundError' || error.name === 'LabelNotFoundError') {
     throw new GraphQLError(error.message, { extensions: { code: 'NOT_FOUND' } });
   }
   throw err;

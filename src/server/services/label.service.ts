@@ -40,6 +40,13 @@ export class LabelParentNotFoundError extends Error {
   }
 }
 
+export class LabelNotFoundError extends Error {
+  constructor() {
+    super('Label not found');
+    this.name = 'LabelNotFoundError';
+  }
+}
+
 export class LabelService {
   constructor(private prisma: PrismaClient) {}
 
@@ -147,8 +154,13 @@ export class LabelService {
           select: { organizationId: true, parentId: true },
           where: { id },
         });
+        // Distinct from LabelParentNotFoundError: this is the label being
+        // updated, not its prospective parent. Reachable only under a race
+        // (the row is deleted between the resolver's existence check and this
+        // transaction); a clear error keeps "label gone" vs "parent gone"
+        // distinguishable for clients.
         if (!current) {
-          throw new LabelParentNotFoundError();
+          throw new LabelNotFoundError();
         }
         const parent = await tx.issueLabel.findFirst({
           select: { parentId: true },
