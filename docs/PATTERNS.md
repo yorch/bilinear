@@ -456,6 +456,10 @@ const handleUpdate = useCallback((id, patch) => {
 
 ---
 
+> **§13 is intentionally absent** — the numbering jumped from §12 to §14
+> when an early draft section was removed before it was written. The gap is
+> cosmetic; no pattern is missing.
+
 ## 14. Authorization Pattern (Sprint 3-4)
 
 Role-based guards are standalone async functions that take the Prisma client and throw `GraphQLError` with `FORBIDDEN` code:

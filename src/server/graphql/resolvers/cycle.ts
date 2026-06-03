@@ -63,8 +63,16 @@ export const cycleResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-
-      await ctx.services.cycle.addIssueToCycle(cycleId, issueId);
+      // The service enforces the team-consistency invariant (CycleCrossTeamError).
+      try {
+        await ctx.services.cycle.addIssueToCycle(cycleId, issueId, cycle.teamId, issue.teamId);
+      } catch (err) {
+        const error = err as Error;
+        if (error.name === 'CycleCrossTeamError') {
+          throw new GraphQLError(error.message, { extensions: { code: 'BAD_USER_INPUT' } });
+        }
+        throw err;
+      }
       const updatedIssue = await ctx.services.issue.findById(issueId);
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,

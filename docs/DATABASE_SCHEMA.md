@@ -865,7 +865,7 @@ CREATE INDEX idx_custom_views_creator ON custom_views(creator_id);
 
 ### 2.18 Favorites ✅
 
-> **Shipped 2026-05-21** — migration `20260521000000_quick_wins_snooze_favorites_subinitiatives`.
+> **Shipped 2026-05-21** — squashed into baseline migration `00000000000000_init`.
 
 ```sql
 CREATE TABLE favorites (
@@ -929,8 +929,8 @@ CREATE INDEX idx_documents_parent ON documents(parent_id);
 
 > **Historical note:** a `content_data JSONB` column was created alongside
 > `content` as a forward-looking slot for structured TipTap JSON, but nothing
-> ever read or wrote it. It was dropped in migration
-> `20260421000000_drop_document_content_data`.
+> ever read or wrote it. It was dropped before the baseline migration was
+> consolidated, so it does not appear in `00000000000000_init`.
 
 > **Design targets not yet implemented:** `slug_id`, per-document color, YJS
 > `content_state` (`BYTEA`) for real-time collab, issue / cycle / initiative
@@ -1392,7 +1392,7 @@ delete semantics. See PATTERNS.md §43.
 
 ### 2.32 Sub-initiatives ✅
 
-> **Shipped 2026-05-21** — migration `20260521000000_quick_wins_snooze_favorites_subinitiatives`.
+> **Shipped 2026-05-21** — squashed into baseline migration `00000000000000_init`.
 
 A single nullable self-FK on `initiatives.parent_id` enables hierarchical
 strategic trees. The progress rollup in §2.13 averages direct projects AND
@@ -1422,7 +1422,7 @@ on accidental parent deletion is too destructive.
 
 ### 2.33 Automation Rules ✅
 
-> **Shipped 2026-05-24** — migration adds `automation_rules` table.
+> **Shipped 2026-05-24** — squashed into baseline migration `00000000000000_init`.
 
 Rules engine with JSONB-embedded conditions and actions; no separate
 condition/action rows. Conditions and actions are stored as typed JSON
@@ -1589,32 +1589,30 @@ yarn prisma migrate dev  # applies new migration
 
 ### Migration Files
 
-Migrations use date-based names. The pre-release incremental history was
-consolidated into a single baseline migration; new features ship as
-additive migrations on top of it.
+The incremental history was squashed into a single baseline before open-sourcing;
+new post-review fixes ship as additive migrations on top of it.
 
 ```
 prisma/
 ├── schema.prisma
-├── prisma.config.ts            -- CLI datasource url (Prisma 7)
+├── prisma.config.ts                              -- CLI datasource url (Prisma 7)
 └── migrations/
-    ├── 20260407000000_init/                        -- consolidated baseline: all pre-Sprint-23 tables,
-    │                                               --   the FTS GIN index, and the partial unique index
-    │                                               --   on teams(organization_id, key) WHERE archived_at IS NULL
-    ├── 20260416120000_custom_fields/               -- custom_field_definitions, custom_field_values,
-    │                                               --   custom_field_type enum (Sprint 23-24)
-    ├── 20260417000001_documents/                   -- documents table w/ parent hierarchy (Sprint 35-36)
-    ├── 20260417000002_public_roadmaps/             -- public_roadmaps + projects.roadmap_visible (Sprint 53-54)
-    ├── 20260421000000_drop_document_content_data/  -- remove unused document content_data column
-    ├── 20260422000000_auth_token_family/           -- auth_tokens family/chain columns for refresh rotation
-    ├── 20260505000000_initiatives_webhooks/        -- initiatives, initiative_projects, webhooks,
-    │                                               --   webhook_deliveries (2026-05-05 sprints)
-    ├── 20260512000000_sync_action_committed_at/    -- sync_actions.committed_at + BEFORE INSERT trigger
-    ├── 20260512100000_db_hardening_constraints/    -- check constraints, partial indexes, enum guards
-    └── 20260517000000_github_integration_email_notifications/
-                                                    -- github_integrations, github_pull_requests,
-                                                    --   users.email_notifications_enabled (2026-05-17)
+    ├── 00000000000000_init/                      -- consolidated baseline: every table,
+    │                                             --   the FTS GIN index, partial unique
+    │                                             --   index on teams(org, key) WHERE
+    │                                             --   archived_at IS NULL, and all
+    │                                             --   pre-review application schema
+    └── 00000000000001_custom_constraints_and_triggers/
+                                                  -- custom DDL that Prisma can't express:
+                                                  --   partial indexes, FTS trigger,
+                                                  --   check constraints, enum guards
 ```
+
+> **Note:** `yarn db:push` re-applies schema.prisma but silently drops all custom DDL
+> (partial indexes, FTS triggers, check constraints) that lives in
+> `00000000000001_custom_constraints_and_triggers`. Use `yarn db:migrate` or
+> `yarn db:reset` for local development; `db:push` is safe only for rapid
+> schema prototyping before any custom migration SQL is needed.
 
 Tables tagged 📋 in §1.1 (Favorites, Attachments as linked resources, Audit Log)
 are **design targets** — kept in §2 as the canonical design reference for when

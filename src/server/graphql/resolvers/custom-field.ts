@@ -214,7 +214,10 @@ export const customFieldResolvers = {
       }
       await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
       try {
-        await ctx.services.customField.setValuesForIssue(issueId, values);
+        await ctx.services.customField.setValuesForIssue(
+          { id: issue.id, organizationId: issue.organizationId, teamId: issue.teamId },
+          values,
+        );
       } catch (err) {
         throw mapServiceError(err);
       }

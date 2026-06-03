@@ -266,6 +266,101 @@ by `clientId` instead of `(title, teamId)`. Couples nicely with the
   identical titles in <100ms; both end up in the list with their
   server-assigned ids.
 
+### 1.5 — TransactionQueue head-of-line blocking + `RATELIMITED` misclassification
+
+**File entry points:**
+- `src/lib/transaction-queue.ts:190-235` — the retry / dequeue logic
+
+**Problems.**
+
+1. **Head-of-line blocking.** The queue processes one item at a time; while
+   the current item is in its retry sleep (1s → 3s → 10s) all subsequent
+   items are blocked. A transient 503 during a drag-drop operation holds
+   every subsequent mutation for up to 24 s (1 + 3 + 10 + 10 retries).
+
+2. **`RATELIMITED` misclassification.** All `result.errors` responses are
+   tagged `permanent: true` and dequeued immediately (line 195). This is
+   correct for `FORBIDDEN` / `NOT_FOUND` / `BAD_USER_INPUT` (retrying won't
+   help), but it's wrong for `RATELIMITED` — the server explicitly signals
+   "try again later." Today a rate-limited mutation silently disappears from
+   the queue; the optimistic state it applied is never rolled back and never
+   confirmed.
+
+**Design.**
+
+- Inspect `errors[0].extensions.code` before deciding `permanent`. Map
+  `RATELIMITED` → retryable (with exponential backoff identical to network
+  errors). All others → permanent (current behavior).
+- For head-of-line: add a per-item `canUnblock: boolean` option.
+  Non-data-ordering mutations (e.g. reactions, view updates) can set
+  `canUnblock: true` so a blocked head item lets unblocking items be
+  dispatched in parallel. Keep the default as strictly sequential (safe
+  for state-changing mutations).
+
+- **Effort:** Small-Medium.
+- **Risk:** Low (logic change is self-contained to `transaction-queue.ts`).
+- **Why deferred:** The `canUnblock` API changes the queue contract;
+  callers need to opt in — low urgency until rate limiting is observed
+  in the wild.
+- **First-touch:** Update the `permanent` flag decision to check
+  `extensions.code`; add a `transaction-queue.test.ts` case that mocks
+  a `RATELIMITED` response and asserts the item is retried, not dropped.
+- **Acceptance signal:** `transaction-queue.test.ts` case passes; a
+  `RATELIMITED` mock triggers exactly `MAX_RETRIES` retries then calls
+  `onError`; a `FORBIDDEN` mock calls `onError` immediately.
+
+### 1.6 — `applyActions` concurrency (no mutex between delta and WS paths)
+
+**File entry points:**
+- `src/lib/sync-manager.ts:562` — `private async applyActions(...)`
+- `src/lib/sync-manager.ts:514-560` — `deltaSync` → `applyActions`
+- `src/lib/sync-manager.ts:1046` — WS handler → `applyActions`
+
+**Problem.** `applyActions` is a single async method that accumulates
+all MobX + Dexie writes in memory and flushes at the end. The
+`isDeltaSyncing` and `isBootstrapping` guards prevent two deltas or two
+bootstraps from overlapping, but there is **no guard** that prevents a
+WS message from arriving while a delta is still running:
+
+```
+deltaSync calls applyActions(page1)          ← yields at `await fetch`
+  WS message arrives, calls applyActions(page2)
+    both compute maxId from syncStore.lastSyncId (same stale value)
+    both write MobX stores (synchronous, safe — last write wins)
+    both await dexie.transaction(...)        ← can now race for Dexie writes
+  page2 sets syncStore.lastSyncId = max2
+page1 finishes, sets syncStore.lastSyncId = max1 (may be < max2)
+```
+
+The Dexie transaction race can produce a stale `lastSyncId`, causing the
+next delta fetch to re-request already-applied actions.
+
+In practice this is low-impact (the actions are idempotent) but it
+breaks the `committed_at` ordering guarantee: if both calls contain
+overlapping action sets, the slower call's Dexie write may overwrite the
+faster call's result with older data for the same entity id.
+
+**Design.** Add a module-level boolean `applyingActions` (analogous to
+`isDeltaSyncing`) and an async queue: if `applyingActions` is true,
+buffer incoming WS actions and drain after the current call completes.
+`SyncManager.applyActions` is already private, so the guard can be
+added without touching callers.
+
+Alternative (simpler): coerce concurrent calls into a chain via a
+single-slot async mutex (e.g. a `Promise` chain). This is 5–10 lines.
+
+- **Effort:** Small.
+- **Risk:** Low.
+- **Why deferred:** The race is benign today (idempotent writes, small
+  delta pages). Becomes material once delta pages grow or high-frequency
+  WS traffic is common.
+- **First-touch:** Add a `_applyLock: Promise<void> = Promise.resolve()`
+  field to `SyncManager`; chain every `applyActions` call through it:
+  `this._applyLock = this._applyLock.then(() => this._doApplyActions(actions))`.
+- **Acceptance signal:** A vitest fake-timer test fires deltaSync and
+  a concurrent WS message; asserts `syncStore.lastSyncId` equals the
+  max of both batches' ids after both complete.
+
 ---
 
 ## 2. DB hardening (one additive migration PR)

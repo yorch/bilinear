@@ -203,12 +203,23 @@ describe('CycleService', () => {
         id: issueId,
       });
 
-      await service.addIssueToCycle(TEST_CYCLE.id, issueId);
+      await service.addIssueToCycle(TEST_CYCLE.id, issueId, TEST_CYCLE.teamId, TEST_CYCLE.teamId);
 
       expect(prisma.issue.update).toHaveBeenCalledWith({
         data: { addedToCycleAt: expect.any(Date), cycleId: TEST_CYCLE.id },
         where: { id: issueId },
       });
+    });
+
+    it('throws CycleCrossTeamError when teams differ', async () => {
+      await expect(
+        service.addIssueToCycle(
+          TEST_CYCLE.id,
+          '00000000-0000-0000-0000-000000000400',
+          TEST_CYCLE.teamId,
+          '00000000-0000-0000-0000-000000000099',
+        ),
+      ).rejects.toThrow('Issue and cycle belong to different teams');
     });
   });
 

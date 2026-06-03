@@ -196,11 +196,32 @@ describe('CustomFieldService', () => {
   });
 
   describe('setValuesForIssue', () => {
+    const ISSUE = {
+      id: 'issue-1',
+      organizationId: TEST_TEAM.organizationId,
+      teamId: TEST_TEAM.id,
+    };
+
+    it('scopes the definition lookup to the issue org and team', async () => {
+      prisma.customFieldDefinition.findMany.mockResolvedValue([TEST_DEF]);
+      prisma.customFieldValue.upsert.mockResolvedValue({});
+
+      await service.setValuesForIssue(ISSUE, [{ definitionId: TEST_DEF.id, value: 'low' }]);
+
+      expect(prisma.customFieldDefinition.findMany).toHaveBeenCalledWith({
+        where: {
+          id: { in: [TEST_DEF.id] },
+          OR: [{ teamId: TEST_TEAM.id }, { teamId: null }],
+          organizationId: TEST_TEAM.organizationId,
+        },
+      });
+    });
+
     it('upserts each value after type validation', async () => {
       prisma.customFieldDefinition.findMany.mockResolvedValue([TEST_DEF]);
       prisma.customFieldValue.upsert.mockResolvedValue({});
 
-      await service.setValuesForIssue('issue-1', [{ definitionId: TEST_DEF.id, value: 'low' }]);
+      await service.setValuesForIssue(ISSUE, [{ definitionId: TEST_DEF.id, value: 'low' }]);
 
       expect(prisma.customFieldValue.upsert).toHaveBeenCalledWith({
         create: {
@@ -222,7 +243,7 @@ describe('CustomFieldService', () => {
       prisma.customFieldDefinition.findMany.mockResolvedValue([TEST_DEF]);
       prisma.customFieldValue.deleteMany.mockResolvedValue({ count: 1 });
 
-      await service.setValuesForIssue('issue-1', [{ definitionId: TEST_DEF.id, value: null }]);
+      await service.setValuesForIssue(ISSUE, [{ definitionId: TEST_DEF.id, value: null }]);
 
       expect(prisma.customFieldValue.deleteMany).toHaveBeenCalledWith({
         where: { definitionId: TEST_DEF.id, issueId: 'issue-1' },
@@ -232,16 +253,16 @@ describe('CustomFieldService', () => {
     it('rejects invalid select value', async () => {
       prisma.customFieldDefinition.findMany.mockResolvedValue([TEST_DEF]);
       await expect(
-        service.setValuesForIssue('issue-1', [
-          { definitionId: TEST_DEF.id, value: 'not-an-option' },
-        ]),
+        service.setValuesForIssue(ISSUE, [{ definitionId: TEST_DEF.id, value: 'not-an-option' }]),
       ).rejects.toBeInstanceOf(CustomFieldInvalidValueError);
     });
 
-    it('rejects unknown definition', async () => {
+    it('rejects unknown or out-of-scope definition', async () => {
+      // A definition from another org/team is filtered out by the scoped
+      // query, so it resolves the same as a genuinely unknown id.
       prisma.customFieldDefinition.findMany.mockResolvedValue([]);
       await expect(
-        service.setValuesForIssue('issue-1', [{ definitionId: 'nope', value: 'x' }]),
+        service.setValuesForIssue(ISSUE, [{ definitionId: 'nope', value: 'x' }]),
       ).rejects.toBeInstanceOf(CustomFieldDefinitionNotFoundError);
     });
   });

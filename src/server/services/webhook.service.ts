@@ -394,6 +394,12 @@ export class WebhookService {
             'X-Bilinear-Signature': `sha256=${signature}`,
           },
           method: 'POST',
+          // Do NOT follow redirects: assertSafeUrl() only validated the
+          // original host's resolved IP. A 3xx to http://169.254.169.254/...
+          // (cloud metadata) or an internal host would otherwise be followed
+          // unchecked, defeating the SSRF guard. A redirecting target is
+          // treated as a failed (non-2xx) delivery.
+          redirect: 'manual',
           signal: controller.signal,
         });
         responseStatus = res.status;

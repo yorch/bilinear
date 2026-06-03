@@ -2,9 +2,11 @@ import { SignJWT } from 'jose';
 import { describe, expect, it, vi } from 'vitest';
 import {
   signAccessToken,
+  signGithubOAuthState,
   signOAuthState,
   signRefreshToken,
   verifyAccessToken,
+  verifyGithubOAuthState,
   verifyOAuthState,
   verifyRefreshToken,
 } from './jwt';
@@ -56,6 +58,35 @@ describe('signOAuthState / verifyOAuthState', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('signGithubOAuthState / verifyGithubOAuthState', () => {
+  const PAYLOAD = {
+    orgId: '00000000-0000-0000-0000-000000000001',
+    userId: '00000000-0000-0000-0000-000000000010',
+    webhookSecret: 'a-sufficiently-long-secret',
+  };
+
+  it('round-trips the org/user/webhookSecret payload', async () => {
+    const state = await signGithubOAuthState(PAYLOAD);
+    await expect(verifyGithubOAuthState(state)).resolves.toEqual(PAYLOAD);
+  });
+
+  it('rejects a tampered (re-signed by another key) state', async () => {
+    const wrongKey = new TextEncoder().encode('x'.repeat(48));
+    const forged = await new SignJWT({ ...PAYLOAD, provider: 'github', type: 'oauth_state' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setExpirationTime('5m')
+      .sign(wrongKey);
+
+    await expect(verifyGithubOAuthState(forged)).rejects.toThrow();
+  });
+
+  it('rejects a google state presented as a github state', async () => {
+    const { state } = await signOAuthState('google');
+    await expect(verifyGithubOAuthState(state)).rejects.toThrow();
   });
 });
 

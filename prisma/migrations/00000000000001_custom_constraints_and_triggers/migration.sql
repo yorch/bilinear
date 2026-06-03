@@ -43,12 +43,19 @@ CREATE INDEX "auth_tokens_token_hash_magic_link_idx"
 -- (ids are assigned at INSERT but transactions commit out of order — a
 -- client recording lastSyncId=max(id) could otherwise miss a row whose id
 -- is lower but commits later). Load-bearing for delta sync.
+--
+-- The assignment is UNCONDITIONAL on purpose. The column carries a DB DEFAULT
+-- (CURRENT_TIMESTAMP, from `@default(now())` in schema.prisma), and PostgreSQL
+-- materializes column DEFAULTs into NEW *before* BEFORE INSERT triggers fire.
+-- A guarded `IF NEW.committed_at IS NULL` would therefore never run — NEW
+-- always arrives pre-populated with the (wrong, transaction-START) default.
+-- Overwriting it here with statement_timestamp() is what makes the watermark
+-- correct, and is robust even if a future `prisma migrate`/`db push` re-adds
+-- the default.
 CREATE OR REPLACE FUNCTION sync_action_set_committed_at()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
-  IF NEW.committed_at IS NULL THEN
-    NEW.committed_at := statement_timestamp();
-  END IF;
+  NEW.committed_at := statement_timestamp();
   RETURN NEW;
 END;
 $$;

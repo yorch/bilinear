@@ -339,15 +339,29 @@ export class CustomFieldService {
 
   /**
    * Set a list of custom field values for an issue. Null/undefined value for
-   * a definition removes the row. Caller is responsible for permission checks.
+   * a definition removes the row. Caller is responsible for verifying the
+   * issue belongs to the caller's org/team.
+   *
+   * The definition lookup is scoped to the issue's org and to definitions
+   * visible to the issue's team (team-scoped match `teamId`; workspace-scoped
+   * have `teamId IS NULL`). Without this scope a caller could attach a value
+   * referencing another org's (or another team's) definition by id.
    */
-  async setValuesForIssue(issueId: string, values: CustomFieldValueInput[]): Promise<void> {
+  async setValuesForIssue(
+    issue: { id: string; organizationId: string; teamId: string },
+    values: CustomFieldValueInput[],
+  ): Promise<void> {
     if (values.length === 0) {
       return;
     }
 
+    const issueId = issue.id;
     const definitions = await this.prisma.customFieldDefinition.findMany({
-      where: { id: { in: values.map(v => v.definitionId) } },
+      where: {
+        id: { in: values.map(v => v.definitionId) },
+        OR: [{ teamId: issue.teamId }, { teamId: null }],
+        organizationId: issue.organizationId,
+      },
     });
     const defById = new Map(definitions.map(d => [d.id, d]));
 

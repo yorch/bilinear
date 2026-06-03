@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { verifyAccessToken } from '@/server/lib/jwt';
+import { verifyAccessToken, verifyRefreshToken } from '@/server/lib/jwt';
 
 const ACCESS_TOKEN_MAX_AGE = 60 * 60 * 24; // 24h in seconds
 const REFRESH_TOKEN_MAX_AGE = 60 * 60 * 24 * 30; // 30d in seconds
@@ -16,12 +16,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing tokens' }, { status: 400 });
   }
 
-  // Verify the access token signature before trusting it into a cookie.
-  // Rejects tokens that weren't signed by this server's JWT_SECRET.
+  // Verify BOTH token signatures before trusting them into httpOnly cookies,
+  // and confirm they belong to the same user. Verifying only the access token
+  // (the prior behaviour) let a caller plant an arbitrary attacker-chosen
+  // refresh_token alongside a valid access token (session-fixation surface).
+  let accessPayload: Awaited<ReturnType<typeof verifyAccessToken>>;
+  let refreshPayload: Awaited<ReturnType<typeof verifyRefreshToken>>;
   try {
-    await verifyAccessToken(accessToken);
+    [accessPayload, refreshPayload] = await Promise.all([
+      verifyAccessToken(accessToken),
+      verifyRefreshToken(refreshToken),
+    ]);
   } catch {
-    return NextResponse.json({ error: 'Invalid access token' }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid token' }, { status: 400 });
+  }
+  if (accessPayload.userId !== refreshPayload.userId) {
+    return NextResponse.json({ error: 'Token subject mismatch' }, { status: 400 });
   }
 
   const res = NextResponse.json({ success: true });
