@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { usePopover } from '@/hooks/use-popover';
 import { cn } from '@/lib/utils';
 
 interface IssueLabel {
@@ -35,26 +35,8 @@ export function LabelSelect({
   forceOpen,
   onClose,
 }: LabelSelectProps) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const { open, setOpen, ref } = usePopover({ forceOpen, onClose });
   const selected = labels.filter(l => value.includes(l.id));
-
-  useEffect(() => {
-    if (forceOpen) {
-      setOpen(true);
-    }
-  }, [forceOpen]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-        onClose?.();
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
 
   const toggle = (labelId: string) => {
     const next = value.includes(labelId) ? value.filter(id => id !== labelId) : [...value, labelId];

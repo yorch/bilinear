@@ -3,6 +3,8 @@
 import { RefreshCw, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { useOutsideClick } from '@/hooks/use-outside-click';
 import type { DBCycle } from '@/lib/db';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -48,19 +50,14 @@ export const CycleSelect = observer(function CycleSelect({
     }
   }, [isOpen]);
 
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setInternalOpen(false);
-        onClose?.();
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen, onClose]);
+  useOutsideClick(
+    containerRef,
+    () => {
+      setInternalOpen(false);
+      onClose?.();
+    },
+    isOpen,
+  );
 
   const handleSelect = (cycleId: string | null) => {
     onChange(cycleId);
@@ -146,9 +143,9 @@ export const CycleSelect = observer(function CycleSelect({
                       {getCycleDisplayName(cycle)}
                     </span>
                     {isActive && (
-                      <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+                      <Badge className="shrink-0 bg-emerald-100 px-1.5 text-[10px] text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
                         Active
-                      </span>
+                      </Badge>
                     )}
                   </button>
                 );

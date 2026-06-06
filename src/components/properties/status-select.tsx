@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { usePopover } from '@/hooks/use-popover';
 import { cn } from '@/lib/utils';
 
 interface WorkflowState {
@@ -36,26 +36,8 @@ export function StatusSelect({
   forceOpen,
   onClose,
 }: StatusSelectProps) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const { open, setOpen, ref } = usePopover({ forceOpen, onClose });
   const current = states.find(s => s.id === value);
-
-  useEffect(() => {
-    if (forceOpen) {
-      setOpen(true);
-    }
-  }, [forceOpen]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-        onClose?.();
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
 
   return (
     <div className={cn('relative', className)} ref={ref}>

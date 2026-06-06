@@ -3,6 +3,7 @@
 import { Bell, Check, CheckCheck, Clock, MessageSquare, RefreshCw, User } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
+import { useOutsideClick } from '@/hooks/use-outside-click';
 import type { DBNotification } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -154,19 +155,7 @@ function NotificationItem({
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const snoozeRef = useRef<HTMLDivElement>(null);
 
-  // Close snooze dropdown when clicking outside
-  useEffect(() => {
-    if (!snoozeOpen) {
-      return;
-    }
-    const handler = (e: MouseEvent) => {
-      if (snoozeRef.current && !snoozeRef.current.contains(e.target as Node)) {
-        setSnoozeOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [snoozeOpen]);
+  useOutsideClick(snoozeRef, () => setSnoozeOpen(false), snoozeOpen);
 
   return (
     <div

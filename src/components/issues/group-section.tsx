@@ -7,38 +7,37 @@ import { StatusDot } from '../properties/status-select';
 
 const VIRTUAL_THRESHOLD = 20;
 
-/**
- * A collapsible group header with two rendering strategies:
- *
- * **`children` (non-virtual)** — use for small lists (≤20 items).
- * Pass your rendered rows directly as children. Simple, composable, no overhead.
- *
- * **`items` + `renderItem` (virtual)** — use for large lists (>20 items).
- * Pass the raw data array and a render function; `useVirtualizer` is activated
- * automatically and only the visible rows are mounted. Requires a fixed
- * `itemHeight` (default 36px) for accurate scrollbar sizing.
- *
- * If `items` is provided but has ≤20 entries the component transparently falls
- * back to the non-virtual `children` path, so you can always pass both and let
- * the component decide.
- */
-interface GroupSectionProps {
-  children?: React.ReactNode;
+interface GroupSectionShared {
   color: string;
   count: number;
-  /**
-   * Stable identity extractor for the items array. Required when `items`
-   * is non-virtual (small group) so React doesn't fall back to the array
-   * index as the key — reordering (status change, sortOrder update)
-   * would otherwise reuse the wrong DOM/state, including popover open
-   * state and focus.
-   */
-  getKey?: (item: unknown, index: number) => string;
   itemHeight?: number;
-  items?: unknown[];
   name: string;
-  renderItem?: (item: unknown, index: number) => React.ReactNode;
 }
+
+/**
+ * **Children mode** — render pre-built rows directly. Use for small or
+ * heterogeneous lists where each row is already JSX.
+ */
+interface GroupSectionChildrenProps extends GroupSectionShared {
+  children: React.ReactNode;
+  getKey?: never;
+  items?: never;
+  renderItem?: never;
+}
+
+/**
+ * **Items mode** — pass raw data; the component picks virtual rendering
+ * automatically when the list exceeds the VIRTUAL_THRESHOLD. `getKey`
+ * is required to prevent index-as-key bugs on reorder.
+ */
+interface GroupSectionItemsProps extends GroupSectionShared {
+  children?: never;
+  getKey: (item: unknown, index: number) => string;
+  items: unknown[];
+  renderItem: (item: unknown, index: number) => React.ReactNode;
+}
+
+type GroupSectionProps = GroupSectionChildrenProps | GroupSectionItemsProps;
 
 function VirtualizedList({
   items,
@@ -124,9 +123,7 @@ export function GroupSection({
         (useVirtual ? (
           <VirtualizedList itemHeight={itemHeight} items={items} renderItem={renderItem} />
         ) : items !== undefined && renderItem !== undefined ? (
-          items.map((item, i) => (
-            <div key={getKey ? getKey(item, i) : i}>{renderItem(item, i)}</div>
-          ))
+          items.map((item, i) => <div key={getKey(item, i)}>{renderItem(item, i)}</div>)
         ) : (
           children
         ))}

@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { usePopover } from '@/hooks/use-popover';
 import { cn } from '@/lib/utils';
+import { UserAvatar } from '../ui/user-avatar';
 
 interface User {
   avatarBackgroundColor: string;
@@ -20,42 +21,6 @@ interface AssigneeSelectProps {
   value: string | null | undefined;
 }
 
-export function UserAvatar({
-  user,
-  size = 'sm',
-}: {
-  user: Pick<User, 'initials' | 'avatarUrl' | 'avatarBackgroundColor' | 'displayName'>;
-  size?: 'xs' | 'sm' | 'md';
-}) {
-  const sizeClass =
-    size === 'xs'
-      ? 'h-4 w-4 text-[8px]'
-      : size === 'md'
-        ? 'h-6 w-6 text-[10px]'
-        : 'h-5 w-5 text-[10px]';
-  if (user.avatarUrl) {
-    return (
-      // biome-ignore lint/performance/noImgElement: avatar URL is external, size unknown at build time
-      <img
-        alt={user.displayName}
-        className={cn('rounded-full object-cover', sizeClass)}
-        src={user.avatarUrl}
-      />
-    );
-  }
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center justify-center rounded-full font-semibold text-white',
-        sizeClass,
-      )}
-      style={{ backgroundColor: user.avatarBackgroundColor }}
-    >
-      {user.initials}
-    </span>
-  );
-}
-
 export function AssigneeSelect({
   value,
   users,
@@ -64,26 +29,8 @@ export function AssigneeSelect({
   forceOpen,
   onClose,
 }: AssigneeSelectProps) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const { open, setOpen, ref } = usePopover({ forceOpen, onClose });
   const current = users.find(u => u.id === value);
-
-  useEffect(() => {
-    if (forceOpen) {
-      setOpen(true);
-    }
-  }, [forceOpen]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-        onClose?.();
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
 
   return (
     <div className={cn('relative', className)} ref={ref}>
@@ -141,3 +88,5 @@ export function AssigneeSelect({
     </div>
   );
 }
+
+export { UserAvatar } from '../ui/user-avatar';
