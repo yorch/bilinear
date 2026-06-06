@@ -1,13 +1,15 @@
 'use client';
 
-import { MessageSquare, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { MessageSquare, Pencil, Plus, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
+import { DeleteUpdateButton } from '@/components/shared/delete-update-button';
+import { UpdateFormFields } from '@/components/shared/update-form-fields';
 import { Badge } from '@/components/ui/badge';
 import { gql } from '@/lib/graphql';
-import { PROJECT_HEALTH_CONFIG, PROJECT_HEALTH_OPTIONS } from '@/lib/project-constants';
+import { PROJECT_HEALTH_CONFIG } from '@/lib/project-constants';
 import { toast } from '@/lib/toast';
-import { cn, formatRelativeTime } from '@/lib/utils';
+import { formatRelativeTime } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import { UserAvatar } from '../ui/user-avatar';
 
@@ -120,7 +122,10 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
-                      <DeleteUpdateButton updateId={update.id} />
+                      <DeleteUpdateButton
+                        mutation={`mutation ($id: ID!) { projectUpdateDelete(id: $id) { success } }`}
+                        updateId={update.id}
+                      />
                     </div>
                   )}
                 </div>
@@ -135,66 +140,6 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
     </div>
   );
 });
-
-// ─── Shared form fields ───────────────────────────────────────────────────────
-
-interface UpdateFormFieldsProps {
-  body: string;
-  health: string;
-  onBodyChange: (value: string) => void;
-  onHealthChange: (value: string) => void;
-  placeholder?: string;
-}
-
-function UpdateFormFields({
-  body,
-  health,
-  onBodyChange,
-  onHealthChange,
-  placeholder,
-}: UpdateFormFieldsProps) {
-  return (
-    <>
-      <div className="mb-3 flex gap-1">
-        <span className="mr-1 self-center text-xs text-zinc-500 dark:text-zinc-400">Health:</span>
-        <button
-          className={cn(
-            'rounded px-2 py-0.5 text-xs font-medium transition-colors',
-            health === ''
-              ? 'bg-zinc-300 text-zinc-700 dark:bg-zinc-600 dark:text-zinc-100'
-              : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700',
-          )}
-          onClick={() => onHealthChange('')}
-          type="button"
-        >
-          None
-        </button>
-        {PROJECT_HEALTH_OPTIONS.map(h => (
-          <button
-            className={cn(
-              'rounded px-2 py-0.5 text-xs font-medium transition-colors',
-              health === h.value
-                ? `${h.color} text-white`
-                : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700',
-            )}
-            key={h.value}
-            onClick={() => onHealthChange(h.value)}
-            type="button"
-          >
-            {h.label}
-          </button>
-        ))}
-      </div>
-      <textarea
-        className="w-full resize-none rounded border border-zinc-200 bg-transparent px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 dark:border-zinc-700 dark:text-zinc-100 dark:focus:border-indigo-500 dark:focus:ring-indigo-500"
-        onChange={e => onBodyChange(e.target.value)}
-        placeholder={placeholder}
-        rows={4}
-        value={body}
-      />
-    </>
-  );
-}
 
 // ─── Create form ─────────────────────────────────────────────────────────────
 
@@ -247,6 +192,7 @@ function CreateUpdateForm({ projectId, onClose }: CreateUpdateFormProps) {
         onBodyChange={setBody}
         onHealthChange={setHealth}
         placeholder="Describe the current status, blockers, or progress..."
+        showNone
       />
       <div className="mt-2 flex justify-end gap-2">
         <button
@@ -310,6 +256,7 @@ function EditUpdateForm({ updateId, initialBody, initialHealth, onClose }: EditU
         health={health}
         onBodyChange={setBody}
         onHealthChange={setHealth}
+        showNone
       />
       <div className="mt-2 flex justify-end gap-2">
         <button
@@ -329,62 +276,5 @@ function EditUpdateForm({ updateId, initialBody, initialHealth, onClose }: EditU
         </button>
       </div>
     </div>
-  );
-}
-
-// ─── Delete button ────────────────────────────────────────────────────────────
-
-function DeleteUpdateButton({ updateId }: { updateId: string }) {
-  const [confirming, setConfirming] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  const handleDelete = async () => {
-    setDeleting(true);
-    try {
-      await gql(
-        `mutation ($id: ID!) {
-          projectUpdateDelete(id: $id) { success }
-        }`,
-        { id: updateId },
-      );
-    } catch {
-      toast.error('Failed to delete update');
-      setDeleting(false);
-      setConfirming(false);
-    }
-  };
-
-  if (confirming) {
-    return (
-      <div className="flex items-center gap-1">
-        <span className="text-xs text-zinc-500">Delete?</span>
-        <button
-          className="rounded px-1.5 py-0.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
-          disabled={deleting}
-          onClick={handleDelete}
-          type="button"
-        >
-          {deleting ? '...' : 'Yes'}
-        </button>
-        <button
-          className="rounded px-1.5 py-0.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          onClick={() => setConfirming(false)}
-          type="button"
-        >
-          No
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <button
-      className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-red-500 dark:hover:bg-zinc-800"
-      onClick={() => setConfirming(true)}
-      title="Delete"
-      type="button"
-    >
-      <Trash2 className="h-3.5 w-3.5" />
-    </button>
   );
 }
