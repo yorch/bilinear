@@ -2,6 +2,7 @@
 
 import { CheckCircle, CornerDownRight, MoreHorizontal, Smile } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -445,10 +446,10 @@ function CommentCard({
             <span className="text-xs text-zinc-400">{formatRelativeTime(comment.createdAt)}</span>
             {comment.editedAt && <span className="text-xs italic text-zinc-400">(edited)</span>}
             {isResolved && (
-              <span className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700 dark:bg-green-900/30 dark:text-green-400">
+              <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                 <CheckCircle className="h-3 w-3" />
                 Resolved
-              </span>
+              </Badge>
             )}
           </div>
 

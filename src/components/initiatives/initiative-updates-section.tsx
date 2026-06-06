@@ -2,6 +2,7 @@
 
 import { MessageSquare, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { gql } from '@/lib/graphql';
 import { PROJECT_HEALTH_CONFIG, PROJECT_HEALTH_OPTIONS } from '@/lib/project-constants';
 import { toast } from '@/lib/toast';
@@ -162,14 +163,9 @@ export function InitiativeUpdatesSection({
                       {update.user.displayName}
                     </span>
                     {health && (
-                      <span
-                        className={cn(
-                          'rounded px-1.5 py-0.5 text-xs font-medium text-white',
-                          health.color,
-                        )}
-                      >
+                      <Badge className={health.color} variant="solid">
                         {health.label}
-                      </span>
+                      </Badge>
                     )}
                     <span className="text-xs text-zinc-400">
                       {formatRelativeTime(update.createdAt)}

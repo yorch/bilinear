@@ -3,6 +3,7 @@
 import { RefreshCw, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import type { DBCycle } from '@/lib/db';
 import { cn } from '@/lib/utils';
@@ -142,9 +143,9 @@ export const CycleSelect = observer(function CycleSelect({
                       {getCycleDisplayName(cycle)}
                     </span>
                     {isActive && (
-                      <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+                      <Badge className="shrink-0 bg-emerald-100 px-1.5 text-[10px] text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
                         Active
-                      </span>
+                      </Badge>
                     )}
                   </button>
                 );

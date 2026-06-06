@@ -2,6 +2,7 @@
 
 import { ExternalLink, GitMerge, GitPullRequest, GitPullRequestClosed } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { gql } from '@/lib/graphql';
 
 interface PullRequest {
@@ -109,28 +110,24 @@ function PrStateIcon({
 function PrStateBadge({ state, draft }: { state: string; draft: boolean }) {
   if (state === 'merged') {
     return (
-      <span className="shrink-0 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+      <Badge className="shrink-0 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
         Merged
-      </span>
+      </Badge>
     );
   }
   if (state === 'closed') {
     return (
-      <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
+      <Badge className="shrink-0 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">
         Closed
-      </span>
+      </Badge>
     );
   }
   if (draft) {
-    return (
-      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-        Draft
-      </span>
-    );
+    return <Badge className="shrink-0 bg-muted text-muted-foreground">Draft</Badge>;
   }
   return (
-    <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300">
+    <Badge className="shrink-0 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
       Open
-    </span>
+    </Badge>
   );
 }
