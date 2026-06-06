@@ -168,7 +168,7 @@ export const PULL_REQUESTS_QUERY = `
 
 // ── Comments ─────────────────────────────────────────────────────────────────
 
-export const COMMENTS_FRAGMENT = `
+const COMMENTS_FRAGMENT = `
   id issueId body bodyData parentId resolvedAt editedAt createdAt updatedAt
   author { id displayName initials avatarBackgroundColor avatarUrl }
   reactions { id emoji userId user { id displayName } }

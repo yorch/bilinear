@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useCallback } from 'react';
 import { usePopover } from '@/hooks/use-popover';
 import { cn } from '@/lib/utils';
 
@@ -31,10 +32,10 @@ export function SelectPopover({
 }: SelectPopoverProps) {
   const { open, setOpen, ref } = usePopover({ forceOpen, onClose });
 
-  const close = () => {
+  const close = useCallback(() => {
     setOpen(false);
     onClose?.();
-  };
+  }, [setOpen, onClose]);
 
   return (
     <div className={cn('relative', className)} ref={ref}>

@@ -2,7 +2,7 @@
 
 import { observer } from 'mobx-react-lite';
 import { useParams, useRouter } from 'next/navigation';
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { RecentItem } from '@/hooks/use-recent-items';
 import type { DBIssue } from '@/lib/db';
 import { IDENTIFIER_RE } from '@/lib/identifiers';
@@ -37,7 +37,7 @@ type SubMenuMode =
   | { issueId: string; type: 'setPriority' }
   | { issueId: string; type: 'setLabel' };
 
-type SubMenuItem = { label: string; onSelect: () => void };
+type SubMenuItem = { id: string; label: string; onSelect: () => void };
 
 const SUBMENU_PLACEHOLDERS = {
   setAssignee: 'Set assignee…',
@@ -93,29 +93,32 @@ const ResultsList = observer(function ResultsList({
     teamKey: teamStore.findById(issue.teamId)?.key ?? '',
   }));
 
-  const baseActions: ActionItem[] = [
-    {
-      id: 'create-issue',
-      keywords: ['create issue', 'new issue', 'add issue'],
-      kind: 'action',
-      label: 'Create new issue',
-      onSelect: () => {
-        uiStore.closeCommandPalette();
-        uiStore.openCreateIssueModal();
+  const baseActions = useMemo<ActionItem[]>(
+    () => [
+      {
+        id: 'create-issue',
+        keywords: ['create issue', 'new issue', 'add issue'],
+        kind: 'action',
+        label: 'Create new issue',
+        onSelect: () => {
+          uiStore.closeCommandPalette();
+          uiStore.openCreateIssueModal();
+        },
+        shortcut: 'C',
       },
-      shortcut: 'C',
-    },
-    {
-      id: 'go-settings',
-      keywords: ['settings', 'preferences', 'config'],
-      kind: 'action',
-      label: 'Go to Settings',
-      onSelect: () => {
-        uiStore.closeCommandPalette();
-        router.push(`/${workspaceKey}/settings`);
+      {
+        id: 'go-settings',
+        keywords: ['settings', 'preferences', 'config'],
+        kind: 'action',
+        label: 'Go to Settings',
+        onSelect: () => {
+          uiStore.closeCommandPalette();
+          router.push(`/${workspaceKey}/settings`);
+        },
       },
-    },
-  ];
+    ],
+    [router, uiStore, workspaceKey],
+  );
   const actionItems: ActionItem[] = query
     ? baseActions.filter(a => {
         const q = query.toLowerCase();
@@ -125,7 +128,8 @@ const ResultsList = observer(function ResultsList({
 
   const allItems: ResultItem[] = [...issueItems, ...actionItems];
 
-  // Ref mutation — safe during render, keeps parent's keyStateRef current
+  // Ref mutation during render — intentional: keeps parent's keyboard ref current
+  // before any keydown event can fire. onItemsChange only mutates a useRef.
   onItemsChange(allItems);
 
   return (
@@ -243,6 +247,7 @@ const SubMenuList = observer(function SubMenuList({
     if (issue) {
       const states = workflowStateStore.findByTeamId(issue.teamId);
       subItems = states.map(s => ({
+        id: s.id,
         label: s.name,
         onSelect: () => {
           issueStore.optimisticUpdate(subMenu.issueId, { stateId: s.id });
@@ -254,6 +259,7 @@ const SubMenuList = observer(function SubMenuList({
     const users = userStore.all;
     subItems = [
       {
+        id: 'no-assignee',
         label: 'No assignee',
         onSelect: () => {
           issueStore.optimisticUpdate(subMenu.issueId, { assigneeId: null });
@@ -261,6 +267,7 @@ const SubMenuList = observer(function SubMenuList({
         },
       },
       ...users.map(u => ({
+        id: u.id,
         label: u.displayName,
         onSelect: () => {
           issueStore.optimisticUpdate(subMenu.issueId, { assigneeId: u.id });
@@ -270,6 +277,7 @@ const SubMenuList = observer(function SubMenuList({
     ];
   } else if (subMenu.type === 'setPriority') {
     subItems = ([0, 1, 2, 3, 4] as const).map(p => ({
+      id: String(p),
       label: getPriorityConfig(p).label,
       onSelect: () => {
         issueStore.optimisticUpdate(subMenu.issueId, { priority: p });
@@ -280,6 +288,7 @@ const SubMenuList = observer(function SubMenuList({
     const issue = issueStore.findById(subMenu.issueId);
     if (issue) {
       subItems = labelStore.all.map(l => ({
+        id: l.id,
         label: l.name,
         onSelect: () => {
           const current = issue.labelIds ?? [];
@@ -293,7 +302,7 @@ const SubMenuList = observer(function SubMenuList({
     }
   }
 
-  // Ref mutation — safe during render
+  // Ref mutation during render — intentional: see ResultsList above.
   onItemsChange(subItems);
 
   return (
@@ -309,7 +318,7 @@ const SubMenuList = observer(function SubMenuList({
               : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
           )}
           data-idx={i}
-          key={item.label}
+          key={item.id}
           onClick={item.onSelect}
           role="option"
           type="button"
@@ -399,13 +408,25 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
     [router, workspaceKey, uiStore],
   );
 
+  const onAllItemsChange = useCallback((items: ResultItem[]) => {
+    allItemsRef.current = items;
+  }, []);
+
+  const onSubItemsChange = useCallback((items: SubMenuItem[]) => {
+    subItemsRef.current = items;
+  }, []);
+
+  const onPaletteClose = useCallback(() => uiStore.closeCommandPalette(), [uiStore]);
+
+  const inSubMenu = subMenu.type !== 'none';
+
   // Keep a ref with the latest handler state so the event listener registered
   // once below can always read fresh values without being re-registered.
   const keyStateRef = useRef({
     activeIndex,
     allItemsRef,
     clampIndex,
-    inSubMenu: false,
+    inSubMenu,
     selectItem,
     setActiveIndex,
     setSubMenu,
@@ -416,7 +437,7 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
     activeIndex,
     allItemsRef,
     clampIndex,
-    inSubMenu: subMenu.type !== 'none',
+    inSubMenu,
     selectItem,
     setActiveIndex,
     setSubMenu,
@@ -468,16 +489,10 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  const inSubMenu = subMenu.type !== 'none';
-
   return (
     <>
       {/* Backdrop */}
-      <div
-        aria-hidden="true"
-        className="fixed inset-0 z-50 bg-black/30"
-        onClick={() => uiStore.closeCommandPalette()}
-      />
+      <div aria-hidden="true" className="fixed inset-0 z-50 bg-black/30" onClick={onPaletteClose} />
 
       {/* Dialog */}
       <div
@@ -549,18 +564,14 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
           {inSubMenu ? (
             <SubMenuList
               activeIndex={activeIndex}
-              onClose={() => uiStore.closeCommandPalette()}
-              onItemsChange={items => {
-                subItemsRef.current = items;
-              }}
+              onClose={onPaletteClose}
+              onItemsChange={onSubItemsChange}
               subMenu={subMenu}
             />
           ) : (
             <ResultsList
               activeIndex={activeIndex}
-              onItemsChange={items => {
-                allItemsRef.current = items;
-              }}
+              onItemsChange={onAllItemsChange}
               query={query}
               recentItems={recentItems}
               router={router}

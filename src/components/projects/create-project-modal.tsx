@@ -55,6 +55,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
     setName('');
     setDescription('');
     setStatusType('planned');
+    setSelectedTeamIds([]);
     setStartDate('');
     setTargetDate('');
     setSubmitting(false);

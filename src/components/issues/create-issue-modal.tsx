@@ -133,9 +133,6 @@ export function CreateIssueModal({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
       // Alt+C — open template selector
       if (e.altKey && e.key === 'c') {
         e.preventDefault();
@@ -146,7 +143,7 @@ export function CreateIssueModal({
       window.addEventListener('keydown', onKey);
     }
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
