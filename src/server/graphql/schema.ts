@@ -653,6 +653,7 @@ export const typeDefs = `
     completedAt: DateTime
     progress: Float!
     scope: Float!
+    carryoverCount: Int!
     teamId: ID!
     organizationId: ID!
     team: Team!
@@ -713,6 +714,7 @@ export const typeDefs = `
     cycleId: ID!
     cycleNumber: Int!
     completedIssues: Int!
+    completedPoints: Float!
   }
 
   type CycleVelocityResult {
@@ -1247,6 +1249,39 @@ export const typeDefs = `
     teamId: String
   }
 
+  # ------------------------------------------------------------------
+  # Audit Log (admin-only)
+  # ------------------------------------------------------------------
+  type AuditLogEntry {
+    action: String!
+    createdAt: DateTime!
+    id: ID!
+    ipAddress: String
+    metadata: JSON
+    organizationId: ID!
+    resourceId: ID
+    resourceType: String
+    user: User
+    userAgent: String
+    userId: ID
+  }
+
+  type AuditLogPage {
+    entries: [AuditLogEntry!]!
+    hasMore: Boolean!
+    nextCursor: String
+  }
+
+  input AuditLogFilter {
+    action: String
+    cursor: String
+    from: DateTime
+    limit: Int
+    resourceType: String
+    to: DateTime
+    userId: ID
+  }
+
   input IssueTriageAcceptInput {
     stateId: String!
     assigneeId: String
@@ -1282,6 +1317,60 @@ export const typeDefs = `
     stateId: ID!
     avgHours: Float!
     sampleSize: Int!
+  }
+
+  type TeamHealthResult {
+    overdueCount: Int!
+    unestimatedCount: Int!
+    unestimatedPct: Float!
+    openCount: Int!
+    oldestOpenAgeDays: Float!
+    p75AgeDays: Float!
+  }
+
+  type CycleVelocityPoint {
+    cycleId: ID!
+    cycleNumber: Int!
+    cycleStartsAt: String!
+    completedIssues: Int!
+    completedPoints: Float!
+  }
+
+  type CycleVelocityTrendResult {
+    cycles: [CycleVelocityPoint!]!
+    rolling3: Float!
+    rolling6: Float!
+    rolling12: Float!
+    rolling3Points: Float!
+    rolling6Points: Float!
+    rolling12Points: Float!
+  }
+
+  type CycleScopeMetrics {
+    totalCount: Int!
+    plannedCount: Int!
+    completedCount: Int!
+    scopeCreepCount: Int!
+    scopeCreepPct: Float!
+    carryoverCount: Int!
+    carryoverPct: Float!
+  }
+
+  type WorkspaceTeamStats {
+    teamId: ID!
+    teamName: String!
+    totalCount: Int!
+    openCount: Int!
+    completedCount: Int!
+    completionRate: Float!
+    avgCycleTimeDays: Float!
+  }
+
+  type WorkspaceOverviewResult {
+    teams: [WorkspaceTeamStats!]!
+    totalIssues: Int!
+    totalOpen: Int!
+    totalCompleted: Int!
   }
 
   # ------------------------------------------------------------------
@@ -1411,6 +1500,13 @@ export const typeDefs = `
     analyticsCycleTimeHistogram(input: AnalyticsInput): [AnalyticsHistogramBucket!]!
     analyticsThroughputByWeek(input: AnalyticsInput): [AnalyticsThroughputPoint!]!
     analyticsTimeInState(input: AnalyticsInput): [AnalyticsTimeInStateRow!]!
+    analyticsTeamHealth(input: AnalyticsInput): TeamHealthResult!
+    analyticsCycleVelocityTrend(input: AnalyticsInput): CycleVelocityTrendResult!
+    analyticsCycleScopeMetrics(cycleId: ID!): CycleScopeMetrics!
+    analyticsWorkspaceOverview: WorkspaceOverviewResult!
+
+    # Audit log — org admin only
+    auditLogs(filter: AuditLogFilter): AuditLogPage!
 
     # Favorites — sidebar pinning, per user
     favorites: [Favorite!]!
@@ -1425,6 +1521,12 @@ export const typeDefs = `
     passed to googleAuthExchange when the callback fires.
     """
     googleAuthStart: GoogleAuthStartPayload!
+
+    """Returns the SAML SSO configuration for the authenticated org. Null if not configured. Owner/admin only."""
+    samlConfiguration: SamlConfiguration
+
+    """List active SCIM provisioning tokens for the org. Admin only."""
+    scimTokens: [ScimToken!]!
   }
 
   type GoogleAuthStartPayload {
@@ -1595,6 +1697,14 @@ export const typeDefs = `
     # Rotate the per-user iCal feed token. Returns the updated user so the
     # caller can immediately display the new feed URL.
     userCalendarFeedTokenRotate: UserPayload!
+
+    # SAML SSO configuration — owner/admin only
+    samlConfigurationSave(input: SamlConfigurationInput!): SamlConfigurationPayload!
+    samlConfigurationDelete: SamlDeletePayload!
+
+    # SCIM provisioning token management — admin only
+    scimTokenCreate(label: String!): ScimTokenCreatePayload!
+    scimTokenRevoke(id: ID!): ScimTokenRevokePayload!
   }
 
   # ---------------------------------------------------------------------------
@@ -1688,5 +1798,73 @@ export const typeDefs = `
   input FavoriteReorderEntryInput {
     id: ID!
     sortOrder: Float!
+  }
+
+  # ---------------------------------------------------------------------------
+  # SAML SSO
+  # ---------------------------------------------------------------------------
+
+  type SamlConfiguration {
+    createdAt: DateTime!
+    emailAttribute: String!
+    enabled: Boolean!
+    id: ID!
+    idpEntityId: String!
+    idpMetadataUrl: String
+    idpSsoUrl: String!
+    jitProvisioning: Boolean!
+    nameAttribute: String!
+    organizationId: ID!
+    ssoEnforced: Boolean!
+    updatedAt: DateTime!
+  }
+
+  input SamlConfigurationInput {
+    emailAttribute: String
+    enabled: Boolean
+    idpCert: String
+    idpEntityId: String!
+    idpMetadataUrl: String
+    idpMetadataXml: String
+    idpSsoUrl: String!
+    jitProvisioning: Boolean
+    nameAttribute: String
+    ssoEnforced: Boolean
+  }
+
+  """
+  SAML and SCIM mutations don't emit SyncActions (they are admin-only config and
+  not mirrored into the org-wide sync stream), so these payloads omit lastSyncId.
+  """
+  type SamlConfigurationPayload {
+    configuration: SamlConfiguration
+    success: Boolean!
+  }
+
+  type SamlDeletePayload {
+    success: Boolean!
+  }
+
+  # ---------------------------------------------------------------------------
+  # SCIM 2.0 provisioning token management
+  # ---------------------------------------------------------------------------
+
+  """A SCIM provisioning token (hashed; plaintext shown only on creation)."""
+  type ScimToken {
+    createdAt: DateTime!
+    id: ID!
+    label: String!
+    lastUsedAt: DateTime
+  }
+
+  type ScimTokenCreatePayload {
+    """Only populated on the initial creation response — never stored."""
+    plaintext: String
+    success: Boolean!
+    token: ScimToken
+  }
+
+  type ScimTokenRevokePayload {
+    success: Boolean!
   }
 `;

@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { Organization, OrganizationMember } from '../../../generated/prisma';
+import { childLogger } from '../../lib/logger';
 import { requireAuth, requireOrgRole, requireUserId } from '../../middleware/auth';
 import {
   InvalidRoleError,
@@ -8,6 +9,8 @@ import {
   UrlKeyTakenError,
 } from '../../services/organization.service';
 import type { GraphQLContext } from '../context';
+
+const log = childLogger({ module: 'resolver/organization' });
 
 export const organizationResolvers = {
   Mutation: {
@@ -72,6 +75,20 @@ export const organizationResolvers = {
         updated.id,
         updated,
       );
+
+      // Fire-and-forget audit log — errors are non-fatal
+      ctx.services.auditLog
+        .log({
+          action: 'member.role_changed',
+          ipAddress: ctx.clientIp,
+          metadata: { newRole: role, targetUserId: userId },
+          orgId: ctx.orgId,
+          resourceId: userId,
+          resourceType: 'OrganizationMember',
+          userId: ctx.userId,
+        })
+        .catch(err => log.warn({ err }, 'audit log failed'));
+
       return { lastSyncId: sync.id.toString(), success: true };
     },
   },

@@ -2002,3 +2002,53 @@ health: async (initiative, _args, ctx) => {
 
 `initiative.progress` is always present on the DB row (Float `@default(0)`),
 so the fallback never throws even on newly created initiatives.
+
+## 61. Audit Log Pattern (2026-06-06)
+
+All security-relevant events are recorded as append-only rows in `audit_log_entries`:
+
+- **`AuditLogService.log(input)`** — fire-and-forget (returns `void`, swallows errors internally). Call with `void ctx.services.auditLog.log({...})` in resolvers — never `await`.
+- **`AuditLogService.findByOrg(filter)`** — cursor-paginated (DESC by `createdAt`), max 200 per page. Returns `{ entries, hasMore, nextCursor }`.
+- **Auth resolver coverage** — `emailVerify` emits `auth.login`; `logout` emits `auth.logout`; SAML callback emits `auth.login` with `metadata: { method: 'saml' }`.
+- **Org/team mutations** — `teamCreate` → `team.created`; `teamDelete` → `team.deleted`; `organizationMemberUpdateRole` → `member.role_changed`.
+- **Issue mutations** — `issueDelete` → `issue.deleted`; `issuesBulkUpdate` → `issue.bulk_updated`.
+- **SAML config** — `samlConfigurationSave` → `saml.enabled` or `saml.configured`; `samlConfigurationDelete` → `saml.disabled`.
+- **SCIM tokens** — `scimTokenCreate` → `scim.token_created`; `scimTokenRevoke` → `scim.token_revoked`.
+- **Admin-only read** — `auditLogs(filter)` query requires `owner` or `admin` role. Settings page at `/settings/audit-log`.
+- **`AuditAction` union** — all valid action strings are enumerated in `audit-log.service.ts` for type safety.
+
+## 62. SAML SSO Pattern (2026-06-06)
+
+SP-initiated SAML 2.0 SSO using Node.js built-ins only (no external SAML library):
+
+- **`SamlService`** — `getConfig`, `saveConfig`, `deleteConfig`, `generateSpMetadata`, `buildAuthnRequest`, `parseAndValidateResponse`, `jitProvisionUser`.
+- **Routes** — `GET /api/auth/saml/metadata?org=<urlKey>` (SP metadata XML); `GET /api/auth/saml/initiate?org=<urlKey>&redirect=<path>` (builds AuthnRequest, stores relay in `saml_relay` httpOnly cookie, redirects to IdP); `POST /api/auth/saml/callback` (parses Response, JIT-provisions user, issues JWT pair, redirects to workspace).
+- **JIT provisioning** — `jitProvisioning: true` (default) creates the user on first SSO login; `false` requires pre-existing account.
+- **`ssoEnforced`** — reserved field for future enforcement of SSO-only login (UI toggle present, enforcement not yet wired into the password/magic-link flow).
+- **Response validation** — `parseAndValidateResponse` extracts `<saml:Issuer>` and rejects responses where it does not match `config.idpEntityId`. It then calls `verifyXmlSignature` which: (1) verifies the `<ds:SignedInfo>` RSA-SHA256/SHA1 signature via `crypto.createVerify`; (2) extracts the `<ds:Reference URI="#id">` to locate the signed element by ID; (3) validates `<ds:DigestValue>` against the element content to detect content substitution; (4) returns the signed XML fragment. All claim extraction (NameID, email, name) is performed on that fragment only — preventing XML signature-wrapping attacks where unsigned content is injected alongside the signed Assertion. Whitespace-only normalization is used instead of full Exclusive C14N — adequate for conformant IdPs (Okta, Azure AD, Google Workspace). Unsigned or tampered responses throw `SamlParseError`.
+- **`idpCert` handling** — `SamlConfigInput.idpCert` is optional. `saveConfig` preserves the existing stored PEM when `idpCert` is omitted, so admins can edit other fields (SSO URL, attributes, enforcement) without re-entering the certificate. `idpCert` is required on first-time creation (falls back to empty string, which will fail signature verification).
+- **Open redirect** — the SAML callback sanitizes the relay-state redirect path: must start with `/` but not `//` (protocol-relative URL guard).
+- **GraphQL** — `samlConfiguration` query + `samlConfigurationSave` / `samlConfigurationDelete` mutations, all `owner`/`admin` only. Return types `SamlConfigurationPayload` and `SamlDeletePayload` intentionally omit `lastSyncId` (config is not synced to the org stream — see `WebhookDeletePayload` for the same precedent).
+- **Settings** — `/settings/security` page (Security section).
+
+## 63. SCIM 2.0 Provisioning Pattern (2026-06-06)
+
+RFC 7644-compliant SCIM 2.0 provisioning API gated by Bearer token:
+
+- **Tokens** — `ScimService.createToken(orgId, userId, label)` generates a 64-char hex plaintext token, stores only its SHA-256 hash. Plaintext is returned once at creation (UI shows a copy-once warning). `revokeToken` sets `revokedAt`; `authenticateScimToken` hashes the incoming bearer and looks up non-revoked rows, updating `lastUsedAt` non-blocking.
+- **Base URL** — `<APP_URL>/api/scim/v2`.
+- **Users resource** — `GET /Users` (list, `userName eq "email"` filter, 1-based pagination), `POST /Users` (upsert by email, add to org; never writes `user.active` — SCIM (de)activation is org-scoped), `GET /Users/:id`, `PUT /Users/:id`, `PATCH /Users/:id` (Operations array — handles `replace`, `add`, and `remove` ops; `active: false` removes org membership + all team memberships within the org; `active: true` re-provisions org membership via upsert so a previously deactivated user regains workspace access), `DELETE /Users/:id` (removes org membership + team memberships; does **not** globally deactivate `users.active` — deactivation is org-scoped).
+- **Groups resource** — maps to Teams. `GET /Groups` (list, single batched member query), `POST /Groups` (create team with auto-generated key; key collision uses incrementing loop to avoid race conditions), `GET /Groups/:id`, `PUT /Groups/:id` (replace name + sync members; validates member userIds against org membership before insert), `PATCH /Groups/:id` (add/remove members, rename; `add` validates against org membership; `remove` handles both bare `members` path and RFC 7644 value-filter `members[value eq "userId"]` for Azure AD compatibility), `DELETE /Groups/:id` (archives team).
+- **GraphQL** — `scimTokens` query + `scimTokenCreate` / `scimTokenRevoke` mutations, `owner`/`admin` only. Return types `ScimTokenCreatePayload` and `ScimTokenRevokePayload` omit `lastSyncId` (same precedent as SAML/webhook).
+- **Settings** — SCIM section on `/settings/security` page above SAML.
+
+## 64. Analytics Extension Pattern (2026-06-06)
+
+Analytics features added in this sprint extend the existing `AnalyticsService`:
+
+- **`cycleScopeAndCarryover(cycleId)`** — returns `{ plannedCount, scopeCreepCount, scopeCreepPct, carryoverCount, carryoverPct, completedCount, totalCount }`. `scopeCreepCount` = issues with `addedToCycleAt IS NOT NULL` minus `carryoverCount` (carryover issues also have `addedToCycleAt` set via rollover but are not genuine scope creep). Carryover uses the stamped `Cycle.carryoverCount` column. Resolver requires the caller to be a member of the cycle's team.
+- **`analyticsWorkspaceOverview`** — restricted to `owner`/`admin` org roles (workspace-aggregate data is not visible to plain members).
+- **`workspaceOverview(orgId)`** — returns org-level aggregates plus per-team stats. Performance note: currently does O(N) Prisma calls for N teams; acceptable for small-to-medium orgs but should be batched into a single SQL CTE for large orgs.
+- **`Cycle.carryoverCount`** — `Int @default(0)` column stamped by `CycleService.rollover()` on the *destination* cycle when issues are moved. Historical cycles have `0` until the next rollover.
+- **Workspace analytics page** — `/analytics` (uses `analyticsWorkspaceOverview` query). Added as `BarChart2` entry in the sidebar `globalNavItems`.
+- **Cycle scope metrics** — shown in `CycleDetailView` as 4 stat cards (planned / scope creep / carryover / completed) when carryover or scope creep > 0.

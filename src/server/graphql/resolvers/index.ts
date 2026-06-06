@@ -1,5 +1,6 @@
 import { DateTimeScalar, JSONScalar, UUIDScalar } from '../types/scalars';
 import { analyticsResolvers } from './analytics';
+import { auditLogResolvers } from './audit-log';
 import { authResolvers } from './auth';
 import { automationResolvers } from './automation';
 import { commentResolvers } from './comment';
@@ -20,6 +21,8 @@ import { notificationResolvers } from './notification';
 import { organizationResolvers } from './organization';
 import { projectResolvers } from './project';
 import { roadmapResolvers } from './roadmap';
+import { samlResolvers } from './saml';
+import { scimResolvers } from './scim';
 import { searchResolvers } from './search';
 import { teamResolvers } from './team';
 import { teamMembershipResolvers } from './team-membership';
@@ -56,6 +59,10 @@ const DateScalar = {
 };
 
 export const resolvers = {
+  AuditLogEntry: {
+    ...auditLogResolvers.AuditLogEntry,
+  },
+
   AuthPayload: {
     ...authResolvers.AuthPayload,
   },
@@ -148,6 +155,8 @@ export const resolvers = {
     ...roadmapResolvers.Mutation,
     ...teamResolvers.Mutation,
     ...teamMembershipResolvers.Mutation,
+    ...samlResolvers.Mutation,
+    ...scimResolvers.Mutation,
     ...triageResolvers.Mutation,
     ...webhookResolvers.Mutation,
     ...workflowStateResolvers.Mutation,
@@ -171,6 +180,7 @@ export const resolvers = {
 
   Query: {
     ...analyticsResolvers.Query,
+    ...auditLogResolvers.Query,
     ...authResolvers.Query,
     ...automationResolvers.Query,
     ...userResolvers.Query,
@@ -194,6 +204,8 @@ export const resolvers = {
     ...cycleResolvers.Query,
     ...projectResolvers.Query,
     ...roadmapResolvers.Query,
+    ...samlResolvers.Query,
+    ...scimResolvers.Query,
     ...triageResolvers.Query,
     ...webhookResolvers.Query,
   },

@@ -322,16 +322,29 @@ describe('CycleService', () => {
       const cycle1 = { ...TEST_CYCLE, id: 'c1', number: 1 };
       const cycle2 = { ...TEST_CYCLE, id: 'c2', number: 2 };
       prisma.cycle.findMany.mockResolvedValue([cycle1, cycle2]);
-      prisma.issue.count
-        .mockResolvedValueOnce(4) // cycle1
-        .mockResolvedValueOnce(6); // cycle2
+      // getVelocity now calls issue.findMany (for story points), not issue.count
+      prisma.issue.findMany
+        .mockResolvedValueOnce([
+          { estimate: 2 },
+          { estimate: null },
+          { estimate: 1 },
+          { estimate: 1 },
+        ]) // 4 issues, 4 pts
+        .mockResolvedValueOnce([
+          { estimate: 3 },
+          { estimate: 2 },
+          { estimate: null },
+          { estimate: 1 },
+          { estimate: 0 },
+          { estimate: 2 },
+        ]); // 6 issues, 8 pts
 
       const result = await service.getVelocity(TEST_TEAM.id, 8);
 
       expect(result.averageIssues).toBe(5);
       expect(result.cycles).toEqual([
-        { completedIssues: 4, cycleId: 'c1', cycleNumber: 1 },
-        { completedIssues: 6, cycleId: 'c2', cycleNumber: 2 },
+        { completedIssues: 4, completedPoints: 4, cycleId: 'c1', cycleNumber: 1 },
+        { completedIssues: 6, completedPoints: 8, cycleId: 'c2', cycleNumber: 2 },
       ]);
     });
 

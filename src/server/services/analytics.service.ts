@@ -44,6 +44,33 @@ export interface TimeInStateRow {
   stateId: string;
 }
 
+export interface TeamHealthResult {
+  oldestOpenAgeDays: number;
+  openCount: number;
+  overdueCount: number;
+  p75AgeDays: number;
+  unestimatedCount: number;
+  unestimatedPct: number;
+}
+
+export interface CycleVelocityPoint {
+  completedIssues: number;
+  completedPoints: number;
+  cycleId: string;
+  cycleNumber: number;
+  cycleStartsAt: string;
+}
+
+export interface CycleVelocityTrendResult {
+  cycles: CycleVelocityPoint[];
+  rolling3: number;
+  rolling3Points: number;
+  rolling6: number;
+  rolling6Points: number;
+  rolling12: number;
+  rolling12Points: number;
+}
+
 /**
  * Days are bucketed as: [0,1), [1,2), [2,3), [3,5), [5,8), [8,13), [13,21),
  * [21,34), [34,inf). Fibonacci-ish edges so a long tail compresses
@@ -149,6 +176,263 @@ export class AnalyticsService {
       count: Number(r.count),
       weekStart: r.week_start.toISOString().split('T')[0],
     }));
+  }
+
+  /**
+   * Team health snapshot: overdue issues, unestimated issues, and open-issue
+   * age statistics. "Open" excludes completed, cancelled, trashed, and
+   * archived issues. No date-range filter — this is a point-in-time view.
+   */
+  async teamHealth(filter: AnalyticsFilter): Promise<TeamHealthResult> {
+    const now = new Date();
+
+    // Fetch all open issues for the team to compute age percentiles.
+    const rows = await this.prisma.$queryRaw<
+      Array<{ age_days: number; is_overdue: boolean; estimate: number | null }>
+    >`
+      SELECT
+        EXTRACT(EPOCH FROM (NOW() - i.created_at)) / 86400.0 AS age_days,
+        (i.due_date IS NOT NULL AND i.due_date < ${now}) AS is_overdue,
+        i.estimate
+      FROM issues i
+      JOIN workflow_states ws ON ws.id = i.state_id
+      WHERE i.organization_id = ${filter.orgId}::uuid
+        AND i.archived_at IS NULL
+        AND i.trashed = false
+        AND ws.type NOT IN ('completed', 'cancelled')
+        ${filter.teamId ? Prisma.sql`AND i.team_id = ${filter.teamId}::uuid` : Prisma.empty}
+      ORDER BY age_days DESC
+    `;
+
+    const openCount = rows.length;
+    const overdueCount = rows.filter(r => r.is_overdue).length;
+    const unestimatedCount = rows.filter(r => r.estimate == null).length;
+    const unestimatedPct = openCount > 0 ? (unestimatedCount / openCount) * 100 : 0;
+
+    const ageDays = rows.map(r => Number(r.age_days)).sort((a, b) => a - b);
+    const oldestOpenAgeDays = ageDays.length > 0 ? (ageDays[ageDays.length - 1] ?? 0) : 0;
+
+    let p75AgeDays = 0;
+    if (ageDays.length > 0) {
+      const idx = Math.floor(ageDays.length * 0.75);
+      p75AgeDays = ageDays[Math.min(idx, ageDays.length - 1)] ?? 0;
+    }
+
+    return {
+      oldestOpenAgeDays,
+      openCount,
+      overdueCount,
+      p75AgeDays,
+      unestimatedCount,
+      unestimatedPct,
+    };
+  }
+
+  /**
+   * Per-cycle velocity (completed issue count + story points) for the last N
+   * completed cycles in the team, plus 3/6/12-cycle rolling averages.
+   * Issues are considered completed when completedAt IS NOT NULL.
+   */
+  async cycleVelocityTrend(
+    filter: AnalyticsFilter & { cycleCount?: number },
+  ): Promise<CycleVelocityTrendResult> {
+    const limit = filter.cycleCount ?? 12;
+
+    const completedCycles = await this.prisma.cycle.findMany({
+      orderBy: { startsAt: 'desc' },
+      take: limit,
+      where: {
+        archivedAt: null,
+        OR: [{ completedAt: { not: null } }, { endsAt: { lte: new Date() } }],
+        team: { organizationId: filter.orgId },
+        ...(filter.teamId ? { teamId: filter.teamId } : {}),
+      },
+    });
+
+    const cyclePoints = await Promise.all(
+      completedCycles.map(async cycle => {
+        const issues = await this.prisma.issue.findMany({
+          select: { estimate: true },
+          where: {
+            archivedAt: null,
+            completedAt: { not: null },
+            cycleId: cycle.id,
+            trashed: false,
+          },
+        });
+        const completedIssues = issues.length;
+        const completedPoints = issues.reduce((sum, i) => sum + (i.estimate ?? 0), 0);
+        return {
+          completedIssues,
+          completedPoints,
+          cycleId: cycle.id,
+          cycleNumber: cycle.number,
+          cycleStartsAt: cycle.startsAt.toISOString(),
+        };
+      }),
+    );
+
+    // Restore chronological order for display; rolling averages use the last N
+    const chronological = [...cyclePoints].reverse();
+
+    function rollingAvg(
+      arr: CycleVelocityPoint[],
+      n: number,
+      field: keyof CycleVelocityPoint,
+    ): number {
+      const slice = arr.slice(-n);
+      if (slice.length === 0) {
+        return 0;
+      }
+      return slice.reduce((s, c) => s + (c[field] as number), 0) / slice.length;
+    }
+
+    return {
+      cycles: chronological,
+      rolling3: rollingAvg(chronological, 3, 'completedIssues'),
+      rolling3Points: rollingAvg(chronological, 3, 'completedPoints'),
+      rolling6: rollingAvg(chronological, 6, 'completedIssues'),
+      rolling6Points: rollingAvg(chronological, 6, 'completedPoints'),
+      rolling12: rollingAvg(chronological, 12, 'completedIssues'),
+      rolling12Points: rollingAvg(chronological, 12, 'completedPoints'),
+    };
+  }
+
+  /**
+   * Scope creep + carryover metrics for a single cycle.
+   *
+   * - scopeCreepCount: issues genuinely added mid-sprint (addedToCycleAt IS NOT NULL,
+   *   excluding carried-over issues). Carryover issues are also added after start via
+   *   rollover and are subtracted out.
+   * - carryoverCount: exact count from Cycle.carryoverCount stamped during
+   *   rollover. Accurate for cycles run through the new code; 0 for legacy.
+   * - plannedCount: issues that were in scope at cycle start (addedToCycleAt IS NULL)
+   * - totalCount: total issues assigned to the cycle
+   * - completedCount: issues completed during the cycle
+   */
+  async cycleScopeAndCarryover(cycleId: string): Promise<{
+    carryoverCount: number;
+    carryoverPct: number;
+    completedCount: number;
+    plannedCount: number;
+    scopeCreepCount: number;
+    scopeCreepPct: number;
+    totalCount: number;
+  }> {
+    const cycle = await this.prisma.cycle.findUnique({
+      select: { carryoverCount: true },
+      where: { id: cycleId },
+    });
+
+    const [total, scopeCreep, completed] = await Promise.all([
+      this.prisma.issue.count({
+        where: { archivedAt: null, cycleId, trashed: false },
+      }),
+      this.prisma.issue.count({
+        where: { addedToCycleAt: { not: null }, archivedAt: null, cycleId, trashed: false },
+      }),
+      this.prisma.issue.count({
+        where: { archivedAt: null, completedAt: { not: null }, cycleId, trashed: false },
+      }),
+    ]);
+
+    const carryoverCount = cycle?.carryoverCount ?? 0;
+    // Subtract carried-over issues: they also have addedToCycleAt set but are
+    // not genuine scope creep.
+    const trueScopeCreepCount = Math.max(0, scopeCreep - carryoverCount);
+    const planned = total - scopeCreep;
+
+    return {
+      carryoverCount,
+      carryoverPct: total > 0 ? (carryoverCount / total) * 100 : 0,
+      completedCount: completed,
+      plannedCount: planned,
+      scopeCreepCount: trueScopeCreepCount,
+      scopeCreepPct: total > 0 ? (trueScopeCreepCount / total) * 100 : 0,
+      totalCount: total,
+    };
+  }
+
+  /**
+   * Workspace-level aggregate metrics across all teams.
+   * Returns per-team stats for the cross-team analytics dashboard.
+   */
+  async workspaceOverview(orgId: string): Promise<{
+    teams: Array<{
+      avgCycleTimeDays: number;
+      completedCount: number;
+      completionRate: number;
+      openCount: number;
+      teamId: string;
+      teamName: string;
+      totalCount: number;
+    }>;
+    totalCompleted: number;
+    totalOpen: number;
+    totalIssues: number;
+  }> {
+    const teams = await this.prisma.team.findMany({
+      select: { id: true, name: true },
+      where: { archivedAt: null, organizationId: orgId },
+    });
+
+    const teamStats = await Promise.all(
+      teams.map(async team => {
+        const [total, open, completed] = await Promise.all([
+          this.prisma.issue.count({
+            where: { archivedAt: null, teamId: team.id, trashed: false },
+          }),
+          this.prisma.issue.count({
+            where: {
+              archivedAt: null,
+              completedAt: null,
+              state: { type: { notIn: ['completed', 'cancelled'] } },
+              teamId: team.id,
+              trashed: false,
+            },
+          }),
+          this.prisma.issue.count({
+            where: {
+              archivedAt: null,
+              completedAt: { not: null },
+              teamId: team.id,
+              trashed: false,
+            },
+          }),
+        ]);
+
+        const cycleTimeRows = await this.prisma.$queryRaw<Array<{ avg_days: number | null }>>`
+          SELECT AVG(EXTRACT(EPOCH FROM (completed_at - started_at)) / 86400.0) AS avg_days
+          FROM issues
+          WHERE team_id = ${team.id}::uuid
+            AND completed_at IS NOT NULL
+            AND started_at IS NOT NULL
+            AND archived_at IS NULL
+            AND trashed = false
+        `;
+
+        return {
+          avgCycleTimeDays: Number(cycleTimeRows[0]?.avg_days ?? 0),
+          completedCount: completed,
+          completionRate: total > 0 ? (completed / total) * 100 : 0,
+          openCount: open,
+          teamId: team.id,
+          teamName: team.name,
+          totalCount: total,
+        };
+      }),
+    );
+
+    const totalCompleted = teamStats.reduce((s, t) => s + t.completedCount, 0);
+    const totalOpen = teamStats.reduce((s, t) => s + t.openCount, 0);
+    const totalIssues = teamStats.reduce((s, t) => s + t.totalCount, 0);
+
+    return {
+      teams: teamStats.sort((a, b) => b.completedCount - a.completedCount),
+      totalCompleted,
+      totalIssues,
+      totalOpen,
+    };
   }
 
   /**

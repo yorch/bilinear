@@ -313,6 +313,12 @@ export class CycleService {
           data: { addedToCycleAt: new Date(), cycleId: nextCycle.id },
           where: { id: { in: toMove.map(i => i.id) } },
         });
+        // Record how many issues were carried into the next cycle so the
+        // analytics carryover-rate metric has an exact count (not heuristic).
+        await tx.cycle.update({
+          data: { carryoverCount: { increment: toMove.length } },
+          where: { id: nextCycle.id },
+        });
       } else if (toMove.length > 0) {
         // No next cycle — unassign issues
         await tx.issue.updateMany({
@@ -338,9 +344,10 @@ export class CycleService {
   ): Promise<{
     averageIssues: number;
     cycles: Array<{
+      completedIssues: number;
+      completedPoints: number;
       cycleId: string;
       cycleNumber: number;
-      completedIssues: number;
     }>;
   }> {
     const now = new Date();
@@ -356,7 +363,8 @@ export class CycleService {
 
     const cycles = await Promise.all(
       completedCycles.map(async cycle => {
-        const completedIssues = await this.prisma.issue.count({
+        const issues = await this.prisma.issue.findMany({
+          select: { estimate: true },
           where: {
             archivedAt: null,
             completedAt: { not: null },
@@ -364,8 +372,11 @@ export class CycleService {
             trashed: false,
           },
         });
+        const completedIssues = issues.length;
+        const completedPoints = issues.reduce((sum, i) => sum + (i.estimate ?? 0), 0);
         return {
           completedIssues,
+          completedPoints,
           cycleId: cycle.id,
           cycleNumber: cycle.number,
         };

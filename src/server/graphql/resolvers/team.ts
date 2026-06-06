@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { Team, TeamMembership } from '../../../generated/prisma';
+import { childLogger } from '../../lib/logger';
 import { requireAuth, requireOrgRole, requireTeamMember } from '../../middleware/auth';
 import type {
   TeamCreateInput,
@@ -7,6 +8,8 @@ import type {
   TeamUpdateInput,
 } from '../../services/team.service';
 import type { GraphQLContext } from '../context';
+
+const log = childLogger({ module: 'resolver/team' });
 
 async function isOrgAdmin(
   prisma: GraphQLContext['prisma'],
@@ -51,6 +54,18 @@ export const teamResolvers = {
           result.team.id,
           result.team,
         );
+        // Fire-and-forget audit log — errors are non-fatal
+        ctx.services.auditLog
+          .log({
+            action: 'team.created',
+            ipAddress: ctx.clientIp,
+            metadata: { key: input.key, name: input.name },
+            orgId: ctx.orgId,
+            resourceId: result.team.id,
+            resourceType: 'Team',
+            userId: ctx.userId,
+          })
+          .catch(err => log.warn({ err }, 'audit log failed'));
         return {
           lastSyncId: sync.id.toString(),
           success: true,
@@ -106,6 +121,17 @@ export const teamResolvers = {
         }
 
         const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Team', id, null);
+        // Fire-and-forget audit log — errors are non-fatal
+        ctx.services.auditLog
+          .log({
+            action: 'team.deleted',
+            ipAddress: ctx.clientIp,
+            orgId: ctx.orgId,
+            resourceId: id,
+            resourceType: 'Team',
+            userId: ctx.userId,
+          })
+          .catch(err => log.warn({ err }, 'audit log failed'));
         return { lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         const error = err as Error;

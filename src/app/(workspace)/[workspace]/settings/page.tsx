@@ -525,6 +525,11 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   label: 'Integrations',
                 },
                 {
+                  description: 'SAML SSO and authentication policies',
+                  href: `/${workspace}/settings/security`,
+                  label: 'Security',
+                },
+                {
                   description: 'Send outbound HTTP events',
                   href: `/${workspace}/settings/webhooks`,
                   label: 'Webhooks',
@@ -533,6 +538,11 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   description: 'Share project status externally',
                   href: `/${workspace}/settings/roadmap`,
                   label: 'Public roadmap',
+                },
+                {
+                  description: 'Security-relevant event history (admins only)',
+                  href: `/${workspace}/settings/audit-log`,
+                  label: 'Audit Log',
                 },
               ].map(item => (
                 <li key={item.href}>

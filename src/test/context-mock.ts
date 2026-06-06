@@ -1,5 +1,6 @@
 import { createLoaders, type Loaders } from '../server/graphql/loaders';
 import { AnalyticsService } from '../server/services/analytics.service';
+import { AuditLogService } from '../server/services/audit-log.service';
 import { AuthService } from '../server/services/auth.service';
 import { AutomationService } from '../server/services/automation.service';
 import { InitiativeService } from '../server/services/initiative.service';
@@ -8,6 +9,8 @@ import { IssueActivityService } from '../server/services/issue-activity.service'
 import { LabelService } from '../server/services/label.service';
 import { NotificationService } from '../server/services/notification.service';
 import { OrganizationService } from '../server/services/organization.service';
+import { SamlService } from '../server/services/saml.service';
+import { ScimService } from '../server/services/scim.service';
 import { SearchService } from '../server/services/search.service';
 import type { SyncActionType } from '../server/services/sync.service';
 import { TeamService } from '../server/services/team.service';
@@ -45,6 +48,7 @@ export interface MockGraphQLContext {
   prisma: MockPrismaClient;
   services: {
     analytics: AnalyticsService;
+    auditLog: AuditLogService;
     auth: AuthService;
     automation: AutomationService;
     initiative: InitiativeService;
@@ -53,6 +57,8 @@ export interface MockGraphQLContext {
     label: LabelService;
     notification: NotificationService;
     organization: OrganizationService;
+    saml: SamlService;
+    scim: ScimService;
     search: SearchService;
     sync: MockSyncService;
     team: TeamService;
@@ -77,6 +83,7 @@ export function createMockContext(
     prisma,
     services: {
       analytics: new AnalyticsService(prisma as never),
+      auditLog: new AuditLogService(prisma as never),
       auth: new AuthService(prisma as never, userService),
       automation: new AutomationService(prisma as never),
       initiative: new InitiativeService(prisma as never),
@@ -85,6 +92,8 @@ export function createMockContext(
       label: new LabelService(prisma as never),
       notification: new NotificationService(prisma as never),
       organization: new OrganizationService(prisma as never),
+      saml: new SamlService(prisma as never),
+      scim: new ScimService(prisma as never),
       search: new SearchService(prisma as never),
       sync: new MockSyncService(),
       team: new TeamService(prisma as never),

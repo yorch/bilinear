@@ -1,7 +1,10 @@
 import { GraphQLError } from 'graphql';
+import { childLogger } from '../../lib/logger';
 import { checkAuthMutationLimit } from '../../middleware/rate-limit';
 import { OAuthError } from '../../services/auth.service';
 import type { GraphQLContext } from '../context';
+
+const log = childLogger({ module: 'resolver/auth' });
 
 // Lightweight RFC-5321-ish format check. Intentionally permissive but blocks
 // the most common abuse shapes (missing @, stray whitespace, overly long
@@ -70,7 +73,29 @@ export const authResolvers = {
       assertValidEmail(input.email);
       await enforceAuthLimit('verify', input.email, ctx);
       try {
-        return await ctx.services.auth.verifyMagicLink(input.email, input.code);
+        const result = await ctx.services.auth.verifyMagicLink(input.email, input.code);
+        // Fire-and-forget audit log — errors are non-fatal. orgId is not
+        // available from ctx at login time (no active session yet), so we
+        // resolve it from the user's org membership asynchronously.
+        if (result.userId) {
+          (async () => {
+            try {
+              const org = await ctx.services.user.getOrganizationForUser(result.userId);
+              if (org) {
+                await ctx.services.auditLog.log({
+                  action: 'auth.login',
+                  ipAddress: ctx.clientIp,
+                  metadata: { method: 'magic_link' },
+                  orgId: org.id,
+                  userId: result.userId,
+                });
+              }
+            } catch (err) {
+              log.warn({ err }, 'audit log failed');
+            }
+          })();
+        }
+        return result;
       } catch (err) {
         const error = err as Error;
         if (error.name === 'InvalidCodeError') {
@@ -103,6 +128,16 @@ export const authResolvers = {
     logout: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
       if (ctx.userId) {
         await ctx.services.auth.logout(ctx.userId);
+        if (ctx.orgId) {
+          ctx.services.auditLog
+            .log({
+              action: 'auth.logout',
+              ipAddress: ctx.clientIp,
+              orgId: ctx.orgId,
+              userId: ctx.userId,
+            })
+            .catch(err => log.warn({ err }, 'audit log failed'));
+        }
       }
       return { success: true };
     },

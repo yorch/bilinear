@@ -224,6 +224,17 @@ export const issueResolvers = {
       void ctx.services.webhook
         .dispatchEvent(ctx.orgId, 'issue.deleted', { id, teamId: existing.teamId }, existing.teamId)
         .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.deleted'));
+      // Fire-and-forget audit log — errors are non-fatal
+      ctx.services.auditLog
+        .log({
+          action: 'issue.deleted',
+          ipAddress: ctx.clientIp,
+          orgId: ctx.orgId,
+          resourceId: id,
+          resourceType: 'Issue',
+          userId: ctx.userId,
+        })
+        .catch(err => logger.warn({ err }, 'audit log failed'));
       return { lastSyncId: sync.id.toString(), success: true };
     },
 
@@ -417,6 +428,17 @@ export const issueResolvers = {
           .dispatchEvent(ctx.orgId, 'issue.updated', issue, issue.teamId)
           .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.updated (bulk)'));
       }
+
+      // Fire-and-forget audit log — errors are non-fatal
+      ctx.services.auditLog
+        .log({
+          action: 'issue.bulk_updated',
+          ipAddress: ctx.clientIp,
+          metadata: { count: updated.length, ids },
+          orgId: ctx.orgId,
+          userId: ctx.userId,
+        })
+        .catch(err => logger.warn({ err }, 'audit log failed'));
 
       return { issues: updated, lastSyncId, success: true };
     },
