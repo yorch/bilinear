@@ -1,6 +1,6 @@
 # Frontend Review — bilinear
 
-_Last updated: 2026-06-06 · Status: Auto-fixing_
+_Last updated: 2026-06-06 · Status: Complete_
 
 ## Conventions (baseline)
 
@@ -21,12 +21,12 @@ _Last updated: 2026-06-06 · Status: Auto-fixing_
 | ID  | Title                                         | Severity | Category     | Tier        | Status     |
 |-----|-----------------------------------------------|----------|--------------|-------------|------------|
 | F01 | `formatRelativeDate` duplicates `formatRelativeTime` | High | Reuse     | Safe        | [x] Done   |
-| F02 | 12 components inline outside-click listener   | Medium   | Hooks/Reuse  | Structural  | [ ] Open   |
-| F03 | No shared popover/dropdown primitive          | High     | Reuse/Composition | Structural | [ ] Open |
-| F04 | `ProjectUpdatesSection` and `InitiativeUpdatesSection` near-duplicate | High | Reuse | Structural | [ ] Open |
-| F05 | `UserAvatar` mis-located; inline re-implementations elsewhere | Medium | Structure | Structural | [ ] Open |
-| F06 | No shared `Badge` component despite 4+ badge patterns | Medium | Reuse | Structural | [ ] Open |
-| F07 | `GroupSection` falls back to index key when `getKey` omitted | Low | Perf/Keys | Structural | [ ] Open |
+| F02 | 12 components inline outside-click listener   | Medium   | Hooks/Reuse  | Structural  | [x] Done (WS-A) |
+| F03 | No shared popover/dropdown primitive          | High     | Reuse/Composition | Structural | [x] Done (WS-E) |
+| F04 | `ProjectUpdatesSection` and `InitiativeUpdatesSection` near-duplicate | High | Reuse | Structural | [x] Done (WS-D) |
+| F05 | `UserAvatar` mis-located; inline re-implementations elsewhere | Medium | Structure | Structural | [x] Done (WS-B) |
+| F06 | No shared `Badge` component despite 4+ badge patterns | Medium | Reuse | Structural | [x] Done (WS-C) |
+| F07 | `GroupSection` falls back to index key when `getKey` omitted | Low | Perf/Keys | Structural | [x] Done (WS-F) |
 
 ---
 
@@ -74,7 +74,7 @@ _Last updated: 2026-06-06 · Status: Auto-fixing_
   useOutsideClick(ref, () => { setOpen(false); onClose?.(); }, open);
   ```
   Remove the now-unused `useEffect` import if it was only used for that block. For `comment-thread.tsx` the two-popover variant requires two separate `useOutsideClick` calls with their respective refs and state setters.
-- **Status:** [ ] Open — awaiting approval as a workstream
+- **Status:** [x] Done — WS-A. Replaced the inline `mousedown` effect in all 12 files with `useOutsideClick(ref, handler, open)`. `comment-thread.tsx` split into two separate calls for its two popovers.
 
 ---
 
@@ -103,7 +103,7 @@ _Last updated: 2026-06-06 · Status: Auto-fixing_
   </Popover>
   ```
   Internally this handles the ref, outside-click, and forceOpen effect. Each property select becomes trigger + content only. Prop API must be designed from all 11 usages before implementation.
-- **Status:** [ ] Open — awaiting approval as a workstream
+- **Status:** [x] Done — WS-E. Created `src/hooks/use-popover.ts` encapsulating `open` state, `ref`, `forceOpen` effect, and `useOutsideClick`. Migrated `AssigneeSelect`, `StatusSelect`, `PrioritySelect`, `LabelSelect`, `DueDatePicker`, and `TemplateSelector` to `usePopover({ forceOpen, onClose })`.
 
 ---
 
@@ -125,7 +125,7 @@ _Last updated: 2026-06-06 · Status: Auto-fixing_
   - Near-identical update card layout — the project variant adds a `UserAvatar` and the `avatarBgColor` field; the initiative variant omits it.
 - **Proposed change:** Extract into `src/components/shared/updates-section.tsx` a set of shared sub-components (`UpdateFormFields`, `DeleteUpdateButton`, section header/empty state), parameterized on the entity-specific GQL strings and whether the avatar is shown. `ProjectUpdatesSection` and `InitiativeUpdatesSection` become thin wrappers.
 - **Note:** The prop API for the shared components must be designed to accommodate both variants before migrating the call sites.
-- **Status:** [ ] Open — awaiting approval as a workstream
+- **Status:** [x] Done — WS-D. Extracted `UpdateFormFields` (with `showNone` prop for the project variant's "None" health button) and `DeleteUpdateButton` (accepts a `mutation` string) into `src/components/shared/`. Both update sections are now thin wrappers.
 
 ---
 
@@ -141,7 +141,7 @@ _Last updated: 2026-06-06 · Status: Auto-fixing_
   - `src/components/projects/project-updates-section.tsx:88–99` — another inline reimplementation (no `img` fallback, different size)
 - **Problem:** `UserAvatar` is a general-purpose presentational component that currently lives inside a feature-specific file (`assignee-select.tsx`). Two other files re-implement the same avatar circle rather than importing it; the `board-view` version omits image fallback support entirely.
 - **Proposed change:** Move `UserAvatar` to `src/components/ui/user-avatar.tsx`. Update the import in `comment-thread.tsx`. Migrate the inline avatars in `board-view.tsx` and `project-updates-section.tsx` to use it (adding a compatible `user` prop shape as needed).
-- **Status:** [ ] Open — awaiting approval as a workstream
+- **Status:** [x] Done — WS-B. Created `src/components/ui/user-avatar.tsx`. Updated imports in `comment-thread.tsx` and `assignee-select.tsx` (backward-compat re-export kept). Replaced inline avatar implementations in `board-view.tsx` and `project-updates-section.tsx`.
 
 ---
 
@@ -158,7 +158,7 @@ _Last updated: 2026-06-06 · Status: Auto-fixing_
   - `src/components/initiatives/initiative-updates-section.tsx:164–170` — same health badge (inline)
 - **Problem:** There are at least 4–5 distinct badge patterns across the codebase with no shared `<Badge>` component. Each inline badge repeats the same `rounded px-1.5 py-0.5 text-xs font-medium` base and applies a color variant inline or via a switch/config lookup.
 - **Proposed change:** Add `src/components/ui/badge.tsx` with a `variant` prop (e.g. `'indigo' | 'green' | 'red' | 'health'`) or a generic `className`/`color` override approach, mirroring the existing `<Button>` CVA pattern. Migrate the 5 call sites.
-- **Status:** [ ] Open — awaiting approval as a workstream
+- **Status:** [x] Done — WS-C. Created `src/components/ui/badge.tsx` with CVA `variant: 'pill' | 'solid'`. Migrated `EstimateBadge`, `PrStateBadge`, "Resolved" pill in `comment-thread.tsx`, health badges in both update sections, and "Active" badge in `cycle-select.tsx`. Color classes are passed via `className` at each call site.
 
 ---
 
@@ -177,4 +177,4 @@ _Last updated: 2026-06-06 · Status: Auto-fixing_
   When `getKey` is not passed (it is optional), items are keyed by position. If a status change moves an issue to a different position within its group, React will reuse the DOM node at that index, potentially preserving stale popover-open state or focus in the issue row component.
 - **Context:** Current callers appear to use the `children` path rather than `items` + `renderItem`, so this is not actively causing bugs. It is a latent risk for future callers.
 - **Proposed change:** Make `getKey` required whenever `items` is provided (use a discriminated union on `GroupSectionProps`), or default to `item.id` via a type constraint. This changes the public prop contract.
-- **Status:** [ ] Open — awaiting approval
+- **Status:** [x] Done — WS-F. Replaced the single `GroupSectionProps` interface with a discriminated union (`GroupSectionChildrenProps | GroupSectionItemsProps`). `getKey` is now required when `items` is provided; the index fallback is removed. The existing caller already passed `getKey`.
