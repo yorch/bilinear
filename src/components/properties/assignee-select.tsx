@@ -88,5 +88,3 @@ export function AssigneeSelect({
     </div>
   );
 }
-
-export { UserAvatar } from '../ui/user-avatar';
