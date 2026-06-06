@@ -1,6 +1,6 @@
 'use client';
 
-import { usePopover } from '@/hooks/use-popover';
+import { SelectPopover } from '@/components/ui/select-popover';
 import { cn } from '@/lib/utils';
 import { UserAvatar } from '../ui/user-avatar';
 
@@ -29,36 +29,33 @@ export function AssigneeSelect({
   forceOpen,
   onClose,
 }: AssigneeSelectProps) {
-  const { open, setOpen, ref } = usePopover({ forceOpen, onClose });
   const current = users.find(u => u.id === value);
 
   return (
-    <div className={cn('relative', className)} ref={ref}>
-      <button
-        className="flex items-center rounded px-1 py-1 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-        onClick={e => {
-          e.stopPropagation();
-          setOpen(o => !o);
-        }}
-        title={current?.displayName ?? 'No assignee'}
-        type="button"
-      >
-        {current ? (
+    <SelectPopover
+      align="right"
+      className={className}
+      forceOpen={forceOpen}
+      onClose={onClose}
+      panelClassName="min-w-[200px] py-1"
+      triggerChildren={
+        current ? (
           <UserAvatar size="xs" user={current} />
         ) : (
           <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border-2 border-dashed border-zinc-300 dark:border-zinc-600" />
-        )}
-      </button>
-
-      {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 min-w-[200px] rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+        )
+      }
+      triggerClassName="px-1 py-1"
+      triggerTitle={current?.displayName ?? 'No assignee'}
+    >
+      {close => (
+        <>
           <button
             className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
             onClick={e => {
               e.stopPropagation();
               onChange(null);
-              setOpen(false);
-              onClose?.();
+              close();
             }}
             type="button"
           >
@@ -74,8 +71,7 @@ export function AssigneeSelect({
               onClick={e => {
                 e.stopPropagation();
                 onChange(user.id);
-                setOpen(false);
-                onClose?.();
+                close();
               }}
               type="button"
             >
@@ -83,8 +79,8 @@ export function AssigneeSelect({
               {user.displayName}
             </button>
           ))}
-        </div>
+        </>
       )}
-    </div>
+    </SelectPopover>
   );
 }
