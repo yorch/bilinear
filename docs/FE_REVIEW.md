@@ -1,6 +1,6 @@
 # Frontend Review — bilinear
 
-_Last updated: 2026-06-06 · Status: All approved workstreams complete_
+_Last updated: 2026-06-06 · Status: All approved workstreams complete + post-review fixes applied (27fbf61)_
 
 ---
 
@@ -142,6 +142,25 @@ _Last updated: 2026-06-06 · Status: All approved workstreams complete_
   - Created `src/lib/graphql-queries.ts` with all 40+ query/mutation strings organized by domain.
   - Renamed ambiguous constants with domain prefixes (COMMENT_REACTION_*, ISSUE_REACTION_*, NOTIFICATION_*, ISSUE_SUBSCRIPTION_*, etc.).
   - Migrated 16 component files to import from the central module.
+
+---
+
+## Post-review fixes (commit 27fbf61)
+
+Applied after running `/code-review` + `/simplify` against the branch diff:
+
+| Fix | File | Change |
+|-----|------|--------|
+| Unique React keys in SubMenuList | `command-palette.tsx` | Added `id` field to `SubMenuItem`; keyed on state/user/label/priority ID instead of `label` string |
+| `selectedTeamIds` not reset on re-open | `create-project-modal.tsx` | Added `setSelectedTeamIds([])` to the open-transition reset effect |
+| Double Escape handler | `create-issue-modal.tsx` | Removed redundant `Escape` branch from window listener; `ModalDialog` handles it |
+| `COMMENTS_FRAGMENT` dead export | `graphql-queries.ts` | Made module-private (`const`, not `export const`) |
+| Stable `close` render-prop | `select-popover.tsx` | Wrapped `close()` in `useCallback` to avoid new reference on every render |
+| `baseActions` recreated per render | `command-palette.tsx` | Wrapped in `useMemo([router, uiStore, workspaceKey])` |
+| Duplicate `inSubMenu` expression | `command-palette.tsx` | Hoisted `const inSubMenu` above `keyStateRef` assignment |
+| Stable callbacks in CommandPaletteContent | `command-palette.tsx` | `useCallback` for `onAllItemsChange`, `onSubItemsChange`, `onPaletteClose` |
+| Backdrop onClick | `command-palette.tsx` | Reused existing `onPaletteClose` stable ref instead of inline arrow |
+| Missed `ModalDialog` migration | `save-view-modal.tsx` | Migrated to `ModalDialog` primitive (was skipped in F03) |
 
 ---
 
