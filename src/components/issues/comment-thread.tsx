@@ -8,7 +8,7 @@ import { toast } from '@/lib/toast';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import type { MentionItem } from '../editor/mention-list';
 import { TipTapEditor } from '../editor/tiptap-editor.lazy';
-import { UserAvatar } from '../properties/assignee-select';
+import { UserAvatar } from '../ui/user-avatar';
 
 interface CommentAuthor {
   avatarBackgroundColor: string;

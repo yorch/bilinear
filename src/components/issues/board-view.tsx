@@ -19,6 +19,7 @@ import type { DBWorkflowState } from '@/lib/db';
 import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser } from '@/types/issues';
 import { PriorityIcon } from '../properties/priority-icon';
+import { UserAvatar } from '../ui/user-avatar';
 import type { IssueRowData } from './issue-row';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -118,15 +119,7 @@ function BoardCardInner({
           ))}
         </div>
 
-        {assignee && (
-          <div
-            className="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-medium text-white"
-            style={{ backgroundColor: assignee.avatarBackgroundColor }}
-            title={assignee.displayName}
-          >
-            {assignee.initials}
-          </div>
-        )}
+        {assignee && <UserAvatar size="sm" user={assignee} />}
       </div>
 
       {/* Due date */}

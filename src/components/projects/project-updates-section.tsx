@@ -8,6 +8,7 @@ import { PROJECT_HEALTH_CONFIG, PROJECT_HEALTH_OPTIONS } from '@/lib/project-con
 import { toast } from '@/lib/toast';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
+import { UserAvatar } from '../ui/user-avatar';
 
 interface ProjectUpdatesSectionProps {
   projectId: string;
@@ -84,19 +85,17 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <span
-                      className={cn(
-                        'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white',
-                        !author?.avatarBgColor && 'bg-indigo-500',
-                      )}
-                      style={
-                        author?.avatarBgColor
-                          ? { backgroundColor: author.avatarBgColor }
-                          : undefined
-                      }
-                    >
-                      {author?.initials ?? '?'}
-                    </span>
+                    {author && (
+                      <UserAvatar
+                        size="md"
+                        user={{
+                          avatarBackgroundColor: author.avatarBgColor,
+                          avatarUrl: author.avatarUrl,
+                          displayName: author.displayName,
+                          initials: author.initials,
+                        }}
+                      />
+                    )}
                     <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
                       {author?.displayName ?? 'Unknown'}
                     </span>
