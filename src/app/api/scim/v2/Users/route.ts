@@ -31,33 +31,31 @@ export async function GET(req: NextRequest) {
     emailFilter = filterMatch[1];
   }
 
-  const members = await prisma.organizationMember.findMany({
-    include: {
-      user: {
-        select: {
-          active: true,
-          createdAt: true,
-          displayName: true,
-          email: true,
-          id: true,
-          updatedAt: true,
+  const where = {
+    organizationId: auth.orgId,
+    ...(emailFilter ? { user: { email: emailFilter } } : {}),
+  };
+
+  const [members, totalResults] = await Promise.all([
+    prisma.organizationMember.findMany({
+      include: {
+        user: {
+          select: {
+            active: true,
+            createdAt: true,
+            displayName: true,
+            email: true,
+            id: true,
+            updatedAt: true,
+          },
         },
       },
-    },
-    skip: startIndex - 1,
-    take: count,
-    where: {
-      organizationId: auth.orgId,
-      ...(emailFilter ? { user: { email: emailFilter } } : {}),
-    },
-  });
-
-  const totalResults = await prisma.organizationMember.count({
-    where: {
-      organizationId: auth.orgId,
-      ...(emailFilter ? { user: { email: emailFilter } } : {}),
-    },
-  });
+      skip: startIndex - 1,
+      take: count,
+      where,
+    }),
+    prisma.organizationMember.count({ where }),
+  ]);
 
   const resources = members.map(m => userToScim(m.user));
   return NextResponse.json(listResponse(totalResults, resources, startIndex), { status: 200 });

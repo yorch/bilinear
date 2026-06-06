@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/server/lib/prisma';
-import { authenticateScim, scimError, teamToScim } from '../../_scim-auth';
+import { authenticateScim, getTeamMembers, scimError, teamToScim } from '../../_scim-auth';
 
 /**
  * SCIM 2.0 Group individual resource endpoint.
@@ -29,16 +29,6 @@ async function filterOrgMembers(orgId: string, userIds: string[]): Promise<strin
     where: { organizationId: orgId, userId: { in: userIds } },
   });
   return members.map(m => m.userId);
-}
-
-async function getTeamMembers(teamId: string) {
-  const memberships = await prisma.teamMembership.findMany({
-    include: {
-      user: { select: { displayName: true, email: true, id: true } },
-    },
-    where: { teamId },
-  });
-  return memberships.map(m => m.user);
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

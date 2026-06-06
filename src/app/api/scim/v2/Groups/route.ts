@@ -2,7 +2,13 @@ import { randomUUID } from 'node:crypto';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/server/lib/prisma';
-import { authenticateScim, listResponse, scimError, teamToScim } from '../_scim-auth';
+import {
+  authenticateScim,
+  getTeamMembers,
+  listResponse,
+  scimError,
+  teamToScim,
+} from '../_scim-auth';
 
 /**
  * SCIM 2.0 Groups collection endpoint.
@@ -10,18 +16,6 @@ import { authenticateScim, listResponse, scimError, teamToScim } from '../_scim-
  * GET  /api/scim/v2/Groups — list teams for org
  * POST /api/scim/v2/Groups — create a team
  */
-
-async function getTeamWithMembers(teamId: string) {
-  const memberships = await prisma.teamMembership.findMany({
-    include: {
-      user: {
-        select: { displayName: true, email: true, id: true },
-      },
-    },
-    where: { teamId },
-  });
-  return memberships.map(m => m.user);
-}
 
 export async function GET(req: NextRequest) {
   const auth = await authenticateScim(req);
@@ -40,12 +34,22 @@ export async function GET(req: NextRequest) {
     where: { archivedAt: null, organizationId: auth.orgId },
   });
 
-  const resources = await Promise.all(
-    teams.map(async team => {
-      const members = await getTeamWithMembers(team.id);
-      return teamToScim(team, members);
-    }),
-  );
+  // Batch all member lookups in a single query instead of one per team.
+  const teamIds = teams.map(t => t.id);
+  const allMemberships = await prisma.teamMembership.findMany({
+    include: { user: { select: { displayName: true, email: true, id: true } } },
+    where: { teamId: { in: teamIds } },
+  });
+  const membersByTeamId = new Map<
+    string,
+    { displayName: string | null; email: string; id: string }[]
+  >();
+  for (const m of allMemberships) {
+    const arr = membersByTeamId.get(m.teamId) ?? [];
+    arr.push(m.user);
+    membersByTeamId.set(m.teamId, arr);
+  }
+  const resources = teams.map(team => teamToScim(team, membersByTeamId.get(team.id) ?? []));
 
   return NextResponse.json(listResponse(teams.length, resources), { status: 200 });
 }
@@ -136,6 +140,6 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const members = await getTeamWithMembers(team.id);
+  const members = await getTeamMembers(team.id);
   return NextResponse.json(teamToScim(team, members), { status: 201 });
 }

@@ -1,4 +1,3 @@
-import { GraphQLError } from 'graphql';
 import { requireAuth, requireOrgRole } from '../../middleware/auth';
 import type { SamlConfigInput } from '../../services/saml.service';
 import type { GraphQLContext } from '../context';
@@ -57,11 +56,8 @@ export const samlResolvers = {
 
   Query: {
     samlConfiguration: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
-      if (!ctx.userId || !ctx.orgId) {
-        throw new GraphQLError('Not authenticated', { extensions: { code: 'UNAUTHENTICATED' } });
-      }
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
-      return ctx.services.saml.getConfig(ctx.orgId);
+      const auth = await requireSamlAdmin(ctx);
+      return ctx.services.saml.getConfig(auth.orgId);
     },
   },
 };

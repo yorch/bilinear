@@ -85,6 +85,19 @@ export function teamToScim(
   };
 }
 
+/** Fetch all members of a team, returning the minimal user shape used by SCIM responses. */
+export async function getTeamMembers(
+  teamId: string,
+): Promise<{ displayName: string | null; email: string; id: string }[]> {
+  const memberships = await prisma.teamMembership.findMany({
+    include: {
+      user: { select: { displayName: true, email: true, id: true } },
+    },
+    where: { teamId },
+  });
+  return memberships.map(m => m.user);
+}
+
 export function listResponse(totalResults: number, resources: unknown[], startIndex = 1) {
   return {
     itemsPerPage: resources.length,
