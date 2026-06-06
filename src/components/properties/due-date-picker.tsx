@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useOutsideClick } from '@/hooks/use-outside-click';
 import { formatDueDate, getDueDateColor } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
 
@@ -28,16 +29,14 @@ export function DueDatePicker({
     }
   }, [forceOpen]);
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-        onClose?.();
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
+  useOutsideClick(
+    ref,
+    () => {
+      setOpen(false);
+      onClose?.();
+    },
+    open,
+  );
 
   const colorClass = getDueDateColor(value);
 

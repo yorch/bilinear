@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useOutsideClick } from '@/hooks/use-outside-click';
 import { cn } from '@/lib/utils';
 
 interface WorkflowState {
@@ -46,16 +47,14 @@ export function StatusSelect({
     }
   }, [forceOpen]);
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-        onClose?.();
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
+  useOutsideClick(
+    ref,
+    () => {
+      setOpen(false);
+      onClose?.();
+    },
+    open,
+  );
 
   return (
     <div className={cn('relative', className)} ref={ref}>

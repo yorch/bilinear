@@ -3,6 +3,7 @@
 import { ChevronDown, Plus, Trash2, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useOutsideClick } from '@/hooks/use-outside-click';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
@@ -269,19 +270,7 @@ function AddRelationForm({ onSubmit, onClose }: AddRelationFormProps) {
   const [typeOpen, setTypeOpen] = useState(false);
   const typeDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close type dropdown on outside click
-  useEffect(() => {
-    if (!typeOpen) {
-      return;
-    }
-    const handler = (e: MouseEvent) => {
-      if (!typeDropdownRef.current?.contains(e.target as Node)) {
-        setTypeOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [typeOpen]);
+  useOutsideClick(typeDropdownRef, () => setTypeOpen(false), typeOpen);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

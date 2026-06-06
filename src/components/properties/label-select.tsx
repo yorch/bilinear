@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useOutsideClick } from '@/hooks/use-outside-click';
 import { cn } from '@/lib/utils';
 
 interface IssueLabel {
@@ -45,16 +46,14 @@ export function LabelSelect({
     }
   }, [forceOpen]);
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-        onClose?.();
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
+  useOutsideClick(
+    ref,
+    () => {
+      setOpen(false);
+      onClose?.();
+    },
+    open,
+  );
 
   const toggle = (labelId: string) => {
     const next = value.includes(labelId) ? value.filter(id => id !== labelId) : [...value, labelId];

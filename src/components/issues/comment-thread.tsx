@@ -2,6 +2,7 @@
 
 import { CheckCircle, CornerDownRight, MoreHorizontal, Smile } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useOutsideClick } from '@/hooks/use-outside-click';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn, formatRelativeTime } from '@/lib/utils';
@@ -353,18 +354,8 @@ function CommentCard({
   const isOwn = comment.author.id === currentUserId;
   const isResolved = !!comment.resolvedAt;
 
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setShowMenu(false);
-      }
-      if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) {
-        setShowEmojiPicker(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
+  useOutsideClick(menuRef, () => setShowMenu(false), showMenu);
+  useOutsideClick(emojiRef, () => setShowEmojiPicker(false), showEmojiPicker);
 
   const saveEdit = async () => {
     if (!editBody.trim() || editBody === comment.body) {

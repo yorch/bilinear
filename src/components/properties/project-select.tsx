@@ -3,6 +3,7 @@
 import { Target, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
+import { useOutsideClick } from '@/hooks/use-outside-click';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -41,19 +42,14 @@ export const ProjectSelect = observer(function ProjectSelect({
     }
   }, [isOpen]);
 
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setInternalOpen(false);
-        onClose?.();
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen, onClose]);
+  useOutsideClick(
+    containerRef,
+    () => {
+      setInternalOpen(false);
+      onClose?.();
+    },
+    isOpen,
+  );
 
   const handleSelect = (projectId: string | null) => {
     onChange(projectId);

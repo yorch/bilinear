@@ -2,6 +2,7 @@
 
 import { ChevronDown, FileText, Star, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useOutsideClick } from '@/hooks/use-outside-click';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
@@ -73,20 +74,14 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
       });
   }, [teamId]);
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        onClose?.();
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [open, onClose]);
+  useOutsideClick(
+    dropdownRef,
+    () => {
+      setOpen(false);
+      onClose?.();
+    },
+    open,
+  );
 
   // Close on Escape
   useEffect(() => {
