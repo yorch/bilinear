@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useOutsideClick } from '@/hooks/use-outside-click';
+import { usePopover } from '@/hooks/use-popover';
 import { formatDueDate, getDueDateColor } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
 
@@ -20,23 +19,7 @@ export function DueDatePicker({
   forceOpen,
   onClose,
 }: DueDatePickerProps) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (forceOpen) {
-      setOpen(true);
-    }
-  }, [forceOpen]);
-
-  useOutsideClick(
-    ref,
-    () => {
-      setOpen(false);
-      onClose?.();
-    },
-    open,
-  );
+  const { open, setOpen, ref } = usePopover({ forceOpen, onClose });
 
   const colorClass = getDueDateColor(value);
 

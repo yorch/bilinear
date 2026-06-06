@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useOutsideClick } from '@/hooks/use-outside-click';
+import { usePopover } from '@/hooks/use-popover';
 import { cn } from '@/lib/utils';
 import { UserAvatar } from '../ui/user-avatar';
 
@@ -30,24 +29,8 @@ export function AssigneeSelect({
   forceOpen,
   onClose,
 }: AssigneeSelectProps) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const { open, setOpen, ref } = usePopover({ forceOpen, onClose });
   const current = users.find(u => u.id === value);
-
-  useEffect(() => {
-    if (forceOpen) {
-      setOpen(true);
-    }
-  }, [forceOpen]);
-
-  useOutsideClick(
-    ref,
-    () => {
-      setOpen(false);
-      onClose?.();
-    },
-    open,
-  );
 
   return (
     <div className={cn('relative', className)} ref={ref}>

@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useOutsideClick } from '@/hooks/use-outside-click';
+import { usePopover } from '@/hooks/use-popover';
 import { getPriorityConfig } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
 import { PriorityIcon } from './priority-icon';
@@ -23,23 +22,7 @@ export function PrioritySelect({
   forceOpen,
   onClose,
 }: PrioritySelectProps) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (forceOpen) {
-      setOpen(true);
-    }
-  }, [forceOpen]);
-
-  useOutsideClick(
-    ref,
-    () => {
-      setOpen(false);
-      onClose?.();
-    },
-    open,
-  );
+  const { open, setOpen, ref } = usePopover({ forceOpen, onClose });
 
   return (
     <div className={cn('relative', className)} ref={ref}>

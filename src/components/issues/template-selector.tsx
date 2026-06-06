@@ -1,8 +1,8 @@
 'use client';
 
 import { ChevronDown, FileText, Star, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useOutsideClick } from '@/hooks/use-outside-click';
+import { useEffect, useMemo, useState } from 'react';
+import { usePopover } from '@/hooks/use-popover';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
@@ -43,15 +43,7 @@ interface TemplateSelectorProps {
 export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: TemplateSelectorProps) {
   const [templates, setTemplates] = useState<IssueTemplate[]>([]);
   const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Sync controlled forceOpen into local open state
-  useEffect(() => {
-    if (forceOpen) {
-      setOpen(true);
-    }
-  }, [forceOpen]);
+  const { open, setOpen, ref: dropdownRef } = usePopover({ forceOpen, onClose });
 
   // Load templates once when dropdown opens (or on mount if teamId is available)
   useEffect(() => {
@@ -74,15 +66,6 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
       });
   }, [teamId]);
 
-  useOutsideClick(
-    dropdownRef,
-    () => {
-      setOpen(false);
-      onClose?.();
-    },
-    open,
-  );
-
   // Close on Escape
   useEffect(() => {
     if (!open) {
@@ -96,7 +79,7 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open, onClose, setOpen]);
 
   // Sort: default first, then alphabetical
   const sorted = useMemo(
