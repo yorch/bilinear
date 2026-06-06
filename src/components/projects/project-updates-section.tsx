@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { gql } from '@/lib/graphql';
 import { PROJECT_HEALTH_CONFIG, PROJECT_HEALTH_OPTIONS } from '@/lib/project-constants';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { cn, formatRelativeTime } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 interface ProjectUpdatesSectionProps {
@@ -111,7 +111,7 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
                       </span>
                     )}
                     <span className="text-xs text-zinc-400">
-                      {formatRelativeDate(update.createdAt)}
+                      {formatRelativeTime(update.createdAt)}
                       {update.editedAt && ' (edited)'}
                     </span>
                   </div>
@@ -392,32 +392,4 @@ function DeleteUpdateButton({ updateId }: { updateId: string }) {
       <Trash2 className="h-3.5 w-3.5" />
     </button>
   );
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatRelativeDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) {
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    if (diffHours === 0) {
-      const diffMins = Math.floor(diffMs / (1000 * 60));
-      return diffMins <= 1 ? 'just now' : `${diffMins}m ago`;
-    }
-    return `${diffHours}h ago`;
-  }
-  if (diffDays === 1) {
-    return 'yesterday';
-  }
-  if (diffDays < 7) {
-    return `${diffDays}d ago`;
-  }
-  if (diffDays < 30) {
-    return `${Math.floor(diffDays / 7)}w ago`;
-  }
-  return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
 }
