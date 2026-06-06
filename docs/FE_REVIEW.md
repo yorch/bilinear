@@ -1,6 +1,6 @@
 # Frontend Review — bilinear
 
-_Last updated: 2026-06-06 · Status: Auto-fixing Tier 1_
+_Last updated: 2026-06-06 · Status: All approved workstreams complete_
 
 ---
 
@@ -22,10 +22,10 @@ _Last updated: 2026-06-06 · Status: Auto-fixing Tier 1_
 | ID  | Title | Severity | Category | Tier | Status |
 |-----|-------|----------|----------|------|--------|
 | F01 | Dead `UserAvatar` re-export in `assignee-select` | Low | Reuse | Safe | [x] Done |
-| F02 | Property selector popover shell duplicated across 8 files | Medium | Reuse | Structural | [ ] Open |
-| F03 | `<dialog>` wrapper duplicated across 3 create-modals | Medium | Reuse | Structural | [ ] Open |
-| F04 | `CommandPalette` observer subscribes to 6 stores | Low | Perf | Structural | [ ] Open |
-| F05 | GraphQL query strings inline in component files | Low | Convention | Structural | [ ] Open |
+| F02 | Property selector popover shell duplicated across 8 files | Medium | Reuse | Structural | [x] Done — c79dd62 |
+| F03 | `<dialog>` wrapper duplicated across 3 create-modals | Medium | Reuse | Structural | [x] Done — a9f54d6 |
+| F04 | `CommandPalette` observer subscribes to 6 stores | Low | Perf | Structural | [x] Done — 81bf1f3 |
+| F05 | GraphQL query strings inline in component files | Low | Convention | Structural | [x] Done — 6147f0a |
 
 ---
 
@@ -75,7 +75,10 @@ _Last updated: 2026-06-06 · Status: Auto-fixing Tier 1_
 
   Prop API must accommodate the two real variants: plain list (status/priority/assignee/label) and search-input list (cycle/project). The call-site migration is the risk surface — each must be verified to render identically.
 
-- **Status:** [ ] Open — awaiting approval
+- **Status:** [x] Done — commit c79dd62
+  - Extracted `SelectPopover` to `src/components/ui/select-popover.tsx`. Render-prop `children(close)` API exposes a `close()` function to item buttons. `panelDataTestId` prop preserves `data-testid` on the panel div.
+  - Migrated: status-select, priority-select, assignee-select, label-select, due-date-picker.
+  - Left as-is (different open-control model): cycle-select, project-select, estimate-picker.
 
 ---
 
@@ -98,7 +101,9 @@ _Last updated: 2026-06-06 · Status: Auto-fixing Tier 1_
   Any future change to modal behaviour (focus trap, animation, scroll lock) must be applied to three files.
 
 - **Proposed change:** Extract a `ModalDialog` wrapper in `src/components/ui/` that accepts `open`, `onClose`, `maxWidth?`, and `children`. Internally it renders the `<dialog>` shell and handles backdrop-click and Escape. Migration straightforward — each modal's interior `<div>` becomes the `children`.
-- **Status:** [ ] Open — awaiting approval
+- **Status:** [x] Done — commit a9f54d6
+  - Created `src/components/ui/modal-dialog.tsx` with `open`, `onClose`, `maxWidth?`, `aria-label`, `children` props.
+  - Migrated all three create-modals.
 
 ---
 
@@ -110,7 +115,13 @@ _Last updated: 2026-06-06 · Status: Auto-fixing Tier 1_
 - **Files:** `src/components/command-palette/command-palette.tsx:62`
 - **Problem:** The top-level `observer()` component destructures `uiStore`, `issueStore`, `workflowStateStore`, `userStore`, `labelStore`, and `teamStore` in one render function. MobX `observer` tracks all accessed observables; any change to any of those six stores will re-render the whole palette, including sections that don't depend on the changed store. The palette is mounted persistently in the app shell, so this fires frequently.
 - **Proposed change:** Split into child `observer` components, one per logical section (e.g. `IssueActions`, `TeamActions`), each subscribing to only the stores it reads. The outer palette becomes a thin coordinator that renders each child.
-- **Status:** [ ] Open — awaiting approval
+- **Status:** [x] Done — commit 81bf1f3
+  - `CommandPalette` (exported observer) tracks only `uiStore.commandPaletteOpen`.
+  - `CommandPaletteContent` (non-observer) owns all state + keyboard nav via `keyStateRef`.
+  - `ResultsList` (observer) subscribes to issueStore + workflowStateStore + teamStore.
+  - `SubMenuList` (observer) subscribes to issueStore + workflowStateStore + userStore + labelStore.
+  - `CommandPaletteFooter` wrapped in `React.memo`.
+  - Children expose computed item arrays to parent via ref-mutation callbacks called during render.
 
 ---
 
@@ -127,7 +138,10 @@ _Last updated: 2026-06-06 · Status: Auto-fixing Tier 1_
   - (and others)
 - **Problem:** Query and mutation strings are defined as module-level `const` template literals inside their consuming component file. There is no GraphQL code generation, so each query is effectively a magic string. This makes it difficult to audit what queries exist, find duplicate/overlapping queries, or adopt codegen later.
 - **Proposed change:** Centralize all GraphQL strings in `src/lib/graphql-queries.ts` (or a `src/lib/graphql/` folder by domain). No runtime change — same strings, same execution path — purely organizational. Value is moderate; no behavior risk.
-- **Status:** [ ] Open — awaiting approval
+- **Status:** [x] Done — commit 6147f0a
+  - Created `src/lib/graphql-queries.ts` with all 40+ query/mutation strings organized by domain.
+  - Renamed ambiguous constants with domain prefixes (COMMENT_REACTION_*, ISSUE_REACTION_*, NOTIFICATION_*, ISSUE_SUBSCRIPTION_*, etc.).
+  - Migrated 16 component files to import from the central module.
 
 ---
 
