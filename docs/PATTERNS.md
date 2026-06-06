@@ -2008,7 +2008,7 @@ so the fallback never throws even on newly created initiatives.
 All security-relevant events are recorded as append-only rows in `audit_log_entries`:
 
 - **`AuditLogService.log(input)`** — fire-and-forget (returns `void`, swallows errors internally). Call with `void ctx.services.auditLog.log({...})` in resolvers — never `await`.
-- **`AuditLogService.findByOrg(filter)`** — cursor-paginated (DESC by `createdAt`), max 200 per page. Returns `{ entries, nextCursor }`.
+- **`AuditLogService.findByOrg(filter)`** — cursor-paginated (DESC by `createdAt`), max 200 per page. Returns `{ entries, hasMore, nextCursor }`.
 - **Auth resolver coverage** — `emailVerify` emits `auth.login`; `logout` emits `auth.logout`; SAML callback emits `auth.login` with `metadata: { method: 'saml' }`.
 - **Org/team mutations** — `teamCreate` → `team.created`; `teamDelete` → `team.deleted`; `organizationMemberUpdateRole` → `member.role_changed`.
 - **Issue mutations** — `issueDelete` → `issue.deleted`; `issuesBulkUpdate` → `issue.bulk_updated`.

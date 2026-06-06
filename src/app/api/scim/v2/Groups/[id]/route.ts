@@ -2,7 +2,13 @@ import { randomUUID } from 'node:crypto';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/server/lib/prisma';
-import { authenticateScim, getTeamMembers, scimError, teamToScim } from '../../_scim-auth';
+import {
+  authenticateScim,
+  filterOrgMembers,
+  getTeamMembers,
+  scimError,
+  teamToScim,
+} from '../../_scim-auth';
 
 /**
  * SCIM 2.0 Group individual resource endpoint.
@@ -18,17 +24,6 @@ async function resolveTeam(orgId: string, teamId: string) {
     select: { createdAt: true, displayName: true, id: true, updatedAt: true },
     where: { archivedAt: null, id: teamId, organizationId: orgId },
   });
-}
-
-async function filterOrgMembers(orgId: string, userIds: string[]): Promise<string[]> {
-  if (userIds.length === 0) {
-    return [];
-  }
-  const members = await prisma.organizationMember.findMany({
-    select: { userId: true },
-    where: { organizationId: orgId, userId: { in: userIds } },
-  });
-  return members.map(m => m.userId);
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

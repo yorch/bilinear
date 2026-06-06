@@ -48,7 +48,7 @@ const SAML_SAVE_MUTATION = `
 
 const SAML_DELETE_MUTATION = `
   mutation SamlConfigurationDelete {
-    samlConfigurationDelete { success lastSyncId }
+    samlConfigurationDelete { success }
   }
 `;
 

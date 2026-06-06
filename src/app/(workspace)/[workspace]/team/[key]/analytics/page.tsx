@@ -397,15 +397,17 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
       return;
     }
     let cancelled = false;
-    void gql(TEAM_HEALTH_QUERY, { input: { teamId } }).then(res => {
-      if (cancelled) {
-        return;
-      }
-      if (res.data) {
-        const d = res.data as unknown as { analyticsTeamHealth: TeamHealthResult };
-        setTeamHealth(d.analyticsTeamHealth);
-      }
-    });
+    void gql(TEAM_HEALTH_QUERY, { input: { teamId } })
+      .then(res => {
+        if (cancelled) {
+          return;
+        }
+        if (res.data) {
+          const d = res.data as unknown as { analyticsTeamHealth: TeamHealthResult };
+          setTeamHealth(d.analyticsTeamHealth);
+        }
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };

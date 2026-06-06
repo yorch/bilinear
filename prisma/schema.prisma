@@ -1381,7 +1381,7 @@ model SamlConfiguration {
   idpSsoUrl      String  @default("") @map("idp_sso_url") @db.VarChar(1000)
   /// Required: IDP entity ID / issuer
   idpEntityId    String  @default("") @map("idp_entity_id") @db.VarChar(500)
-  /// IDP X.509 signing certificate (PEM or base64 DER, no header/footer needed)
+  /// IDP X.509 signing certificate (PEM format, including -----BEGIN CERTIFICATE----- header/footer)
   idpCert        String  @default("") @map("idp_cert") @db.Text
 
   /// Attribute name in SAML assertion that maps to user email

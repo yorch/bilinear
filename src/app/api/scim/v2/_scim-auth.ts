@@ -85,6 +85,18 @@ export function teamToScim(
   };
 }
 
+/** Filter a list of user IDs to those who are members of the given org. */
+export async function filterOrgMembers(orgId: string, userIds: string[]): Promise<string[]> {
+  if (userIds.length === 0) {
+    return [];
+  }
+  const members = await prisma.organizationMember.findMany({
+    select: { userId: true },
+    where: { organizationId: orgId, userId: { in: userIds } },
+  });
+  return members.map(m => m.userId);
+}
+
 /** Fetch all members of a team, returning the minimal user shape used by SCIM responses. */
 export async function getTeamMembers(
   teamId: string,

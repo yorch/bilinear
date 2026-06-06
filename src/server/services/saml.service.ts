@@ -27,7 +27,7 @@ export interface SamlUserClaims {
 export interface SamlConfigInput {
   emailAttribute?: string;
   enabled?: boolean;
-  idpCert: string;
+  idpCert?: string;
   idpEntityId: string;
   idpMetadataUrl?: string;
   idpMetadataXml?: string;
@@ -71,16 +71,91 @@ function extractIssuer(xml: string): string | null {
 }
 
 /**
- * Verify the XML-DSig signature on a SAML Response using the IdP certificate.
- *
- * Applies whitespace-only normalization rather than full Exclusive XML C14N.
- * This works with most conformant IdPs (Okta, Azure AD, Google Workspace) but
- * a deployment handling non-standard IdPs should use a full XML-DSig library.
- *
- * Throws SamlParseError if the signature is absent, uses an unsupported
- * algorithm, or does not verify against certPem.
+ * Extract an XML element with the given ID attribute using balanced-tag scanning.
+ * Returns the full element string including open/close tags, or null if not found.
  */
-function verifyXmlSignature(xml: string, certPem: string): void {
+function extractElementById(xml: string, id: string): string | null {
+  const escapedId = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const openTagMatch = xml.match(new RegExp(`<([\\w:]+)[^>]*\\bID="${escapedId}"[^>]*>`));
+  if (!openTagMatch) {
+    return null;
+  }
+
+  const tagName = openTagMatch[1];
+  const startPos = xml.indexOf(openTagMatch[0]);
+  if (startPos < 0) {
+    return null;
+  }
+
+  const openTag = `<${tagName}`;
+  const closeTag = `</${tagName}>`;
+  let depth = 0;
+  let pos = startPos;
+
+  while (pos < xml.length) {
+    const nextOpen = xml.indexOf(openTag, pos);
+    const nextClose = xml.indexOf(closeTag, pos);
+    if (nextClose < 0) {
+      break;
+    }
+    if (nextOpen >= 0 && nextOpen < nextClose) {
+      depth++;
+      pos = nextOpen + openTag.length;
+    } else {
+      depth--;
+      if (depth === 0) {
+        return xml.slice(startPos, nextClose + closeTag.length);
+      }
+      pos = nextClose + closeTag.length;
+    }
+  }
+  return null;
+}
+
+/**
+ * Validate the <ds:DigestValue> of a signed reference element to detect
+ * content substitution (signature wrapping attacks).
+ */
+function validateReferenceDigest(signedInfoXml: string, content: string): void {
+  const digestMethodMatch = signedInfoXml.match(/<ds:DigestMethod[^>]+Algorithm="([^"]+)"/i);
+  const digestValueMatch = signedInfoXml.match(
+    /<ds:DigestValue[^>]*>\s*([\s\S]*?)\s*<\/ds:DigestValue>/i,
+  );
+  if (!digestMethodMatch || !digestValueMatch) {
+    return; // No digest present in this Reference — skip
+  }
+
+  const digestAlgUri = digestMethodMatch[1];
+  const expectedDigest = digestValueMatch[1].replace(/\s+/g, '');
+
+  let hashAlg: string;
+  if (digestAlgUri.includes('sha256')) {
+    hashAlg = 'sha256';
+  } else if (digestAlgUri.includes('sha1')) {
+    hashAlg = 'sha1';
+  } else {
+    throw new SamlParseError(`Unsupported SAML digest algorithm: ${digestAlgUri}`);
+  }
+
+  const normalized = content.replace(/>\s+</g, '><').trim();
+  const actualDigest = crypto.createHash(hashAlg).update(normalized, 'utf8').digest('base64');
+
+  if (actualDigest !== expectedDigest) {
+    throw new SamlParseError('SAML response reference digest mismatch');
+  }
+}
+
+/**
+ * Verify the XML-DSig signature on a SAML Response using the IdP certificate.
+ * Returns the signed XML fragment so callers can restrict attribute extraction
+ * to the verified content, preventing XML signature-wrapping attacks.
+ *
+ * Also validates the <ds:DigestValue> of the referenced element to detect
+ * content substitution.
+ *
+ * Limitation: uses whitespace-only normalisation instead of full Exclusive C14N.
+ */
+function verifyXmlSignature(xml: string, certPem: string): string {
   const sigInfoMatch = xml.match(/<ds:SignedInfo[\s\S]*?<\/ds:SignedInfo>/i);
   if (!sigInfoMatch) {
     throw new SamlParseError('SAML response is not signed');
@@ -121,6 +196,20 @@ function verifyXmlSignature(xml: string, certPem: string): void {
   if (!valid) {
     throw new SamlParseError('SAML response signature is invalid');
   }
+
+  // Locate the signed element via the Reference URI to prevent wrapping attacks.
+  const refMatch = signedInfoXml.match(/<ds:Reference\s+URI="#([^"]+)"/i);
+  if (!refMatch?.[1]) {
+    return xml;
+  }
+  const signedElement = extractElementById(xml, refMatch[1]);
+  if (!signedElement) {
+    throw new SamlParseError('SAML signed reference element not found');
+  }
+
+  validateReferenceDigest(signedInfoXml, signedElement);
+
+  return signedElement;
 }
 
 /** Generate a random ID suitable for SAML request identifiers. */
@@ -152,12 +241,22 @@ export class SamlService {
   ): Promise<SamlConfiguration> {
     log.info({ orgId }, 'Saving SAML configuration');
 
+    // Preserve the existing cert when not re-supplied (e.g. edit without re-entering the PEM).
+    let idpCert = input.idpCert;
+    if (!idpCert) {
+      const existing = await this.prisma.samlConfiguration.findUnique({
+        select: { idpCert: true },
+        where: { organizationId: orgId },
+      });
+      idpCert = existing?.idpCert ?? '';
+    }
+
     return this.prisma.samlConfiguration.upsert({
       create: {
         createdById: userId,
         emailAttribute: input.emailAttribute ?? 'email',
         enabled: input.enabled ?? false,
-        idpCert: input.idpCert,
+        idpCert,
         idpEntityId: input.idpEntityId,
         idpMetadataUrl: input.idpMetadataUrl ?? null,
         idpMetadataXml: input.idpMetadataXml ?? null,
@@ -170,7 +269,7 @@ export class SamlService {
       update: {
         emailAttribute: input.emailAttribute ?? 'email',
         enabled: input.enabled ?? false,
-        idpCert: input.idpCert,
+        idpCert,
         idpEntityId: input.idpEntityId,
         idpMetadataUrl: input.idpMetadataUrl ?? null,
         idpMetadataXml: input.idpMetadataXml ?? null,
@@ -280,20 +379,23 @@ export class SamlService {
       );
     }
 
-    // Verify XML signature against the stored IdP certificate.
-    verifyXmlSignature(xml, config.idpCert);
+    // Verify XML signature and get the signed fragment to restrict all claim extraction.
+    const signedContent = verifyXmlSignature(xml, config.idpCert);
 
-    const nameId = extractNameId(xml);
+    const nameId = extractNameId(signedContent);
     if (!nameId) {
       throw new SamlParseError('SAML response missing NameID');
     }
 
     // Prefer the configured attribute names; fall back to common alternatives
     let email =
-      extractAttribute(xml, config.emailAttribute) ??
-      extractAttribute(xml, 'email') ??
-      extractAttribute(xml, 'mail') ??
-      extractAttribute(xml, 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress');
+      extractAttribute(signedContent, config.emailAttribute) ??
+      extractAttribute(signedContent, 'email') ??
+      extractAttribute(signedContent, 'mail') ??
+      extractAttribute(
+        signedContent,
+        'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress',
+      );
 
     if (!email) {
       // Some IdPs put the email in the NameID directly when format is email
@@ -305,10 +407,13 @@ export class SamlService {
     }
 
     const name =
-      extractAttribute(xml, config.nameAttribute) ??
-      extractAttribute(xml, 'name') ??
-      extractAttribute(xml, 'displayName') ??
-      extractAttribute(xml, 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name') ??
+      extractAttribute(signedContent, config.nameAttribute) ??
+      extractAttribute(signedContent, 'name') ??
+      extractAttribute(signedContent, 'displayName') ??
+      extractAttribute(
+        signedContent,
+        'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name',
+      ) ??
       email.split('@')[0];
 
     return { email: email.toLowerCase(), name, nameId };

@@ -64,10 +64,10 @@ const MAX_LIMIT = 200;
 /**
  * Write-once audit trail for security-relevant org events.
  *
- * `log()` is always fire-and-forget — it never throws. Callers should
- * attach a `.catch()` to silence any async rejection, but the method
- * itself already absorbs all errors via an internal try/catch so that
- * an audit-logging failure can never break the primary operation.
+ * `log()` is always fire-and-forget — it never throws or rejects. Errors are
+ * caught and logged internally so an audit-logging failure can never break
+ * the primary operation. Callers should use `void ctx.services.auditLog.log({...})`
+ * and never `await` it.
  */
 export class AuditLogService {
   constructor(private prisma: PrismaClient) {}

@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/server/lib/prisma';
 import {
   authenticateScim,
+  filterOrgMembers,
   getTeamMembers,
   listResponse,
   scimError,
@@ -126,8 +127,10 @@ export async function POST(req: NextRequest) {
     }
   }
   if (memberValues.length > 0) {
+    // Only add users who are already org members — validates cross-tenant access.
+    const validUserIds = await filterOrgMembers(auth.orgId, memberValues);
     await prisma.teamMembership.createMany({
-      data: memberValues.map(userId => ({
+      data: validUserIds.map(userId => ({
         createdAt: now,
         id: randomUUID(),
         isOwner: false,

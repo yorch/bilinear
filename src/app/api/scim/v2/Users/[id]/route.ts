@@ -31,11 +31,12 @@ async function resolveUser(orgId: string, userId: string) {
 }
 
 async function deactivateUser(userId: string, orgId: string) {
-  // Remove from all teams in this org only. Do not touch user.active — that is
-  // a global flag; SCIM deactivation is org-scoped.
-  await prisma.teamMembership.deleteMany({
-    where: { team: { organizationId: orgId }, userId },
-  });
+  // Remove org + team memberships. Never touch user.active — that is global;
+  // SCIM (de)activation is org-scoped.
+  await prisma.$transaction([
+    prisma.organizationMember.deleteMany({ where: { organizationId: orgId, userId } }),
+    prisma.teamMembership.deleteMany({ where: { team: { organizationId: orgId }, userId } }),
+  ]);
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -153,6 +154,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   if (active === false) {
     await deactivateUser(id, auth.orgId);
+  } else if (active === true) {
+    // Re-provision: restore org membership if it was removed by a prior deactivation.
+    await prisma.organizationMember.upsert({
+      create: {
+        createdAt: new Date(),
+        organizationId: auth.orgId,
+        role: 'member',
+        updatedAt: new Date(),
+        userId: id,
+      },
+      update: {},
+      where: { organizationId_userId: { organizationId: auth.orgId, userId: id } },
+    });
   }
 
   const updated = await prisma.user.update({

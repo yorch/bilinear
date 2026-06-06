@@ -129,18 +129,24 @@ export function CycleVelocitySection({ teamId }: CycleVelocitySectionProps) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    void gql(CYCLE_VELOCITY_QUERY, { input: { teamId } }).then(res => {
-      if (cancelled) {
-        return;
-      }
-      if (res.data) {
-        const d = res.data as unknown as {
-          analyticsCycleVelocityTrend: CycleVelocityTrendResult;
-        };
-        setData(d.analyticsCycleVelocityTrend);
-      }
-      setLoading(false);
-    });
+    void gql(CYCLE_VELOCITY_QUERY, { input: { teamId } })
+      .then(res => {
+        if (cancelled) {
+          return;
+        }
+        if (res.data) {
+          const d = res.data as unknown as {
+            analyticsCycleVelocityTrend: CycleVelocityTrendResult;
+          };
+          setData(d.analyticsCycleVelocityTrend);
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
     return () => {
       cancelled = true;
     };

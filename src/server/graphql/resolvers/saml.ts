@@ -5,7 +5,6 @@ import { mapServiceError } from '../types/errors';
 
 const SAML_ERROR_MAP = {
   BAD_USER_INPUT: ['SamlParseError', 'SamlNotConfiguredError', 'SamlNotEnabledError'],
-  NOT_FOUND: ['SamlNotFoundError'],
 } as const;
 
 async function requireSamlAdmin(

@@ -1822,7 +1822,7 @@ export const typeDefs = `
   input SamlConfigurationInput {
     emailAttribute: String
     enabled: Boolean
-    idpCert: String!
+    idpCert: String
     idpEntityId: String!
     idpMetadataUrl: String
     idpMetadataXml: String

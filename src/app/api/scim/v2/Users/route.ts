@@ -82,7 +82,6 @@ export async function POST(req: NextRequest) {
   const email = userName.trim().toLowerCase();
   const nameObj = body.name as { formatted?: string } | undefined;
   const displayName = nameObj?.formatted?.trim() ?? null;
-  const active = typeof body.active === 'boolean' ? body.active : true;
 
   const resolvedDisplayName = displayName ?? email;
   // Derive initials from display name (up to 2 chars).
@@ -94,10 +93,9 @@ export async function POST(req: NextRequest) {
       .toUpperCase()
       .slice(0, 2) || 'U';
 
-  // Upsert user by email.
+  // Upsert user by email. Never touch user.active — SCIM (de)activation is org-scoped.
   const user = await prisma.user.upsert({
     create: {
-      active,
       createdAt: new Date(),
       displayName: resolvedDisplayName,
       email,
@@ -113,7 +111,7 @@ export async function POST(req: NextRequest) {
       id: true,
       updatedAt: true,
     },
-    update: { active, displayName: displayName ?? undefined, updatedAt: new Date() },
+    update: { displayName: displayName ?? undefined, updatedAt: new Date() },
     where: { email },
   });
 
