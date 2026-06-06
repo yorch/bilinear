@@ -301,9 +301,9 @@ export class AnalyticsService {
   /**
    * Scope creep + carryover metrics for a single cycle.
    *
-   * - scopeCreepCount: issues added to the cycle AFTER it started
-   *   (addedToCycleAt IS NOT NULL). Includes carryover issues since those are
-   *   also added after start via rollover.
+   * - scopeCreepCount: issues genuinely added mid-sprint (addedToCycleAt IS NOT NULL,
+   *   excluding carried-over issues). Carryover issues are also added after start via
+   *   rollover and are subtracted out.
    * - carryoverCount: exact count from Cycle.carryoverCount stamped during
    *   rollover. Accurate for cycles run through the new code; 0 for legacy.
    * - plannedCount: issues that were in scope at cycle start (addedToCycleAt IS NULL)
@@ -337,6 +337,9 @@ export class AnalyticsService {
     ]);
 
     const carryoverCount = cycle?.carryoverCount ?? 0;
+    // Subtract carried-over issues: they also have addedToCycleAt set but are
+    // not genuine scope creep.
+    const trueScopeCreepCount = Math.max(0, scopeCreep - carryoverCount);
     const planned = total - scopeCreep;
 
     return {
@@ -344,8 +347,8 @@ export class AnalyticsService {
       carryoverPct: total > 0 ? (carryoverCount / total) * 100 : 0,
       completedCount: completed,
       plannedCount: planned,
-      scopeCreepCount: scopeCreep,
-      scopeCreepPct: total > 0 ? (scopeCreep / total) * 100 : 0,
+      scopeCreepCount: trueScopeCreepCount,
+      scopeCreepPct: total > 0 ? (trueScopeCreepCount / total) * 100 : 0,
       totalCount: total,
     };
   }

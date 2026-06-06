@@ -145,8 +145,9 @@ export async function POST(req: NextRequest) {
     userId,
   });
 
-  // Sanitize redirect to prevent open redirect
-  const safeRedirect = redirectPath.startsWith('/') ? redirectPath : `/${orgKey}`;
+  // Sanitize redirect: must start with '/' but not '//' (protocol-relative URLs).
+  const safeRedirect =
+    redirectPath.startsWith('/') && !redirectPath.startsWith('//') ? redirectPath : `/${orgKey}`;
   const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
   const destination = `${appUrl}${safeRedirect}`;
 

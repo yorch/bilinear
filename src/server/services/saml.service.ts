@@ -64,6 +64,65 @@ function extractNameId(xml: string): string | null {
   return m?.[1]?.trim() ?? null;
 }
 
+/** Extract the top-level Issuer element value from a SAML Response. */
+function extractIssuer(xml: string): string | null {
+  const m = xml.match(/<(?:saml2?:)?Issuer[^>]*>([^<]+)<\/(?:saml2?:)?Issuer>/i);
+  return m?.[1]?.trim() ?? null;
+}
+
+/**
+ * Verify the XML-DSig signature on a SAML Response using the IdP certificate.
+ *
+ * Applies whitespace-only normalization rather than full Exclusive XML C14N.
+ * This works with most conformant IdPs (Okta, Azure AD, Google Workspace) but
+ * a deployment handling non-standard IdPs should use a full XML-DSig library.
+ *
+ * Throws SamlParseError if the signature is absent, uses an unsupported
+ * algorithm, or does not verify against certPem.
+ */
+function verifyXmlSignature(xml: string, certPem: string): void {
+  const sigInfoMatch = xml.match(/<ds:SignedInfo[\s\S]*?<\/ds:SignedInfo>/i);
+  if (!sigInfoMatch) {
+    throw new SamlParseError('SAML response is not signed');
+  }
+
+  const sigValMatch = xml.match(/<ds:SignatureValue[^>]*>\s*([\s\S]*?)\s*<\/ds:SignatureValue>/i);
+  if (!sigValMatch) {
+    throw new SamlParseError('SAML response signature value is missing');
+  }
+
+  const signedInfoXml = sigInfoMatch[0];
+  const signatureB64 = sigValMatch[1].replace(/\s+/g, '');
+
+  const algMatch = signedInfoXml.match(/<ds:SignatureMethod[^>]+Algorithm="([^"]+)"/i);
+  const algorithm = algMatch?.[1] ?? '';
+
+  let nodeAlg: string;
+  if (algorithm.includes('rsa-sha256')) {
+    nodeAlg = 'RSA-SHA256';
+  } else if (algorithm.includes('rsa-sha1')) {
+    nodeAlg = 'RSA-SHA1';
+  } else {
+    throw new SamlParseError(`Unsupported SAML signature algorithm: ${algorithm}`);
+  }
+
+  // Whitespace-only normalization (not true Exclusive C14N).
+  const normalizedSignedInfo = signedInfoXml.replace(/>\s+</g, '><').trim();
+
+  let valid: boolean;
+  try {
+    const verifier = crypto.createVerify(nodeAlg);
+    verifier.update(normalizedSignedInfo, 'utf8');
+    valid = verifier.verify(certPem, signatureB64, 'base64');
+  } catch {
+    throw new SamlParseError('SAML signature verification error');
+  }
+
+  if (!valid) {
+    throw new SamlParseError('SAML response signature is invalid');
+  }
+}
+
 /** Generate a random ID suitable for SAML request identifiers. */
 function generateSamlId(): string {
   return `_${crypto.randomUUID().replace(/-/g, '')}`;
@@ -196,15 +255,7 @@ export class SamlService {
   // Response parsing
   // -------------------------------------------------------------------------
 
-  /**
-   * Parse a base64-encoded SAML Response and extract user claims.
-   *
-   * TODO (production hardening): verify the IdP signature on the Assertion
-   * using `idpCert` and Node.js `crypto.verify`. The certificate should be
-   * parsed from PEM to DER and the XML signature canonicalized (C14N) before
-   * verification. Skipping this in the MVP is acceptable only when the SAML
-   * endpoint is protected by TLS and the IdP is trusted.
-   */
+  /** Parse a base64-encoded SAML Response, verify the issuer and signature, and extract user claims. */
   async parseAndValidateResponse(
     config: SamlConfig,
     samlResponse: string,
@@ -217,6 +268,20 @@ export class SamlService {
     }
 
     log.debug({ idpEntityId: config.idpEntityId }, 'Parsing SAML response');
+
+    // Verify the response came from the expected IdP.
+    const issuer = extractIssuer(xml);
+    if (!issuer) {
+      throw new SamlParseError('SAML response missing Issuer');
+    }
+    if (issuer !== config.idpEntityId) {
+      throw new SamlParseError(
+        `SAML Issuer mismatch: expected "${config.idpEntityId}", got "${issuer}"`,
+      );
+    }
+
+    // Verify XML signature against the stored IdP certificate.
+    verifyXmlSignature(xml, config.idpCert);
 
     const nameId = extractNameId(xml);
     if (!nameId) {

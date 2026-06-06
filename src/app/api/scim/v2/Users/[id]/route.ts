@@ -31,17 +31,11 @@ async function resolveUser(orgId: string, userId: string) {
 }
 
 async function deactivateUser(userId: string, orgId: string) {
-  await prisma.$transaction([
-    // Mark user inactive.
-    prisma.user.update({
-      data: { active: false, updatedAt: new Date() },
-      where: { id: userId },
-    }),
-    // Remove from all teams in org.
-    prisma.teamMembership.deleteMany({
-      where: { team: { organizationId: orgId }, userId },
-    }),
-  ]);
+  // Remove from all teams in this org only. Do not touch user.active — that is
+  // a global flag; SCIM deactivation is org-scoped.
+  await prisma.teamMembership.deleteMany({
+    where: { team: { organizationId: orgId }, userId },
+  });
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -87,7 +81,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const updated = await prisma.user.update({
     data: {
-      active: active ?? undefined,
       displayName,
       updatedAt: new Date(),
     },
@@ -136,13 +129,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   for (const op of ops) {
     const path = op.path?.toLowerCase();
-    if (op.op?.toLowerCase() === 'replace') {
+    const opLower = op.op?.toLowerCase();
+    if (opLower === 'replace' || opLower === 'add') {
       if (path === 'name' || path === 'name.formatted') {
         displayName = typeof op.value === 'string' ? op.value : undefined;
       } else if (path === 'active') {
         active = typeof op.value === 'boolean' ? op.value : undefined;
       } else if (!path && typeof op.value === 'object' && op.value !== null) {
-        // Whole-object replace with no path
         const val = op.value as Record<string, unknown>;
         if (typeof val.active === 'boolean') {
           active = val.active;
@@ -152,6 +145,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           displayName = nameObj.formatted;
         }
       }
+    } else if (opLower === 'remove' && path === 'active') {
+      // Removing the active attribute re-enables the user (active defaults true).
+      active = true;
     }
   }
 
@@ -161,7 +157,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const updated = await prisma.user.update({
     data: {
-      active: active ?? undefined,
       displayName,
       updatedAt: new Date(),
     },
@@ -191,16 +186,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return scimError(404, 'User not found');
   }
 
+  // Deprovision from this org only — do not globally deactivate the user account.
   await prisma.$transaction([
-    prisma.user.update({
-      data: { active: false, updatedAt: new Date() },
-      where: { id },
-    }),
-    // Remove from org membership.
     prisma.organizationMember.delete({
       where: { organizationId_userId: { organizationId: auth.orgId, userId: id } },
     }),
-    // Remove from all teams in org.
     prisma.teamMembership.deleteMany({
       where: { team: { organizationId: auth.orgId }, userId: id },
     }),

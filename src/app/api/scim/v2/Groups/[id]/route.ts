@@ -20,6 +20,17 @@ async function resolveTeam(orgId: string, teamId: string) {
   });
 }
 
+async function filterOrgMembers(orgId: string, userIds: string[]): Promise<string[]> {
+  if (userIds.length === 0) {
+    return [];
+  }
+  const members = await prisma.organizationMember.findMany({
+    select: { userId: true },
+    where: { organizationId: orgId, userId: { in: userIds } },
+  });
+  return members.map(m => m.userId);
+}
+
 async function getTeamMembers(teamId: string) {
   const memberships = await prisma.teamMembership.findMany({
     include: {
@@ -93,9 +104,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       where: { teamId: id, userId: { notIn: newUserIds } },
     });
 
-    // Create missing memberships.
+    // Create missing memberships — only for users that belong to this org.
+    const validUserIds = await filterOrgMembers(auth.orgId, newUserIds);
     await prisma.teamMembership.createMany({
-      data: newUserIds.map(userId => ({
+      data: validUserIds.map(userId => ({
         createdAt: now,
         id: randomUUID(),
         isOwner: false,
@@ -165,8 +177,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         .map(v => v.value);
 
       if (userIds.length > 0) {
+        // Validate membership before granting team access.
+        const validUserIds = await filterOrgMembers(auth.orgId, userIds);
         await prisma.teamMembership.createMany({
-          data: userIds.map(userId => ({
+          data: validUserIds.map(userId => ({
             createdAt: now,
             id: randomUUID(),
             isOwner: false,
@@ -178,16 +192,24 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           skipDuplicates: true,
         });
       }
-    } else if (opLower === 'remove' && path === 'members') {
-      const values = Array.isArray(op.value) ? (op.value as unknown[]) : [];
-      const userIds = values
-        .filter(
-          (v): v is { value: string } =>
-            typeof v === 'object' &&
-            v !== null &&
-            typeof (v as { value?: unknown }).value === 'string',
-        )
-        .map(v => v.value);
+    } else if (opLower === 'remove' && (path === 'members' || path?.startsWith('members['))) {
+      let userIds: string[] = [];
+
+      // Handle RFC 7644 value-filter: members[value eq "userId"] (Azure AD style).
+      const filterMatch = op.path?.match(/^members\[value\s+eq\s+"([^"]+)"\]$/i);
+      if (filterMatch?.[1]) {
+        userIds = [filterMatch[1]];
+      } else {
+        const values = Array.isArray(op.value) ? (op.value as unknown[]) : [];
+        userIds = values
+          .filter(
+            (v): v is { value: string } =>
+              typeof v === 'object' &&
+              v !== null &&
+              typeof (v as { value?: unknown }).value === 'string',
+          )
+          .map(v => v.value);
+      }
 
       if (userIds.length > 0) {
         await prisma.teamMembership.deleteMany({

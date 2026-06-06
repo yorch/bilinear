@@ -39,14 +39,14 @@ export const analyticsResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      // Verify the cycle belongs to the caller's org
       const cycle = await ctx.prisma.cycle.findFirst({
-        select: { id: true },
+        select: { id: true, teamId: true },
         where: { id: cycleId, organizationId: ctx.orgId },
       });
       if (!cycle) {
         throw new GraphQLError('Cycle not found', { extensions: { code: 'NOT_FOUND' } });
       }
+      await requireTeamMember(ctx.prisma, cycle.teamId, ctx.userId, ctx.orgId);
       return ctx.services.analytics.cycleScopeAndCarryover(cycleId);
     },
     analyticsCycleTimeHistogram: async (
@@ -87,7 +87,7 @@ export const analyticsResolvers = {
 
     analyticsWorkspaceOverview: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin', 'member']);
+      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
       return ctx.services.analytics.workspaceOverview(ctx.orgId);
     },
   },
