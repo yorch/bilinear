@@ -146,6 +146,9 @@ Resolvers are thin: `requireAuth(ctx)` → `ctx.services.<domain>.method()` → 
 - Toast notifications: use `@/lib/toast` wrapper, never import sonner directly.
 - Lazy-load large components: `CommandPalette` (on Cmd+K), `IssueDetailPanel` (on first open).
 - Logging: use `logger`/`childLogger` from `@/server/lib/logger` (pino). No `console.log` in server code.
+- UI primitives in `src/components/ui/`: `Button` (CVA), `Badge` (CVA, variants: `pill`/`solid`), `UserAvatar`, `Select`, `Skeleton`. Extend here, not inline.
+- Shared sub-components in `src/components/shared/`: `UpdateFormFields`, `DeleteUpdateButton`. Add cross-feature building blocks here.
+- Dropdown/popover state: use `usePopover({ forceOpen?, onClose? })` from `@/hooks/use-popover` — returns `{ open, setOpen, ref }`. For outside-click only (no `forceOpen`), use `useOutsideClick` from `@/hooks/use-outside-click` directly.
 
 ### Testing
 
