@@ -3,6 +3,7 @@
 import { Activity, Clock } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { gql } from '@/lib/graphql';
+import { ISSUE_ACTIVITIES_QUERY } from '@/lib/graphql-queries';
 import { cn, formatRelativeTime } from '@/lib/utils';
 
 interface ActivityActor {
@@ -26,24 +27,6 @@ interface ActivityTimelineProps {
   /** Increment this to trigger a re-fetch (e.g. after an issue update). */
   refetchKey?: number;
 }
-
-const GET_ISSUE_ACTIVITIES_QUERY = `
-  query GetIssueActivities($issueId: ID!, $limit: Int) {
-    issueActivities(issueId: $issueId, limit: $limit) {
-      id
-      field
-      oldValue
-      newValue
-      createdAt
-      actor {
-        id
-        displayName
-        initials
-        avatarBgColor
-      }
-    }
-  }
-`;
 
 const FIELD_LABELS: Record<string, string> = {
   assigneeId: 'assignee',
@@ -93,7 +76,7 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
     const fetchActivities = async () => {
       setLoading(true);
       try {
-        const res = await gql(GET_ISSUE_ACTIVITIES_QUERY, {
+        const res = await gql(ISSUE_ACTIVITIES_QUERY, {
           issueId,
           limit: 50,
         });

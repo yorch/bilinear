@@ -3,6 +3,11 @@
 import { Smile } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { gql } from '@/lib/graphql';
+import {
+  ISSUE_REACTION_ADD_MUTATION,
+  ISSUE_REACTION_REMOVE_MUTATION,
+  ISSUE_REACTIONS_QUERY,
+} from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 
@@ -20,30 +25,6 @@ interface IssueReactionBarProps {
 
 const QUICK_EMOJIS = ['👍', '👎', '❤️', '🎉', '😄', '🚀', '👀', '😕'];
 
-const GET_REACTIONS_QUERY = `
-  query IssueReactions($id: ID!) {
-    issue(id: $id) {
-      id
-      reactions { id emoji userId user { id displayName } }
-    }
-  }
-`;
-
-const REACTION_ADD_MUTATION = `
-  mutation IssueReactionAdd($issueId: ID!, $emoji: String!) {
-    issueReactionAdd(issueId: $issueId, emoji: $emoji) {
-      success
-      reaction { id emoji userId user { id displayName } }
-    }
-  }
-`;
-
-const REACTION_REMOVE_MUTATION = `
-  mutation IssueReactionRemove($issueId: ID!, $emoji: String!) {
-    issueReactionRemove(issueId: $issueId, emoji: $emoji) { success }
-  }
-`;
-
 export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarProps) {
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [showPicker, setShowPicker] = useState(false);
@@ -51,7 +32,7 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
 
   const fetchReactions = useCallback(async () => {
     try {
-      const res = await gql(GET_REACTIONS_QUERY, { id: issueId });
+      const res = await gql(ISSUE_REACTIONS_QUERY, { id: issueId });
       const data = res.data as { issue?: { reactions: Reaction[] } } | undefined;
       setReactions(data?.issue?.reactions ?? []);
     } catch {
@@ -91,8 +72,8 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
   const toggle = async (emoji: string, hasReacted: boolean) => {
     try {
       const res = hasReacted
-        ? await gql(REACTION_REMOVE_MUTATION, { emoji, issueId })
-        : await gql(REACTION_ADD_MUTATION, { emoji, issueId });
+        ? await gql(ISSUE_REACTION_REMOVE_MUTATION, { emoji, issueId })
+        : await gql(ISSUE_REACTION_ADD_MUTATION, { emoji, issueId });
       if (res.errors?.length) {
         throw new Error('mutation failed');
       }

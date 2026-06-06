@@ -4,6 +4,7 @@ import { observer } from 'mobx-react-lite';
 import { useRouter } from 'next/navigation';
 import { useCallback, useMemo } from 'react';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
+import { PROJECT_UPDATE_MUTATION } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
@@ -11,20 +12,6 @@ import { useStore } from '@/providers/store-provider';
 interface ProjectRoadmapViewProps {
   workspaceKey: string;
 }
-
-const PROJECT_UPDATE_MUTATION = `
-  mutation ProjectUpdate($id: ID!, $input: ProjectUpdateInput!) {
-    projectUpdate(id: $id, input: $input) {
-      success
-      lastSyncId
-      project {
-        id
-        startDate
-        targetDate
-      }
-    }
-  }
-`;
 
 export const ProjectRoadmapView = observer(function ProjectRoadmapView({
   workspaceKey,

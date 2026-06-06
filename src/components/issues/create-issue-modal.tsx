@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { gql } from '@/lib/graphql';
+import { ISSUE_TEMPLATES_QUERY } from '@/lib/graphql-queries';
 import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 import { TipTapEditor } from '../editor/tiptap-editor.lazy';
@@ -12,12 +13,6 @@ import { PrioritySelect } from '../properties/priority-select';
 import { ProjectSelect } from '../properties/project-select';
 import { StatusSelect } from '../properties/status-select';
 import { TemplateSelector } from './template-selector';
-
-const GET_TEMPLATES_QUERY = `
-  query GetIssueTemplates($teamId: ID!) {
-    issueTemplates(teamId: $teamId) { id name templateData isDefault }
-  }
-`;
 
 interface CreateIssueInput {
   assigneeId?: string;
@@ -112,7 +107,7 @@ export function CreateIssueModal({
     setTimeout(() => titleRef.current?.focus(), 50);
 
     if (teamId) {
-      gql(GET_TEMPLATES_QUERY, { teamId })
+      gql(ISSUE_TEMPLATES_QUERY, { teamId })
         .then(res => {
           const templates = (
             res.data as {

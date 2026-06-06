@@ -6,6 +6,11 @@ import { DeleteUpdateButton } from '@/components/shared/delete-update-button';
 import { UpdateFormFields } from '@/components/shared/update-form-fields';
 import { Badge } from '@/components/ui/badge';
 import { gql } from '@/lib/graphql';
+import {
+  INITIATIVE_UPDATE_CREATE_MUTATION,
+  INITIATIVE_UPDATE_EDIT_MUTATION,
+  INITIATIVE_UPDATES_QUERY,
+} from '@/lib/graphql-queries';
 import { PROJECT_HEALTH_CONFIG } from '@/lib/project-constants';
 import { toast } from '@/lib/toast';
 import { formatRelativeTime } from '@/lib/utils';
@@ -24,44 +29,6 @@ interface InitiativeUpdatesSectionProps {
   viewerId: string;
 }
 
-const FETCH_QUERY = `
-  query InitiativeUpdates($id: ID!) {
-    initiative(id: $id) {
-      id
-      updates {
-        id
-        body
-        health
-        editedAt
-        createdAt
-        user { id displayName }
-      }
-    }
-  }
-`;
-
-const CREATE_MUTATION = `
-  mutation InitiativeUpdateCreate($input: InitiativeUpdateCreateInput!) {
-    initiativeUpdateCreate(input: $input) {
-      success
-      initiativeUpdate {
-        id body health editedAt createdAt user { id displayName }
-      }
-    }
-  }
-`;
-
-const EDIT_MUTATION = `
-  mutation InitiativeUpdateEdit($id: ID!, $input: InitiativeUpdateEditInput!) {
-    initiativeUpdateUpdate(id: $id, input: $input) {
-      success
-      initiativeUpdate {
-        id body health editedAt createdAt user { id displayName }
-      }
-    }
-  }
-`;
-
 export function InitiativeUpdatesSection({
   initiativeId,
   viewerId,
@@ -73,7 +40,7 @@ export function InitiativeUpdatesSection({
 
   const fetchUpdates = useCallback(async () => {
     try {
-      const res = await gql(FETCH_QUERY, { id: initiativeId });
+      const res = await gql(INITIATIVE_UPDATES_QUERY, { id: initiativeId });
       const data = res.data as { initiative?: { updates: InitiativeUpdate[] } } | undefined;
       setUpdates(data?.initiative?.updates ?? []);
     } finally {
@@ -217,7 +184,7 @@ function CreateUpdateForm({ initiativeId, onClose, onCreated }: CreateUpdateForm
     }
     setSubmitting(true);
     try {
-      const res = await gql(CREATE_MUTATION, {
+      const res = await gql(INITIATIVE_UPDATE_CREATE_MUTATION, {
         input: {
           body: body.trim(),
           bodyData: {},
@@ -305,7 +272,7 @@ function EditUpdateForm({
     }
     setSubmitting(true);
     try {
-      const res = await gql(EDIT_MUTATION, {
+      const res = await gql(INITIATIVE_UPDATE_EDIT_MUTATION, {
         id: updateId,
         input: { body: body.trim(), bodyData: {}, health },
       });

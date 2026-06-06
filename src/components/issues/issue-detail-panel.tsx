@@ -5,6 +5,11 @@ import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { gql } from '@/lib/graphql';
+import {
+  ISSUE_SUBSCRIBE_MUTATION,
+  ISSUE_SUBSCRIPTION_QUERY,
+  ISSUE_UNSUBSCRIBE_MUTATION,
+} from '@/lib/graphql-queries';
 import { formatDueDate, getDueDateColor, getPriorityConfig } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
@@ -26,28 +31,6 @@ import { IssueReactionBar } from './issue-reaction-bar';
 import { PullRequestsSection } from './pull-requests-section';
 import { RelationsSection } from './relations-section';
 import { SubIssueList } from './sub-issue-list';
-
-// ---------------------------------------------------------------------------
-// GraphQL strings
-// ---------------------------------------------------------------------------
-
-const CHECK_SUBSCRIPTION_QUERY = `
-  query NotificationIsSubscribed($issueId: ID!) {
-    notificationIsSubscribed(issueId: $issueId)
-  }
-`;
-
-const SUBSCRIBE_MUTATION = `
-  mutation NotificationSubscribe($issueId: ID!) {
-    notificationSubscribe(issueId: $issueId) { success lastSyncId }
-  }
-`;
-
-const UNSUBSCRIBE_MUTATION = `
-  mutation NotificationUnsubscribe($issueId: ID!) {
-    notificationUnsubscribe(issueId: $issueId) { success lastSyncId }
-  }
-`;
 
 interface IssueDetailPanelProps {
   issue: IssueDetail | null;
@@ -109,7 +92,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
       return;
     }
     setSubscribed(null);
-    gql(CHECK_SUBSCRIPTION_QUERY, { issueId: issue.id })
+    gql(ISSUE_SUBSCRIPTION_QUERY, { issueId: issue.id })
       .then(res => {
         if (res.errors?.length) {
           setSubscribed(false);
@@ -128,7 +111,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
     const prev = subscribed;
     setSubscribed(!prev);
     try {
-      const mutation = prev ? UNSUBSCRIBE_MUTATION : SUBSCRIBE_MUTATION;
+      const mutation = prev ? ISSUE_UNSUBSCRIBE_MUTATION : ISSUE_SUBSCRIBE_MUTATION;
       const res = await gql(mutation, { issueId: issue.id });
       if (res.errors?.length) {
         setSubscribed(prev);
