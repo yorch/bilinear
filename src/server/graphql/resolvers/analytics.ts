@@ -1,5 +1,5 @@
 import { GraphQLError } from 'graphql';
-import { requireAuth, requireTeamMember } from '../../middleware/auth';
+import { requireAuth, requireOrgRole, requireTeamMember } from '../../middleware/auth';
 import type { AnalyticsRange } from '../../services/analytics.service';
 import type { GraphQLContext } from '../context';
 
@@ -33,17 +33,45 @@ async function buildFilter(
 
 export const analyticsResolvers = {
   Query: {
+    analyticsCycleScopeMetrics: async (
+      _p: unknown,
+      { cycleId }: { cycleId: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      // Verify the cycle belongs to the caller's org
+      const cycle = await ctx.prisma.cycle.findFirst({
+        select: { id: true },
+        where: { id: cycleId, organizationId: ctx.orgId },
+      });
+      if (!cycle) {
+        throw new GraphQLError('Cycle not found', { extensions: { code: 'NOT_FOUND' } });
+      }
+      return ctx.services.analytics.cycleScopeAndCarryover(cycleId);
+    },
     analyticsCycleTimeHistogram: async (
       _p: unknown,
       { input }: { input?: AnalyticsInput | null },
       ctx: GraphQLContext,
     ) => ctx.services.analytics.cycleTimeHistogram(await buildFilter(ctx, input)),
 
+    analyticsCycleVelocityTrend: async (
+      _p: unknown,
+      { input }: { input?: AnalyticsInput | null },
+      ctx: GraphQLContext,
+    ) => ctx.services.analytics.cycleVelocityTrend(await buildFilter(ctx, input)),
+
     analyticsLeadTimeHistogram: async (
       _p: unknown,
       { input }: { input?: AnalyticsInput | null },
       ctx: GraphQLContext,
     ) => ctx.services.analytics.leadTimeHistogram(await buildFilter(ctx, input)),
+
+    analyticsTeamHealth: async (
+      _p: unknown,
+      { input }: { input?: AnalyticsInput | null },
+      ctx: GraphQLContext,
+    ) => ctx.services.analytics.teamHealth(await buildFilter(ctx, input)),
 
     analyticsThroughputByWeek: async (
       _p: unknown,
@@ -56,5 +84,11 @@ export const analyticsResolvers = {
       { input }: { input?: AnalyticsInput | null },
       ctx: GraphQLContext,
     ) => ctx.services.analytics.timeInStateApprox(await buildFilter(ctx, input)),
+
+    analyticsWorkspaceOverview: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin', 'member']);
+      return ctx.services.analytics.workspaceOverview(ctx.orgId);
+    },
   },
 };

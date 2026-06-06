@@ -5,6 +5,7 @@ import { redis } from '../lib/redis';
 import type { AuthContext } from '../middleware/auth';
 import { extractAuthContext } from '../middleware/auth';
 import { AnalyticsService } from '../services/analytics.service';
+import { AuditLogService } from '../services/audit-log.service';
 import { AuthService } from '../services/auth.service';
 import { AutomationService } from '../services/automation.service';
 import { CommentService } from '../services/comment.service';
@@ -25,6 +26,8 @@ import { NotificationService } from '../services/notification.service';
 import { OrganizationService } from '../services/organization.service';
 import { ProjectService } from '../services/project.service';
 import { RoadmapService } from '../services/roadmap.service';
+import { SamlService } from '../services/saml.service';
+import { ScimService } from '../services/scim.service';
 import { SearchService } from '../services/search.service';
 import { SyncService } from '../services/sync.service';
 import { TeamService } from '../services/team.service';
@@ -42,6 +45,7 @@ export interface GraphQLContext extends AuthContext {
   prisma: PrismaClient;
   services: {
     analytics: AnalyticsService;
+    auditLog: AuditLogService;
     auth: AuthService;
     automation: AutomationService;
     comment: CommentService;
@@ -62,6 +66,8 @@ export interface GraphQLContext extends AuthContext {
     organization: OrganizationService;
     project: ProjectService;
     roadmap: RoadmapService;
+    saml: SamlService;
+    scim: ScimService;
     search: SearchService;
     sync: SyncService;
     team: TeamService;
@@ -106,6 +112,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const clientIp = extractClientIp(req);
 
   const userService = new UserService(prisma);
+  const auditLogService = new AuditLogService(prisma);
   const authService = new AuthService(prisma, userService);
   const analyticsService = new AnalyticsService(prisma);
   const githubService = new GitHubService(prisma);
@@ -130,6 +137,8 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const roadmapService = new RoadmapService(prisma);
   const syncService = new SyncService(prisma, redis);
   const searchService = new SearchService(prisma);
+  const samlService = new SamlService(prisma);
+  const scimService = new ScimService(prisma);
   const triageService = new TriageService(prisma);
   const webhookService = new WebhookService(prisma);
   // AutomationService wraps issueService.update + syncService.createSyncAction
@@ -148,6 +157,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
     prisma,
     services: {
       analytics: analyticsService,
+      auditLog: auditLogService,
       auth: authService,
       automation: automationService,
       comment: commentService,
@@ -168,6 +178,8 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
       organization: organizationService,
       project: projectService,
       roadmap: roadmapService,
+      saml: samlService,
+      scim: scimService,
       search: searchService,
       sync: syncService,
       team: teamService,

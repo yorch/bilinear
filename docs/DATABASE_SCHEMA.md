@@ -60,7 +60,7 @@ remains a design target.
 | 2.21 Webhooks             | ✅      | Shipped 2026-05-05 — `webhooks` + `webhook_deliveries`                                                |
 | 2.22 Sync Actions         | ✅      |                                                                                                       |
 | 2.23 Auth Tokens          | ✅      |                                                                                                       |
-| 2.24 Audit Log            | 📋      |                                                                                                       |
+| 2.24 Audit Log            | ✅      | Shipped 2026-06-06 — see §2.34 for the actual `audit_log_entries` schema                              |
 | 2.25 Files                | ✅      |                                                                                                       |
 | 2.26 Team Member Roles    | ✅      | Enforcement helper `requireTeamMemberNotGuest` shipped 2026-05-21                                     |
 | 2.27 Custom Fields        | ✅      | Workspace-scope (team_id nullable) shipped 2026-05-21                                                 |
@@ -70,6 +70,9 @@ remains a design target.
 | 2.31 Initiative Updates   | ✅      | Shipped 2026-05-18 — `initiative_updates`, mirrors §2.11                                              |
 | 2.32 Sub-Initiatives      | ✅      | Shipped 2026-05-21 — `initiatives.parent_id` self-relation, max depth 5                               |
 | 2.33 Automation Rules     | ✅      | Shipped 2026-05-24 — `automation_rules` with JSONB conditions/actions; no separate log table           |
+| 2.34 Audit Log Entries    | ✅      | Shipped 2026-06-06 — `audit_log_entries` append-only table, see §2.34                                 |
+| 2.35 SAML Configurations  | ✅      | Shipped 2026-06-06 — `saml_configurations` one-per-org, see §2.35                                     |
+| 2.36 SCIM Tokens          | ✅      | Shipped 2026-06-06 — `scim_tokens` bearer auth for SCIM provisioning, see §2.36                       |
 
 ---
 
@@ -1617,3 +1620,86 @@ prisma/
 Tables tagged 📋 in §1.1 (Favorites, Attachments as linked resources, Audit Log)
 are **design targets** — kept in §2 as the canonical design reference for when
 those sprints land.
+
+### 2.34 Audit Log Entries ✅
+
+Append-only table for security-relevant event records. Never updated or soft-deleted.
+
+```sql
+CREATE TABLE audit_log_entries (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id         UUID REFERENCES users(id) ON DELETE SET NULL,
+    action          VARCHAR(100) NOT NULL,       -- e.g. 'auth.login', 'team.deleted'
+    resource_type   VARCHAR(50),                 -- e.g. 'Issue', 'Team'
+    resource_id     VARCHAR(36),                 -- UUID of the affected row
+    metadata        JSONB,                       -- event-specific payload
+    ip_address      VARCHAR(45),                 -- IPv4 or IPv6
+    user_agent      VARCHAR(500),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    -- no updated_at — append-only
+);
+
+CREATE INDEX idx_audit_log_org_created
+    ON audit_log_entries (organization_id, created_at DESC);
+```
+
+Key properties:
+- Written fire-and-forget via `AuditLogService.log()` — errors are swallowed so audit failure never breaks the main request.
+- `user_id` is nullable for system-originated events.
+- Queried via `auditLogs(filter)` GraphQL query; owner/admin only.
+- Settings page at `/(workspace)/[workspace]/settings/audit-log`.
+
+### 2.35 SAML Configurations ✅
+
+One-per-organization SAML 2.0 SP configuration.
+
+```sql
+CREATE TABLE saml_configurations (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id  UUID NOT NULL UNIQUE REFERENCES organizations(id) ON DELETE CASCADE,
+    idp_metadata_url VARCHAR(1000),
+    idp_metadata_xml TEXT,
+    idp_sso_url      VARCHAR(1000) NOT NULL DEFAULT '',
+    idp_entity_id    VARCHAR(500) NOT NULL DEFAULT '',
+    idp_cert         TEXT NOT NULL DEFAULT '',     -- PEM certificate
+    email_attribute  VARCHAR(255) NOT NULL DEFAULT 'email',
+    name_attribute   VARCHAR(255) NOT NULL DEFAULT 'name',
+    jit_provisioning BOOLEAN NOT NULL DEFAULT TRUE,
+    sso_enforced     BOOLEAN NOT NULL DEFAULT FALSE,
+    enabled          BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by_id    UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+Key properties:
+- UNIQUE on `organization_id` — one config per org.
+- `enabled` controls whether SSO is active. `sso_enforced` (future) would require SSO-only login.
+- Service: `SamlService` in `src/server/services/saml.service.ts`.
+- Routes: `GET /api/auth/saml/metadata`, `GET /api/auth/saml/initiate`, `POST /api/auth/saml/callback`.
+
+### 2.36 SCIM Tokens ✅
+
+Bearer tokens for SCIM 2.0 provisioning API authentication.
+
+```sql
+CREATE TABLE scim_tokens (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    token_hash      VARCHAR(64) NOT NULL UNIQUE,  -- SHA-256 hex of plaintext
+    label           VARCHAR(255) NOT NULL,
+    created_by_id   UUID REFERENCES users(id) ON DELETE SET NULL,
+    last_used_at    TIMESTAMPTZ,
+    revoked_at      TIMESTAMPTZ,                  -- soft-revoke
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+Key properties:
+- Plaintext token is 64-char hex (`crypto.randomBytes(32).toString('hex')`), shown once at creation.
+- Only `token_hash` (SHA-256) is stored — plaintext is unrecoverable after creation.
+- Revoked via `revokedAt` timestamp — `authenticateScimToken` rejects revoked tokens.
+- SCIM base URL: `<APP_URL>/api/scim/v2`.
+- Service: `ScimService` in `src/server/services/scim.service.ts`.

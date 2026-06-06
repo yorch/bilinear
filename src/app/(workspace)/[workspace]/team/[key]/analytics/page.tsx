@@ -2,8 +2,10 @@
 
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { CycleVelocitySection } from '@/components/analytics/cycle-velocity-section';
 import { InsightsSection } from '@/components/analytics/insights-section';
+import { gql } from '@/lib/graphql';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -25,6 +27,32 @@ function weekStart(date: Date): Date {
 function fmtShort(date: Date): string {
   return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
 }
+
+// ---------------------------------------------------------------------------
+// Team Health types + query
+// ---------------------------------------------------------------------------
+
+interface TeamHealthResult {
+  oldestOpenAgeDays: number;
+  openCount: number;
+  overdueCount: number;
+  p75AgeDays: number;
+  unestimatedCount: number;
+  unestimatedPct: number;
+}
+
+const TEAM_HEALTH_QUERY = `
+  query TeamHealth($input: AnalyticsInput) {
+    analyticsTeamHealth(input: $input) {
+      overdueCount
+      unestimatedCount
+      unestimatedPct
+      openCount
+      oldestOpenAgeDays
+      p75AgeDays
+    }
+  }
+`;
 
 // ---------------------------------------------------------------------------
 // Bar chart primitive (pure CSS, no library)
@@ -360,6 +388,29 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
     return (durations.reduce((s, d) => s + d, 0) / durations.length).toFixed(1);
   }, [rangeIssues]);
 
+  // ── Team health (fetched from GraphQL, not MobX store) ────────────────────
+
+  const [teamHealth, setTeamHealth] = useState<TeamHealthResult | null>(null);
+
+  useEffect(() => {
+    if (!teamId) {
+      return;
+    }
+    let cancelled = false;
+    void gql(TEAM_HEALTH_QUERY, { input: { teamId } }).then(res => {
+      if (cancelled) {
+        return;
+      }
+      if (res.data) {
+        const d = res.data as unknown as { analyticsTeamHealth: TeamHealthResult };
+        setTeamHealth(d.analyticsTeamHealth);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [teamId]);
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (isLoading) {
@@ -526,6 +577,61 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
             teamId={teamId}
           />
         )}
+
+        {/* Team Health */}
+        {teamHealth && (
+          <div className="mt-5">
+            <h2 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+              Team Health
+            </h2>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
+                  Open issues
+                </p>
+                <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+                  {teamHealth.openCount}
+                </p>
+              </div>
+              <div className="rounded-lg border border-red-100 bg-red-50 p-4 dark:border-red-900/40 dark:bg-red-950/30">
+                <p className="text-xs font-medium uppercase tracking-wider text-red-400">Overdue</p>
+                <p className="mt-1 text-2xl font-semibold text-red-600 dark:text-red-400">
+                  {teamHealth.overdueCount}
+                </p>
+              </div>
+              <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
+                  Unestimated
+                </p>
+                <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+                  {teamHealth.unestimatedCount}
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-400">
+                  {teamHealth.unestimatedPct.toFixed(0)}% of open
+                </p>
+              </div>
+              <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
+                  Oldest open
+                </p>
+                <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+                  {teamHealth.oldestOpenAgeDays.toFixed(0)}d
+                </p>
+              </div>
+              <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
+                  P75 age
+                </p>
+                <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+                  {teamHealth.p75AgeDays.toFixed(0)}d
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-400">75th percentile</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {teamId && <CycleVelocitySection teamId={teamId} />}
       </div>
     </div>
   );

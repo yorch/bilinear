@@ -42,6 +42,20 @@ const CYCLE_BURNDOWN_QUERY = `
   }
 `;
 
+const CYCLE_SCOPE_METRICS_QUERY = `
+  query CycleScopeMetrics($cycleId: ID!) {
+    analyticsCycleScopeMetrics(cycleId: $cycleId) {
+      totalCount
+      plannedCount
+      completedCount
+      scopeCreepCount
+      scopeCreepPct
+      carryoverCount
+      carryoverPct
+    }
+  }
+`;
+
 const CYCLE_VELOCITY_QUERY = `
   query CycleVelocity($teamId: ID!, $cycleCount: Int) {
     cycleVelocity(teamId: $teamId, cycleCount: $cycleCount) {
@@ -60,6 +74,16 @@ interface BurndownPoint {
   date: string;
   remaining: number;
   scope: number;
+}
+
+interface ScopeMetrics {
+  carryoverCount: number;
+  carryoverPct: number;
+  completedCount: number;
+  plannedCount: number;
+  scopeCreepCount: number;
+  scopeCreepPct: number;
+  totalCount: number;
 }
 
 interface VelocityCycle {
@@ -304,6 +328,9 @@ export const CycleDetailView = observer(function CycleDetailView({
   const [burndownLoading, setBurndownLoading] = useState(false);
   const [chartView, setChartView] = useState<'burndown' | 'burnup'>('burndown');
 
+  // Scope / carryover metrics
+  const [scopeMetrics, setScopeMetrics] = useState<ScopeMetrics | null>(null);
+
   // Velocity state
   const [velocity, setVelocity] = useState<VelocityResult | null>(null);
 
@@ -327,6 +354,21 @@ export const CycleDetailView = observer(function CycleDetailView({
       })
       .catch(() => setBurndown([]))
       .finally(() => setBurndownLoading(false));
+  }, [cycleId]);
+
+  // Fetch scope / carryover metrics
+  useEffect(() => {
+    if (!cycleId) {
+      return;
+    }
+    gql(CYCLE_SCOPE_METRICS_QUERY, { cycleId })
+      .then(res => {
+        const m = res.data?.analyticsCycleScopeMetrics as ScopeMetrics | undefined;
+        if (m) {
+          setScopeMetrics(m);
+        }
+      })
+      .catch(() => {});
   }, [cycleId]);
 
   // Fetch velocity data
@@ -546,6 +588,52 @@ export const CycleDetailView = observer(function CycleDetailView({
               />
             </div>
           </div>
+
+          {/* Scope creep / carryover metrics */}
+          {scopeMetrics &&
+            (scopeMetrics.scopeCreepCount > 0 || scopeMetrics.carryoverCount > 0) && (
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
+                    Planned
+                  </p>
+                  <p className="mt-1 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+                    {scopeMetrics.plannedCount}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
+                    Scope creep
+                  </p>
+                  <p className="mt-1 text-xl font-semibold text-orange-500">
+                    {scopeMetrics.scopeCreepCount}
+                  </p>
+                  <p className="text-[11px] text-zinc-400">
+                    {Math.round(scopeMetrics.scopeCreepPct)}% of total
+                  </p>
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
+                    Carried over
+                  </p>
+                  <p className="mt-1 text-xl font-semibold text-blue-500">
+                    {scopeMetrics.carryoverCount}
+                  </p>
+                  <p className="text-[11px] text-zinc-400">
+                    {Math.round(scopeMetrics.carryoverPct)}% of total
+                  </p>
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
+                    Completed
+                  </p>
+                  <p className="mt-1 text-xl font-semibold text-green-500">
+                    {scopeMetrics.completedCount}
+                  </p>
+                  <p className="text-[11px] text-zinc-400">of {scopeMetrics.totalCount} total</p>
+                </div>
+              </div>
+            )}
 
           {/* Burndown / burnup chart — active or completed cycles */}
           {(isActive || isCompleted) && (

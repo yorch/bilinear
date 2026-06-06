@@ -46,6 +46,9 @@ model Organization {
   favorites              Favorite[]
   customFieldDefinitions CustomFieldDefinition[]
   automationRules        AutomationRule[]
+  auditLogEntries        AuditLogEntry[]
+  samlConfiguration      SamlConfiguration?
+  scimTokens             ScimToken[]
 
   @@map("organizations")
 }
@@ -107,6 +110,9 @@ model User {
   githubIntegrations        GitHubIntegration[]        @relation("GitHubIntegrationCreator")
   createdAutomationRules    AutomationRule[]           @relation("AutomationRuleCreator")
   favorites                 Favorite[]
+  auditLogEntries           AuditLogEntry[]            @relation("AuditLogUser")
+  createdSamlConfigurations SamlConfiguration[]        @relation("SamlConfigCreator")
+  createdScimTokens         ScimToken[]                @relation("ScimTokenCreator")
 
   @@map("users")
 }
@@ -633,6 +639,10 @@ model Cycle {
 
   progress Float @default(0)
   scope    Float @default(0)
+
+  /// Count of issues rolled over INTO this cycle from a previous cycle.
+  /// Populated by CycleService.rollover() on the DESTINATION cycle.
+  carryoverCount Int @default(0) @map("carryover_count")
 
   scopeHistory               Json @default("[]") @map("scope_history")
   completedScopeHistory      Json @default("[]") @map("completed_scope_history")
@@ -1324,4 +1334,98 @@ model AutomationRule {
   @@index([teamId, enabled])
   @@index([triggerType])
   @@map("automation_rules")
+}
+
+/// Append-only security-relevant event log. Each row captures who did what,
+/// when, from where. Free for self-hosted deployments (§3.3, PRD §3.4).
+/// Partitioned by createdAt for long-term retention; hard-deletes are never
+/// issued — rows expire via a scheduled vacuum or pg_partman in production.
+model AuditLogEntry {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @map("organization_id") @db.Uuid
+  userId         String? @map("user_id") @db.Uuid
+
+  /// Event category and name, e.g. "auth.login", "issue.delete", "member.role_changed"
+  action       String  @db.VarChar(100)
+  resourceType String? @map("resource_type") @db.VarChar(50)
+  resourceId   String? @map("resource_id") @db.VarChar(36)
+
+  /// Arbitrary JSON context for the action (old/new values, etc.)
+  metadata Json?
+
+  ipAddress String? @map("ip_address") @db.VarChar(45)
+  userAgent String? @map("user_agent") @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation("AuditLogUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([userId])
+  @@index([action])
+  @@map("audit_log_entries")
+}
+
+/// SP-initiated SAML 2.0 configuration for an organisation (one per org).
+/// Free for self-hosted deployments per PRD §3.4.
+model SamlConfiguration {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @unique @map("organization_id") @db.Uuid
+
+  /// IDP metadata URL — fetched on demand to refresh signing certs
+  idpMetadataUrl String? @map("idp_metadata_url") @db.VarChar(1000)
+  /// Raw IDP metadata XML — used when URL is not available
+  idpMetadataXml String? @map("idp_metadata_xml") @db.Text
+  /// Required: IDP SSO POST endpoint
+  idpSsoUrl      String  @default("") @map("idp_sso_url") @db.VarChar(1000)
+  /// Required: IDP entity ID / issuer
+  idpEntityId    String  @default("") @map("idp_entity_id") @db.VarChar(500)
+  /// IDP X.509 signing certificate (PEM or base64 DER, no header/footer needed)
+  idpCert        String  @default("") @map("idp_cert") @db.Text
+
+  /// Attribute name in SAML assertion that maps to user email
+  emailAttribute String @default("email") @map("email_attribute") @db.VarChar(255)
+  /// Attribute name for display name (optional)
+  nameAttribute  String @default("name") @map("name_attribute") @db.VarChar(255)
+
+  /// Enable JIT provisioning — auto-create user on first SSO login
+  jitProvisioning Boolean @default(true) @map("jit_provisioning")
+  /// When true, only SSO logins are allowed (magic link / password disabled)
+  ssoEnforced     Boolean @default(false) @map("sso_enforced")
+
+  enabled     Boolean @default(false)
+  createdById String? @map("created_by_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation("SamlConfigCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@map("saml_configurations")
+}
+
+/// Bearer token for SCIM 2.0 provisioning API. Tokens are stored hashed
+/// (SHA-256 hex). The plaintext is only shown once on creation.
+/// Free for self-hosted deployments per PRD §3.4.
+model ScimToken {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @map("organization_id") @db.Uuid
+
+  /// SHA-256(plaintext_token) — 64 hex chars
+  tokenHash  String  @unique @map("token_hash") @db.VarChar(64)
+  /// Human-readable label
+  label      String  @db.VarChar(255)
+  createdById String? @map("created_by_id") @db.Uuid
+
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation("ScimTokenCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@map("scim_tokens")
 }

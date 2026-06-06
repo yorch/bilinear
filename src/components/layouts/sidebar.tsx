@@ -222,6 +222,11 @@ export const Sidebar = observer(function Sidebar({
       icon: <Target className="h-4 w-4" />,
       label: 'Projects',
     },
+    {
+      href: `${base}/analytics`,
+      icon: <BarChart2 className="h-4 w-4" />,
+      label: 'Analytics',
+    },
   ];
 
   const allTeams = teamStore.all;
