@@ -2,6 +2,7 @@
 
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
+import { ModalDialog } from '@/components/ui/modal-dialog';
 import { SimpleSelect } from '@/components/ui/select';
 import { cn, getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -100,169 +101,147 @@ export const CreateProjectModal = observer(function CreateProjectModal({
     }
   };
 
-  if (!open) {
-    return null;
-  }
-
   const canSubmit = name.trim().length > 0 && selectedTeamIds.length > 0 && !submitting;
 
   return (
-    <dialog
-      aria-label="Create project"
-      className="fixed inset-0 z-50 flex h-screen w-screen items-center justify-center bg-black/40 p-0 m-0 border-none max-w-none max-h-none"
-      onClick={e => {
-        if (e.target === e.currentTarget) {
-          onClose();
-        }
-      }}
-      onKeyDown={e => {
-        if (e.key === 'Escape') {
-          onClose();
-        }
-      }}
-      open
-    >
-      <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
-        <form className="flex flex-col" onSubmit={handleSubmit}>
-          <div className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              Create project
-            </h2>
+    <ModalDialog aria-label="Create project" onClose={onClose} open={open}>
+      <form className="flex flex-col" onSubmit={handleSubmit}>
+        <div className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Create project</h2>
+        </div>
+
+        <div className="flex flex-col gap-4 px-5 py-4">
+          <div className="flex flex-col gap-1">
+            <label
+              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+              htmlFor="project-name"
+            >
+              Name
+            </label>
+            <input
+              className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+              id="project-name"
+              onChange={e => setName(e.target.value)}
+              placeholder="e.g. Q2 Launch"
+              ref={nameRef}
+              required
+              type="text"
+              value={name}
+            />
           </div>
 
-          <div className="flex flex-col gap-4 px-5 py-4">
+          <div className="flex flex-col gap-1">
+            <label
+              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+              htmlFor="project-description"
+            >
+              Description <span className="font-normal text-zinc-400">(optional)</span>
+            </label>
+            <textarea
+              className="resize-none rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-600 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-400"
+              id="project-description"
+              onChange={e => setDescription(e.target.value)}
+              placeholder="What is this project about?"
+              rows={2}
+              value={description}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label
+              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+              htmlFor="project-status"
+            >
+              Status
+            </label>
+            <SimpleSelect
+              id="project-status"
+              onChange={setStatusType}
+              options={STATUS_OPTIONS}
+              value={statusType}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Teams</span>
+            <div className="flex flex-wrap gap-2">
+              {teams.map(team => (
+                <button
+                  className={cn(
+                    'rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
+                    selectedTeamIds.includes(team.id)
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
+                      : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800',
+                  )}
+                  key={team.id}
+                  onClick={() => toggleTeam(team.id)}
+                  type="button"
+                >
+                  {team.icon ? `${team.icon} ` : ''}
+                  {team.name}
+                </button>
+              ))}
+            </div>
+            {teams.length === 0 && (
+              <p className="text-xs text-zinc-400">No teams available. Create a team first.</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
               <label
                 className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-                htmlFor="project-name"
+                htmlFor="project-start"
               >
-                Name
+                Start date <span className="font-normal text-zinc-400">(optional)</span>
               </label>
               <input
-                className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
-                id="project-name"
-                onChange={e => setName(e.target.value)}
-                placeholder="e.g. Q2 Launch"
-                ref={nameRef}
-                required
-                type="text"
-                value={name}
+                className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+                id="project-start"
+                onChange={e => setStartDate(e.target.value)}
+                type="date"
+                value={startDate}
               />
             </div>
-
             <div className="flex flex-col gap-1">
               <label
                 className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-                htmlFor="project-description"
+                htmlFor="project-target"
               >
-                Description <span className="font-normal text-zinc-400">(optional)</span>
+                Target date <span className="font-normal text-zinc-400">(optional)</span>
               </label>
-              <textarea
-                className="resize-none rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-600 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-400"
-                id="project-description"
-                onChange={e => setDescription(e.target.value)}
-                placeholder="What is this project about?"
-                rows={2}
-                value={description}
+              <input
+                className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+                id="project-target"
+                onChange={e => setTargetDate(e.target.value)}
+                type="date"
+                value={targetDate}
               />
             </div>
-
-            <div className="flex flex-col gap-1">
-              <label
-                className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-                htmlFor="project-status"
-              >
-                Status
-              </label>
-              <SimpleSelect
-                id="project-status"
-                onChange={setStatusType}
-                options={STATUS_OPTIONS}
-                value={statusType}
-              />
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Teams</span>
-              <div className="flex flex-wrap gap-2">
-                {teams.map(team => (
-                  <button
-                    className={cn(
-                      'rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
-                      selectedTeamIds.includes(team.id)
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
-                        : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800',
-                    )}
-                    key={team.id}
-                    onClick={() => toggleTeam(team.id)}
-                    type="button"
-                  >
-                    {team.icon ? `${team.icon} ` : ''}
-                    {team.name}
-                  </button>
-                ))}
-              </div>
-              {teams.length === 0 && (
-                <p className="text-xs text-zinc-400">No teams available. Create a team first.</p>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1">
-                <label
-                  className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-                  htmlFor="project-start"
-                >
-                  Start date <span className="font-normal text-zinc-400">(optional)</span>
-                </label>
-                <input
-                  className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
-                  id="project-start"
-                  onChange={e => setStartDate(e.target.value)}
-                  type="date"
-                  value={startDate}
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label
-                  className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-                  htmlFor="project-target"
-                >
-                  Target date <span className="font-normal text-zinc-400">(optional)</span>
-                </label>
-                <input
-                  className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
-                  id="project-target"
-                  onChange={e => setTargetDate(e.target.value)}
-                  type="date"
-                  value={targetDate}
-                />
-              </div>
-            </div>
           </div>
+        </div>
 
-          <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
-            {submitError && <p className="flex-1 text-xs text-red-500">{submitError}</p>}
-            <button
-              className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-              onClick={onClose}
-              type="button"
-            >
-              Cancel
-            </button>
-            <button
-              className={cn(
-                'rounded-md px-4 py-1.5 text-sm font-medium text-white transition-colors',
-                'bg-indigo-600 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50',
-              )}
-              disabled={!canSubmit}
-              type="submit"
-            >
-              {submitting ? 'Creating...' : 'Create project'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </dialog>
+        <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
+          {submitError && <p className="flex-1 text-xs text-red-500">{submitError}</p>}
+          <button
+            className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            onClick={onClose}
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            className={cn(
+              'rounded-md px-4 py-1.5 text-sm font-medium text-white transition-colors',
+              'bg-indigo-600 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50',
+            )}
+            disabled={!canSubmit}
+            type="submit"
+          >
+            {submitting ? 'Creating...' : 'Create project'}
+          </button>
+        </div>
+      </form>
+    </ModalDialog>
   );
 });

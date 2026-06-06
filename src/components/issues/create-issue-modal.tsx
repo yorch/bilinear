@@ -12,6 +12,7 @@ import { LabelSelect } from '../properties/label-select';
 import { PrioritySelect } from '../properties/priority-select';
 import { ProjectSelect } from '../properties/project-select';
 import { StatusSelect } from '../properties/status-select';
+import { ModalDialog } from '../ui/modal-dialog';
 import { TemplateSelector } from './template-selector';
 
 interface CreateIssueInput {
@@ -173,91 +174,71 @@ export function CreateIssueModal({
     }
   };
 
-  if (!open) {
-    return null;
-  }
-
   return (
-    <dialog
-      aria-label="Create issue"
-      className="fixed inset-0 z-50 flex h-screen w-screen items-center justify-center bg-black/40 p-0 m-0 border-none max-w-none max-h-none"
-      onClick={e => {
-        if (e.target === e.currentTarget) {
-          onClose();
-        }
-      }}
-      onKeyDown={e => {
-        if (e.key === 'Escape') {
-          onClose();
-        }
-      }}
-      open
-    >
-      <div className="w-full max-w-lg rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
-        <form className="flex flex-col" onSubmit={handleSubmit}>
-          {/* Title */}
-          <div className="px-5 pt-5">
-            <input
-              className="w-full bg-transparent text-lg font-medium text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
-              onChange={e => setTitle(e.target.value)}
-              placeholder="Issue title"
-              ref={titleRef}
-              required
-              type="text"
-              value={title}
-            />
-          </div>
+    <ModalDialog aria-label="Create issue" maxWidth="lg" onClose={onClose} open={open}>
+      <form className="flex flex-col" onSubmit={handleSubmit}>
+        {/* Title */}
+        <div className="px-5 pt-5">
+          <input
+            className="w-full bg-transparent text-lg font-medium text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
+            onChange={e => setTitle(e.target.value)}
+            placeholder="Issue title"
+            ref={titleRef}
+            required
+            type="text"
+            value={title}
+          />
+        </div>
 
-          {/* Description */}
-          <div className="px-5 pt-2">
-            <TipTapEditor
-              className="text-sm text-zinc-600 dark:text-zinc-400"
-              content={description}
-              onChange={html => setDescription(html)}
-              placeholder="Add description… (optional, supports **markdown**)"
-            />
-          </div>
+        {/* Description */}
+        <div className="px-5 pt-2">
+          <TipTapEditor
+            className="text-sm text-zinc-600 dark:text-zinc-400"
+            content={description}
+            onChange={html => setDescription(html)}
+            placeholder="Add description… (optional, supports **markdown**)"
+          />
+        </div>
 
-          {/* Properties toolbar */}
-          <div className="flex flex-wrap items-center gap-1 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
-            <StatusSelect onChange={setStateId} states={states} value={stateId} />
-            <PrioritySelect onChange={setPriority} value={priority} />
-            <AssigneeSelect onChange={setAssigneeId} users={users} value={assigneeId} />
-            <LabelSelect labels={labels} onChange={setLabelIds} value={labelIds} />
-            <DueDatePicker onChange={setDueDate} value={dueDate} />
-            <ProjectSelect onChange={setProjectId} value={projectId} />
-            {teamId && (
-              <TemplateSelector
-                forceOpen={templateOpen}
-                onClose={() => setTemplateOpen(false)}
-                onSelect={applyTemplate}
-                teamId={teamId}
-              />
+        {/* Properties toolbar */}
+        <div className="flex flex-wrap items-center gap-1 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
+          <StatusSelect onChange={setStateId} states={states} value={stateId} />
+          <PrioritySelect onChange={setPriority} value={priority} />
+          <AssigneeSelect onChange={setAssigneeId} users={users} value={assigneeId} />
+          <LabelSelect labels={labels} onChange={setLabelIds} value={labelIds} />
+          <DueDatePicker onChange={setDueDate} value={dueDate} />
+          <ProjectSelect onChange={setProjectId} value={projectId} />
+          {teamId && (
+            <TemplateSelector
+              forceOpen={templateOpen}
+              onClose={() => setTemplateOpen(false)}
+              onSelect={applyTemplate}
+              teamId={teamId}
+            />
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
+          <button
+            className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            onClick={onClose}
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            className={cn(
+              'rounded-md px-4 py-1.5 text-sm font-medium text-white transition-colors',
+              'bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed',
             )}
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
-            <button
-              className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-              onClick={onClose}
-              type="button"
-            >
-              Cancel
-            </button>
-            <button
-              className={cn(
-                'rounded-md px-4 py-1.5 text-sm font-medium text-white transition-colors',
-                'bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed',
-              )}
-              disabled={!title.trim() || submitting}
-              type="submit"
-            >
-              {submitting ? 'Creating…' : 'Create issue'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </dialog>
+            disabled={!title.trim() || submitting}
+            type="submit"
+          >
+            {submitting ? 'Creating…' : 'Create issue'}
+          </button>
+        </div>
+      </form>
+    </ModalDialog>
   );
 }
