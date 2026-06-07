@@ -36,7 +36,7 @@ export const WorkspaceClient = observer(function WorkspaceClient({
   children: React.ReactNode;
 }) {
   const { uiStore, teamStore, workflowStateStore } = useStore();
-  const params = useParams<{ workspace?: string }>();
+  const params = useParams<{ workspace: string }>();
   const workspaceKey = params.workspace;
   const { items: recentItems } = useRecentItems(workspaceKey);
   const router = useRouter();
