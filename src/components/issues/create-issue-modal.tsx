@@ -81,11 +81,14 @@ export function CreateIssueModal({
   // setSubmitting(true) ever lands and create the issue twice.
   const submittingRef = useRef(false);
 
-  const patchForm = (patch: Partial<FormState>) => setForm(prev => ({ ...prev, ...patch }));
+  const patchForm = useCallback(
+    (patch: Partial<FormState>) => setForm(prev => ({ ...prev, ...patch })),
+    [],
+  );
 
-  const applyTemplate = useCallback((data: object) => {
-    const d = data as Record<string, unknown>;
-    setForm(prev => {
+  const applyTemplate = useCallback(
+    (data: object) => {
+      const d = data as Record<string, unknown>;
       const patch: Partial<FormState> = {};
       if (typeof d.assigneeId === 'string') {
         patch.assigneeId = d.assigneeId;
@@ -105,9 +108,10 @@ export function CreateIssueModal({
       if (typeof d.title === 'string') {
         patch.title = d.title;
       }
-      return { ...prev, ...patch };
-    });
-  }, []);
+      patchForm(patch);
+    },
+    [patchForm],
+  );
 
   // Reset form state only when the modal transitions from closed to open.
   // Including the MobX-derived props (states, defaultStateId, teamId) in the

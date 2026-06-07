@@ -12,17 +12,25 @@ interface ProjectListViewProps {
   workspaceKey: string;
 }
 
+const ACTIVE_STATUSES = ['inProgress', 'planned', 'backlog'];
+const COMPLETED_STATUSES = ['completed', 'canceled'];
+
 export const ProjectListView = observer(function ProjectListView({
   workspaceKey,
 }: ProjectListViewProps) {
   const { projectStore, uiStore } = useStore();
   const projects = projectStore.all;
 
-  const activeStatuses = ['inProgress', 'planned', 'backlog'];
-  const completedStatuses = ['completed', 'canceled'];
-
-  const activeProjects = projects.filter(p => activeStatuses.includes(p.statusType));
-  const completedProjects = projects.filter(p => completedStatuses.includes(p.statusType));
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the intentional reactive trigger
+  const activeProjects = useMemo(
+    () => projects.filter(p => ACTIVE_STATUSES.includes(p.statusType)),
+    [projectStore.pool.size],
+  );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the intentional reactive trigger
+  const completedProjects = useMemo(
+    () => projects.filter(p => COMPLETED_STATUSES.includes(p.statusType)),
+    [projectStore.pool.size],
+  );
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">

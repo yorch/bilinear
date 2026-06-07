@@ -12,7 +12,6 @@ import {
   GET_COMMENTS_QUERY,
 } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
 import type { MentionItem } from '../editor/mention-list';
 import { CommentCard, type CommentItem } from './comment-card';
 import { CommentComposer } from './comment-composer';
@@ -182,7 +181,7 @@ export function CommentThread({
       ))}
 
       {/* New comment composer */}
-      <div className={cn('mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800')}>
+      <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
         <CommentComposer
           issueId={issueId}
           mentionIssues={mentionIssues}

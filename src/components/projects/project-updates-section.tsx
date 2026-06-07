@@ -59,12 +59,15 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
         <CreateUpdateForm
           onClose={() => setCreating(false)}
           onSubmit={async (body, health) => {
-            await gql(
+            const res = await gql(
               `mutation ($input: ProjectUpdateCreateInput!) {
                 projectUpdateCreate(input: $input) { success }
               }`,
               { input: { body, health: health || null, projectId } },
             );
+            if (res.errors?.length) {
+              throw new Error('mutation failed');
+            }
           }}
           showNone
         />
@@ -89,12 +92,15 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
                   key={update.id}
                   onClose={() => setEditingId(null)}
                   onSave={async (body, health) => {
-                    await gql(
+                    const res = await gql(
                       `mutation ($id: ID!, $input: ProjectUpdateUpdateInput!) {
                         projectUpdateUpdate(id: $id, input: $input) { success }
                       }`,
                       { id: update.id, input: { body, health: health || null } },
                     );
+                    if (res.errors?.length) {
+                      throw new Error('mutation failed');
+                    }
                   }}
                   showNone
                 />

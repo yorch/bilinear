@@ -32,13 +32,17 @@ export function CreateUpdateForm({
       return;
     }
     setSubmitting(true);
+    let succeeded = false;
     try {
       await onSubmit(body.trim(), health);
-      onClose();
+      succeeded = true;
     } catch {
       toast.error('Failed to post update');
     } finally {
       setSubmitting(false);
+    }
+    if (succeeded) {
+      onClose();
     }
   };
 
@@ -111,13 +115,17 @@ export function EditUpdateForm({
       return;
     }
     setSubmitting(true);
+    let succeeded = false;
     try {
       await onSave(body.trim(), health);
-      onClose();
+      succeeded = true;
     } catch {
       toast.error('Failed to save update');
     } finally {
       setSubmitting(false);
+    }
+    if (succeeded) {
+      onClose();
     }
   };
 

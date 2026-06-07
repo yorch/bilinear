@@ -23,7 +23,7 @@ import {
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useAuth } from '@/hooks/use-auth';
 import { gql } from '@/lib/graphql';
@@ -83,20 +83,10 @@ function favoriteLabel(fav: FavoriteMeta): string {
   switch (e.__typename) {
     case 'Issue':
       return `${e.identifier} ${e.title}`;
-    case 'Project':
-      return e.name;
-    case 'Initiative':
-      return e.name;
-    case 'CustomView':
-      return e.name;
-    case 'Cycle':
-      return e.name;
     case 'Document':
       return e.title;
-    case 'Team':
-      return e.name;
     default:
-      return '';
+      return e.name;
   }
 }
 
@@ -238,18 +228,21 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
 }) {
   const { customViewStore, teamStore, uiStore } = useStore();
 
-  const allTeams = teamStore.all;
-  const rootTeams = allTeams.filter(t => !t.parentId);
-  const childTeamsByParent = allTeams.reduce<Record<string, typeof allTeams>>((acc, t) => {
-    if (t.parentId) {
-      if (!acc[t.parentId]) {
-        acc[t.parentId] = [];
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the intentional reactive trigger
+  const teams = useMemo(() => {
+    const allTeams = teamStore.all;
+    const rootTeams = allTeams.filter(t => !t.parentId);
+    const childTeamsByParent = allTeams.reduce<Record<string, typeof allTeams>>((acc, t) => {
+      if (t.parentId) {
+        if (!acc[t.parentId]) {
+          acc[t.parentId] = [];
+        }
+        acc[t.parentId].push(t);
       }
-      acc[t.parentId].push(t);
-    }
-    return acc;
-  }, {});
-  const teams = rootTeams.flatMap(t => [t, ...(childTeamsByParent[t.id] ?? [])]);
+      return acc;
+    }, {});
+    return rootTeams.flatMap(t => [t, ...(childTeamsByParent[t.id] ?? [])]);
+  }, [teamStore.pool.size]);
 
   return (
     <>

@@ -85,17 +85,17 @@ export function InitiativeUpdatesSection({
 
       {creating && (
         <CreateUpdateForm
-          initialHealth="onTrack"
           onClose={() => setCreating(false)}
           onSubmit={async (body, health) => {
             const res = await gql(INITIATIVE_UPDATE_CREATE_MUTATION, {
-              input: { body, bodyData: {}, health, initiativeId },
+              input: { body, bodyData: {}, health: health || null, initiativeId },
             });
             if (res.errors?.length) {
               throw new Error('mutation failed');
             }
             await fetchUpdates();
           }}
+          showNone
         />
       )}
 
@@ -113,19 +113,20 @@ export function InitiativeUpdatesSection({
               return (
                 <EditUpdateForm
                   initialBody={update.body}
-                  initialHealth={update.health ?? 'onTrack'}
+                  initialHealth={update.health ?? ''}
                   key={update.id}
                   onClose={() => setEditingId(null)}
                   onSave={async (body, health) => {
                     const res = await gql(INITIATIVE_UPDATE_EDIT_MUTATION, {
                       id: update.id,
-                      input: { body, bodyData: {}, health },
+                      input: { body, bodyData: {}, health: health || null },
                     });
                     if (res.errors?.length) {
                       throw new Error('mutation failed');
                     }
                     await fetchUpdates();
                   }}
+                  showNone
                 />
               );
             }

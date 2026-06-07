@@ -1,9 +1,9 @@
 'use client';
 
 import { CheckCircle, CornerDownRight, MoreHorizontal, Smile } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { useOutsideClick } from '@/hooks/use-outside-click';
+import { usePopover } from '@/hooks/use-popover';
 import { gql } from '@/lib/graphql';
 import { COMMENT_UPDATE_MUTATION, CONVERT_TO_SUB_ISSUE_MUTATION } from '@/lib/graphql-queries';
 import { QUICK_EMOJIS } from '@/lib/issue-utils';
@@ -74,23 +74,19 @@ export function CommentCard({
   onToggleReaction: (commentId: string, emoji: string, hasReacted: boolean) => void;
   onReply: (id: string) => void;
   showReplyTo: string | null;
-  onSubmitReply: (body: string, parentId?: string) => void;
+  onSubmitReply: (body: string, parentId?: string) => void | Promise<void>;
   onUpdate: (comment: CommentItem) => void;
   onConvertToSubIssue: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [editBody, setEditBody] = useState(comment.body);
-  const [showMenu, setShowMenu] = useState(false);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [replyBody, setReplyBody] = useState('');
-  const menuRef = useRef<HTMLDivElement>(null);
-  const emojiRef = useRef<HTMLDivElement>(null);
+  const [replySubmitting, setReplySubmitting] = useState(false);
+  const { open: showMenu, setOpen: setShowMenu, ref: menuRef } = usePopover();
+  const { open: showEmojiPicker, setOpen: setShowEmojiPicker, ref: emojiRef } = usePopover();
 
   const isOwn = comment.author.id === currentUserId;
   const isResolved = !!comment.resolvedAt;
-
-  useOutsideClick(menuRef, () => setShowMenu(false), showMenu);
-  useOutsideClick(emojiRef, () => setShowEmojiPicker(false), showEmojiPicker);
 
   const reactionCounts = useMemo(
     () =>
@@ -397,12 +393,17 @@ export function CommentCard({
             mentionIssues={mentionIssues}
             mentionUsers={mentionUsers}
             onChange={setReplyBody}
-            onSubmit={body => {
-              onSubmitReply(body, comment.id);
-              setReplyBody('');
+            onSubmit={async body => {
+              setReplySubmitting(true);
+              try {
+                await onSubmitReply(body, comment.id);
+              } finally {
+                setReplySubmitting(false);
+                setReplyBody('');
+              }
             }}
             placeholder="Reply…"
-            submitting={false}
+            submitting={replySubmitting}
             value={replyBody}
           />
         </div>

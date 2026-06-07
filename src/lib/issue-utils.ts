@@ -11,13 +11,9 @@ export const PRIORITY_CONFIG = {
 export type Priority = keyof typeof PRIORITY_CONFIG;
 
 /** Flat label lookup keyed by priority integer (0–4). */
-export const PRIORITY_LABELS: Record<number, string> = {
-  0: PRIORITY_CONFIG[0].label,
-  1: PRIORITY_CONFIG[1].label,
-  2: PRIORITY_CONFIG[2].label,
-  3: PRIORITY_CONFIG[3].label,
-  4: PRIORITY_CONFIG[4].label,
-};
+export const PRIORITY_LABELS: Record<number, string> = Object.fromEntries(
+  Object.entries(PRIORITY_CONFIG).map(([k, v]) => [Number(k), v.label]),
+);
 
 /** Select-compatible options for filter and picker UIs. */
 export const PRIORITY_OPTIONS: { label: string; value: string }[] = [0, 1, 2, 3, 4].map(p => ({
