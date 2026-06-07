@@ -297,7 +297,7 @@ export class AuthService {
   async listApiTokens(userId: string) {
     return this.prisma.authToken.findMany({
       orderBy: { createdAt: 'desc' },
-      where: { revokedAt: null, type: 'api_key', userId },
+      where: { expiresAt: { gt: new Date() }, revokedAt: null, type: 'api_key', userId },
     });
   }
 

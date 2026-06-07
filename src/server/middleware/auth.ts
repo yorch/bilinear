@@ -30,12 +30,18 @@ export async function extractAuthContext(
   if (prisma && token.startsWith('bil_')) {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const authToken = await prisma.authToken.findFirst({
-      include: {
+      select: {
+        id: true,
         user: {
-          include: {
-            orgMemberships: { orderBy: { createdAt: 'asc' as const }, take: 1 },
+          select: {
+            orgMemberships: {
+              orderBy: { createdAt: 'asc' as const },
+              select: { organizationId: true },
+              take: 1,
+            },
           },
         },
+        userId: true,
       },
       where: {
         expiresAt: { gt: new Date() },

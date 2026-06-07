@@ -22,7 +22,7 @@ import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
 // ---------------------------------------------------------------------------
 
 const ISSUE_FIELDS = `
-  id identifier number title priority estimate dueDate startDate
+  id identifier number title description priority estimate dueDate startDate
   sortOrder prioritySortOrder trashed
   teamId organizationId stateId assigneeId creatorId parentId
   projectId cycleId branchName
@@ -67,6 +67,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
   // All non-trashed, non-archived issues assigned to the current user,
   // across every team. Deps: pool.size catches adds/removes; userStore.pool.size
   // catches the current user resolving after bootstrap.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the MobX reactive trigger
   const allMyIssues: IssueDetail[] = useMemo(() => {
     if (!currentUser) {
       return [];
@@ -82,18 +83,15 @@ const MyIssuesPage = observer(function MyIssuesPage() {
           .map(l => ({ color: l.color, id: l.id, name: l.name })),
       }))
       .sort((a, b) => a.sortOrder - b.sortOrder);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [issueStore.pool.size, userStore.pool.size, currentUser, issueStore, labelStore]);
 
   // All active workflow states across all teams (for grouping + filter options).
-  const states = useMemo(
-    () => workflowStateStore.all,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [workflowStateStore.pool.size],
-  );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the MobX reactive trigger
+  const states = useMemo(() => workflowStateStore.all, [workflowStateStore.pool.size]);
 
   const issues = applyFilters(allMyIssues, filterSet);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the MobX reactive trigger
   const users: IssueUser[] = useMemo(
     () =>
       userStore.all.map(u => ({
@@ -103,10 +101,10 @@ const MyIssuesPage = observer(function MyIssuesPage() {
         id: u.id,
         initials: u.initials,
       })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [userStore.pool.size],
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the MobX reactive trigger
   const labels: IssueLabel[] = useMemo(
     () =>
       labelStore.all.map(l => ({
@@ -114,13 +112,13 @@ const MyIssuesPage = observer(function MyIssuesPage() {
         id: l.id,
         name: l.name,
       })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [labelStore.pool.size],
   );
 
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
   const hasError = syncStore.status === 'error';
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the MobX reactive trigger
   const detailIssue: IssueDetail | null = useMemo(() => {
     if (!detailIssueId) {
       return null;
@@ -134,7 +132,6 @@ const MyIssuesPage = observer(function MyIssuesPage() {
       .filter((l): l is DBIssueLabel => l !== null)
       .map(l => ({ color: l.color, id: l.id, name: l.name }));
     return { ...raw, dueDate: raw.dueDate ?? null, labels: issueLabels };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detailIssueId, issueStore.pool.size, issueStore, labelStore]);
 
   // ── Mutations ─────────────────────────────────────────────────────────────
@@ -241,9 +238,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Loading…
-      </div>
+      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">Loading…</div>
     );
   }
 

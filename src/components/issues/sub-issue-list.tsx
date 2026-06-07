@@ -44,20 +44,24 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
 
   // pool.size is the MobX reactive dependency per repo convention.
   // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size values are the intentional reactive triggers
-  const { subIssues, grouped } = useMemo(() => {
+  const { subIssues, grouped, completedCount } = useMemo(() => {
     const issues = Array.from(issueStore.pool.values()).filter(
       i => i.parentId === parentIssueId && !i.trashed && !i.archivedAt,
     );
     const g = new Map<string, typeof issues>();
+    let done = 0;
     for (const issue of issues) {
       const state = workflowStateStore.findById(issue.stateId);
       const category = state?.type ?? 'backlog';
+      if (category === 'completed') {
+        done++;
+      }
       if (!g.has(category)) {
         g.set(category, []);
       }
       g.get(category)?.push(issue);
     }
-    return { grouped: g, subIssues: issues };
+    return { completedCount: done, grouped: g, subIssues: issues };
   }, [parentIssueId, issueStore.pool.size, workflowStateStore.pool.size]);
 
   // Guard: parent issue not yet in store — can happen during a race between
@@ -67,9 +71,6 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
     return null;
   }
 
-  const completedCount = subIssues.filter(
-    i => workflowStateStore.findById(i.stateId)?.type === 'completed',
-  ).length;
   const completionPct = subIssues.length > 0 ? (completedCount / subIssues.length) * 100 : 0;
 
   return (

@@ -219,9 +219,10 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
       const data = result.data as
         | { apiTokenCreate?: { plaintext: string; token: ApiToken } }
         | undefined;
-      if (data?.apiTokenCreate) {
-        setApiTokens(prev => [data.apiTokenCreate?.token as ApiToken, ...prev]);
-        setNewPlaintext(data.apiTokenCreate.plaintext);
+      if (data?.apiTokenCreate?.token) {
+        const { token, plaintext } = data.apiTokenCreate;
+        setApiTokens(prev => [token as ApiToken, ...prev]);
+        setNewPlaintext(plaintext);
         setNewTokenLabel('');
       }
     } catch {
