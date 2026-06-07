@@ -1,9 +1,9 @@
 'use client';
 
 import { X } from 'lucide-react';
+import { StatusDot } from '@/components/properties/status-select';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { getPriorityConfig } from '@/lib/issue-utils';
-import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 
 const PRIORITIES = [0, 1, 2, 3, 4] as const;
@@ -15,15 +15,6 @@ interface BulkActionBarProps {
   onUpdate: (patch: Record<string, unknown>) => void;
   states: WorkflowState[];
   users: IssueUser[];
-}
-
-function StatusDot({ color }: { color: string }) {
-  return (
-    <span
-      className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-      style={{ backgroundColor: color }}
-    />
-  );
 }
 
 export function BulkActionBar({
@@ -42,7 +33,7 @@ export function BulkActionBar({
 
       <SelectPopover
         triggerChildren={
-          <span className={cn('px-2 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-400')}>
+          <span className="px-2 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-400">
             Status
           </span>
         }

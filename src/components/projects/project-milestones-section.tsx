@@ -10,6 +10,9 @@ import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
+const MILESTONE_FIELDS =
+  'id name description targetDate projectId sortOrder archivedAt createdAt updatedAt';
+
 interface ProjectMilestonesSectionProps {
   projectId: string;
 }
@@ -217,7 +220,10 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
     try {
       const res = await gql(
         `mutation ($input: ProjectMilestoneCreateInput!) {
-          projectMilestoneCreate(input: $input) { success }
+          projectMilestoneCreate(input: $input) {
+            success
+            projectMilestone { ${MILESTONE_FIELDS} }
+          }
         }`,
         {
           input: {
@@ -231,6 +237,12 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
       if (res.errors?.length) {
         throw new Error((res.errors[0] as { message: string }).message ?? 'mutation failed');
       }
+      const milestone = (
+        res.data as { projectMilestoneCreate?: { projectMilestone?: DBProjectMilestone } }
+      )?.projectMilestoneCreate?.projectMilestone;
+      if (milestone) {
+        projectStore.applyMilestoneSyncAction('I', milestone.id, milestone);
+      }
       setCreating(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to create milestone');
@@ -241,7 +253,10 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
     try {
       const res = await gql(
         `mutation ($id: ID!, $input: ProjectMilestoneUpdateInput!) {
-          projectMilestoneUpdate(id: $id, input: $input) { success }
+          projectMilestoneUpdate(id: $id, input: $input) {
+            success
+            projectMilestone { ${MILESTONE_FIELDS} }
+          }
         }`,
         {
           id,
@@ -254,6 +269,12 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
       );
       if (res.errors?.length) {
         throw new Error((res.errors[0] as { message: string }).message ?? 'mutation failed');
+      }
+      const milestone = (
+        res.data as { projectMilestoneUpdate?: { projectMilestone?: DBProjectMilestone } }
+      )?.projectMilestoneUpdate?.projectMilestone;
+      if (milestone) {
+        projectStore.applyMilestoneSyncAction('U', milestone.id, milestone);
       }
       setEditingId(null);
     } catch (err) {
@@ -272,6 +293,7 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
       if (res.errors?.length) {
         throw new Error((res.errors[0] as { message: string }).message ?? 'mutation failed');
       }
+      projectStore.applyMilestoneSyncAction('D', id, null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete milestone');
     }

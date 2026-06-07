@@ -257,6 +257,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
 
   const handleBulkUpdate = useCallback(
     (ids: string[], patch: Record<string, unknown>) => {
+      const snapshots = ids.map(id => ({ id, snapshot: issueStore.findById(id) }));
       for (const id of ids) {
         issueStore.optimisticUpdate(id, patch as Partial<DBIssue>);
       }
@@ -265,7 +266,11 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         { ids, input: patch },
         {
           onError: () => {
-            // No per-issue snapshots stored — just re-fetch via sync on error
+            for (const { id, snapshot } of snapshots) {
+              if (snapshot) {
+                issueStore.optimisticUpdate(id, snapshot);
+              }
+            }
           },
           onSuccess: data => {
             const updated =

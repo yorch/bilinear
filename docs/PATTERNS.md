@@ -2097,8 +2097,10 @@ Multi-select checkboxes in the issue list view with a floating action bar for ba
 
 - **Entry point** — `IssueListView` accepts `onBulkUpdate?: (ids: string[], patch) => void`. When present, each `IssueRow` checkbox enters bulk-select mode (uses `checked`/`onCheck` props instead of the single-select `selected`/`onSelect`).
 - **Range select** — Shift+click extends selection from the last-checked index, mirroring the board view's pattern.
-- **`BulkActionBar`** — fixed bottom bar (`src/components/issues/bulk-action-bar.tsx`). Appears when `checkedIds.size > 0`. Provides Status / Priority / Assignee / Label `SelectPopover` dropdowns; clears selection after applying.
-- **Mutation** — `issuesBulkUpdate(ids, input)` on team page and My Issues page. Optimistically updates each issue in the MobX store, then applies server-returned issues via `applySyncAction`.
+- **`BulkActionBar`** — fixed bottom bar (`src/components/issues/bulk-action-bar.tsx`). Appears when `checkedIds.size > 0`. Provides Status / Priority / Assignee / Label `SelectPopover` dropdowns; clears selection after applying. Imports `StatusDot` from `@/components/properties/status-select` — do not redefine it locally.
+- **Mutation** — `issuesBulkUpdate(ids, input)` on team page and My Issues page. Snapshots each issue via `issueStore.findById` before the optimistic update; rolls back on `onError`, applies server-returned issues via `applySyncAction` on `onSuccess`.
+- **Selection reset** — `IssueListView` derives `issueIds = issues.map(i => i.id).join(',')` via `useMemo` and resets `checkedIds` in a `useEffect` when it changes, so stale selections are cleared automatically when filters or team context changes.
+- **Checkbox accessibility** — bulk-mode checkbox uses `onChange` (fires for both mouse and keyboard/Space) to call `onCheck(shiftKey)`; `onClick` only calls `stopPropagation`. Never use `readOnly` on a checkbox in bulk mode.
 
 ## 70. Cycle Burndown Chart (2026-06-07)
 
@@ -2106,6 +2108,7 @@ True agile burndown chart alongside the existing burnup chart in `CycleDetailVie
 
 - **Component** — `src/components/cycles/burndown-chart.tsx`. SVG-based (600×300 viewBox), same axes/grid/date-label pattern as `burnup-chart.tsx`. Plots remaining issues (indigo line) against an ideal straight-line burndown from initial scope to 0 (dashed gray).
 - **UI** — tab toggle between "Burndown" and "Burnup" in `cycle-detail-view.tsx`.
+- **Y-axis scale** — `maxY = Math.max(...data.map(d => Math.max(d.remaining, d.scope)), 1)`. Using only the day-0 scope would clip scope creep (remaining > initial scope) off the SVG viewport.
 
 ## 71. Issue Templates CRUD UI (2026-06-07)
 
@@ -2115,6 +2118,7 @@ Template management section in the team settings page.
 - **Form fields** — name, description (textarea), status/priority/assignee defaults (populated from team stores), label multi-toggle, "Set as default" checkbox.
 - **Mutations** — `issueTemplateCreate` / `issueTemplateUpdate` / `issueTemplateDelete`. Applies `applySyncAction` after each write for immediate UI update.
 - **Location** — rendered in `team/[key]/settings/page.tsx` between Custom Fields and Danger Zone.
+- **Priority guard** — use `td.priority !== undefined && td.priority !== null` (not a truthy check) to gate the priority display chip; priority 0 ("No priority") is falsy but valid.
 
 ## 72. Project Milestones UI (2026-06-07)
 
@@ -2122,5 +2126,5 @@ Inline milestone management in the project detail view.
 
 - **Component** — `src/components/projects/project-milestones-section.tsx` (`ProjectMilestonesSection`). MobX `observer`; reads from `projectStore.getMilestones(projectId)`.
 - **Form** — inline create/edit with name, description, and target date (date input). Delete confirms via `window.confirm`.
-- **Mutations** — `projectMilestoneCreate` / `projectMilestoneUpdate` / `projectMilestoneDelete`.
+- **Mutations** — `projectMilestoneCreate` / `projectMilestoneUpdate` / `projectMilestoneDelete`. Create and update request the milestone fields in the response and call `projectStore.applyMilestoneSyncAction` immediately so the list updates without waiting for the WebSocket SyncAction. Delete calls `applyMilestoneSyncAction('D', id, null)` immediately.
 - **Location** — replaces the old read-only milestones block in `project-detail-view.tsx`.

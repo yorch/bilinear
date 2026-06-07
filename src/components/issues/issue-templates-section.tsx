@@ -202,9 +202,10 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
             const stateName = td.stateId
               ? (states.find(s => s.id === td.stateId)?.name ?? null)
               : null;
-            const priority = td.priority
-              ? (PRIORITY_OPTIONS.find(p => p.value === String(td.priority))?.label ?? null)
-              : null;
+            const priority =
+              td.priority !== undefined && td.priority !== null
+                ? (PRIORITY_OPTIONS.find(p => p.value === String(td.priority))?.label ?? null)
+                : null;
             const assigneeName = td.assigneeId
               ? (users.find(u => u.id === td.assigneeId)?.displayName ?? null)
               : null;

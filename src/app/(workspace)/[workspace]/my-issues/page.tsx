@@ -174,6 +174,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
 
   const handleBulkUpdate = useCallback(
     (ids: string[], patch: Record<string, unknown>) => {
+      const snapshots = ids.map(id => ({ id, snapshot: issueStore.findById(id) }));
       for (const id of ids) {
         issueStore.optimisticUpdate(id, patch as Partial<DBIssue>);
       }
@@ -181,7 +182,13 @@ const MyIssuesPage = observer(function MyIssuesPage() {
         ISSUES_BULK_UPDATE_MUTATION,
         { ids, input: patch },
         {
-          onError: () => {},
+          onError: () => {
+            for (const { id, snapshot } of snapshots) {
+              if (snapshot) {
+                issueStore.optimisticUpdate(id, snapshot);
+              }
+            }
+          },
           onSuccess: data => {
             const updated =
               (data as { issuesBulkUpdate?: { issues?: DBIssue[] } })?.issuesBulkUpdate?.issues ??

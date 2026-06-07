@@ -138,14 +138,10 @@ export function IssueRow({
           'h-3.5 w-3.5 flex-shrink-0 focus:opacity-100',
           isBulkMode && checked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
         )}
-        onChange={isBulkMode ? undefined : onSelect}
-        onClick={e => {
-          e.stopPropagation();
-          if (isBulkMode) {
-            onCheck(e.shiftKey);
-          }
-        }}
-        readOnly={isBulkMode}
+        onChange={
+          isBulkMode ? e => onCheck(Boolean((e.nativeEvent as MouseEvent).shiftKey)) : onSelect
+        }
+        onClick={e => e.stopPropagation()}
         type="checkbox"
       />
 

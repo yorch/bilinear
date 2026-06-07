@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ColumnKey } from '@/hooks/use-visible-columns';
 import type { DBCustomFieldDefinition } from '@/lib/db';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
@@ -66,6 +66,13 @@ export function IssueListView({
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const lastCheckedIndexRef = useRef<number>(-1);
+
+  const issueIds = useMemo(() => issues.map(i => i.id).join(','), [issues]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: issueIds is a stable change signal; the effect resets selection when the visible issue set changes
+  useEffect(() => {
+    setCheckedIds(new Set());
+    lastCheckedIndexRef.current = -1;
+  }, [issueIds]);
 
   function handleCheck(issueId: string, shiftKey: boolean) {
     if (!onBulkUpdate) {

@@ -29,7 +29,7 @@ export function BurndownChart({ data }: BurndownChartProps) {
   const chartHeight = height - paddingTop - paddingBottom;
 
   const initialScope = data[0].scope;
-  const maxY = Math.max(initialScope, 1);
+  const maxY = Math.max(...data.map(d => Math.max(d.remaining, d.scope)), 1);
   const n = data.length;
 
   const xScale = (i: number) => paddingLeft + (n > 1 ? (i / (n - 1)) * chartWidth : chartWidth / 2);
