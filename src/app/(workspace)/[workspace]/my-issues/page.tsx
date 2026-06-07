@@ -40,6 +40,16 @@ const ISSUE_UPDATE_MUTATION = `
   }
 `;
 
+const ISSUES_BULK_UPDATE_MUTATION = `
+  mutation IssuesBulkUpdate($ids: [ID!]!, $input: IssueUpdateInput!) {
+    issuesBulkUpdate(ids: $ids, input: $input) {
+      success
+      lastSyncId
+      issues { ${ISSUE_FIELDS} }
+    }
+  }
+`;
+
 // ---------------------------------------------------------------------------
 // Page component
 // ---------------------------------------------------------------------------
@@ -154,6 +164,30 @@ const MyIssuesPage = observer(function MyIssuesPage() {
             const updated = (data as { issueUpdate?: { issue?: DBIssue } })?.issueUpdate?.issue;
             if (updated) {
               issueStore.applySyncAction('U', id, updated);
+            }
+          },
+        },
+      );
+    },
+    [issueStore, txQueue],
+  );
+
+  const handleBulkUpdate = useCallback(
+    (ids: string[], patch: Record<string, unknown>) => {
+      for (const id of ids) {
+        issueStore.optimisticUpdate(id, patch as Partial<DBIssue>);
+      }
+      txQueue.enqueue(
+        ISSUES_BULK_UPDATE_MUTATION,
+        { ids, input: patch },
+        {
+          onError: () => {},
+          onSuccess: data => {
+            const updated =
+              (data as { issuesBulkUpdate?: { issues?: DBIssue[] } })?.issuesBulkUpdate?.issues ??
+              [];
+            for (const issue of updated) {
+              issueStore.applySyncAction('U', issue.id, issue);
             }
           },
         },
@@ -304,6 +338,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
           <IssueListView
             issues={issues}
             labels={labels}
+            onBulkUpdate={handleBulkUpdate}
             onOpen={handleOpen}
             onPropertyClosed={() => setOpenProperty(null)}
             onSelect={setSelectedId}

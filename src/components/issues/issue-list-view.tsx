@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ColumnKey } from '@/hooks/use-visible-columns';
 import type { DBCustomFieldDefinition } from '@/lib/db';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
+import { BulkActionBar } from './bulk-action-bar';
 import { GroupSection } from './group-section';
 import { IssueContextMenu } from './issue-context-menu';
 import type { IssueRowData, OpenProperty } from './issue-row';
@@ -16,6 +17,7 @@ interface IssueListViewProps {
   issues: IssueRowData[];
   labels: IssueLabel[];
   onArchive?: (id: string) => void;
+  onBulkUpdate?: (ids: string[], patch: Record<string, unknown>) => void;
   onDelete?: (id: string) => void;
   onOpen: (id: string) => void;
   onPropertyClosed?: () => void;
@@ -54,6 +56,7 @@ export function IssueListView({
   onUpdate,
   onArchive,
   onDelete,
+  onBulkUpdate,
   openProperty,
   onPropertyClosed,
   isColumnVisible,
@@ -61,6 +64,39 @@ export function IssueListView({
   getCustomFieldValue,
 }: IssueListViewProps) {
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const lastCheckedIndexRef = useRef<number>(-1);
+
+  function handleCheck(issueId: string, shiftKey: boolean) {
+    if (!onBulkUpdate) {
+      return;
+    }
+    const currentIndex = issues.findIndex(i => i.id === issueId);
+    setCheckedIds(prev => {
+      const next = new Set(prev);
+      if (shiftKey && lastCheckedIndexRef.current >= 0) {
+        const lo = Math.min(lastCheckedIndexRef.current, currentIndex);
+        const hi = Math.max(lastCheckedIndexRef.current, currentIndex);
+        const willCheck = !prev.has(issueId);
+        for (let idx = lo; idx <= hi; idx++) {
+          const id = issues[idx]?.id;
+          if (id) {
+            if (willCheck) {
+              next.add(id);
+            } else {
+              next.delete(id);
+            }
+          }
+        }
+      } else if (next.has(issueId)) {
+        next.delete(issueId);
+      } else {
+        next.add(issueId);
+      }
+      return next;
+    });
+    lastCheckedIndexRef.current = currentIndex;
+  }
 
   // Group issues by state, preserving workflow state order
   const stateIds = new Set(states.map(s => s.id));
@@ -113,6 +149,7 @@ export function IssueListView({
             return (
               <IssueRow
                 allLabels={labels}
+                checked={checkedIds.has(issue.id)}
                 customFields={customFields}
                 getCustomFieldValue={
                   getCustomFieldValue ? defId => getCustomFieldValue(issue.id, defId) : undefined
@@ -120,6 +157,7 @@ export function IssueListView({
                 isColumnVisible={isColumnVisible}
                 issue={issue}
                 key={issue.id}
+                onCheck={onBulkUpdate ? shiftKey => handleCheck(issue.id, shiftKey) : undefined}
                 onContextMenu={e => {
                   e.preventDefault();
                   setCtxMenu({
@@ -156,6 +194,20 @@ export function IssueListView({
           title={ctxMenu.title}
           x={ctxMenu.x}
           y={ctxMenu.y}
+        />
+      )}
+
+      {onBulkUpdate && checkedIds.size > 0 && (
+        <BulkActionBar
+          count={checkedIds.size}
+          labels={labels}
+          onClear={() => setCheckedIds(new Set())}
+          onUpdate={patch => {
+            onBulkUpdate([...checkedIds], patch);
+            setCheckedIds(new Set());
+          }}
+          states={states}
+          users={users}
         />
       )}
     </div>

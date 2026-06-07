@@ -71,6 +71,16 @@ const ISSUE_UPDATE_MUTATION = `
   }
 `;
 
+const ISSUES_BULK_UPDATE_MUTATION = `
+  mutation IssuesBulkUpdate($ids: [ID!]!, $input: IssueUpdateInput!) {
+    issuesBulkUpdate(ids: $ids, input: $input) {
+      success
+      lastSyncId
+      issues { ${ISSUE_FIELDS} }
+    }
+  }
+`;
+
 const ISSUE_ARCHIVE_MUTATION = `
   mutation IssueArchive($id: ID!) {
     issueArchive(id: $id) {
@@ -237,6 +247,32 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
             const updated = (data as { issueUpdate?: { issue?: DBIssue } })?.issueUpdate?.issue;
             if (updated) {
               issueStore.applySyncAction('U', id, updated);
+            }
+          },
+        },
+      );
+    },
+    [issueStore, txQueue],
+  );
+
+  const handleBulkUpdate = useCallback(
+    (ids: string[], patch: Record<string, unknown>) => {
+      for (const id of ids) {
+        issueStore.optimisticUpdate(id, patch as Partial<DBIssue>);
+      }
+      txQueue.enqueue(
+        ISSUES_BULK_UPDATE_MUTATION,
+        { ids, input: patch },
+        {
+          onError: () => {
+            // No per-issue snapshots stored — just re-fetch via sync on error
+          },
+          onSuccess: data => {
+            const updated =
+              (data as { issuesBulkUpdate?: { issues?: DBIssue[] } })?.issuesBulkUpdate?.issues ??
+              [];
+            for (const issue of updated) {
+              issueStore.applySyncAction('U', issue.id, issue);
             }
           },
         },
@@ -635,6 +671,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
             issues={issues}
             labels={labels}
             onArchive={handleArchive}
+            onBulkUpdate={handleBulkUpdate}
             onDelete={handleDelete}
             onOpen={handleOpen}
             onPropertyClosed={() => setOpenProperty(null)}
