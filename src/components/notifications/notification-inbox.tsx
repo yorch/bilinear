@@ -6,56 +6,15 @@ import { useEffect, useRef, useState } from 'react';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import type { DBNotification } from '@/lib/db';
 import { gql } from '@/lib/graphql';
+import {
+  GET_NOTIFICATIONS_QUERY,
+  NOTIFICATION_MARK_ALL_READ_MUTATION,
+  NOTIFICATION_MARK_READ_MUTATION,
+  NOTIFICATION_SNOOZE_MUTATION,
+} from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
-
-// ─── GraphQL ──────────────────────────────────────────────────────────────────
-
-const GET_NOTIFICATIONS_QUERY = `
-  query GetNotifications($limit: Int) {
-    notifications(limit: $limit) {
-      id
-      type
-      read
-      readAt
-      snoozedUntilAt
-      data
-      createdAt
-      userId
-      actorId
-      issueId
-      organizationId
-      updatedAt
-    }
-  }
-`;
-
-const MARK_READ_MUTATION = `
-  mutation NotificationMarkRead($id: ID!) {
-    notificationMarkRead(id: $id) {
-      success
-      lastSyncId
-    }
-  }
-`;
-
-const MARK_ALL_READ_MUTATION = `
-  mutation NotificationMarkAllRead {
-    notificationMarkAllRead {
-      success
-      lastSyncId
-    }
-  }
-`;
-
-const SNOOZE_MUTATION = `
-  mutation NotificationSnooze($id: ID!, $until: DateTime!) {
-    notificationSnooze(id: $id, until: $until) {
-      success lastSyncId
-    }
-  }
-`;
 
 // ─── Snooze helpers ───────────────────────────────────────────────────────────
 
@@ -298,7 +257,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
     notificationStore.markRead(id); // Optimistic update
     setMarkingId(id);
     try {
-      const res = await gql(MARK_READ_MUTATION, { id });
+      const res = await gql(NOTIFICATION_MARK_READ_MUTATION, { id });
       if (res.errors?.length) {
         throw new Error('Failed to mark notification as read');
       }
@@ -324,7 +283,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
     });
     setSnoozingId(id);
     try {
-      const res = await gql(SNOOZE_MUTATION, {
+      const res = await gql(NOTIFICATION_SNOOZE_MUTATION, {
         id,
         until: until.toISOString(),
       });
@@ -343,7 +302,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
   const handleMarkAllRead = async () => {
     setMarkingAll(true);
     try {
-      const res = await gql(MARK_ALL_READ_MUTATION, {});
+      const res = await gql(NOTIFICATION_MARK_ALL_READ_MUTATION, {});
       if (res.errors?.length) {
         throw new Error('Failed to mark all notifications as read');
       }

@@ -2,7 +2,7 @@
 
 import { observer } from 'mobx-react-lite';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { RecentItem } from '@/hooks/use-recent-items';
 import type { DBIssue } from '@/lib/db';
 import { IDENTIFIER_RE } from '@/lib/identifiers';
@@ -15,31 +15,29 @@ import { useStore } from '@/providers/store-provider';
 // ---------------------------------------------------------------------------
 
 type IssueItem = {
-  kind: 'issue';
   issue: DBIssue;
-  teamKey: string;
+  kind: 'issue';
   stateColor?: string;
+  teamKey: string;
 };
 type ActionItem = {
-  kind: 'action';
   id: string;
-  label: string;
   keywords: string[];
-  shortcut?: string;
+  kind: 'action';
+  label: string;
   onSelect: () => void;
+  shortcut?: string;
 };
 type ResultItem = IssueItem | ActionItem;
 
 type SubMenuMode =
   | { type: 'none' }
-  | { type: 'setStatus'; issueId: string }
-  | { type: 'setAssignee'; issueId: string }
-  | { type: 'setPriority'; issueId: string }
-  | { type: 'setLabel'; issueId: string };
+  | { issueId: string; type: 'setStatus' }
+  | { issueId: string; type: 'setAssignee' }
+  | { issueId: string; type: 'setPriority' }
+  | { issueId: string; type: 'setLabel' };
 
-// ---------------------------------------------------------------------------
-// Sub-menu placeholder labels (type-checked against SubMenuMode)
-// ---------------------------------------------------------------------------
+type SubMenuItem = { id: string; label: string; onSelect: () => void };
 
 const SUBMENU_PLACEHOLDERS = {
   setAssignee: 'Set assignee…',
@@ -49,84 +47,54 @@ const SUBMENU_PLACEHOLDERS = {
 } satisfies Record<Exclude<SubMenuMode['type'], 'none'>, string>;
 
 // ---------------------------------------------------------------------------
-// CommandPalette
+// ResultsList — observer: issueStore + workflowStateStore + teamStore
 // ---------------------------------------------------------------------------
 
-interface CommandPaletteProps {
-  recentItems?: RecentItem[];
+interface ResultsListProps {
+  activeIndex: number;
+  onItemsChange: (items: ResultItem[]) => void;
+  query: string;
+  recentItems: RecentItem[];
+  router: ReturnType<typeof useRouter>;
+  selectItem: (item: ResultItem | undefined) => void;
+  workspaceKey: string;
 }
 
-export const CommandPalette = observer(function CommandPalette({
-  recentItems = [],
-}: CommandPaletteProps) {
-  const { uiStore, issueStore, workflowStateStore, userStore, labelStore, teamStore } = useStore();
-  const router = useRouter();
-  // Read workspace key from URL — works in any nested route under [workspace]
-  const params = useParams<{ workspace?: string }>();
-  const workspaceKey = params.workspace ?? '';
+const ResultsList = observer(function ResultsList({
+  activeIndex,
+  onItemsChange,
+  query,
+  recentItems,
+  router,
+  selectItem,
+  workspaceKey,
+}: ResultsListProps) {
+  const { issueStore, teamStore, uiStore, workflowStateStore } = useStore();
 
-  const [query, setQuery] = useState('');
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const [subMenu, setSubMenu] = useState<SubMenuMode>({ type: 'none' });
-  const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
+  const trimmed = (query || '').trim().toUpperCase();
+  const exactIdentifier = IDENTIFIER_RE.test(trimmed)
+    ? (issueStore.findByIdentifier(trimmed) ?? undefined)
+    : undefined;
+  const matched = issueStore.search(query || '', 10);
+  const recent = query
+    ? []
+    : recentItems
+        .map(r => issueStore.findById(r.id))
+        .filter((i): i is DBIssue => i !== null)
+        .slice(0, 5);
+  let issues = query ? matched : recent;
+  if (exactIdentifier) {
+    issues = [exactIdentifier, ...issues.filter(i => i.id !== exactIdentifier.id)];
+  }
+  const issueItems: IssueItem[] = issues.map(issue => ({
+    issue,
+    kind: 'issue' as const,
+    stateColor: workflowStateStore.findById(issue.stateId)?.color,
+    teamKey: teamStore.findById(issue.teamId)?.key ?? '',
+  }));
 
-  // Reset state when palette opens
-  useEffect(() => {
-    if (uiStore.commandPaletteOpen) {
-      setQuery('');
-      setActiveIndex(-1);
-      setSubMenu({ type: 'none' });
-      setTimeout(() => inputRef.current?.focus(), 0);
-    }
-  }, [uiStore.commandPaletteOpen]);
-
-  // Ensure active index stays in bounds
-  const clampIndex = useCallback(
-    (items: unknown[], idx: number) => Math.max(0, Math.min(idx, items.length - 1)),
-    [],
-  );
-
-  // Scroll active item into view
-  useEffect(() => {
-    const el = listRef.current?.querySelector(`[data-idx="${activeIndex}"]`) as HTMLElement | null;
-    el?.scrollIntoView({ block: 'nearest' });
-  }, [activeIndex]);
-
-  // ── Build result items ───────────────────────────────────────────────────
-
-  const buildIssueItems = useCallback((): IssueItem[] => {
-    // Identifier instant-jump: when the query is shaped like ENG-123, prefer
-    // an exact identifier hit so a press of Enter routes straight to it
-    // without the user having to disambiguate against fuzzy near-matches.
-    const trimmed = (query || '').trim().toUpperCase();
-    const exactIdentifier = IDENTIFIER_RE.test(trimmed)
-      ? (issueStore.findByIdentifier(trimmed) ?? undefined)
-      : undefined;
-
-    const matched = issueStore.search(query || '', 10);
-    const recent = query
-      ? []
-      : recentItems
-          .map(r => issueStore.findById(r.id))
-          .filter((i): i is DBIssue => i !== null)
-          .slice(0, 5);
-
-    let issues = query ? matched : recent;
-    if (exactIdentifier) {
-      issues = [exactIdentifier, ...issues.filter(i => i.id !== exactIdentifier.id)];
-    }
-
-    return issues.map(issue => ({
-      issue,
-      kind: 'issue' as const,
-      stateColor: workflowStateStore.findById(issue.stateId)?.color,
-      teamKey: teamStore.findById(issue.teamId)?.key ?? '',
-    }));
-  }, [query, issueStore, recentItems, teamStore, workflowStateStore]);
-
-  const buildActionItems = useCallback((): ActionItem[] => {
-    const actions: ActionItem[] = [
+  const baseActions = useMemo<ActionItem[]>(
+    () => [
       {
         id: 'create-issue',
         keywords: ['create issue', 'new issue', 'add issue'],
@@ -148,78 +116,179 @@ export const CommandPalette = observer(function CommandPalette({
           router.push(`/${workspaceKey}/settings`);
         },
       },
-    ];
+    ],
+    [router, uiStore, workspaceKey],
+  );
+  const actionItems: ActionItem[] = query
+    ? baseActions.filter(a => {
+        const q = query.toLowerCase();
+        return a.label.toLowerCase().includes(q) || a.keywords.some(k => k.includes(q));
+      })
+    : baseActions;
 
-    if (!query) {
-      return actions;
-    }
-
-    const q = query.toLowerCase();
-    return actions.filter(
-      a => a.label.toLowerCase().includes(q) || a.keywords.some(k => k.includes(q)),
-    );
-  }, [query, uiStore, router, workspaceKey]);
-
-  const issueItems = buildIssueItems();
-  const actionItems = buildActionItems();
   const allItems: ResultItem[] = [...issueItems, ...actionItems];
 
-  // ── Sub-menu items ────────────────────────────────────────────────────────
+  // Ref mutation during render — intentional: keeps parent's keyboard ref current
+  // before any keydown event can fire. onItemsChange only mutates a useRef.
+  onItemsChange(allItems);
 
-  const buildSubMenuItems = (): Array<{
-    label: string;
-    onSelect: () => void;
-  }> => {
-    if (subMenu.type === 'setStatus') {
-      const issue = issueStore.findById(subMenu.issueId);
-      if (!issue) {
-        return [];
-      }
+  return (
+    <>
+      {allItems.length === 0 && (
+        <p className="px-4 py-3 text-sm text-zinc-400">No results for &ldquo;{query}&rdquo;</p>
+      )}
+
+      {issueItems.length > 0 && (
+        <>
+          <p className="px-4 py-1.5 text-xs font-medium uppercase tracking-wide text-zinc-400">
+            {query ? 'Issues' : 'Recent'}
+          </p>
+          {issueItems.map((item, i) => (
+            <button
+              aria-selected={i === activeIndex}
+              className={cn(
+                'flex w-full items-center gap-3 px-4 py-2 text-sm',
+                i === activeIndex
+                  ? 'bg-zinc-100 dark:bg-zinc-800'
+                  : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
+              )}
+              data-highlighted={i === activeIndex ? 'true' : undefined}
+              data-idx={i}
+              data-testid="command-palette-item"
+              key={item.issue.id}
+              onClick={() => selectItem(item)}
+              role="option"
+              type="button"
+            >
+              {item.stateColor && (
+                <span
+                  className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
+                  style={{ backgroundColor: item.stateColor }}
+                />
+              )}
+              <span className="w-16 flex-shrink-0 font-mono text-xs text-zinc-400">
+                {item.issue.identifier}
+              </span>
+              <span className="flex-1 truncate text-zinc-900 dark:text-zinc-100">
+                {item.issue.title}
+              </span>
+              {item.teamKey && (
+                <span className="flex-shrink-0 text-xs text-zinc-400">{item.teamKey}</span>
+              )}
+            </button>
+          ))}
+        </>
+      )}
+
+      {actionItems.length > 0 && (
+        <>
+          <p className="px-4 py-1.5 text-xs font-medium uppercase tracking-wide text-zinc-400">
+            Actions
+          </p>
+          {actionItems.map((item, i) => {
+            const globalIdx = issueItems.length + i;
+            return (
+              <button
+                aria-selected={globalIdx === activeIndex}
+                className={cn(
+                  'flex w-full items-center gap-3 px-4 py-2 text-sm',
+                  globalIdx === activeIndex
+                    ? 'bg-zinc-100 dark:bg-zinc-800'
+                    : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
+                )}
+                data-highlighted={globalIdx === activeIndex ? 'true' : undefined}
+                data-idx={globalIdx}
+                data-testid="command-palette-item"
+                key={item.id}
+                onClick={() => selectItem(item)}
+                role="option"
+                type="button"
+              >
+                <span className="flex-1 truncate text-zinc-900 dark:text-zinc-100">
+                  {item.label}
+                </span>
+                {item.shortcut && (
+                  <kbd className="flex-shrink-0 rounded border border-zinc-200 px-1.5 py-0.5 font-mono text-[10px] text-zinc-400 dark:border-zinc-600">
+                    {item.shortcut}
+                  </kbd>
+                )}
+              </button>
+            );
+          })}
+        </>
+      )}
+    </>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// SubMenuList — observer: issueStore + workflowStateStore + userStore + labelStore
+// ---------------------------------------------------------------------------
+
+interface SubMenuListProps {
+  activeIndex: number;
+  onClose: () => void;
+  onItemsChange: (items: SubMenuItem[]) => void;
+  subMenu: SubMenuMode;
+}
+
+const SubMenuList = observer(function SubMenuList({
+  activeIndex,
+  onClose,
+  onItemsChange,
+  subMenu,
+}: SubMenuListProps) {
+  const { issueStore, labelStore, userStore, workflowStateStore } = useStore();
+
+  let subItems: SubMenuItem[] = [];
+
+  if (subMenu.type === 'setStatus') {
+    const issue = issueStore.findById(subMenu.issueId);
+    if (issue) {
       const states = workflowStateStore.findByTeamId(issue.teamId);
-      return states.map(s => ({
+      subItems = states.map(s => ({
+        id: s.id,
         label: s.name,
         onSelect: () => {
           issueStore.optimisticUpdate(subMenu.issueId, { stateId: s.id });
-          uiStore.closeCommandPalette();
+          onClose();
         },
       }));
     }
-    if (subMenu.type === 'setAssignee') {
-      const users = userStore.all;
-      const none = {
+  } else if (subMenu.type === 'setAssignee') {
+    const users = userStore.all;
+    subItems = [
+      {
+        id: 'no-assignee',
         label: 'No assignee',
         onSelect: () => {
           issueStore.optimisticUpdate(subMenu.issueId, { assigneeId: null });
-          uiStore.closeCommandPalette();
+          onClose();
         },
-      };
-      return [
-        none,
-        ...users.map(u => ({
-          label: u.displayName,
-          onSelect: () => {
-            issueStore.optimisticUpdate(subMenu.issueId, { assigneeId: u.id });
-            uiStore.closeCommandPalette();
-          },
-        })),
-      ];
-    }
-    if (subMenu.type === 'setPriority') {
-      return ([0, 1, 2, 3, 4] as const).map(p => ({
-        label: getPriorityConfig(p).label,
+      },
+      ...users.map(u => ({
+        id: u.id,
+        label: u.displayName,
         onSelect: () => {
-          issueStore.optimisticUpdate(subMenu.issueId, { priority: p });
-          uiStore.closeCommandPalette();
+          issueStore.optimisticUpdate(subMenu.issueId, { assigneeId: u.id });
+          onClose();
         },
-      }));
-    }
-    if (subMenu.type === 'setLabel') {
-      const issue = issueStore.findById(subMenu.issueId);
-      if (!issue) {
-        return [];
-      }
-      const allLabels = labelStore.all;
-      return allLabels.map(l => ({
+      })),
+    ];
+  } else if (subMenu.type === 'setPriority') {
+    subItems = ([0, 1, 2, 3, 4] as const).map(p => ({
+      id: String(p),
+      label: getPriorityConfig(p).label,
+      onSelect: () => {
+        issueStore.optimisticUpdate(subMenu.issueId, { priority: p });
+        onClose();
+      },
+    }));
+  } else if (subMenu.type === 'setLabel') {
+    const issue = issueStore.findById(subMenu.issueId);
+    if (issue) {
+      subItems = labelStore.all.map(l => ({
+        id: l.id,
         label: l.name,
         onSelect: () => {
           const current = issue.labelIds ?? [];
@@ -227,15 +296,102 @@ export const CommandPalette = observer(function CommandPalette({
             ? current.filter(id => id !== l.id)
             : [...current, l.id];
           issueStore.optimisticUpdate(subMenu.issueId, { labelIds: next });
-          uiStore.closeCommandPalette();
+          onClose();
         },
       }));
     }
-    return [];
-  };
+  }
 
-  const subItems = buildSubMenuItems();
-  const inSubMenu = subMenu.type !== 'none';
+  // Ref mutation during render — intentional: see ResultsList above.
+  onItemsChange(subItems);
+
+  return (
+    <>
+      {subItems.length === 0 && <p className="px-4 py-3 text-sm text-zinc-400">No options</p>}
+      {subItems.map((item, i) => (
+        <button
+          aria-selected={i === activeIndex}
+          className={cn(
+            'flex w-full items-center gap-3 px-4 py-2 text-sm',
+            i === activeIndex
+              ? 'bg-zinc-100 dark:bg-zinc-800'
+              : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
+          )}
+          data-idx={i}
+          key={item.id}
+          onClick={item.onSelect}
+          role="option"
+          type="button"
+        >
+          <span className="text-zinc-900 dark:text-zinc-100">{item.label}</span>
+        </button>
+      ))}
+    </>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// CommandPaletteFooter — static, memo'd to avoid re-renders on query change
+// ---------------------------------------------------------------------------
+
+const CommandPaletteFooter = memo(function CommandPaletteFooter({
+  inSubMenu,
+}: {
+  inSubMenu: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-4 border-t border-zinc-100 px-4 py-2 dark:border-zinc-800">
+      <span className="text-[10px] text-zinc-400">
+        <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">↑↓</kbd> Navigate
+      </span>
+      <span className="text-[10px] text-zinc-400">
+        <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">↵</kbd> Select
+      </span>
+      <span className="text-[10px] text-zinc-400">
+        <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">Esc</kbd>{' '}
+        {inSubMenu ? 'Back' : 'Close'}
+      </span>
+    </div>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// CommandPaletteContent — non-observer, owns all state + keyboard nav
+// ---------------------------------------------------------------------------
+
+function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
+  const { uiStore } = useStore();
+  const router = useRouter();
+  const params = useParams<{ workspace?: string }>();
+  const workspaceKey = params.workspace ?? '';
+
+  const [query, setQuery] = useState('');
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const [subMenu, setSubMenu] = useState<SubMenuMode>({ type: 'none' });
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Refs holding latest item arrays for the keyboard handler — updated by
+  // child observers during their renders, not from this component
+  const allItemsRef = useRef<ResultItem[]>([]);
+  const subItemsRef = useRef<SubMenuItem[]>([]);
+
+  useEffect(() => {
+    setQuery('');
+    setActiveIndex(-1);
+    setSubMenu({ type: 'none' });
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, []);
+
+  const clampIndex = useCallback(
+    (items: unknown[], idx: number) => Math.max(0, Math.min(idx, items.length - 1)),
+    [],
+  );
+
+  useEffect(() => {
+    const el = listRef.current?.querySelector(`[data-idx="${activeIndex}"]`) as HTMLElement | null;
+    el?.scrollIntoView({ block: 'nearest' });
+  }, [activeIndex]);
 
   const selectItem = useCallback(
     (item: ResultItem | undefined) => {
@@ -252,54 +408,58 @@ export const CommandPalette = observer(function CommandPalette({
     [router, workspaceKey, uiStore],
   );
 
-  // ── Keyboard navigation ──────────────────────────────────────────────────
+  const onAllItemsChange = useCallback((items: ResultItem[]) => {
+    allItemsRef.current = items;
+  }, []);
+
+  const onSubItemsChange = useCallback((items: SubMenuItem[]) => {
+    subItemsRef.current = items;
+  }, []);
+
+  const onPaletteClose = useCallback(() => uiStore.closeCommandPalette(), [uiStore]);
+
+  const inSubMenu = subMenu.type !== 'none';
 
   // Keep a ref with the latest handler state so the event listener registered
-  // below can always read fresh values without being re-registered on each
-  // render (which would cause a flicker gap where no listener is attached).
+  // once below can always read fresh values without being re-registered.
   const keyStateRef = useRef({
     activeIndex,
-    allItems,
+    allItemsRef,
     clampIndex,
     inSubMenu,
     selectItem,
     setActiveIndex,
     setSubMenu,
-    subItems,
+    subItemsRef,
     uiStore,
   });
   keyStateRef.current = {
     activeIndex,
-    allItems,
+    allItemsRef,
     clampIndex,
     inSubMenu,
     selectItem,
     setActiveIndex,
     setSubMenu,
-    subItems,
+    subItemsRef,
     uiStore,
   };
 
-  // Use a layout effect so the listener is registered synchronously after
-  // React commits the render — before the browser paints and before the next
-  // Playwright CDP command arrives. This prevents the race where ArrowDown is
-  // dispatched before the palette's input has focus (and therefore the event
-  // never reached the dialog's onKeyDown). The listener is registered once on
-  // mount and reads fresh state from keyStateRef on every invocation.
+  // Registered once; reads fresh state via keyStateRef on every invocation
   useLayoutEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const {
         activeIndex: idx,
-        allItems: all,
+        allItemsRef: allRef,
         clampIndex: clamp,
         inSubMenu: inSub,
         selectItem: select,
         setActiveIndex: setIdx,
         setSubMenu: setSub,
-        subItems: sub,
+        subItemsRef: subRef,
         uiStore: ui,
       } = keyStateRef.current;
-      const items = inSub ? sub : all;
+      const items = inSub ? subRef.current : allRef.current;
 
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -310,12 +470,9 @@ export const CommandPalette = observer(function CommandPalette({
       } else if (e.key === 'Enter') {
         e.preventDefault();
         if (inSub) {
-          sub[idx]?.onSelect();
+          subRef.current[idx]?.onSelect();
         } else {
-          // Fall back to the first item when nothing is highlighted yet so
-          // typing an issue identifier and hitting Enter jumps straight to
-          // it instead of being a no-op.
-          const target = idx === -1 ? all[0] : all[idx];
+          const target = idx === -1 ? allRef.current[0] : allRef.current[idx];
           select(target);
         }
       } else if (e.key === 'Escape') {
@@ -330,26 +487,12 @@ export const CommandPalette = observer(function CommandPalette({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Reset activeIndex when items change
-  useEffect(() => {
-    setActiveIndex(-1);
-  }, []);
-
-  if (!uiStore.commandPaletteOpen) {
-    return null;
-  }
 
   return (
     <>
       {/* Backdrop */}
-      <div
-        aria-hidden="true"
-        className="fixed inset-0 z-50 bg-black/30"
-        onClick={() => uiStore.closeCommandPalette()}
-      />
+      <div aria-hidden="true" className="fixed inset-0 z-50 bg-black/30" onClick={onPaletteClose} />
 
       {/* Dialog */}
       <div
@@ -391,7 +534,8 @@ export const CommandPalette = observer(function CommandPalette({
           <input
             aria-label={
               inSubMenu
-                ? (SUBMENU_PLACEHOLDERS[subMenu.type] ?? 'Search')
+                ? (SUBMENU_PLACEHOLDERS[subMenu.type as keyof typeof SUBMENU_PLACEHOLDERS] ??
+                  'Search')
                 : 'Search issues and commands'
             }
             autoComplete="off"
@@ -399,7 +543,8 @@ export const CommandPalette = observer(function CommandPalette({
             onChange={e => setQuery(e.target.value)}
             placeholder={
               inSubMenu
-                ? (SUBMENU_PLACEHOLDERS[subMenu.type] ?? 'Search…')
+                ? (SUBMENU_PLACEHOLDERS[subMenu.type as keyof typeof SUBMENU_PLACEHOLDERS] ??
+                  'Search…')
                 : 'Search issues, commands…'
             }
             ref={inputRef}
@@ -417,148 +562,45 @@ export const CommandPalette = observer(function CommandPalette({
           role="listbox"
         >
           {inSubMenu ? (
-            <>
-              {subItems.length === 0 && (
-                <p className="px-4 py-3 text-sm text-zinc-400">No options</p>
-              )}
-              {subItems.map((item, i) => (
-                <button
-                  aria-selected={i === activeIndex}
-                  className={cn(
-                    'flex w-full items-center gap-3 px-4 py-2 text-sm',
-                    i === activeIndex
-                      ? 'bg-zinc-100 dark:bg-zinc-800'
-                      : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
-                  )}
-                  data-idx={i}
-                  key={item.label}
-                  onClick={item.onSelect}
-                  role="option"
-                  type="button"
-                >
-                  <span className="text-zinc-900 dark:text-zinc-100">{item.label}</span>
-                </button>
-              ))}
-            </>
+            <SubMenuList
+              activeIndex={activeIndex}
+              onClose={onPaletteClose}
+              onItemsChange={onSubItemsChange}
+              subMenu={subMenu}
+            />
           ) : (
-            <>
-              {allItems.length === 0 && (
-                <p className="px-4 py-3 text-sm text-zinc-400">
-                  No results for &ldquo;{query}&rdquo;
-                </p>
-              )}
-
-              {/* Issue results */}
-              {issueItems.length > 0 && (
-                <>
-                  <p className="px-4 py-1.5 text-xs font-medium text-zinc-400 uppercase tracking-wide">
-                    {query ? 'Issues' : 'Recent'}
-                  </p>
-                  {issueItems.map((item, i) => {
-                    if (item.kind !== 'issue') {
-                      return null;
-                    }
-                    const globalIdx = i;
-                    return (
-                      <button
-                        aria-selected={globalIdx === activeIndex}
-                        className={cn(
-                          'flex w-full items-center gap-3 px-4 py-2 text-sm',
-                          globalIdx === activeIndex
-                            ? 'bg-zinc-100 dark:bg-zinc-800'
-                            : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
-                        )}
-                        data-highlighted={globalIdx === activeIndex ? 'true' : undefined}
-                        data-idx={globalIdx}
-                        data-testid="command-palette-item"
-                        key={item.issue.id}
-                        onClick={() => selectItem(item)}
-                        role="option"
-                        type="button"
-                      >
-                        {item.stateColor && (
-                          <span
-                            className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
-                            style={{ backgroundColor: item.stateColor }}
-                          />
-                        )}
-                        <span className="w-16 flex-shrink-0 font-mono text-xs text-zinc-400">
-                          {item.issue.identifier}
-                        </span>
-                        <span className="flex-1 truncate text-zinc-900 dark:text-zinc-100">
-                          {item.issue.title}
-                        </span>
-                        {item.teamKey && (
-                          <span className="flex-shrink-0 text-xs text-zinc-400">
-                            {item.teamKey}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </>
-              )}
-
-              {/* Action results */}
-              {actionItems.length > 0 && (
-                <>
-                  <p className="px-4 py-1.5 text-xs font-medium text-zinc-400 uppercase tracking-wide">
-                    Actions
-                  </p>
-                  {actionItems.map((item, i) => {
-                    if (item.kind !== 'action') {
-                      return null;
-                    }
-                    const globalIdx = issueItems.length + i;
-                    return (
-                      <button
-                        aria-selected={globalIdx === activeIndex}
-                        className={cn(
-                          'flex w-full items-center gap-3 px-4 py-2 text-sm',
-                          globalIdx === activeIndex
-                            ? 'bg-zinc-100 dark:bg-zinc-800'
-                            : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
-                        )}
-                        data-highlighted={globalIdx === activeIndex ? 'true' : undefined}
-                        data-idx={globalIdx}
-                        data-testid="command-palette-item"
-                        key={item.id}
-                        onClick={() => selectItem(item)}
-                        role="option"
-                        type="button"
-                      >
-                        <span className="flex-1 truncate text-zinc-900 dark:text-zinc-100">
-                          {item.label}
-                        </span>
-                        {item.shortcut && (
-                          <kbd className="flex-shrink-0 rounded border border-zinc-200 px-1.5 py-0.5 font-mono text-[10px] text-zinc-400 dark:border-zinc-600">
-                            {item.shortcut}
-                          </kbd>
-                        )}
-                      </button>
-                    );
-                  })}
-                </>
-              )}
-            </>
+            <ResultsList
+              activeIndex={activeIndex}
+              onItemsChange={onAllItemsChange}
+              query={query}
+              recentItems={recentItems}
+              router={router}
+              selectItem={selectItem}
+              workspaceKey={workspaceKey}
+            />
           )}
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center gap-4 border-t border-zinc-100 px-4 py-2 dark:border-zinc-800">
-          <span className="text-[10px] text-zinc-400">
-            <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">↑↓</kbd>{' '}
-            Navigate
-          </span>
-          <span className="text-[10px] text-zinc-400">
-            <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">↵</kbd> Select
-          </span>
-          <span className="text-[10px] text-zinc-400">
-            <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">Esc</kbd>{' '}
-            {inSubMenu ? 'Back' : 'Close'}
-          </span>
-        </div>
+        <CommandPaletteFooter inSubMenu={inSubMenu} />
       </div>
     </>
   );
+}
+
+// ---------------------------------------------------------------------------
+// CommandPalette — public export, observer: uiStore.commandPaletteOpen only
+// ---------------------------------------------------------------------------
+
+interface CommandPaletteProps {
+  recentItems?: RecentItem[];
+}
+
+export const CommandPalette = observer(function CommandPalette({
+  recentItems = [],
+}: CommandPaletteProps) {
+  const { uiStore } = useStore();
+  if (!uiStore.commandPaletteOpen) {
+    return null;
+  }
+  return <CommandPaletteContent recentItems={recentItems} />;
 });

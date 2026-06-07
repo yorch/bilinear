@@ -4,6 +4,7 @@ import { ExternalLink, GitMerge, GitPullRequest, GitPullRequestClosed } from 'lu
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { gql } from '@/lib/graphql';
+import { PULL_REQUESTS_QUERY } from '@/lib/graphql-queries';
 
 interface PullRequest {
   authorLogin: string;
@@ -18,16 +19,6 @@ interface PullRequest {
   title: string;
   url: string;
 }
-
-const PULL_REQUESTS_QUERY = `
-  query IssuePullRequests($issueId: ID!) {
-    issue(id: $issueId) {
-      pullRequests {
-        id prNumber title url state draft headBranch repoFullName authorLogin mergedAt closedAt
-      }
-    }
-  }
-`;
 
 interface IssuePullRequestsSectionProps {
   issueId: string;

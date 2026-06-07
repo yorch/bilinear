@@ -1,6 +1,6 @@
 'use client';
 
-import { usePopover } from '@/hooks/use-popover';
+import { SelectPopover } from '@/components/ui/select-popover';
 import { cn } from '@/lib/utils';
 
 interface WorkflowState {
@@ -36,50 +36,44 @@ export function StatusSelect({
   forceOpen,
   onClose,
 }: StatusSelectProps) {
-  const { open, setOpen, ref } = usePopover({ forceOpen, onClose });
   const current = states.find(s => s.id === value);
 
   return (
-    <div className={cn('relative', className)} ref={ref}>
-      <button
-        className="flex items-center gap-1.5 rounded px-1.5 py-1 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800"
-        onClick={e => {
-          e.stopPropagation();
-          setOpen(o => !o);
-        }}
-        title={current?.name ?? 'Status'}
-        type="button"
-      >
-        {current && <StatusDot color={current.color} />}
-        <span className="text-zinc-600 dark:text-zinc-400">{current?.name ?? '—'}</span>
-      </button>
-
-      {open && (
-        <div
-          className="absolute left-0 top-full z-50 mt-1 min-w-[160px] rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
-          data-testid="status-select-popover"
-        >
-          {states.map(state => (
-            <button
-              className={cn(
-                'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800',
-                state.id === value && 'font-medium',
-              )}
-              key={state.id}
-              onClick={e => {
-                e.stopPropagation();
-                onChange(state.id);
-                setOpen(false);
-                onClose?.();
-              }}
-              type="button"
-            >
-              <StatusDot color={state.color} />
-              {state.name}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <SelectPopover
+      className={className}
+      forceOpen={forceOpen}
+      onClose={onClose}
+      panelClassName="min-w-[160px] py-1"
+      panelDataTestId="status-select-popover"
+      triggerChildren={
+        <>
+          {current && <StatusDot color={current.color} />}
+          <span className="text-zinc-600 dark:text-zinc-400">{current?.name ?? '—'}</span>
+        </>
+      }
+      triggerClassName="gap-1.5 px-1.5 py-1 text-xs"
+      triggerTitle={current?.name ?? 'Status'}
+    >
+      {close =>
+        states.map(state => (
+          <button
+            className={cn(
+              'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800',
+              state.id === value && 'font-medium',
+            )}
+            key={state.id}
+            onClick={e => {
+              e.stopPropagation();
+              onChange(state.id);
+              close();
+            }}
+            type="button"
+          >
+            <StatusDot color={state.color} />
+            {state.name}
+          </button>
+        ))
+      }
+    </SelectPopover>
   );
 }

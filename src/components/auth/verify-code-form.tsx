@@ -4,22 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { gql } from '@/lib/graphql';
-
-const EMAIL_VERIFY_MUTATION = `
-  mutation EmailVerify($input: EmailVerifyInput!) {
-    emailVerify(input: $input) {
-      success
-      accessToken
-      refreshToken
-      expiresIn
-      user {
-        id
-        displayName
-        email
-      }
-    }
-  }
-`;
+import { EMAIL_VERIFY_MUTATION } from '@/lib/graphql-queries';
 
 export function VerifyCodeForm() {
   const router = useRouter();

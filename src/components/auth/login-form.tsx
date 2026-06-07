@@ -4,21 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { gql } from '@/lib/graphql';
+import { EMAIL_LOGIN_MUTATION, GOOGLE_AUTH_START_QUERY } from '@/lib/graphql-queries';
 import { gqlError } from '@/lib/utils';
-
-const EMAIL_LOGIN_MUTATION = `
-  mutation EmailLogin($input: EmailLoginInput!) {
-    emailLogin(input: $input) {
-      success
-    }
-  }
-`;
-
-const GOOGLE_AUTH_START_QUERY = `
-  query GoogleAuthStart {
-    googleAuthStart { url state }
-  }
-`;
 
 export function LoginForm() {
   const router = useRouter();

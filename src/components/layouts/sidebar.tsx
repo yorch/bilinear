@@ -27,38 +27,10 @@ import { useEffect, useState } from 'react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useAuth } from '@/hooks/use-auth';
 import { gql } from '@/lib/graphql';
+import { FAVORITE_DELETE_MUTATION, FAVORITES_QUERY } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
-
-const FAVORITES_QUERY = `
-  query SidebarFavorites {
-    favorites {
-      id
-      entityType
-      entityId
-      sortOrder
-      entity {
-        ... on Issue { id identifier title teamId }
-        ... on Project { id name icon color slugId }
-        ... on Initiative { id name color }
-        ... on CustomView { id name teamId }
-        ... on Cycle { id name teamId }
-        ... on Document { id title teamId }
-        ... on Team { id name key icon }
-      }
-    }
-  }
-`;
-
-const FAVORITE_DELETE_MUTATION = `
-  mutation FavoriteDelete($id: ID!) {
-    favoriteDelete(id: $id) {
-      success
-      lastSyncId
-    }
-  }
-`;
 
 interface FavoriteMeta {
   entity:

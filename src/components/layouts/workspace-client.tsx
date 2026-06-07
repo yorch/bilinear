@@ -9,6 +9,7 @@ import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useRecentItems } from '@/hooks/use-recent-items';
 import type { DBTeam, DBWorkflowState } from '@/lib/db';
 import { gql } from '@/lib/graphql';
+import { TEAM_CREATE_MUTATION } from '@/lib/graphql-queries';
 import { gqlError } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -22,23 +23,6 @@ const CommandPalette = dynamic(
     })),
   { ssr: false },
 );
-
-const TEAM_CREATE_MUTATION = `
-  mutation TeamCreate($input: TeamCreateInput!) {
-    teamCreate(input: $input) {
-      success
-      lastSyncId
-      team {
-        id organizationId parentId
-        key name displayName description icon color private timezone
-        cyclesEnabled issueEstimationType triageEnabled issueCount
-        defaultIssueStateId
-        createdAt updatedAt archivedAt
-        states { id teamId name color type position description createdAt updatedAt archivedAt }
-      }
-    }
-  }
-`;
 
 /**
  * Client-only wrapper for the workspace layout.

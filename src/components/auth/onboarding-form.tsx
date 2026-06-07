@@ -4,22 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { gql } from '@/lib/graphql';
-
-const ORGANIZATION_CREATE_MUTATION = `
-  mutation OrganizationCreate($input: OrganizationCreateInput!) {
-    organizationCreate(input: $input) {
-      success
-      accessToken
-      refreshToken
-      expiresIn
-      organization {
-        id
-        name
-        urlKey
-      }
-    }
-  }
-`;
+import { ORGANIZATION_CREATE_MUTATION } from '@/lib/graphql-queries';
 
 interface OrganizationCreateResult {
   accessToken: string;

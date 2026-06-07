@@ -3,6 +3,7 @@
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useMemo, useRef, useState } from 'react';
+import { CREATE_SUB_ISSUE_MUTATION } from '@/lib/graphql-queries';
 import { getPriorityConfig } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
@@ -19,16 +20,6 @@ const STATE_CATEGORY_LABELS: Record<string, string> = {
   started: 'In Progress',
   unstarted: 'Todo',
 };
-
-const CREATE_SUB_ISSUE_MUTATION = `
-  mutation CreateSubIssue($input: IssueCreateInput!) {
-    issueCreate(input: $input) {
-      success
-      lastSyncId
-      issue { id title identifier priority stateId teamId }
-    }
-  }
-`;
 
 interface SubIssueListProps {
   parentIssueId: string;

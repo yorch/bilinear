@@ -1,6 +1,6 @@
 'use client';
 
-import { usePopover } from '@/hooks/use-popover';
+import { SelectPopover } from '@/components/ui/select-popover';
 import { cn } from '@/lib/utils';
 
 interface IssueLabel {
@@ -35,7 +35,6 @@ export function LabelSelect({
   forceOpen,
   onClose,
 }: LabelSelectProps) {
-  const { open, setOpen, ref } = usePopover({ forceOpen, onClose });
   const selected = labels.filter(l => value.includes(l.id));
 
   const toggle = (labelId: string) => {
@@ -44,25 +43,24 @@ export function LabelSelect({
   };
 
   return (
-    <div className={cn('relative', className)} ref={ref}>
-      <button
-        className="flex items-center gap-0.5 rounded px-1.5 py-1 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-        onClick={e => {
-          e.stopPropagation();
-          setOpen(o => !o);
-        }}
-        title={selected.length ? selected.map(l => l.name).join(', ') : 'No labels'}
-        type="button"
-      >
-        {selected.length > 0 ? (
+    <SelectPopover
+      align="right"
+      className={className}
+      forceOpen={forceOpen}
+      onClose={onClose}
+      panelClassName="min-w-[200px] py-1"
+      triggerChildren={
+        selected.length > 0 ? (
           selected.slice(0, 3).map(l => <LabelDot color={l.color} key={l.id} />)
         ) : (
           <span className="text-xs text-zinc-400">Labels</span>
-        )}
-      </button>
-
-      {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 min-w-[200px] rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+        )
+      }
+      triggerClassName="gap-0.5 px-1.5 py-1"
+      triggerTitle={selected.length ? selected.map(l => l.name).join(', ') : 'No labels'}
+    >
+      {_close => (
+        <>
           {labels.length === 0 && <p className="px-3 py-2 text-sm text-zinc-400">No labels</p>}
           {labels.map(label => (
             <button
@@ -82,8 +80,8 @@ export function LabelSelect({
               {value.includes(label.id) && <span className="ml-auto text-zinc-400">✓</span>}
             </button>
           ))}
-        </div>
+        </>
       )}
-    </div>
+    </SelectPopover>
   );
 }

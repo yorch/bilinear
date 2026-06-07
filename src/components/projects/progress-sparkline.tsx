@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { gql } from '@/lib/graphql';
+import { PROJECT_PROGRESS_HISTORY_QUERY } from '@/lib/graphql-queries';
 
 interface ProgressHistoryPoint {
   completedIssueCount: number;
@@ -17,26 +18,13 @@ interface ProgressSparklineProps {
   width?: number;
 }
 
-const PROGRESS_HISTORY_QUERY = `
-  query ProjectProgressHistory($id: ID!) {
-    project(id: $id) {
-      id
-      progressHistory {
-        date
-        issueCount
-        completedIssueCount
-      }
-    }
-  }
-`;
-
 export function ProgressSparkline({ projectId, width = 160, height = 28 }: ProgressSparklineProps) {
   const [points, setPoints] = useState<ProgressHistoryPoint[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   const fetchHistory = useCallback(async () => {
     try {
-      const res = await gql(PROGRESS_HISTORY_QUERY, { id: projectId });
+      const res = await gql(PROJECT_PROGRESS_HISTORY_QUERY, { id: projectId });
       const data = res.data as
         | { project?: { progressHistory: ProgressHistoryPoint[] } }
         | undefined;

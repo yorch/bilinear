@@ -6,6 +6,12 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BurnupChart } from '@/components/cycles/burnup-chart';
 import { gql } from '@/lib/graphql';
+import {
+  CYCLE_BURNDOWN_QUERY,
+  CYCLE_ROLLOVER_MUTATION,
+  CYCLE_SCOPE_METRICS_QUERY,
+  CYCLE_VELOCITY_QUERY,
+} from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn } from '@/lib/utils';
@@ -25,45 +31,6 @@ function formatDate(iso: string): string {
     year: 'numeric',
   });
 }
-
-// ---------------------------------------------------------------------------
-// GraphQL strings
-// ---------------------------------------------------------------------------
-
-const CYCLE_ROLLOVER_MUTATION = `
-  mutation CycleRollover($cycleId: ID!) {
-    cycleRollover(cycleId: $cycleId) { success lastSyncId movedCount nextCycleId }
-  }
-`;
-
-const CYCLE_BURNDOWN_QUERY = `
-  query CycleBurndown($cycleId: ID!) {
-    cycleBurndown(cycleId: $cycleId) { date remaining completed scope }
-  }
-`;
-
-const CYCLE_SCOPE_METRICS_QUERY = `
-  query CycleScopeMetrics($cycleId: ID!) {
-    analyticsCycleScopeMetrics(cycleId: $cycleId) {
-      totalCount
-      plannedCount
-      completedCount
-      scopeCreepCount
-      scopeCreepPct
-      carryoverCount
-      carryoverPct
-    }
-  }
-`;
-
-const CYCLE_VELOCITY_QUERY = `
-  query CycleVelocity($teamId: ID!, $cycleCount: Int) {
-    cycleVelocity(teamId: $teamId, cycleCount: $cycleCount) {
-      averageIssues
-      cycles { cycleId cycleNumber completedIssues }
-    }
-  }
-`;
 
 // ---------------------------------------------------------------------------
 // Types

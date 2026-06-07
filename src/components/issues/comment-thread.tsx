@@ -5,6 +5,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { gql } from '@/lib/graphql';
+import {
+  COMMENT_CREATE_MUTATION,
+  COMMENT_DELETE_MUTATION,
+  COMMENT_REACTION_ADD_MUTATION,
+  COMMENT_REACTION_REMOVE_MUTATION,
+  COMMENT_RESOLVE_MUTATION,
+  COMMENT_UNRESOLVE_MUTATION,
+  COMMENT_UPDATE_MUTATION,
+  CONVERT_TO_SUB_ISSUE_MUTATION,
+  GET_COMMENTS_QUERY,
+} from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import type { MentionItem } from '../editor/mention-list';
@@ -49,92 +60,6 @@ interface CommentThreadProps {
   mentionUsers?: MentionItem[];
   teamId?: string;
 }
-
-const COMMENTS_FRAGMENT = `
-  id issueId body bodyData parentId resolvedAt editedAt createdAt updatedAt
-  author { id displayName initials avatarBackgroundColor avatarUrl }
-  reactions { id emoji userId user { id displayName } }
-  replyCount
-  replies {
-    id issueId body bodyData parentId resolvedAt editedAt createdAt updatedAt
-    author { id displayName initials avatarBackgroundColor avatarUrl }
-    reactions { id emoji userId user { id displayName } }
-    replyCount
-    replies { id }
-  }
-`;
-
-const GET_COMMENTS_QUERY = `
-  query GetComments($issueId: ID!) {
-    comments(issueId: $issueId) { ${COMMENTS_FRAGMENT} }
-  }
-`;
-
-const COMMENT_CREATE_MUTATION = `
-  mutation CommentCreate($input: CommentCreateInput!) {
-    commentCreate(input: $input) {
-      success lastSyncId
-      comment { ${COMMENTS_FRAGMENT} }
-    }
-  }
-`;
-
-const COMMENT_UPDATE_MUTATION = `
-  mutation CommentUpdate($id: ID!, $input: CommentUpdateInput!) {
-    commentUpdate(id: $id, input: $input) {
-      success
-      comment { ${COMMENTS_FRAGMENT} }
-    }
-  }
-`;
-
-const COMMENT_DELETE_MUTATION = `
-  mutation CommentDelete($id: ID!) {
-    commentDelete(id: $id) { success }
-  }
-`;
-
-const COMMENT_RESOLVE_MUTATION = `
-  mutation CommentResolve($id: ID!) {
-    commentResolve(id: $id) {
-      success
-      comment { id resolvedAt }
-    }
-  }
-`;
-
-const COMMENT_UNRESOLVE_MUTATION = `
-  mutation CommentUnresolve($id: ID!) {
-    commentUnresolve(id: $id) {
-      success
-      comment { id resolvedAt }
-    }
-  }
-`;
-
-const REACTION_ADD_MUTATION = `
-  mutation ReactionAdd($commentId: ID!, $emoji: String!) {
-    commentReactionAdd(commentId: $commentId, emoji: $emoji) {
-      success
-      reaction { id emoji userId user { id displayName } }
-    }
-  }
-`;
-
-const REACTION_REMOVE_MUTATION = `
-  mutation ReactionRemove($commentId: ID!, $emoji: String!) {
-    commentReactionRemove(commentId: $commentId, emoji: $emoji) { success }
-  }
-`;
-
-const CONVERT_TO_SUB_ISSUE_MUTATION = `
-  mutation ConvertCommentToSubIssue($input: IssueCreateInput!) {
-    issueCreate(input: $input) {
-      success lastSyncId
-      issue { id title identifier }
-    }
-  }
-`;
 
 const QUICK_EMOJIS = ['👍', '👎', '❤️', '🎉', '😄', '🚀', '👀', '😕'];
 
@@ -243,9 +168,9 @@ export function CommentThread({
   const toggleReaction = async (commentId: string, emoji: string, hasReacted: boolean) => {
     try {
       if (hasReacted) {
-        await gql(REACTION_REMOVE_MUTATION, { commentId, emoji });
+        await gql(COMMENT_REACTION_REMOVE_MUTATION, { commentId, emoji });
       } else {
-        await gql(REACTION_ADD_MUTATION, { commentId, emoji });
+        await gql(COMMENT_REACTION_ADD_MUTATION, { commentId, emoji });
       }
       await fetchComments();
     } catch {
