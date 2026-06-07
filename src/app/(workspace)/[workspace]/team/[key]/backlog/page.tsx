@@ -8,6 +8,7 @@ import { PriorityIcon } from '@/components/properties/priority-icon';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import type { DBIssue, DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
+import { PRIORITY_LABELS } from '@/lib/issue-utils';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -42,16 +43,6 @@ const ISSUE_ARCHIVE_MUTATION = `
     }
   }
 `;
-
-// ─── Priority labels ────────────────────────────────────────────────────────
-
-const PRIORITY_LABELS: Record<number, string> = {
-  0: 'No priority',
-  1: 'Urgent',
-  2: 'High',
-  3: 'Medium',
-  4: 'Low',
-};
 
 // ─── Staleness indicator ────────────────────────────────────────────────────
 

@@ -3,6 +3,7 @@
 import { Download } from 'lucide-react';
 import { downloadCsv, rowsToCsv } from '@/lib/csv-export';
 import type { DBCustomFieldDefinition } from '@/lib/db';
+import { PRIORITY_LABELS } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 
@@ -22,14 +23,6 @@ export interface CsvIssue {
   title: string;
   updatedAt?: string;
 }
-
-const PRIORITY_LABELS: Record<number, string> = {
-  0: 'No priority',
-  1: 'Urgent',
-  2: 'High',
-  3: 'Medium',
-  4: 'Low',
-};
 
 export function CsvExportButton({
   issues,

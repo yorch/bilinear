@@ -16,13 +16,9 @@ import { useStore } from '@/providers/store-provider';
 // Lazy-load CommandPalette: cmdk + fuzzy-search only ship to the browser
 // after the user first opens the palette (Cmd+K). ssr:false because it has
 // no meaningful server rendering — it's a popover gated by uiStore state.
-const CommandPalette = dynamic(
-  () =>
-    import('@/components/command-palette/command-palette').then(m => ({
-      default: m.CommandPalette,
-    })),
-  { ssr: false },
-);
+const CommandPalette = dynamic(() => import('@/components/command-palette/command-palette'), {
+  ssr: false,
+});
 
 /**
  * Client-only wrapper for the workspace layout.
@@ -36,7 +32,7 @@ export const WorkspaceClient = observer(function WorkspaceClient({
   children: React.ReactNode;
 }) {
   const { uiStore, teamStore, workflowStateStore } = useStore();
-  const params = useParams<{ workspace?: string }>();
+  const params = useParams<{ workspace: string }>();
   const workspaceKey = params.workspace;
   const { items: recentItems } = useRecentItems(workspaceKey);
   const router = useRouter();

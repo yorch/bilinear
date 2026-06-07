@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { gql } from '@/lib/graphql';
 import { PULL_REQUESTS_QUERY } from '@/lib/graphql-queries';
+import { cn } from '@/lib/utils';
 
 interface PullRequest {
   authorLogin: string;
@@ -86,14 +87,14 @@ function PrStateIcon({
   className?: string;
 }) {
   if (state === 'merged') {
-    return <GitMerge className={`h-4 w-4 text-purple-500 ${className}`} />;
+    return <GitMerge className={cn('h-4 w-4 text-purple-500', className)} />;
   }
   if (state === 'closed') {
-    return <GitPullRequestClosed className={`h-4 w-4 text-red-500 ${className}`} />;
+    return <GitPullRequestClosed className={cn('h-4 w-4 text-red-500', className)} />;
   }
   return (
     <GitPullRequest
-      className={`h-4 w-4 ${draft ? 'text-muted-foreground' : 'text-green-500'} ${className}`}
+      className={cn('h-4 w-4', draft ? 'text-muted-foreground' : 'text-green-500', className)}
     />
   );
 }

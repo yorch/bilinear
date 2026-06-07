@@ -10,6 +10,7 @@ import type {
   FilterOperator,
   FilterSet,
 } from '@/lib/filter-engine';
+import { PRIORITY_OPTIONS } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser } from '@/types/issues';
 
@@ -34,14 +35,6 @@ const OPERATORS: { label: string; value: FilterOperator }[] = [
   { label: 'is none of', value: 'nin' },
   { label: 'is set', value: 'is_set' },
   { label: 'is not set', value: 'is_not_set' },
-];
-
-const PRIORITY_OPTIONS = [
-  { label: 'No priority', value: '0' },
-  { label: 'Urgent', value: '1' },
-  { label: 'High', value: '2' },
-  { label: 'Medium', value: '3' },
-  { label: 'Low', value: '4' },
 ];
 
 // ─── Filter Pill ────────────────────────────────────────────────────────────

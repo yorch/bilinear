@@ -128,7 +128,7 @@ Resolvers are thin: `requireAuth(ctx)` → `ctx.services.<domain>.method()` → 
 ### MobX Stores
 
 - Wrap components with `observer()` from `mobx-react-lite`
-- Use `useStore()` hook (from StoreProvider context) to access RootStore — never import `getRootStore()` directly
+- Use `useStore()` hook (from StoreProvider context) to access RootStore — never import `getRootStore()` directly. No Redux/Zustand/React Query/SWR; use `useState` for ephemeral local UI state only.
 - Use `store.pool.size` as dependency in `useMemo`, not the Map itself
 - `TransactionQueue` instances share a singleton in-memory FIFO backed by an IndexedDB `pendingTransactions` table. `new TransactionQueue()` per component mount with `useMemo(() => new TransactionQueue(), [])` is still the convention — every instance enqueues into the shared queue. Pending transactions survive a page reload, scoped to the session that enqueued them (`orgId`/`userId` from the JWT). `SyncProvider` calls `TransactionQueue.setActiveSession(...)` then `TransactionQueue.hydrate(session)` once at app boot; rows from other sessions are deleted, not replayed.
 
@@ -141,10 +141,12 @@ Resolvers are thin: `requireAuth(ctx)` → `ctx.services.<domain>.method()` → 
 
 ### Frontend
 
-- TailwindCSS v4 + shadcn/ui. Dark mode via `next-themes` (class-based).
-- No hardcoded hex colors — use Tailwind semantic tokens or CSS custom properties.
+- TailwindCSS v4 + shadcn/ui only — no CSS Modules, no styled-components. Dark mode via `next-themes` (class-based).
+- No hardcoded hex colors — use Tailwind semantic tokens or CSS custom properties (oklch theme tokens).
+- Use `cn()` from `@/lib/utils` (clsx + tailwind-merge) for all class merging — never template-literal concatenation.
+- Component files live in `src/components/<feature>/` — feature-grouped, kebab-case filenames. Interactive components are `'use client'`; pages and layouts are server components.
+- Large client-only widgets use `dynamic(..., { ssr: false })` with a `.lazy.tsx` suffix (e.g. `tiptap-editor.lazy.tsx`, `issue-detail-panel.lazy.tsx`).
 - Toast notifications: use `@/lib/toast` wrapper, never import sonner directly.
-- Lazy-load large components: `CommandPalette` (on Cmd+K), `IssueDetailPanel` (on first open).
 - Logging: use `logger`/`childLogger` from `@/server/lib/logger` (pino). No `console.log` in server code.
 - UI primitives in `src/components/ui/`: `Button` (CVA), `Badge` (CVA, variants: `pill`/`solid`), `UserAvatar`, `Select`, `Skeleton`. Extend here, not inline.
 - Shared sub-components in `src/components/shared/`: `UpdateFormFields`, `DeleteUpdateButton`. Add cross-feature building blocks here.

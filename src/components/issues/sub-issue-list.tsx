@@ -42,20 +42,23 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
   // TransactionQueue per mount
   const tq = useMemo(() => new TransactionQueue(), []);
 
-  // Derived in render so MobX (observer) tracks pool access and re-renders on changes
-  const subIssues = Array.from(issueStore.pool.values()).filter(
-    i => i.parentId === parentIssueId && !i.trashed && !i.archivedAt,
-  );
-
-  const grouped = new Map<string, typeof subIssues>();
-  for (const issue of subIssues) {
-    const state = workflowStateStore.findById(issue.stateId);
-    const category = state?.type ?? 'backlog';
-    if (!grouped.has(category)) {
-      grouped.set(category, []);
+  // pool.size is the MobX reactive dependency per repo convention.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size values are the intentional reactive triggers
+  const { subIssues, grouped } = useMemo(() => {
+    const issues = Array.from(issueStore.pool.values()).filter(
+      i => i.parentId === parentIssueId && !i.trashed && !i.archivedAt,
+    );
+    const g = new Map<string, typeof issues>();
+    for (const issue of issues) {
+      const state = workflowStateStore.findById(issue.stateId);
+      const category = state?.type ?? 'backlog';
+      if (!g.has(category)) {
+        g.set(category, []);
+      }
+      g.get(category)?.push(issue);
     }
-    grouped.get(category)?.push(issue);
-  }
+    return { grouped: g, subIssues: issues };
+  }, [parentIssueId, issueStore.pool.size, workflowStateStore.pool.size]);
 
   // Guard: parent issue not yet in store — can happen during a race between
   // bootstrap and panel open; renders nothing rather than using an empty teamId

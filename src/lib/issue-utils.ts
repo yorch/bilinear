@@ -10,6 +10,20 @@ export const PRIORITY_CONFIG = {
 
 export type Priority = keyof typeof PRIORITY_CONFIG;
 
+/** Flat label lookup keyed by priority integer (0–4). */
+export const PRIORITY_LABELS: Record<number, string> = Object.fromEntries(
+  Object.entries(PRIORITY_CONFIG).map(([k, v]) => [Number(k), v.label]),
+);
+
+/** Select-compatible options for filter and picker UIs. */
+export const PRIORITY_OPTIONS: { label: string; value: string }[] = [0, 1, 2, 3, 4].map(p => ({
+  label: PRIORITY_CONFIG[p as Priority].label,
+  value: String(p),
+}));
+
+/** Emoji palette shared by comment and issue reaction pickers. */
+export const QUICK_EMOJIS = ['👍', '👎', '❤️', '🎉', '😄', '🚀', '👀', '😕'] as const;
+
 export function getPriorityConfig(priority: number) {
   return PRIORITY_CONFIG[priority as Priority] ?? PRIORITY_CONFIG[0];
 }

@@ -16,6 +16,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import type { DBWorkflowState } from '@/lib/db';
+import { PRIORITY_LABELS } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser } from '@/types/issues';
 import { PriorityIcon } from '../properties/priority-icon';
@@ -46,16 +47,6 @@ interface Column {
   issues: IssueRowData[];
   label: string;
 }
-
-// ─── Priority labels ────────────────────────────────────────────────────────
-
-const PRIORITY_LABELS: Record<number, string> = {
-  0: 'No priority',
-  1: 'Urgent',
-  2: 'High',
-  3: 'Medium',
-  4: 'Low',
-};
 
 // ─── Card component ─────────────────────────────────────────────────────────
 

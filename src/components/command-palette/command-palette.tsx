@@ -604,3 +604,5 @@ export const CommandPalette = observer(function CommandPalette({
   }
   return <CommandPaletteContent recentItems={recentItems} />;
 });
+
+export default CommandPalette;

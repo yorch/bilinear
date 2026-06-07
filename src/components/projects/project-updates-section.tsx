@@ -1,14 +1,13 @@
 'use client';
 
-import { MessageSquare, Pencil, Plus, X } from 'lucide-react';
+import { Pencil, Plus } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
 import { DeleteUpdateButton } from '@/components/shared/delete-update-button';
-import { UpdateFormFields } from '@/components/shared/update-form-fields';
+import { CreateUpdateForm, EditUpdateForm } from '@/components/shared/update-forms';
 import { Badge } from '@/components/ui/badge';
 import { gql } from '@/lib/graphql';
 import { PROJECT_HEALTH_CONFIG } from '@/lib/project-constants';
-import { toast } from '@/lib/toast';
 import { formatRelativeTime } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import { UserAvatar } from '../ui/user-avatar';
@@ -56,7 +55,23 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
         )}
       </div>
 
-      {creating && <CreateUpdateForm onClose={() => setCreating(false)} projectId={projectId} />}
+      {creating && (
+        <CreateUpdateForm
+          onClose={() => setCreating(false)}
+          onSubmit={async (body, health) => {
+            const res = await gql(
+              `mutation ($input: ProjectUpdateCreateInput!) {
+                projectUpdateCreate(input: $input) { success }
+              }`,
+              { input: { body, health: health || null, projectId } },
+            );
+            if (res.errors?.length) {
+              throw new Error('mutation failed');
+            }
+          }}
+          showNone
+        />
+      )}
 
       {updates.length === 0 && !creating ? (
         <p className="py-6 text-center text-xs text-zinc-400">
@@ -76,7 +91,18 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
                   initialHealth={update.health ?? ''}
                   key={update.id}
                   onClose={() => setEditingId(null)}
-                  updateId={update.id}
+                  onSave={async (body, health) => {
+                    const res = await gql(
+                      `mutation ($id: ID!, $input: ProjectUpdateUpdateInput!) {
+                        projectUpdateUpdate(id: $id, input: $input) { success }
+                      }`,
+                      { id: update.id, input: { body, health: health || null } },
+                    );
+                    if (res.errors?.length) {
+                      throw new Error('mutation failed');
+                    }
+                  }}
+                  showNone
                 />
               );
             }
@@ -140,141 +166,3 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
     </div>
   );
 });
-
-// ─── Create form ─────────────────────────────────────────────────────────────
-
-interface CreateUpdateFormProps {
-  onClose: () => void;
-  projectId: string;
-}
-
-function CreateUpdateForm({ projectId, onClose }: CreateUpdateFormProps) {
-  const [body, setBody] = useState('');
-  const [health, setHealth] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
-  const handleSubmit = async () => {
-    if (!body.trim()) {
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await gql(
-        `mutation ($input: ProjectUpdateCreateInput!) {
-          projectUpdateCreate(input: $input) { success }
-        }`,
-        { input: { body: body.trim(), health: health || null, projectId } },
-      );
-      onClose();
-    } catch {
-      toast.error('Failed to post update');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="mt-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-      <div className="flex items-center gap-2 pb-2">
-        <MessageSquare className="h-4 w-4 text-zinc-400" />
-        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">New update</span>
-        <button
-          className="ml-auto rounded p-0.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-          onClick={onClose}
-          type="button"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
-      <UpdateFormFields
-        body={body}
-        health={health}
-        onBodyChange={setBody}
-        onHealthChange={setHealth}
-        placeholder="Describe the current status, blockers, or progress..."
-        showNone
-      />
-      <div className="mt-2 flex justify-end gap-2">
-        <button
-          className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          onClick={onClose}
-          type="button"
-        >
-          Cancel
-        </button>
-        <button
-          className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-          disabled={!body.trim() || submitting}
-          onClick={handleSubmit}
-          type="button"
-        >
-          {submitting ? 'Posting...' : 'Post update'}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Edit form ────────────────────────────────────────────────────────────────
-
-interface EditUpdateFormProps {
-  initialBody: string;
-  initialHealth: string;
-  onClose: () => void;
-  updateId: string;
-}
-
-function EditUpdateForm({ updateId, initialBody, initialHealth, onClose }: EditUpdateFormProps) {
-  const [body, setBody] = useState(initialBody);
-  const [health, setHealth] = useState(initialHealth);
-  const [submitting, setSubmitting] = useState(false);
-
-  const handleSave = async () => {
-    if (!body.trim()) {
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await gql(
-        `mutation ($id: ID!, $input: ProjectUpdateUpdateInput!) {
-          projectUpdateUpdate(id: $id, input: $input) { success }
-        }`,
-        { id: updateId, input: { body: body.trim(), health: health || null } },
-      );
-      onClose();
-    } catch {
-      toast.error('Failed to save update');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="rounded-lg border border-indigo-300 p-4 dark:border-indigo-700">
-      <UpdateFormFields
-        body={body}
-        health={health}
-        onBodyChange={setBody}
-        onHealthChange={setHealth}
-        showNone
-      />
-      <div className="mt-2 flex justify-end gap-2">
-        <button
-          className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          onClick={onClose}
-          type="button"
-        >
-          Cancel
-        </button>
-        <button
-          className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-          disabled={!body.trim() || submitting}
-          onClick={handleSave}
-          type="button"
-        >
-          {submitting ? 'Saving...' : 'Save'}
-        </button>
-      </div>
-    </div>
-  );
-}

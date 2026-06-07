@@ -3,7 +3,7 @@
 import { Calendar, Plus, Target } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { PROJECT_HEALTH_CONFIG, PROJECT_STATUS_CONFIG } from '@/lib/project-constants';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -12,17 +12,25 @@ interface ProjectListViewProps {
   workspaceKey: string;
 }
 
+const ACTIVE_STATUSES = ['inProgress', 'planned', 'backlog'];
+const COMPLETED_STATUSES = ['completed', 'canceled'];
+
 export const ProjectListView = observer(function ProjectListView({
   workspaceKey,
 }: ProjectListViewProps) {
   const { projectStore, uiStore } = useStore();
   const projects = projectStore.all;
 
-  const activeStatuses = ['inProgress', 'planned', 'backlog'];
-  const completedStatuses = ['completed', 'canceled'];
-
-  const activeProjects = projects.filter(p => activeStatuses.includes(p.statusType));
-  const completedProjects = projects.filter(p => completedStatuses.includes(p.statusType));
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the intentional reactive trigger
+  const activeProjects = useMemo(
+    () => projects.filter(p => ACTIVE_STATUSES.includes(p.statusType)),
+    [projectStore.pool.size],
+  );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the intentional reactive trigger
+  const completedProjects = useMemo(
+    () => projects.filter(p => COMPLETED_STATUSES.includes(p.statusType)),
+    [projectStore.pool.size],
+  );
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -95,6 +103,23 @@ const ProjectGroup = observer(function ProjectGroup({
   const { issueStore, userStore } = useStore();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
+  // Pre-compute progress stats for all projects in this group so we don't call
+  // findByProjectId() O(n) times inside the render loop. pool.size is the MobX
+  // reactive dependency per repo convention (using the Map itself is unstable).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: issueStore.pool.size is the intentional reactive trigger
+  const progressByProject = useMemo(() => {
+    const stats = new Map<string, { total: number; progress: number }>();
+    for (const project of projects) {
+      const allIssues = issueStore.findByProjectId(project.id);
+      const completed = allIssues.filter(i => i.completedAt).length;
+      stats.set(project.id, {
+        progress: allIssues.length > 0 ? Math.round((completed / allIssues.length) * 100) : 0,
+        total: allIssues.length,
+      });
+    }
+    return stats;
+  }, [projects, issueStore.pool.size]);
+
   return (
     <div>
       <button
@@ -125,12 +150,10 @@ const ProjectGroup = observer(function ProjectGroup({
             const health = project.health ? PROJECT_HEALTH_CONFIG[project.health] : null;
             const lead = project.leadId ? userStore.findById(project.leadId) : null;
 
-            const allIssues = issueStore.findByProjectId(project.id);
-            const completedIssues = allIssues.filter(i => i.completedAt);
-            const progress =
-              allIssues.length > 0
-                ? Math.round((completedIssues.length / allIssues.length) * 100)
-                : 0;
+            const { total: totalIssues, progress } = progressByProject.get(project.id) ?? {
+              progress: 0,
+              total: 0,
+            };
 
             return (
               <Link
@@ -163,7 +186,7 @@ const ProjectGroup = observer(function ProjectGroup({
                   </div>
                 </div>
 
-                {allIssues.length > 0 && (
+                {totalIssues > 0 && (
                   <div className="flex items-center gap-2">
                     <div className="h-1.5 w-16 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
                       <div
