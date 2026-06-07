@@ -15,6 +15,30 @@ import { StatusSelect } from '../properties/status-select';
 import { ModalDialog } from '../ui/modal-dialog';
 import { TemplateSelector } from './template-selector';
 
+interface FormState {
+  assigneeId: string | null;
+  description: string;
+  dueDate: string | null;
+  labelIds: string[];
+  priority: number;
+  projectId: string | null;
+  stateId: string;
+  title: string;
+}
+
+function initialForm(defaultStateId?: string, firstStateId?: string): FormState {
+  return {
+    assigneeId: null,
+    description: '',
+    dueDate: null,
+    labelIds: [],
+    priority: 0,
+    projectId: null,
+    stateId: defaultStateId ?? firstStateId ?? '',
+    title: '',
+  };
+}
+
 interface CreateIssueInput {
   assigneeId?: string;
   description?: string;
@@ -48,14 +72,7 @@ export function CreateIssueModal({
   teamId,
 }: CreateIssueModalProps) {
   const titleRef = useRef<HTMLInputElement>(null);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [stateId, setStateId] = useState(defaultStateId ?? states[0]?.id ?? '');
-  const [assigneeId, setAssigneeId] = useState<string | null>(null);
-  const [priority, setPriority] = useState(0);
-  const [labelIds, setLabelIds] = useState<string[]>([]);
-  const [dueDate, setDueDate] = useState<string | null>(null);
-  const [projectId, setProjectId] = useState<string | null>(null);
+  const [form, setForm] = useState<FormState>(() => initialForm(defaultStateId, states[0]?.id));
   const [submitting, setSubmitting] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
   // Synchronous re-entry guard. The disabled prop on the submit button
@@ -64,26 +81,32 @@ export function CreateIssueModal({
   // setSubmitting(true) ever lands and create the issue twice.
   const submittingRef = useRef(false);
 
+  const patchForm = (patch: Partial<FormState>) => setForm(prev => ({ ...prev, ...patch }));
+
   const applyTemplate = useCallback((data: object) => {
     const d = data as Record<string, unknown>;
-    if (typeof d.title === 'string') {
-      setTitle(d.title);
-    }
-    if (typeof d.description === 'string') {
-      setDescription(d.description);
-    }
-    if (typeof d.priority === 'number') {
-      setPriority(d.priority);
-    }
-    if (typeof d.stateId === 'string') {
-      setStateId(d.stateId);
-    }
-    if (Array.isArray(d.labelIds)) {
-      setLabelIds(d.labelIds as string[]);
-    }
-    if (typeof d.assigneeId === 'string') {
-      setAssigneeId(d.assigneeId);
-    }
+    setForm(prev => {
+      const patch: Partial<FormState> = {};
+      if (typeof d.assigneeId === 'string') {
+        patch.assigneeId = d.assigneeId;
+      }
+      if (typeof d.description === 'string') {
+        patch.description = d.description;
+      }
+      if (Array.isArray(d.labelIds)) {
+        patch.labelIds = d.labelIds as string[];
+      }
+      if (typeof d.priority === 'number') {
+        patch.priority = d.priority;
+      }
+      if (typeof d.stateId === 'string') {
+        patch.stateId = d.stateId;
+      }
+      if (typeof d.title === 'string') {
+        patch.title = d.title;
+      }
+      return { ...prev, ...patch };
+    });
   }, []);
 
   // Reset form state only when the modal transitions from closed to open.
@@ -96,14 +119,7 @@ export function CreateIssueModal({
     if (!open) {
       return;
     }
-    setTitle('');
-    setDescription('');
-    setStateId(defaultStateId ?? states[0]?.id ?? '');
-    setAssigneeId(null);
-    setPriority(0);
-    setLabelIds([]);
-    setDueDate(null);
-    setProjectId(null);
+    setForm(initialForm(defaultStateId, states[0]?.id));
     setTemplateOpen(false);
     setTimeout(() => titleRef.current?.focus(), 50);
 
@@ -147,7 +163,7 @@ export function CreateIssueModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || submittingRef.current) {
+    if (!form.title.trim() || submittingRef.current) {
       return;
     }
 
@@ -155,14 +171,14 @@ export function CreateIssueModal({
     setSubmitting(true);
     try {
       await onSubmit({
-        assigneeId: assigneeId ?? undefined,
-        description: description.trim() || undefined,
-        dueDate,
-        labelIds,
-        priority,
-        projectId: projectId ?? undefined,
-        stateId: stateId || undefined,
-        title: title.trim(),
+        assigneeId: form.assigneeId ?? undefined,
+        description: form.description.trim() || undefined,
+        dueDate: form.dueDate,
+        labelIds: form.labelIds,
+        priority: form.priority,
+        projectId: form.projectId ?? undefined,
+        stateId: form.stateId || undefined,
+        title: form.title.trim(),
       });
       onClose();
     } finally {
@@ -178,12 +194,12 @@ export function CreateIssueModal({
         <div className="px-5 pt-5">
           <input
             className="w-full bg-transparent text-lg font-medium text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
-            onChange={e => setTitle(e.target.value)}
+            onChange={e => patchForm({ title: e.target.value })}
             placeholder="Issue title"
             ref={titleRef}
             required
             type="text"
-            value={title}
+            value={form.title}
           />
         </div>
 
@@ -191,20 +207,32 @@ export function CreateIssueModal({
         <div className="px-5 pt-2">
           <TipTapEditor
             className="text-sm text-zinc-600 dark:text-zinc-400"
-            content={description}
-            onChange={html => setDescription(html)}
+            content={form.description}
+            onChange={html => patchForm({ description: html })}
             placeholder="Add description… (optional, supports **markdown**)"
           />
         </div>
 
         {/* Properties toolbar */}
         <div className="flex flex-wrap items-center gap-1 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
-          <StatusSelect onChange={setStateId} states={states} value={stateId} />
-          <PrioritySelect onChange={setPriority} value={priority} />
-          <AssigneeSelect onChange={setAssigneeId} users={users} value={assigneeId} />
-          <LabelSelect labels={labels} onChange={setLabelIds} value={labelIds} />
-          <DueDatePicker onChange={setDueDate} value={dueDate} />
-          <ProjectSelect onChange={setProjectId} value={projectId} />
+          <StatusSelect
+            onChange={v => patchForm({ stateId: v })}
+            states={states}
+            value={form.stateId}
+          />
+          <PrioritySelect onChange={v => patchForm({ priority: v })} value={form.priority} />
+          <AssigneeSelect
+            onChange={v => patchForm({ assigneeId: v })}
+            users={users}
+            value={form.assigneeId}
+          />
+          <LabelSelect
+            labels={labels}
+            onChange={v => patchForm({ labelIds: v })}
+            value={form.labelIds}
+          />
+          <DueDatePicker onChange={v => patchForm({ dueDate: v })} value={form.dueDate} />
+          <ProjectSelect onChange={v => patchForm({ projectId: v })} value={form.projectId} />
           {teamId && (
             <TemplateSelector
               forceOpen={templateOpen}
@@ -229,7 +257,7 @@ export function CreateIssueModal({
               'rounded-md px-4 py-1.5 text-sm font-medium text-white transition-colors',
               'bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed',
             )}
-            disabled={!title.trim() || submitting}
+            disabled={!form.title.trim() || submitting}
             type="submit"
           >
             {submitting ? 'Creating…' : 'Create issue'}
