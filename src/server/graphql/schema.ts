@@ -1527,6 +1527,8 @@ export const typeDefs = `
 
     """List active SCIM provisioning tokens for the org. Admin only."""
     scimTokens: [ScimToken!]!
+
+    apiTokens: [ApiToken!]!
   }
 
   type GoogleAuthStartPayload {
@@ -1705,6 +1707,9 @@ export const typeDefs = `
     # SCIM provisioning token management — admin only
     scimTokenCreate(label: String!): ScimTokenCreatePayload!
     scimTokenRevoke(id: ID!): ScimTokenRevokePayload!
+
+    apiTokenCreate(label: String!): ApiTokenCreatePayload!
+    apiTokenRevoke(id: ID!): BasicPayload!
   }
 
   # ---------------------------------------------------------------------------
@@ -1866,5 +1871,19 @@ export const typeDefs = `
 
   type ScimTokenRevokePayload {
     success: Boolean!
+  }
+
+  type ApiToken {
+    id: ID!
+    label: String!
+    lastUsedAt: DateTime
+    createdAt: DateTime!
+    expiresAt: DateTime!
+  }
+
+  type ApiTokenCreatePayload {
+    plaintext: String!
+    success: Boolean!
+    token: ApiToken!
   }
 `;

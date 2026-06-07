@@ -1,6 +1,6 @@
 'use client';
 
-import { Calendar, ChevronRight, Copy, Lock, RefreshCw, Users } from 'lucide-react';
+import { Calendar, ChevronRight, Copy, Key, Lock, RefreshCw, Trash2, Users } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -66,6 +66,24 @@ const UPDATE_NOTIFICATION_PREFS_MUTATION = `
   }
 `;
 
+const API_TOKENS_QUERY = `
+  query ApiTokens { apiTokens { id label lastUsedAt createdAt expiresAt } }
+`;
+
+const API_TOKEN_CREATE_MUTATION = `
+  mutation ApiTokenCreate($label: String!) {
+    apiTokenCreate(label: $label) {
+      success
+      plaintext
+      token { id label lastUsedAt createdAt expiresAt }
+    }
+  }
+`;
+
+const API_TOKEN_REVOKE_MUTATION = `
+  mutation ApiTokenRevoke($id: ID!) { apiTokenRevoke(id: $id) { success } }
+`;
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -76,6 +94,14 @@ interface OrgInfo {
   id: string;
   name: string;
   urlKey: string;
+}
+
+interface ApiToken {
+  createdAt: string;
+  expiresAt: string;
+  id: string;
+  label: string;
+  lastUsedAt: string | null;
 }
 
 const ORG_ROLES = ['owner', 'admin', 'member', 'guest'] as const;
@@ -115,6 +141,11 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const [calendarFeedUrl, setCalendarFeedUrl] = useState<string | null>(null);
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true);
   const [rotatingToken, setRotatingToken] = useState(false);
+  const [apiTokens, setApiTokens] = useState<ApiToken[]>([]);
+  const [newTokenLabel, setNewTokenLabel] = useState('');
+  const [creatingToken, setCreatingToken] = useState(false);
+  const [newPlaintext, setNewPlaintext] = useState<string | null>(null);
+  const [revokingTokenId, setRevokingTokenId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -168,6 +199,50 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    gql(API_TOKENS_QUERY)
+      .then(result => {
+        const data = result.data as { apiTokens?: ApiToken[] } | undefined;
+        setApiTokens(data?.apiTokens ?? []);
+      })
+      .catch(() => {});
+  }, []);
+
+  async function createApiToken() {
+    if (!newTokenLabel.trim()) {
+      return;
+    }
+    setCreatingToken(true);
+    try {
+      const result = await gql(API_TOKEN_CREATE_MUTATION, { label: newTokenLabel.trim() });
+      const data = result.data as
+        | { apiTokenCreate?: { plaintext: string; token: ApiToken } }
+        | undefined;
+      if (data?.apiTokenCreate) {
+        setApiTokens(prev => [data.apiTokenCreate!.token, ...prev]);
+        setNewPlaintext(data.apiTokenCreate.plaintext);
+        setNewTokenLabel('');
+      }
+    } catch {
+      toast.error('Failed to create API token');
+    } finally {
+      setCreatingToken(false);
+    }
+  }
+
+  async function revokeApiToken(id: string) {
+    setRevokingTokenId(id);
+    try {
+      await gql(API_TOKEN_REVOKE_MUTATION, { id });
+      setApiTokens(prev => prev.filter(t => t.id !== id));
+      toast.success('Token revoked');
+    } catch {
+      toast.error('Failed to revoke token');
+    } finally {
+      setRevokingTokenId(null);
+    }
+  }
 
   async function rotateCalendarToken() {
     setRotatingToken(true);

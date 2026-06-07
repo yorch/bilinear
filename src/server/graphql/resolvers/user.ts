@@ -13,6 +13,22 @@ function buildCalendarFeedUrl(token: string | null, appUrl: string): string | nu
 
 export const userResolvers = {
   Mutation: {
+    apiTokenCreate: async (
+      _parent: unknown,
+      { label }: { label: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      const result = await ctx.services.auth.createApiToken(ctx.userId, label);
+      return { plaintext: result.plaintext, success: true, token: result.token };
+    },
+
+    apiTokenRevoke: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+      await ctx.services.auth.revokeApiToken(ctx.userId, id);
+      return { success: true };
+    },
+
     userCalendarFeedTokenRotate: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
       const token = crypto.randomBytes(32).toString('hex');
@@ -38,6 +54,11 @@ export const userResolvers = {
   },
 
   Query: {
+    apiTokens: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+      return ctx.services.auth.listApiTokens(ctx.userId);
+    },
+
     viewer: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
       const user = await ctx.services.user.findById(ctx.userId);

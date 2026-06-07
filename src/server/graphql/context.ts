@@ -108,7 +108,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('access_token')?.value ?? null;
 
-  const auth = await extractAuthContext(authHeader, cookieToken);
+  const auth = await extractAuthContext(authHeader, cookieToken, prisma);
   const clientIp = extractClientIp(req);
 
   const userService = new UserService(prisma);
