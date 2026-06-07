@@ -2082,3 +2082,45 @@ Scoped long-lived tokens for programmatic API access (`bil_` prefix):
 - **Multi-org** — API key auth scopes to the user's oldest org (`orderBy: { createdAt: 'asc' }, take: 1`). This is a known limitation; tokens are not org-scoped at the DB level.
 - **GraphQL** — `apiTokens: [ApiToken!]!` query + `apiTokenCreate(label)` + `apiTokenRevoke(id)` mutations. All in `userResolvers`.
 - **Settings UI** — `/settings` page shows a one-time plaintext banner (copy + dismiss), label input, and a list of active tokens with revoke buttons.
+
+## 68. Keyboard Shortcut Help Modal (2026-06-07)
+
+`?` opens a full shortcut reference modal listing all registered hotkeys grouped into 5 sections: Global, Navigation, Issue List, Issue Actions, and View.
+
+- **Component** — `src/components/layouts/shortcut-help-modal.tsx`. Plain div overlay + centered card (no shadcn Dialog). Closes on Escape or outside-click.
+- **Registration** — `useHotkeys('?', ...)` in `workspace-client.tsx`. Suppressed when focus is inside an input/textarea (default hook behaviour).
+- **`kbd` styling** — `rounded border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 text-xs font-mono dark:border-zinc-600 dark:bg-zinc-800`.
+
+## 69. Bulk Actions Toolbar (2026-06-07)
+
+Multi-select checkboxes in the issue list view with a floating action bar for batch mutations.
+
+- **Entry point** — `IssueListView` accepts `onBulkUpdate?: (ids: string[], patch) => void`. When present, each `IssueRow` checkbox enters bulk-select mode (uses `checked`/`onCheck` props instead of the single-select `selected`/`onSelect`).
+- **Range select** — Shift+click extends selection from the last-checked index, mirroring the board view's pattern.
+- **`BulkActionBar`** — fixed bottom bar (`src/components/issues/bulk-action-bar.tsx`). Appears when `checkedIds.size > 0`. Provides Status / Priority / Assignee / Label `SelectPopover` dropdowns; clears selection after applying.
+- **Mutation** — `issuesBulkUpdate(ids, input)` on team page and My Issues page. Optimistically updates each issue in the MobX store, then applies server-returned issues via `applySyncAction`.
+
+## 70. Cycle Burndown Chart (2026-06-07)
+
+True agile burndown chart alongside the existing burnup chart in `CycleDetailView`.
+
+- **Component** — `src/components/cycles/burndown-chart.tsx`. SVG-based (600×300 viewBox), same axes/grid/date-label pattern as `burnup-chart.tsx`. Plots remaining issues (indigo line) against an ideal straight-line burndown from initial scope to 0 (dashed gray).
+- **UI** — tab toggle between "Burndown" and "Burnup" in `cycle-detail-view.tsx`.
+
+## 71. Issue Templates CRUD UI (2026-06-07)
+
+Template management section in the team settings page.
+
+- **Component** — `src/components/issues/issue-templates-section.tsx` (`IssueTemplatesSection`). MobX `observer`; reads from `issueTemplateStore.findByTeamId(teamId)`.
+- **Form fields** — name, description (textarea), status/priority/assignee defaults (populated from team stores), label multi-toggle, "Set as default" checkbox.
+- **Mutations** — `issueTemplateCreate` / `issueTemplateUpdate` / `issueTemplateDelete`. Applies `applySyncAction` after each write for immediate UI update.
+- **Location** — rendered in `team/[key]/settings/page.tsx` between Custom Fields and Danger Zone.
+
+## 72. Project Milestones UI (2026-06-07)
+
+Inline milestone management in the project detail view.
+
+- **Component** — `src/components/projects/project-milestones-section.tsx` (`ProjectMilestonesSection`). MobX `observer`; reads from `projectStore.getMilestones(projectId)`.
+- **Form** — inline create/edit with name, description, and target date (date input). Delete confirms via `window.confirm`.
+- **Mutations** — `projectMilestoneCreate` / `projectMilestoneUpdate` / `projectMilestoneDelete`.
+- **Location** — replaces the old read-only milestones block in `project-detail-view.tsx`.
