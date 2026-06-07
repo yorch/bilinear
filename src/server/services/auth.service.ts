@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import type { PrismaClient } from '../../generated/prisma';
+import type { AuthToken, PrismaClient } from '../../generated/prisma';
 import { sendMagicLinkEmail } from '../lib/email';
 import {
   ACCESS_TOKEN_EXPIRY_SECONDS,
@@ -281,7 +281,7 @@ export class AuthService {
   async createApiToken(
     userId: string,
     label: string,
-  ): Promise<{ plaintext: string; token: import('../../generated/prisma').AuthToken }> {
+  ): Promise<{ plaintext: string; token: AuthToken }> {
     if (!label.trim()) {
       throw new Error('Label is required');
     }

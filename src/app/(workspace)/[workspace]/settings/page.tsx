@@ -220,7 +220,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
         | { apiTokenCreate?: { plaintext: string; token: ApiToken } }
         | undefined;
       if (data?.apiTokenCreate) {
-        setApiTokens(prev => [data.apiTokenCreate!.token, ...prev]);
+        setApiTokens(prev => [data.apiTokenCreate?.token as ApiToken, ...prev]);
         setNewPlaintext(data.apiTokenCreate.plaintext);
         setNewTokenLabel('');
       }
@@ -583,6 +583,135 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* API tokens */}
+        <section>
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+            API Tokens
+          </h2>
+          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 divide-y divide-zinc-100 dark:divide-zinc-800">
+            {/* New plaintext banner — shown only once after creation */}
+            {newPlaintext && (
+              <div className="px-5 py-3 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800">
+                <p className="text-xs font-medium text-amber-700 dark:text-amber-400 mb-1.5">
+                  Copy your token now — it will not be shown again.
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 truncate text-xs bg-white dark:bg-zinc-900 border border-amber-200 dark:border-amber-700 px-2 py-1 rounded text-zinc-700 dark:text-zinc-300 font-mono">
+                    {newPlaintext}
+                  </code>
+                  <button
+                    className="shrink-0 text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-200"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(newPlaintext);
+                      toast.success('Copied to clipboard');
+                    }}
+                    title="Copy token"
+                    type="button"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <button
+                  className="mt-2 text-xs text-amber-600 dark:text-amber-400 hover:underline"
+                  onClick={() => setNewPlaintext(null)}
+                  type="button"
+                >
+                  I have copied it
+                </button>
+              </div>
+            )}
+
+            {/* Create new token */}
+            <div className="px-5 py-3">
+              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5 mb-2">
+                <Key className="h-3.5 w-3.5 text-zinc-400" />
+                Create token
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  className={cn(
+                    'flex-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-transparent',
+                    'px-3 py-1.5 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400',
+                    'focus:outline-none focus:ring-1 focus:ring-indigo-500',
+                  )}
+                  disabled={creatingToken}
+                  onChange={e => setNewTokenLabel(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      void createApiToken();
+                    }
+                  }}
+                  placeholder="Token label"
+                  type="text"
+                  value={newTokenLabel}
+                />
+                <button
+                  className={cn(
+                    'shrink-0 rounded-md border border-zinc-200 dark:border-zinc-700',
+                    'px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300',
+                    'hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50',
+                  )}
+                  disabled={creatingToken || !newTokenLabel.trim()}
+                  onClick={() => void createApiToken()}
+                  type="button"
+                >
+                  {creatingToken ? 'Creating…' : 'Create'}
+                </button>
+              </div>
+            </div>
+
+            {/* Token list */}
+            {apiTokens.length === 0 ? (
+              <p className="px-5 py-4 text-sm text-zinc-400">No API tokens yet.</p>
+            ) : (
+              <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {apiTokens.map(token => (
+                  <li className="flex items-start gap-3 px-5 py-3" key={token.id}>
+                    <Key className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                        {token.label}
+                      </p>
+                      <p className="text-xs text-zinc-400 mt-0.5">
+                        Created{' '}
+                        {new Date(token.createdAt).toLocaleDateString(undefined, {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                        {' · '}
+                        {token.lastUsedAt
+                          ? `Last used ${new Date(token.lastUsedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`
+                          : 'Never used'}
+                        {' · '}
+                        Expires{' '}
+                        {new Date(token.expiresAt).toLocaleDateString(undefined, {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </p>
+                    </div>
+                    <button
+                      className="shrink-0 text-zinc-400 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40"
+                      disabled={revokingTokenId === token.id}
+                      onClick={() => {
+                        if (window.confirm(`Revoke token "${token.label}"?`)) {
+                          void revokeApiToken(token.id);
+                        }
+                      }}
+                      title="Revoke token"
+                      type="button"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </section>
 

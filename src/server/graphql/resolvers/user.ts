@@ -13,11 +13,7 @@ function buildCalendarFeedUrl(token: string | null, appUrl: string): string | nu
 
 export const userResolvers = {
   Mutation: {
-    apiTokenCreate: async (
-      _parent: unknown,
-      { label }: { label: string },
-      ctx: GraphQLContext,
-    ) => {
+    apiTokenCreate: async (_parent: unknown, { label }: { label: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
       const result = await ctx.services.auth.createApiToken(ctx.userId, label);
       return { plaintext: result.plaintext, success: true, token: result.token };
