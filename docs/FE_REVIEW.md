@@ -1,6 +1,6 @@
 # Frontend Review — Bilinear
 
-_Last updated: 2026-06-07 · Status: Auto-fixing Tier 1_
+_Last updated: 2026-06-07 · Status: All tiers complete_
 
 ## Conventions (baseline)
 
@@ -26,17 +26,19 @@ _Last updated: 2026-06-07 · Status: Auto-fixing Tier 1_
 | F02 | `useParams` type too broad in `WorkspaceClient` | Low | Types | Safe | [x] |
 | F03 | Collapse button missing `aria-expanded` in `GroupSection` | Medium | A11y | Safe | [x] |
 | F04 | Comment action buttons hidden from keyboard (opacity-0) | High | A11y | Safe | [x] |
-| F05 | `QUICK_EMOJIS` constant duplicated in two files | Low | Reuse | Structural | [ ] |
-| F06 | `PRIORITY_LABELS`/`PRIORITY_OPTIONS` duplicated across `board-view` and `filter-builder` | Medium | Reuse | Structural | [ ] |
-| F07 | Update forms copy-pasted between `project-updates-section` and `initiative-updates-section` | High | Reuse | Structural | [ ] |
-| F08 | `CommentCard` and `CommentComposer` inlined in 660-line `comment-thread.tsx` | Medium | Composition | Structural | [ ] |
-| F09 | Sidebar (579 lines) mixes global nav, teams, favorites, and footer into one component | Medium | Composition | Structural | [ ] |
-| F10 | `CreateIssueModal` has 8 independent `useState` calls that could be one form-state object | Low | State | Structural | [ ] |
-| F11 | Derived issue counts recalculated inline on every render in `ProjectListView` and `ProjectDetailView` | High | Perf | Structural | [ ] |
-| F12 | `statesById`/`usersById` Maps rebuilt on every render in `CsvExportButton` | Low | Perf | Structural | [ ] |
-| F13 | Grouped-issues Map rebuilt on every render in `SubIssueList` | Low | Perf | Structural | [ ] |
-| F14 | `WorkspaceClient` `dynamic()` import wraps named export unnecessarily | Low | Convention | Structural | [ ] |
-| F15 | `reactionCounts` reduce runs on every render inside `CommentCard` | Low | Perf | Structural | [ ] |
+| F05 | `QUICK_EMOJIS` constant duplicated in two files | Low | Reuse | Structural | [x] |
+| F06 | `PRIORITY_LABELS`/`PRIORITY_OPTIONS` duplicated across `board-view` and `filter-builder` | Medium | Reuse | Structural | [x] |
+| F07 | Update forms copy-pasted between `project-updates-section` and `initiative-updates-section` | High | Reuse | Structural | [x] |
+| F08 | `CommentCard` and `CommentComposer` inlined in 660-line `comment-thread.tsx` | Medium | Composition | Structural | [x] |
+| F09 | Sidebar (579 lines) mixes global nav, teams, favorites, and footer into one component | Medium | Composition | Structural | [x] |
+| F10 | `CreateIssueModal` has 8 independent `useState` calls that could be one form-state object | Low | State | Structural | [x] |
+| F11 | Derived issue counts recalculated inline on every render in `ProjectListView` and `ProjectDetailView` | High | Perf | Structural | [x] |
+| F12 | `statesById`/`usersById` Maps rebuilt on every render in `CsvExportButton` | Low | Perf | Structural | [~] |
+| F13 | Grouped-issues Map rebuilt on every render in `SubIssueList` | Low | Perf | Structural | [x] |
+| F14 | `WorkspaceClient` `dynamic()` import wraps named export unnecessarily | Low | Convention | Structural | [x] |
+| F15 | `reactionCounts` reduce runs on every render inside `CommentCard` | Low | Perf | Structural | [x] |
+
+_[x] = done · [~] = won't do (false positive)_
 
 ---
 
@@ -50,8 +52,7 @@ _Last updated: 2026-06-07 · Status: Auto-fixing Tier 1_
 - **Files:** `src/components/issues/pull-requests-section.tsx:89,92,96`
 - **Problem:** `PrStateIcon` builds Tailwind classNames via template literals: `` `h-4 w-4 text-purple-500 ${className}` ``. When `className` is `undefined` (the prop's default), the string `"undefined"` is literally appended to the DOM class attribute. This conflicts with Tailwind's deduplication and is a pattern mismatch — the entire repo uses `cn()` for class merging.
 - **Proposed change:** Replace all three template literals with `cn('h-4 w-4 text-...', className)`.
-- **Status:** [x] Done
-- **Commit:** _(see batch 1)_
+- **Status:** [x] Done — added `cn()` import and replaced template literals.
 
 ---
 
@@ -64,7 +65,6 @@ _Last updated: 2026-06-07 · Status: Auto-fixing Tier 1_
 - **Problem:** `WorkspaceClient` lives inside the `(workspace)/[workspace]/` segment, so `params.workspace` is always a non-empty string at runtime. Typing it as `string | undefined` creates dead-code branches and suppresses useful TypeScript narrowing downstream.
 - **Proposed change:** Change generic to `{ workspace: string }`.
 - **Status:** [x] Done
-- **Commit:** _(see batch 1)_
 
 ---
 
@@ -77,7 +77,6 @@ _Last updated: 2026-06-07 · Status: Auto-fixing Tier 1_
 - **Problem:** The group header `<button>` toggles `collapsed` state but conveys no state to assistive technology. Screen readers announce it as a plain button with no indication of whether the group is expanded or collapsed.
 - **Proposed change:** Add `aria-expanded={!collapsed}` to the button element.
 - **Status:** [x] Done
-- **Commit:** _(see batch 1)_
 
 ---
 
@@ -86,11 +85,10 @@ _Last updated: 2026-06-07 · Status: Auto-fixing Tier 1_
 - **Severity:** High
 - **Category:** A11y
 - **Tier:** Safe
-- **Files:** `src/components/issues/comment-thread.tsx:382`
+- **Files:** `src/components/issues/comment-card.tsx` (was `comment-thread.tsx:382`)
 - **Problem:** The actions container (`flex items-center gap-1 opacity-0 group-hover:opacity-100`) is fully transparent until the mouse hovers over the comment card. Keyboard users who Tab into the contained buttons cannot see them and have no indication they exist. The "Resolve", "React", and "More" controls are effectively unreachable without a mouse.
 - **Proposed change:** Add `group-focus-within:opacity-100` to the container className so keyboard focus on any child button reveals the bar.
-- **Status:** [x] Done
-- **Commit:** _(see batch 1)_
+- **Status:** [x] Done — applied in `comment-card.tsx` during WS3 extraction.
 
 ---
 
@@ -98,11 +96,11 @@ _Last updated: 2026-06-07 · Status: Auto-fixing Tier 1_
 
 - **Severity:** Low
 - **Category:** Reuse
-- **Tier:** Structural
-- **Files:** `src/components/issues/comment-thread.tsx:64`, `src/components/issues/issue-reaction-bar.tsx:26`
-- **Problem:** `const QUICK_EMOJIS = ['👍', '👎', '❤️', '🎉', '😄', '🚀', '👀', '😕']` is copy-pasted verbatim. Any future change to the emoji set requires updating both files.
-- **Proposed change:** Move the constant to `src/lib/reactions.ts` (new small file) and import from both sites. Alternative: export from whichever component is considered the owner and import in the other.
-- **Status:** [ ] Open
+- **Tier:** Structural (WS2)
+- **Files:** `src/components/issues/comment-thread.tsx`, `src/components/issues/issue-reaction-bar.tsx`
+- **Problem:** `const QUICK_EMOJIS = ['👍', '👎', '❤️', '🎉', '😄', '🚀', '👀', '😕']` was copy-pasted verbatim. Any future change to the emoji set required updating both files.
+- **Proposed change:** Move to `src/lib/issue-utils.ts` and import from both sites.
+- **Status:** [x] Done — exported from `issue-utils.ts`; local copies removed from both consumers.
 
 ---
 
@@ -110,11 +108,11 @@ _Last updated: 2026-06-07 · Status: Auto-fixing Tier 1_
 
 - **Severity:** Medium
 - **Category:** Reuse
-- **Tier:** Structural
-- **Files:** `src/components/issues/board-view.tsx:52–58`, `src/components/issues/filter-builder.tsx:39–45`
-- **Problem:** Both files independently define a mapping of priority integer → label + icon/color. The data is identical. Divergence will cause inconsistent labels.
-- **Proposed change:** Extract to `src/lib/issue-constants.ts` (or extend the existing `src/lib/issue-utils.ts`) and import from both sites.
-- **Status:** [ ] Open
+- **Tier:** Structural (WS2)
+- **Files:** `src/components/issues/board-view.tsx`, `src/components/issues/filter-builder.tsx`
+- **Problem:** Both files independently defined a mapping of priority integer → label + icon/color. The data was identical. Divergence would cause inconsistent labels.
+- **Proposed change:** Extract to `src/lib/issue-utils.ts` and import from both sites.
+- **Status:** [x] Done — `PRIORITY_LABELS` and `PRIORITY_OPTIONS` exported from `issue-utils.ts`; local copies removed.
 
 ---
 
@@ -122,11 +120,11 @@ _Last updated: 2026-06-07 · Status: Auto-fixing Tier 1_
 
 - **Severity:** High
 - **Category:** Reuse
-- **Tier:** Structural
-- **Files:** `src/components/projects/project-updates-section.tsx:144–280`, `src/components/initiatives/initiative-updates-section.tsx:168–319`
-- **Problem:** Both files embed nearly identical `CreateUpdateForm` and `EditUpdateForm` sub-components (≈ 140 lines each). The only differences are the GraphQL mutation name and the `projectId` vs `initiativeId` parameter. Any bug or UX change must be applied in two places. `src/components/shared/` already exists for exactly this purpose; `UpdateFormFields` (shared form inputs) is already there, but the form wrapper components themselves are duplicated.
-- **Proposed change:** Create `src/components/shared/update-forms.tsx` exporting `CreateUpdateForm` and `EditUpdateForm` that accept a generic `onSubmit` callback. Migrate both call sites.
-- **Status:** [ ] Open
+- **Tier:** Structural (WS1)
+- **Files:** `src/components/projects/project-updates-section.tsx`, `src/components/initiatives/initiative-updates-section.tsx`
+- **Problem:** Both files embedded nearly identical `CreateUpdateForm` and `EditUpdateForm` sub-components (≈ 140 lines each). The only differences were the GraphQL mutation name and the `projectId` vs `initiativeId` parameter. Any bug or UX change had to be applied in two places.
+- **Proposed change:** Create `src/components/shared/update-forms.tsx` exporting `CreateUpdateForm` and `EditUpdateForm` that accept a generic `onSubmit`/`onSave` callback. Migrate both call sites.
+- **Status:** [x] Done — shared forms extracted; both sections now import from `@/components/shared/update-forms`.
 
 ---
 
@@ -134,11 +132,11 @@ _Last updated: 2026-06-07 · Status: Auto-fixing Tier 1_
 
 - **Severity:** Medium
 - **Category:** Composition
-- **Tier:** Structural
-- **Files:** `src/components/issues/comment-thread.tsx:239–601`, `src/components/issues/comment-thread.tsx:604–660`
-- **Problem:** `CommentCard` (363 lines, 6 `useState` calls) and `CommentComposer` (57 lines) are unexported internal components defined at the bottom of the file. They are self-contained enough to live in separate files but being co-located makes the file hard to navigate and the components impossible to test in isolation or reuse.
-- **Proposed change:** Move `CommentCard` → `src/components/issues/comment-card.tsx` and `CommentComposer` → `src/components/issues/comment-composer.tsx`. No behavior or prop API changes — pure file split.
-- **Status:** [ ] Open
+- **Tier:** Structural (WS3)
+- **Files:** `src/components/issues/comment-thread.tsx`
+- **Problem:** `CommentCard` (363 lines, 6 `useState` calls) and `CommentComposer` (57 lines) were unexported internal components defined at the bottom of the file. They were self-contained but impossible to test in isolation or reuse.
+- **Proposed change:** Move `CommentCard` → `comment-card.tsx` and `CommentComposer` → `comment-composer.tsx`.
+- **Status:** [x] Done — both extracted; `comment-thread.tsx` is now the orchestrator only. F04 (a11y) and F15 (perf) were applied during this extraction.
 
 ---
 
@@ -146,11 +144,11 @@ _Last updated: 2026-06-07 · Status: Auto-fixing Tier 1_
 
 - **Severity:** Medium
 - **Category:** Composition
-- **Tier:** Structural
+- **Tier:** Structural (WS5)
 - **Files:** `src/components/layouts/sidebar.tsx`
-- **Problem:** A single 579-line file handles global navigation links, per-team sub-navigation, favorites fetching and rendering, and the user/workspace footer. Sections have independent state and logic but no boundary between them. Adding or changing any section requires reading the whole file.
-- **Proposed change:** Split into `SidebarTeamsSection`, `SidebarFavoritesSection`, and `SidebarFooter` sub-components (either as files in `src/components/layouts/` or as unexported sub-components extracted to named functions at the top of the same file). No API changes to `Sidebar`'s props.
-- **Status:** [ ] Open
+- **Problem:** A single 579-line file handled global navigation links, per-team sub-navigation, favorites fetching and rendering, and the user/workspace footer.
+- **Proposed change:** Extract `SidebarFavoritesSection` and `SidebarTeamsSection` as named sub-components within the same file.
+- **Status:** [x] Done — both sections extracted as self-contained `observer` components that call `useStore()` directly; module-level helpers `favoriteHref`/`favoriteLabel` extracted from the function body.
 
 ---
 
@@ -158,11 +156,11 @@ _Last updated: 2026-06-07 · Status: Auto-fixing Tier 1_
 
 - **Severity:** Low
 - **Category:** State
-- **Tier:** Structural
-- **Files:** `src/components/issues/create-issue-modal.tsx:45–62`
-- **Problem:** Eight separate `useState` declarations (`title`, `description`, `stateId`, `assigneeId`, `priority`, `labelIds`, `dueDate`, `projectId`) each require their own reset call in the `useEffect` initializer (lines 99–107). Adding a new field requires touching three places. A single `formState` object would make initialization, reset, and validation clearer.
-- **Proposed change:** Consolidate into `const [form, setForm] = useState<FormState>(initialForm)` with a `patchForm` helper. Requires changing the prop API of no other component.
-- **Status:** [ ] Open
+- **Tier:** Structural (WS6)
+- **Files:** `src/components/issues/create-issue-modal.tsx`
+- **Problem:** Eight separate `useState` declarations each required their own reset call in the `useEffect` initializer. Adding a new field required touching three places.
+- **Proposed change:** Consolidate into `const [form, setForm] = useState<FormState>(initialForm)` with a `patchForm` helper.
+- **Status:** [x] Done — `FormState` interface + `initialForm()` helper introduced; 8 state hooks reduced to 1; `applyTemplate` uses a functional `setForm` update.
 
 ---
 
@@ -170,11 +168,11 @@ _Last updated: 2026-06-07 · Status: Auto-fixing Tier 1_
 
 - **Severity:** High
 - **Category:** Perf
-- **Tier:** Structural
-- **Files:** `src/components/projects/project-list-view.tsx:128–132`, `src/components/projects/project-detail-view.tsx:36–44`
-- **Problem:** `issueStore.findByProjectId(project.id)` is called inside a `.map()` over projects (O(n²) when the pool is large). In `ProjectDetailView` it's called unconditionally on every render with no memoization. Both sites also call `.filter(i => i.completedAt)` inline, creating a new array per render.
-- **Proposed change:** Wrap per-project derivations in `useMemo([project.id, issueStore.pool.size])` (using `pool.size` as the MobX-reactive dependency per repo convention). Alternatively, expose a `getProjectStats(id)` computed on the store.
-- **Status:** [ ] Open
+- **Tier:** Structural (WS4)
+- **Files:** `src/components/projects/project-list-view.tsx`, `src/components/projects/project-detail-view.tsx`
+- **Problem:** `issueStore.findByProjectId(project.id)` was called inside a `.map()` over projects (O(n²)). In `ProjectDetailView` it ran unconditionally on every render with no memoization.
+- **Proposed change:** Wrap in `useMemo([project.id, issueStore.pool.size])` per repo convention.
+- **Status:** [x] Done — `progressByProject` Map pre-computed in `ProjectGroup`; issue stats wrapped in `useMemo` before early return in `ProjectDetailView`.
 
 ---
 
@@ -183,10 +181,9 @@ _Last updated: 2026-06-07 · Status: Auto-fixing Tier 1_
 - **Severity:** Low
 - **Category:** Perf
 - **Tier:** Structural
-- **Files:** `src/components/issues/csv-export-button.tsx:61–62`
-- **Problem:** Two `new Map(...)` calls run unconditionally in the component body. For typical team sizes (50–200 users, similar count of states) the cost is small but it fires on every render of the button, not just on export.
-- **Proposed change:** Wrap in `useMemo([states, users])`.
-- **Status:** [ ] Open
+- **Files:** `src/components/issues/csv-export-button.tsx`
+- **Problem:** Two `new Map(...)` calls appeared to run in the component body on every render.
+- **Status:** [~] Won't do — false positive. On closer reading, both Maps are constructed inside `handleExport()` (the click handler), not in the component body. No render-time cost.
 
 ---
 
@@ -194,11 +191,11 @@ _Last updated: 2026-06-07 · Status: Auto-fixing Tier 1_
 
 - **Severity:** Low
 - **Category:** Perf
-- **Tier:** Structural
-- **Files:** `src/components/issues/sub-issue-list.tsx:50–58`
-- **Problem:** A `Map<string, issue[]>` grouping sub-issues by workflow state category is built in the component body with no memoization. The computation runs on every render even when `subIssues` hasn't changed.
-- **Proposed change:** Wrap in `useMemo([subIssues])`.
-- **Status:** [ ] Open
+- **Tier:** Structural (WS4)
+- **Files:** `src/components/issues/sub-issue-list.tsx`
+- **Problem:** A `Map<string, issue[]>` grouping sub-issues by workflow state category was built in the component body with no memoization.
+- **Proposed change:** Wrap in `useMemo([parentIssueId, issueStore.pool.size, workflowStateStore.pool.size])`.
+- **Status:** [x] Done — `subIssues` filter and `grouped` Map wrapped in a single `useMemo`.
 
 ---
 
@@ -206,11 +203,11 @@ _Last updated: 2026-06-07 · Status: Auto-fixing Tier 1_
 
 - **Severity:** Low
 - **Category:** Convention
-- **Tier:** Structural
-- **Files:** `src/components/layouts/workspace-client.tsx:19–25`
-- **Problem:** The current pattern `import(...).then(m => ({ default: m.CommandPalette }))` works but is more verbose than necessary. Next.js `dynamic()` already accepts a promise resolving to a module with a named export via `.then(m => m.CommandPalette)`.
-- **Proposed change:** Simplify to `dynamic(() => import('...').then(m => m.CommandPalette), { ssr: false })`.
-- **Status:** [ ] Open
+- **Tier:** Structural (WS7)
+- **Files:** `src/components/layouts/workspace-client.tsx`, `src/components/command-palette/command-palette.tsx`
+- **Problem:** The `.then(m => ({ default: m.CommandPalette }))` pattern was needed because `CommandPalette` was a named export with no default export.
+- **Proposed change:** Add `export default CommandPalette` to `command-palette.tsx`, then simplify the `dynamic()` call to `import('...')` with no `.then()`.
+- **Status:** [x] Done — default export added; `dynamic()` simplified to a direct import.
 
 ---
 
@@ -218,8 +215,8 @@ _Last updated: 2026-06-07 · Status: Auto-fixing Tier 1_
 
 - **Severity:** Low
 - **Category:** Perf
-- **Tier:** Structural
-- **Files:** `src/components/issues/comment-thread.tsx:341–352`
-- **Problem:** The `reduce` that builds `Record<emoji, {count, reacted}>` runs unconditionally in the component body. For typical comment reaction counts the cost is negligible, but it's an easily avoided allocation.
+- **Tier:** Structural (WS3/WS4)
+- **Files:** `src/components/issues/comment-card.tsx` (was `comment-thread.tsx`)
+- **Problem:** The `reduce` that builds `Record<emoji, {count, reacted}>` ran unconditionally in the component body on every render.
 - **Proposed change:** Wrap in `useMemo([comment.reactions, currentUserId])`.
-- **Status:** [ ] Open
+- **Status:** [x] Done — applied during WS3 extraction into `comment-card.tsx`.
