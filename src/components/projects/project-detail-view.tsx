@@ -3,6 +3,7 @@
 import { ArrowLeft, Calendar, CircleDot, Target, User } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
+import { useMemo } from 'react';
 import { ProgressSparkline } from '@/components/projects/progress-sparkline';
 import { ProjectUpdatesSection } from '@/components/projects/project-updates-section';
 import { SimpleSelect } from '@/components/ui/select';
@@ -25,6 +26,22 @@ export const ProjectDetailView = observer(function ProjectDetailView({
   const viewerId = userStore.currentUserId ?? '';
   const project = projectStore.findBySlugId(projectSlugId);
 
+  // useMemo must be called before any early return (Rules of Hooks).
+  // pool.size is the MobX reactive dependency per repo convention.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: issueStore.pool.size is the intentional reactive trigger
+  const { projectIssues, completedIssues, progress } = useMemo(() => {
+    if (!project) {
+      return { completedIssues: [], progress: 0, projectIssues: [] };
+    }
+    const all = issueStore.findByProjectId(project.id);
+    const done = all.filter(i => i.completedAt);
+    return {
+      completedIssues: done,
+      progress: all.length > 0 ? Math.round((done.length / all.length) * 100) : 0,
+      projectIssues: all,
+    };
+  }, [project?.id, issueStore.pool.size]);
+
   if (!project) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
@@ -35,13 +52,6 @@ export const ProjectDetailView = observer(function ProjectDetailView({
 
   const status = PROJECT_STATUS_CONFIG[project.statusType] ?? PROJECT_STATUS_CONFIG.planned;
   const lead = project.leadId ? userStore.findById(project.leadId) : null;
-
-  const projectIssues = issueStore.findByProjectId(project.id);
-  const completedIssues = projectIssues.filter(i => i.completedAt);
-  const progress =
-    projectIssues.length > 0
-      ? Math.round((completedIssues.length / projectIssues.length) * 100)
-      : 0;
 
   const milestones = projectStore.getMilestones(project.id);
 
