@@ -1,0 +1,341 @@
+'use client';
+
+import { format, parseISO } from 'date-fns';
+import { Check, Pencil, Plus, Target, Trash2, X } from 'lucide-react';
+import { observer } from 'mobx-react-lite';
+import { useEffect, useRef, useState } from 'react';
+import type { DBProjectMilestone } from '@/lib/db';
+import { gql } from '@/lib/graphql';
+import { toast } from '@/lib/toast';
+import { cn } from '@/lib/utils';
+import { useStore } from '@/providers/store-provider';
+
+interface ProjectMilestonesSectionProps {
+  projectId: string;
+}
+
+interface MilestoneFormState {
+  description: string;
+  name: string;
+  targetDate: string;
+}
+
+const EMPTY_FORM: MilestoneFormState = { description: '', name: '', targetDate: '' };
+
+function formatTargetDate(dateStr: string): string {
+  try {
+    return format(parseISO(dateStr), 'MMM d, yyyy');
+  } catch {
+    return dateStr;
+  }
+}
+
+interface MilestoneFormProps {
+  initialValues?: MilestoneFormState;
+  onCancel: () => void;
+  onSubmit: (values: MilestoneFormState) => Promise<void>;
+  submitLabel: string;
+}
+
+function MilestoneForm({
+  initialValues = EMPTY_FORM,
+  onCancel,
+  onSubmit,
+  submitLabel,
+}: MilestoneFormProps) {
+  const [values, setValues] = useState<MilestoneFormState>(initialValues);
+  const [saving, setSaving] = useState(false);
+  const nameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    nameRef.current?.focus();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!values.name.trim()) {
+      nameRef.current?.focus();
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSubmit(values);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form
+      className="mt-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
+      onSubmit={handleSubmit}
+    >
+      <div className="flex flex-col gap-2">
+        <input
+          className={cn(
+            'w-full rounded border border-zinc-200 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none',
+            'placeholder:text-zinc-400 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400',
+            'dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-indigo-500',
+          )}
+          onChange={e => setValues(v => ({ ...v, name: e.target.value }))}
+          placeholder="Milestone name"
+          ref={nameRef}
+          required
+          type="text"
+          value={values.name}
+        />
+        <textarea
+          className={cn(
+            'w-full resize-none rounded border border-zinc-200 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none',
+            'placeholder:text-zinc-400 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400',
+            'dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-indigo-500',
+          )}
+          onChange={e => setValues(v => ({ ...v, description: e.target.value }))}
+          placeholder="Description (optional)"
+          rows={2}
+          value={values.description}
+        />
+        <input
+          className={cn(
+            'w-full rounded border border-zinc-200 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none',
+            'focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400',
+            'dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-indigo-500',
+          )}
+          onChange={e => setValues(v => ({ ...v, targetDate: e.target.value }))}
+          type="date"
+          value={values.targetDate}
+        />
+      </div>
+      <div className="mt-2 flex items-center justify-end gap-2">
+        <button
+          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          disabled={saving}
+          onClick={onCancel}
+          type="button"
+        >
+          <X className="h-3.5 w-3.5" />
+          Cancel
+        </button>
+        <button
+          className={cn(
+            'flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-white transition-colors',
+            'bg-indigo-600 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50',
+          )}
+          disabled={saving || !values.name.trim()}
+          type="submit"
+        >
+          <Check className="h-3.5 w-3.5" />
+          {saving ? 'Saving…' : submitLabel}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+interface MilestoneRowProps {
+  milestone: DBProjectMilestone;
+  onDelete: (id: string) => Promise<void>;
+  onEdit: (id: string) => void;
+}
+
+function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!window.confirm(`Delete milestone "${milestone.name}"?`)) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      await onDelete(milestone.id);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="flex items-start gap-3 rounded-md border border-zinc-200 px-3 py-2.5 dark:border-zinc-800">
+      <Target className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
+      <div className="min-w-0 flex-1">
+        <span className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          {milestone.name}
+        </span>
+        {milestone.description && (
+          <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
+            {milestone.description}
+          </span>
+        )}
+      </div>
+      {milestone.targetDate && (
+        <span className="shrink-0 text-xs text-zinc-400">
+          {formatTargetDate(milestone.targetDate)}
+        </span>
+      )}
+      <div className="flex shrink-0 items-center gap-0.5">
+        <button
+          className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          onClick={() => onEdit(milestone.id)}
+          title="Edit milestone"
+          type="button"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+        <button
+          className="rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950 dark:hover:text-red-400"
+          disabled={deleting}
+          onClick={handleDelete}
+          title="Delete milestone"
+          type="button"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export const ProjectMilestonesSection = observer(function ProjectMilestonesSection({
+  projectId,
+}: ProjectMilestonesSectionProps) {
+  const { projectStore } = useStore();
+  const milestones = projectStore.getMilestones(projectId);
+
+  const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const openCreate = () => {
+    setEditingId(null);
+    setCreating(true);
+  };
+
+  const openEdit = (id: string) => {
+    setCreating(false);
+    setEditingId(id);
+  };
+
+  const handleCreate = async (values: MilestoneFormState) => {
+    try {
+      const res = await gql(
+        `mutation ($input: ProjectMilestoneCreateInput!) {
+          projectMilestoneCreate(input: $input) { success }
+        }`,
+        {
+          input: {
+            description: values.description || undefined,
+            name: values.name.trim(),
+            projectId,
+            targetDate: values.targetDate || undefined,
+          },
+        },
+      );
+      if (res.errors?.length) {
+        throw new Error((res.errors[0] as { message: string }).message ?? 'mutation failed');
+      }
+      setCreating(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create milestone');
+    }
+  };
+
+  const handleUpdate = async (id: string, values: MilestoneFormState) => {
+    try {
+      const res = await gql(
+        `mutation ($id: ID!, $input: ProjectMilestoneUpdateInput!) {
+          projectMilestoneUpdate(id: $id, input: $input) { success }
+        }`,
+        {
+          id,
+          input: {
+            description: values.description || undefined,
+            name: values.name.trim(),
+            targetDate: values.targetDate || undefined,
+          },
+        },
+      );
+      if (res.errors?.length) {
+        throw new Error((res.errors[0] as { message: string }).message ?? 'mutation failed');
+      }
+      setEditingId(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update milestone');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      const res = await gql(
+        `mutation ($id: ID!) {
+          projectMilestoneDelete(id: $id) { success }
+        }`,
+        { id },
+      );
+      if (res.errors?.length) {
+        throw new Error((res.errors[0] as { message: string }).message ?? 'mutation failed');
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete milestone');
+    }
+  };
+
+  return (
+    <div className="mt-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          Milestones ({milestones.length})
+        </h3>
+        {!creating && !editingId && (
+          <button
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            onClick={openCreate}
+            type="button"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add milestone
+          </button>
+        )}
+      </div>
+
+      {creating && (
+        <MilestoneForm
+          onCancel={() => setCreating(false)}
+          onSubmit={handleCreate}
+          submitLabel="Create"
+        />
+      )}
+
+      {milestones.length === 0 && !creating ? (
+        <p className="py-6 text-center text-xs text-zinc-400">
+          No milestones yet. Add one to track key checkpoints.
+        </p>
+      ) : (
+        <div className="mt-2 flex flex-col gap-2">
+          {milestones.map(milestone => {
+            if (editingId === milestone.id) {
+              return (
+                <MilestoneForm
+                  initialValues={{
+                    description: milestone.description ?? '',
+                    name: milestone.name,
+                    targetDate: milestone.targetDate ?? '',
+                  }}
+                  key={milestone.id}
+                  onCancel={() => setEditingId(null)}
+                  onSubmit={values => handleUpdate(milestone.id, values)}
+                  submitLabel="Save"
+                />
+              );
+            }
+            return (
+              <MilestoneRow
+                key={milestone.id}
+                milestone={milestone}
+                onDelete={handleDelete}
+                onEdit={openEdit}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+});
