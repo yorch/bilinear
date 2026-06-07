@@ -16,6 +16,7 @@ import {
   CONVERT_TO_SUB_ISSUE_MUTATION,
   GET_COMMENTS_QUERY,
 } from '@/lib/graphql-queries';
+import { QUICK_EMOJIS } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import type { MentionItem } from '../editor/mention-list';
@@ -60,8 +61,6 @@ interface CommentThreadProps {
   mentionUsers?: MentionItem[];
   teamId?: string;
 }
-
-const QUICK_EMOJIS = ['👍', '👎', '❤️', '🎉', '😄', '🚀', '👀', '😕'];
 
 function updateCommentInTree(
   comments: CommentItem[],

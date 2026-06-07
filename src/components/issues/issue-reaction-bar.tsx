@@ -8,6 +8,7 @@ import {
   ISSUE_REACTION_REMOVE_MUTATION,
   ISSUE_REACTIONS_QUERY,
 } from '@/lib/graphql-queries';
+import { QUICK_EMOJIS } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 
@@ -22,8 +23,6 @@ interface IssueReactionBarProps {
   currentUserId: string | undefined;
   issueId: string;
 }
-
-const QUICK_EMOJIS = ['👍', '👎', '❤️', '🎉', '😄', '🚀', '👀', '😕'];
 
 export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarProps) {
   const [reactions, setReactions] = useState<Reaction[]>([]);
