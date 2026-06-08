@@ -102,7 +102,7 @@ export const FAVORITE_DELETE_MUTATION = `
   }
 `;
 
-// ── Issues ────────────────────────────────────────────────────────────────────
+// ── Issues — queries ─────────────────────────────────────────────────────────
 
 export const ISSUE_TEMPLATES_QUERY = `
   query GetIssueTemplates($teamId: ID!) {
@@ -162,6 +162,57 @@ export const PULL_REQUESTS_QUERY = `
       pullRequests {
         id prNumber title url state draft headBranch repoFullName authorLogin mergedAt closedAt
       }
+    }
+  }
+`;
+
+// ── Issues — shared field set and core mutations ──────────────────────────────
+
+/** Full issue field set used by IssueCreate / IssueUpdate / IssuesBulkUpdate responses. */
+const ISSUE_FIELDS = `
+  id identifier number title description priority estimate dueDate startDate
+  sortOrder prioritySortOrder trashed
+  teamId organizationId stateId assigneeId creatorId parentId
+  projectId cycleId branchName
+  startedAt completedAt canceledAt archivedAt createdAt updatedAt
+  labels { id name color }
+`;
+
+export const ISSUE_CREATE_MUTATION = `
+  mutation IssueCreate($input: IssueCreateInput!) {
+    issueCreate(input: $input) {
+      success
+      lastSyncId
+      issue { ${ISSUE_FIELDS} }
+    }
+  }
+`;
+
+export const ISSUE_UPDATE_MUTATION = `
+  mutation IssueUpdate($id: ID!, $input: IssueUpdateInput!) {
+    issueUpdate(id: $id, input: $input) {
+      success
+      lastSyncId
+      issue { ${ISSUE_FIELDS} }
+    }
+  }
+`;
+
+export const ISSUES_BULK_UPDATE_MUTATION = `
+  mutation IssuesBulkUpdate($ids: [ID!]!, $input: IssueUpdateInput!) {
+    issuesBulkUpdate(ids: $ids, input: $input) {
+      success
+      lastSyncId
+      issues { ${ISSUE_FIELDS} }
+    }
+  }
+`;
+
+export const ISSUE_ARCHIVE_MUTATION = `
+  mutation IssueArchive($id: ID!) {
+    issueArchive(id: $id) {
+      success
+      lastSyncId
     }
   }
 `;

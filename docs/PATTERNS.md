@@ -2052,3 +2052,88 @@ Analytics features added in this sprint extend the existing `AnalyticsService`:
 - **`Cycle.carryoverCount`** — `Int @default(0)` column stamped by `CycleService.rollover()` on the *destination* cycle when issues are moved. Historical cycles have `0` until the next rollover.
 - **Workspace analytics page** — `/analytics` (uses `analyticsWorkspaceOverview` query). Added as `BarChart2` entry in the sidebar `globalNavItems`.
 - **Cycle scope metrics** — shown in `CycleDetailView` as 4 stat cards (planned / scope creep / carryover / completed) when carryover or scope creep > 0.
+
+## 65. My Issues Cross-Team View (2026-06-07)
+
+Global view of all non-trashed, non-archived issues assigned to the current user across every team:
+
+- **Route** — `/(workspace)/[workspace]/my-issues` (sidebar shortcut `G` then `I`).
+- **Data source** — `issueStore.pool` filtered by `assigneeId === currentUser.id && !i.trashed && !i.archivedAt`; no GraphQL query needed (bootstrap already loaded all org issues).
+- **View modes** — List / Board / Timeline, toggled with Alt+1/2/3. Board supports group-by (status / assignee / priority) and swimlane (none / assignee / priority).
+- **FilterBuilder** — same `applyFilters(issues, filterSet)` engine used on team pages.
+- **Keyboard shortcuts** — j/k navigate, Enter opens detail, Escape closes; s/a/p/l/d/Shift+E open inline property editors.
+- **MobX deps** — `issueStore.pool.size` + `userStore.pool.size` as reactive triggers (not the Map itself) per store convention.
+
+## 66. Sub-Issue Progress Rollup UI (2026-06-07)
+
+Progress bar and completion counter added to the Sub-issues section header in IssueDetailPanel:
+
+- **Location** — `src/components/issues/sub-issue-list.tsx`, inside the `SubIssueList` component.
+- **Computation** — `completedCount` is computed inside the existing `useMemo` that also builds `grouped`, by counting issues whose `workflowStateStore.findById(issue.stateId)?.type === 'completed'` in the same loop. This avoids a second O(n) store-lookup pass outside the memo.
+- **Rendering** — shown only when `subIssues.length > 0`: a `{completedCount}/{subIssues.length}` counter and a `w-20 h-1 rounded-full` progress track with a `bg-green-500` fill proportional to `completionPct`.
+
+## 67. Personal API Tokens (2026-06-07)
+
+Scoped long-lived tokens for programmatic API access (`bil_` prefix):
+
+- **Schema** — reuses existing `auth_tokens` table (`type: 'api_key'`, 1-year expiry, SHA-256 hash stored).
+- **Service** — `AuthService.createApiToken(userId, label)` / `listApiTokens(userId)` / `revokeApiToken(userId, id)`. `listApiTokens` filters `expiresAt: { gt: new Date() }` so expired tokens are excluded from the UI.
+- **Auth middleware** — `extractAuthContext` in `src/server/middleware/auth.ts` falls through to API key check when JWT verification fails. Uses `select` (not `include`) to fetch only `id`, `userId`, and `orgMemberships.organizationId` — avoids loading the full User row on every authenticated API request.
+- **Multi-org** — API key auth scopes to the user's oldest org (`orderBy: { createdAt: 'asc' }, take: 1`). This is a known limitation; tokens are not org-scoped at the DB level.
+- **GraphQL** — `apiTokens: [ApiToken!]!` query + `apiTokenCreate(label)` + `apiTokenRevoke(id)` mutations. All in `userResolvers`.
+- **Settings UI** — `/settings` page shows a one-time plaintext banner (copy + dismiss), label input, and a list of active tokens with revoke buttons.
+
+## 68. Keyboard Shortcut Help Modal (2026-06-07)
+
+`?` opens a full shortcut reference modal listing all registered hotkeys grouped into 5 sections: Global, Navigation, Issue List, Issue Actions, and View.
+
+- **Component** — `src/components/layouts/shortcut-help-modal.tsx`. Plain div overlay + centered card (no shadcn Dialog). Closes on Escape or outside-click.
+- **Registration** — `useHotkeys('?', ...)` in `workspace-client.tsx`. Suppressed when focus is inside an input/textarea (default hook behaviour).
+- **`kbd` styling** — `rounded border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 text-xs font-mono dark:border-zinc-600 dark:bg-zinc-800`.
+
+## 69. Bulk Actions Toolbar (2026-06-07)
+
+Multi-select checkboxes in the issue list view with a floating action bar for batch mutations.
+
+- **Entry point** — `IssueListView` accepts `onBulkUpdate?: (ids: string[], patch) => void`. When present, each `IssueRow` checkbox enters bulk-select mode (uses `checked`/`onCheck` props instead of the single-select `selected`/`onSelect`).
+- **Range select** — Shift+click extends selection from the last-checked index, mirroring the board view's pattern.
+- **`BulkActionBar`** — fixed bottom bar (`src/components/issues/bulk-action-bar.tsx`). Appears when `checkedIds.size > 0`. Provides Status / Priority / Assignee / Label `SelectPopover` dropdowns; clears selection after applying. Imports `StatusDot` from `@/components/properties/status-select` — do not redefine it locally.
+- **Mutation** — `issuesBulkUpdate(ids, input)` on team page and My Issues page. Snapshots each issue via `issueStore.findById` before the optimistic update; rolls back on `onError`, applies server-returned issues via `applySyncAction` on `onSuccess`.
+- **Selection reset** — `IssueListView` derives `issueIds = issues.map(i => i.id).join(',')` via `useMemo` and resets `checkedIds` in a `useEffect` when it changes, so stale selections are cleared automatically when filters or team context changes.
+- **Checkbox accessibility** — bulk-mode checkbox uses `onChange` (fires for both mouse and keyboard/Space) to call `onCheck(shiftKey)`; `onClick` only calls `stopPropagation`. Never use `readOnly` on a checkbox in bulk mode.
+
+## 70. Cycle Burndown Chart (2026-06-07)
+
+True agile burndown chart alongside the existing burnup chart in `CycleDetailView`.
+
+- **Component** — `src/components/cycles/burndown-chart.tsx`. SVG-based (600×300 viewBox), same axes/grid/date-label pattern as `burnup-chart.tsx`. Plots remaining issues (indigo line) against an ideal straight-line burndown from initial scope to 0 (dashed gray).
+- **UI** — tab toggle between "Burndown" and "Burnup" in `cycle-detail-view.tsx`.
+- **Y-axis scale** — `maxY = Math.max(...data.map(d => Math.max(d.remaining, d.scope)), 1)`. Using only the day-0 scope would clip scope creep (remaining > initial scope) off the SVG viewport.
+
+## 71. Issue Templates CRUD UI (2026-06-07)
+
+Template management section in the team settings page.
+
+- **Component** — `src/components/issues/issue-templates-section.tsx` (`IssueTemplatesSection`). MobX `observer`; reads from `issueTemplateStore.findByTeamId(teamId)`.
+- **Form fields** — name, description (textarea), status/priority/assignee defaults (populated from team stores), label multi-toggle, "Set as default" checkbox.
+- **Mutations** — `issueTemplateCreate` / `issueTemplateUpdate` / `issueTemplateDelete`. Applies `applySyncAction` after each write for immediate UI update.
+- **Location** — rendered in `team/[key]/settings/page.tsx` between Custom Fields and Danger Zone.
+- **Priority guard** — use `td.priority !== undefined && td.priority !== null` (not a truthy check) to gate the priority display chip; priority 0 ("No priority") is falsy but valid.
+
+## 72. Project Milestones UI (2026-06-07)
+
+Inline milestone management in the project detail view.
+
+- **Component** — `src/components/projects/project-milestones-section.tsx` (`ProjectMilestonesSection`). MobX `observer`; reads from `projectStore.getMilestones(projectId)`.
+- **Form** — inline create/edit with name, description, and target date (date input). Delete confirms via `window.confirm`.
+- **Mutations** — `projectMilestoneCreate` / `projectMilestoneUpdate` / `projectMilestoneDelete`. Create and update request the milestone fields in the response and call `projectStore.applyMilestoneSyncAction` immediately so the list updates without waiting for the WebSocket SyncAction. Delete calls `applyMilestoneSyncAction('D', id, null)` immediately.
+- **Location** — replaces the old read-only milestones block in `project-detail-view.tsx`.
+
+## 73. GraphQL Mutation Centralization (2026-06-08)
+
+Convention for where to put GraphQL operation strings.
+
+- **Single-use mutations** — define inline in the component file that owns them (e.g. `CUSTOM_VIEW_CREATE_MUTATION` in `team/[key]/page.tsx`).
+- **Shared mutations** — export from `src/lib/graphql-queries.ts`. Current shared exports: `ISSUE_CREATE_MUTATION`, `ISSUE_UPDATE_MUTATION`, `ISSUES_BULK_UPDATE_MUTATION`, `ISSUE_ARCHIVE_MUTATION`.
+- **Field-set fragments** — declare as a private (non-exported) `const` in the same file, then interpolate into mutations via template literals (e.g. `const ISSUE_FIELDS = \`...\``). This mirrors the existing `COMMENTS_FRAGMENT` pattern. Do **not** export the fragment unless a consumer outside the file needs it directly.
+- **File organisation** — `graphql-queries.ts` sections are ordered: Auth → Teams → Sidebar/Favorites → Issues (queries) → Issues (mutations) → Comments → Issue Reactions → Cycles → Notifications → Projects → Initiatives. New domains append a new `// ── Domain ──` section at the bottom.

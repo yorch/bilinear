@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import type { PrismaClient } from '../../generated/prisma';
+import type { AuthToken, PrismaClient } from '../../generated/prisma';
 import { sendMagicLinkEmail } from '../lib/email';
 import {
   ACCESS_TOKEN_EXPIRY_SECONDS,
@@ -276,6 +276,36 @@ export class AuthService {
   /** Re-issue access + refresh tokens after an org change (e.g. onboarding). */
   async reissueTokens(userId: string, orgId: string): Promise<AuthPayload> {
     return this.issueTokenPair(userId, orgId);
+  }
+
+  async createApiToken(
+    userId: string,
+    label: string,
+  ): Promise<{ plaintext: string; token: AuthToken }> {
+    if (!label.trim()) {
+      throw new Error('Label is required');
+    }
+    const plaintext = `bil_${crypto.randomBytes(32).toString('hex')}`;
+    const tokenHash = hashToken(plaintext);
+    const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    const token = await this.prisma.authToken.create({
+      data: { expiresAt, label: label.trim(), tokenHash, type: 'api_key', userId },
+    });
+    return { plaintext, token };
+  }
+
+  async listApiTokens(userId: string) {
+    return this.prisma.authToken.findMany({
+      orderBy: { createdAt: 'desc' },
+      where: { expiresAt: { gt: new Date() }, revokedAt: null, type: 'api_key', userId },
+    });
+  }
+
+  async revokeApiToken(userId: string, id: string): Promise<void> {
+    await this.prisma.authToken.updateMany({
+      data: { revokedAt: new Date() },
+      where: { id, type: 'api_key', userId },
+    });
   }
 
   private async issueTokenPair(

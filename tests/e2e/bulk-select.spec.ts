@@ -25,7 +25,10 @@ test.describe('Bulk Selection', () => {
     // The checkbox is opacity-0 until hover/focus; force the click since
     // headless tests don't always trigger the hover state reliably.
     await checkbox.click({ force: true });
-    await expect(firstRow).toHaveAttribute('data-selected', 'true');
+    // On the team page the checkbox is in bulk-mode: click adds the issue to
+    // the checked set (checkbox becomes checked), but does NOT open the detail
+    // panel or change keyboard-nav selection (data-selected).
+    await expect(checkbox).toBeChecked();
     await expect(page.locator('[data-testid="issue-detail-panel"]')).toHaveCount(0);
   });
 });

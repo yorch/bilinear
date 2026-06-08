@@ -39,6 +39,8 @@ export type OpenProperty =
 
 interface IssueRowProps {
   allLabels: IssueLabel[];
+  /** Whether this row is checked in bulk-selection mode. */
+  checked?: boolean;
   /** Active custom-field definitions; only those whose column is visible render. */
   customFields?: DBCustomFieldDefinition[];
   estimationType?: string;
@@ -50,6 +52,7 @@ interface IssueRowProps {
    */
   isColumnVisible?: (key: ColumnKey) => boolean;
   issue: IssueRowData;
+  onCheck?: (shiftKey: boolean) => void;
   onContextMenu?: (e: React.MouseEvent) => void;
   onOpen: () => void;
   /** Called when the forced-open property popover closes. */
@@ -98,7 +101,9 @@ export function IssueRow({
   teamId,
   estimationType,
   selected,
+  checked,
   onSelect,
+  onCheck,
   onOpen,
   onUpdate,
   onContextMenu,
@@ -109,6 +114,7 @@ export function IssueRow({
   getCustomFieldValue,
   style,
 }: IssueRowProps) {
+  const isBulkMode = onCheck !== undefined;
   // If no visibility function is provided, every built-in column renders
   // (callers that haven't adopted the column picker keep their current UX).
   const visible = (key: Parameters<NonNullable<typeof isColumnVisible>>[0]) =>
@@ -127,9 +133,14 @@ export function IssueRow({
     >
       {/* Checkbox */}
       <input
-        checked={selected}
-        className="h-3.5 w-3.5 flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
-        onChange={onSelect}
+        checked={isBulkMode ? (checked ?? false) : selected}
+        className={cn(
+          'h-3.5 w-3.5 flex-shrink-0 focus:opacity-100',
+          isBulkMode && checked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+        )}
+        onChange={
+          isBulkMode ? e => onCheck(Boolean((e.nativeEvent as MouseEvent).shiftKey)) : onSelect
+        }
         onClick={e => e.stopPropagation()}
         type="checkbox"
       />

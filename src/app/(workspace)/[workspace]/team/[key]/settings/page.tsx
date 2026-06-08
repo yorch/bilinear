@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CustomFieldsSection } from '@/components/custom-fields/custom-fields-section';
+import { IssueTemplatesSection } from '@/components/issues/issue-templates-section';
 import {
   type TeamMember,
   TeamMemberManagement,
@@ -571,6 +572,8 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         </section>
 
         <CustomFieldsSection teamId={team.id} />
+
+        <IssueTemplatesSection teamId={team.id} />
 
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-red-400">

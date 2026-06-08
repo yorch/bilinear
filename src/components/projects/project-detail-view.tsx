@@ -1,10 +1,11 @@
 'use client';
 
-import { ArrowLeft, Calendar, CircleDot, Target, User } from 'lucide-react';
+import { ArrowLeft, Calendar, CircleDot, User } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useMemo } from 'react';
 import { ProgressSparkline } from '@/components/projects/progress-sparkline';
+import { ProjectMilestonesSection } from '@/components/projects/project-milestones-section';
 import { ProjectUpdatesSection } from '@/components/projects/project-updates-section';
 import { SimpleSelect } from '@/components/ui/select';
 import { gql } from '@/lib/graphql';
@@ -52,8 +53,6 @@ export const ProjectDetailView = observer(function ProjectDetailView({
 
   const status = PROJECT_STATUS_CONFIG[project.statusType] ?? PROJECT_STATUS_CONFIG.planned;
   const lead = project.leadId ? userStore.findById(project.leadId) : null;
-
-  const milestones = projectStore.getMilestones(project.id);
 
   const handleStatusChange = async (newStatus: string) => {
     try {
@@ -173,27 +172,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
               <ProgressSparkline projectId={project.id} />
             </div>
           </div>
-          {milestones.length > 0 && (
-            <div className="mt-6">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                Milestones
-              </h3>
-              <div className="mt-2 flex flex-col gap-2">
-                {milestones.map(m => (
-                  <div
-                    className="flex items-center gap-3 rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-800"
-                    key={m.id}
-                  >
-                    <Target className="h-4 w-4 shrink-0 text-zinc-400" />
-                    <span className="flex-1 text-sm text-zinc-900 dark:text-zinc-100">
-                      {m.name}
-                    </span>
-                    {m.targetDate && <span className="text-xs text-zinc-400">{m.targetDate}</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <ProjectMilestonesSection projectId={project.id} />
           <div className="mt-6">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { GraphQLError } from 'graphql';
 import type { PrismaClient } from '../../generated/prisma';
 import type { AccessTokenPayload } from '../lib/jwt';
@@ -11,6 +12,7 @@ export interface AuthContext {
 export async function extractAuthContext(
   authHeader: string | null,
   cookieToken: string | null,
+  prisma?: PrismaClient,
 ): Promise<AuthContext> {
   const token = extractBearerToken(authHeader) ?? cookieToken ?? null;
 
@@ -22,8 +24,45 @@ export async function extractAuthContext(
     const payload: AccessTokenPayload = await verifyAccessToken(token);
     return { orgId: payload.orgId, userId: payload.userId };
   } catch {
-    return { orgId: null, userId: null };
+    // fall through to API key check
   }
+
+  if (prisma && token.startsWith('bil_')) {
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const authToken = await prisma.authToken.findFirst({
+      select: {
+        id: true,
+        user: {
+          select: {
+            orgMemberships: {
+              orderBy: { createdAt: 'asc' as const },
+              select: { organizationId: true },
+              take: 1,
+            },
+          },
+        },
+        userId: true,
+      },
+      where: {
+        expiresAt: { gt: new Date() },
+        revokedAt: null,
+        tokenHash,
+        type: 'api_key',
+      },
+    });
+    if (authToken) {
+      const orgId = authToken.user.orgMemberships[0]?.organizationId ?? null;
+      void prisma.authToken
+        .update({
+          data: { lastUsedAt: new Date() },
+          where: { id: authToken.id },
+        })
+        .catch(() => {});
+      return { orgId, userId: authToken.userId };
+    }
+  }
+
+  return { orgId: null, userId: null };
 }
 
 export function requireAuth(ctx: AuthContext): asserts ctx is { userId: string; orgId: string } {

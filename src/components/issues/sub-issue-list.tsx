@@ -44,20 +44,24 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
 
   // pool.size is the MobX reactive dependency per repo convention.
   // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size values are the intentional reactive triggers
-  const { subIssues, grouped } = useMemo(() => {
+  const { subIssues, grouped, completedCount } = useMemo(() => {
     const issues = Array.from(issueStore.pool.values()).filter(
       i => i.parentId === parentIssueId && !i.trashed && !i.archivedAt,
     );
     const g = new Map<string, typeof issues>();
+    let done = 0;
     for (const issue of issues) {
       const state = workflowStateStore.findById(issue.stateId);
       const category = state?.type ?? 'backlog';
+      if (category === 'completed') {
+        done++;
+      }
       if (!g.has(category)) {
         g.set(category, []);
       }
       g.get(category)?.push(issue);
     }
-    return { grouped: g, subIssues: issues };
+    return { completedCount: done, grouped: g, subIssues: issues };
   }, [parentIssueId, issueStore.pool.size, workflowStateStore.pool.size]);
 
   // Guard: parent issue not yet in store — can happen during a race between
@@ -66,6 +70,8 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
   if (!teamId) {
     return null;
   }
+
+  const completionPct = subIssues.length > 0 ? (completedCount / subIssues.length) * 100 : 0;
 
   return (
     <div className="mt-6">
@@ -82,6 +88,19 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
           )}
           Sub-issues ({subIssues.length})
         </button>
+        {subIssues.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs tabular-nums text-zinc-400 dark:text-zinc-500">
+              {completedCount}/{subIssues.length}
+            </span>
+            <div className="h-1 w-20 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+              <div
+                className="h-full rounded-full bg-green-500 transition-all duration-300"
+                style={{ width: `${completionPct}%` }}
+              />
+            </div>
+          </div>
+        )}
         {!showCreateForm && (
           <button
             className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"

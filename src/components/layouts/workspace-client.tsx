@@ -3,7 +3,8 @@
 import { observer } from 'mobx-react-lite';
 import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
+import { ShortcutHelpModal } from '@/components/layouts/shortcut-help-modal';
 import { CreateTeamModal } from '@/components/teams/create-team-modal';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useRecentItems } from '@/hooks/use-recent-items';
@@ -36,11 +37,13 @@ export const WorkspaceClient = observer(function WorkspaceClient({
   const workspaceKey = params.workspace;
   const { items: recentItems } = useRecentItems(workspaceKey);
   const router = useRouter();
+  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
 
   useHotkeys(['meta+k', 'ctrl+k'], () => uiStore.toggleCommandPalette(), { allowInInput: true }, [
     uiStore,
   ]);
   useHotkeys(['meta+b', 'ctrl+b'], () => uiStore.toggleSidebarCollapsed(), {}, [uiStore]);
+  useHotkeys('?', () => setShortcutHelpOpen(open => !open), {}, []);
 
   const handleCreateTeam = useCallback(
     async (input: { name: string; key: string; description?: string; private: boolean }) => {
@@ -77,6 +80,7 @@ export const WorkspaceClient = observer(function WorkspaceClient({
         onSubmit={handleCreateTeam}
         open={uiStore.createTeamModalOpen}
       />
+      <ShortcutHelpModal onClose={() => setShortcutHelpOpen(false)} open={shortcutHelpOpen} />
     </>
   );
 });
