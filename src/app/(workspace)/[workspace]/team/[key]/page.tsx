@@ -24,6 +24,7 @@ import type { DBIssue, DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
 import { gql } from '@/lib/graphql';
 import {
+  ISSUE_ARCHIVE_MUTATION,
   ISSUE_CREATE_MUTATION,
   ISSUE_UPDATE_MUTATION,
   ISSUES_BULK_UPDATE_MUTATION,
@@ -43,15 +44,6 @@ const CUSTOM_VIEW_CREATE_MUTATION = `
       success
       lastSyncId
       customView { id name }
-    }
-  }
-`;
-
-const ISSUE_ARCHIVE_MUTATION = `
-  mutation IssueArchive($id: ID!) {
-    issueArchive(id: $id) {
-      success
-      lastSyncId
     }
   }
 `;

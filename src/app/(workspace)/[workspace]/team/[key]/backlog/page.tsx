@@ -8,23 +8,12 @@ import { PriorityIcon } from '@/components/properties/priority-icon';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import type { DBIssue, DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
-import { ISSUE_UPDATE_MUTATION } from '@/lib/graphql-queries';
+import { ISSUE_ARCHIVE_MUTATION, ISSUE_UPDATE_MUTATION } from '@/lib/graphql-queries';
 import { PRIORITY_LABELS } from '@/lib/issue-utils';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import type { IssueLabel, IssueUser } from '@/types/issues';
-
-// ─── Mutations ──────────────────────────────────────────────────────────────
-
-const ISSUE_ARCHIVE_MUTATION = `
-  mutation IssueArchive($id: ID!) {
-    issueArchive(id: $id) {
-      success
-      lastSyncId
-    }
-  }
-`;
 
 // ─── Staleness indicator ────────────────────────────────────────────────────
 

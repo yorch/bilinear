@@ -474,3 +474,12 @@ export const ISSUES_BULK_UPDATE_MUTATION = `
     }
   }
 `;
+
+export const ISSUE_ARCHIVE_MUTATION = `
+  mutation IssueArchive($id: ID!) {
+    issueArchive(id: $id) {
+      success
+      lastSyncId
+    }
+  }
+`;
