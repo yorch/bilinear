@@ -164,7 +164,14 @@ export function IssueListView({
                 isColumnVisible={isColumnVisible}
                 issue={issue}
                 key={issue.id}
-                onCheck={onBulkUpdate ? shiftKey => handleCheck(issue.id, shiftKey) : undefined}
+                onCheck={
+                  onBulkUpdate
+                    ? shiftKey => {
+                        handleCheck(issue.id, shiftKey);
+                        onSelect(issue.id);
+                      }
+                    : undefined
+                }
                 onContextMenu={e => {
                   e.preventDefault();
                   setCtxMenu({
