@@ -2128,3 +2128,12 @@ Inline milestone management in the project detail view.
 - **Form** — inline create/edit with name, description, and target date (date input). Delete confirms via `window.confirm`.
 - **Mutations** — `projectMilestoneCreate` / `projectMilestoneUpdate` / `projectMilestoneDelete`. Create and update request the milestone fields in the response and call `projectStore.applyMilestoneSyncAction` immediately so the list updates without waiting for the WebSocket SyncAction. Delete calls `applyMilestoneSyncAction('D', id, null)` immediately.
 - **Location** — replaces the old read-only milestones block in `project-detail-view.tsx`.
+
+## 73. GraphQL Mutation Centralization (2026-06-08)
+
+Convention for where to put GraphQL operation strings.
+
+- **Single-use mutations** — define inline in the component file that owns them (e.g. `CUSTOM_VIEW_CREATE_MUTATION` in `team/[key]/page.tsx`).
+- **Shared mutations** — export from `src/lib/graphql-queries.ts`. Current shared exports: `ISSUE_CREATE_MUTATION`, `ISSUE_UPDATE_MUTATION`, `ISSUES_BULK_UPDATE_MUTATION`, `ISSUE_ARCHIVE_MUTATION`.
+- **Field-set fragments** — declare as a private (non-exported) `const` in the same file, then interpolate into mutations via template literals (e.g. `const ISSUE_FIELDS = \`...\``). This mirrors the existing `COMMENTS_FRAGMENT` pattern. Do **not** export the fragment unless a consumer outside the file needs it directly.
+- **File organisation** — `graphql-queries.ts` sections are ordered: Auth → Teams → Sidebar/Favorites → Issues (queries) → Issues (mutations) → Comments → Issue Reactions → Cycles → Notifications → Projects → Initiatives. New domains append a new `// ── Domain ──` section at the bottom.

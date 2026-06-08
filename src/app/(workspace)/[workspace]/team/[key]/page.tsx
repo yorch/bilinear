@@ -35,7 +35,7 @@ import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
 
 // ---------------------------------------------------------------------------
-// GraphQL mutations (queries replaced by MobX store reads)
+// GraphQL mutations
 // ---------------------------------------------------------------------------
 
 const CUSTOM_VIEW_CREATE_MUTATION = `
