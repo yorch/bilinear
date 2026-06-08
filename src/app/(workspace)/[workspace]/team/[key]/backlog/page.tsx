@@ -8,6 +8,7 @@ import { PriorityIcon } from '@/components/properties/priority-icon';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import type { DBIssue, DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
+import { ISSUE_UPDATE_MUTATION } from '@/lib/graphql-queries';
 import { PRIORITY_LABELS } from '@/lib/issue-utils';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn } from '@/lib/utils';
@@ -15,25 +16,6 @@ import { useStore } from '@/providers/store-provider';
 import type { IssueLabel, IssueUser } from '@/types/issues';
 
 // ─── Mutations ──────────────────────────────────────────────────────────────
-
-const ISSUE_FIELDS = `
-  id identifier number title description priority estimate dueDate
-  sortOrder prioritySortOrder trashed
-  teamId organizationId stateId assigneeId creatorId parentId
-  projectId cycleId branchName
-  startedAt completedAt canceledAt archivedAt createdAt updatedAt
-  labels { id name color }
-`;
-
-const ISSUE_UPDATE_MUTATION = `
-  mutation IssueUpdate($id: ID!, $input: IssueUpdateInput!) {
-    issueUpdate(id: $id, input: $input) {
-      success
-      lastSyncId
-      issue { ${ISSUE_FIELDS} }
-    }
-  }
-`;
 
 const ISSUE_ARCHIVE_MUTATION = `
   mutation IssueArchive($id: ID!) {

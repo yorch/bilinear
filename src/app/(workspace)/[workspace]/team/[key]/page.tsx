@@ -23,6 +23,11 @@ import { useVisibleColumns } from '@/hooks/use-visible-columns';
 import type { DBIssue, DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
 import { gql } from '@/lib/graphql';
+import {
+  ISSUE_CREATE_MUTATION,
+  ISSUE_UPDATE_MUTATION,
+  ISSUES_BULK_UPDATE_MUTATION,
+} from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
@@ -32,51 +37,12 @@ import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
 // GraphQL mutations (queries replaced by MobX store reads)
 // ---------------------------------------------------------------------------
 
-const ISSUE_FIELDS = `
-  id identifier number title description priority estimate dueDate startDate
-  sortOrder prioritySortOrder trashed
-  teamId organizationId stateId assigneeId creatorId parentId
-  projectId cycleId branchName
-  startedAt completedAt canceledAt archivedAt createdAt updatedAt
-  labels { id name color }
-`;
-
 const CUSTOM_VIEW_CREATE_MUTATION = `
   mutation CustomViewCreate($input: CustomViewCreateInput!) {
     customViewCreate(input: $input) {
       success
       lastSyncId
       customView { id name }
-    }
-  }
-`;
-
-const ISSUE_CREATE_MUTATION = `
-  mutation IssueCreate($input: IssueCreateInput!) {
-    issueCreate(input: $input) {
-      success
-      lastSyncId
-      issue { ${ISSUE_FIELDS} }
-    }
-  }
-`;
-
-const ISSUE_UPDATE_MUTATION = `
-  mutation IssueUpdate($id: ID!, $input: IssueUpdateInput!) {
-    issueUpdate(id: $id, input: $input) {
-      success
-      lastSyncId
-      issue { ${ISSUE_FIELDS} }
-    }
-  }
-`;
-
-const ISSUES_BULK_UPDATE_MUTATION = `
-  mutation IssuesBulkUpdate($ids: [ID!]!, $input: IssueUpdateInput!) {
-    issuesBulkUpdate(ids: $ids, input: $input) {
-      success
-      lastSyncId
-      issues { ${ISSUE_FIELDS} }
     }
   }
 `;
