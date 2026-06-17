@@ -46,6 +46,7 @@ model Organization {
   webhooks               Webhook[]
   githubIntegration      GitHubIntegration?
   githubPullRequests     GitHubPullRequest[]
+  slackIntegration       SlackIntegration?
   favorites              Favorite[]
   customFieldDefinitions CustomFieldDefinition[]
   automationRules        AutomationRule[]
@@ -1285,6 +1286,37 @@ model GitHubPullRequest {
   @@index([issueId])
   @@index([organizationId])
   @@map("github_pull_requests")
+}
+
+/// Slack workspace integration — one per org. Powers the /bilinear slash
+/// command (create issues from Slack). The bot access token is per-install;
+/// slash-request signatures are verified with the app-level SLACK_SIGNING_SECRET.
+model SlackIntegration {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @unique @map("organization_id") @db.Uuid
+
+  // Slack workspace (team) this install belongs to. Unique so a Slack
+  // workspace maps to exactly one org; slash commands route by this id.
+  slackTeamId   String @unique @map("slack_team_id") @db.VarChar(64)
+  slackTeamName String @map("slack_team_name") @db.VarChar(255)
+
+  // Bot access token (xoxb-…) for chat.postMessage etc. Plaintext for now;
+  // encrypt at rest in a follow-up hardening pass (same as GitHub token).
+  accessToken String @map("access_token") @db.VarChar(500)
+  botUserId   String @map("bot_user_id") @db.VarChar(64)
+
+  // Bilinear team that slash-command issues are filed into. Nullable until an
+  // admin picks one; slash commands without it return a helpful error.
+  defaultTeamId String? @map("default_team_id") @db.Uuid
+
+  createdById String @map("created_by_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("slack_integrations")
 }
 
 /// Rule-based automation. Triggers fire on resolver events (issue_created,

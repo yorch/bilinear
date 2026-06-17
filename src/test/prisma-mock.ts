@@ -61,6 +61,7 @@ export type MockPrismaClient = {
     | 'organizationMember'
     | 'project'
     | 'publicRoadmap'
+    | 'slackIntegration'
     | 'syncAction'
     | 'team'
     | 'teamMemberRole'
@@ -109,6 +110,7 @@ export function createMockPrisma(): MockPrismaClient {
     organizationMember: createMockModel(),
     project: createMockModel(),
     publicRoadmap: createMockModel(),
+    slackIntegration: createMockModel(),
     syncAction: createMockModel(),
     team: createMockModel(),
     teamMemberRole: createMockModel(),

@@ -1483,6 +1483,18 @@ export const typeDefs = `
     lastSyncId: String!
   }
 
+  type SlackIntegration {
+    id: ID!
+    slackTeamName: String!
+    defaultTeamId: ID
+    createdAt: DateTime!
+  }
+
+  type SlackSettingsPayload {
+    success: Boolean!
+    integration: SlackIntegration
+  }
+
   type Query {
     """True when AI is configured server-side AND enabled for this workspace."""
     aiAvailable: Boolean!
@@ -1490,6 +1502,8 @@ export const typeDefs = `
     csvImportPreview(csv: String!): CsvImportPreview!
     """JSON export of issues for a team (or the whole org when teamId omitted)."""
     organizationExport(teamId: ID): String!
+    """The connected Slack workspace for this org, or null."""
+    slackIntegration: SlackIntegration
     viewer: User!
     organization: Organization!
     organizationMembers: [OrganizationMemberEntry!]!
@@ -1612,6 +1626,10 @@ export const typeDefs = `
     aiSettingsUpdate(enabled: Boolean!): AiSettingsPayload!
     """Import issues from CSV into a team (up to 500 rows)."""
     csvImportIssues(input: CsvImportInput!): CsvImportResult!
+    """Disconnect the Slack workspace (owner/admin)."""
+    slackDisconnect: BasicPayload!
+    """Set the team that Slack slash-command issues are filed into (owner/admin)."""
+    slackSetDefaultTeam(teamId: ID): SlackSettingsPayload!
     emailLogin(input: EmailLoginInput!): EmailLoginPayload!
     emailVerify(input: EmailVerifyInput!): AuthPayload!
     """

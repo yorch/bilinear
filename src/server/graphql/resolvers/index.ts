@@ -26,6 +26,7 @@ import { roadmapResolvers } from './roadmap';
 import { samlResolvers } from './saml';
 import { scimResolvers } from './scim';
 import { searchResolvers } from './search';
+import { slackResolvers } from './slack';
 import { teamResolvers } from './team';
 import { teamMembershipResolvers } from './team-membership';
 import { triageResolvers } from './triage';
@@ -145,6 +146,7 @@ export const resolvers = {
     ...fileResolvers.Mutation,
     ...githubResolvers.Mutation,
     ...importResolvers.Mutation,
+    ...slackResolvers.Mutation,
     ...initiativeResolvers.Mutation,
     ...notificationResolvers.Mutation,
     ...issueRelationResolvers.Mutation,
@@ -186,6 +188,7 @@ export const resolvers = {
     ...aiResolvers.Query,
     ...analyticsResolvers.Query,
     ...importResolvers.Query,
+    ...slackResolvers.Query,
     ...auditLogResolvers.Query,
     ...authResolvers.Query,
     ...automationResolvers.Query,

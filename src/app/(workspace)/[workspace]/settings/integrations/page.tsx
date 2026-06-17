@@ -1,14 +1,42 @@
 'use client';
 
+import { observer } from 'mobx-react-lite';
 import { useEffect, useState } from 'react';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
+import { useStore } from '@/providers/store-provider';
 
 interface GitHubIntegration {
   createdAt: string;
   githubLogin: string;
   id: string;
 }
+
+interface SlackIntegration {
+  createdAt: string;
+  defaultTeamId: string | null;
+  id: string;
+  slackTeamName: string;
+}
+
+const SLACK_INTEGRATION_QUERY = `
+  query SlackIntegration {
+    slackIntegration { id slackTeamName defaultTeamId createdAt }
+  }
+`;
+
+const SLACK_DISCONNECT_MUTATION = `
+  mutation SlackDisconnect { slackDisconnect { success } }
+`;
+
+const SLACK_SET_DEFAULT_TEAM_MUTATION = `
+  mutation SlackSetDefaultTeam($teamId: ID) {
+    slackSetDefaultTeam(teamId: $teamId) {
+      success
+      integration { id slackTeamName defaultTeamId createdAt }
+    }
+  }
+`;
 
 const GITHUB_INTEGRATION_QUERY = `
   query GitHubIntegration {
@@ -31,13 +59,16 @@ const GITHUB_ROTATE_SECRET_MUTATION = `
   }
 `;
 
-export default function IntegrationsSettingsPage() {
+const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
+  const { teamStore } = useStore();
+  const teams = teamStore.all;
   const [integration, setIntegration] = useState<GitHubIntegration | null>(null);
   const [loading, setLoading] = useState(true);
   const [connectSecret, setConnectSecret] = useState('');
   const [rotateSecret, setRotateSecret] = useState('');
   const [showRotate, setShowRotate] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [slack, setSlack] = useState<SlackIntegration | null>(null);
 
   const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const orgKey = typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '';
@@ -50,7 +81,45 @@ export default function IntegrationsSettingsPage() {
       })
       .catch(() => toast.error('Failed to load GitHub integration'))
       .finally(() => setLoading(false));
+
+    gql(SLACK_INTEGRATION_QUERY)
+      .then(res => {
+        const data = (res.data ?? {}) as { slackIntegration?: SlackIntegration | null };
+        setSlack(data.slackIntegration ?? null);
+      })
+      .catch(() => {});
   }, []);
+
+  async function handleSlackDisconnect() {
+    if (!confirm('Disconnect Slack? The /bilinear command will stop working.')) {
+      return;
+    }
+    setSaving(true);
+    try {
+      await gql(SLACK_DISCONNECT_MUTATION);
+      setSlack(null);
+      toast.success('Slack disconnected');
+    } catch {
+      toast.error('Failed to disconnect Slack');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSetDefaultTeam(teamId: string) {
+    try {
+      const res = await gql(SLACK_SET_DEFAULT_TEAM_MUTATION, { teamId: teamId || null });
+      const data = (res.data ?? {}) as {
+        slackSetDefaultTeam?: { integration: SlackIntegration | null };
+      };
+      if (data.slackSetDefaultTeam?.integration) {
+        setSlack(data.slackSetDefaultTeam.integration);
+      }
+      toast.success('Default team updated');
+    } catch {
+      toast.error('Failed to update default team');
+    }
+  }
 
   function handleConnect() {
     if (connectSecret.trim().length < 16) {
@@ -218,6 +287,85 @@ export default function IntegrationsSettingsPage() {
           </div>
         )}
       </section>
+
+      {/* Slack */}
+      <section className="rounded-lg border p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <svg aria-hidden="true" className="h-6 w-6" viewBox="0 0 24 24">
+            <path
+              d="M6 15a2 2 0 1 1-2-2h2v2zm1 0a2 2 0 0 1 4 0v5a2 2 0 1 1-4 0v-5zm2-8a2 2 0 1 1 2-2v2H9zm0 1a2 2 0 0 1 0 4H4a2 2 0 1 1 0-4h5zm8 2a2 2 0 1 1 2 2h-2v-2zm-1 0a2 2 0 0 1-4 0V5a2 2 0 1 1 4 0v5zm-2 8a2 2 0 1 1-2 2v-2h2zm0-1a2 2 0 0 1 0-4h5a2 2 0 1 1 0 4h-5z"
+              fill="currentColor"
+            />
+          </svg>
+          <div>
+            <h2 className="font-medium">Slack</h2>
+            <p className="text-sm text-muted-foreground">
+              Create issues from Slack with the <code className="font-mono">/bilinear</code>{' '}
+              command.
+            </p>
+          </div>
+          {slack && (
+            <span className="ml-auto rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
+              Connected
+            </span>
+          )}
+        </div>
+
+        {slack ? (
+          <div className="space-y-4">
+            <div className="rounded-md bg-muted/50 px-4 py-3 text-sm">
+              <p>
+                Connected to <strong>{slack.slackTeamName}</strong> on{' '}
+                {new Date(slack.createdAt).toLocaleDateString()}
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1" htmlFor="slack-default-team">
+                Default team for new issues
+              </label>
+              <select
+                className="w-full rounded-md border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                id="slack-default-team"
+                onChange={e => void handleSetDefaultTeam(e.target.value)}
+                value={slack.defaultTeamId ?? ''}
+              >
+                <option value="">— choose a team —</option>
+                {teams.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              className="rounded-md border border-destructive/50 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10 disabled:opacity-50"
+              disabled={saving}
+              onClick={handleSlackDisconnect}
+              type="button"
+            >
+              Disconnect
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Connect your Slack workspace, then set the{' '}
+              <code className="font-mono">/bilinear</code> slash command request URL to:
+            </p>
+            <code className="block break-all rounded bg-muted px-2 py-1 font-mono text-xs">
+              {appUrl}/api/integrations/slack/commands
+            </code>
+            <a
+              className="inline-block rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              href="/api/integrations/slack"
+            >
+              Connect Slack
+            </a>
+          </div>
+        )}
+      </section>
     </div>
   );
-}
+});
+
+export default IntegrationsSettingsPage;

@@ -198,3 +198,25 @@ export async function verifyGithubOAuthState(state: string): Promise<GithubOAuth
     webhookSecret: payload.webhookSecret as string,
   };
 }
+
+export interface SlackOAuthStatePayload {
+  orgId: string;
+  userId: string;
+}
+
+/**
+ * Sign the Slack OAuth "state" param. Like GitHub, Slack redirects to our
+ * server-side callback, so the state carries the initiating org/user. Signed
+ * with `JWT_SECRET` so a callback can't be forged to bind a foreign org.
+ */
+export async function signSlackOAuthState(payload: SlackOAuthStatePayload): Promise<string> {
+  return signOAuthStateJWT({ ...payload, provider: 'slack' });
+}
+
+export async function verifySlackOAuthState(state: string): Promise<SlackOAuthStatePayload> {
+  const payload = await verifyOAuthStateJWT(state, 'slack');
+  return {
+    orgId: payload.orgId as string,
+    userId: payload.userId as string,
+  };
+}

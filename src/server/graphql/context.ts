@@ -31,6 +31,7 @@ import { RoadmapService } from '../services/roadmap.service';
 import { SamlService } from '../services/saml.service';
 import { ScimService } from '../services/scim.service';
 import { SearchService } from '../services/search.service';
+import { SlackService } from '../services/slack.service';
 import { SyncService } from '../services/sync.service';
 import { TeamService } from '../services/team.service';
 import { TriageService } from '../services/triage.service';
@@ -73,6 +74,7 @@ export interface GraphQLContext extends AuthContext {
     saml: SamlService;
     scim: ScimService;
     search: SearchService;
+    slack: SlackService;
     sync: SyncService;
     team: TeamService;
     triage: TriageService;
@@ -143,6 +145,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const syncService = new SyncService(prisma, redis);
   const searchService = new SearchService(prisma);
   const aiService = new AiService(prisma, searchService);
+  const slackService = new SlackService(prisma, issueService);
   const samlService = new SamlService(prisma);
   const scimService = new ScimService(prisma);
   const triageService = new TriageService(prisma);
@@ -189,6 +192,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
       saml: samlService,
       scim: scimService,
       search: searchService,
+      slack: slackService,
       sync: syncService,
       team: teamService,
       triage: triageService,
