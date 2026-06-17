@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 import type { AuthContext } from '../middleware/auth';
 import { extractAuthContext } from '../middleware/auth';
+import { AiService } from '../services/ai.service';
 import { AnalyticsService } from '../services/analytics.service';
 import { AuditLogService } from '../services/audit-log.service';
 import { AuthService } from '../services/auth.service';
@@ -44,6 +45,7 @@ export interface GraphQLContext extends AuthContext {
   loaders: Loaders;
   prisma: PrismaClient;
   services: {
+    ai: AiService;
     analytics: AnalyticsService;
     auditLog: AuditLogService;
     auth: AuthService;
@@ -137,6 +139,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const roadmapService = new RoadmapService(prisma);
   const syncService = new SyncService(prisma, redis);
   const searchService = new SearchService(prisma);
+  const aiService = new AiService(prisma, searchService);
   const samlService = new SamlService(prisma);
   const scimService = new ScimService(prisma);
   const triageService = new TriageService(prisma);
@@ -156,6 +159,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
     loaders: createLoaders(prisma, auth.orgId),
     prisma,
     services: {
+      ai: aiService,
       analytics: analyticsService,
       auditLog: auditLogService,
       auth: authService,

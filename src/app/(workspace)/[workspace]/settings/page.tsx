@@ -22,11 +22,21 @@ const ORGANIZATION_QUERY = `
       name
       urlKey
       dataRegion
+      aiEnabled
       createdAt
     }
     organizationMembers {
       userId
       role
+    }
+  }
+`;
+
+const AI_SETTINGS_UPDATE_MUTATION = `
+  mutation AiSettingsUpdate($enabled: Boolean!) {
+    aiSettingsUpdate(enabled: $enabled) {
+      success
+      organization { id aiEnabled }
     }
   }
 `;
@@ -89,6 +99,7 @@ const API_TOKEN_REVOKE_MUTATION = `
 // ---------------------------------------------------------------------------
 
 interface OrgInfo {
+  aiEnabled: boolean;
   createdAt: string;
   dataRegion: string;
   id: string;
@@ -157,6 +168,22 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const [creatingToken, setCreatingToken] = useState(false);
   const [newPlaintext, setNewPlaintext] = useState<string | null>(null);
   const [revokingTokenId, setRevokingTokenId] = useState<string | null>(null);
+  const [savingAi, setSavingAi] = useState(false);
+
+  async function toggleAi(enabled: boolean) {
+    setSavingAi(true);
+    // Optimistic — revert on error.
+    setOrg(prev => (prev ? { ...prev, aiEnabled: enabled } : prev));
+    try {
+      await gql(AI_SETTINGS_UPDATE_MUTATION, { enabled });
+      toast.success(enabled ? 'AI features enabled' : 'AI features disabled');
+    } catch {
+      setOrg(prev => (prev ? { ...prev, aiEnabled: !enabled } : prev));
+      toast.error('Failed to update AI settings');
+    } finally {
+      setSavingAi(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -776,6 +803,44 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                 ))}
               </ul>
             )}
+          </div>
+        </section>
+
+        {/* AI assistant */}
+        <section>
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+            AI
+          </h2>
+          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 px-5 py-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">AI assistant</p>
+                <p className="mt-0.5 text-xs text-zinc-400">
+                  Title suggestions, issue summaries, and duplicate detection. Requires an Anthropic
+                  API key configured on the server.
+                </p>
+              </div>
+              <button
+                aria-checked={org?.aiEnabled ?? false}
+                aria-label="Enable AI assistant"
+                className={cn(
+                  'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors disabled:opacity-50',
+                  'focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2',
+                  org?.aiEnabled ? 'bg-indigo-600' : 'bg-zinc-300 dark:bg-zinc-600',
+                )}
+                disabled={savingAi || !org}
+                onClick={() => void toggleAi(!(org?.aiEnabled ?? false))}
+                role="switch"
+                type="button"
+              >
+                <span
+                  className={cn(
+                    'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform',
+                    org?.aiEnabled ? 'translate-x-4' : 'translate-x-0',
+                  )}
+                />
+              </button>
+            </div>
           </div>
         </section>
 

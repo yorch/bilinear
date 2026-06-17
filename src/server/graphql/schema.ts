@@ -35,6 +35,7 @@ export const typeDefs = `
     logoUrl: String
     dataRegion: String!
     roadmapEnabled: Boolean!
+    aiEnabled: Boolean!
     createdAt: DateTime!
     updatedAt: DateTime!
     archivedAt: DateTime
@@ -1424,7 +1425,36 @@ export const typeDefs = `
     sortOrder: Float
   }
 
+  type AiDuplicateIssue {
+    id: ID!
+    identifier: String!
+    title: String!
+  }
+
+  type AiTitlePayload {
+    success: Boolean!
+    title: String!
+  }
+
+  type AiSummaryPayload {
+    success: Boolean!
+    summary: String!
+  }
+
+  type AiDuplicatesPayload {
+    success: Boolean!
+    duplicates: [AiDuplicateIssue!]!
+  }
+
+  type AiSettingsPayload {
+    success: Boolean!
+    organization: Organization!
+    lastSyncId: String!
+  }
+
   type Query {
+    """True when AI is configured server-side AND enabled for this workspace."""
+    aiAvailable: Boolean!
     viewer: User!
     organization: Organization!
     organizationMembers: [OrganizationMemberEntry!]!
@@ -1537,6 +1567,14 @@ export const typeDefs = `
   }
 
   type Mutation {
+    """Suggest a concise issue title from a description (requires AI enabled)."""
+    aiSuggestIssueTitle(description: String!): AiTitlePayload!
+    """Summarize an issue into a short paragraph (requires AI enabled)."""
+    aiSummarizeIssue(issueId: ID!): AiSummaryPayload!
+    """Detect likely duplicate issues for the given issue (requires AI enabled)."""
+    aiFindDuplicateIssues(issueId: ID!): AiDuplicatesPayload!
+    """Enable/disable AI features for the workspace (owner/admin only)."""
+    aiSettingsUpdate(enabled: Boolean!): AiSettingsPayload!
     emailLogin(input: EmailLoginInput!): EmailLoginPayload!
     emailVerify(input: EmailVerifyInput!): AuthPayload!
     """

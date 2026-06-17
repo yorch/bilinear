@@ -17,6 +17,9 @@ model Organization {
   roadmapEnabled     Boolean @default(false) @map("roadmap_enabled")
   customersEnabled   Boolean @default(false) @map("customers_enabled")
   initiativesEnabled Boolean @default(false) @map("initiatives_enabled")
+  // Gates the AI assistant features (title suggestion, summarize, duplicate
+  // detection). Also requires ANTHROPIC_API_KEY to be set server-side.
+  aiEnabled          Boolean @default(false) @map("ai_enabled")
 
   securitySettings Json  @default("{}") @map("security_settings")
   authSettings     Json  @default("{}") @map("auth_settings")

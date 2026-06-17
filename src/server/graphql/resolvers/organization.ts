@@ -14,6 +14,29 @@ const log = childLogger({ module: 'resolver/organization' });
 
 export const organizationResolvers = {
   Mutation: {
+    aiSettingsUpdate: async (
+      _parent: unknown,
+      { enabled }: { enabled: boolean },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+      const organization = await ctx.prisma.organization.update({
+        data: { aiEnabled: enabled },
+        where: { id: ctx.orgId },
+      });
+      // Organization is part of the synced dataset — broadcast so other
+      // clients pick up the toggle without a refresh.
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'U',
+        'Organization',
+        organization.id,
+        organization,
+      );
+      return { lastSyncId: sync.id.toString(), organization, success: true };
+    },
+
     organizationCreate: async (
       _parent: unknown,
       { input }: { input: { name: string; urlKey: string } },

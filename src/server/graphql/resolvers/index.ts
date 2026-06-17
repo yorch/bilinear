@@ -1,4 +1,5 @@
 import { DateTimeScalar, JSONScalar, UUIDScalar } from '../types/scalars';
+import { aiResolvers } from './ai';
 import { analyticsResolvers } from './analytics';
 import { auditLogResolvers } from './audit-log';
 import { authResolvers } from './auth';
@@ -133,6 +134,7 @@ export const resolvers = {
   JSON: JSONScalar,
 
   Mutation: {
+    ...aiResolvers.Mutation,
     ...authResolvers.Mutation,
     ...automationResolvers.Mutation,
     ...commentResolvers.Mutation,
@@ -179,6 +181,7 @@ export const resolvers = {
   },
 
   Query: {
+    ...aiResolvers.Query,
     ...analyticsResolvers.Query,
     ...auditLogResolvers.Query,
     ...authResolvers.Query,
