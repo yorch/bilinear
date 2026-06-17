@@ -167,7 +167,28 @@ export const issueResolvers = {
       await requireTeamMemberNotGuest(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
 
       try {
-        const issue = await ctx.services.issue.create(ctx.orgId, ctx.userId, input);
+        // Record the SyncAction inside the create transaction so a crash can
+        // never leave a persisted issue without its replication marker.
+        let issueSync: Awaited<ReturnType<typeof ctx.services.sync.recordSyncAction>> | undefined;
+        const issue = await ctx.services.issue.create(
+          ctx.orgId,
+          ctx.userId,
+          input,
+          async (tx, created) => {
+            issueSync = await ctx.services.sync.recordSyncAction(
+              tx,
+              ctx.orgId,
+              'I',
+              'Issue',
+              created.id,
+              created,
+            );
+          },
+        );
+        // Publish to Redis only after the transaction has committed.
+        if (issueSync) {
+          ctx.services.sync.publish(issueSync);
+        }
 
         // Auto-subscribe creator and notify assignee (fire-and-forget — don't
         // block the response on notification delivery)
@@ -183,20 +204,13 @@ export const issueResolvers = {
             .catch(err => logger.error({ err }, 'Failed to create issue assignment notification'));
         }
 
-        const sync = await ctx.services.sync.createSyncAction(
-          ctx.orgId,
-          'I',
-          'Issue',
-          issue.id,
-          issue,
-        );
         void ctx.services.webhook
           .dispatchEvent(ctx.orgId, 'issue.created', issue, issue.teamId)
           .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.created'));
         void ctx.services.automation
           .evaluateForIssue(ctx.orgId, { issue, type: 'issue_created' }, ctx.userId)
           .catch(err => logger.error({ err }, 'automation evaluate failed: issue_created'));
-        return { issue, lastSyncId: sync.id.toString(), success: true };
+        return { issue, lastSyncId: issueSync?.id.toString() ?? '0', success: true };
       } catch (err) {
         const error = err as Error;
         if (error.name === 'IssueStateRequiredError' || error.name === 'IssueInvalidStateError') {
@@ -492,7 +506,33 @@ export const issueResolvers = {
       // Snapshot old label set before mutation for diff
       const oldLabels = input.labelIds !== undefined ? await ctx.services.issue.getLabels(id) : [];
 
-      const { issue, cascaded } = await ctx.services.issue.update(id, input);
+      // Record SyncActions for the issue and any cascaded rows INSIDE the
+      // update transaction (atomic with the writes). Published to Redis only
+      // after commit, below.
+      type RecordedSync = Awaited<ReturnType<typeof ctx.services.sync.recordSyncAction>>;
+      let issueSync: RecordedSync | undefined;
+      const cascadedSyncs: RecordedSync[] = [];
+      const { issue, cascaded } = await ctx.services.issue.update(id, input, async (tx, res) => {
+        issueSync = await ctx.services.sync.recordSyncAction(
+          tx,
+          ctx.orgId,
+          'U',
+          'Issue',
+          id,
+          res.issue,
+        );
+        for (const row of res.cascaded) {
+          cascadedSyncs.push(
+            await ctx.services.sync.recordSyncAction(tx, ctx.orgId, 'U', 'Issue', row.id, row),
+          );
+        }
+      });
+      if (issueSync) {
+        ctx.services.sync.publish(issueSync);
+      }
+      for (const s of cascadedSyncs) {
+        ctx.services.sync.publish(s);
+      }
 
       // Record an activity entry for each changed tracked field
       const activities: IssueActivityCreateInput[] = [];
@@ -579,18 +619,14 @@ export const issueResolvers = {
         );
       }
 
-      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', id, issue);
-
-      // Auto-close cascade may have touched parent/child issues inside the
-      // same transaction. Emit one SyncAction per row so remote clients
-      // see the cascaded state changes in real time (instead of next
-      // bootstrap), and fire webhook events for each. Cascaded rows also
-      // feed the automation engine so an `issue_state_changed` rule fires
-      // for the parent that was auto-closed exactly as it would for a
-      // user-initiated close; otherwise rules see only the leaf change
+      // The issue + cascaded SyncActions were recorded inside the update
+      // transaction and published above. Cascaded rows (auto-closed
+      // parent/child) still need webhook + automation side effects so remote
+      // clients see the cascaded state changes and an `issue_state_changed`
+      // rule fires for the parent that was auto-closed exactly as it would
+      // for a user-initiated close; otherwise rules see only the leaf change
       // and the parent transition silently bypasses them.
       for (const row of cascaded) {
-        await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', row.id, row);
         void ctx.services.webhook
           .dispatchEvent(ctx.orgId, 'issue.updated', row, row.teamId)
           .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.updated (cascade)'));
@@ -646,7 +682,7 @@ export const issueResolvers = {
         });
       }
 
-      return { issue, lastSyncId: sync.id.toString(), success: true };
+      return { issue, lastSyncId: issueSync?.id.toString() ?? '0', success: true };
     },
   },
 

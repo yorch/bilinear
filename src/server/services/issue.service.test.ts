@@ -77,6 +77,45 @@ describe('IssueService', () => {
       expect(result).toEqual(TEST_ISSUE);
     });
 
+    it('invokes the txHook with the transaction client and created issue before returning', async () => {
+      prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1, key: 'ENG' });
+      prisma.issue.create.mockResolvedValue(TEST_ISSUE);
+
+      const seen: { issueId: string; sameTx: boolean } = { issueId: '', sameTx: false };
+      await service.create(
+        TEST_ORG.id,
+        TEST_USER.id,
+        { stateId: DEFAULT_WORKFLOW_STATES[0].id, teamId: TEST_TEAM.id, title: 'Hook' },
+        async (tx, created) => {
+          seen.issueId = created.id;
+          // The hook receives the SAME mock client the writes ran on, so a
+          // recordSyncAction(tx, …) lands in the same transaction.
+          seen.sameTx = tx === (prisma as never);
+        },
+      );
+
+      expect(seen.issueId).toBe(TEST_ISSUE.id);
+      expect(seen.sameTx).toBe(true);
+    });
+
+    it('rolls back the issue write when the txHook throws (atomicity)', async () => {
+      prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1, key: 'ENG' });
+      prisma.issue.create.mockResolvedValue(TEST_ISSUE);
+
+      // A failing SyncAction write inside the hook must reject the whole
+      // create — real Prisma rolls the transaction back, so no orphaned row.
+      await expect(
+        service.create(
+          TEST_ORG.id,
+          TEST_USER.id,
+          { stateId: DEFAULT_WORKFLOW_STATES[0].id, teamId: TEST_TEAM.id, title: 'Boom' },
+          async () => {
+            throw new Error('sync write failed');
+          },
+        ),
+      ).rejects.toThrow('sync write failed');
+    });
+
     it('uses client-provided UUID when id is given', async () => {
       const customId = '12345678-1234-1234-1234-123456789abc';
       prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1 });

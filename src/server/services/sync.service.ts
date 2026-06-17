@@ -18,6 +18,14 @@ const COMMITTED_WATERMARK_LAG_MS = 500;
 export type SyncActionType = 'I' | 'U' | 'D' | 'A';
 
 /**
+ * Minimal Prisma surface needed to persist a SyncAction. Both the singleton
+ * client and an interactive `$transaction` client (`Prisma.TransactionClient`)
+ * satisfy it structurally, so `recordSyncAction` can write the marker row
+ * inside the SAME transaction as the business write — see `recordSyncAction`.
+ */
+export type SyncWriteClient = Pick<PrismaClient, 'syncAction'>;
+
+/**
  * Opaque cursor encoding a `(committedAt, id)` tuple as
  * `<committedAtMicros>-<id>`. Tuple ordering is critical: BIGSERIAL `id`
  * values alone can race when transactions commit out of order, so the
@@ -70,14 +78,27 @@ export class SyncService {
     private redis: Redis,
   ) {}
 
-  async createSyncAction(
+  /**
+   * Persist a SyncAction row using an explicit client WITHOUT publishing to
+   * Redis. Pass an interactive `$transaction` client to make the marker write
+   * atomic with the business write that precedes it: a crash/rollback between
+   * the two now drops BOTH, so a persisted row can never lack its SyncAction
+   * (the silent-divergence bug — a row that no client ever sees because delta
+   * sync only ships rows that have a SyncAction).
+   *
+   * The caller is responsible for `publish()`-ing the returned action AFTER
+   * the transaction commits — publishing inside the tx would broadcast a row
+   * that a later rollback erases, creating a phantom on every client.
+   */
+  async recordSyncAction(
+    client: SyncWriteClient,
     orgId: string,
     action: SyncActionType,
     modelName: string,
     modelId: string,
     data: object | null,
   ): Promise<SyncAction> {
-    const syncAction = await this.prisma.syncAction.create({
+    return client.syncAction.create({
       data: {
         action,
         data: data ?? undefined,
@@ -86,18 +107,45 @@ export class SyncService {
         organizationId: orgId,
       },
     });
+  }
 
-    // Publish to Redis so the WebSocket server can broadcast to connected
-    // clients. Detached from the mutation hot path — the DB write is the
-    // source of truth, and delta sync will fill any gap caused by a failed
-    // publish. Awaiting here adds ~1-50ms (plus tail-latency spikes) to
-    // every mutation for no correctness benefit.
+  /**
+   * Broadcast an already-persisted SyncAction to the org's WebSocket clients.
+   * Fire-and-forget — the DB row is the source of truth and delta sync fills
+   * any gap from a failed publish, so awaiting here would add latency for no
+   * correctness benefit. Safe to call after a transaction commits.
+   */
+  publish(action: SyncAction): void {
     void this.redis
-      .publish(`sync:${orgId}`, JSON.stringify(serializeSyncAction(syncAction)))
+      .publish(`sync:${action.organizationId}`, JSON.stringify(serializeSyncAction(action)))
       .catch(err => {
-        log.error({ err, orgId }, 'Redis publish error');
+        log.error({ err, orgId: action.organizationId }, 'Redis publish error');
       });
+  }
 
+  /**
+   * Non-transactional convenience: write a SyncAction on the singleton client
+   * and publish it. Used by mutations that aren't (yet) wrapped in a
+   * business-write transaction. New entity-carrying / cascading mutations
+   * should instead thread `recordSyncAction(tx, …)` through the business
+   * transaction and `publish()` after commit (see issueCreate/issueUpdate).
+   */
+  async createSyncAction(
+    orgId: string,
+    action: SyncActionType,
+    modelName: string,
+    modelId: string,
+    data: object | null,
+  ): Promise<SyncAction> {
+    const syncAction = await this.recordSyncAction(
+      this.prisma,
+      orgId,
+      action,
+      modelName,
+      modelId,
+      data,
+    );
+    this.publish(syncAction);
     return syncAction;
   }
 

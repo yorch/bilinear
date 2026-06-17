@@ -152,3 +152,61 @@ describe('SyncService.getDeltaSyncActions — pagination', () => {
     expect(c.id).toBe(BigInt(99));
   });
 });
+
+describe('SyncService — atomic write helpers', () => {
+  let prisma: MockPrismaClient;
+  let svc: SyncService;
+  const redis = { publish: vi.fn().mockResolvedValue(1) };
+
+  beforeEach(() => {
+    redis.publish.mockClear();
+    prisma = createMockPrisma();
+    svc = new SyncService(prisma as never, redis as never);
+  });
+
+  it('recordSyncAction writes via the supplied client and does NOT publish', async () => {
+    const action = makeAction(BigInt(7));
+    // A distinct "tx" client to prove the row is written on IT, not the singleton.
+    const tx = { syncAction: { create: vi.fn().mockResolvedValue(action) } };
+
+    const result = await svc.recordSyncAction(
+      tx as never,
+      TEST_ORG.id,
+      'I',
+      'Issue',
+      action.modelId,
+      {
+        title: 'x',
+      },
+    );
+
+    expect(tx.syncAction.create).toHaveBeenCalledTimes(1);
+    // The singleton client must not be touched — the marker is transaction-scoped.
+    expect(prisma.syncAction.create).not.toHaveBeenCalled();
+    // Publishing inside the tx would broadcast a row a rollback could erase.
+    expect(redis.publish).not.toHaveBeenCalled();
+    expect(result).toBe(action);
+  });
+
+  it('publish broadcasts the action on the org channel as serialized JSON', () => {
+    const action = makeAction(BigInt(9));
+    svc.publish(action);
+
+    expect(redis.publish).toHaveBeenCalledTimes(1);
+    const [channel, payload] = redis.publish.mock.calls[0] as [string, string];
+    expect(channel).toBe(`sync:${TEST_ORG.id}`);
+    // id is serialized to string so BigInt survives JSON transport.
+    expect(JSON.parse(payload)).toMatchObject({ id: '9', modelName: 'Issue' });
+  });
+
+  it('createSyncAction records on the singleton AND publishes (back-compat path)', async () => {
+    const action = makeAction(BigInt(11));
+    prisma.syncAction.create.mockResolvedValue(action);
+
+    const result = await svc.createSyncAction(TEST_ORG.id, 'U', 'Issue', action.modelId, {});
+
+    expect(prisma.syncAction.create).toHaveBeenCalledTimes(1);
+    expect(redis.publish).toHaveBeenCalledTimes(1);
+    expect(result).toBe(action);
+  });
+});

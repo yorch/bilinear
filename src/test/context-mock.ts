@@ -31,6 +31,22 @@ class MockSyncService {
   ) {
     return { id: BigInt(1) } as { id: bigint };
   }
+
+  // In-transaction marker write (atomic-sync path). Returns the same
+  // predictable id so resolvers that record-then-publish still assert '1'.
+  async recordSyncAction(
+    _client: unknown,
+    _orgId: string,
+    _action: SyncActionType,
+    _modelName: string,
+    _modelId: string,
+    _data: object | null,
+  ) {
+    return { id: BigInt(1), organizationId: _orgId } as { id: bigint; organizationId: string };
+  }
+
+  // Post-commit Redis broadcast — no-op in tests.
+  publish(_action: { id: bigint; organizationId: string }) {}
 }
 
 // Minimal mock WebhookService — webhooks are fire-and-forget, so the resolver

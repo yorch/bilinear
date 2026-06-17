@@ -1,6 +1,20 @@
 import type { Issue, IssueLabel, IssueReaction, PrismaClient } from '../../generated/prisma';
+import type { SyncWriteClient } from './sync.service';
 
 type PrismaLike = Pick<PrismaClient, 'issue' | 'issueLabelAssignment' | 'issueLabel' | 'team'>;
+
+/**
+ * In-transaction hook invoked just before `create`/`update` return, while the
+ * business-write transaction is still open. Lets the resolver persist the
+ * SyncAction atomically with the issue write (via `sync.recordSyncAction(tx,
+ * …)`) so a crash can never leave a row without its replication marker. The
+ * resolver publishes the recorded action(s) to Redis AFTER the call resolves.
+ */
+export type IssueCreateTxHook = (tx: SyncWriteClient, issue: Issue) => Promise<void>;
+export type IssueUpdateTxHook = (
+  tx: SyncWriteClient,
+  result: { issue: Issue; cascaded: Issue[] },
+) => Promise<void>;
 
 export interface IssueCreateInput {
   assigneeId?: string;
@@ -81,7 +95,12 @@ export interface IssuePage {
 export class IssueService {
   constructor(private prisma: PrismaClient) {}
 
-  async create(orgId: string, creatorId: string, input: IssueCreateInput): Promise<Issue> {
+  async create(
+    orgId: string,
+    creatorId: string,
+    input: IssueCreateInput,
+    txHook?: IssueCreateTxHook,
+  ): Promise<Issue> {
     return this.prisma.$transaction(async tx => {
       // Atomically increment issueCount and use it as the issue number
       const team = await tx.team.update({
@@ -190,6 +209,10 @@ export class IssueService {
         await this.syncLabels(tx, issue.id, input.labelIds);
       }
 
+      // Persist the SyncAction inside this transaction (atomic with the issue
+      // write). Publish happens in the resolver after commit.
+      await txHook?.(tx, issue);
+
       return issue;
     });
   }
@@ -288,7 +311,11 @@ export class IssueService {
    * The caller is responsible for emitting one SyncAction per `cascaded`
    * entry so remote clients can reflect the cascade in real time.
    */
-  async update(id: string, input: IssueUpdateInput): Promise<{ issue: Issue; cascaded: Issue[] }> {
+  async update(
+    id: string,
+    input: IssueUpdateInput,
+    txHook?: IssueUpdateTxHook,
+  ): Promise<{ issue: Issue; cascaded: Issue[] }> {
     const data: Parameters<PrismaClient['issue']['update']>[0]['data'] = {};
 
     if (input.title !== undefined) {
@@ -426,6 +453,10 @@ export class IssueService {
           cascaded.push(...closedChildren);
         }
       }
+
+      // Persist SyncAction(s) for the issue + any cascaded rows inside this
+      // transaction so the markers can't survive a rollback of the writes.
+      await txHook?.(tx, { cascaded, issue });
 
       return { cascaded, issue };
     });
