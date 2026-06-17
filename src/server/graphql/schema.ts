@@ -1708,7 +1708,8 @@ export const typeDefs = `
     scimTokenCreate(label: String!): ScimTokenCreatePayload!
     scimTokenRevoke(id: ID!): ScimTokenRevokePayload!
 
-    apiTokenCreate(label: String!): ApiTokenCreatePayload!
+    """Create a personal API key. scopes defaults to [read, write]; expiresInDays defaults to 365 (1-3650)."""
+    apiTokenCreate(label: String!, scopes: [String!], expiresInDays: Int): ApiTokenCreatePayload!
     apiTokenRevoke(id: ID!): BasicPayload!
   }
 
@@ -1876,6 +1877,8 @@ export const typeDefs = `
   type ApiToken {
     id: ID!
     label: String!
+    """Permission scopes. Empty = full access (legacy key). Values: read, write."""
+    scopes: [String!]!
     lastUsedAt: DateTime
     createdAt: DateTime!
     expiresAt: DateTime!

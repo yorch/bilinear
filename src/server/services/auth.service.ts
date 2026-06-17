@@ -18,6 +18,20 @@ const MAGIC_LINK_EXPIRY_MINUTES = 15;
 const REFRESH_GRACE_PERIOD_MINUTES = 30;
 const REFRESH_TOKEN_DAYS = 30;
 
+/** Recognised API-key permission scopes. */
+export const VALID_API_SCOPES = new Set(['read', 'write']);
+/** Scopes granted when a key is created without an explicit selection. */
+export const DEFAULT_API_SCOPES = ['read', 'write'] as const;
+
+/**
+ * Does this scope set permit write (mutation) operations? Empty scopes are
+ * treated as full access (legacy keys predate the scopes column), matching
+ * the migration default and `createApiToken`'s empty→full normalisation.
+ */
+export function apiScopesAllowWrite(scopes: string[]): boolean {
+  return scopes.length === 0 || scopes.includes('write');
+}
+
 export interface EmailLoginPayload {
   success: boolean;
 }
@@ -281,15 +295,30 @@ export class AuthService {
   async createApiToken(
     userId: string,
     label: string,
+    opts: { scopes?: string[]; expiresInDays?: number } = {},
   ): Promise<{ plaintext: string; token: AuthToken }> {
     if (!label.trim()) {
       throw new Error('Label is required');
     }
+    // Normalise scopes to the recognised set. Empty/absent → full access
+    // (`read` + `write`) so the API stays usable without forcing a choice.
+    const requested = opts.scopes?.map(s => s.trim().toLowerCase()).filter(Boolean) ?? [];
+    const invalid = requested.filter(s => !VALID_API_SCOPES.has(s));
+    if (invalid.length > 0) {
+      throw new Error(`Invalid scope(s): ${invalid.join(', ')}`);
+    }
+    const scopes = requested.length > 0 ? Array.from(new Set(requested)) : [...DEFAULT_API_SCOPES];
+
+    // Expiry: default 1 year, configurable, clamped to [1, 3650] days.
+    const days = opts.expiresInDays ?? 365;
+    if (!Number.isFinite(days) || days < 1 || days > 3650) {
+      throw new Error('expiresInDays must be between 1 and 3650');
+    }
     const plaintext = `bil_${crypto.randomBytes(32).toString('hex')}`;
     const tokenHash = hashToken(plaintext);
-    const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
     const token = await this.prisma.authToken.create({
-      data: { expiresAt, label: label.trim(), tokenHash, type: 'api_key', userId },
+      data: { expiresAt, label: label.trim(), scopes, tokenHash, type: 'api_key', userId },
     });
     return { plaintext, token };
   }

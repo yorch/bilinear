@@ -15,6 +15,7 @@ import {
   estimateComplexity,
   withRateLimitHeaders,
 } from '../../../server/middleware/rate-limit';
+import { apiScopesAllowWrite } from '../../../server/services/auth.service';
 
 // Hard caps enforced by GraphQL validation rules — reject queries before any
 // resolver runs. Complementary to the per-user rate limiter in rate-limit.ts,
@@ -77,6 +78,26 @@ const server = new ApolloServer<GraphQLContext>({
           });
         }
         return {};
+      },
+    },
+    {
+      // API-key scope enforcement: a request authenticated with a key that
+      // lacks the `write` scope may run queries but not mutations. Centralised
+      // here so every mutation is covered without per-resolver checks.
+      async requestDidStart() {
+        return {
+          async didResolveOperation({ contextValue, operation }) {
+            if (operation?.operation !== 'mutation') {
+              return;
+            }
+            const scopes = contextValue.apiKeyScopes ?? null;
+            if (scopes !== null && !apiScopesAllowWrite(scopes)) {
+              throw new GraphQLError('API key lacks the "write" scope', {
+                extensions: { code: 'FORBIDDEN' },
+              });
+            }
+          },
+        };
       },
     },
     {

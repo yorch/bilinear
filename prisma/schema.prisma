@@ -166,6 +166,12 @@ model AuthToken {
   ipAddress String? @map("ip_address") @db.VarChar(45)
   userAgent String? @map("user_agent")
 
+  // Permission scopes for `type = 'api_key'` rows. Empty = full access
+  // (legacy keys created before scopes existed). Recognised values: `read`,
+  // `write`. Enforced centrally in the GraphQL route: a key lacking `write`
+  // is rejected on any mutation. Ignored for non-api_key token types.
+  scopes String[] @default([])
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

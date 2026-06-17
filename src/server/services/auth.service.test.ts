@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TEST_USER } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import { signRefreshToken } from '../lib/jwt';
-import { AuthService, InvalidTokenError } from './auth.service';
+import { AuthService, apiScopesAllowWrite, InvalidTokenError } from './auth.service';
 import { UserService } from './user.service';
 
 const FAMILY_ID = '00000000-0000-0000-0000-000000000aaa';
@@ -145,5 +145,50 @@ describe('AuthService.refreshTokens — family + reuse detection', () => {
 
     expect(prisma.authToken.findFirst).not.toHaveBeenCalled();
     expect(prisma.authToken.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('AuthService — API token scopes & expiry', () => {
+  let prisma: MockPrismaClient;
+  let service: AuthService;
+
+  beforeEach(() => {
+    prisma = createMockPrisma();
+    service = new AuthService(prisma as never, new UserService(prisma as never));
+    prisma.authToken.create.mockImplementation(async ({ data }: { data: unknown }) => data);
+  });
+
+  it('defaults to [read, write] scopes and a 1-year expiry', async () => {
+    const before = Date.now();
+    const { token } = await service.createApiToken(TEST_USER.id, 'CI');
+    const created = prisma.authToken.create.mock.calls[0]?.[0]?.data as {
+      scopes: string[];
+      expiresAt: Date;
+    };
+    expect(created.scopes).toEqual(['read', 'write']);
+    const yearMs = 365 * 24 * 60 * 60 * 1000;
+    expect(created.expiresAt.getTime()).toBeGreaterThanOrEqual(before + yearMs - 5000);
+    expect(token).toBeDefined();
+  });
+
+  it('honours an explicit read-only scope and custom expiry', async () => {
+    await service.createApiToken(TEST_USER.id, 'readonly', { expiresInDays: 30, scopes: ['read'] });
+    const created = prisma.authToken.create.mock.calls[0]?.[0]?.data as { scopes: string[] };
+    expect(created.scopes).toEqual(['read']);
+  });
+
+  it('rejects unrecognised scopes and out-of-range expiry', async () => {
+    await expect(
+      service.createApiToken(TEST_USER.id, 'bad', { scopes: ['admin'] }),
+    ).rejects.toThrow(/Invalid scope/);
+    await expect(
+      service.createApiToken(TEST_USER.id, 'bad', { expiresInDays: 99999 }),
+    ).rejects.toThrow(/expiresInDays/);
+  });
+
+  it('apiScopesAllowWrite: empty (legacy) = full access; read-only blocks writes', () => {
+    expect(apiScopesAllowWrite([])).toBe(true);
+    expect(apiScopesAllowWrite(['read', 'write'])).toBe(true);
+    expect(apiScopesAllowWrite(['read'])).toBe(false);
   });
 });

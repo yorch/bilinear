@@ -67,15 +67,15 @@ const UPDATE_NOTIFICATION_PREFS_MUTATION = `
 `;
 
 const API_TOKENS_QUERY = `
-  query ApiTokens { apiTokens { id label lastUsedAt createdAt expiresAt } }
+  query ApiTokens { apiTokens { id label scopes lastUsedAt createdAt expiresAt } }
 `;
 
 const API_TOKEN_CREATE_MUTATION = `
-  mutation ApiTokenCreate($label: String!) {
-    apiTokenCreate(label: $label) {
+  mutation ApiTokenCreate($label: String!, $scopes: [String!], $expiresInDays: Int) {
+    apiTokenCreate(label: $label, scopes: $scopes, expiresInDays: $expiresInDays) {
       success
       plaintext
-      token { id label lastUsedAt createdAt expiresAt }
+      token { id label scopes lastUsedAt createdAt expiresAt }
     }
   }
 `;
@@ -102,7 +102,16 @@ interface ApiToken {
   id: string;
   label: string;
   lastUsedAt: string | null;
+  scopes: string[];
 }
+
+// Expiry presets offered in the create form (days).
+const TOKEN_EXPIRY_OPTIONS = [
+  { days: 30, label: '30 days' },
+  { days: 90, label: '90 days' },
+  { days: 365, label: '1 year' },
+  { days: 730, label: '2 years' },
+] as const;
 
 const ORG_ROLES = ['owner', 'admin', 'member', 'guest'] as const;
 type OrgRole = (typeof ORG_ROLES)[number];
@@ -143,6 +152,8 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const [rotatingToken, setRotatingToken] = useState(false);
   const [apiTokens, setApiTokens] = useState<ApiToken[]>([]);
   const [newTokenLabel, setNewTokenLabel] = useState('');
+  const [newTokenWritable, setNewTokenWritable] = useState(true);
+  const [newTokenExpiryDays, setNewTokenExpiryDays] = useState(365);
   const [creatingToken, setCreatingToken] = useState(false);
   const [newPlaintext, setNewPlaintext] = useState<string | null>(null);
   const [revokingTokenId, setRevokingTokenId] = useState<string | null>(null);
@@ -215,7 +226,12 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
     }
     setCreatingToken(true);
     try {
-      const result = await gql(API_TOKEN_CREATE_MUTATION, { label: newTokenLabel.trim() });
+      const result = await gql(API_TOKEN_CREATE_MUTATION, {
+        expiresInDays: newTokenExpiryDays,
+        label: newTokenLabel.trim(),
+        // Read access is always granted; write is opt-in via the toggle.
+        scopes: newTokenWritable ? ['read', 'write'] : ['read'],
+      });
       const data = result.data as
         | { apiTokenCreate?: { plaintext: string; token: ApiToken } }
         | undefined;
@@ -662,6 +678,41 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   {creatingToken ? 'Creating…' : 'Create'}
                 </button>
               </div>
+              {/* Scope + expiry controls */}
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-zinc-500 dark:text-zinc-400">
+                <label className="flex items-center gap-1.5">
+                  <input
+                    checked={newTokenWritable}
+                    className="h-3.5 w-3.5 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
+                    disabled={creatingToken}
+                    onChange={e => setNewTokenWritable(e.target.checked)}
+                    type="checkbox"
+                  />
+                  Allow write (mutations)
+                </label>
+                <label className="flex items-center gap-1.5">
+                  Expires in
+                  <select
+                    className={cn(
+                      'rounded-md border border-zinc-200 dark:border-zinc-700 bg-transparent',
+                      'px-1.5 py-0.5 text-xs text-zinc-700 dark:text-zinc-300',
+                      'focus:outline-none focus:ring-1 focus:ring-indigo-500',
+                    )}
+                    disabled={creatingToken}
+                    onChange={e => setNewTokenExpiryDays(Number(e.target.value))}
+                    value={newTokenExpiryDays}
+                  >
+                    {TOKEN_EXPIRY_OPTIONS.map(opt => (
+                      <option key={opt.days} value={opt.days}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {!newTokenWritable && (
+                  <span className="text-amber-600 dark:text-amber-400">Read-only key</span>
+                )}
+              </div>
             </div>
 
             {/* Token list */}
@@ -673,8 +724,20 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   <li className="flex items-start gap-3 px-5 py-3" key={token.id}>
                     <Key className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate flex items-center gap-2">
                         {token.label}
+                        <span
+                          className={cn(
+                            'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+                            token.scopes.length === 0 || token.scopes.includes('write')
+                              ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
+                              : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300',
+                          )}
+                        >
+                          {token.scopes.length === 0 || token.scopes.includes('write')
+                            ? 'Read/Write'
+                            : 'Read only'}
+                        </span>
                       </p>
                       <p className="text-xs text-zinc-400 mt-0.5">
                         Created{' '}
