@@ -1452,9 +1452,44 @@ export const typeDefs = `
     lastSyncId: String!
   }
 
+  type CsvImportPreview {
+    headers: [String!]!
+    rowCount: Int!
+    sampleRows: [[String!]!]!
+  }
+
+  input CsvImportMappingInput {
+    """CSV header for the issue title (required)."""
+    title: String!
+    description: String
+    priority: String
+    """CSV header holding an assignee email."""
+    assignee: String
+    """CSV header holding a workflow-state name."""
+    state: String
+  }
+
+  input CsvImportInput {
+    teamId: ID!
+    csv: String!
+    mapping: CsvImportMappingInput!
+  }
+
+  type CsvImportResult {
+    success: Boolean!
+    created: Int!
+    skipped: Int!
+    errors: [String!]!
+    lastSyncId: String!
+  }
+
   type Query {
     """True when AI is configured server-side AND enabled for this workspace."""
     aiAvailable: Boolean!
+    """Parse CSV (no writes) to drive the import mapping UI."""
+    csvImportPreview(csv: String!): CsvImportPreview!
+    """JSON export of issues for a team (or the whole org when teamId omitted)."""
+    organizationExport(teamId: ID): String!
     viewer: User!
     organization: Organization!
     organizationMembers: [OrganizationMemberEntry!]!
@@ -1575,6 +1610,8 @@ export const typeDefs = `
     aiFindDuplicateIssues(issueId: ID!): AiDuplicatesPayload!
     """Enable/disable AI features for the workspace (owner/admin only)."""
     aiSettingsUpdate(enabled: Boolean!): AiSettingsPayload!
+    """Import issues from CSV into a team (up to 500 rows)."""
+    csvImportIssues(input: CsvImportInput!): CsvImportResult!
     emailLogin(input: EmailLoginInput!): EmailLoginPayload!
     emailVerify(input: EmailVerifyInput!): AuthPayload!
     """

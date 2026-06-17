@@ -12,6 +12,7 @@ import { documentResolvers } from './document';
 import { favoriteResolvers } from './favorite';
 import { fileResolvers } from './file';
 import { githubResolvers } from './github';
+import { importResolvers } from './import';
 import { initiativeResolvers } from './initiative';
 import { issueResolvers } from './issue';
 import { issueActivityResolvers } from './issue-activity';
@@ -143,6 +144,7 @@ export const resolvers = {
     ...favoriteResolvers.Mutation,
     ...fileResolvers.Mutation,
     ...githubResolvers.Mutation,
+    ...importResolvers.Mutation,
     ...initiativeResolvers.Mutation,
     ...notificationResolvers.Mutation,
     ...issueRelationResolvers.Mutation,
@@ -183,6 +185,7 @@ export const resolvers = {
   Query: {
     ...aiResolvers.Query,
     ...analyticsResolvers.Query,
+    ...importResolvers.Query,
     ...auditLogResolvers.Query,
     ...authResolvers.Query,
     ...automationResolvers.Query,

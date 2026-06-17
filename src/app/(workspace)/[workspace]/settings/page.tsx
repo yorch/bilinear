@@ -868,6 +868,11 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   label: 'Webhooks',
                 },
                 {
+                  description: 'Import issues from CSV, export data',
+                  href: `/${workspace}/settings/import`,
+                  label: 'Import / Export',
+                },
+                {
                   description: 'Share project status externally',
                   href: `/${workspace}/settings/roadmap`,
                   label: 'Public roadmap',
