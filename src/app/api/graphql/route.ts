@@ -4,18 +4,18 @@ import { GraphQLError } from 'graphql';
 import depthLimit from 'graphql-depth-limit';
 import { getComplexity, simpleEstimator } from 'graphql-query-complexity';
 import { NextRequest } from 'next/server';
-import type { GraphQLContext } from '../../../server/graphql/context';
-import { createContext } from '../../../server/graphql/context';
-import { resolvers } from '../../../server/graphql/resolvers';
-import { typeDefs } from '../../../server/graphql/schema';
-import { logger } from '../../../server/lib/logger';
+import type { GraphQLContext } from '@/server/graphql/context';
+import { createContext } from '@/server/graphql/context';
+import { resolvers } from '@/server/graphql/resolvers';
+import { typeDefs } from '@/server/graphql/schema';
+import { logger } from '@/server/lib/logger';
 import {
   buildRateLimitedResponse,
   checkRateLimit,
   estimateComplexity,
   withRateLimitHeaders,
-} from '../../../server/middleware/rate-limit';
-import { apiScopesAllowWrite } from '../../../server/services/auth.service';
+} from '@/server/middleware/rate-limit';
+import { apiScopesAllowWrite } from '@/server/services/auth.service';
 
 // Hard caps enforced by GraphQL validation rules — reject queries before any
 // resolver runs. Complementary to the per-user rate limiter in rate-limit.ts,
