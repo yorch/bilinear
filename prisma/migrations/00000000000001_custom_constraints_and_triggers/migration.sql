@@ -81,9 +81,13 @@ CREATE INDEX IF NOT EXISTS idx_issues_fts
 -- ---------------------------------------------------------------------------
 -- Prisma 7 emits String[] columns as nullable at the DB level even though
 -- the client treats them as never-null at the TypeScript level. The
--- pre-consolidation migrations declared webhooks.events NOT NULL
--- explicitly; reinstate the DB-level constraint here so raw-SQL writes
--- that omit the array still fail loudly. issues.previous_identifiers was
--- already nullable in the original init, so it does not need preserving.
+-- pre-consolidation migrations declared webhooks.events and
+-- auth_tokens.scopes NOT NULL explicitly; reinstate the DB-level constraint
+-- here so raw-SQL writes that omit the array still fail loudly.
+-- issues.previous_identifiers was already nullable in the original init, so
+-- it does not need preserving.
 ALTER TABLE "webhooks"
   ALTER COLUMN "events" SET NOT NULL;
+
+ALTER TABLE "auth_tokens"
+  ALTER COLUMN "scopes" SET NOT NULL;
