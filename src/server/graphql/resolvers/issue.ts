@@ -148,12 +148,25 @@ export const issueResolvers = {
       }
       await requireIssueAccessNotGuestOrOwn(ctx.prisma, existing, ctx.userId, ctx.orgId);
 
-      const issue = await ctx.services.issue.archive(id);
-      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'A', 'Issue', id, issue);
+      // Record the SyncAction inside the archive transaction; publish after commit.
+      let issueSync: Awaited<ReturnType<typeof ctx.services.sync.recordSyncAction>> | undefined;
+      const issue = await ctx.services.issue.archive(id, async (tx, archived) => {
+        issueSync = await ctx.services.sync.recordSyncAction(
+          tx,
+          ctx.orgId,
+          'A',
+          'Issue',
+          id,
+          archived,
+        );
+      });
+      if (issueSync) {
+        ctx.services.sync.publish(issueSync);
+      }
       void ctx.services.webhook
         .dispatchEvent(ctx.orgId, 'issue.archived', issue, issue.teamId)
         .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.archived'));
-      return { issue, lastSyncId: sync.id.toString(), success: true };
+      return { issue, lastSyncId: issueSync?.id.toString() ?? '0', success: true };
     },
     issueCreate: async (
       _parent: unknown,
@@ -233,8 +246,14 @@ export const issueResolvers = {
       }
       await requireIssueAccessNotGuestOrOwn(ctx.prisma, existing, ctx.userId, ctx.orgId);
 
-      await ctx.services.issue.delete(id);
-      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Issue', id, null);
+      // Record the 'D' SyncAction inside the delete transaction; publish after.
+      let issueSync: Awaited<ReturnType<typeof ctx.services.sync.recordSyncAction>> | undefined;
+      await ctx.services.issue.delete(id, async tx => {
+        issueSync = await ctx.services.sync.recordSyncAction(tx, ctx.orgId, 'D', 'Issue', id, null);
+      });
+      if (issueSync) {
+        ctx.services.sync.publish(issueSync);
+      }
       void ctx.services.webhook
         .dispatchEvent(ctx.orgId, 'issue.deleted', { id, teamId: existing.teamId }, existing.teamId)
         .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.deleted'));
@@ -249,7 +268,7 @@ export const issueResolvers = {
           userId: ctx.userId,
         })
         .catch(err => logger.warn({ err }, 'audit log failed'));
-      return { lastSyncId: sync.id.toString(), success: true };
+      return { lastSyncId: issueSync?.id.toString() ?? '0', success: true };
     },
 
     issueReactionAdd: async (
@@ -267,15 +286,26 @@ export const issueResolvers = {
       }
       await requireIssueAccessNotGuestOrOwn(ctx.prisma, existing, ctx.userId, ctx.orgId);
 
-      const reaction = await ctx.services.issue.addReaction(issueId, ctx.userId, emoji);
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'I',
-        'IssueReaction',
-        reaction.id,
-        reaction,
+      let reactionSync: Awaited<ReturnType<typeof ctx.services.sync.recordSyncAction>> | undefined;
+      const reaction = await ctx.services.issue.addReaction(
+        issueId,
+        ctx.userId,
+        emoji,
+        async (tx, created) => {
+          reactionSync = await ctx.services.sync.recordSyncAction(
+            tx,
+            ctx.orgId,
+            'I',
+            'IssueReaction',
+            created.id,
+            created,
+          );
+        },
       );
-      return { lastSyncId: sync.id.toString(), reaction, success: true };
+      if (reactionSync) {
+        ctx.services.sync.publish(reactionSync);
+      }
+      return { lastSyncId: reactionSync?.id.toString() ?? '0', reaction, success: true };
     },
 
     issueReactionRemove: async (
@@ -294,15 +324,23 @@ export const issueResolvers = {
       await requireIssueAccessNotGuestOrOwn(ctx.prisma, existing, ctx.userId, ctx.orgId);
 
       try {
-        const result = await ctx.services.issue.removeReaction(issueId, ctx.userId, emoji);
-        const sync = await ctx.services.sync.createSyncAction(
-          ctx.orgId,
-          'D',
-          'IssueReaction',
-          result.id,
-          null,
-        );
-        return { lastSyncId: sync.id.toString(), success: true };
+        let reactionSync:
+          | Awaited<ReturnType<typeof ctx.services.sync.recordSyncAction>>
+          | undefined;
+        await ctx.services.issue.removeReaction(issueId, ctx.userId, emoji, async (tx, removed) => {
+          reactionSync = await ctx.services.sync.recordSyncAction(
+            tx,
+            ctx.orgId,
+            'D',
+            'IssueReaction',
+            removed.id,
+            null,
+          );
+        });
+        if (reactionSync) {
+          ctx.services.sync.publish(reactionSync);
+        }
+        return { lastSyncId: reactionSync?.id.toString() ?? '0', success: true };
       } catch (err) {
         if ((err as Error).name === 'IssueReactionNotFoundError') {
           throw new GraphQLError('Reaction not found', {
@@ -338,9 +376,21 @@ export const issueResolvers = {
       }
       await requireIssueAccessNotGuestOrOwn(ctx.prisma, existing, ctx.userId, ctx.orgId);
 
-      const issue = await ctx.services.issue.snooze(id, ctx.userId, parsed);
-      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', id, issue);
-      return { issue, lastSyncId: sync.id.toString(), success: true };
+      let issueSync: Awaited<ReturnType<typeof ctx.services.sync.recordSyncAction>> | undefined;
+      const issue = await ctx.services.issue.snooze(id, ctx.userId, parsed, async (tx, snoozed) => {
+        issueSync = await ctx.services.sync.recordSyncAction(
+          tx,
+          ctx.orgId,
+          'U',
+          'Issue',
+          id,
+          snoozed,
+        );
+      });
+      if (issueSync) {
+        ctx.services.sync.publish(issueSync);
+      }
+      return { issue, lastSyncId: issueSync?.id.toString() ?? '0', success: true };
     },
 
     issuesBulkUpdate: async (
@@ -404,9 +454,19 @@ export const issueResolvers = {
         }
       }
 
+      // Record one SyncAction per row INSIDE the bulk transaction so the
+      // markers can't survive a rollback of the batch; publish after commit.
+      type RecordedSync = Awaited<ReturnType<typeof ctx.services.sync.recordSyncAction>>;
+      const recordedSyncs: RecordedSync[] = [];
       let updated: Issue[];
       try {
-        updated = await ctx.services.issue.bulkUpdate(ctx.orgId, ids, input);
+        updated = await ctx.services.issue.bulkUpdate(ctx.orgId, ids, input, async (tx, rows) => {
+          for (const row of rows) {
+            recordedSyncs.push(
+              await ctx.services.sync.recordSyncAction(tx, ctx.orgId, 'U', 'Issue', row.id, row),
+            );
+          }
+        });
       } catch (err) {
         if (err instanceof IssueBulkLimitExceededError) {
           throw new GraphQLError(err.message, {
@@ -426,18 +486,15 @@ export const issueResolvers = {
         throw err;
       }
 
-      // Emit one SyncAction per row so subscribers see each change live.
-      // Sequential to preserve commit ordering across the batch.
+      // Publish the recorded SyncActions (already committed) and fan out
+      // webhooks. Order preserved from the batch so subscribers see each
+      // change in input order.
       let lastSyncId = await ctx.services.sync.getLastSyncId(ctx.orgId);
-      for (const issue of updated) {
-        const sync = await ctx.services.sync.createSyncAction(
-          ctx.orgId,
-          'U',
-          'Issue',
-          issue.id,
-          issue,
-        );
+      for (const sync of recordedSyncs) {
+        ctx.services.sync.publish(sync);
         lastSyncId = sync.id.toString();
+      }
+      for (const issue of updated) {
         void ctx.services.webhook
           .dispatchEvent(ctx.orgId, 'issue.updated', issue, issue.teamId)
           .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.updated (bulk)'));
@@ -468,9 +525,21 @@ export const issueResolvers = {
       }
       await requireIssueAccessNotGuestOrOwn(ctx.prisma, existing, ctx.userId, ctx.orgId);
 
-      const issue = await ctx.services.issue.unarchive(id);
-      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', id, issue);
-      return { issue, lastSyncId: sync.id.toString(), success: true };
+      let issueSync: Awaited<ReturnType<typeof ctx.services.sync.recordSyncAction>> | undefined;
+      const issue = await ctx.services.issue.unarchive(id, async (tx, unarchived) => {
+        issueSync = await ctx.services.sync.recordSyncAction(
+          tx,
+          ctx.orgId,
+          'U',
+          'Issue',
+          id,
+          unarchived,
+        );
+      });
+      if (issueSync) {
+        ctx.services.sync.publish(issueSync);
+      }
+      return { issue, lastSyncId: issueSync?.id.toString() ?? '0', success: true };
     },
 
     issueUnsnooze: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
@@ -483,9 +552,21 @@ export const issueResolvers = {
       }
       await requireIssueAccessNotGuestOrOwn(ctx.prisma, existing, ctx.userId, ctx.orgId);
 
-      const issue = await ctx.services.issue.unsnooze(id);
-      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', id, issue);
-      return { issue, lastSyncId: sync.id.toString(), success: true };
+      let issueSync: Awaited<ReturnType<typeof ctx.services.sync.recordSyncAction>> | undefined;
+      const issue = await ctx.services.issue.unsnooze(id, async (tx, unsnoozed) => {
+        issueSync = await ctx.services.sync.recordSyncAction(
+          tx,
+          ctx.orgId,
+          'U',
+          'Issue',
+          id,
+          unsnoozed,
+        );
+      });
+      if (issueSync) {
+        ctx.services.sync.publish(issueSync);
+      }
+      return { issue, lastSyncId: issueSync?.id.toString() ?? '0', success: true };
     },
 
     issueUpdate: async (
