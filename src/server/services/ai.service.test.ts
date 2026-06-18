@@ -30,7 +30,9 @@ describe('AiService', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    process.env.ANTHROPIC_API_KEY = undefined;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.AI_PROVIDER;
+    delete process.env.OPENAI_API_KEY;
   });
 
   describe('assertEnabled', () => {
@@ -69,6 +71,40 @@ describe('AiService', () => {
     it('wraps a non-ok provider response in AiRequestError', async () => {
       fetchMock.mockResolvedValue(anthropicResponse('rate limited', false, 429));
       await expect(svc.suggestTitle('something')).rejects.toBeInstanceOf(AiRequestError);
+    });
+  });
+
+  describe('provider selection (AI_PROVIDER=openai)', () => {
+    // Build a fake OpenAI Chat Completions response.
+    function openaiResponse(text: string) {
+      return {
+        json: async () => ({ choices: [{ message: { content: text } }] }),
+        ok: true,
+        status: 200,
+        text: async () => text,
+      } as unknown as Response;
+    }
+
+    it('routes through the OpenAI-compatible endpoint and parses its shape', async () => {
+      process.env.AI_PROVIDER = 'openai';
+      process.env.OPENAI_API_KEY = 'sk-oai';
+      fetchMock.mockResolvedValue(openaiResponse('Fix the login redirect'));
+
+      const title = await svc.suggestTitle('Users cannot log in after the redirect.');
+      expect(title).toBe('Fix the login redirect');
+
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toContain('/chat/completions');
+      expect((init.headers as Record<string, string>).authorization).toBe('Bearer sk-oai');
+    });
+
+    it('isConfigured reflects the active provider key, not Anthropic', () => {
+      process.env.AI_PROVIDER = 'openai';
+      process.env.ANTHROPIC_API_KEY = 'sk-test'; // set, but inactive provider
+      process.env.OPENAI_API_KEY = '';
+      expect(svc.isConfigured()).toBe(false);
+      process.env.OPENAI_API_KEY = 'sk-oai';
+      expect(svc.isConfigured()).toBe(true);
     });
   });
 

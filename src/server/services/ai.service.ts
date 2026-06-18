@@ -1,14 +1,9 @@
 import type { Issue, PrismaClient } from '../../generated/prisma';
+import { type AiProvider, resolveAiProvider } from '../lib/ai-provider';
 import { childLogger } from '../lib/logger';
 import type { SearchService } from './search.service';
 
 const log = childLogger({ module: 'ai' });
-
-const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-const ANTHROPIC_VERSION = '2023-06-01';
-// Utility tasks (titles, short summaries, ranking) are well served by a fast,
-// inexpensive model. Override with ANTHROPIC_MODEL for higher quality.
-const DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
 
 /** Thrown when AI is not configured/enabled — resolver maps to FORBIDDEN. */
 export class AiDisabledError extends Error {
@@ -33,9 +28,11 @@ export interface DuplicateCandidate {
 }
 
 /**
- * AI assistant features backed by the Anthropic Messages API. Stateless —
- * every call reads `ANTHROPIC_API_KEY` (presence gates availability) and the
- * per-org `aiEnabled` flag. Network calls happen at request time and are
+ * AI assistant features backed by a pluggable provider (Anthropic Messages by
+ * default, or any OpenAI-compatible Chat Completions endpoint — selected with
+ * `AI_PROVIDER`; see `ai-provider.ts`). Stateless — every call resolves the
+ * provider from the environment (its credentials gate availability) and reads
+ * the per-org `aiEnabled` flag. Network calls happen at request time and are
  * never persisted; resolvers expose the results as plain payloads (no
  * SyncAction, since nothing is written to the replicated dataset).
  */
@@ -45,17 +42,14 @@ export class AiService {
     private search: SearchService,
   ) {}
 
-  private get apiKey(): string {
-    return process.env.ANTHROPIC_API_KEY ?? '';
+  /** Resolved per call so AI_PROVIDER / credential changes take effect live. */
+  private get provider(): AiProvider {
+    return resolveAiProvider();
   }
 
-  private get model(): string {
-    return process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL;
-  }
-
-  /** Server-side: is an API key configured at all? */
+  /** Server-side: are credentials for the active provider configured? */
   isConfigured(): boolean {
-    return this.apiKey.length > 0;
+    return this.provider.isConfigured();
   }
 
   /** Both a server key AND the per-org toggle are required. */
@@ -77,37 +71,22 @@ export class AiService {
    * go through the task-specific helpers below, which own their prompts.
    */
   private async complete(system: string, user: string, maxTokens: number): Promise<string> {
+    const provider = this.provider;
+    const { url, init } = provider.buildRequest(system, user, maxTokens);
     let res: Response;
     try {
-      res = await fetch(ANTHROPIC_URL, {
-        body: JSON.stringify({
-          max_tokens: maxTokens,
-          messages: [{ content: user, role: 'user' }],
-          model: this.model,
-          system,
-        }),
-        headers: {
-          'anthropic-version': ANTHROPIC_VERSION,
-          'content-type': 'application/json',
-          'x-api-key': this.apiKey,
-        },
-        method: 'POST',
-      });
+      res = await fetch(url, init);
     } catch (err) {
-      log.error({ err }, 'Anthropic request failed');
+      log.error({ err, provider: provider.name }, 'AI provider request failed');
       throw new AiRequestError('Failed to reach the AI provider');
     }
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
-      log.error({ detail, status: res.status }, 'Anthropic API error');
+      log.error({ detail, provider: provider.name, status: res.status }, 'AI provider error');
       throw new AiRequestError(`AI provider returned ${res.status}`);
     }
-    const data = (await res.json().catch(() => null)) as {
-      content?: Array<{ text?: string; type?: string }>;
-    } | null;
-    const text =
-      data?.content?.find(b => b.type === 'text')?.text ?? data?.content?.[0]?.text ?? '';
-    return text.trim();
+    const data = await res.json().catch(() => null);
+    return provider.parseResponse(data).trim();
   }
 
   /** Suggest a concise issue title from a free-form description. */
