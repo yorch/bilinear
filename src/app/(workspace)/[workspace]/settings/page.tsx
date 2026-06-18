@@ -22,11 +22,21 @@ const ORGANIZATION_QUERY = `
       name
       urlKey
       dataRegion
+      aiEnabled
       createdAt
     }
     organizationMembers {
       userId
       role
+    }
+  }
+`;
+
+const AI_SETTINGS_UPDATE_MUTATION = `
+  mutation AiSettingsUpdate($enabled: Boolean!) {
+    aiSettingsUpdate(enabled: $enabled) {
+      success
+      organization { id aiEnabled }
     }
   }
 `;
@@ -67,15 +77,15 @@ const UPDATE_NOTIFICATION_PREFS_MUTATION = `
 `;
 
 const API_TOKENS_QUERY = `
-  query ApiTokens { apiTokens { id label lastUsedAt createdAt expiresAt } }
+  query ApiTokens { apiTokens { id label scopes lastUsedAt createdAt expiresAt } }
 `;
 
 const API_TOKEN_CREATE_MUTATION = `
-  mutation ApiTokenCreate($label: String!) {
-    apiTokenCreate(label: $label) {
+  mutation ApiTokenCreate($label: String!, $scopes: [String!], $expiresInDays: Int) {
+    apiTokenCreate(label: $label, scopes: $scopes, expiresInDays: $expiresInDays) {
       success
       plaintext
-      token { id label lastUsedAt createdAt expiresAt }
+      token { id label scopes lastUsedAt createdAt expiresAt }
     }
   }
 `;
@@ -89,6 +99,7 @@ const API_TOKEN_REVOKE_MUTATION = `
 // ---------------------------------------------------------------------------
 
 interface OrgInfo {
+  aiEnabled: boolean;
   createdAt: string;
   dataRegion: string;
   id: string;
@@ -102,7 +113,16 @@ interface ApiToken {
   id: string;
   label: string;
   lastUsedAt: string | null;
+  scopes: string[];
 }
+
+// Expiry presets offered in the create form (days).
+const TOKEN_EXPIRY_OPTIONS = [
+  { days: 30, label: '30 days' },
+  { days: 90, label: '90 days' },
+  { days: 365, label: '1 year' },
+  { days: 730, label: '2 years' },
+] as const;
 
 const ORG_ROLES = ['owner', 'admin', 'member', 'guest'] as const;
 type OrgRole = (typeof ORG_ROLES)[number];
@@ -143,9 +163,27 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const [rotatingToken, setRotatingToken] = useState(false);
   const [apiTokens, setApiTokens] = useState<ApiToken[]>([]);
   const [newTokenLabel, setNewTokenLabel] = useState('');
+  const [newTokenWritable, setNewTokenWritable] = useState(true);
+  const [newTokenExpiryDays, setNewTokenExpiryDays] = useState(365);
   const [creatingToken, setCreatingToken] = useState(false);
   const [newPlaintext, setNewPlaintext] = useState<string | null>(null);
   const [revokingTokenId, setRevokingTokenId] = useState<string | null>(null);
+  const [savingAi, setSavingAi] = useState(false);
+
+  async function toggleAi(enabled: boolean) {
+    setSavingAi(true);
+    // Optimistic — revert on error.
+    setOrg(prev => (prev ? { ...prev, aiEnabled: enabled } : prev));
+    try {
+      await gql(AI_SETTINGS_UPDATE_MUTATION, { enabled });
+      toast.success(enabled ? 'AI features enabled' : 'AI features disabled');
+    } catch {
+      setOrg(prev => (prev ? { ...prev, aiEnabled: !enabled } : prev));
+      toast.error('Failed to update AI settings');
+    } finally {
+      setSavingAi(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -215,7 +253,12 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
     }
     setCreatingToken(true);
     try {
-      const result = await gql(API_TOKEN_CREATE_MUTATION, { label: newTokenLabel.trim() });
+      const result = await gql(API_TOKEN_CREATE_MUTATION, {
+        expiresInDays: newTokenExpiryDays,
+        label: newTokenLabel.trim(),
+        // Read access is always granted; write is opt-in via the toggle.
+        scopes: newTokenWritable ? ['read', 'write'] : ['read'],
+      });
       const data = result.data as
         | { apiTokenCreate?: { plaintext: string; token: ApiToken } }
         | undefined;
@@ -662,6 +705,41 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   {creatingToken ? 'Creating…' : 'Create'}
                 </button>
               </div>
+              {/* Scope + expiry controls */}
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-zinc-500 dark:text-zinc-400">
+                <label className="flex items-center gap-1.5">
+                  <input
+                    checked={newTokenWritable}
+                    className="h-3.5 w-3.5 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
+                    disabled={creatingToken}
+                    onChange={e => setNewTokenWritable(e.target.checked)}
+                    type="checkbox"
+                  />
+                  Allow write (mutations)
+                </label>
+                <label className="flex items-center gap-1.5">
+                  Expires in
+                  <select
+                    className={cn(
+                      'rounded-md border border-zinc-200 dark:border-zinc-700 bg-transparent',
+                      'px-1.5 py-0.5 text-xs text-zinc-700 dark:text-zinc-300',
+                      'focus:outline-none focus:ring-1 focus:ring-indigo-500',
+                    )}
+                    disabled={creatingToken}
+                    onChange={e => setNewTokenExpiryDays(Number(e.target.value))}
+                    value={newTokenExpiryDays}
+                  >
+                    {TOKEN_EXPIRY_OPTIONS.map(opt => (
+                      <option key={opt.days} value={opt.days}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {!newTokenWritable && (
+                  <span className="text-amber-600 dark:text-amber-400">Read-only key</span>
+                )}
+              </div>
             </div>
 
             {/* Token list */}
@@ -673,8 +751,20 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   <li className="flex items-start gap-3 px-5 py-3" key={token.id}>
                     <Key className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate flex items-center gap-2">
                         {token.label}
+                        <span
+                          className={cn(
+                            'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+                            token.scopes.length === 0 || token.scopes.includes('write')
+                              ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
+                              : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300',
+                          )}
+                        >
+                          {token.scopes.length === 0 || token.scopes.includes('write')
+                            ? 'Read/Write'
+                            : 'Read only'}
+                        </span>
                       </p>
                       <p className="text-xs text-zinc-400 mt-0.5">
                         Created{' '}
@@ -716,6 +806,44 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
           </div>
         </section>
 
+        {/* AI assistant */}
+        <section>
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+            AI
+          </h2>
+          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 px-5 py-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">AI assistant</p>
+                <p className="mt-0.5 text-xs text-zinc-400">
+                  Title suggestions, issue summaries, and duplicate detection. Requires an Anthropic
+                  API key configured on the server.
+                </p>
+              </div>
+              <button
+                aria-checked={org?.aiEnabled ?? false}
+                aria-label="Enable AI assistant"
+                className={cn(
+                  'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors disabled:opacity-50',
+                  'focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2',
+                  org?.aiEnabled ? 'bg-indigo-600' : 'bg-zinc-300 dark:bg-zinc-600',
+                )}
+                disabled={savingAi || !org}
+                onClick={() => void toggleAi(!(org?.aiEnabled ?? false))}
+                role="switch"
+                type="button"
+              >
+                <span
+                  className={cn(
+                    'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform',
+                    org?.aiEnabled ? 'translate-x-4' : 'translate-x-0',
+                  )}
+                />
+              </button>
+            </div>
+          </div>
+        </section>
+
         {/* Quick links to sub-settings */}
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
@@ -738,6 +866,11 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   description: 'Send outbound HTTP events',
                   href: `/${workspace}/settings/webhooks`,
                   label: 'Webhooks',
+                },
+                {
+                  description: 'Import issues from CSV, export data',
+                  href: `/${workspace}/settings/import`,
+                  label: 'Import / Export',
                 },
                 {
                   description: 'Share project status externally',

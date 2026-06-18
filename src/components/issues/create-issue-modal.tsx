@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { gql } from '@/lib/graphql';
 import { ISSUE_TEMPLATES_QUERY } from '@/lib/graphql-queries';
+import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 import { TipTapEditor } from '../editor/tiptap-editor.lazy';
@@ -75,6 +76,8 @@ export function CreateIssueModal({
   const [form, setForm] = useState<FormState>(() => initialForm(defaultStateId, states[0]?.id));
   const [submitting, setSubmitting] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
+  const [aiAvailable, setAiAvailable] = useState(false);
+  const [suggestingTitle, setSuggestingTitle] = useState(false);
   // Synchronous re-entry guard. The disabled prop on the submit button
   // races React's state-update commit, so a fast double click (notably
   // under Firefox + Playwright) can dispatch two handleSubmit runs before
@@ -127,6 +130,12 @@ export function CreateIssueModal({
     setTemplateOpen(false);
     setTimeout(() => titleRef.current?.focus(), 50);
 
+    // Probe AI availability once per open so the "Suggest" affordance only
+    // shows when the workspace has AI enabled and a key is configured.
+    gql('query AiAvailable { aiAvailable }')
+      .then(res => setAiAvailable(Boolean((res.data as { aiAvailable?: boolean })?.aiAvailable)))
+      .catch(() => setAiAvailable(false));
+
     if (teamId) {
       gql(ISSUE_TEMPLATES_QUERY, { teamId })
         .then(res => {
@@ -165,6 +174,34 @@ export function CreateIssueModal({
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
+  const handleSuggestTitle = async () => {
+    // Strip TipTap HTML to plain text for a cleaner prompt.
+    const text = form.description
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!text) {
+      toast.error('Add a description first to suggest a title');
+      return;
+    }
+    setSuggestingTitle(true);
+    try {
+      const res = await gql(
+        'mutation AiSuggestIssueTitle($description: String!) { aiSuggestIssueTitle(description: $description) { title } }',
+        { description: text },
+      );
+      const title = (res.data as { aiSuggestIssueTitle?: { title?: string } })?.aiSuggestIssueTitle
+        ?.title;
+      if (title) {
+        patchForm({ title });
+      }
+    } catch {
+      toast.error('Could not suggest a title');
+    } finally {
+      setSuggestingTitle(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.title.trim() || submittingRef.current) {
@@ -195,7 +232,7 @@ export function CreateIssueModal({
     <ModalDialog aria-label="Create issue" maxWidth="lg" onClose={onClose} open={open}>
       <form className="flex flex-col" onSubmit={handleSubmit}>
         {/* Title */}
-        <div className="px-5 pt-5">
+        <div className="flex items-center gap-2 px-5 pt-5">
           <input
             className="w-full bg-transparent text-lg font-medium text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
             onChange={e => patchForm({ title: e.target.value })}
@@ -205,6 +242,21 @@ export function CreateIssueModal({
             type="text"
             value={form.title}
           />
+          {aiAvailable && (
+            <button
+              className={cn(
+                'shrink-0 rounded-md border border-zinc-200 px-2 py-1 text-xs font-medium',
+                'text-indigo-600 hover:bg-indigo-50 disabled:opacity-50',
+                'dark:border-zinc-700 dark:text-indigo-400 dark:hover:bg-indigo-950/30',
+              )}
+              disabled={suggestingTitle}
+              onClick={handleSuggestTitle}
+              title="Suggest a title from the description"
+              type="button"
+            >
+              {suggestingTitle ? '…' : '✨ Suggest'}
+            </button>
+          )}
         </div>
 
         {/* Description */}

@@ -35,6 +35,7 @@ export const typeDefs = `
     logoUrl: String
     dataRegion: String!
     roadmapEnabled: Boolean!
+    aiEnabled: Boolean!
     createdAt: DateTime!
     updatedAt: DateTime!
     archivedAt: DateTime
@@ -1424,7 +1425,85 @@ export const typeDefs = `
     sortOrder: Float
   }
 
+  type AiDuplicateIssue {
+    id: ID!
+    identifier: String!
+    title: String!
+  }
+
+  type AiTitlePayload {
+    success: Boolean!
+    title: String!
+  }
+
+  type AiSummaryPayload {
+    success: Boolean!
+    summary: String!
+  }
+
+  type AiDuplicatesPayload {
+    success: Boolean!
+    duplicates: [AiDuplicateIssue!]!
+  }
+
+  type AiSettingsPayload {
+    success: Boolean!
+    organization: Organization!
+    lastSyncId: String!
+  }
+
+  type CsvImportPreview {
+    headers: [String!]!
+    rowCount: Int!
+    sampleRows: [[String!]!]!
+  }
+
+  input CsvImportMappingInput {
+    """CSV header for the issue title (required)."""
+    title: String!
+    description: String
+    priority: String
+    """CSV header holding an assignee email."""
+    assignee: String
+    """CSV header holding a workflow-state name."""
+    state: String
+  }
+
+  input CsvImportInput {
+    teamId: ID!
+    csv: String!
+    mapping: CsvImportMappingInput!
+  }
+
+  type CsvImportResult {
+    success: Boolean!
+    created: Int!
+    skipped: Int!
+    errors: [String!]!
+    lastSyncId: String!
+  }
+
+  type SlackIntegration {
+    id: ID!
+    slackTeamName: String!
+    defaultTeamId: ID
+    createdAt: DateTime!
+  }
+
+  type SlackSettingsPayload {
+    success: Boolean!
+    integration: SlackIntegration
+  }
+
   type Query {
+    """True when AI is configured server-side AND enabled for this workspace."""
+    aiAvailable: Boolean!
+    """Parse CSV (no writes) to drive the import mapping UI."""
+    csvImportPreview(csv: String!): CsvImportPreview!
+    """JSON export of issues for a team (or the whole org when teamId omitted)."""
+    organizationExport(teamId: ID): String!
+    """The connected Slack workspace for this org, or null."""
+    slackIntegration: SlackIntegration
     viewer: User!
     organization: Organization!
     organizationMembers: [OrganizationMemberEntry!]!
@@ -1537,6 +1616,20 @@ export const typeDefs = `
   }
 
   type Mutation {
+    """Suggest a concise issue title from a description (requires AI enabled)."""
+    aiSuggestIssueTitle(description: String!): AiTitlePayload!
+    """Summarize an issue into a short paragraph (requires AI enabled)."""
+    aiSummarizeIssue(issueId: ID!): AiSummaryPayload!
+    """Detect likely duplicate issues for the given issue (requires AI enabled)."""
+    aiFindDuplicateIssues(issueId: ID!): AiDuplicatesPayload!
+    """Enable/disable AI features for the workspace (owner/admin only)."""
+    aiSettingsUpdate(enabled: Boolean!): AiSettingsPayload!
+    """Import issues from CSV into a team (up to 500 rows)."""
+    csvImportIssues(input: CsvImportInput!): CsvImportResult!
+    """Disconnect the Slack workspace (owner/admin)."""
+    slackDisconnect: BasicPayload!
+    """Set the team that Slack slash-command issues are filed into (owner/admin)."""
+    slackSetDefaultTeam(teamId: ID): SlackSettingsPayload!
     emailLogin(input: EmailLoginInput!): EmailLoginPayload!
     emailVerify(input: EmailVerifyInput!): AuthPayload!
     """
@@ -1708,7 +1801,8 @@ export const typeDefs = `
     scimTokenCreate(label: String!): ScimTokenCreatePayload!
     scimTokenRevoke(id: ID!): ScimTokenRevokePayload!
 
-    apiTokenCreate(label: String!): ApiTokenCreatePayload!
+    """Create a personal API key. scopes defaults to [read, write]; expiresInDays defaults to 365 (1-3650)."""
+    apiTokenCreate(label: String!, scopes: [String!], expiresInDays: Int): ApiTokenCreatePayload!
     apiTokenRevoke(id: ID!): BasicPayload!
   }
 
@@ -1876,6 +1970,8 @@ export const typeDefs = `
   type ApiToken {
     id: ID!
     label: String!
+    """Permission scopes. Empty = full access (legacy key). Values: read, write."""
+    scopes: [String!]!
     lastUsedAt: DateTime
     createdAt: DateTime!
     expiresAt: DateTime!

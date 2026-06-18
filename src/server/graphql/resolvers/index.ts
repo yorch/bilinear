@@ -1,4 +1,5 @@
 import { DateTimeScalar, JSONScalar, UUIDScalar } from '../types/scalars';
+import { aiResolvers } from './ai';
 import { analyticsResolvers } from './analytics';
 import { auditLogResolvers } from './audit-log';
 import { authResolvers } from './auth';
@@ -11,6 +12,7 @@ import { documentResolvers } from './document';
 import { favoriteResolvers } from './favorite';
 import { fileResolvers } from './file';
 import { githubResolvers } from './github';
+import { importResolvers } from './import';
 import { initiativeResolvers } from './initiative';
 import { issueResolvers } from './issue';
 import { issueActivityResolvers } from './issue-activity';
@@ -24,6 +26,7 @@ import { roadmapResolvers } from './roadmap';
 import { samlResolvers } from './saml';
 import { scimResolvers } from './scim';
 import { searchResolvers } from './search';
+import { slackResolvers } from './slack';
 import { teamResolvers } from './team';
 import { teamMembershipResolvers } from './team-membership';
 import { triageResolvers } from './triage';
@@ -133,6 +136,7 @@ export const resolvers = {
   JSON: JSONScalar,
 
   Mutation: {
+    ...aiResolvers.Mutation,
     ...authResolvers.Mutation,
     ...automationResolvers.Mutation,
     ...commentResolvers.Mutation,
@@ -141,6 +145,8 @@ export const resolvers = {
     ...favoriteResolvers.Mutation,
     ...fileResolvers.Mutation,
     ...githubResolvers.Mutation,
+    ...importResolvers.Mutation,
+    ...slackResolvers.Mutation,
     ...initiativeResolvers.Mutation,
     ...notificationResolvers.Mutation,
     ...issueRelationResolvers.Mutation,
@@ -179,7 +185,10 @@ export const resolvers = {
   },
 
   Query: {
+    ...aiResolvers.Query,
     ...analyticsResolvers.Query,
+    ...importResolvers.Query,
+    ...slackResolvers.Query,
     ...auditLogResolvers.Query,
     ...authResolvers.Query,
     ...automationResolvers.Query,

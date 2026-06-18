@@ -25,6 +25,7 @@ import { PrioritySelect } from '../properties/priority-select';
 import { ProjectSelect } from '../properties/project-select';
 import { StatusSelect } from '../properties/status-select';
 import { ActivityTimeline } from './activity-timeline';
+import { AiInsights } from './ai-insights';
 import { CommentThread } from './comment-thread';
 import { FileAttachments } from './file-attachments';
 import { IssueReactionBar } from './issue-reaction-bar';
@@ -355,6 +356,9 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
           <div className="mt-3">
             <IssueReactionBar currentUserId={currentUserId} issueId={issue.id} />
           </div>
+
+          {/* AI insights */}
+          <AiInsights issueId={issue.id} />
 
           {/* Sub-issues */}
           <SubIssueList parentIssueId={issue.id} />

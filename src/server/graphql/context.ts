@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 import type { AuthContext } from '../middleware/auth';
 import { extractAuthContext } from '../middleware/auth';
+import { AiService } from '../services/ai.service';
 import { AnalyticsService } from '../services/analytics.service';
 import { AuditLogService } from '../services/audit-log.service';
 import { AuthService } from '../services/auth.service';
@@ -16,6 +17,7 @@ import { DocumentService } from '../services/document.service';
 import { FavoriteService } from '../services/favorite.service';
 import { FileService } from '../services/file.service';
 import { GitHubService } from '../services/github.service';
+import { ImportService } from '../services/import.service';
 import { InitiativeService } from '../services/initiative.service';
 import { IssueService } from '../services/issue.service';
 import { IssueActivityService } from '../services/issue-activity.service';
@@ -29,6 +31,7 @@ import { RoadmapService } from '../services/roadmap.service';
 import { SamlService } from '../services/saml.service';
 import { ScimService } from '../services/scim.service';
 import { SearchService } from '../services/search.service';
+import { SlackService } from '../services/slack.service';
 import { SyncService } from '../services/sync.service';
 import { TeamService } from '../services/team.service';
 import { TriageService } from '../services/triage.service';
@@ -44,12 +47,14 @@ export interface GraphQLContext extends AuthContext {
   loaders: Loaders;
   prisma: PrismaClient;
   services: {
+    ai: AiService;
     analytics: AnalyticsService;
     auditLog: AuditLogService;
     auth: AuthService;
     automation: AutomationService;
     comment: CommentService;
     github: GitHubService;
+    import: ImportService;
     customField: CustomFieldService;
     customView: CustomViewService;
     cycle: CycleService;
@@ -69,6 +74,7 @@ export interface GraphQLContext extends AuthContext {
     saml: SamlService;
     scim: ScimService;
     search: SearchService;
+    slack: SlackService;
     sync: SyncService;
     team: TeamService;
     triage: TriageService;
@@ -130,6 +136,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const cycleService = new CycleService(prisma);
   const initiativeService = new InitiativeService(prisma);
   const issueService = new IssueService(prisma);
+  const importService = new ImportService(prisma, issueService);
   const issueRelationService = new IssueRelationService(prisma);
   const issueTemplateService = new IssueTemplateService(prisma);
   const labelService = new LabelService(prisma);
@@ -137,6 +144,8 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const roadmapService = new RoadmapService(prisma);
   const syncService = new SyncService(prisma, redis);
   const searchService = new SearchService(prisma);
+  const aiService = new AiService(prisma, searchService);
+  const slackService = new SlackService(prisma, issueService);
   const samlService = new SamlService(prisma);
   const scimService = new ScimService(prisma);
   const triageService = new TriageService(prisma);
@@ -156,6 +165,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
     loaders: createLoaders(prisma, auth.orgId),
     prisma,
     services: {
+      ai: aiService,
       analytics: analyticsService,
       auditLog: auditLogService,
       auth: authService,
@@ -168,6 +178,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
       favorite: favoriteService,
       file: fileService,
       github: githubService,
+      import: importService,
       initiative: initiativeService,
       issue: issueService,
       issueActivity: issueActivityService,
@@ -181,6 +192,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
       saml: samlService,
       scim: scimService,
       search: searchService,
+      slack: slackService,
       sync: syncService,
       team: teamService,
       triage: triageService,

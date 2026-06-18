@@ -4,17 +4,18 @@ import { GraphQLError } from 'graphql';
 import depthLimit from 'graphql-depth-limit';
 import { getComplexity, simpleEstimator } from 'graphql-query-complexity';
 import { NextRequest } from 'next/server';
-import type { GraphQLContext } from '../../../server/graphql/context';
-import { createContext } from '../../../server/graphql/context';
-import { resolvers } from '../../../server/graphql/resolvers';
-import { typeDefs } from '../../../server/graphql/schema';
-import { logger } from '../../../server/lib/logger';
+import type { GraphQLContext } from '@/server/graphql/context';
+import { createContext } from '@/server/graphql/context';
+import { resolvers } from '@/server/graphql/resolvers';
+import { typeDefs } from '@/server/graphql/schema';
+import { logger } from '@/server/lib/logger';
 import {
   buildRateLimitedResponse,
   checkRateLimit,
   estimateComplexity,
   withRateLimitHeaders,
-} from '../../../server/middleware/rate-limit';
+} from '@/server/middleware/rate-limit';
+import { apiScopesAllowWrite } from '@/server/services/auth.service';
 
 // Hard caps enforced by GraphQL validation rules — reject queries before any
 // resolver runs. Complementary to the per-user rate limiter in rate-limit.ts,
@@ -77,6 +78,26 @@ const server = new ApolloServer<GraphQLContext>({
           });
         }
         return {};
+      },
+    },
+    {
+      // API-key scope enforcement: a request authenticated with a key that
+      // lacks the `write` scope may run queries but not mutations. Centralised
+      // here so every mutation is covered without per-resolver checks.
+      async requestDidStart() {
+        return {
+          async didResolveOperation({ contextValue, operation }) {
+            if (operation?.operation !== 'mutation') {
+              return;
+            }
+            const scopes = contextValue.apiKeyScopes ?? null;
+            if (scopes !== null && !apiScopesAllowWrite(scopes)) {
+              throw new GraphQLError('API key lacks the "write" scope', {
+                extensions: { code: 'FORBIDDEN' },
+              });
+            }
+          },
+        };
       },
     },
     {

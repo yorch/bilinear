@@ -5,6 +5,16 @@ import type { AccessTokenPayload } from '../lib/jwt';
 import { verifyAccessToken } from '../lib/jwt';
 
 export interface AuthContext {
+  /**
+   * When the request was authenticated with an API key, the key's permission
+   * scopes (e.g. `['read']`). `null` for session/JWT auth (full access) and
+   * for unauthenticated requests. The GraphQL route rejects mutations when
+   * this is non-null and lacks `write`. An empty array means a legacy key
+   * with full access (see auth.service `apiScopesAllowWrite`). Optional so
+   * callers constructing a bare `{ orgId, userId }` (tests, narrowing
+   * predicates) stay valid — absent is treated as `null` (full access).
+   */
+  apiKeyScopes?: string[] | null;
   orgId: string | null;
   userId: string | null;
 }
@@ -17,12 +27,12 @@ export async function extractAuthContext(
   const token = extractBearerToken(authHeader) ?? cookieToken ?? null;
 
   if (!token) {
-    return { orgId: null, userId: null };
+    return { apiKeyScopes: null, orgId: null, userId: null };
   }
 
   try {
     const payload: AccessTokenPayload = await verifyAccessToken(token);
-    return { orgId: payload.orgId, userId: payload.userId };
+    return { apiKeyScopes: null, orgId: payload.orgId, userId: payload.userId };
   } catch {
     // fall through to API key check
   }
@@ -32,6 +42,7 @@ export async function extractAuthContext(
     const authToken = await prisma.authToken.findFirst({
       select: {
         id: true,
+        scopes: true,
         user: {
           select: {
             orgMemberships: {
@@ -58,11 +69,11 @@ export async function extractAuthContext(
           where: { id: authToken.id },
         })
         .catch(() => {});
-      return { orgId, userId: authToken.userId };
+      return { apiKeyScopes: authToken.scopes, orgId, userId: authToken.userId };
     }
   }
 
-  return { orgId: null, userId: null };
+  return { apiKeyScopes: null, orgId: null, userId: null };
 }
 
 export function requireAuth(ctx: AuthContext): asserts ctx is { userId: string; orgId: string } {

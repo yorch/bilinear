@@ -77,6 +77,45 @@ describe('IssueService', () => {
       expect(result).toEqual(TEST_ISSUE);
     });
 
+    it('invokes the txHook with the transaction client and created issue before returning', async () => {
+      prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1, key: 'ENG' });
+      prisma.issue.create.mockResolvedValue(TEST_ISSUE);
+
+      const seen: { issueId: string; sameTx: boolean } = { issueId: '', sameTx: false };
+      await service.create(
+        TEST_ORG.id,
+        TEST_USER.id,
+        { stateId: DEFAULT_WORKFLOW_STATES[0].id, teamId: TEST_TEAM.id, title: 'Hook' },
+        async (tx, created) => {
+          seen.issueId = created.id;
+          // The hook receives the SAME mock client the writes ran on, so a
+          // recordSyncAction(tx, …) lands in the same transaction.
+          seen.sameTx = tx === (prisma as never);
+        },
+      );
+
+      expect(seen.issueId).toBe(TEST_ISSUE.id);
+      expect(seen.sameTx).toBe(true);
+    });
+
+    it('rolls back the issue write when the txHook throws (atomicity)', async () => {
+      prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1, key: 'ENG' });
+      prisma.issue.create.mockResolvedValue(TEST_ISSUE);
+
+      // A failing SyncAction write inside the hook must reject the whole
+      // create — real Prisma rolls the transaction back, so no orphaned row.
+      await expect(
+        service.create(
+          TEST_ORG.id,
+          TEST_USER.id,
+          { stateId: DEFAULT_WORKFLOW_STATES[0].id, teamId: TEST_TEAM.id, title: 'Boom' },
+          async () => {
+            throw new Error('sync write failed');
+          },
+        ),
+      ).rejects.toThrow('sync write failed');
+    });
+
     it('uses client-provided UUID when id is given', async () => {
       const customId = '12345678-1234-1234-1234-123456789abc';
       prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1 });
@@ -392,6 +431,120 @@ describe('IssueService', () => {
       expect(prisma.issue.delete).toHaveBeenCalledWith({
         where: { id: TEST_ISSUE.id },
       });
+    });
+  });
+
+  // Single-row issue mutations record their SyncAction inside the same
+  // transaction as the write via a txHook (so a crash can't leave a row
+  // without its replication marker). These assert the hook fires with the
+  // SAME tx client and the affected row, and that a throwing hook rolls back.
+  describe('sync atomicity (txHook)', () => {
+    const sameTx = (tx: unknown) => tx === (prisma as never);
+
+    it('archive invokes the hook with the tx client and archived row', async () => {
+      const archived = { ...TEST_ISSUE, archivedAt: new Date() };
+      prisma.issue.update.mockResolvedValue(archived);
+
+      const seen: { id: string; tx: boolean } = { id: '', tx: false };
+      await service.archive(TEST_ISSUE.id, async (tx, row) => {
+        seen.id = row.id;
+        seen.tx = sameTx(tx);
+      });
+
+      expect(seen).toEqual({ id: TEST_ISSUE.id, tx: true });
+    });
+
+    it('unarchive invokes the hook with the restored row', async () => {
+      prisma.issue.update.mockResolvedValue({ ...TEST_ISSUE, archivedAt: null });
+      let calledWith = '';
+      await service.unarchive(TEST_ISSUE.id, async (_tx, row) => {
+        calledWith = row.id;
+      });
+      expect(calledWith).toBe(TEST_ISSUE.id);
+    });
+
+    it('delete passes the just-deleted row to the hook', async () => {
+      prisma.issue.delete.mockResolvedValue(TEST_ISSUE);
+      let calledWith = '';
+      await service.delete(TEST_ISSUE.id, async (_tx, row) => {
+        calledWith = row.id;
+      });
+      expect(calledWith).toBe(TEST_ISSUE.id);
+    });
+
+    it('delete rejects (rolls back) when the hook throws', async () => {
+      prisma.issue.delete.mockResolvedValue(TEST_ISSUE);
+      await expect(
+        service.delete(TEST_ISSUE.id, async () => {
+          throw new Error('sync write failed');
+        }),
+      ).rejects.toThrow('sync write failed');
+    });
+
+    it('snooze invokes the hook with the snoozed row', async () => {
+      const until = new Date(Date.now() + 60_000);
+      prisma.issue.update.mockResolvedValue({ ...TEST_ISSUE, snoozedUntilAt: until });
+      let calledWith = '';
+      await service.snooze(TEST_ISSUE.id, TEST_USER.id, until, async (_tx, row) => {
+        calledWith = row.id;
+      });
+      expect(calledWith).toBe(TEST_ISSUE.id);
+    });
+
+    it('unsnooze invokes the hook with the woken row', async () => {
+      prisma.issue.update.mockResolvedValue({ ...TEST_ISSUE, snoozedUntilAt: null });
+      let calledWith = '';
+      await service.unsnooze(TEST_ISSUE.id, async (_tx, row) => {
+        calledWith = row.id;
+      });
+      expect(calledWith).toBe(TEST_ISSUE.id);
+    });
+
+    it('addReaction invokes the hook with the upserted reaction', async () => {
+      const reaction = {
+        emoji: '👍',
+        id: '00000000-0000-0000-0000-000000000901',
+        issueId: TEST_ISSUE.id,
+        userId: TEST_USER.id,
+      };
+      prisma.issue.findUnique.mockResolvedValue(TEST_ISSUE);
+      prisma.issueReaction.upsert.mockResolvedValue({ ...reaction, user: TEST_USER });
+      let calledWith = '';
+      await service.addReaction(TEST_ISSUE.id, TEST_USER.id, '👍', async (_tx, row) => {
+        calledWith = row.id;
+      });
+      expect(calledWith).toBe(reaction.id);
+    });
+
+    it('removeReaction invokes the hook with the removed reaction id', async () => {
+      const reaction = {
+        emoji: '👍',
+        id: '00000000-0000-0000-0000-000000000902',
+        issueId: TEST_ISSUE.id,
+        userId: TEST_USER.id,
+      };
+      prisma.issueReaction.findUnique.mockResolvedValue(reaction);
+      prisma.issueReaction.delete.mockResolvedValue(reaction);
+      let calledWith = '';
+      await service.removeReaction(TEST_ISSUE.id, TEST_USER.id, '👍', async (_tx, row) => {
+        calledWith = row.id;
+      });
+      expect(calledWith).toBe(reaction.id);
+    });
+
+    it('bulkUpdate invokes the hook with every updated row in input order', async () => {
+      const a = { ...TEST_ISSUE, id: '00000000-0000-0000-0000-0000000000a1' };
+      const b = { ...TEST_ISSUE, id: '00000000-0000-0000-0000-0000000000a2' };
+      // claim select (id/teamId) and the post-update re-read share this mock.
+      prisma.issue.findMany.mockResolvedValue([a, b]);
+      prisma.issue.updateMany.mockResolvedValue({ count: 2 });
+
+      let seenIds: string[] = [];
+      await service.bulkUpdate(TEST_ORG.id, [a.id, b.id], { priority: 2 }, async (_tx, rows) => {
+        seenIds = rows.map(r => r.id);
+      });
+
+      expect(seenIds).toEqual([a.id, b.id]);
     });
   });
 

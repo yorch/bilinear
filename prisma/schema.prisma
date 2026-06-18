@@ -17,6 +17,9 @@ model Organization {
   roadmapEnabled     Boolean @default(false) @map("roadmap_enabled")
   customersEnabled   Boolean @default(false) @map("customers_enabled")
   initiativesEnabled Boolean @default(false) @map("initiatives_enabled")
+  // Gates the AI assistant features (title suggestion, summarize, duplicate
+  // detection). Also requires ANTHROPIC_API_KEY to be set server-side.
+  aiEnabled          Boolean @default(false) @map("ai_enabled")
 
   securitySettings Json  @default("{}") @map("security_settings")
   authSettings     Json  @default("{}") @map("auth_settings")
@@ -43,6 +46,7 @@ model Organization {
   webhooks               Webhook[]
   githubIntegration      GitHubIntegration?
   githubPullRequests     GitHubPullRequest[]
+  slackIntegration       SlackIntegration?
   favorites              Favorite[]
   customFieldDefinitions CustomFieldDefinition[]
   automationRules        AutomationRule[]
@@ -165,6 +169,12 @@ model AuthToken {
   label     String? @db.VarChar(255)
   ipAddress String? @map("ip_address") @db.VarChar(45)
   userAgent String? @map("user_agent")
+
+  // Permission scopes for `type = 'api_key'` rows. Empty = full access
+  // (legacy keys created before scopes existed). Recognised values: `read`,
+  // `write`. Enforced centrally in the GraphQL route: a key lacking `write`
+  // is rejected on any mutation. Ignored for non-api_key token types.
+  scopes String[] @default([])
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
@@ -1276,6 +1286,37 @@ model GitHubPullRequest {
   @@index([issueId])
   @@index([organizationId])
   @@map("github_pull_requests")
+}
+
+/// Slack workspace integration — one per org. Powers the /bilinear slash
+/// command (create issues from Slack). The bot access token is per-install;
+/// slash-request signatures are verified with the app-level SLACK_SIGNING_SECRET.
+model SlackIntegration {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @unique @map("organization_id") @db.Uuid
+
+  // Slack workspace (team) this install belongs to. Unique so a Slack
+  // workspace maps to exactly one org; slash commands route by this id.
+  slackTeamId   String @unique @map("slack_team_id") @db.VarChar(64)
+  slackTeamName String @map("slack_team_name") @db.VarChar(255)
+
+  // Bot access token (xoxb-…) for chat.postMessage etc. Plaintext for now;
+  // encrypt at rest in a follow-up hardening pass (same as GitHub token).
+  accessToken String @map("access_token") @db.VarChar(500)
+  botUserId   String @map("bot_user_id") @db.VarChar(64)
+
+  // Bilinear team that slash-command issues are filed into. Nullable until an
+  // admin picks one; slash commands without it return a helpful error.
+  defaultTeamId String? @map("default_team_id") @db.Uuid
+
+  createdById String @map("created_by_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("slack_integrations")
 }
 
 /// Rule-based automation. Triggers fire on resolver events (issue_created,

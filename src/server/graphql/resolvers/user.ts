@@ -13,10 +13,27 @@ function buildCalendarFeedUrl(token: string | null, appUrl: string): string | nu
 
 export const userResolvers = {
   Mutation: {
-    apiTokenCreate: async (_parent: unknown, { label }: { label: string }, ctx: GraphQLContext) => {
+    apiTokenCreate: async (
+      _parent: unknown,
+      {
+        label,
+        scopes,
+        expiresInDays,
+      }: { label: string; scopes?: string[]; expiresInDays?: number },
+      ctx: GraphQLContext,
+    ) => {
       requireAuth(ctx);
-      const result = await ctx.services.auth.createApiToken(ctx.userId, label);
-      return { plaintext: result.plaintext, success: true, token: result.token };
+      try {
+        const result = await ctx.services.auth.createApiToken(ctx.userId, label, {
+          expiresInDays,
+          scopes,
+        });
+        return { plaintext: result.plaintext, success: true, token: result.token };
+      } catch (err) {
+        throw new GraphQLError((err as Error).message, {
+          extensions: { code: 'BAD_USER_INPUT' },
+        });
+      }
     },
 
     apiTokenRevoke: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {

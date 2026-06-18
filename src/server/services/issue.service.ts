@@ -1,6 +1,34 @@
 import type { Issue, IssueLabel, IssueReaction, PrismaClient } from '../../generated/prisma';
+import type { SyncWriteClient } from './sync.service';
 
 type PrismaLike = Pick<PrismaClient, 'issue' | 'issueLabelAssignment' | 'issueLabel' | 'team'>;
+
+/**
+ * In-transaction hook invoked just before `create`/`update` return, while the
+ * business-write transaction is still open. Lets the resolver persist the
+ * SyncAction atomically with the issue write (via `sync.recordSyncAction(tx,
+ * …)`) so a crash can never leave a row without its replication marker. The
+ * resolver publishes the recorded action(s) to Redis AFTER the call resolves.
+ */
+export type IssueCreateTxHook = (tx: SyncWriteClient, issue: Issue) => Promise<void>;
+export type IssueUpdateTxHook = (
+  tx: SyncWriteClient,
+  result: { issue: Issue; cascaded: Issue[] },
+) => Promise<void>;
+/**
+ * Hook for single-row issue mutations (archive/unarchive/snooze/unsnooze/
+ * delete). Receives the post-write row (for delete, the row as it was just
+ * before removal) so the resolver can record the SyncAction inside the same
+ * transaction. Publish happens after commit.
+ */
+export type IssueRowTxHook = (tx: SyncWriteClient, issue: Issue) => Promise<void>;
+/** Hook for reaction add/remove — receives the affected reaction row id. */
+export type IssueReactionTxHook = (
+  tx: SyncWriteClient,
+  reaction: { id: string } & Record<string, unknown>,
+) => Promise<void>;
+/** Hook for bulk update — receives every updated row, in input order. */
+export type IssuesBulkTxHook = (tx: SyncWriteClient, issues: Issue[]) => Promise<void>;
 
 export interface IssueCreateInput {
   assigneeId?: string;
@@ -81,7 +109,12 @@ export interface IssuePage {
 export class IssueService {
   constructor(private prisma: PrismaClient) {}
 
-  async create(orgId: string, creatorId: string, input: IssueCreateInput): Promise<Issue> {
+  async create(
+    orgId: string,
+    creatorId: string,
+    input: IssueCreateInput,
+    txHook?: IssueCreateTxHook,
+  ): Promise<Issue> {
     return this.prisma.$transaction(async tx => {
       // Atomically increment issueCount and use it as the issue number
       const team = await tx.team.update({
@@ -190,6 +223,10 @@ export class IssueService {
         await this.syncLabels(tx, issue.id, input.labelIds);
       }
 
+      // Persist the SyncAction inside this transaction (atomic with the issue
+      // write). Publish happens in the resolver after commit.
+      await txHook?.(tx, issue);
+
       return issue;
     });
   }
@@ -288,7 +325,11 @@ export class IssueService {
    * The caller is responsible for emitting one SyncAction per `cascaded`
    * entry so remote clients can reflect the cascade in real time.
    */
-  async update(id: string, input: IssueUpdateInput): Promise<{ issue: Issue; cascaded: Issue[] }> {
+  async update(
+    id: string,
+    input: IssueUpdateInput,
+    txHook?: IssueUpdateTxHook,
+  ): Promise<{ issue: Issue; cascaded: Issue[] }> {
     const data: Parameters<PrismaClient['issue']['update']>[0]['data'] = {};
 
     if (input.title !== undefined) {
@@ -427,26 +468,44 @@ export class IssueService {
         }
       }
 
+      // Persist SyncAction(s) for the issue + any cascaded rows inside this
+      // transaction so the markers can't survive a rollback of the writes.
+      await txHook?.(tx, { cascaded, issue });
+
       return { cascaded, issue };
     });
   }
 
-  async archive(id: string): Promise<Issue> {
-    return this.prisma.issue.update({
-      data: { archivedAt: new Date() },
-      where: { id },
+  async archive(id: string, txHook?: IssueRowTxHook): Promise<Issue> {
+    return this.prisma.$transaction(async tx => {
+      const issue = await tx.issue.update({
+        data: { archivedAt: new Date() },
+        where: { id },
+      });
+      await txHook?.(tx, issue);
+      return issue;
     });
   }
 
-  async unarchive(id: string): Promise<Issue> {
-    return this.prisma.issue.update({
-      data: { archivedAt: null },
-      where: { id },
+  async unarchive(id: string, txHook?: IssueRowTxHook): Promise<Issue> {
+    return this.prisma.$transaction(async tx => {
+      const issue = await tx.issue.update({
+        data: { archivedAt: null },
+        where: { id },
+      });
+      await txHook?.(tx, issue);
+      return issue;
     });
   }
 
-  async delete(id: string): Promise<Issue> {
-    return this.prisma.issue.delete({ where: { id } });
+  async delete(id: string, txHook?: IssueRowTxHook): Promise<Issue> {
+    return this.prisma.$transaction(async tx => {
+      const issue = await tx.issue.delete({ where: { id } });
+      // Pass the just-deleted row so the resolver can record a 'D' SyncAction
+      // (with null data) atomically with the delete.
+      await txHook?.(tx, issue);
+      return issue;
+    });
   }
 
   /**
@@ -456,17 +515,25 @@ export class IssueService {
    * (the SnoozedIssues view in IssueFilter); waking up is purely a
    * function of `now() >= snoozedUntilAt`, no background job needed.
    */
-  async snooze(id: string, userId: string, until: Date): Promise<Issue> {
-    return this.prisma.issue.update({
-      data: { snoozedById: userId, snoozedUntilAt: until },
-      where: { id },
+  async snooze(id: string, userId: string, until: Date, txHook?: IssueRowTxHook): Promise<Issue> {
+    return this.prisma.$transaction(async tx => {
+      const issue = await tx.issue.update({
+        data: { snoozedById: userId, snoozedUntilAt: until },
+        where: { id },
+      });
+      await txHook?.(tx, issue);
+      return issue;
     });
   }
 
-  async unsnooze(id: string): Promise<Issue> {
-    return this.prisma.issue.update({
-      data: { snoozedById: null, snoozedUntilAt: null },
-      where: { id },
+  async unsnooze(id: string, txHook?: IssueRowTxHook): Promise<Issue> {
+    return this.prisma.$transaction(async tx => {
+      const issue = await tx.issue.update({
+        data: { snoozedById: null, snoozedUntilAt: null },
+        where: { id },
+      });
+      await txHook?.(tx, issue);
+      return issue;
     });
   }
 
@@ -482,7 +549,12 @@ export class IssueService {
    * Returns the updated rows in input order; throws if any id doesn't
    * belong to the issuer's team (caller pre-checks team membership).
    */
-  async bulkUpdate(orgId: string, ids: string[], input: IssueUpdateInput): Promise<Issue[]> {
+  async bulkUpdate(
+    orgId: string,
+    ids: string[],
+    input: IssueUpdateInput,
+    txHook?: IssuesBulkTxHook,
+  ): Promise<Issue[]> {
     if (ids.length === 0) {
       return [];
     }
@@ -590,7 +662,13 @@ export class IssueService {
         where: { id: { in: ids } },
       });
       const byId = new Map(updated.map(u => [u.id, u]));
-      return ids.map(id => byId.get(id)).filter((u): u is Issue => u !== undefined);
+      const ordered = ids.map(id => byId.get(id)).filter((u): u is Issue => u !== undefined);
+
+      // Record one SyncAction per row inside this transaction so the markers
+      // can't outlive a rollback of the batch. Publish happens after commit.
+      await txHook?.(tx, ordered);
+
+      return ordered;
     });
   }
 
@@ -858,6 +936,7 @@ export class IssueService {
     issueId: string,
     userId: string,
     emoji: string,
+    txHook?: IssueReactionTxHook,
   ): Promise<IssueReaction & { user: unknown }> {
     const existing = await this.prisma.issue.findUnique({
       where: { id: issueId },
@@ -866,15 +945,24 @@ export class IssueService {
       throw new IssueNotFoundError();
     }
 
-    return this.prisma.issueReaction.upsert({
-      create: { emoji, issueId, userId },
-      include: { user: true },
-      update: {},
-      where: { issueId_userId_emoji: { emoji, issueId, userId } },
-    }) as unknown as IssueReaction & { user: unknown };
+    return this.prisma.$transaction(async tx => {
+      const reaction = await tx.issueReaction.upsert({
+        create: { emoji, issueId, userId },
+        include: { user: true },
+        update: {},
+        where: { issueId_userId_emoji: { emoji, issueId, userId } },
+      });
+      await txHook?.(tx, reaction as unknown as { id: string } & Record<string, unknown>);
+      return reaction as unknown as IssueReaction & { user: unknown };
+    });
   }
 
-  async removeReaction(issueId: string, userId: string, emoji: string): Promise<{ id: string }> {
+  async removeReaction(
+    issueId: string,
+    userId: string,
+    emoji: string,
+    txHook?: IssueReactionTxHook,
+  ): Promise<{ id: string }> {
     const reaction = await this.prisma.issueReaction.findUnique({
       where: { issueId_userId_emoji: { emoji, issueId, userId } },
     });
@@ -882,10 +970,13 @@ export class IssueService {
       throw new IssueReactionNotFoundError();
     }
 
-    await this.prisma.issueReaction.delete({
-      where: { id: reaction.id },
+    return this.prisma.$transaction(async tx => {
+      await tx.issueReaction.delete({
+        where: { id: reaction.id },
+      });
+      await txHook?.(tx, reaction as unknown as { id: string } & Record<string, unknown>);
+      return { id: reaction.id };
     });
-    return { id: reaction.id };
   }
 
   async listReactions(issueId: string): Promise<Array<IssueReaction & { user: unknown }>> {
