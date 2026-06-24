@@ -565,6 +565,25 @@ const result = await teamResolvers.Mutation.teamCreate(null, { input }, ctx as n
 expect(result.success).toBe(true);
 ```
 
+**Store tests** instantiate the store directly — MobX stores are pure in-memory
+pools with no DB/network dependency, so no mocks are needed:
+
+```typescript
+const store = new IssueStore();
+store.upsertMany([makeIssue({ id: '1' })]);
+store.applySyncAction('D', '1', null);
+expect(store.findById('1')).toBeNull();
+```
+
+Cover the computed getters (archived/trashed filtering, sort order), the
+`findBy*` lookups, and `applySyncAction` for each `I`/`U`/`A`/`D` branch —
+including any cascade (e.g. `CustomFieldStore` drops a definition's values on
+`D`, `InitiativeStore` drops project links).
+
+**Pure client-lib tests** (`src/lib/*.test.ts`) need no harness at all. Pin the
+clock with `vi.useFakeTimers()` + `vi.setSystemTime(...)` for anything that
+reads `new Date()` (e.g. `formatRelativeTime`, `getDueDateColor`).
+
 **Scripts:**
 
 - `yarn vitest run` (or `yarn test`) — run all tests once

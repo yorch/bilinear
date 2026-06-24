@@ -35,6 +35,7 @@ function createMockModel(): MockModel {
 
 export type MockPrismaClient = {
   [K in keyof PrismaClient]: K extends
+    | 'auditLogEntry'
     | 'authToken'
     | 'automationRule'
     | 'comment'
@@ -44,7 +45,10 @@ export type MockPrismaClient = {
     | 'customView'
     | 'cycle'
     | 'document'
+    | 'favorite'
     | 'file'
+    | 'gitHubIntegration'
+    | 'gitHubPullRequest'
     | 'initiative'
     | 'initiativeProject'
     | 'initiativeUpdate'
@@ -60,7 +64,13 @@ export type MockPrismaClient = {
     | 'organization'
     | 'organizationMember'
     | 'project'
+    | 'projectMember'
+    | 'projectMilestone'
+    | 'projectTeam'
+    | 'projectUpdate'
     | 'publicRoadmap'
+    | 'samlConfiguration'
+    | 'scimToken'
     | 'slackIntegration'
     | 'syncAction'
     | 'team'
@@ -84,6 +94,7 @@ export function createMockPrisma(): MockPrismaClient {
       // By default, $transaction passes itself so the callback uses the same mock
       return fn(mock as MockPrismaClient);
     }),
+    auditLogEntry: createMockModel(),
     authToken: createMockModel(),
     automationRule: createMockModel(),
     comment: createMockModel(),
@@ -93,7 +104,10 @@ export function createMockPrisma(): MockPrismaClient {
     customView: createMockModel(),
     cycle: createMockModel(),
     document: createMockModel(),
+    favorite: createMockModel(),
     file: createMockModel(),
+    gitHubIntegration: createMockModel(),
+    gitHubPullRequest: createMockModel(),
     initiative: createMockModel(),
     initiativeProject: createMockModel(),
     initiativeUpdate: createMockModel(),
@@ -109,7 +123,13 @@ export function createMockPrisma(): MockPrismaClient {
     organization: createMockModel(),
     organizationMember: createMockModel(),
     project: createMockModel(),
+    projectMember: createMockModel(),
+    projectMilestone: createMockModel(),
+    projectTeam: createMockModel(),
+    projectUpdate: createMockModel(),
     publicRoadmap: createMockModel(),
+    samlConfiguration: createMockModel(),
+    scimToken: createMockModel(),
     slackIntegration: createMockModel(),
     syncAction: createMockModel(),
     team: createMockModel(),
