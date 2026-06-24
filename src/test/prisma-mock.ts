@@ -44,6 +44,7 @@ export type MockPrismaClient = {
     | 'customView'
     | 'cycle'
     | 'document'
+    | 'favorite'
     | 'file'
     | 'initiative'
     | 'initiativeProject'
@@ -93,6 +94,7 @@ export function createMockPrisma(): MockPrismaClient {
     customView: createMockModel(),
     cycle: createMockModel(),
     document: createMockModel(),
+    favorite: createMockModel(),
     file: createMockModel(),
     initiative: createMockModel(),
     initiativeProject: createMockModel(),
