@@ -122,7 +122,7 @@ jobs:
         run: yarn test:e2e --project=chromium
 
       - name: Upload Playwright report
-        if: always()
+        if: ${{ always() && !env.ACT }}
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report
