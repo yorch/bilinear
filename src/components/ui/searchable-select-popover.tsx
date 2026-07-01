@@ -38,10 +38,14 @@ export function SearchableSelectPopover<T>({
   triggerChildren,
   triggerTitle,
 }: SearchableSelectPopoverProps<T>) {
-  const { open: isOpen, setOpen, ref: containerRef } = usePopover({
+  const {
+    open: isOpen,
+    setOpen,
+    ref: containerRef,
+  } = usePopover({
+    closeOnEscape: true,
     onClose,
     open: controlledOpen,
-    closeOnEscape: true,
   });
   const [search, setSearch] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
