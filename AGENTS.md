@@ -148,9 +148,9 @@ Resolvers are thin: `requireAuth(ctx)` → `ctx.services.<domain>.method()` → 
 - Large client-only widgets use `dynamic(..., { ssr: false })` with a `.lazy.tsx` suffix (e.g. `tiptap-editor.lazy.tsx`, `issue-detail-panel.lazy.tsx`).
 - Toast notifications: use `@/lib/toast` wrapper, never import sonner directly.
 - Logging: use `logger`/`childLogger` from `@/server/lib/logger` (pino). No `console.log` in server code.
-- UI primitives in `src/components/ui/`: `Button` (CVA), `Badge` (CVA, variants: `pill`/`solid`), `UserAvatar`, `Select`, `Skeleton`. Extend here, not inline.
+- UI primitives in `src/components/ui/`: `Button` (CVA), `Badge` (CVA, variants: `pill`/`solid`), `UserAvatar`, `Select`, `Skeleton`, `SelectPopover`, `SearchableSelectPopover` (generic searchable dropdown — see `CycleSelect`/`ProjectSelect` for usage). Extend here, not inline.
 - Shared sub-components in `src/components/shared/`: `UpdateFormFields`, `DeleteUpdateButton`. Add cross-feature building blocks here.
-- Dropdown/popover state: use `usePopover({ forceOpen?, onClose? })` from `@/hooks/use-popover` — returns `{ open, setOpen, ref }`. For outside-click only (no `forceOpen`), use `useOutsideClick` from `@/hooks/use-outside-click` directly.
+- Dropdown/popover state: use `usePopover({ open?, forceOpen?, onClose?, closeOnEscape? })` from `@/hooks/use-popover` — returns `{ open, setOpen, ref }`. `open` is fully controlled (parent owns show/hide); `forceOpen` is a one-shot uncontrolled open. For outside-click only (no popover state), use `useOutsideClick` from `@/hooks/use-outside-click` directly — it also takes an optional `closeOnEscape` param.
 
 ### Testing
 

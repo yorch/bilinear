@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { useOutsideClick } from '@/hooks/use-outside-click';
+import { usePopover } from '@/hooks/use-popover';
 import { cn } from '@/lib/utils';
 
 /** Estimation scale point values per estimation type. */
@@ -87,23 +87,7 @@ export function EstimatePicker({
   onClose,
   onChange,
 }: EstimatePickerProps) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (forceOpen) {
-      setOpen(true);
-    }
-  }, [forceOpen]);
-
-  useOutsideClick(
-    containerRef,
-    () => {
-      setOpen(false);
-      onClose?.();
-    },
-    open,
-  );
+  const { open, setOpen, ref: containerRef } = usePopover({ forceOpen, onClose });
 
   const scale = SCALE_OPTIONS[estimationType];
 

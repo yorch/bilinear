@@ -2,6 +2,7 @@
 
 import { Smile } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useOutsideClick } from '@/hooks/use-outside-click';
 import { gql } from '@/lib/graphql';
 import {
   ISSUE_REACTION_ADD_MUTATION,
@@ -43,19 +44,7 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
     fetchReactions();
   }, [fetchReactions]);
 
-  // Close the picker on outside click
-  useEffect(() => {
-    if (!showPicker) {
-      return;
-    }
-    const onDown = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setShowPicker(false);
-      }
-    };
-    window.addEventListener('mousedown', onDown);
-    return () => window.removeEventListener('mousedown', onDown);
-  }, [showPicker]);
+  useOutsideClick(pickerRef, () => setShowPicker(false), showPicker);
 
   const counts = reactions.reduce<Record<string, { count: number; reacted: boolean }>>((acc, r) => {
     if (!acc[r.emoji]) {

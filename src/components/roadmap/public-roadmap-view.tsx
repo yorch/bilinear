@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useRef } from 'react';
+import { cn } from '@/lib/utils';
 
 interface RoadmapProject {
   color: string;
@@ -174,13 +175,16 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
                   {/* Badges row */}
                   <div className="flex flex-wrap items-center gap-2">
                     <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusInfo.cls}`}
+                      className={cn(
+                        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+                        statusInfo.cls,
+                      )}
                     >
                       {project.statusName ?? statusInfo.label}
                     </span>
                     {healthDot && (
                       <span className="flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
-                        <span className={`h-2 w-2 rounded-full ${healthDot}`} />
+                        <span className={cn('h-2 w-2 rounded-full', healthDot)} />
                         {project.health}
                       </span>
                     )}

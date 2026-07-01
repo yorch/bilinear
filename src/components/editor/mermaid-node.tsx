@@ -5,6 +5,7 @@ import { mergeAttributes, Node } from '@tiptap/core';
 import type { NodeViewProps } from '@tiptap/react';
 import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import { useEffect, useRef, useState } from 'react';
+import { cn } from '@/lib/utils';
 
 // Mermaid is large — lazy-load it only when a diagram is first rendered.
 // Cache the promise so initialize() only runs once even under concurrent renders.
@@ -73,11 +74,12 @@ function MermaidView({ node, updateAttributes, selected }: NodeViewProps) {
   return (
     <NodeViewWrapper>
       <button
-        className={`mermaid-block relative my-2 w-full cursor-pointer rounded-md border p-3 text-left ${
+        className={cn(
+          'mermaid-block relative my-2 w-full cursor-pointer rounded-md border p-3 text-left',
           selected
             ? 'border-indigo-400 bg-indigo-50/30 dark:bg-indigo-950/20'
-            : 'border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900'
-        }`}
+            : 'border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900',
+        )}
         onDoubleClick={() => setEditing(true)}
         title="Double-click to edit"
         type="button"
