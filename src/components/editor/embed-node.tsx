@@ -5,6 +5,7 @@ import { mergeAttributes, Node } from '@tiptap/core';
 import type { NodeViewProps } from '@tiptap/react';
 import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import { useState } from 'react';
+import { cn } from '@/lib/utils';
 
 const YOUTUBE_RE = /(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
 const LOOM_RE = /loom\.com\/(?:share|embed)\/([a-zA-Z0-9]+)/;
@@ -70,9 +71,10 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
   return (
     <NodeViewWrapper>
       <div
-        className={`embed-block group relative my-2 overflow-hidden rounded-md border ${
-          selected ? 'border-indigo-400' : 'border-zinc-200 dark:border-zinc-700'
-        }`}
+        className={cn(
+          'embed-block group relative my-2 overflow-hidden rounded-md border',
+          selected ? 'border-indigo-400' : 'border-zinc-200 dark:border-zinc-700',
+        )}
         style={{ paddingBottom: '56.25%' }}
       >
         <iframe

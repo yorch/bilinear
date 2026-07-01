@@ -1,6 +1,7 @@
 'use client';
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { cn } from '@/lib/utils';
 
 export interface MentionItem {
   id: string;
@@ -83,11 +84,12 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
       {items.map((item, index) => (
         <li key={item.id}>
           <button
-            className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors ${
+            className={cn(
+              'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors',
               index === selectedIndex
                 ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-                : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800'
-            }`}
+                : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800',
+            )}
             onMouseDown={e => {
               e.preventDefault();
               command(item);

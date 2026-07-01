@@ -3,6 +3,7 @@
 import { X } from 'lucide-react';
 import { StatusDot } from '@/components/properties/status-select';
 import { SelectPopover } from '@/components/ui/select-popover';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { getPriorityConfig } from '@/lib/issue-utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 
@@ -126,12 +127,7 @@ export function BulkActionBar({
                 }}
                 type="button"
               >
-                <span
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white"
-                  style={{ backgroundColor: u.avatarBackgroundColor ?? '#6366f1' }}
-                >
-                  {u.initials}
-                </span>
+                <UserAvatar size="md" user={u} />
                 <span className="truncate">{u.displayName}</span>
               </button>
             ))}
