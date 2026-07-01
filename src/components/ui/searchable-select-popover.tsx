@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { useOutsideClick } from '@/hooks/use-outside-click';
+import { usePopover } from '@/hooks/use-popover';
 import { cn } from '@/lib/utils';
 
 interface SearchableSelectPopoverProps<T> {
@@ -38,12 +38,13 @@ export function SearchableSelectPopover<T>({
   triggerChildren,
   triggerTitle,
 }: SearchableSelectPopoverProps<T>) {
-  const [internalOpen, setInternalOpen] = useState(false);
+  const { open: isOpen, setOpen, ref: containerRef } = usePopover({
+    onClose,
+    open: controlledOpen,
+    closeOnEscape: true,
+  });
   const [search, setSearch] = useState('');
-  const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const isOpen = controlledOpen ?? internalOpen;
 
   const filtered = search.trim() ? items.filter(item => matchesSearch(item, search)) : items;
 
@@ -55,17 +56,15 @@ export function SearchableSelectPopover<T>({
   }, [isOpen]);
 
   const close = () => {
-    setInternalOpen(false);
+    setOpen(false);
     onClose?.();
   };
-
-  useOutsideClick(containerRef, close, isOpen);
 
   return (
     <div className="relative" ref={containerRef}>
       <button
         className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
-        onClick={() => (isOpen ? close() : setInternalOpen(true))}
+        onClick={() => (isOpen ? close() : setOpen(true))}
         title={triggerTitle}
         type="button"
       >
@@ -77,11 +76,6 @@ export function SearchableSelectPopover<T>({
           <input
             className="mb-1 w-full rounded-md border border-zinc-200 bg-transparent px-2 py-1 text-xs outline-none placeholder:text-zinc-400 focus:border-indigo-500 dark:border-zinc-700"
             onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Escape') {
-                close();
-              }
-            }}
             placeholder={searchPlaceholder}
             ref={inputRef}
             type="text"

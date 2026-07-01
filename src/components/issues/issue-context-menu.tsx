@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { cn } from '@/lib/utils';
 
@@ -46,18 +46,7 @@ export function IssueContextMenu({
   const workspaceKey = params.workspace ?? '';
   const menuRef = useRef<HTMLDivElement>(null);
 
-  useOutsideClick(menuRef, onClose);
-
-  // Close on Escape
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  useOutsideClick(menuRef, onClose, true, true);
 
   // Build the issue URL for clipboard operations
   const issueUrl =

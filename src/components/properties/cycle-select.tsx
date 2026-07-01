@@ -4,7 +4,7 @@ import { RefreshCw, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { Badge } from '@/components/ui/badge';
 import { SearchableSelectPopover } from '@/components/ui/searchable-select-popover';
-import type { DBCycle } from '@/lib/db';
+import { getCycleDisplayName, isActiveCycle } from '@/lib/cycle-utils';
 import { useStore } from '@/providers/store-provider';
 
 interface CycleSelectProps {
@@ -13,17 +13,6 @@ interface CycleSelectProps {
   open?: boolean;
   teamId: string;
   value: string | null;
-}
-
-function getCycleDisplayName(cycle: DBCycle): string {
-  return cycle.name || `Cycle ${cycle.number}`;
-}
-
-function isActiveCycle(cycle: DBCycle): boolean {
-  const now = Date.now();
-  const startsAtMs = new Date(cycle.startsAt).getTime();
-  const endsAtMs = new Date(cycle.endsAt).getTime();
-  return !cycle.completedAt && startsAtMs <= now && endsAtMs > now;
 }
 
 export const CycleSelect = observer(function CycleSelect({

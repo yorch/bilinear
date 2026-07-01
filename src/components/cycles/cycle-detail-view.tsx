@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BurndownChart } from '@/components/cycles/burndown-chart';
 import { BurnupChart } from '@/components/cycles/burnup-chart';
+import { isActiveCycle } from '@/lib/cycle-utils';
 import { gql } from '@/lib/graphql';
 import {
   CYCLE_BURNDOWN_QUERY,
@@ -269,7 +270,7 @@ export const CycleDetailView = observer(function CycleDetailView({
   const now = Date.now();
   const startsAtMs = new Date(cycle.startsAt).getTime();
   const endsAtMs = new Date(cycle.endsAt).getTime();
-  const isActive = !cycle.completedAt && startsAtMs <= now && endsAtMs > now;
+  const isActive = isActiveCycle(cycle);
   const isUpcoming = startsAtMs > now;
   const isCompleted = !isActive && !isUpcoming;
 
