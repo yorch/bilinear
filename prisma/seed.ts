@@ -36,14 +36,18 @@ async function main() {
   });
 
   const e2eUser = await prisma.user.upsert({
+    // e2eUser doubles as the platform admin for the /admin console E2E suite.
+    // isPlatformAdmin is set on both create and update so re-seeding an
+    // existing DB promotes it too (platform admin is orthogonal to org role).
     create: {
       avatarBgColor: '#10b981',
       displayName: 'E2E Tester',
       email: E2E_EMAIL,
       initials: 'E2',
+      isPlatformAdmin: true,
       name: 'E2E Tester',
     },
-    update: {},
+    update: { isPlatformAdmin: true },
     where: { email: E2E_EMAIL },
   });
 

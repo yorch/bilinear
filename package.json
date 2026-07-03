@@ -24,6 +24,7 @@
     "db:reset": "prisma migrate reset",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
+    "admin:grant": "tsx --env-file-if-exists=.env scripts/grant-platform-admin.ts",
     "ws:server": "tsx --env-file-if-exists=.env src/server/ws/index.ts",
     "yjs:server": "tsx --env-file-if-exists=.env src/server/yjs/index.ts",
     "analyze": "ANALYZE=true next build",

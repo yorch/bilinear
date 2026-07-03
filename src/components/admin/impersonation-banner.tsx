@@ -61,13 +61,17 @@ export function ImpersonationBanner() {
   }
 
   return (
-    <div className="flex items-center justify-center gap-3 bg-amber-500 px-4 py-1.5 text-center text-xs font-medium text-amber-950">
+    <div
+      className="flex items-center justify-center gap-3 bg-amber-500 px-4 py-1.5 text-center text-xs font-medium text-amber-950"
+      data-testid="impersonation-banner"
+    >
       <span>
         Impersonating this workspace
         {state.adminName ? ` as ${state.adminName}` : ''} — signed in from the platform console.
       </span>
       <button
         className="rounded bg-amber-950/20 px-2 py-0.5 font-semibold hover:bg-amber-950/30 disabled:opacity-50"
+        data-testid="stop-impersonating"
         disabled={stopping}
         onClick={handleStop}
         type="button"

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import {
@@ -170,7 +171,12 @@ function TenantsInner() {
                 return (
                   <tr className="bg-white dark:bg-zinc-950" key={t.id}>
                     <td className="px-4 py-2">
-                      <p className="font-medium text-zinc-900 dark:text-zinc-100">{t.name}</p>
+                      <Link
+                        className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                        href={`/admin/tenants/${t.id}`}
+                      >
+                        {t.name}
+                      </Link>
                       <p className="font-mono text-xs text-zinc-400">
                         {t.urlKey} · {t.dataRegion}
                       </p>
