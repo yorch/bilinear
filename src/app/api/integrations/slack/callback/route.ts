@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { verifySlackOAuthState } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
+import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
 import { IssueService } from '@/server/services/issue.service';
 import { exchangeSlackCode, SlackService } from '@/server/services/slack.service';
 
@@ -14,7 +15,7 @@ const log = childLogger({ module: 'slack-callback' });
  * Slack OAuth v2 callback: exchanges the code for a bot token and stores the
  * integration, then redirects to the integrations settings page.
  */
-export async function GET(req: NextRequest) {
+async function handleGet(req: NextRequest) {
   const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
 
   const code = req.nextUrl.searchParams.get('code');
@@ -32,6 +33,7 @@ export async function GET(req: NextRequest) {
   } catch {
     return NextResponse.redirect(`${appUrl}?error=invalid_state`);
   }
+  bindRequestContext({ orgId, userId });
 
   const membership = await prisma.organizationMember.findUnique({
     select: { role: true },
@@ -71,3 +73,5 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.redirect(`${settingsUrl}?slack_connected=1`);
 }
+
+export const GET = withRequestContext('integrations/slack/callback', handleGet);

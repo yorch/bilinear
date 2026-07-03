@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { verifyGithubOAuthState } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
+import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
 import { GitHubService } from '@/server/services/github.service';
 
 const log = childLogger({ module: 'github-callback' });
@@ -14,7 +15,7 @@ const log = childLogger({ module: 'github-callback' });
  * GitHub user, and stores the integration. Redirects to the integrations
  * settings page when done.
  */
-export async function GET(req: NextRequest) {
+async function handleGet(req: NextRequest) {
   const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
   const fallbackUrl = `${appUrl}`;
 
@@ -37,6 +38,7 @@ export async function GET(req: NextRequest) {
   } catch {
     return NextResponse.redirect(`${fallbackUrl}?error=invalid_state`);
   }
+  bindRequestContext({ orgId, userId });
 
   // Defense in depth: confirm the initiating user is still an owner/admin of
   // the org before completing the connection (the signed state proves they
@@ -74,3 +76,5 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.redirect(`${settingsUrl}?connected=1`);
 }
+
+export const GET = withRequestContext('integrations/github/callback', handleGet);
