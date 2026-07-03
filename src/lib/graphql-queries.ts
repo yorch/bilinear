@@ -20,6 +20,22 @@ export const GOOGLE_AUTH_START_QUERY = `
   }
 `;
 
+export const GOOGLE_AUTH_EXCHANGE_MUTATION = `
+  mutation GoogleAuthExchange($code: String!, $state: String!) {
+    googleAuthExchange(code: $code, state: $state) {
+      success
+      accessToken
+      refreshToken
+      expiresIn
+      user {
+        id
+        displayName
+        email
+      }
+    }
+  }
+`;
+
 export const GITHUB_AUTH_START_QUERY = `
   query GithubAuthStart {
     githubAuthStart { url state }

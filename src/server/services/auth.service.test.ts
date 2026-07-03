@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TEST_USER } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
-import { signGithubOAuthState, signRefreshToken, verifyOAuthState } from '../lib/jwt';
+import {
+  signGithubOAuthState,
+  signOAuthState,
+  signRefreshToken,
+  verifyOAuthState,
+} from '../lib/jwt';
 import { AuthService, apiScopesAllowWrite, InvalidTokenError } from './auth.service';
 import { UserService } from './user.service';
 
@@ -193,6 +198,108 @@ describe('AuthService — API token scopes & expiry', () => {
   });
 });
 
+describe('AuthService — Google OAuth login', () => {
+  let prisma: MockPrismaClient;
+  let userService: UserService;
+  let service: AuthService;
+
+  beforeEach(() => {
+    prisma = createMockPrisma();
+    userService = new UserService(prisma as never);
+    vi.spyOn(userService, 'getOrganizationForUser').mockResolvedValue(null);
+    service = new AuthService(prisma as never, userService);
+    vi.stubEnv('GOOGLE_CLIENT_ID', 'test-client-id');
+    vi.stubEnv('GOOGLE_CLIENT_SECRET', 'test-client-secret');
+    vi.stubEnv('APP_URL', 'http://localhost:3000');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('startGoogleAuth throws when GOOGLE_CLIENT_ID is not configured', async () => {
+    vi.stubEnv('GOOGLE_CLIENT_ID', '');
+    await expect(service.startGoogleAuth()).rejects.toThrow(/not configured/);
+  });
+
+  it('startGoogleAuth returns the consent URL with a signed state', async () => {
+    const { url, state } = await service.startGoogleAuth();
+    const parsed = new URL(url);
+    expect(parsed.origin + parsed.pathname).toBe('https://accounts.google.com/o/oauth2/v2/auth');
+    expect(parsed.searchParams.get('client_id')).toBe('test-client-id');
+    expect(parsed.searchParams.get('redirect_uri')).toBe(
+      'http://localhost:3000/auth/google/callback',
+    );
+    expect(parsed.searchParams.get('scope')).toBe('openid email profile');
+    expect(parsed.searchParams.get('response_type')).toBe('code');
+    expect(parsed.searchParams.get('state')).toBe(state);
+    // The state must round-trip through the google verifier
+    await expect(verifyOAuthState(state, 'google')).resolves.toBeUndefined();
+  });
+
+  it('exchangeGoogleCode rejects an invalid state', async () => {
+    await expect(service.exchangeGoogleCode('code', 'garbage')).rejects.toThrow(
+      /Invalid or expired OAuth state/,
+    );
+  });
+
+  it('exchangeGoogleCode rejects a github_login state presented as a google state', async () => {
+    const { state } = await signOAuthState('github_login');
+    await expect(service.exchangeGoogleCode('code', state)).rejects.toThrow(
+      /Invalid or expired OAuth state/,
+    );
+  });
+
+  it('exchangeGoogleCode signs the user in with the resolved profile', async () => {
+    const { state } = await service.startGoogleAuth();
+    vi.stubGlobal('fetch', buildGoogleFetchMock({}));
+    const findOrCreate = vi.spyOn(userService, 'findOrCreate').mockResolvedValue(TEST_USER);
+    prisma.authToken.create.mockResolvedValue({});
+
+    const result = await service.exchangeGoogleCode('good-code', state);
+
+    expect(result.success).toBe(true);
+    expect(result.userId).toBe(TEST_USER.id);
+    expect(findOrCreate).toHaveBeenCalledWith({
+      avatarUrl: 'https://lh3.googleusercontent.com/a/photo',
+      email: 'verified@example.com',
+      googleId: '1234567890',
+      name: 'Ada Lovelace',
+    });
+  });
+
+  it('exchangeGoogleCode rejects when the code exchange fails', async () => {
+    const { state } = await service.startGoogleAuth();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('nope', { status: 400 })),
+    );
+
+    await expect(service.exchangeGoogleCode('bad-code', state)).rejects.toThrow(
+      /Failed to exchange Google authorization code/,
+    );
+  });
+
+  it('exchangeGoogleCode rejects when the profile lookup fails', async () => {
+    const { state } = await service.startGoogleAuth();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('https://oauth2.googleapis.com/token')) {
+          return jsonResponse({ access_token: 'ya29.test' });
+        }
+        return new Response('nope', { status: 401 });
+      }),
+    );
+
+    await expect(service.exchangeGoogleCode('good-code', state)).rejects.toThrow(
+      /Failed to fetch Google user profile/,
+    );
+  });
+});
+
 describe('AuthService — GitHub OAuth login', () => {
   let prisma: MockPrismaClient;
   let userService: UserService;
@@ -309,6 +416,33 @@ function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
     headers: { 'Content-Type': 'application/json' },
     status: 200,
+  });
+}
+
+function buildGoogleFetchMock(
+  overrides: Partial<{
+    name: string | null;
+    email: string;
+    picture: string | null;
+  }>,
+) {
+  return vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.startsWith('https://oauth2.googleapis.com/token')) {
+      return jsonResponse({ access_token: 'ya29.test' });
+    }
+    if (url.startsWith('https://www.googleapis.com/oauth2/v2/userinfo')) {
+      return jsonResponse({
+        email: overrides.email ?? 'verified@example.com',
+        id: '1234567890',
+        name: overrides.name === undefined ? 'Ada Lovelace' : overrides.name,
+        picture:
+          overrides.picture === undefined
+            ? 'https://lh3.googleusercontent.com/a/photo'
+            : overrides.picture,
+      });
+    }
+    throw new Error(`Unexpected fetch in test: ${url}`);
   });
 }
 
