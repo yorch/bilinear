@@ -41,6 +41,18 @@ export interface PlatformTenant {
   urlKey: string;
 }
 
+export interface PlatformTenantOwner {
+  displayName: string;
+  email: string;
+  id: string;
+}
+
+export interface PlatformTenantDetail extends PlatformTenant {
+  owners: PlatformTenantOwner[];
+  projectCount: number;
+  teamCount: number;
+}
+
 export interface PlatformUserOrg {
   id: string;
   name: string;
@@ -111,6 +123,20 @@ export function fetchTenants(query: string, includeArchived: boolean): Promise<P
     }`,
     { includeArchived, query: query || null },
     'platformTenants',
+  );
+}
+
+export function fetchTenant(id: string): Promise<PlatformTenantDetail | null> {
+  return run(
+    `query PlatformTenant($id: ID!) {
+      platformTenant(id: $id) {
+        ${TENANT_FIELDS}
+        teamCount projectCount
+        owners { id email displayName }
+      }
+    }`,
+    { id },
+    'platformTenant',
   );
 }
 
