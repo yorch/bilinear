@@ -52,7 +52,7 @@ cp .env.example .env
 Edit `.env` and set at minimum:
 
 ```text
-DATABASE_URL=postgresql://user:pass@localhost:5432/issue_tracker
+DATABASE_URL=postgresql://user:pass@localhost:5432/bilinear
 REDIS_URL=redis://localhost:6379
 JWT_SECRET=<random 256-bit hex>
 JWT_REFRESH_SECRET=<different random 256-bit hex>
@@ -236,10 +236,10 @@ Required environment variables (in addition to defaults): `JWT_SECRET`, `JWT_REF
 
 Two long-running processes are required in production alongside the Next.js app:
 
-| Process | Command | Responsibilities |
-| ------- | ------- | ---------------- |
-| **WebSocket server** | `yarn ws:server` | Real-time sync fan-out (Redis Pub/Sub → connected clients), webhook retry sweep (every 30s), cycle auto-rollover |
-| **YJS server** *(optional)* | `yarn yjs:server` | Collaborative editing — only needed when `NEXT_PUBLIC_COLLAB_ENABLED=true` |
+| Process                     | Command           | Responsibilities                                                                                                 |
+| --------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **WebSocket server**        | `yarn ws:server`  | Real-time sync fan-out (Redis Pub/Sub → connected clients), webhook retry sweep (every 30s), cycle auto-rollover |
+| **YJS server** *(optional)* | `yarn yjs:server` | Collaborative editing — only needed when `NEXT_PUBLIC_COLLAB_ENABLED=true`                                       |
 
 **Neither server is wired into the Docker Compose files** — run them as separate services or background processes in your deployment. Set `NEXT_PUBLIC_WS_PORT` (and `NEXT_PUBLIC_YJS_SERVER_URL` for YJS) before `yarn build` so the values are inlined at build time.
 

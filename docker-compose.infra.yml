@@ -2,15 +2,19 @@ services:
   postgres:
     image: postgres:18-alpine
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: pass
-      POSTGRES_DB: issue_tracker
+      POSTGRES_USER: ${POSTGRES_USER:-user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pass}
+      POSTGRES_DB: ${POSTGRES_DB:-bilinear}
     ports:
       - "5432:5432"
     volumes:
       - ./data/postgres:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d issue_tracker"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-bilinear}",
+        ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -30,5 +34,5 @@ services:
   mailpit:
     image: axllent/mailpit:latest
     ports:
-      - "1025:1025"  # SMTP
-      - "8025:8025"  # Web UI → http://localhost:8025
+      - "1025:1025" # SMTP
+      - "8025:8025" # Web UI → http://localhost:8025
