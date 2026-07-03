@@ -509,6 +509,8 @@ describe('SamlService', () => {
 
     it('creates a new user with derived initials and ensures membership', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
+      // Non-empty users table → this JIT user is not the bootstrap admin.
+      prisma.user.count.mockResolvedValue(3);
       prisma.user.create.mockResolvedValue({ ...TEST_USER, email: claims.email, id: 'new-id' });
       prisma.organizationMember.upsert.mockResolvedValue({});
 
@@ -520,6 +522,7 @@ describe('SamlService', () => {
           displayName: 'New Person',
           email: claims.email,
           initials: 'NP',
+          isPlatformAdmin: false,
           name: 'New Person',
         },
       });
@@ -527,6 +530,20 @@ describe('SamlService', () => {
         expect.objectContaining({
           create: { organizationId: TEST_ORG.id, role: 'member', userId: 'new-id' },
         }),
+      );
+    });
+
+    it('bootstraps the first-ever user as platform admin', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      // Empty users table → this SSO login is the deployment's first account.
+      prisma.user.count.mockResolvedValue(0);
+      prisma.user.create.mockResolvedValue({ ...TEST_USER, email: claims.email, id: 'first-id' });
+      prisma.organizationMember.upsert.mockResolvedValue({});
+
+      await service.jitProvisionUser(prisma as never, TEST_ORG.id, claims);
+
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ isPlatformAdmin: true }) }),
       );
     });
 

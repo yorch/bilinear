@@ -1,9 +1,11 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { verifyAccessToken, verifyRefreshToken } from '@/server/lib/jwt';
-
-const ACCESS_TOKEN_MAX_AGE = 60 * 60 * 24; // 24h in seconds
-const REFRESH_TOKEN_MAX_AGE = 60 * 60 * 24 * 30; // 30d in seconds
+import {
+  ACCESS_TOKEN_MAX_AGE,
+  REFRESH_TOKEN_MAX_AGE,
+  setSessionCookie,
+} from '@/server/lib/request-security';
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -35,23 +37,8 @@ export async function POST(req: NextRequest) {
   }
 
   const res = NextResponse.json({ success: true });
-
-  res.cookies.set('access_token', accessToken, {
-    httpOnly: true,
-    maxAge: ACCESS_TOKEN_MAX_AGE,
-    path: '/',
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-  });
-
-  res.cookies.set('refresh_token', refreshToken, {
-    httpOnly: true,
-    maxAge: REFRESH_TOKEN_MAX_AGE,
-    path: '/',
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-  });
-
+  setSessionCookie(res, 'access_token', accessToken, ACCESS_TOKEN_MAX_AGE);
+  setSessionCookie(res, 'refresh_token', refreshToken, REFRESH_TOKEN_MAX_AGE);
   return res;
 }
 

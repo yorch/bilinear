@@ -1,3 +1,4 @@
+import { ImpersonationBanner } from '@/components/admin/impersonation-banner';
 import { AppShell } from '@/components/layouts/app-shell';
 import { WorkspaceClient } from '@/components/layouts/workspace-client';
 import { StoreProvider } from '@/providers/store-provider';
@@ -8,6 +9,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
     <StoreProvider>
       <SyncProvider>
         <WorkspaceClient>
+          <ImpersonationBanner />
           <AppShell>{children}</AppShell>
         </WorkspaceClient>
       </SyncProvider>

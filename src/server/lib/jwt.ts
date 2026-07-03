@@ -5,6 +5,11 @@ const ACCESS_TOKEN_EXPIRY = '24h';
 const REFRESH_TOKEN_EXPIRY = '30d';
 const OAUTH_STATE_EXPIRY = '10m';
 const WS_TICKET_EXPIRY = '60s';
+// Impersonation access tokens are deliberately short-lived so a leaked one has
+// a small blast radius. On expiry the session simply becomes unauthenticated
+// and the admin is returned to login; the "Stop impersonating" control ends it
+// immediately by re-issuing the admin's own session.
+const IMPERSONATION_TOKEN_EXPIRY = '30m';
 
 // HS256 (HMAC-SHA256) recommends secrets >= 32 bytes per RFC 7518 §3.2.
 // `jose` does not enforce this itself, so we validate at boot to fail fast
@@ -32,6 +37,13 @@ function getSecret(key: string): Uint8Array {
 }
 
 export interface AccessTokenPayload {
+  /**
+   * Set only on impersonation tokens: the id of the platform admin acting as
+   * `userId`. Its presence is what the app uses to render the impersonation
+   * banner and to authorize "stop impersonating" (which re-issues a normal
+   * session for this admin). Absent on ordinary sessions.
+   */
+  impersonatorId?: string;
   orgId: string;
   userId: string;
 }
@@ -54,6 +66,24 @@ export async function signAccessToken(payload: AccessTokenPayload): Promise<stri
     .sign(getSecret('JWT_SECRET'));
 }
 
+/**
+ * Sign a short-lived impersonation access token. Identical in shape to a
+ * normal access token (so the whole app treats the session as `userId` in
+ * `orgId`) but carries the `impersonatorId` claim and a 30-minute lifetime.
+ * No matching refresh token is issued — see `IMPERSONATION_TOKEN_EXPIRY`.
+ */
+export async function signImpersonationToken(payload: {
+  orgId: string;
+  userId: string;
+  impersonatorId: string;
+}): Promise<string> {
+  return new SignJWT({ ...payload, type: 'access' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime(IMPERSONATION_TOKEN_EXPIRY)
+    .sign(getSecret('JWT_SECRET'));
+}
+
 export async function signRefreshToken(payload: RefreshTokenPayload): Promise<string> {
   return new SignJWT({ ...payload, type: 'refresh' })
     .setProtectedHeader({ alg: 'HS256' })
@@ -72,6 +102,7 @@ export async function verifyAccessToken(token: string): Promise<AccessTokenPaylo
   }
 
   return {
+    impersonatorId: typeof payload.impersonatorId === 'string' ? payload.impersonatorId : undefined,
     orgId: payload.orgId as string,
     userId: payload.userId as string,
   };

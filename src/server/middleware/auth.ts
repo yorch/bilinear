@@ -15,9 +15,23 @@ export interface AuthContext {
    * predicates) stay valid — absent is treated as `null` (full access).
    */
   apiKeyScopes?: string[] | null;
+  /**
+   * Present only when the session is a platform admin impersonating another
+   * user: the impersonating admin's id. `userId`/`orgId` are the *target's*.
+   * Resolvers use this to (a) render the impersonation banner and (b) refuse
+   * to let an impersonated session wield platform-admin powers.
+   */
+  impersonatorId?: string | null;
   orgId: string | null;
   userId: string | null;
 }
+
+const EMPTY_CONTEXT: AuthContext = {
+  apiKeyScopes: null,
+  impersonatorId: null,
+  orgId: null,
+  userId: null,
+};
 
 export async function extractAuthContext(
   authHeader: string | null,
@@ -27,17 +41,24 @@ export async function extractAuthContext(
   const token = extractBearerToken(authHeader) ?? cookieToken ?? null;
 
   if (!token) {
-    return { apiKeyScopes: null, orgId: null, userId: null };
+    return { ...EMPTY_CONTEXT };
   }
+
+  let resolved: AuthContext | null = null;
 
   try {
     const payload: AccessTokenPayload = await verifyAccessToken(token);
-    return { apiKeyScopes: null, orgId: payload.orgId, userId: payload.userId };
+    resolved = {
+      apiKeyScopes: null,
+      impersonatorId: payload.impersonatorId ?? null,
+      orgId: payload.orgId,
+      userId: payload.userId,
+    };
   } catch {
     // fall through to API key check
   }
 
-  if (prisma && token.startsWith('bil_')) {
+  if (!resolved && prisma && token.startsWith('bil_')) {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const authToken = await prisma.authToken.findFirst({
       select: {
@@ -69,11 +90,48 @@ export async function extractAuthContext(
           where: { id: authToken.id },
         })
         .catch(() => {});
-      return { apiKeyScopes: authToken.scopes, orgId, userId: authToken.userId };
+      resolved = {
+        apiKeyScopes: authToken.scopes,
+        impersonatorId: null,
+        orgId,
+        userId: authToken.userId,
+      };
     }
   }
 
-  return { apiKeyScopes: null, orgId: null, userId: null };
+  if (!resolved) {
+    return { ...EMPTY_CONTEXT };
+  }
+
+  // Suspension enforcement (needs DB — skipped in unit tests that pass no
+  // prisma). A globally-suspended user (active=false) is fully logged out; a
+  // suspended/archived org drops only `orgId` so a platform admin whose own
+  // org is suspended can still reach the /admin console (which needs userId
+  // only) while being locked out of the workspace.
+  if (prisma && resolved.userId) {
+    // Run the user + org lookups concurrently — they're independent PK reads
+    // and this is the app's hottest path (every authenticated request).
+    const [user, org] = await Promise.all([
+      prisma.user.findUnique({
+        select: { active: true },
+        where: { id: resolved.userId },
+      }),
+      resolved.orgId
+        ? prisma.organization.findUnique({
+            select: { archivedAt: true, suspendedAt: true },
+            where: { id: resolved.orgId },
+          })
+        : Promise.resolve(null),
+    ]);
+    if (!user?.active) {
+      return { ...EMPTY_CONTEXT };
+    }
+    if (org && (org.suspendedAt || org.archivedAt)) {
+      resolved = { ...resolved, orgId: null };
+    }
+  }
+
+  return resolved;
 }
 
 export function requireAuth(ctx: AuthContext): asserts ctx is { userId: string; orgId: string } {
@@ -110,6 +168,43 @@ export async function requireOrgRole(
       extensions: { code: 'FORBIDDEN' },
     });
   }
+}
+
+/**
+ * Gate for the cross-tenant platform console. Verifies the caller is an
+ * authenticated user carrying the global `isPlatformAdmin` flag AND is not
+ * currently impersonating someone — an impersonated session must never be
+ * able to wield platform-admin powers, even if the impersonated target
+ * happens to be an admin too.
+ *
+ * Assertion signatures can't be async, so this returns the caller's id
+ * instead of narrowing `ctx` — pair it with `requireUserId(ctx)` when you
+ * also need `ctx.userId` narrowed to non-null.
+ */
+export async function requirePlatformAdmin(
+  prisma: PrismaClient,
+  ctx: AuthContext,
+): Promise<string> {
+  if (!ctx.userId) {
+    throw new GraphQLError('Not authenticated', {
+      extensions: { code: 'UNAUTHENTICATED' },
+    });
+  }
+  if (ctx.impersonatorId) {
+    throw new GraphQLError('Platform admin actions are not allowed while impersonating', {
+      extensions: { code: 'FORBIDDEN' },
+    });
+  }
+  const user = await prisma.user.findUnique({
+    select: { isPlatformAdmin: true },
+    where: { id: ctx.userId },
+  });
+  if (!user?.isPlatformAdmin) {
+    throw new GraphQLError('Platform admin access required', {
+      extensions: { code: 'FORBIDDEN' },
+    });
+  }
+  return ctx.userId;
 }
 
 /**

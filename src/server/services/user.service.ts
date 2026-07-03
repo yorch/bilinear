@@ -1,5 +1,16 @@
 import type { PrismaClient, User } from '../../generated/prisma';
 
+/**
+ * Whether the given (transaction or root) Prisma client sees an empty users
+ * table — i.e. the caller is about to create the very first account, which is
+ * bootstrapped as the platform admin. Shared across every user-creation path
+ * (magic-link/OAuth via `findOrCreate`, SAML JIT, SCIM) so a fresh deployment
+ * always gets exactly one operator regardless of how the first user signs in.
+ */
+export async function isFirstUser(client: Pick<PrismaClient, 'user'>): Promise<boolean> {
+  return (await client.user.count()) === 0;
+}
+
 export class UserService {
   constructor(private prisma: PrismaClient) {}
 
@@ -51,16 +62,26 @@ export class UserService {
 
     const initials = deriveInitials(params.name);
 
-    return this.prisma.user.create({
-      data: {
-        avatarUrl: params.avatarUrl,
-        displayName: params.name,
-        email: params.email,
-        githubId: params.githubId,
-        googleId: params.googleId,
-        initials,
-        name: params.name,
-      },
+    // Bootstrap: the very first account created in an empty deployment becomes
+    // the platform admin, so a fresh install has an operator without any
+    // seed/env step. Done inside a transaction so the count and the insert see
+    // a consistent view — on the (rare) concurrent-first-signup race the DB
+    // may briefly mint two admins, which is acceptable and easily corrected
+    // from the console.
+    return this.prisma.$transaction(async tx => {
+      const platformAdmin = await isFirstUser(tx);
+      return tx.user.create({
+        data: {
+          avatarUrl: params.avatarUrl,
+          displayName: params.name,
+          email: params.email,
+          githubId: params.githubId,
+          googleId: params.googleId,
+          initials,
+          isPlatformAdmin: platformAdmin,
+          name: params.name,
+        },
+      });
     });
   }
 

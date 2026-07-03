@@ -17,6 +17,11 @@ export const typeDefs = `
     avatarBackgroundColor: String!
     active: Boolean!
     isMe: Boolean!
+    """
+    Global platform-operator flag. Exposed as false for users other than
+    the viewer themselves — use the platform console queries for a full roster.
+    """
+    isPlatformAdmin: Boolean!
     timezone: String
     lastSeen: DateTime
     statusEmoji: String
@@ -1616,6 +1621,19 @@ export const typeDefs = `
     scimTokens: [ScimToken!]!
 
     apiTokens: [ApiToken!]!
+
+    # ------------------------------------------------------------------
+    # Platform admin console (cross-tenant) — every field requires the
+    # caller to carry User.isPlatformAdmin. See PATTERNS.md (Platform admin).
+    # ------------------------------------------------------------------
+    platformMetrics: PlatformMetrics!
+    platformTenants(query: String, includeArchived: Boolean, limit: Int): [PlatformTenant!]!
+    platformTenant(id: ID!): PlatformTenantDetail
+    platformUsers(query: String, limit: Int): [PlatformUser!]!
+    platformUser(id: ID!): PlatformUser
+    platformAuditLog(limit: Int, cursor: String): PlatformAuditLogPage!
+    """Impersonation state for the current session — drives the banner. Any authenticated user."""
+    impersonationState: ImpersonationState!
   }
 
   type GoogleAuthStartPayload {
@@ -1823,6 +1841,25 @@ export const typeDefs = `
     """Create a personal API key. scopes defaults to [read, write]; expiresInDays defaults to 365 (1-3650)."""
     apiTokenCreate(label: String!, scopes: [String!], expiresInDays: Int): ApiTokenCreatePayload!
     apiTokenRevoke(id: ID!): BasicPayload!
+
+    # ------------------------------------------------------------------
+    # Platform admin console (cross-tenant) — every mutation requires the
+    # caller to carry User.isPlatformAdmin. Impersonation start/stop are
+    # handled by dedicated API routes (/api/admin/impersonate[/stop]) because
+    # they must rewrite the session cookie server-side.
+    #
+    # These deliberately DON'T follow the usual { success, entity, lastSyncId }
+    # mutation envelope: they act across tenants, so there is no single org to
+    # scope a SyncAction to, and no lastSyncId to return. Like webhooks/SAML
+    # (also SyncAction-exempt), they return the affected entity directly.
+    # ------------------------------------------------------------------
+    platformTenantSuspend(id: ID!, reason: String): PlatformTenant!
+    platformTenantRestore(id: ID!): PlatformTenant!
+    """Soft-delete a tenant (sets archivedAt). Members lose access; data is retained."""
+    platformTenantDelete(id: ID!): PlatformTenant!
+    platformUserSuspend(id: ID!): PlatformUser!
+    platformUserReactivate(id: ID!): PlatformUser!
+    platformUserSetAdmin(id: ID!, isPlatformAdmin: Boolean!): PlatformUser!
   }
 
   # ---------------------------------------------------------------------------
@@ -2000,5 +2037,123 @@ export const typeDefs = `
     plaintext: String!
     success: Boolean!
     token: ApiToken!
+  }
+
+  # ---------------------------------------------------------------------------
+  # Platform admin console (cross-tenant)
+  # ---------------------------------------------------------------------------
+
+  type PlatformTopOrg {
+    id: ID!
+    name: String!
+    urlKey: String!
+    issueCount: Int!
+    memberCount: Int!
+  }
+
+  type PlatformMetrics {
+    totalOrgs: Int!
+    activeOrgs: Int!
+    suspendedOrgs: Int!
+    totalUsers: Int!
+    activeUsers: Int!
+    suspendedUsers: Int!
+    platformAdmins: Int!
+    totalIssues: Int!
+    newUsers7d: Int!
+    newUsers30d: Int!
+    newOrgs7d: Int!
+    newOrgs30d: Int!
+    topOrgs: [PlatformTopOrg!]!
+  }
+
+  type PlatformTenant {
+    id: ID!
+    name: String!
+    urlKey: String!
+    logoUrl: String
+    dataRegion: String!
+    suspendedAt: DateTime
+    suspendedReason: String
+    archivedAt: DateTime
+    createdAt: DateTime!
+    memberCount: Int!
+    issueCount: Int!
+  }
+
+  type PlatformTenantOwner {
+    id: ID!
+    email: String!
+    displayName: String!
+  }
+
+  type PlatformTenantDetail {
+    id: ID!
+    name: String!
+    urlKey: String!
+    logoUrl: String
+    dataRegion: String!
+    suspendedAt: DateTime
+    suspendedReason: String
+    archivedAt: DateTime
+    createdAt: DateTime!
+    memberCount: Int!
+    issueCount: Int!
+    teamCount: Int!
+    projectCount: Int!
+    owners: [PlatformTenantOwner!]!
+  }
+
+  type PlatformUserOrg {
+    id: ID!
+    name: String!
+    urlKey: String!
+    role: String!
+  }
+
+  type PlatformUser {
+    id: ID!
+    email: String!
+    displayName: String!
+    active: Boolean!
+    isPlatformAdmin: Boolean!
+    lastSeen: DateTime
+    createdAt: DateTime!
+    organizations: [PlatformUserOrg!]!
+  }
+
+  """
+  Lean projection of the acting admin. Deliberately NOT the full User type:
+  the audit query only selects id/email/displayName, so exposing it as User
+  would let a client request non-null User fields (active, avatar, …) that
+  aren't loaded and error the whole response.
+  """
+  type PlatformAuditActor {
+    id: ID!
+    email: String!
+    displayName: String!
+  }
+
+  type PlatformAuditLogEntry {
+    id: ID!
+    action: String!
+    targetType: String
+    targetId: ID
+    metadata: JSON
+    ipAddress: String
+    createdAt: DateTime!
+    actor: PlatformAuditActor
+  }
+
+  type PlatformAuditLogPage {
+    entries: [PlatformAuditLogEntry!]!
+    hasMore: Boolean!
+    nextCursor: String
+  }
+
+  type ImpersonationState {
+    active: Boolean!
+    adminEmail: String
+    adminName: String
   }
 `;

@@ -55,6 +55,7 @@ const VIEWER_QUERY = `
       id
       emailNotificationsEnabled
       calendarFeedUrl
+      isPlatformAdmin
     }
   }
 `;
@@ -160,6 +161,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const [memberRoles, setMemberRoles] = useState<Record<string, OrgRole>>({});
   const [calendarFeedUrl, setCalendarFeedUrl] = useState<string | null>(null);
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [rotatingToken, setRotatingToken] = useState(false);
   const [apiTokens, setApiTokens] = useState<ApiToken[]>([]);
   const [newTokenLabel, setNewTokenLabel] = useState('');
@@ -228,11 +230,18 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
     gql(VIEWER_QUERY)
       .then(result => {
         const data = result.data as
-          | { viewer?: { calendarFeedUrl?: string | null; emailNotificationsEnabled?: boolean } }
+          | {
+              viewer?: {
+                calendarFeedUrl?: string | null;
+                emailNotificationsEnabled?: boolean;
+                isPlatformAdmin?: boolean;
+              };
+            }
           | undefined;
         if (data?.viewer) {
           setCalendarFeedUrl(data.viewer.calendarFeedUrl ?? null);
           setEmailNotificationsEnabled(data.viewer.emailNotificationsEnabled ?? true);
+          setIsPlatformAdmin(data.viewer.isPlatformAdmin ?? false);
         }
       })
       .catch(() => {});
@@ -409,6 +418,28 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
             )}
           </div>
         </section>
+
+        {isPlatformAdmin && (
+          <section>
+            <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+              Platform
+            </h2>
+            <Link
+              className="flex items-center justify-between rounded-lg border border-indigo-200 bg-indigo-50 px-5 py-4 transition-colors hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/30 dark:hover:bg-indigo-950/50"
+              href="/admin"
+            >
+              <div>
+                <p className="text-sm font-medium text-indigo-900 dark:text-indigo-200">
+                  Platform admin console
+                </p>
+                <p className="text-xs text-indigo-700/70 dark:text-indigo-300/70">
+                  Manage tenants, users, and impersonation across every organization
+                </p>
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-indigo-400" />
+            </Link>
+          </section>
+        )}
 
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">

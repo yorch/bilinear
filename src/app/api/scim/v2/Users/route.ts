@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/server/lib/prisma';
+import { isFirstUser } from '@/server/services/user.service';
 import { authenticateScim, listResponse, scimError, userToScim } from '../_scim-auth';
 
 /**
@@ -93,6 +94,11 @@ export async function POST(req: NextRequest) {
       .toUpperCase()
       .slice(0, 2) || 'U';
 
+  // Bootstrap the platform admin if this is the first account in the
+  // deployment (create branch only runs when the user is new; an empty table
+  // means this SCIM-provisioned user is the first). See UserService.isFirstUser.
+  const platformAdmin = await isFirstUser(prisma);
+
   // Upsert user by email. Never touch user.active — SCIM (de)activation is org-scoped.
   const user = await prisma.user.upsert({
     create: {
@@ -100,6 +106,7 @@ export async function POST(req: NextRequest) {
       displayName: resolvedDisplayName,
       email,
       initials,
+      isPlatformAdmin: platformAdmin,
       name: resolvedDisplayName,
       updatedAt: new Date(),
     },

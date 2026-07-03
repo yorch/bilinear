@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import type { PrismaClient, SamlConfiguration } from '../../generated/prisma';
 import { childLogger } from '../lib/logger';
+import { isFirstUser } from './user.service';
 
 const log = childLogger({ module: 'saml', service: 'SamlService' });
 
@@ -439,13 +440,17 @@ export class SamlService {
       return { isNew: false, userId: existing.id };
     }
 
-    // Create new user
+    // Create new user. Bootstrap the platform admin if this is the very first
+    // account in the deployment (an enterprise install whose first login is
+    // SSO must still end up with an operator — see UserService.isFirstUser).
     const initials = deriveInitials(claims.name);
+    const platformAdmin = await isFirstUser(prisma);
     const user = await prisma.user.create({
       data: {
         displayName: claims.name,
         email: claims.email,
         initials,
+        isPlatformAdmin: platformAdmin,
         name: claims.name,
       },
     });

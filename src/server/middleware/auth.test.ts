@@ -1,7 +1,14 @@
 import { GraphQLError } from 'graphql';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createMockPrisma } from '../../test/prisma-mock';
-import { requireAuth, requireOrgRole, requireTeamMember, requireTeamOwner } from './auth';
+import {
+  type AuthContext,
+  requireAuth,
+  requireOrgRole,
+  requirePlatformAdmin,
+  requireTeamMember,
+  requireTeamOwner,
+} from './auth';
 
 describe('requireAuth', () => {
   it('throws UNAUTHENTICATED when both userId and orgId are null', () => {
@@ -211,5 +218,57 @@ describe('requireTeamOwner', () => {
       expect(e).toBeInstanceOf(GraphQLError);
       expect((e as GraphQLError).extensions?.code).toBe('FORBIDDEN');
     }
+  });
+});
+
+describe('requirePlatformAdmin', () => {
+  const prisma = createMockPrisma();
+
+  beforeEach(() => {
+    prisma.user.findUnique.mockReset();
+  });
+
+  function ctx(overrides: Partial<AuthContext> = {}): AuthContext {
+    return {
+      apiKeyScopes: null,
+      impersonatorId: null,
+      orgId: 'org-1',
+      userId: 'user-1',
+      ...overrides,
+    };
+  }
+
+  it('throws UNAUTHENTICATED when there is no user', async () => {
+    try {
+      await requirePlatformAdmin(prisma as never, ctx({ userId: null }));
+      expect.unreachable('Should have thrown');
+    } catch (e) {
+      expect((e as GraphQLError).extensions?.code).toBe('UNAUTHENTICATED');
+    }
+  });
+
+  it('throws FORBIDDEN while impersonating, without hitting the DB', async () => {
+    try {
+      await requirePlatformAdmin(prisma as never, ctx({ impersonatorId: 'admin-1' }));
+      expect.unreachable('Should have thrown');
+    } catch (e) {
+      expect((e as GraphQLError).extensions?.code).toBe('FORBIDDEN');
+    }
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('throws FORBIDDEN when the user lacks the platform-admin flag', async () => {
+    prisma.user.findUnique.mockResolvedValue({ isPlatformAdmin: false });
+    try {
+      await requirePlatformAdmin(prisma as never, ctx());
+      expect.unreachable('Should have thrown');
+    } catch (e) {
+      expect((e as GraphQLError).extensions?.code).toBe('FORBIDDEN');
+    }
+  });
+
+  it('returns the userId for a genuine platform admin', async () => {
+    prisma.user.findUnique.mockResolvedValue({ isPlatformAdmin: true });
+    await expect(requirePlatformAdmin(prisma as never, ctx())).resolves.toBe('user-1');
   });
 });
