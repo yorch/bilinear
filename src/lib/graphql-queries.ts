@@ -20,6 +20,28 @@ export const GOOGLE_AUTH_START_QUERY = `
   }
 `;
 
+export const GITHUB_AUTH_START_QUERY = `
+  query GithubAuthStart {
+    githubAuthStart { url state }
+  }
+`;
+
+export const GITHUB_AUTH_EXCHANGE_MUTATION = `
+  mutation GithubAuthExchange($code: String!, $state: String!) {
+    githubAuthExchange(code: $code, state: $state) {
+      success
+      accessToken
+      refreshToken
+      expiresIn
+      user {
+        id
+        displayName
+        email
+      }
+    }
+  }
+`;
+
 export const EMAIL_VERIFY_MUTATION = `
   mutation EmailVerify($input: EmailVerifyInput!) {
     emailVerify(input: $input) {

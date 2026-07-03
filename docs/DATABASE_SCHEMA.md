@@ -138,6 +138,7 @@ CREATE TABLE users (
     -- Auth
     password_hash   TEXT,  -- null for OAuth-only users
     google_id       VARCHAR(255),
+    github_id       VARCHAR(255),  -- numeric GitHub user id, stored as string
 
     -- Notification preferences
     email_notifications_enabled  BOOLEAN NOT NULL DEFAULT true,

@@ -230,7 +230,7 @@ docker compose -f docker-compose.prod.yml -f docker-compose.infra.yml \
                -f docker-compose.traefik.yml up -d
 ```
 
-Required environment variables (in addition to defaults): `JWT_SECRET`, `JWT_REFRESH_SECRET`, `APP_URL`, `REDIS_URL`, and optionally `POSTGRES_PASSWORD`, `WS_PORT` (default 3001), SMTP / Google OAuth settings. See `.env.example` for the full list.
+Required environment variables (in addition to defaults): `JWT_SECRET`, `JWT_REFRESH_SECRET`, `APP_URL`, `REDIS_URL`, and optionally `POSTGRES_PASSWORD`, `WS_PORT` (default 3001), SMTP / Google OAuth / GitHub OAuth settings. See `.env.example` for the full list.
 
 ### Production process requirements
 

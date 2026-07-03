@@ -152,21 +152,29 @@ async function verifyOAuthStateJWT(
 }
 
 /**
+ * Login-flow OAuth providers. `github_login` is deliberately distinct from
+ * the `github` provider claim used by the org-integration connect flow
+ * (`signGithubOAuthState` below) so an integration state can never be
+ * presented as a login state or vice-versa.
+ */
+export type LoginOAuthProvider = 'google' | 'github_login';
+
+/**
  * Sign a short-lived OAuth "state" JWT used to prevent CSRF on the
- * Google OAuth redirect chain. The token carries a random nonce and a
- * narrow `type: 'oauth_state'` claim so it cannot be substituted for an
- * access/refresh token. Expires in 10 minutes — long enough for the user
- * to complete a Google consent screen, short enough to limit replay.
+ * login OAuth redirect chain (Google, GitHub). The token carries a random
+ * nonce and a narrow `type: 'oauth_state'` claim so it cannot be substituted
+ * for an access/refresh token. Expires in 10 minutes — long enough for the
+ * user to complete a consent screen, short enough to limit replay.
  */
 export async function signOAuthState(
-  provider: 'google',
+  provider: LoginOAuthProvider,
 ): Promise<{ state: string; nonce: string }> {
   const nonce = crypto.randomBytes(24).toString('base64url');
   const state = await signOAuthStateJWT({ nonce, provider });
   return { nonce, state };
 }
 
-export async function verifyOAuthState(state: string, provider: 'google'): Promise<void> {
+export async function verifyOAuthState(state: string, provider: LoginOAuthProvider): Promise<void> {
   await verifyOAuthStateJWT(state, provider);
 }
 

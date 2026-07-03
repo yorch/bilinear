@@ -15,19 +15,33 @@ export class UserService {
     email: string;
     name: string;
     googleId?: string;
+    githubId?: string;
     avatarUrl?: string;
   }): Promise<User> {
-    const existing = await this.prisma.user.findUnique({
-      where: { email: params.email },
-    });
+    // Provider ids are stable while provider-side emails can change. Match by
+    // provider id first so a returning OAuth user whose email changed still
+    // lands on their existing account instead of falling through to a create
+    // that violates the unique provider-id constraint.
+    let existing: User | null = null;
+    if (params.githubId) {
+      existing = await this.prisma.user.findUnique({ where: { githubId: params.githubId } });
+    } else if (params.googleId) {
+      existing = await this.prisma.user.findUnique({ where: { googleId: params.googleId } });
+    }
+    existing ??= await this.prisma.user.findUnique({ where: { email: params.email } });
 
     if (existing) {
-      // Update googleId / avatar if linking OAuth
-      if (params.googleId && !existing.googleId) {
+      // Link the provider id on first OAuth sign-in to an existing account.
+      const linkGoogle = params.googleId && !existing.googleId;
+      const linkGithub = params.githubId && !existing.githubId;
+      if (linkGoogle || linkGithub) {
         return this.prisma.user.update({
           data: {
-            avatarUrl: params.avatarUrl ?? existing.avatarUrl,
-            googleId: params.googleId,
+            // Fill the avatar only when the account has none — linking a
+            // provider must not clobber an avatar the user already has.
+            avatarUrl: existing.avatarUrl ?? params.avatarUrl,
+            ...(linkGoogle ? { googleId: params.googleId } : {}),
+            ...(linkGithub ? { githubId: params.githubId } : {}),
           },
           where: { id: existing.id },
         });
@@ -42,6 +56,7 @@ export class UserService {
         avatarUrl: params.avatarUrl,
         displayName: params.name,
         email: params.email,
+        githubId: params.githubId,
         googleId: params.googleId,
         initials,
         name: params.name,

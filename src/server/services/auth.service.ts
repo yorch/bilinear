@@ -202,6 +202,51 @@ export class AuthService {
     return this.issueTokenPair(user.id);
   }
 
+  /**
+   * Returns the GitHub OAuth consent URL plus a signed `state` token that
+   * the callback page must send back to `exchangeGithubCode`. Reuses the
+   * same OAuth App credentials as the org integration (`GITHUB_CLIENT_ID` /
+   * `GITHUB_CLIENT_SECRET`); the redirect URI is server-controlled.
+   */
+  async startGithubAuth(): Promise<{ url: string; state: string }> {
+    const clientId = process.env.GITHUB_CLIENT_ID;
+    if (!clientId) {
+      throw new OAuthError('GitHub OAuth is not configured');
+    }
+    const { state } = await signOAuthState('github_login');
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: getGithubRedirectUri(),
+      // read:user for profile, user:email so private primary emails are
+      // still visible via /user/emails.
+      scope: 'read:user user:email',
+      state,
+    });
+    const url = `https://github.com/login/oauth/authorize?${params.toString()}`;
+    return { state, url };
+  }
+
+  async exchangeGithubCode(code: string, state: string): Promise<AuthPayload> {
+    try {
+      await verifyOAuthState(state, 'github_login');
+    } catch {
+      throw new OAuthError('Invalid or expired OAuth state');
+    }
+
+    const profile = await fetchGithubProfile(code, getGithubRedirectUri());
+
+    const user = await this.userService.findOrCreate({
+      avatarUrl: profile.avatarUrl,
+      email: profile.email,
+      // Stored as a string (like googleId) — the numeric GitHub id is only an
+      // opaque identity key here, and a string column can't overflow int4.
+      githubId: String(profile.id),
+      name: profile.name,
+    });
+
+    return this.issueTokenPair(user.id);
+  }
+
   async refreshTokens(rawRefreshToken: string): Promise<AuthPayload> {
     let payload: { userId: string; tokenId: string };
     try {
@@ -410,17 +455,20 @@ export class OAuthError extends Error {
 }
 
 /**
- * Resolve the server-authoritative Google OAuth redirect URI. Prefers the
- * explicit `GOOGLE_REDIRECT_URI` env (so prod/preview/dev can each register
- * their own) and falls back to `APP_URL + /auth/google/callback`.
+ * Resolve a server-authoritative OAuth redirect URI. Prefers the provider's
+ * explicit `*_REDIRECT_URI` env (so prod/preview/dev can each register their
+ * own) and falls back to `APP_URL + callbackPath`.
  */
-function getGoogleRedirectUri(): string {
-  const explicit = process.env.GOOGLE_REDIRECT_URI;
-  if (explicit) {
-    return explicit;
+function getOAuthRedirectUri(explicitUri: string | undefined, callbackPath: string): string {
+  if (explicitUri) {
+    return explicitUri;
   }
   const appUrl = (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
-  return `${appUrl}/auth/google/callback`;
+  return `${appUrl}${callbackPath}`;
+}
+
+function getGoogleRedirectUri(): string {
+  return getOAuthRedirectUri(process.env.GOOGLE_REDIRECT_URI, '/auth/google/callback');
 }
 
 async function fetchGoogleProfile(code: string, redirectUri: string) {
@@ -456,4 +504,91 @@ async function fetchGoogleProfile(code: string, redirectUri: string) {
     name: string;
     picture?: string;
   }>;
+}
+
+/**
+ * GitHub *login* redirect URI — distinct from the org-integration callback
+ * (`/api/integrations/github/callback`).
+ */
+function getGithubRedirectUri(): string {
+  return getOAuthRedirectUri(process.env.GITHUB_REDIRECT_URI, '/auth/github/callback');
+}
+
+interface GithubLoginProfile {
+  avatarUrl?: string;
+  email: string;
+  id: number;
+  name: string;
+}
+
+async function fetchGithubProfile(code: string, redirectUri: string): Promise<GithubLoginProfile> {
+  const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+    body: new URLSearchParams({
+      client_id: process.env.GITHUB_CLIENT_ID ?? '',
+      client_secret: process.env.GITHUB_CLIENT_SECRET ?? '',
+      code,
+      redirect_uri: redirectUri,
+    }),
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    method: 'POST',
+  });
+
+  if (!tokenRes.ok) {
+    throw new OAuthError('Failed to exchange GitHub authorization code');
+  }
+
+  // GitHub returns 200 with an `error` body for bad/expired codes.
+  const tokenData = (await tokenRes.json()) as { access_token?: string; error?: string };
+  if (!tokenData.access_token) {
+    throw new OAuthError('Failed to exchange GitHub authorization code');
+  }
+
+  const apiHeaders = {
+    Accept: 'application/vnd.github+json',
+    Authorization: `Bearer ${tokenData.access_token}`,
+  };
+
+  // The two lookups are independent given the token — fetch them in parallel.
+  const [profileRes, emailsRes] = await Promise.all([
+    fetch('https://api.github.com/user', { headers: apiHeaders }),
+    fetch('https://api.github.com/user/emails', { headers: apiHeaders }),
+  ]);
+  if (!profileRes.ok) {
+    throw new OAuthError('Failed to fetch GitHub user profile');
+  }
+  const profile = (await profileRes.json()) as {
+    id: number;
+    login: string;
+    name: string | null;
+    email: string | null;
+    avatar_url?: string;
+  };
+
+  // `/user.email` is the public profile email — often null, and even when set
+  // it is not necessarily verified. Always resolve the email via
+  // /user/emails and require `verified` — findOrCreate links accounts by
+  // email, so accepting an unverified address would let an attacker claim a
+  // victim's email on GitHub and take over their account here.
+  if (!emailsRes.ok) {
+    throw new OAuthError('Failed to fetch GitHub email addresses');
+  }
+  const emails = (await emailsRes.json()) as Array<{
+    email: string;
+    primary: boolean;
+    verified: boolean;
+  }>;
+  const email = (emails.find(e => e.primary && e.verified) ?? emails.find(e => e.verified))?.email;
+  if (!email) {
+    throw new OAuthError('Your GitHub account has no verified email address');
+  }
+
+  return {
+    avatarUrl: profile.avatar_url,
+    email,
+    id: profile.id,
+    name: profile.name?.trim() || profile.login,
+  };
 }

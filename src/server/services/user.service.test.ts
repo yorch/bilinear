@@ -105,6 +105,43 @@ describe('UserService', () => {
       expect(prisma.user.update).not.toHaveBeenCalled();
     });
 
+    it('matches a returning OAuth user by provider id when their email changed', async () => {
+      const linked = { ...TEST_USER, email: 'old@example.com', githubId: '42' };
+      // First lookup is by githubId and hits — the email lookup never runs.
+      prisma.user.findUnique.mockResolvedValueOnce(linked);
+
+      const result = await service.findOrCreate({
+        email: 'new@example.com',
+        githubId: '42',
+        name: TEST_USER.name,
+      });
+
+      expect(result).toEqual(linked);
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { githubId: '42' } });
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('does not clobber an existing avatar when linking a provider', async () => {
+      const withAvatar = { ...TEST_USER, avatarUrl: 'https://example.com/custom.png' };
+      prisma.user.findUnique
+        .mockResolvedValueOnce(null) // githubId lookup misses
+        .mockResolvedValueOnce(withAvatar); // email lookup hits
+      prisma.user.update.mockResolvedValue({ ...withAvatar, githubId: '42' });
+
+      await service.findOrCreate({
+        avatarUrl: 'https://avatars.githubusercontent.com/u/42',
+        email: TEST_USER.email,
+        githubId: '42',
+        name: TEST_USER.name,
+      });
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        data: { avatarUrl: 'https://example.com/custom.png', githubId: '42' },
+        where: { id: TEST_USER.id },
+      });
+    });
+
     it('creates a new user with derived initials when none exists', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
       prisma.user.create.mockResolvedValue(TEST_USER_2);

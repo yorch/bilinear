@@ -43,6 +43,7 @@ CREATE TABLE "users" (
     "status_until_at" TIMESTAMPTZ,
     "password_hash" TEXT,
     "google_id" VARCHAR(255),
+    "github_id" VARCHAR(255),
     "email_notifications_enabled" BOOLEAN NOT NULL DEFAULT true,
     "calendar_feed_token" VARCHAR(64),
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -840,6 +841,9 @@ CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "users_google_id_key" ON "users"("google_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "users_github_id_key" ON "users"("github_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "users_calendar_feed_token_key" ON "users"("calendar_feed_token");

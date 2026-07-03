@@ -39,6 +39,16 @@ async function enforceAuthLimit(
   }
 }
 
+/** Remap service-level OAuthError to the OAUTH_ERROR GraphQL code; rethrow the rest. */
+function remapOAuthError(err: unknown): never {
+  if (err instanceof OAuthError) {
+    throw new GraphQLError(err.message, {
+      extensions: { code: 'OAUTH_ERROR' },
+    });
+  }
+  throw err;
+}
+
 // The AuthPayload service return includes `userId`; this resolver hydrates it
 // into the `user: User!` field declared in the GraphQL schema.
 export const authResolvers = {
@@ -107,6 +117,18 @@ export const authResolvers = {
       }
     },
 
+    githubAuthExchange: async (
+      _parent: unknown,
+      { code, state }: { code: string; state: string },
+      ctx: GraphQLContext,
+    ) => {
+      try {
+        return await ctx.services.auth.exchangeGithubCode(code, state);
+      } catch (err) {
+        remapOAuthError(err);
+      }
+    },
+
     googleAuthExchange: async (
       _parent: unknown,
       { code, state }: { code: string; state: string },
@@ -115,13 +137,7 @@ export const authResolvers = {
       try {
         return await ctx.services.auth.exchangeGoogleCode(code, state);
       } catch (err) {
-        const error = err as Error;
-        if (err instanceof OAuthError) {
-          throw new GraphQLError(error.message, {
-            extensions: { code: 'OAUTH_ERROR' },
-          });
-        }
-        throw err;
+        remapOAuthError(err);
       }
     },
 
@@ -162,16 +178,19 @@ export const authResolvers = {
   },
 
   Query: {
+    githubAuthStart: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
+      try {
+        return await ctx.services.auth.startGithubAuth();
+      } catch (err) {
+        remapOAuthError(err);
+      }
+    },
+
     googleAuthStart: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
       try {
         return await ctx.services.auth.startGoogleAuth();
       } catch (err) {
-        if (err instanceof OAuthError) {
-          throw new GraphQLError(err.message, {
-            extensions: { code: 'OAUTH_ERROR' },
-          });
-        }
-        throw err;
+        remapOAuthError(err);
       }
     },
   },

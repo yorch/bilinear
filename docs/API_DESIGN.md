@@ -33,17 +33,19 @@ code. A section at the end lists planned-but-unshipped surface.
 
 ## 2. Authentication
 
-### Magic link + Google OAuth
+### Magic link + Google/GitHub OAuth
 
 ```graphql
 type Query {
   googleAuthStart: GoogleAuthStartPayload!  # returns { url, state } — client redirects browser to url
+  githubAuthStart: GithubAuthStartPayload!  # same shape; callback lands on /auth/github/callback
 }
 
 type Mutation {
   emailLogin(input: EmailLoginInput!): EmailLoginPayload!   # send magic code
   emailVerify(input: EmailVerifyInput!): AuthPayload!       # verify 6-digit code
   googleAuthExchange(code: String!, state: String!): AuthPayload!  # state returned by googleAuthStart
+  githubAuthExchange(code: String!, state: String!): AuthPayload!  # state returned by githubAuthStart
   tokenRefresh(refreshToken: String!): AuthPayload!
   logout: LogoutPayload!
 
@@ -150,7 +152,7 @@ catches service-layer exceptions and remaps them:
 | `BAD_USER_INPUT`  | Validation failure (service-level errors, Zod parse miss)  |
 | `INVALID_CODE`    | Magic link code wrong / expired                            |
 | `INVALID_TOKEN`   | Refresh token invalid / reused                             |
-| `OAUTH_ERROR`     | Google OAuth token exchange failed or returned no identity |
+| `OAUTH_ERROR`     | OAuth (Google/GitHub) exchange failed or returned no identity |
 | `RATELIMITED`     | Over the rate-limit budget (§12)                           |
 
 Clients key off `extensions.code`, not the human-readable message.
@@ -833,7 +835,7 @@ source.
 ### Auth (§2)
 
 ```
-emailLogin, emailVerify, googleAuthStart (Query), googleAuthExchange, tokenRefresh, logout
+emailLogin, emailVerify, googleAuthStart (Query), googleAuthExchange, githubAuthStart (Query), githubAuthExchange, tokenRefresh, logout
 organizationCreate
 ```
 
