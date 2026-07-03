@@ -76,6 +76,7 @@ model User {
 
   passwordHash String? @map("password_hash")
   googleId     String? @unique @map("google_id") @db.VarChar(255)
+  githubId     String? @unique @map("github_id") @db.VarChar(255)
 
   emailNotificationsEnabled Boolean @default(true) @map("email_notifications_enabled")
 

@@ -4,7 +4,11 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { gql } from '@/lib/graphql';
-import { EMAIL_LOGIN_MUTATION, GOOGLE_AUTH_START_QUERY } from '@/lib/graphql-queries';
+import {
+  EMAIL_LOGIN_MUTATION,
+  GITHUB_AUTH_START_QUERY,
+  GOOGLE_AUTH_START_QUERY,
+} from '@/lib/graphql-queries';
 import { gqlError } from '@/lib/utils';
 
 export function LoginForm() {
@@ -68,32 +72,60 @@ export function LoginForm() {
 
       <Button
         className="w-full"
-        onClick={async () => {
-          // Let the server own the OAuth URL (including redirect_uri and
-          // CSRF state). Persist state to sessionStorage so the callback
-          // page can replay it to googleAuthExchange.
-          try {
-            const result = await gql(GOOGLE_AUTH_START_QUERY);
-            const payload = (
-              result.data as {
-                googleAuthStart?: { url: string; state: string };
-              }
-            )?.googleAuthStart;
-            if (!payload) {
-              setError(gqlError(result, 'Failed to start Google sign-in'));
-              return;
-            }
-            sessionStorage.setItem('google_oauth_state', payload.state);
-            window.location.href = payload.url;
-          } catch {
-            setError('Something went wrong. Please try again.');
-          }
-        }}
+        onClick={() =>
+          startOAuth({
+            field: 'googleAuthStart',
+            label: 'Google',
+            query: GOOGLE_AUTH_START_QUERY,
+            storageKey: 'google_oauth_state',
+          })
+        }
         type="button"
         variant="outline"
       >
         Continue with Google
       </Button>
+
+      <Button
+        className="w-full"
+        onClick={() =>
+          startOAuth({
+            field: 'githubAuthStart',
+            label: 'GitHub',
+            query: GITHUB_AUTH_START_QUERY,
+            storageKey: 'github_oauth_state',
+          })
+        }
+        type="button"
+        variant="outline"
+      >
+        Continue with GitHub
+      </Button>
     </form>
   );
+
+  // Let the server own the OAuth URL (including redirect_uri and CSRF
+  // state). Persist state to sessionStorage so the callback page can replay
+  // it to the matching *AuthExchange mutation.
+  async function startOAuth(provider: {
+    field: string;
+    label: string;
+    query: string;
+    storageKey: string;
+  }) {
+    try {
+      const result = await gql(provider.query);
+      const payload = (result.data as Record<string, { url: string; state: string } | undefined>)?.[
+        provider.field
+      ];
+      if (!payload) {
+        setError(gqlError(result, `Failed to start ${provider.label} sign-in`));
+        return;
+      }
+      sessionStorage.setItem(provider.storageKey, payload.state);
+      window.location.href = payload.url;
+    } catch {
+      setError('Something went wrong. Please try again.');
+    }
+  }
 }

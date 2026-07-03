@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { installSessionCookies } from '@/lib/auth-session';
 import { gql } from '@/lib/graphql';
 import { EMAIL_VERIFY_MUTATION } from '@/lib/graphql-queries';
 
@@ -57,12 +58,8 @@ export function VerifyCodeForm() {
         }
       ).emailVerify;
 
-      // Store tokens in cookies via server action / API
-      await fetch('/api/auth/session', {
-        body: JSON.stringify({ accessToken, refreshToken }),
-        headers: { 'Content-Type': 'application/json' },
-        method: 'POST',
-      });
+      // Store tokens in httpOnly cookies via the session API
+      await installSessionCookies({ accessToken, refreshToken });
 
       router.push('/');
     } catch {

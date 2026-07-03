@@ -1601,6 +1601,14 @@ export const typeDefs = `
     """
     googleAuthStart: GoogleAuthStartPayload!
 
+    """
+    Begin a GitHub OAuth login flow. Returns the authorize URL (with
+    server-controlled redirect_uri and a signed CSRF state) that the client
+    should redirect the browser to. The returned state must be stored and
+    passed to githubAuthExchange when the callback fires.
+    """
+    githubAuthStart: GithubAuthStartPayload!
+
     """Returns the SAML SSO configuration for the authenticated org. Null if not configured. Owner/admin only."""
     samlConfiguration: SamlConfiguration
 
@@ -1611,6 +1619,11 @@ export const typeDefs = `
   }
 
   type GoogleAuthStartPayload {
+    url: String!
+    state: String!
+  }
+
+  type GithubAuthStartPayload {
     url: String!
     state: String!
   }
@@ -1638,6 +1651,12 @@ export const typeDefs = `
     is rejected as CSRF.
     """
     googleAuthExchange(code: String!, state: String!): AuthPayload!
+    """
+    Exchange a GitHub OAuth authorization code for a session. The state
+    token must match the one returned by githubAuthStart or the request
+    is rejected as CSRF.
+    """
+    githubAuthExchange(code: String!, state: String!): AuthPayload!
     tokenRefresh(refreshToken: String!): AuthPayload!
     logout: LogoutPayload!
 

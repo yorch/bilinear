@@ -114,6 +114,22 @@ describe('authResolvers', () => {
     });
   });
 
+  describe('Mutation.githubAuthExchange', () => {
+    it('throws OAUTH_ERROR when the state token is invalid', async () => {
+      try {
+        await authResolvers.Mutation.githubAuthExchange(
+          null,
+          { code: 'bad-code', state: 'not-a-jwt' },
+          ctx as never,
+        );
+        expect.unreachable('Should have thrown');
+      } catch (e) {
+        expect(e).toBeInstanceOf(GraphQLError);
+        expect((e as GraphQLError).extensions?.code).toBe('OAUTH_ERROR');
+      }
+    });
+  });
+
   describe('Mutation.logout', () => {
     it('revokes tokens and returns success when authenticated', async () => {
       ctx.prisma.authToken.updateMany.mockResolvedValue({ count: 1 });

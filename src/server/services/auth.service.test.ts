@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TEST_USER } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
-import { signRefreshToken } from '../lib/jwt';
+import { signGithubOAuthState, signRefreshToken, verifyOAuthState } from '../lib/jwt';
 import { AuthService, apiScopesAllowWrite, InvalidTokenError } from './auth.service';
 import { UserService } from './user.service';
 
@@ -192,3 +192,154 @@ describe('AuthService — API token scopes & expiry', () => {
     expect(apiScopesAllowWrite(['read'])).toBe(false);
   });
 });
+
+describe('AuthService — GitHub OAuth login', () => {
+  let prisma: MockPrismaClient;
+  let userService: UserService;
+  let service: AuthService;
+
+  beforeEach(() => {
+    prisma = createMockPrisma();
+    userService = new UserService(prisma as never);
+    vi.spyOn(userService, 'getOrganizationForUser').mockResolvedValue(null);
+    service = new AuthService(prisma as never, userService);
+    vi.stubEnv('GITHUB_CLIENT_ID', 'test-client-id');
+    vi.stubEnv('GITHUB_CLIENT_SECRET', 'test-client-secret');
+    vi.stubEnv('APP_URL', 'http://localhost:3000');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('startGithubAuth throws when GITHUB_CLIENT_ID is not configured', async () => {
+    vi.stubEnv('GITHUB_CLIENT_ID', '');
+    await expect(service.startGithubAuth()).rejects.toThrow(/not configured/);
+  });
+
+  it('startGithubAuth returns the authorize URL with a signed state', async () => {
+    const { url, state } = await service.startGithubAuth();
+    const parsed = new URL(url);
+    expect(parsed.origin + parsed.pathname).toBe('https://github.com/login/oauth/authorize');
+    expect(parsed.searchParams.get('client_id')).toBe('test-client-id');
+    expect(parsed.searchParams.get('redirect_uri')).toBe(
+      'http://localhost:3000/auth/github/callback',
+    );
+    expect(parsed.searchParams.get('scope')).toBe('read:user user:email');
+    expect(parsed.searchParams.get('state')).toBe(state);
+    // The state must round-trip through the github_login verifier
+    await expect(verifyOAuthState(state, 'github_login')).resolves.toBeUndefined();
+  });
+
+  it('exchangeGithubCode rejects an invalid state', async () => {
+    await expect(service.exchangeGithubCode('code', 'garbage')).rejects.toThrow(
+      /Invalid or expired OAuth state/,
+    );
+  });
+
+  it('exchangeGithubCode rejects a state signed for the integration flow', async () => {
+    const integrationState = await signGithubOAuthState({
+      orgId: '00000000-0000-0000-0000-000000000001',
+      userId: TEST_USER.id,
+      webhookSecret: 'whsec',
+    });
+    await expect(service.exchangeGithubCode('code', integrationState)).rejects.toThrow(
+      /Invalid or expired OAuth state/,
+    );
+  });
+
+  it('exchangeGithubCode signs the user in with the verified primary email', async () => {
+    const { state } = await service.startGithubAuth();
+    vi.stubGlobal('fetch', buildGithubFetchMock({}));
+    const findOrCreate = vi.spyOn(userService, 'findOrCreate').mockResolvedValue(TEST_USER);
+    prisma.authToken.create.mockResolvedValue({});
+
+    const result = await service.exchangeGithubCode('good-code', state);
+
+    expect(result.success).toBe(true);
+    expect(result.userId).toBe(TEST_USER.id);
+    expect(findOrCreate).toHaveBeenCalledWith({
+      avatarUrl: 'https://avatars.githubusercontent.com/u/42',
+      email: 'verified@example.com',
+      githubId: '42',
+      name: 'Octo Cat',
+    });
+  });
+
+  it('exchangeGithubCode falls back to the login when the profile has no name', async () => {
+    const { state } = await service.startGithubAuth();
+    vi.stubGlobal('fetch', buildGithubFetchMock({ name: null }));
+    const findOrCreate = vi.spyOn(userService, 'findOrCreate').mockResolvedValue(TEST_USER);
+    prisma.authToken.create.mockResolvedValue({});
+
+    await service.exchangeGithubCode('good-code', state);
+
+    expect(findOrCreate).toHaveBeenCalledWith(expect.objectContaining({ name: 'octocat' }));
+  });
+
+  it('exchangeGithubCode rejects accounts with no verified email', async () => {
+    const { state } = await service.startGithubAuth();
+    vi.stubGlobal(
+      'fetch',
+      buildGithubFetchMock({
+        emails: [{ email: 'unverified@example.com', primary: true, verified: false }],
+      }),
+    );
+
+    await expect(service.exchangeGithubCode('good-code', state)).rejects.toThrow(
+      /no verified email/,
+    );
+  });
+
+  it('exchangeGithubCode rejects when the code exchange returns an error body', async () => {
+    const { state } = await service.startGithubAuth();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse({ error: 'bad_verification_code' })),
+    );
+
+    await expect(service.exchangeGithubCode('bad-code', state)).rejects.toThrow(
+      /Failed to exchange GitHub authorization code/,
+    );
+  });
+});
+
+function jsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    headers: { 'Content-Type': 'application/json' },
+    status: 200,
+  });
+}
+
+function buildGithubFetchMock(
+  overrides: Partial<{
+    name: string | null;
+    emails: Array<{ email: string; primary: boolean; verified: boolean }>;
+  }>,
+) {
+  return vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.startsWith('https://github.com/login/oauth/access_token')) {
+      return jsonResponse({ access_token: 'gho_test' });
+    }
+    if (url.startsWith('https://api.github.com/user/emails')) {
+      return jsonResponse(
+        overrides.emails ?? [
+          { email: 'secondary@example.com', primary: false, verified: true },
+          { email: 'verified@example.com', primary: true, verified: true },
+        ],
+      );
+    }
+    if (url.startsWith('https://api.github.com/user')) {
+      return jsonResponse({
+        avatar_url: 'https://avatars.githubusercontent.com/u/42',
+        email: null,
+        id: 42,
+        login: 'octocat',
+        name: overrides.name === undefined ? 'Octo Cat' : overrides.name,
+      });
+    }
+    throw new Error(`Unexpected fetch in test: ${url}`);
+  });
+}
