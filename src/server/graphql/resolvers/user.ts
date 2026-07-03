@@ -23,6 +23,15 @@ export const userResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+      // Block during impersonation: an admin acting as another user must not
+      // be able to mint a long-lived personal API key for that user, which
+      // would outlive the 30-min impersonation token and grant persistent,
+      // unaudited access as the target.
+      if (ctx.impersonatorId) {
+        throw new GraphQLError('Cannot create API tokens while impersonating', {
+          extensions: { code: 'FORBIDDEN' },
+        });
+      }
       try {
         const result = await ctx.services.auth.createApiToken(ctx.userId, label, {
           expiresInDays,
@@ -96,5 +105,10 @@ export const userResolvers = {
     },
     emailNotificationsEnabled: (user: User) => user.emailNotificationsEnabled,
     isMe: (user: User, _args: unknown, ctx: GraphQLContext) => user.id === ctx.userId,
+    // Only reveal the platform-admin flag for the viewer's own record — one
+    // user must not be able to enumerate who the platform operators are. The
+    // console's cross-tenant queries expose the full roster to admins only.
+    isPlatformAdmin: (user: User, _args: unknown, ctx: GraphQLContext) =>
+      user.id === ctx.userId ? user.isPlatformAdmin : false,
   },
 };

@@ -6,6 +6,10 @@ This file provides guidance to AI Agents when working with code in this reposito
 
 A Linear-style issue tracker built with Next.js 16 (App Router), Apollo Server GraphQL, Prisma 7, PostgreSQL, MobX, and real-time sync via WebSocket + Redis Pub/Sub. Offline-first with Dexie.js (IndexedDB) client cache.
 
+### Recently shipped (2026-07-03)
+
+- **Platform admin console** — the first cross-tenant privilege in the app. New `User.isPlatformAdmin` flag (first user in an empty DB is auto-bootstrapped), org suspension (`suspendedAt`/`suspendedReason`) and a `platform_audit_logs` trail. `requirePlatformAdmin` gates a `PlatformAdminService` (tenant + user management, platform metrics) and the `(admin)` UI console at `/admin`. Impersonation via `/api/admin/impersonate[/stop]` issues a 30-min token carrying an `impersonatorId` claim; an `ImpersonationBanner` offers one-click exit. Suspension is enforced per-request in `extractAuthContext`. See PATTERNS.md §74 and DATABASE_SCHEMA.md §2.37.
+
 ### Recently shipped (2026-05-05)
 
 - **Triage workflow** — inbound issue queue at `/team/[key]/triage` with accept/decline/snooze/duplicate. Issues created on triage-enabled teams default to a `triage`-type workflow state. See PATTERNS.md §38.

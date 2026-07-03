@@ -5,6 +5,7 @@ import { ACCESS_TOKEN_EXPIRY_SECONDS, signAccessToken, signRefreshToken } from '
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
+import { getClientIp, setSessionCookie } from '@/server/lib/request-security';
 import { AuditLogService } from '@/server/services/audit-log.service';
 import { SamlService } from '@/server/services/saml.service';
 
@@ -141,7 +142,7 @@ async function handlePost(req: NextRequest) {
 
   void auditLogService.log({
     action: 'auth.login',
-    ipAddress: req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? undefined,
+    ipAddress: getClientIp(req) ?? undefined,
     metadata: { idpEntityId: config.idpEntityId, method: 'saml' },
     orgId: org.id,
     userAgent: req.headers.get('user-agent') ?? undefined,
@@ -156,21 +157,8 @@ async function handlePost(req: NextRequest) {
 
   const res = NextResponse.redirect(destination, 302);
 
-  res.cookies.set('access_token', accessToken, {
-    httpOnly: true,
-    maxAge: ACCESS_TOKEN_MAX_AGE,
-    path: '/',
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-  });
-
-  res.cookies.set('refresh_token', refreshToken, {
-    httpOnly: true,
-    maxAge: REFRESH_TOKEN_MAX_AGE,
-    path: '/',
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-  });
+  setSessionCookie(res, 'access_token', accessToken, ACCESS_TOKEN_MAX_AGE);
+  setSessionCookie(res, 'refresh_token', refreshToken, REFRESH_TOKEN_MAX_AGE);
 
   // Clear the relay state cookie
   res.cookies.delete('saml_relay');

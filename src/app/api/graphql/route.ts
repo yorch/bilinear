@@ -11,6 +11,7 @@ import { createContext } from '@/server/graphql/context';
 import { resolvers } from '@/server/graphql/resolvers';
 import { typeDefs } from '@/server/graphql/schema';
 import { logger, runWithRequestContext } from '@/server/lib/logger';
+import { isOriginStringAllowed } from '@/server/lib/request-security';
 import {
   buildRateLimitedResponse,
   checkRateLimit,
@@ -111,29 +112,6 @@ const observabilityPlugin: ApolloServerPlugin<GraphQLContext> = {
 };
 
 /**
- * Resolve the allow-list of Origins permitted to hit `/api/graphql`.
- * Built from `APP_URL` plus any additional comma-separated entries in
- * `GRAPHQL_ALLOWED_ORIGINS` (e.g. preview deployments). Returning an
- * empty list disables the check — useful in tests where the request
- * arrives with no Origin header.
- */
-function getAllowedOrigins(): string[] {
-  const fromEnv: string[] = [];
-  if (process.env.APP_URL) {
-    fromEnv.push(process.env.APP_URL.replace(/\/$/, ''));
-  }
-  if (process.env.GRAPHQL_ALLOWED_ORIGINS) {
-    for (const o of process.env.GRAPHQL_ALLOWED_ORIGINS.split(',')) {
-      const trimmed = o.trim().replace(/\/$/, '');
-      if (trimmed) {
-        fromEnv.push(trimmed);
-      }
-    }
-  }
-  return fromEnv;
-}
-
-/**
  * Cache the GraphQL context per request so we only call createContext once.
  * Apollo's context callback and the rate-limit check both need the context,
  * but createContext does JWT verification + service instantiation on every
@@ -159,8 +137,7 @@ const server = new ApolloServer<GraphQLContext>({
       // on some browsers, so allow no-Origin too.
       async requestDidStart({ contextValue: _ctx, request }) {
         const origin = request.http?.headers.get('origin') ?? null;
-        const allowed = getAllowedOrigins();
-        if (origin && allowed.length > 0 && !allowed.includes(origin)) {
+        if (!isOriginStringAllowed(origin)) {
           throw new GraphQLError('Origin not allowed', {
             extensions: { code: 'FORBIDDEN' },
           });

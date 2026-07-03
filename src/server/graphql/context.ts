@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import type { PrismaClient } from '../../generated/prisma';
 import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
+import { getClientIp } from '../lib/request-security';
 import type { AuthContext } from '../middleware/auth';
 import { extractAuthContext } from '../middleware/auth';
 import { AiService } from '../services/ai.service';
@@ -26,6 +27,7 @@ import { IssueTemplateService } from '../services/issue-template.service';
 import { LabelService } from '../services/label.service';
 import { NotificationService } from '../services/notification.service';
 import { OrganizationService } from '../services/organization.service';
+import { PlatformAdminService } from '../services/platform-admin.service';
 import { ProjectService } from '../services/project.service';
 import { RoadmapService } from '../services/roadmap.service';
 import { SamlService } from '../services/saml.service';
@@ -69,6 +71,7 @@ export interface GraphQLContext extends AuthContext {
     label: LabelService;
     notification: NotificationService;
     organization: OrganizationService;
+    platformAdmin: PlatformAdminService;
     project: ProjectService;
     roadmap: RoadmapService;
     saml: SamlService;
@@ -84,38 +87,12 @@ export interface GraphQLContext extends AuthContext {
   };
 }
 
-function extractClientIp(req: NextRequest): string | null {
-  // When TRUST_PROXY_HEADERS=1, read X-Forwarded-For / X-Real-IP. Deploy
-  // this only when the upstream proxy strips client-supplied forwarding
-  // headers (Vercel, Cloudflare, reverse-proxy with trust_forwarded, etc.).
-  if (process.env.TRUST_PROXY_HEADERS === '1') {
-    const xff = req.headers.get('x-forwarded-for');
-    if (xff) {
-      const first = xff.split(',')[0]?.trim();
-      if (first) {
-        return first;
-      }
-    }
-    const realIp = req.headers.get('x-real-ip');
-    if (realIp) {
-      return realIp;
-    }
-  }
-  // Fallback: NextRequest exposes the socket-level remote address. This
-  // is the actual TCP peer — when the app runs without a proxy, it's
-  // already the real client IP; behind a misconfigured proxy it'll be
-  // the proxy itself, which still bounds the per-IP cap to one shared
-  // bucket per upstream rather than disabling it entirely.
-  const nextIp = (req as unknown as { ip?: string | null }).ip;
-  return nextIp ?? null;
-}
-
 export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('access_token')?.value ?? null;
 
   const auth = await extractAuthContext(authHeader, cookieToken, prisma);
-  const clientIp = extractClientIp(req);
+  const clientIp = getClientIp(req);
 
   const userService = new UserService(prisma);
   const auditLogService = new AuditLogService(prisma);
@@ -131,6 +108,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const issueActivityService = new IssueActivityService(prisma);
   const notificationService = new NotificationService(prisma);
   const organizationService = new OrganizationService(prisma);
+  const platformAdminService = new PlatformAdminService(prisma);
   const teamService = new TeamService(prisma);
   const workflowStateService = new WorkflowStateService(prisma);
   const cycleService = new CycleService(prisma);
@@ -187,6 +165,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
       label: labelService,
       notification: notificationService,
       organization: organizationService,
+      platformAdmin: platformAdminService,
       project: projectService,
       roadmap: roadmapService,
       saml: samlService,

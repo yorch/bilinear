@@ -21,6 +21,7 @@ import { issueTemplateResolvers } from './issue-template';
 import { labelResolvers } from './label';
 import { notificationResolvers } from './notification';
 import { organizationResolvers } from './organization';
+import { platformAdminResolvers } from './platform-admin';
 import { projectResolvers } from './project';
 import { roadmapResolvers } from './roadmap';
 import { samlResolvers } from './saml';
@@ -152,6 +153,7 @@ export const resolvers = {
     ...issueRelationResolvers.Mutation,
     ...issueTemplateResolvers.Mutation,
     ...organizationResolvers.Mutation,
+    ...platformAdminResolvers.Mutation,
     ...customFieldResolvers.Mutation,
     ...customViewResolvers.Mutation,
     ...cycleResolvers.Mutation,
@@ -204,6 +206,7 @@ export const resolvers = {
     ...issueRelationResolvers.Query,
     ...issueTemplateResolvers.Query,
     ...organizationResolvers.Query,
+    ...platformAdminResolvers.Query,
     ...customFieldResolvers.Query,
     ...customViewResolvers.Query,
     ...teamResolvers.Query,
