@@ -1,6 +1,9 @@
 import type { RootStore } from '@/stores/root-store';
 import { db } from './db';
+import { createClientLogger } from './logger';
 import type { SerializedSyncAction, WsClient } from './ws-client';
+
+const log = createClientLogger('SyncManager');
 
 /**
  * Cursor for delta-sync is a `(committedAt, id)` tuple encoded as
@@ -503,7 +506,7 @@ export class SyncManager {
       syncStore.setLastSyncId(lastSyncId);
       syncStore.setStatus('connected');
     } catch (err) {
-      console.error('[SyncManager] Bootstrap error:', err);
+      log.error('Bootstrap error', err);
       syncStore.setStatus('error');
       syncStore.setError('Bootstrap failed');
     } finally {
@@ -551,7 +554,7 @@ export class SyncManager {
       }
       syncStore.setStatus('connected');
     } catch (err) {
-      console.error('[SyncManager] Delta sync error:', err);
+      log.error('Delta sync error', err);
       // Non-fatal — we'll catch up via WebSocket
       syncStore.setStatus('connected');
     } finally {

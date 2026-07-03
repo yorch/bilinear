@@ -1,12 +1,15 @@
 'use client';
 
-import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { useReportRenderError } from '@/hooks/use-report-render-error';
 
 /**
  * Workspace-segment error boundary. Catches errors thrown inside the
  * workspace layout subtree without taking down the root layout's theme +
  * toaster providers, so the user can recover without a full reload.
+ *
+ * Reporting to Sentry is handled by useReportRenderError — Next.js swallows
+ * boundary errors before Sentry's global handlers see them.
  */
 export default function WorkspaceError({
   error,
@@ -15,11 +18,7 @@ export default function WorkspaceError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  useEffect(() => {
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('[workspace error boundary]', error);
-    }
-  }, [error]);
+  useReportRenderError('workspace-error-boundary', error);
 
   return (
     <div className="flex h-full flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
