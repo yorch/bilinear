@@ -319,11 +319,19 @@ export function requireAuth(ctx: AuthContext): asserts ctx is { userId: string; 
 // After requireAuth(ctx), TypeScript knows ctx.userId is string (not null)
 ```
 
-The Next.js edge middleware (`src/middleware.ts`) guards all non-public routes **before** any React rendering. Public paths are whitelisted in `PUBLIC_PATHS`:
+Route protection is enforced **per page**, not by edge middleware (there is no `src/middleware.ts`). Server components read the `access_token` cookie via `next/headers` and `redirect('/login')` when it is missing or fails verification — see `src/app/page.tsx`:
 
 ```typescript
-const PUBLIC_PATHS = ['/login', '/verify', '/api/graphql', '/auth/google', '/_next', '/favicon.ico'];
+const token = (await cookies()).get('access_token')?.value;
+if (!token) redirect('/login');
+try {
+  await verifyAccessToken(token); // never falls back to an empty JWT secret
+} catch {
+  redirect('/login'); // token invalid/expired
+}
 ```
+
+The `(auth)` route group runs no such check, so its routes are public by construction: `/login`, `/verify`, `/onboarding`, and the OAuth callbacks `/auth/google/callback` and `/auth/github/callback` (each exchanges its `code` + `state` and installs session cookies before redirecting to `/`).
 
 **Never fall back to an empty JWT secret:**
 
