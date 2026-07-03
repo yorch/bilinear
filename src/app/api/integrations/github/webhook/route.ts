@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
+import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
 import { GitHubService } from '@/server/services/github.service';
 
 const log = childLogger({ module: 'github-webhook' });
@@ -18,7 +19,7 @@ const log = childLogger({ module: 'github-webhook' });
  *
  * Signature validated with HMAC-SHA256 against the stored webhook_secret.
  */
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   // Identify the org via query param (?org=<urlKey>)
   const orgKey = req.nextUrl.searchParams.get('org');
   if (!orgKey) {
@@ -32,6 +33,7 @@ export async function POST(req: NextRequest) {
   if (!org) {
     return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
   }
+  bindRequestContext({ orgId: org.id });
 
   // Read raw body for signature validation
   const rawBody = Buffer.from(await req.arrayBuffer());
@@ -73,3 +75,5 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withRequestContext('integrations/github/webhook', handlePost);

@@ -4,6 +4,7 @@ import { verifyAccessToken } from '@/server/lib/jwt';
 import { logger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { redis } from '@/server/lib/redis';
+import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
 import { parseCursor, SyncService, serializeSyncAction } from '@/server/services/sync.service';
 
 /**
@@ -17,7 +18,7 @@ import { parseCursor, SyncService, serializeSyncAction } from '@/server/services
  *
  * Response: { actions: SerializedSyncAction[]; hasMore: boolean }.
  */
-export async function GET(req: NextRequest) {
+async function handleGet(req: NextRequest) {
   const token =
     req.cookies.get('access_token')?.value ??
     req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ??
@@ -33,6 +34,7 @@ export async function GET(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  bindRequestContext({ orgId });
 
   const url = new URL(req.url);
   const lastSyncIdParam = url.searchParams.get('lastSyncId');
@@ -54,7 +56,9 @@ export async function GET(req: NextRequest) {
       { headers: { 'Cache-Control': 'no-store' } },
     );
   } catch (err) {
-    logger.error({ err }, '[sync/delta] Error');
+    logger.error({ err }, 'Delta sync failed');
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+export const GET = withRequestContext('sync/delta', handleGet);

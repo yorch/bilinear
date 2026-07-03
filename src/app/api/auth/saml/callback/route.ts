@@ -4,10 +4,11 @@ import { NextResponse } from 'next/server';
 import { ACCESS_TOKEN_EXPIRY_SECONDS, signAccessToken, signRefreshToken } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
+import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
 import { AuditLogService } from '@/server/services/audit-log.service';
 import { SamlService } from '@/server/services/saml.service';
 
-const log = childLogger({ module: 'saml', route: 'callback' });
+const log = childLogger({ module: 'saml' });
 const samlService = new SamlService(prisma);
 const auditLogService = new AuditLogService(prisma);
 
@@ -23,7 +24,7 @@ const REFRESH_TOKEN_DAYS = 30;
  * issues JWT access + refresh tokens, and sets httpOnly cookies before
  * redirecting to the workspace.
  */
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   let samlResponse: string | null = null;
   let relayState: string | null = null;
 
@@ -70,6 +71,7 @@ export async function POST(req: NextRequest) {
   if (!org) {
     return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
   }
+  bindRequestContext({ orgId: org.id });
 
   const config = await samlService.getConfig(org.id);
   if (!config?.enabled) {
@@ -110,6 +112,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { userId } = await samlService.jitProvisionUser(prisma, org.id, claims);
+  bindRequestContext({ userId });
 
   // Issue JWT token pair (mirrors AuthService.issueTokenPair)
   const tokenId = crypto.randomUUID();
@@ -174,3 +177,5 @@ export async function POST(req: NextRequest) {
 
   return res;
 }
+
+export const POST = withRequestContext('auth/saml/callback', handlePost);

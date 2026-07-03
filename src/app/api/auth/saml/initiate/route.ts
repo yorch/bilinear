@@ -2,13 +2,14 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
+import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
 import {
   SamlNotConfiguredError,
   SamlNotEnabledError,
   SamlService,
 } from '@/server/services/saml.service';
 
-const log = childLogger({ module: 'saml', route: 'initiate' });
+const log = childLogger({ module: 'saml' });
 const samlService = new SamlService(prisma);
 
 // 5-minute relay state cookie TTL (seconds)
@@ -21,7 +22,7 @@ const RELAY_STATE_MAX_AGE = 5 * 60;
  * The org URL key and intended post-login redirect are stored in a
  * short-lived `saml_relay` cookie so the callback route can retrieve them.
  */
-export async function GET(req: NextRequest) {
+async function handleGet(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const orgKey = searchParams.get('org');
   const redirect = searchParams.get('redirect') ?? '/';
@@ -37,6 +38,7 @@ export async function GET(req: NextRequest) {
   if (!org) {
     return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
   }
+  bindRequestContext({ orgId: org.id });
 
   const config = await samlService.getConfig(org.id);
 
@@ -87,3 +89,5 @@ export async function GET(req: NextRequest) {
 
   return res;
 }
+
+export const GET = withRequestContext('auth/saml/initiate', handleGet);

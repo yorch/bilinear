@@ -4,6 +4,7 @@ import { verifyAccessToken } from '@/server/lib/jwt';
 import { logger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { redis } from '@/server/lib/redis';
+import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
 import { SyncService } from '@/server/services/sync.service';
 
 /**
@@ -13,7 +14,7 @@ import { SyncService } from '@/server/services/sync.service';
  * line-delimited stream: each line is `ModelName=<JSON>`, terminated by
  * `_metadata_={"lastSyncId":"<N>"}`.
  */
-export async function GET(req: NextRequest) {
+async function handleGet(req: NextRequest) {
   const token =
     req.cookies.get('access_token')?.value ??
     req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ??
@@ -29,6 +30,7 @@ export async function GET(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  bindRequestContext({ orgId });
 
   const syncService = new SyncService(prisma, redis);
 
@@ -102,7 +104,9 @@ export async function GET(req: NextRequest) {
       status: 200,
     });
   } catch (err) {
-    logger.error({ err }, '[sync/bootstrap] Error');
+    logger.error({ err }, 'Bootstrap failed');
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+export const GET = withRequestContext('sync/bootstrap', handleGet);

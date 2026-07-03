@@ -433,7 +433,9 @@ export class SamlService {
     if (existing) {
       // Ensure org membership exists
       await ensureOrgMembership(prisma, orgId, existing.id);
-      log.info({ email: claims.email, orgId, userId: existing.id }, 'SSO login — existing user');
+      // Log by userId/orgId only — the email is PII and the user id is enough
+      // to correlate an SSO login without persisting an address in log storage.
+      log.info({ orgId, userId: existing.id }, 'SSO login — existing user');
       return { isNew: false, userId: existing.id };
     }
 
@@ -449,7 +451,7 @@ export class SamlService {
     });
 
     await ensureOrgMembership(prisma, orgId, user.id);
-    log.info({ email: claims.email, orgId, userId: user.id }, 'SSO login — new user provisioned');
+    log.info({ orgId, userId: user.id }, 'SSO login — new user provisioned');
     return { isNew: true, userId: user.id };
   }
 }

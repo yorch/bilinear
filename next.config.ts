@@ -8,6 +8,13 @@ const withBundleAnalyzer = bundleAnalyzer({
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  // Keep pino and its pretty-print transport out of the webpack/turbopack
+  // server bundle. pino-pretty runs in a worker thread (via thread-stream);
+  // when bundled, the worker's transport target can't be resolved at runtime
+  // ("unable to determine transport target"), so logs silently vanish or the
+  // logger throws on init. Externalizing loads them from node_modules instead,
+  // and ensures `output: 'standalone'` traces them into the deploy bundle.
+  serverExternalPackages: ['pino', 'pino-pretty', 'thread-stream'],
 };
 
 const baseConfig = withBundleAnalyzer(nextConfig);

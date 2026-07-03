@@ -972,19 +972,24 @@ The bucket key is `rl:<userId>:<window>` where `<window>` is `floor(unixSeconds 
 
 ## 29. Structured Logging Pattern (Sprint 11-12)
 
-All server-side logging uses the `logger` singleton from `src/server/lib/logger.ts` (backed by `pino`). Never use `console.log` in server code.
+All server-side logging uses the `logger` singleton from `src/server/lib/logger.ts` (backed by `pino`). Never use `console.log` in server code. Prefer a module-bound `childLogger({ module })` over the raw `logger` so lines can be filtered by module.
 
 ```typescript
 import { childLogger, logger } from '@/server/lib/logger';
 
-// Module-level log
-logger.info({ userId, orgId }, 'User authenticated');
-logger.error({ err, query: req.url }, 'GraphQL handler failed');
-
-// Request-scoped child (pre-bind userId/orgId once, then use throughout)
-const reqLog = childLogger({ orgId: ctx.orgId, userId: ctx.userId });
-reqLog.info({ issueId }, 'Issue created');
+// Module-bound child — the convention for every server file
+const log = childLogger({ module: 'resolver/issue' });
+log.info({ issueId }, 'Issue created');
+log.error({ err }, 'webhook dispatch failed');
 ```
+
+**Request correlation (AsyncLocalStorage).** A pino `mixin` merges a per-request store (`requestId`, `route`, and `orgId`/`userId` once known) onto **every** log line emitted during the request — including deep in services — so no logger needs to be threaded through call sites. `/api/graphql` wraps each request inline via `runWithRequestContext(...)`. Other logging API routes (`sync/*`, `integrations/*`, `auth/saml/*`) wrap their exported handler with `withRequestContext('<route>', handler)` from `@/server/lib/request-context` and call `bindRequestContext({ orgId, userId })` once auth resolves. To add request-scoped fields anywhere, `runWithRequestContext`/`bindRequestContext` shallow-merge into the active scope.
+
+**Sentry + redaction.** A `hooks.logMethod` hook forwards any `error`/`fatal` log that carries an `Error` (as `err` or the first arg) to `Sentry.captureException`. Because it's a pino hook, child loggers inherit it — `.child()` can't bypass capture. `redact` scrubs credential-ish paths and PII (`password`, `*.token`, `authorization`, `cookie`, `email`, …) before serialization as defense-in-depth. It can't catch a secret embedded inside a value (e.g. a token in a URL string), so still keep those out of logs at the call site — key off `userId`/`orgId` instead.
+
+**GraphQL access/error logs.** `observabilityPlugin` in the route emits one structured line per operation (`operationName`, `operationType`, `durationMs`, `status`, `errorCount`) and logs server-side faults at `error` (client-error codes like `BAD_USER_INPUT`/`NOT_FOUND` are skipped). Successful requests — and requests that fail with only client-error codes — are sampled by `LOG_HTTP_SAMPLE_RATE` (0..1, default 1); server-side faults and slow (≥1s) requests bypass sampling and are always logged.
+
+**Client logging.** Client code never imports the pino logger. Use `createClientLogger(scope)` from `src/lib/logger.ts` — it console-logs in dev, forwards `error` to Sentry as events, and records `warn` as breadcrumbs (so high-frequency benign warnings don't flood Sentry) in prod. Error boundaries report via the shared `useReportRenderError` hook, since Next.js swallows boundary errors before Sentry's global handlers see them.
 
 **Log levels:**
 
@@ -994,7 +999,7 @@ reqLog.info({ issueId }, 'Issue created');
 - `warn` — rate limit exceeded, retries, degraded states
 - `error` — unhandled errors, service failures
 
-Override with `LOG_LEVEL` env var. Pretty-print in dev with `LOG_PRETTY=1`.
+Override with `LOG_LEVEL` env var. Pretty-print in dev with `LOG_PRETTY=1`. `pino`/`pino-pretty` are in `serverExternalPackages` (next.config.ts) so the pretty transport's worker thread resolves correctly instead of being bundled.
 
 ---
 

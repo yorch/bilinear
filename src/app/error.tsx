@@ -1,15 +1,15 @@
 'use client';
 
-import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { useReportRenderError } from '@/hooks/use-report-render-error';
 
 /**
  * Root error boundary. Caught by Next when any non-server-component throws
  * during render and the error wasn't handled by a deeper segment-level
  * error.tsx. The `reset` callback re-runs the segment from a fresh state.
  *
- * Render-only — Sentry already wires `captureException` via the
- * sentry.client.config; we don't double-log here.
+ * Reporting to Sentry is handled by useReportRenderError — Next.js swallows
+ * boundary errors before Sentry's global handlers see them.
  */
 export default function GlobalError({
   error,
@@ -18,11 +18,7 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  useEffect(() => {
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('[app error boundary]', error);
-    }
-  }, [error]);
+  useReportRenderError('app-error-boundary', error);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">

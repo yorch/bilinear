@@ -1,5 +1,8 @@
 import { type DBPendingTransaction, db } from './db';
 import { gql } from './graphql';
+import { createClientLogger } from './logger';
+
+const log = createClientLogger('TransactionQueue');
 
 export interface Transaction {
   createdAt: number;
@@ -62,7 +65,7 @@ export class TransactionQueue {
       // every component's first enqueue (auth flow has a few async hops).
       // Stamp the row with empty IDs and let `hydrate()` skip it on the
       // next boot — better than crashing the page on a race.
-      console.warn('[TransactionQueue] enqueue before setActiveSession');
+      log.warn('enqueue before setActiveSession');
     }
     const tx: Transaction = {
       createdAt: Date.now(),
@@ -124,7 +127,7 @@ export class TransactionQueue {
           .toArray(),
       ]);
     } catch (err) {
-      console.warn('[TransactionQueue] Hydrate failed:', err);
+      log.warn('Hydrate failed', err);
       return;
     }
     hydrated = true;
@@ -143,7 +146,7 @@ export class TransactionQueue {
       try {
         await db.pendingTransactions.bulkDelete(foreign.map(r => r.id));
       } catch (err) {
-        console.warn('[TransactionQueue] Stale-row cleanup failed:', err);
+        log.warn('Stale-row cleanup failed', err);
       }
     }
     if (queue.length > 0) {
@@ -168,7 +171,7 @@ async function persist(tx: Transaction): Promise<void> {
     // If IndexedDB is unavailable (private browsing quota, schema mismatch),
     // fall through and process from memory only. Reload-survival is lost but
     // the in-flight retry loop still works.
-    console.warn('[TransactionQueue] Persist failed:', err);
+    log.warn('Persist failed', err);
   }
 }
 
@@ -176,7 +179,7 @@ async function unpersist(id: string): Promise<void> {
   try {
     await db.pendingTransactions.delete(id);
   } catch (err) {
-    console.warn('[TransactionQueue] Unpersist failed:', err);
+    log.warn('Unpersist failed', err);
   }
 }
 

@@ -1,10 +1,13 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { createClientLogger } from '@/lib/logger';
 import { SyncManager } from '@/lib/sync-manager';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { WsClient } from '@/lib/ws-client';
 import { useStore } from './store-provider';
+
+const log = createClientLogger('SyncProvider');
 
 /**
  * Bootstraps data and maintains the WebSocket sync connection.
@@ -70,7 +73,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     }
 
     init().catch(err => {
-      console.error('[SyncProvider] Init error:', err);
+      log.error('Init error', err);
     });
 
     return () => {
