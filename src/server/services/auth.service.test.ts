@@ -269,6 +269,26 @@ describe('AuthService — Google OAuth login', () => {
     });
   });
 
+  it('exchangeGoogleCode rejects an unverified Google email', async () => {
+    const { state } = await service.startGoogleAuth();
+    vi.stubGlobal('fetch', buildGoogleFetchMock({ verified_email: false }));
+
+    await expect(service.exchangeGoogleCode('good-code', state)).rejects.toThrow(
+      /no verified email/,
+    );
+  });
+
+  it('exchangeGoogleCode falls back to the email local-part when the profile has no name', async () => {
+    const { state } = await service.startGoogleAuth();
+    vi.stubGlobal('fetch', buildGoogleFetchMock({ email: 'ada@example.com', name: null }));
+    const findOrCreate = vi.spyOn(userService, 'findOrCreate').mockResolvedValue(TEST_USER);
+    prisma.authToken.create.mockResolvedValue({});
+
+    await service.exchangeGoogleCode('good-code', state);
+
+    expect(findOrCreate).toHaveBeenCalledWith(expect.objectContaining({ name: 'ada' }));
+  });
+
   it('exchangeGoogleCode rejects when the code exchange fails', async () => {
     const { state } = await service.startGoogleAuth();
     vi.stubGlobal(
@@ -423,6 +443,7 @@ function buildGoogleFetchMock(
   overrides: Partial<{
     name: string | null;
     email: string;
+    verified_email: boolean;
     picture: string | null;
   }>,
 ) {
@@ -440,6 +461,7 @@ function buildGoogleFetchMock(
           overrides.picture === undefined
             ? 'https://lh3.googleusercontent.com/a/photo'
             : overrides.picture,
+        verified_email: overrides.verified_email ?? true,
       });
     }
     throw new Error(`Unexpected fetch in test: ${url}`);

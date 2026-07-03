@@ -4,17 +4,33 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { installSessionCookies } from '@/lib/auth-session';
 import { gql } from '@/lib/graphql';
-import { GITHUB_AUTH_EXCHANGE_MUTATION } from '@/lib/graphql-queries';
 import { gqlError } from '@/lib/utils';
 
 /**
- * Completes the GitHub OAuth login. GitHub redirects here with `code` and
+ * Configuration for one OAuth login provider. Mirrors the `startOAuth`
+ * descriptor in `login-form.tsx` so the start and callback halves stay
+ * symmetric: the login form stashes `state` under `storageKey` and the
+ * callback replays it to `mutation`'s `exchangeField`.
+ */
+export interface OAuthProvider {
+  /** The mutation's response field, e.g. "googleAuthExchange". */
+  exchangeField: string;
+  /** Human-readable name shown in status/error copy, e.g. "Google". */
+  label: string;
+  /** The `*AuthExchange` mutation string from `@/lib/graphql-queries`. */
+  mutation: string;
+  /** sessionStorage key the login form stored the CSRF `state` under. */
+  storageKey: string;
+}
+
+/**
+ * Completes an OAuth login. The provider redirects here with `code` and
  * `state`; the state must match the one stashed in sessionStorage by the
  * login form (same-browser CSRF check on top of the server's signed-state
  * verification). On success the token pair is exchanged into httpOnly
  * cookies via /api/auth/session.
  */
-export function GithubCallbackHandler() {
+export function OAuthCallbackHandler({ provider }: { provider: OAuthProvider }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -33,8 +49,8 @@ export function GithubCallbackHandler() {
     async function exchange() {
       const code = searchParams.get('code');
       const state = searchParams.get('state');
-      const storedState = sessionStorage.getItem('github_oauth_state');
-      sessionStorage.removeItem('github_oauth_state');
+      const storedState = sessionStorage.getItem(provider.storageKey);
+      sessionStorage.removeItem(provider.storageKey);
 
       if (!code || !state || state !== storedState) {
         setError('Sign-in session expired or was tampered with. Please try again.');
@@ -42,15 +58,13 @@ export function GithubCallbackHandler() {
       }
 
       try {
-        const result = await gql(GITHUB_AUTH_EXCHANGE_MUTATION, { code, state });
+        const result = await gql(provider.mutation, { code, state });
 
         const payload = (
-          result.data as {
-            githubAuthExchange?: { accessToken: string; refreshToken: string };
-          } | null
-        )?.githubAuthExchange;
+          result.data as Record<string, { accessToken: string; refreshToken: string } | undefined>
+        )?.[provider.exchangeField];
         if (!payload) {
-          setError(gqlError(result, 'GitHub sign-in failed. Please try again.'));
+          setError(gqlError(result, `${provider.label} sign-in failed. Please try again.`));
           return;
         }
 
@@ -84,7 +98,9 @@ export function GithubCallbackHandler() {
           </button>
         </>
       ) : (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Signing you in with GitHub…</p>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          Signing you in with {provider.label}…
+        </p>
       )}
     </div>
   );

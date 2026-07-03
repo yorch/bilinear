@@ -471,7 +471,14 @@ function getGoogleRedirectUri(): string {
   return getOAuthRedirectUri(process.env.GOOGLE_REDIRECT_URI, '/auth/google/callback');
 }
 
-async function fetchGoogleProfile(code: string, redirectUri: string) {
+interface GoogleLoginProfile {
+  email: string;
+  id: string;
+  name: string;
+  picture?: string;
+}
+
+async function fetchGoogleProfile(code: string, redirectUri: string): Promise<GoogleLoginProfile> {
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
     body: new URLSearchParams({
       client_id: process.env.GOOGLE_CLIENT_ID ?? '',
@@ -498,12 +505,30 @@ async function fetchGoogleProfile(code: string, redirectUri: string) {
     throw new OAuthError('Failed to fetch Google user profile');
   }
 
-  return profileRes.json() as Promise<{
+  const profile = (await profileRes.json()) as {
     id: string;
-    email: string;
-    name: string;
+    email?: string;
+    verified_email?: boolean;
+    name?: string;
     picture?: string;
-  }>;
+  };
+
+  // findOrCreate links accounts by email, so accepting an unverified address
+  // would let an attacker set their Google email to a victim's and take over
+  // that account here — mirror the GitHub path and require a verified email.
+  if (!profile.email || !profile.verified_email) {
+    throw new OAuthError('Your Google account has no verified email address');
+  }
+
+  return {
+    email: profile.email,
+    id: profile.id,
+    // Google omits `name` under restricted consent; fall back to the email
+    // local-part so display-name / initial derivation never sees an empty
+    // or undefined name (which would throw in deriveInitials).
+    name: profile.name?.trim() || profile.email.split('@')[0],
+    picture: profile.picture,
+  };
 }
 
 /**
