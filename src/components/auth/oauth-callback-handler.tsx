@@ -4,7 +4,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { installSessionCookies } from '@/lib/auth-session';
 import { gql } from '@/lib/graphql';
+import { createClientLogger } from '@/lib/logger';
 import { gqlError } from '@/lib/utils';
+
+const log = createClientLogger('OAuthCallback');
 
 /**
  * Configuration for one OAuth login provider. Mirrors the `startOAuth`
@@ -53,6 +56,9 @@ export function OAuthCallbackHandler({ provider }: { provider: OAuthProvider }) 
       sessionStorage.removeItem(provider.storageKey);
 
       if (!code || !state || state !== storedState) {
+        // Expected-degraded (expired session / reopened tab / tampering) —
+        // breadcrumb only, not a Sentry event.
+        log.warn('Missing or mismatched OAuth state', undefined, { provider: provider.label });
         setError('Sign-in session expired or was tampered with. Please try again.');
         return;
       }
@@ -64,17 +70,24 @@ export function OAuthCallbackHandler({ provider }: { provider: OAuthProvider }) 
           result.data as Record<string, { accessToken: string; refreshToken: string } | undefined>
         )?.[provider.exchangeField];
         if (!payload) {
+          log.error('OAuth exchange returned no session', undefined, {
+            provider: provider.label,
+          });
           setError(gqlError(result, `${provider.label} sign-in failed. Please try again.`));
           return;
         }
 
         if (!(await installSessionCookies(payload))) {
+          log.error('Failed to install session cookies', undefined, {
+            provider: provider.label,
+          });
           setError('Failed to establish a session. Please try again.');
           return;
         }
 
         router.push('/');
-      } catch {
+      } catch (err) {
+        log.error('OAuth exchange threw', err, { provider: provider.label });
         setError('Something went wrong. Please try again.');
       }
     }
