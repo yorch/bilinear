@@ -171,7 +171,16 @@ function SortableCard({
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    // biome-ignore lint/a11y/useSemanticElements: dnd-kit's attributes spread supplies role="button"/tabIndex for the keyboard drag handle
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      aria-label={t('issues.moveIssue', { identifier: issue.identifier })}
+      role="button"
+      tabIndex={0}
+    >
       <BoardCardInner
         isDragging={isDragging}
         issue={issue}

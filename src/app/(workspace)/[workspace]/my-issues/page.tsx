@@ -11,10 +11,11 @@ import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-pane
 import { type ViewMode, ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { useHotkeys } from '@/hooks/use-hotkeys';
+import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue, DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
-import { ISSUE_UPDATE_MUTATION, ISSUES_BULK_UPDATE_MUTATION } from '@/lib/graphql-queries';
+import { ISSUES_BULK_UPDATE_MUTATION } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
@@ -117,32 +118,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
-  const handleUpdate = useCallback(
-    (id: string, patch: Record<string, unknown>) => {
-      const snapshot = issueStore.findById(id);
-      issueStore.optimisticUpdate(id, patch as Partial<DBIssue>);
-
-      txQueue.enqueue(
-        ISSUE_UPDATE_MUTATION,
-        { id, input: patch },
-        {
-          onError: err => {
-            toast.error(err instanceof Error ? err.message : t('issues.updateFailed'));
-            if (snapshot) {
-              issueStore.optimisticUpdate(id, snapshot);
-            }
-          },
-          onSuccess: data => {
-            const updated = (data as { issueUpdate?: { issue?: DBIssue } })?.issueUpdate?.issue;
-            if (updated) {
-              issueStore.applySyncAction('U', id, updated);
-            }
-          },
-        },
-      );
-    },
-    [issueStore, txQueue, t],
-  );
+  const handleUpdate = useIssueUpdate();
 
   const handleBulkUpdate = useCallback(
     (ids: string[], patch: Record<string, unknown>) => {

@@ -489,7 +489,10 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
           </h2>
           <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900 flex flex-col gap-5">
             {/* Private team toggle */}
-            <div className="flex items-center justify-between gap-4">
+            <label
+              className="flex cursor-pointer items-center justify-between gap-4"
+              htmlFor="team-private-toggle"
+            >
               <div>
                 <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   {t('settings.team.privateTeam')}
@@ -499,12 +502,16 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
               <Switch
                 aria-label={t('settings.team.privateTeam')}
                 checked={isPrivate}
+                id="team-private-toggle"
                 onCheckedChange={setIsPrivate}
               />
-            </div>
+            </label>
 
             {/* Triage toggle */}
-            <div className="flex items-center justify-between gap-4">
+            <label
+              className="flex cursor-pointer items-center justify-between gap-4"
+              htmlFor="team-triage-toggle"
+            >
               <div>
                 <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   {t('settings.team.triage')}
@@ -514,9 +521,10 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
               <Switch
                 aria-label={t('settings.team.triage')}
                 checked={triageEnabled}
+                id="team-triage-toggle"
                 onCheckedChange={setTriageEnabled}
               />
-            </div>
+            </label>
           </div>
         </section>
 

@@ -22,8 +22,8 @@ export default function GlobalError({
       <body
         style={{
           alignItems: 'center',
-          background: '#fff',
-          color: '#18181b',
+          background: 'oklch(1 0 0)',
+          color: 'oklch(0.21 0.006 285.885)',
           display: 'flex',
           flexDirection: 'column',
           fontFamily: 'ui-sans-serif, system-ui, sans-serif',
@@ -35,13 +35,24 @@ export default function GlobalError({
         }}
       >
         <h1 style={{ fontSize: '1.25rem', fontWeight: 600, margin: 0 }}>Something went wrong</h1>
-        <p style={{ color: '#52525b', fontSize: '0.875rem', margin: 0, maxWidth: '28rem' }}>
+        <p
+          style={{
+            color: 'oklch(0.442 0.017 285.786)',
+            fontSize: '0.875rem',
+            margin: 0,
+            maxWidth: '28rem',
+          }}
+        >
           The app hit an unexpected error while starting up. Try again — if it keeps happening,
           reload or come back in a minute.
         </p>
         {error.digest ? (
           <p
-            style={{ color: '#71717a', fontFamily: 'ui-monospace, monospace', fontSize: '0.75rem' }}
+            style={{
+              color: 'oklch(0.552 0.016 285.938)',
+              fontFamily: 'ui-monospace, monospace',
+              fontSize: '0.75rem',
+            }}
           >
             Error ref: {error.digest}
           </p>
@@ -49,10 +60,10 @@ export default function GlobalError({
         <button
           onClick={() => reset()}
           style={{
-            background: '#18181b',
+            background: 'oklch(0.21 0.006 285.885)',
             border: 'none',
             borderRadius: '0.375rem',
-            color: '#fff',
+            color: 'oklch(1 0 0)',
             cursor: 'pointer',
             fontSize: '0.875rem',
             padding: '0.5rem 1rem',

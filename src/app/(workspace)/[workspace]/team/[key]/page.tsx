@@ -7,7 +7,6 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import { type BoardGroupBy, type BoardSwimlaneBy, BoardView } from '@/components/issues/board-view';
 import { ColumnPicker } from '@/components/issues/column-picker';
-import { CreateIssueModal } from '@/components/issues/create-issue-modal';
 import { CsvExportButton } from '@/components/issues/csv-export-button';
 import { FilterBuilder } from '@/components/issues/filter-builder';
 import { IssueListView } from '@/components/issues/issue-list-view';
@@ -18,7 +17,7 @@ import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { type SaveViewInput, SaveViewModal } from '@/components/views/save-view-modal';
 import { useHotkeys } from '@/hooks/use-hotkeys';
-import { useIssueCreate } from '@/hooks/use-issue-create';
+import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useRecentItems } from '@/hooks/use-recent-items';
 import { useTranslations } from '@/hooks/use-translations';
 import { useVisibleColumns } from '@/hooks/use-visible-columns';
@@ -28,9 +27,9 @@ import { gql } from '@/lib/graphql';
 import {
   ISSUE_ARCHIVE_MUTATION,
   ISSUE_UNARCHIVE_MUTATION,
-  ISSUE_UPDATE_MUTATION,
   ISSUES_BULK_UPDATE_MUTATION,
 } from '@/lib/graphql-queries';
+import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
@@ -80,6 +79,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     projectStore,
     cycleStore,
     syncStore,
+    uiStore,
   } = useStore();
 
   // One queue per component mount — unmounting the page cleans up the reference
@@ -88,7 +88,6 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   // UI state (local to this page)
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detailIssueId, setDetailIssueId] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
   const [saveViewOpen, setSaveViewOpen] = useState(false);
   // Which property popover to force-open on the selected row (keyboard shortcut)
   const [openProperty, setOpenProperty] = useState<OpenProperty>(null);
@@ -156,19 +155,9 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     (issueId, definitionId) => customFieldStore.findValue(issueId, definitionId)?.value ?? null,
   );
 
-  const users: IssueUser[] = userStore.all.map(u => ({
-    avatarBackgroundColor: u.avatarBgColor,
-    avatarUrl: u.avatarUrl ?? null,
-    displayName: u.displayName,
-    id: u.id,
-    initials: u.initials,
-  }));
+  const users: IssueUser[] = toIssueUsers(userStore.all);
 
-  const labels: IssueLabel[] = labelStore.all.map(l => ({
-    color: l.color,
-    id: l.id,
-    name: l.name,
-  }));
+  const labels: IssueLabel[] = toIssueLabels(labelStore.all);
 
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
   const hasError = syncStore.status === 'error';
@@ -190,32 +179,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
-  const handleUpdate = useCallback(
-    (id: string, patch: Record<string, unknown>) => {
-      const snapshot = issueStore.findById(id);
-      issueStore.optimisticUpdate(id, patch as Partial<DBIssue>);
-
-      txQueue.enqueue(
-        ISSUE_UPDATE_MUTATION,
-        { id, input: patch },
-        {
-          onError: err => {
-            toast.error(err instanceof Error ? err.message : t('issues.updateFailed'));
-            if (snapshot) {
-              issueStore.optimisticUpdate(id, snapshot);
-            }
-          },
-          onSuccess: data => {
-            const updated = (data as { issueUpdate?: { issue?: DBIssue } })?.issueUpdate?.issue;
-            if (updated) {
-              issueStore.applySyncAction('U', id, updated);
-            }
-          },
-        },
-      );
-    },
-    [issueStore, txQueue, t],
-  );
+  const handleUpdate = useIssueUpdate();
 
   const handleBulkUpdate = useCallback(
     (ids: string[], patch: Record<string, unknown>) => {
@@ -249,8 +213,6 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     [issueStore, txQueue, t],
   );
 
-  const handleCreate = useIssueCreate(team, states);
-
   const handleUnarchive = useCallback(
     (id: string) => {
       issueStore.optimisticUpdate(id, { archivedAt: null });
@@ -271,11 +233,17 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   const handleArchive = useCallback(
     (id: string) => {
       issueStore.optimisticUpdate(id, { archivedAt: new Date().toISOString() });
+      const undoToastId = toast.undo(t('issues.archivedToast'), t('common.undo'), () =>
+        handleUnarchive(id),
+      );
       txQueue.enqueue(
         ISSUE_ARCHIVE_MUTATION,
         { id },
         {
           onError: err => {
+            // The archive never happened server-side: retire the stale Undo
+            // affordance before surfacing the failure and rolling back.
+            toast.dismiss(undoToastId);
             toast.error(err instanceof Error ? err.message : t('issues.archiveFailed'));
             issueStore.optimisticUpdate(id, { archivedAt: null });
           },
@@ -284,7 +252,6 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
           },
         },
       );
-      toast.undo(t('issues.archivedToast'), t('common.undo'), () => handleUnarchive(id));
       if (selectedId === id) {
         setSelectedId(null);
       }
@@ -334,8 +301,8 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   const selectedIndex = issues.findIndex(i => i.id === selectedId);
   const hasSelection = selectedId !== null;
 
-  // C is registered globally in WorkspaceClient and opens the shared
-  // GlobalCreateIssueModal; this page's local modal is button-driven only.
+  // C (create issue) is registered globally in WorkspaceClient and opens the
+  // shared GlobalCreateIssueModal; the New-issue button below uses it too.
 
   // J / K — navigate list
   useHotkeys(
@@ -485,8 +452,6 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     );
   }
 
-  const defaultStateId = states.find(s => s.type === 'backlog')?.id ?? states[0]?.id;
-
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Page header */}
@@ -527,7 +492,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
           </Link>
           <button
             className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
-            onClick={() => setCreateOpen(true)}
+            onClick={() => uiStore.openCreateIssueModal()}
             type="button"
           >
             {t('issues.newIssue')}
@@ -667,18 +632,6 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         }}
         open={pendingDelete !== null}
         title={t('issues.deleteConfirmTitle')}
-      />
-
-      {/* Create modal */}
-      <CreateIssueModal
-        defaultStateId={defaultStateId}
-        labels={labels}
-        onClose={() => setCreateOpen(false)}
-        onSubmit={handleCreate}
-        open={createOpen}
-        states={states}
-        teamId={teamId ?? undefined}
-        users={users}
       />
 
       {/* Save current filters as a custom view */}

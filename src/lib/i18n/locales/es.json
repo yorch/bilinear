@@ -818,6 +818,7 @@
     "lastUpdatedDaysAgo_one": "Actualizado hace {count} día",
     "lastUpdatedDaysAgo_other": "Actualizado hace {count} días",
     "listViewShortcut": "Vista de lista (Alt+1)",
+    "moveIssue": "Mover {identifier}",
     "myIssues": "Mis tareas",
     "newIssue": "Nueva tarea",
     "noBacklogIssues": "Sin tareas pendientes",
@@ -1532,6 +1533,7 @@
   },
   "sync": {
     "backOnline": "De nuevo en línea — sincronizando cambios",
+    "changeFailed": "No se pudo guardar un cambio",
     "connectionLost": "Conexión perdida — los cambios se sincronizarán al reconectar",
     "offline": "Sin conexión",
     "reconnecting": "Reconectando…"

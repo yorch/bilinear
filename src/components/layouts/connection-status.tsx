@@ -1,15 +1,14 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
-import { useEffect, useRef } from 'react';
 import { useTranslations } from '@/hooks/use-translations';
-import { toast } from '@/lib/toast';
 import { useStore } from '@/providers/store-provider';
 
 /**
- * Surfaces the WebSocket connection state that syncStore already tracks:
- * a pill while disconnected, plus one-shot toasts on lost/restored
- * transitions. Renders nothing while connected or during initial bootstrap.
+ * Presentational pill surfacing the WebSocket connection state syncStore
+ * already tracks. Renders nothing while connected or during initial
+ * bootstrap. Transition toasts live in ConnectionToasts (always mounted in
+ * WorkspaceClient) — this pill remounts on sidebar collapse toggles.
  */
 export const ConnectionStatus = observer(function ConnectionStatus({
   compact = false,
@@ -18,28 +17,9 @@ export const ConnectionStatus = observer(function ConnectionStatus({
 }) {
   const { syncStore } = useStore();
   const t = useTranslations();
-  const connected = syncStore.wsConnected;
-  // null until the first observation so the initial state never toasts;
-  // everConnected gates the "back online" toast to real reconnects.
-  const prev = useRef<boolean | null>(null);
-  const everConnected = useRef(false);
-
-  useEffect(() => {
-    if (prev.current !== null && connected !== prev.current) {
-      if (connected && everConnected.current) {
-        toast.success(t('sync.backOnline'));
-      } else if (!connected && everConnected.current) {
-        toast.warning(t('sync.connectionLost'));
-      }
-    }
-    if (connected) {
-      everConnected.current = true;
-    }
-    prev.current = connected;
-  }, [connected, t]);
 
   const bootstrapping = syncStore.status === 'idle' || syncStore.status === 'bootstrapping';
-  if (connected || bootstrapping) {
+  if (syncStore.wsConnected || bootstrapping) {
     return null;
   }
 

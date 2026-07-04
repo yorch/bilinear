@@ -4,13 +4,11 @@ import { observer } from 'mobx-react-lite';
 import { useParams, useRouter } from 'next/navigation';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { priorityLabelKey } from '@/components/properties/priority-icon';
+import { useIssueUpdate } from '@/hooks/use-issue-update';
 import type { RecentItem } from '@/hooks/use-recent-items';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue } from '@/lib/db';
-import { ISSUE_UPDATE_MUTATION } from '@/lib/graphql-queries';
 import { IDENTIFIER_RE } from '@/lib/identifiers';
-import { toast } from '@/lib/toast';
-import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -251,35 +249,7 @@ const SubMenuList = observer(function SubMenuList({
 }: SubMenuListProps) {
   const { issueStore, labelStore, userStore, workflowStateStore } = useStore();
   const t = useTranslations();
-  const txQueue = useMemo(() => new TransactionQueue(), []);
-
-  // Optimistic write + enqueue so submenu edits actually persist; snapshot
-  // rollback + toast on failure (same idiom as the team page).
-  const applyPatch = useCallback(
-    (issueId: string, patch: Record<string, unknown>) => {
-      const snapshot = issueStore.findById(issueId);
-      issueStore.optimisticUpdate(issueId, patch as Partial<DBIssue>);
-      txQueue.enqueue(
-        ISSUE_UPDATE_MUTATION,
-        { id: issueId, input: patch },
-        {
-          onError: err => {
-            toast.error(err instanceof Error ? err.message : t('issues.updateFailed'));
-            if (snapshot) {
-              issueStore.optimisticUpdate(issueId, snapshot);
-            }
-          },
-          onSuccess: data => {
-            const updated = (data as { issueUpdate?: { issue?: DBIssue } })?.issueUpdate?.issue;
-            if (updated) {
-              issueStore.applySyncAction('U', issueId, updated);
-            }
-          },
-        },
-      );
-    },
-    [issueStore, txQueue, t],
-  );
+  const applyPatch = useIssueUpdate();
 
   let subItems: SubMenuItem[] = [];
 
@@ -543,6 +513,22 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
           select(target);
         }
       } else if (e.key === 'Tab' || e.key === 'ArrowRight') {
+        if (e.key === 'Tab') {
+          // Focus never leaves the palette — it isn't a native modal, so an
+          // unhandled Tab would move focus to the page underneath.
+          e.preventDefault();
+        } else {
+          // ArrowRight opens issue actions only when it can't be a caret
+          // move: skip while the caret is anywhere but the end of the query.
+          const input = inputRef.current;
+          if (
+            input &&
+            document.activeElement === input &&
+            input.selectionStart !== input.value.length
+          ) {
+            return;
+          }
+        }
         if (!inSub) {
           const target = idx === -1 ? allRef.current[0] : allRef.current[idx];
           if (target?.kind === 'issue') {

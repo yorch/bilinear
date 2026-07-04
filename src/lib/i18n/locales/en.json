@@ -818,6 +818,7 @@
     "lastUpdatedDaysAgo_one": "Last updated {count} day ago",
     "lastUpdatedDaysAgo_other": "Last updated {count} days ago",
     "listViewShortcut": "List view (Alt+1)",
+    "moveIssue": "Move {identifier}",
     "myIssues": "My Issues",
     "newIssue": "New issue",
     "noBacklogIssues": "No backlog issues",
@@ -1532,6 +1533,7 @@
   },
   "sync": {
     "backOnline": "Back online — syncing changes",
+    "changeFailed": "A change could not be saved",
     "connectionLost": "Connection lost — changes will sync when you're back online",
     "offline": "Offline",
     "reconnecting": "Reconnecting…"

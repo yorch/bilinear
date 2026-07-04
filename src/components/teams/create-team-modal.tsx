@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Input } from '@/components/ui/input';
 import { ModalDialog } from '@/components/ui/modal-dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { useTranslations } from '@/hooks/use-translations';
 import { cn, getErrorMessage } from '@/lib/utils';
 
@@ -133,14 +135,12 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
             >
               {t('teams.name')}
             </label>
-            <input
-              className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+            <Input
               id="team-name"
               onChange={e => setName(e.target.value)}
               placeholder={t('teams.namePlaceholder')}
               ref={nameRef}
               required
-              type="text"
               value={name}
             />
           </div>
@@ -178,8 +178,8 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
               {t('teams.description')}
               <span className="ml-1 font-normal text-zinc-400">({t('teams.optional')})</span>
             </label>
-            <textarea
-              className="resize-none rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-600 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-400"
+            <Textarea
+              className="resize-none"
               id="team-description"
               onChange={e => setDescription(e.target.value)}
               placeholder={t('teams.descriptionPlaceholder')}

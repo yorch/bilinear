@@ -3,14 +3,13 @@
 import { Eye } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { IssueListView } from '@/components/issues/issue-list-view';
+import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useTranslations } from '@/hooks/use-translations';
-import type { DBIssue, DBIssueLabel } from '@/lib/db';
-import { applyFilters, type FilterSet } from '@/lib/filter-engine';
-import { ISSUE_UPDATE_MUTATION } from '@/lib/graphql-queries';
-import { toast } from '@/lib/toast';
-import { TransactionQueue } from '@/lib/transaction-queue';
+import type { DBIssueLabel } from '@/lib/db';
+import { applyFilters, coerceFilterSet } from '@/lib/filter-engine';
+import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
 
@@ -41,7 +40,6 @@ const CustomViewPage = observer(function CustomViewPage() {
     workflowStateStore,
   } = useStore();
 
-  const txQueue = useMemo(() => new TransactionQueue(), []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const team = teamStore.findByKey(teamKey);
@@ -67,50 +65,16 @@ const CustomViewPage = observer(function CustomViewPage() {
   const issues = view
     ? applyFilters(
         allIssues,
-        view.filters as FilterSet,
+        coerceFilterSet(view.filters),
         (issueId, definitionId) => customFieldStore.findValue(issueId, definitionId)?.value ?? null,
       )
     : [];
 
-  const users: IssueUser[] = userStore.all.map(u => ({
-    avatarBackgroundColor: u.avatarBgColor,
-    avatarUrl: u.avatarUrl ?? null,
-    displayName: u.displayName,
-    id: u.id,
-    initials: u.initials,
-  }));
+  const users: IssueUser[] = toIssueUsers(userStore.all);
 
-  const labels: IssueLabel[] = labelStore.all.map(l => ({
-    color: l.color,
-    id: l.id,
-    name: l.name,
-  }));
+  const labels: IssueLabel[] = toIssueLabels(labelStore.all);
 
-  const handleUpdate = useCallback(
-    (id: string, patch: Record<string, unknown>) => {
-      const snapshot = issueStore.findById(id);
-      issueStore.optimisticUpdate(id, patch as Partial<DBIssue>);
-      txQueue.enqueue(
-        ISSUE_UPDATE_MUTATION,
-        { id, input: patch },
-        {
-          onError: err => {
-            toast.error(err instanceof Error ? err.message : t('issues.updateFailed'));
-            if (snapshot) {
-              issueStore.optimisticUpdate(id, snapshot);
-            }
-          },
-          onSuccess: data => {
-            const updated = (data as { issueUpdate?: { issue?: DBIssue } })?.issueUpdate?.issue;
-            if (updated) {
-              issueStore.applySyncAction('U', id, updated);
-            }
-          },
-        },
-      );
-    },
-    [issueStore, txQueue, t],
-  );
+  const handleUpdate = useIssueUpdate();
 
   const handleOpen = useCallback(
     (id: string) => {

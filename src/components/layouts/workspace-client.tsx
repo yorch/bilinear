@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { GlobalCreateIssueModal } from '@/components/issues/global-create-issue-modal';
+import { ConnectionToasts } from '@/components/layouts/connection-toasts';
 import { ShortcutHelpModal } from '@/components/layouts/shortcut-help-modal';
 import { CreateTeamModal } from '@/components/teams/create-team-modal';
 import { useChord, useHotkeys } from '@/hooks/use-hotkeys';
@@ -85,6 +86,7 @@ export const WorkspaceClient = observer(function WorkspaceClient({
       {children}
       {uiStore.commandPaletteOpen && <CommandPalette recentItems={recentItems} />}
       <GlobalCreateIssueModal />
+      <ConnectionToasts />
       <CreateTeamModal
         onClose={() => uiStore.closeCreateTeamModal()}
         onSubmit={handleCreateTeam}

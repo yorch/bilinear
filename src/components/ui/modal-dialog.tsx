@@ -39,7 +39,6 @@ function ModalDialogInner({
   }, []);
 
   return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: keyboard dismissal is the native <dialog> cancel event (Escape), handled via onCancel
     <dialog
       aria-label={ariaLabel}
       className="fixed inset-0 z-50 flex h-screen w-screen items-center justify-center bg-black/40 p-0 m-0 border-none max-w-none max-h-none"
@@ -54,11 +53,22 @@ function ModalDialogInner({
           onClose();
         }
       }}
+      onKeyDown={e => {
+        // Keep the Escape keydown inside the dialog so window-level Escape
+        // handlers (e.g. the issue detail panel) don't also close their
+        // surface; the native `cancel` event still handles the dismissal.
+        if (e.key === 'Escape') {
+          e.stopPropagation();
+        }
+      }}
       ref={dialogRef}
     >
+      {/* No overflow clipping here: property dropdowns inside modals render
+          position:absolute panels that must overflow the dialog box. Tall
+          modals scroll via the dialog element itself if ever needed. */}
       <div
         className={cn(
-          'max-h-[90vh] w-full overflow-y-auto rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900',
+          'w-full rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900',
           maxWidth === 'lg' ? 'max-w-lg' : 'max-w-md',
         )}
       >

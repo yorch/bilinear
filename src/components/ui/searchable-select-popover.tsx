@@ -51,7 +51,6 @@ export function SearchableSelectPopover<T>({
   const [activeIndex, setActiveIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
   const wasOpen = useRef(false);
   const listboxId = useId();
 
@@ -152,7 +151,7 @@ export function SearchableSelectPopover<T>({
             </button>
           )}
 
-          <div className="max-h-48 overflow-y-auto" id={listboxId} ref={listRef} role="listbox">
+          <div className="max-h-48 overflow-y-auto" id={listboxId} role="listbox">
             {filtered.length === 0 ? (
               <p className="px-2 py-3 text-center text-xs text-zinc-400">{emptyText}</p>
             ) : (

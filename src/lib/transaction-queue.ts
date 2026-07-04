@@ -52,6 +52,11 @@ const callbackMap = new Map<string, Callbacks>();
 let processing = false;
 let hydrated = false;
 let activeSession: ActiveSession | null = null;
+// Fallback error surface for permanent failures with no per-call onError —
+// rehydrated transactions (callbacks don't survive reload) and enqueue sites
+// that omit callbacks would otherwise fail silently. Registered by
+// SyncProvider so the message can be localized.
+let defaultErrorHandler: ((err: Error) => void) | null = null;
 
 /**
  * Queues GraphQL mutations and processes them serially with IndexedDB
@@ -88,6 +93,11 @@ export class TransactionQueue {
 
   static setActiveSession(session: ActiveSession): void {
     activeSession = session;
+  }
+
+  /** Register the fallback surface for permanent failures without onError. */
+  static setDefaultErrorHandler(handler: ((err: Error) => void) | null): void {
+    defaultErrorHandler = handler;
   }
 
   /**
@@ -221,7 +231,11 @@ async function processNext(): Promise<void> {
       await unpersist(tx.id);
       const cb = callbackMap.get(tx.id);
       callbackMap.delete(tx.id);
-      cb?.onError?.(error);
+      if (cb?.onError) {
+        cb.onError(error);
+      } else {
+        defaultErrorHandler?.(error);
+      }
     } else {
       tx.retryCount++;
       // Persist the bumped count for same-session continuity. `hydrate()`

@@ -245,3 +245,15 @@ export function applySorting<T extends FilterableIssue>(
 export function createEmptyFilterSet(): FilterSet {
   return { composition: 'and', conditions: [] };
 }
+
+/**
+ * Normalize an untyped stored value (CustomView.filters is persisted as bare
+ * JSON with no server-side shape validation) into a safe FilterSet.
+ */
+export function coerceFilterSet(value: unknown): FilterSet {
+  const v = value as Partial<FilterSet> | null | undefined;
+  if (v && Array.isArray(v.conditions)) {
+    return { composition: v.composition === 'or' ? 'or' : 'and', conditions: v.conditions };
+  }
+  return createEmptyFilterSet();
+}

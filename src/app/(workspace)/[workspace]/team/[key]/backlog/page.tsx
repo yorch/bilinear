@@ -6,10 +6,11 @@ import { useCallback, useMemo, useState } from 'react';
 import { FilterBuilder } from '@/components/issues/filter-builder';
 import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
 import { useHotkeys } from '@/hooks/use-hotkeys';
+import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useTranslations } from '@/hooks/use-translations';
-import type { DBIssue, DBIssueLabel } from '@/lib/db';
+import type { DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
-import { ISSUE_ARCHIVE_MUTATION, ISSUE_UPDATE_MUTATION } from '@/lib/graphql-queries';
+import { ISSUE_ARCHIVE_MUTATION } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn } from '@/lib/utils';
@@ -283,32 +284,7 @@ const BacklogPage = observer(function BacklogPage() {
 
   // ── Mutations ───────────────────────────────────────────────────────────
 
-  const handleUpdate = useCallback(
-    (id: string, patch: Record<string, unknown>) => {
-      const snapshot = issueStore.findById(id);
-      issueStore.optimisticUpdate(id, patch as Partial<DBIssue>);
-
-      txQueue.enqueue(
-        ISSUE_UPDATE_MUTATION,
-        { id, input: patch },
-        {
-          onError: err => {
-            toast.error(err instanceof Error ? err.message : t('issues.updateFailed'));
-            if (snapshot) {
-              issueStore.optimisticUpdate(id, snapshot);
-            }
-          },
-          onSuccess: data => {
-            const updated = (data as { issueUpdate?: { issue?: DBIssue } })?.issueUpdate?.issue;
-            if (updated) {
-              issueStore.applySyncAction('U', id, updated);
-            }
-          },
-        },
-      );
-    },
-    [issueStore, txQueue, t],
-  );
+  const handleUpdate = useIssueUpdate();
 
   const handleToggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => {
