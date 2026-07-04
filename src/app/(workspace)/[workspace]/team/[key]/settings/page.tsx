@@ -13,6 +13,7 @@ import {
   type TeamRole,
 } from '@/components/teams/team-member-management';
 import { SimpleSelect } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -488,58 +489,34 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
           </h2>
           <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900 flex flex-col gap-5">
             {/* Private team toggle */}
-            <label className="flex cursor-pointer items-center justify-between gap-4">
+            <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   {t('settings.team.privateTeam')}
                 </p>
                 <p className="text-xs text-zinc-400">{t('settings.team.privateTeamDescription')}</p>
               </div>
-              <button
-                aria-checked={isPrivate}
-                className={cn(
-                  'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
-                  isPrivate ? 'bg-indigo-600' : 'bg-zinc-200 dark:bg-zinc-700',
-                )}
-                onClick={() => setIsPrivate(v => !v)}
-                role="switch"
-                type="button"
-              >
-                <span
-                  className={cn(
-                    'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-200',
-                    isPrivate ? 'translate-x-4' : 'translate-x-0',
-                  )}
-                />
-              </button>
-            </label>
+              <Switch
+                aria-label={t('settings.team.privateTeam')}
+                checked={isPrivate}
+                onCheckedChange={setIsPrivate}
+              />
+            </div>
 
             {/* Triage toggle */}
-            <label className="flex cursor-pointer items-center justify-between gap-4">
+            <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   {t('settings.team.triage')}
                 </p>
                 <p className="text-xs text-zinc-400">{t('settings.team.triageDescription')}</p>
               </div>
-              <button
-                aria-checked={triageEnabled}
-                className={cn(
-                  'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
-                  triageEnabled ? 'bg-indigo-600' : 'bg-zinc-200 dark:bg-zinc-700',
-                )}
-                onClick={() => setTriageEnabled(v => !v)}
-                role="switch"
-                type="button"
-              >
-                <span
-                  className={cn(
-                    'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-200',
-                    triageEnabled ? 'translate-x-4' : 'translate-x-0',
-                  )}
-                />
-              </button>
-            </label>
+              <Switch
+                aria-label={t('settings.team.triage')}
+                checked={triageEnabled}
+                onCheckedChange={setTriageEnabled}
+              />
+            </div>
           </div>
         </section>
 

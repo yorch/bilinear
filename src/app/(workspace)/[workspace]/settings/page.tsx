@@ -6,6 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { Switch } from '@/components/ui/switch';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
@@ -600,25 +601,11 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   {t('settings.workspace.emailNotificationsDescription')}
                 </p>
               </div>
-              <button
-                aria-checked={emailNotificationsEnabled}
+              <Switch
                 aria-label={t('settings.workspace.emailNotifications')}
-                className={cn(
-                  'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors',
-                  'focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2',
-                  emailNotificationsEnabled ? 'bg-indigo-600' : 'bg-zinc-200 dark:bg-zinc-700',
-                )}
-                onClick={() => toggleEmailNotifications(!emailNotificationsEnabled)}
-                role="switch"
-                type="button"
-              >
-                <span
-                  className={cn(
-                    'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform',
-                    emailNotificationsEnabled ? 'translate-x-4' : 'translate-x-0',
-                  )}
-                />
-              </button>
+                checked={emailNotificationsEnabled}
+                onCheckedChange={checked => toggleEmailNotifications(checked)}
+              />
             </div>
 
             {/* iCal cycle feed */}
@@ -876,26 +863,12 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   {t('settings.workspace.aiAssistantDescription')}
                 </p>
               </div>
-              <button
-                aria-checked={org?.aiEnabled ?? false}
+              <Switch
                 aria-label={t('settings.workspace.enableAiAssistant')}
-                className={cn(
-                  'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors disabled:opacity-50',
-                  'focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2',
-                  org?.aiEnabled ? 'bg-indigo-600' : 'bg-zinc-300 dark:bg-zinc-600',
-                )}
+                checked={org?.aiEnabled ?? false}
                 disabled={savingAi || !org}
-                onClick={() => void toggleAi(!(org?.aiEnabled ?? false))}
-                role="switch"
-                type="button"
-              >
-                <span
-                  className={cn(
-                    'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform',
-                    org?.aiEnabled ? 'translate-x-4' : 'translate-x-0',
-                  )}
-                />
-              </button>
+                onCheckedChange={checked => void toggleAi(checked)}
+              />
             </div>
           </div>
         </section>

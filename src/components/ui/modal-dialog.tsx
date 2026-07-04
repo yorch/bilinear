@@ -58,7 +58,7 @@ function ModalDialogInner({
     >
       <div
         className={cn(
-          'w-full rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900',
+          'max-h-[90vh] w-full overflow-y-auto rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900',
           maxWidth === 'lg' ? 'max-w-lg' : 'max-w-md',
         )}
       >

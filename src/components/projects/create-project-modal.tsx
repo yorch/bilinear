@@ -2,8 +2,10 @@
 
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
+import { Input } from '@/components/ui/input';
 import { ModalDialog } from '@/components/ui/modal-dialog';
 import { SimpleSelect } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { useTranslations } from '@/hooks/use-translations';
 import { cn, getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -123,14 +125,12 @@ export const CreateProjectModal = observer(function CreateProjectModal({
             >
               {t('projects.name')}
             </label>
-            <input
-              className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+            <Input
               id="project-name"
               onChange={e => setName(e.target.value)}
               placeholder={t('projects.namePlaceholder')}
               ref={nameRef}
               required
-              type="text"
               value={name}
             />
           </div>
@@ -143,8 +143,8 @@ export const CreateProjectModal = observer(function CreateProjectModal({
               {t('projects.description')}{' '}
               <span className="font-normal text-zinc-400">({t('projects.optional')})</span>
             </label>
-            <textarea
-              className="resize-none rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-600 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-400"
+            <Textarea
+              className="resize-none"
               id="project-description"
               onChange={e => setDescription(e.target.value)}
               placeholder={t('projects.descriptionPlaceholder')}
@@ -204,8 +204,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
                 {t('projects.startDate')}{' '}
                 <span className="font-normal text-zinc-400">({t('projects.optional')})</span>
               </label>
-              <input
-                className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+              <Input
                 id="project-start"
                 onChange={e => setStartDate(e.target.value)}
                 type="date"
@@ -220,8 +219,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
                 {t('projects.targetDate')}{' '}
                 <span className="font-normal text-zinc-400">({t('projects.optional')})</span>
               </label>
-              <input
-                className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+              <Input
                 id="project-target"
                 onChange={e => setTargetDate(e.target.value)}
                 type="date"

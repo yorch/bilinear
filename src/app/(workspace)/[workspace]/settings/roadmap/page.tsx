@@ -4,6 +4,7 @@ import { ExternalLink, Eye, EyeOff } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { Switch } from '@/components/ui/switch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -203,17 +204,11 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                       {t('roadmap.settings.publicRoadmapDescription')}
                     </p>
                   </div>
-                  <button
-                    aria-checked={enabled}
-                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 dark:focus:ring-offset-zinc-900 ${enabled ? 'bg-indigo-600' : 'bg-zinc-300 dark:bg-zinc-600'}`}
-                    onClick={() => setEnabled(v => !v)}
-                    role="switch"
-                    type="button"
-                  >
-                    <span
-                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-4' : 'translate-x-0.5'}`}
-                    />
-                  </button>
+                  <Switch
+                    aria-label={t('roadmap.settings.publicRoadmap')}
+                    checked={enabled}
+                    onCheckedChange={setEnabled}
+                  />
                 </div>
 
                 {/* Title */}

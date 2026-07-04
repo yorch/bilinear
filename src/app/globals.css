@@ -102,3 +102,19 @@ body {
   color: var(--foreground);
   background: var(--background);
 }
+
+/* Collapse animations and transitions for users who ask for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: must beat inline styles set by dnd-kit/animation libs */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: same */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: same */
+    transition-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: same */
+    scroll-behavior: auto !important;
+  }
+}

@@ -902,6 +902,7 @@
       "title": "Keyboard Shortcuts",
       "toggleSidebar": "Toggle sidebar"
     },
+    "skipToContent": "Skip to content",
     "workspaceError": {
       "detail": "Something went wrong inside the app. Retrying re-mounts just this section without losing the rest of your session.",
       "retry": "Retry",

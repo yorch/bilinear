@@ -902,6 +902,7 @@
       "title": "Atajos de teclado",
       "toggleSidebar": "Mostrar/ocultar barra lateral"
     },
+    "skipToContent": "Saltar al contenido",
     "workspaceError": {
       "detail": "Algo salió mal dentro de la aplicación. Reintentar vuelve a montar solo esta sección sin perder el resto de tu sesión.",
       "retry": "Reintentar",
