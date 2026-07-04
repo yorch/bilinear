@@ -36,6 +36,23 @@ function getPath(dict: Dictionary, path: string): unknown {
  * one instance per locale for the plural-category lookups in `translate()`.
  */
 const pluralRulesCache = new Map<Locale, Intl.PluralRules>();
+
+/**
+ * Locale-aware number formatter for the `{count}` placeholder, memoized per
+ * locale (constructing `Intl.NumberFormat` is not free and this runs on the
+ * hot list/board render path). Ensures large counts get the locale's grouping
+ * separators (e.g. `1.500` in `es`, `1,500` in `en`).
+ */
+const numberFormatCache = new Map<Locale, Intl.NumberFormat>();
+function numberFormatFor(locale: Locale): Intl.NumberFormat {
+  let fmt = numberFormatCache.get(locale);
+  if (!fmt) {
+    fmt = new Intl.NumberFormat(INTL_LOCALES[locale]);
+    numberFormatCache.set(locale, fmt);
+  }
+  return fmt;
+}
+
 function pluralRulesFor(locale: Locale): Intl.PluralRules {
   let rules = pluralRulesCache.get(locale);
   if (!rules) {
@@ -55,12 +72,16 @@ function pluralRulesFor(locale: Locale): Intl.PluralRules {
  */
 function resolvePluralRaw(locale: Locale, key: string, count: number): string | null {
   const category = pluralRulesFor(locale).select(count);
-  for (const cat of [category, 'other']) {
-    const raw =
-      getPath(dictionaries[locale], `${key}_${cat}`) ??
-      getPath(dictionaries[defaultLocale], `${key}_${cat}`);
-    if (typeof raw === 'string') {
-      return raw;
+  // Exhaust the target locale's own forms (selected category, then `_other`)
+  // BEFORE crossing to the default locale — otherwise a locale that lacks the
+  // selected CLDR category but has `_other` would render the English form
+  // mid-sentence instead of its own fallback.
+  for (const dict of [dictionaries[locale], dictionaries[defaultLocale]]) {
+    for (const cat of [category, 'other']) {
+      const raw = getPath(dict, `${key}_${cat}`);
+      if (typeof raw === 'string') {
+        return raw;
+      }
     }
   }
   return null;
@@ -95,7 +116,14 @@ export function translate(
   let value = typeof raw === 'string' ? raw : key;
   if (params) {
     for (const [name, replacement] of Object.entries(params)) {
-      value = value.replaceAll(`{${name}}`, () => String(replacement));
+      // `count` is a cardinal number → render it with the locale's digit
+      // grouping; every other placeholder is inserted verbatim (years, ids,
+      // and pre-escaped HTML fragments must not be reformatted).
+      const rendered =
+        name === 'count' && typeof replacement === 'number'
+          ? numberFormatFor(locale).format(replacement)
+          : String(replacement);
+      value = value.replaceAll(`{${name}}`, () => rendered);
     }
   }
   return value;
@@ -120,7 +148,9 @@ export function pickLocaleFromAcceptLanguage(header: string | null | undefined):
       const quality = q ? Number.parseFloat(q.slice(2)) : 1;
       return { quality: Number.isNaN(quality) ? 0 : quality, tag: tag.trim().toLowerCase() };
     })
-    .filter(entry => entry.tag && entry.tag !== '*')
+    // Drop the wildcard, empty tags, and `q=0` — per RFC 7231 a zero quality
+    // means the client explicitly rejects that language, so it must never win.
+    .filter(entry => entry.tag && entry.tag !== '*' && entry.quality > 0)
     .sort((a, b) => b.quality - a.quality);
   for (const { tag } of ranked) {
     const base = tag.split('-')[0];

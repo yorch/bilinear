@@ -1,6 +1,5 @@
 'use client';
 
-import { format, parseISO } from 'date-fns';
 import { Check, Pencil, Plus, Target, Trash2, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
@@ -138,7 +137,7 @@ interface MilestoneRowProps {
 
 function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
   const t = useTranslations();
-  const { dateFnsLocale } = useFormatters();
+  const { formatDate } = useFormatters();
   const [deleting, setDeleting] = useState(false);
 
   const handleDelete = async () => {
@@ -168,7 +167,7 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
       </div>
       {milestone.targetDate && (
         <span className="shrink-0 text-xs text-zinc-400">
-          {format(parseISO(milestone.targetDate), 'MMM d, yyyy', { locale: dateFnsLocale })}
+          {formatDate(milestone.targetDate, { day: 'numeric', month: 'short', year: 'numeric' })}
         </span>
       )}
       <div className="flex shrink-0 items-center gap-0.5">

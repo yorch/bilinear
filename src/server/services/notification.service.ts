@@ -359,18 +359,20 @@ export class NotificationService {
     issueId: string,
     excerpt?: string,
   ): Promise<void> {
-    const actor = await this.prisma.user.findUnique({
-      select: { displayName: true },
-      where: { id: actorId },
-    });
-    const issue = await this.prisma.issue.findUnique({
-      select: {
-        identifier: true,
-        team: { select: { organization: { select: { urlKey: true } } } },
-        title: true,
-      },
-      where: { id: issueId },
-    });
+    const [actor, issue] = await Promise.all([
+      this.prisma.user.findUnique({
+        select: { displayName: true },
+        where: { id: actorId },
+      }),
+      this.prisma.issue.findUnique({
+        select: {
+          identifier: true,
+          team: { select: { organization: { select: { urlKey: true } } } },
+          title: true,
+        },
+        where: { id: issueId },
+      }),
+    ]);
     if (!actor || !issue) {
       return;
     }
