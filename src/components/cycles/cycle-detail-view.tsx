@@ -236,23 +236,9 @@ export const CycleDetailView = observer(function CycleDetailView({
         | undefined;
       if (payload?.success) {
         if (payload.nextCycleId) {
-          toast.success(
-            t(
-              payload.movedCount === 1
-                ? 'cycles.detail.rolledOverSingular'
-                : 'cycles.detail.rolledOverPlural',
-              { count: payload.movedCount },
-            ),
-          );
+          toast.success(t('cycles.detail.rolledOver', { count: payload.movedCount }));
         } else {
-          toast.success(
-            t(
-              payload.movedCount === 1
-                ? 'cycles.detail.unassignedSingular'
-                : 'cycles.detail.unassignedPlural',
-              { count: payload.movedCount },
-            ),
-          );
+          toast.success(t('cycles.detail.unassigned', { count: payload.movedCount }));
         }
       }
     } catch {
@@ -517,12 +503,7 @@ export const CycleDetailView = observer(function CycleDetailView({
                   {t('cycles.detail.velocity.issuesPerCycle', { count: velocity.averageIssues })}
                 </span>
                 {velocity.cycles.length > 0 &&
-                  ` (${t(
-                    velocity.cycles.length === 1
-                      ? 'cycles.detail.velocity.basedOnLastSingular'
-                      : 'cycles.detail.velocity.basedOnLastPlural',
-                    { count: velocity.cycles.length },
-                  )})`}
+                  ` (${t('cycles.detail.velocity.basedOnLast', { count: velocity.cycles.length })})`}
               </p>
               {isUpcoming && (
                 <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">

@@ -32,9 +32,49 @@ function getPath(dict: Dictionary, path: string): unknown {
 }
 
 /**
+ * `Intl.PluralRules` is cheap to reuse but not free to construct, so memoize
+ * one instance per locale for the plural-category lookups in `translate()`.
+ */
+const pluralRulesCache = new Map<Locale, Intl.PluralRules>();
+function pluralRulesFor(locale: Locale): Intl.PluralRules {
+  let rules = pluralRulesCache.get(locale);
+  if (!rules) {
+    rules = new Intl.PluralRules(INTL_LOCALES[locale]);
+    pluralRulesCache.set(locale, rules);
+  }
+  return rules;
+}
+
+/**
+ * Resolve a pluralized key. When a `count` is in play, a key `foo.bar` is
+ * represented by CLDR-category siblings (`foo.bar_one`, `foo.bar_other`, and
+ * for locales that need them `_zero`/`_two`/`_few`/`_many`). We pick the
+ * category via `Intl.PluralRules`, fall back to `_other`, and — so plain
+ * (non-pluralized) keys keep working unchanged — return `null` when no
+ * suffixed variant exists, letting the caller fall through to a direct lookup.
+ */
+function resolvePluralRaw(locale: Locale, key: string, count: number): string | null {
+  const category = pluralRulesFor(locale).select(count);
+  for (const cat of [category, 'other']) {
+    const raw =
+      getPath(dictionaries[locale], `${key}_${cat}`) ??
+      getPath(dictionaries[defaultLocale], `${key}_${cat}`);
+    if (typeof raw === 'string') {
+      return raw;
+    }
+  }
+  return null;
+}
+
+/**
  * Core translation lookup shared by the client `useTranslations()` hook and the
  * server `getServerTranslations()` helper so both resolve keys, fall back to
  * English, and interpolate `{placeholder}` tokens identically.
+ *
+ * When `params.count` is a number, the key is first resolved through the CLDR
+ * plural-category siblings (see `resolvePluralRaw`) so "1 issue" / "2 issues"
+ * pick the grammatically correct form per locale; keys without such siblings
+ * fall through to a direct lookup untouched.
  *
  * The replacement is passed as a function so `String.prototype.replaceAll`
  * treats `$`-sequences in user-supplied values (issue titles, entity names)
@@ -45,8 +85,13 @@ export function translate(
   key: string,
   params?: Record<string, string | number>,
 ): string {
+  const pluralRaw =
+    params && typeof params.count === 'number' ? resolvePluralRaw(locale, key, params.count) : null;
   const raw =
-    getPath(dictionaries[locale], key) ?? getPath(dictionaries[defaultLocale], key) ?? key;
+    pluralRaw ??
+    getPath(dictionaries[locale], key) ??
+    getPath(dictionaries[defaultLocale], key) ??
+    key;
   let value = typeof raw === 'string' ? raw : key;
   if (params) {
     for (const [name, replacement] of Object.entries(params)) {
@@ -54,6 +99,36 @@ export function translate(
     }
   }
   return value;
+}
+
+/**
+ * Pick the best supported locale from an HTTP `Accept-Language` header, honoring
+ * `q`-weights and matching on the base language subtag (so `es-MX` → `es`).
+ * Returns `null` when nothing matches, letting callers fall back to the default.
+ * Used server-side to seed the locale for first-time visitors who have not yet
+ * chosen one (i.e. before the `locale` cookie is set).
+ */
+export function pickLocaleFromAcceptLanguage(header: string | null | undefined): Locale | null {
+  if (!header) {
+    return null;
+  }
+  const ranked = header
+    .split(',')
+    .map(part => {
+      const [tag, ...attrs] = part.trim().split(';');
+      const q = attrs.map(a => a.trim()).find(a => a.startsWith('q='));
+      const quality = q ? Number.parseFloat(q.slice(2)) : 1;
+      return { quality: Number.isNaN(quality) ? 0 : quality, tag: tag.trim().toLowerCase() };
+    })
+    .filter(entry => entry.tag && entry.tag !== '*')
+    .sort((a, b) => b.quality - a.quality);
+  for (const { tag } of ranked) {
+    const base = tag.split('-')[0];
+    if (isLocale(base)) {
+      return base;
+    }
+  }
+  return null;
 }
 
 /** Maps an app `Locale` to a BCP 47 tag for `Intl`/`toLocaleDateString` calls. */
