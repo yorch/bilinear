@@ -3,9 +3,11 @@
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { CycleListView } from '@/components/cycles/cycle-list-view';
+import { useTranslations } from '@/hooks/use-translations';
 import { useStore } from '@/providers/store-provider';
 
 const TeamCyclesPage = observer(function TeamCyclesPage() {
+  const t = useTranslations();
   const { workspace, key: teamKey } = useParams<{
     workspace: string;
     key: string;
@@ -20,7 +22,7 @@ const TeamCyclesPage = observer(function TeamCyclesPage() {
   if (isLoading) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Loading...
+        {t('common.loading')}
       </div>
     );
   }
@@ -28,7 +30,7 @@ const TeamCyclesPage = observer(function TeamCyclesPage() {
   if (hasError) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-red-500">
-        Failed to load data. Please refresh.
+        {t('cycles.failedToLoad')}
       </div>
     );
   }
@@ -36,7 +38,7 @@ const TeamCyclesPage = observer(function TeamCyclesPage() {
   if (!team) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Team not found.
+        {t('cycles.teamNotFound')}
       </div>
     );
   }

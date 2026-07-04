@@ -1,3 +1,7 @@
+import { useTranslations } from '@/hooks/use-translations';
+import { INTL_LOCALES } from '@/lib/i18n';
+import { useLocale } from '@/providers/locale-provider';
+
 interface BurndownPoint {
   completed: number;
   date: string;
@@ -10,12 +14,11 @@ interface BurndownChartProps {
 }
 
 export function BurndownChart({ data }: BurndownChartProps) {
+  const t = useTranslations();
+  const { locale } = useLocale();
+
   if (data.length === 0) {
-    return (
-      <p className="py-6 text-center text-xs text-zinc-400">
-        Burndown data will appear once the cycle starts.
-      </p>
-    );
+    return <p className="py-6 text-center text-xs text-zinc-400">{t('cycles.burndown.empty')}</p>;
   }
 
   const width = 600;
@@ -53,14 +56,17 @@ export function BurndownChart({ data }: BurndownChartProps) {
   const xLabels = data
     .map((d, i) => ({
       i,
-      label: new Date(d.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }),
+      label: new Date(d.date).toLocaleDateString(INTL_LOCALES[locale], {
+        day: 'numeric',
+        month: 'short',
+      }),
     }))
     .filter((_, i) => i % 3 === 0 || i === n - 1);
 
   return (
     <div className="w-full overflow-x-auto">
       <svg
-        aria-label="Burndown chart"
+        aria-label={t('cycles.burndown.ariaLabel')}
         className="w-full"
         style={{ height: 300 }}
         viewBox={`0 0 ${width} ${height}`}
@@ -124,11 +130,11 @@ export function BurndownChart({ data }: BurndownChartProps) {
             y2={5}
           />
           <text className="fill-zinc-500 dark:fill-zinc-400" fontSize={9} x={20} y={9}>
-            Ideal
+            {t('cycles.chart.ideal')}
           </text>
           <line stroke="#6366f1" strokeWidth={2} x1={50} x2={66} y1={5} y2={5} />
           <text className="fill-zinc-500 dark:fill-zinc-400" fontSize={9} x={70} y={9}>
-            Remaining
+            {t('cycles.chart.remaining')}
           </text>
         </g>
       </svg>

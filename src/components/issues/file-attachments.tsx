@@ -2,6 +2,7 @@
 
 import { FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { toast } from '@/lib/toast';
 import { formatFileSize } from '@/lib/utils';
 
@@ -50,6 +51,7 @@ async function deleteFile(fileId: string): Promise<void> {
 }
 
 export function FileAttachments({ issueId }: FileAttachmentsProps) {
+  const t = useTranslations();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -79,8 +81,10 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
 
         const res = await fetch('/api/upload', { body: form, method: 'POST' });
         if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: 'Upload failed' }));
-          toast.error(err.error ?? 'Upload failed');
+          const err = await res
+            .json()
+            .catch(() => ({ error: t('issueDetail.attachments.uploadFailed') }));
+          toast.error(err.error ?? t('issueDetail.attachments.uploadFailed'));
           continue;
         }
         const data = await res.json();
@@ -97,14 +101,14 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
       await deleteFile(att.id);
       setAttachments(prev => prev.filter(a => a.id !== att.id));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete file');
+      toast.error(err instanceof Error ? err.message : t('issueDetail.attachments.failedToDelete'));
     }
   };
 
   return (
     <div className="mt-4">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-medium text-zinc-500">Attachments</p>
+        <p className="text-xs font-medium text-zinc-500">{t('issueDetail.attachments.title')}</p>
         <button
           className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700 disabled:opacity-50 dark:hover:text-zinc-300"
           disabled={uploading}
@@ -116,11 +120,11 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
           ) : (
             <Paperclip className="h-3 w-3" />
           )}
-          {uploading ? 'Uploading…' : 'Attach'}
+          {uploading ? t('issueDetail.attachments.uploading') : t('issueDetail.attachments.attach')}
         </button>
       </div>
       <input
-        aria-label="Attach file"
+        aria-label={t('issueDetail.attachments.attachFile')}
         className="hidden"
         multiple
         onChange={handleFileSelect}
@@ -145,7 +149,7 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
               </a>
               <span className="shrink-0 text-zinc-400">{formatFileSize(att.size)}</span>
               <button
-                aria-label="Remove attachment"
+                aria-label={t('issueDetail.attachments.removeAttachment')}
                 className="text-zinc-400 hover:text-red-500"
                 onClick={() => handleDelete(att)}
                 type="button"
@@ -156,7 +160,7 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
           ))}
         </ul>
       ) : (
-        <p className="text-xs italic text-zinc-400">No attachments</p>
+        <p className="text-xs italic text-zinc-400">{t('issueDetail.attachments.empty')}</p>
       )}
     </div>
   );

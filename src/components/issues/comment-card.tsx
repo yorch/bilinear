@@ -4,11 +4,14 @@ import { CheckCircle, CornerDownRight, MoreHorizontal, Smile } from 'lucide-reac
 import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { usePopover } from '@/hooks/use-popover';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { COMMENT_UPDATE_MUTATION, CONVERT_TO_SUB_ISSUE_MUTATION } from '@/lib/graphql-queries';
+import { INTL_LOCALES } from '@/lib/i18n';
 import { QUICK_EMOJIS } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
 import { cn, formatRelativeTime } from '@/lib/utils';
+import { useLocale } from '@/providers/locale-provider';
 import type { MentionItem } from '../editor/mention-list';
 import { TipTapEditor } from '../editor/tiptap-editor.lazy';
 import { UserAvatar } from '../ui/user-avatar';
@@ -78,6 +81,8 @@ export function CommentCard({
   onUpdate: (comment: CommentItem) => void;
   onConvertToSubIssue: (id: string) => void;
 }) {
+  const t = useTranslations();
+  const { locale } = useLocale();
   const [editing, setEditing] = useState(false);
   const [editBody, setEditBody] = useState(comment.body);
   const [replyBody, setReplyBody] = useState('');
@@ -120,7 +125,7 @@ export function CommentCard({
       }
       setEditing(false);
     } catch {
-      toast.error('Failed to update comment');
+      toast.error(t('issueDetail.comments.failedToUpdate'));
     }
   };
 
@@ -136,11 +141,11 @@ export function CommentCard({
   const handleConvertToSubIssue = async () => {
     setShowMenu(false);
     if (!teamId) {
-      toast.error('Cannot convert — team not resolved');
+      toast.error(t('issueDetail.comments.cannotConvertTeamUnresolved'));
       return;
     }
     const text = new DOMParser().parseFromString(comment.body, 'text/html').body.textContent ?? '';
-    const title = text.trim().slice(0, 255) || 'Sub-issue from comment';
+    const title = text.trim().slice(0, 255) || t('issueDetail.comments.subIssueFromComment');
     try {
       await gql(CONVERT_TO_SUB_ISSUE_MUTATION, {
         input: {
@@ -150,10 +155,10 @@ export function CommentCard({
           title,
         },
       });
-      toast.success('Converted to sub-issue');
+      toast.success(t('issueDetail.comments.convertedToSubIssue'));
       onConvertToSubIssue(comment.id);
     } catch {
-      toast.error('Failed to convert comment to sub-issue');
+      toast.error(t('issueDetail.comments.failedToConvert'));
     }
   };
 
@@ -174,12 +179,18 @@ export function CommentCard({
             <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
               {comment.author.displayName}
             </span>
-            <span className="text-xs text-zinc-400">{formatRelativeTime(comment.createdAt)}</span>
-            {comment.editedAt && <span className="text-xs italic text-zinc-400">(edited)</span>}
+            <span className="text-xs text-zinc-400">
+              {formatRelativeTime(comment.createdAt, t, INTL_LOCALES[locale])}
+            </span>
+            {comment.editedAt && (
+              <span className="text-xs italic text-zinc-400">
+                ({t('issueDetail.comments.edited')})
+              </span>
+            )}
             {isResolved && (
               <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                 <CheckCircle className="h-3 w-3" />
-                Resolved
+                {t('issueDetail.comments.resolved')}
               </Badge>
             )}
           </div>
@@ -191,7 +202,7 @@ export function CommentCard({
               <button
                 className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
                 onClick={() => setShowEmojiPicker(v => !v)}
-                title="React"
+                title={t('issueDetail.comments.react')}
                 type="button"
               >
                 <Smile className="h-3.5 w-3.5" />
@@ -226,7 +237,7 @@ export function CommentCard({
               <button
                 className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
                 onClick={handleQuoteReply}
-                title="Quote reply"
+                title={t('issueDetail.comments.quoteReply')}
                 type="button"
               >
                 <CornerDownRight className="h-3.5 w-3.5" />
@@ -242,7 +253,9 @@ export function CommentCard({
                   : 'text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700',
               )}
               onClick={() => onToggleResolve(comment)}
-              title={isResolved ? 'Unresolve' : 'Resolve'}
+              title={
+                isResolved ? t('issueDetail.comments.unresolve') : t('issueDetail.comments.resolve')
+              }
               type="button"
             >
               <CheckCircle className="h-3.5 w-3.5" />
@@ -268,7 +281,7 @@ export function CommentCard({
                       }}
                       type="button"
                     >
-                      Edit
+                      {t('common.edit')}
                     </button>
                   )}
                   {/* Convert to sub-issue — only on top-level comments */}
@@ -278,7 +291,7 @@ export function CommentCard({
                       onClick={handleConvertToSubIssue}
                       type="button"
                     >
-                      Convert to sub-issue
+                      {t('issueDetail.comments.convertToSubIssue')}
                     </button>
                   )}
                   {isOwn && (
@@ -290,7 +303,7 @@ export function CommentCard({
                       }}
                       type="button"
                     >
-                      Delete
+                      {t('common.delete')}
                     </button>
                   )}
                 </div>
@@ -316,14 +329,14 @@ export function CommentCard({
                 onClick={saveEdit}
                 type="button"
               >
-                Save
+                {t('common.save')}
               </button>
               <button
                 className="rounded-md px-3 py-1 text-xs text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-700"
                 onClick={() => setEditing(false)}
                 type="button"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -402,7 +415,7 @@ export function CommentCard({
                 setReplyBody('');
               }
             }}
-            placeholder="Reply…"
+            placeholder={t('issueDetail.comments.replyPlaceholder')}
             submitting={replySubmitting}
             value={replyBody}
           />

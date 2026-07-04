@@ -3,6 +3,7 @@
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
 import { InitiativeUpdatesSection } from '@/components/initiatives/initiative-updates-section';
+import { useTranslations } from '@/hooks/use-translations';
 import type { DBInitiative } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -57,16 +58,21 @@ const INITIATIVE_REMOVE_PROJECT_MUTATION = `
   }
 `;
 
-const STATUS_LABELS: Record<string, string> = {
-  active: 'Active',
-  canceled: 'Canceled',
-  completed: 'Completed',
-  planned: 'Planned',
-};
-
 const STATUS_ORDER = ['active', 'planned', 'completed', 'canceled'];
 
+function useStatusLabels() {
+  const t = useTranslations();
+  return {
+    active: t('initiatives.status.active'),
+    canceled: t('initiatives.status.canceled'),
+    completed: t('initiatives.status.completed'),
+    planned: t('initiatives.status.planned'),
+  } as Record<string, string>;
+}
+
 function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: DBInitiative }) {
+  const t = useTranslations();
+  const STATUS_LABELS = useStatusLabels();
   const { initiativeStore, projectStore, userStore } = useStore();
   const viewerId = userStore.currentUser?.id ?? '';
   const [expanded, setExpanded] = useState(false);
@@ -123,20 +129,22 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
         <div className="px-12 pb-3">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-              Projects ({projects.length})
+              {t('initiatives.row.projects', { count: projects.length })}
             </span>
             <button
               className="rounded border border-zinc-300 px-2 py-0.5 text-xs hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
               onClick={() => setAdding(a => !a)}
               type="button"
             >
-              {adding ? 'Cancel' : '+ Add project'}
+              {adding ? t('common.cancel') : t('initiatives.row.addProject')}
             </button>
           </div>
           {adding ? (
             <div className="mb-2 max-h-40 overflow-y-auto rounded border border-zinc-200 dark:border-zinc-700">
               {allProjects.length === 0 ? (
-                <div className="px-3 py-2 text-xs text-zinc-400">No projects to add.</div>
+                <div className="px-3 py-2 text-xs text-zinc-400">
+                  {t('initiatives.row.noProjectsToAdd')}
+                </div>
               ) : (
                 allProjects.map(p => (
                   <button
@@ -148,9 +156,9 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
                         projectId: p.id,
                       });
                       if (res.errors?.length) {
-                        toast.error('Failed to add project');
+                        toast.error(t('initiatives.row.addProjectFailed'));
                       } else {
-                        toast.success(`Added ${p.name}`);
+                        toast.success(t('initiatives.row.addedProject', { name: p.name }));
                         setAdding(false);
                       }
                     }}
@@ -163,7 +171,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
             </div>
           ) : null}
           {projects.length === 0 ? (
-            <div className="text-xs text-zinc-400">No projects yet.</div>
+            <div className="text-xs text-zinc-400">{t('initiatives.row.noProjectsYet')}</div>
           ) : (
             <div className="space-y-1">
               {projects.map(p => (
@@ -187,13 +195,13 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
                       if (res.errors?.length) {
                         toast.error(
                           (res.errors[0] as { message?: string })?.message ??
-                            'Failed to remove project',
+                            t('initiatives.row.removeProjectFailed'),
                         );
                       } else {
-                        toast.success(`Removed ${p.name}`);
+                        toast.success(t('initiatives.row.removedProject', { name: p.name }));
                       }
                     }}
-                    title={`Remove ${p.name} from this initiative`}
+                    title={t('initiatives.row.removeProjectTitle', { name: p.name })}
                     type="button"
                   >
                     ×
@@ -231,6 +239,8 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
 }
 
 const InitiativesPage = observer(function InitiativesPage() {
+  const t = useTranslations();
+  const STATUS_LABELS = useStatusLabels();
   const { initiativeStore, syncStore } = useStore();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
@@ -255,9 +265,9 @@ const InitiativesPage = observer(function InitiativesPage() {
     }
     const res = await gql(INITIATIVE_CREATE_MUTATION, { input: { name: name.trim() } });
     if (res.errors?.length) {
-      toast.error('Failed to create initiative');
+      toast.error(t('initiatives.page.createFailed'));
     } else {
-      toast.success('Initiative created');
+      toast.success(t('initiatives.page.createdSuccess'));
       setName('');
       setCreating(false);
     }
@@ -268,7 +278,7 @@ const InitiativesPage = observer(function InitiativesPage() {
   if (isLoading) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Loading...
+        {t('common.loading')}
       </div>
     );
   }
@@ -276,13 +286,15 @@ const InitiativesPage = observer(function InitiativesPage() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
-        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Initiatives</h1>
+        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          {t('initiatives.page.title')}
+        </h1>
         <button
           className="rounded bg-indigo-600 px-2.5 py-1 text-xs text-white hover:bg-indigo-700"
           onClick={() => setCreating(c => !c)}
           type="button"
         >
-          {creating ? 'Cancel' : '+ New initiative'}
+          {creating ? t('common.cancel') : t('initiatives.page.newInitiative')}
         </button>
       </div>
 
@@ -299,7 +311,7 @@ const InitiativesPage = observer(function InitiativesPage() {
                 setName('');
               }
             }}
-            placeholder="Initiative name"
+            placeholder={t('initiatives.page.namePlaceholder')}
             ref={inputRef}
             value={name}
           />
@@ -308,7 +320,7 @@ const InitiativesPage = observer(function InitiativesPage() {
             onClick={handleCreate}
             type="button"
           >
-            Create
+            {t('common.create')}
           </button>
         </div>
       ) : null}
@@ -316,7 +328,7 @@ const InitiativesPage = observer(function InitiativesPage() {
       <div className="flex-1 overflow-y-auto">
         {grouped.length === 0 ? (
           <div className="flex items-center justify-center py-20 text-sm text-zinc-400 dark:text-zinc-500">
-            No initiatives yet. Create one to start grouping projects.
+            {t('initiatives.page.empty')}
           </div>
         ) : (
           grouped.map(({ status, items }) => (

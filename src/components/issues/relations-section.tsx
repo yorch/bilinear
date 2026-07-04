@@ -4,6 +4,7 @@ import { ChevronDown, Plus, Trash2, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useOutsideClick } from '@/hooks/use-outside-click';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
@@ -50,12 +51,16 @@ const RELATION_TYPES = ['blocks', 'blocked_by', 'related', 'duplicate'] as const
 
 type RelationType = (typeof RELATION_TYPES)[number];
 
-const RELATION_TYPE_LABELS: Record<RelationType, string> = {
-  blocked_by: 'Blocked by',
-  blocks: 'Blocks',
-  duplicate: 'Duplicate of',
-  related: 'Related to',
-};
+function getRelationTypeLabels(
+  t: ReturnType<typeof useTranslations>,
+): Record<RelationType, string> {
+  return {
+    blocked_by: t('issueDetail.relations.blockedBy'),
+    blocks: t('issueDetail.relations.blocks'),
+    duplicate: t('issueDetail.relations.duplicateOf'),
+    related: t('issueDetail.relations.relatedTo'),
+  };
+}
 
 interface RelatedIssueRef {
   id: string;
@@ -81,6 +86,8 @@ interface RelationsSectionProps {
 export const RelationsSection = observer(function RelationsSection({
   issueId,
 }: RelationsSectionProps) {
+  const t = useTranslations();
+  const RELATION_TYPE_LABELS = useMemo(() => getRelationTypeLabels(t), [t]);
   const store = useStore();
   const [relations, setRelations] = useState<IssueRelation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,7 +111,7 @@ export const RelationsSection = observer(function RelationsSection({
       })
       .catch(() => {
         if (!cancelled) {
-          toast.error('Failed to load relations');
+          toast.error(t('issueDetail.relations.failedToLoad'));
         }
       })
       .finally(() => {
@@ -115,7 +122,7 @@ export const RelationsSection = observer(function RelationsSection({
     return () => {
       cancelled = true;
     };
-  }, [issueId]);
+  }, [issueId, t]);
 
   const handleDelete = async (relationId: string) => {
     const prev = relations;
@@ -130,7 +137,7 @@ export const RelationsSection = observer(function RelationsSection({
         );
       });
     } catch {
-      toast.error('Failed to delete relation');
+      toast.error(t('issueDetail.relations.failedToDelete'));
       setRelations(prev);
     }
   };
@@ -143,7 +150,7 @@ export const RelationsSection = observer(function RelationsSection({
       i => i.identifier === normalized,
     );
     if (!relatedIssue) {
-      toast.error(`Issue "${normalized}" not found`);
+      toast.error(t('issueDetail.relations.issueNotFound', { identifier: normalized }));
       return;
     }
 
@@ -163,7 +170,7 @@ export const RelationsSection = observer(function RelationsSection({
       }
       setShowAddForm(false);
     } catch {
-      toast.error('Failed to create relation');
+      toast.error(t('issueDetail.relations.failedToCreate'));
     }
   };
 
@@ -184,7 +191,7 @@ export const RelationsSection = observer(function RelationsSection({
     <div className="mt-6">
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-          Relations {relations.length > 0 && `(${relations.length})`}
+          {t('issueDetail.relations.title')} {relations.length > 0 && `(${relations.length})`}
         </h3>
         {!showAddForm && (
           <button
@@ -193,15 +200,15 @@ export const RelationsSection = observer(function RelationsSection({
             type="button"
           >
             <Plus className="h-3.5 w-3.5" />
-            Add relation
+            {t('issueDetail.relations.addRelation')}
           </button>
         )}
       </div>
 
-      {loading && <p className="mt-2 text-xs text-zinc-400 italic">Loading…</p>}
+      {loading && <p className="mt-2 text-xs text-zinc-400 italic">{t('common.loading')}</p>}
 
       {!loading && relations.length === 0 && !showAddForm && (
-        <p className="mt-2 text-xs text-zinc-400 italic">No relations.</p>
+        <p className="mt-2 text-xs text-zinc-400 italic">{t('issueDetail.relations.empty')}</p>
       )}
 
       {!loading && (
@@ -229,10 +236,10 @@ export const RelationsSection = observer(function RelationsSection({
                           {other?.identifier ?? '—'}
                         </span>
                         <span className="flex-1 truncate text-zinc-700 dark:text-zinc-300">
-                          {other?.title ?? 'Unknown issue'}
+                          {other?.title ?? t('issueDetail.relations.unknownIssue')}
                         </span>
                         <button
-                          aria-label="Remove relation"
+                          aria-label={t('issueDetail.relations.removeRelation')}
                           className="hidden items-center rounded p-0.5 text-zinc-400 hover:text-red-500 group-hover:flex"
                           onClick={() => handleDelete(rel.id)}
                           type="button"
@@ -264,6 +271,8 @@ interface AddRelationFormProps {
 }
 
 function AddRelationForm({ onSubmit, onClose }: AddRelationFormProps) {
+  const t = useTranslations();
+  const RELATION_TYPE_LABELS = useMemo(() => getRelationTypeLabels(t), [t]);
   const [type, setType] = useState<RelationType>('related');
   const [identifier, setIdentifier] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -334,13 +343,13 @@ function AddRelationForm({ onSubmit, onClose }: AddRelationFormProps) {
               onClose();
             }
           }}
-          placeholder="Issue identifier (e.g. ENG-123)"
+          placeholder={t('issueDetail.relations.identifierPlaceholder')}
           type="text"
           value={identifier}
         />
 
         <button
-          aria-label="Cancel"
+          aria-label={t('common.cancel')}
           className="rounded p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
           onClick={onClose}
           type="button"
@@ -355,14 +364,14 @@ function AddRelationForm({ onSubmit, onClose }: AddRelationFormProps) {
           onClick={onClose}
           type="button"
         >
-          Cancel
+          {t('common.cancel')}
         </button>
         <button
           className="rounded bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
           disabled={!identifier.trim() || submitting}
           type="submit"
         >
-          {submitting ? 'Adding…' : 'Add'}
+          {submitting ? t('issueDetail.relations.adding') : t('issueDetail.relations.add')}
         </button>
       </div>
     </form>

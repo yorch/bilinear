@@ -2,6 +2,7 @@
 
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
@@ -25,14 +26,24 @@ const EXPORT_QUERY = `
 
 // Mappable issue fields → label. `title` is required; the rest optional.
 const MAPPABLE_FIELDS = [
-  { key: 'title', label: 'Title', required: true },
-  { key: 'description', label: 'Description', required: false },
-  { key: 'priority', label: 'Priority', required: false },
-  { key: 'assignee', label: 'Assignee (email)', required: false },
-  { key: 'state', label: 'Status (name)', required: false },
+  { key: 'title', labelKey: 'settings.import.fieldTitle', required: true },
+  { key: 'description', labelKey: 'settings.import.fieldDescription', required: false },
+  { key: 'priority', labelKey: 'settings.import.fieldPriority', required: false },
+  { key: 'assignee', labelKey: 'settings.import.fieldAssignee', required: false },
+  { key: 'state', labelKey: 'settings.import.fieldState', required: false },
 ] as const;
 
 type FieldKey = (typeof MAPPABLE_FIELDS)[number]['key'];
+
+// English header names used for best-effort auto-mapping against CSV headers.
+// Not translated — this matches literal CSV column names, not display text.
+const MAPPABLE_FIELD_MATCH_LABELS: Record<FieldKey, string> = {
+  assignee: 'Assignee (email)',
+  description: 'Description',
+  priority: 'Priority',
+  state: 'Status (name)',
+  title: 'Title',
+};
 
 interface ImportResult {
   created: number;
@@ -41,6 +52,7 @@ interface ImportResult {
 }
 
 const ImportSettingsPage = observer(function ImportSettingsPage() {
+  const t = useTranslations();
   const { teamStore } = useStore();
   const teams = teamStore.all;
 
@@ -59,7 +71,9 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
     const next: Partial<Record<FieldKey, string>> = {};
     for (const f of MAPPABLE_FIELDS) {
       const hit = hdrs.find(
-        h => h.toLowerCase() === f.key || h.toLowerCase() === f.label.toLowerCase(),
+        h =>
+          h.toLowerCase() === f.key ||
+          h.toLowerCase() === MAPPABLE_FIELD_MATCH_LABELS[f.key].toLowerCase(),
       );
       if (hit) {
         next[f.key] = hit;
@@ -89,17 +103,17 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
         setResult(null);
       }
     } catch {
-      toast.error('Could not parse CSV');
+      toast.error(t('settings.import.couldNotParseCsv'));
     }
   }
 
   async function runImport() {
     if (!activeTeamId) {
-      toast.error('Select a team');
+      toast.error(t('settings.import.selectTeam'));
       return;
     }
     if (!mapping.title) {
-      toast.error('Map the Title column');
+      toast.error(t('settings.import.mapTitleColumn'));
       return;
     }
     setImporting(true);
@@ -110,10 +124,10 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
       const data = (res.data as { csvImportIssues?: ImportResult })?.csvImportIssues;
       if (data) {
         setResult(data);
-        toast.success(`Imported ${data.created} issue(s)`);
+        toast.success(t('settings.import.importedCount', { count: data.created }));
       }
     } catch (err) {
-      toast.error((err as Error).message || 'Import failed');
+      toast.error((err as Error).message || t('settings.import.importFailed'));
     } finally {
       setImporting(false);
     }
@@ -134,7 +148,7 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      toast.error('Export failed');
+      toast.error(t('settings.import.exportFailed'));
     }
   }
 
@@ -147,15 +161,13 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-8 p-8">
       <div>
-        <h1 className="text-xl font-semibold">Import / Export</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Import issues from a CSV file, or export your data as JSON.
-        </p>
+        <h1 className="text-xl font-semibold">{t('settings.import.title')}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t('settings.import.description')}</p>
       </div>
 
       {/* Import */}
       <section className="rounded-lg border p-6 space-y-4">
-        <h2 className="font-medium">Import issues from CSV</h2>
+        <h2 className="font-medium">{t('settings.import.importHeading')}</h2>
 
         <div className="flex flex-wrap items-center gap-3">
           <input
@@ -174,10 +186,10 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
             onChange={e => setTeamId(e.target.value)}
             value={activeTeamId}
           >
-            {teams.length === 0 && <option value="">No teams</option>}
-            {teams.map(t => (
-              <option key={t.id} value={t.id}>
-                {t.name}
+            {teams.length === 0 && <option value="">{t('settings.import.noTeams')}</option>}
+            {teams.map(team => (
+              <option key={team.id} value={team.id}>
+                {team.name}
               </option>
             ))}
           </select>
@@ -186,13 +198,13 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
         {headers.length > 0 && (
           <>
             <p className="text-xs text-muted-foreground">
-              {rowCount} row(s) detected. Map columns to issue fields:
+              {t('settings.import.rowsDetected', { count: rowCount })}
             </p>
             <div className="space-y-2">
               {MAPPABLE_FIELDS.map(f => (
                 <label className="flex items-center justify-between gap-3" key={f.key}>
                   <span className="text-sm">
-                    {f.label}
+                    {t(f.labelKey)}
                     {f.required && <span className="text-destructive"> *</span>}
                   </span>
                   <select
@@ -202,7 +214,7 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
                     }
                     value={mapping[f.key] ?? ''}
                   >
-                    <option value="">— none —</option>
+                    <option value="">{t('settings.import.noneOption')}</option>
                     {headers.map(h => (
                       <option key={h} value={h}>
                         {h}
@@ -218,7 +230,9 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
               onClick={() => void runImport()}
               type="button"
             >
-              {importing ? 'Importing…' : `Import ${rowCount} issue(s)`}
+              {importing
+                ? t('settings.import.importingEllipsis')
+                : t('settings.import.importCount', { count: rowCount })}
             </button>
           </>
         )}
@@ -226,7 +240,10 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
         {result && (
           <div className="rounded-md bg-muted/50 p-3 text-sm">
             <p>
-              Created <strong>{result.created}</strong>, skipped <strong>{result.skipped}</strong>.
+              {t('settings.import.createdSkipped', {
+                created: result.created,
+                skipped: result.skipped,
+              })}
             </p>
             {result.errors.length > 0 && (
               <ul className="mt-2 max-h-40 list-disc overflow-auto pl-5 text-xs text-destructive">
@@ -241,16 +258,14 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
 
       {/* Export */}
       <section className="rounded-lg border p-6 space-y-3">
-        <h2 className="font-medium">Export</h2>
-        <p className="text-sm text-muted-foreground">
-          Download a JSON snapshot of issues for the selected team (or all teams).
-        </p>
+        <h2 className="font-medium">{t('settings.import.exportHeading')}</h2>
+        <p className="text-sm text-muted-foreground">{t('settings.import.exportDescription')}</p>
         <button
           className="rounded-md border px-4 py-1.5 text-sm hover:bg-muted"
           onClick={() => void runExport()}
           type="button"
         >
-          Export JSON
+          {t('settings.import.exportJson')}
         </button>
       </section>
     </div>

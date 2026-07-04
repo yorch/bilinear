@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import {
   COMMENT_CREATE_MUTATION,
@@ -47,6 +48,7 @@ export function CommentThread({
   mentionIssues,
   mentionUsers,
 }: CommentThreadProps) {
+  const t = useTranslations();
   const [comments, setComments] = useState<CommentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
@@ -82,7 +84,7 @@ export function CommentThread({
       setShowReplyTo(null);
       await fetchComments();
     } catch {
-      toast.error('Failed to post comment');
+      toast.error(t('issueDetail.comments.failedToPost'));
     } finally {
       setSubmitting(false);
     }
@@ -96,9 +98,9 @@ export function CommentThread({
           .filter(c => c.id !== id)
           .map(c => ({ ...c, replies: c.replies.filter(r => r.id !== id) })),
       );
-      toast.success('Comment deleted');
+      toast.success(t('issueDetail.comments.deleted'));
     } catch {
-      toast.error('Failed to delete comment');
+      toast.error(t('issueDetail.comments.failedToDelete'));
     }
   };
 
@@ -122,7 +124,7 @@ export function CommentThread({
         );
       }
     } catch {
-      toast.error('Failed to update comment');
+      toast.error(t('issueDetail.comments.failedToUpdate'));
     }
   };
 
@@ -135,7 +137,7 @@ export function CommentThread({
       }
       await fetchComments();
     } catch {
-      toast.error('Failed to update reaction');
+      toast.error(t('issueDetail.comments.failedToUpdateReaction'));
     }
   };
 
@@ -188,7 +190,7 @@ export function CommentThread({
           mentionUsers={mentionUsers}
           onChange={setNewComment}
           onSubmit={body => submitComment(body)}
-          placeholder="Write a comment… (supports **markdown**, @mentions, #issues)"
+          placeholder={t('issueDetail.comments.writePlaceholder')}
           submitting={submitting}
           value={newComment}
         />

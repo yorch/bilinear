@@ -1,3 +1,4 @@
+import type { Locale as DateFnsLocale } from 'date-fns';
 import { differenceInCalendarDays, format, isToday } from 'date-fns';
 
 export const PRIORITY_CONFIG = {
@@ -49,9 +50,12 @@ export function getDueDateColor(dueDate: string | null | undefined): string {
   return 'text-zinc-500';
 }
 
-export function formatDueDate(dueDate: string | null | undefined): string {
+export function formatDueDate(
+  dueDate: string | null | undefined,
+  dateFnsLocale?: DateFnsLocale,
+): string {
   if (!dueDate) {
     return '';
   }
-  return format(new Date(dueDate), 'MMM d');
+  return format(new Date(dueDate), 'MMM d', dateFnsLocale ? { locale: dateFnsLocale } : undefined);
 }

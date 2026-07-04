@@ -1,6 +1,7 @@
 'use client';
 
 import { GanttChartSquare, Kanban, List } from 'lucide-react';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 
 export type ViewMode = 'list' | 'board' | 'timeline';
@@ -11,6 +12,7 @@ interface ViewToggleProps {
 }
 
 export function ViewToggle({ mode, onChange }: ViewToggleProps) {
+  const t = useTranslations();
   return (
     <div className="flex items-center rounded-md border border-zinc-200 dark:border-zinc-700">
       <button
@@ -21,7 +23,7 @@ export function ViewToggle({ mode, onChange }: ViewToggleProps) {
             : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300',
         )}
         onClick={() => onChange('list')}
-        title="List view (Alt+1)"
+        title={t('issues.listViewShortcut')}
         type="button"
       >
         <List className="h-4 w-4" />
@@ -34,7 +36,7 @@ export function ViewToggle({ mode, onChange }: ViewToggleProps) {
             : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300',
         )}
         onClick={() => onChange('board')}
-        title="Board view (Alt+2)"
+        title={t('issues.boardViewShortcut')}
         type="button"
       >
         <Kanban className="h-4 w-4" />
@@ -47,7 +49,7 @@ export function ViewToggle({ mode, onChange }: ViewToggleProps) {
             : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300',
         )}
         onClick={() => onChange('timeline')}
-        title="Timeline view (Alt+3)"
+        title={t('issues.timelineViewShortcut')}
         type="button"
       >
         <GanttChartSquare className="h-4 w-4" />

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BurndownChart } from '@/components/cycles/burndown-chart';
 import { BurnupChart } from '@/components/cycles/burnup-chart';
+import { useTranslations } from '@/hooks/use-translations';
 import { isActiveCycle } from '@/lib/cycle-utils';
 import { gql } from '@/lib/graphql';
 import {
@@ -14,9 +15,11 @@ import {
   CYCLE_SCOPE_METRICS_QUERY,
   CYCLE_VELOCITY_QUERY,
 } from '@/lib/graphql-queries';
+import { INTL_LOCALES } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn } from '@/lib/utils';
+import { useLocale } from '@/providers/locale-provider';
 import { useStore } from '@/providers/store-provider';
 
 interface CycleDetailViewProps {
@@ -25,9 +28,9 @@ interface CycleDetailViewProps {
   workspaceKey: string;
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, intlLocale: string): string {
   const d = new Date(iso);
-  return d.toLocaleDateString('en-US', {
+  return d.toLocaleDateString(intlLocale, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -75,10 +78,13 @@ interface VelocityBarChartProps {
 }
 
 function VelocityBarChart({ cycles }: VelocityBarChartProps) {
+  const t = useTranslations();
   const max = Math.max(...cycles.map(c => c.completedIssues), 1);
 
   if (cycles.length === 0) {
-    return <p className="py-4 text-center text-xs text-zinc-400">No velocity data yet.</p>;
+    return (
+      <p className="py-4 text-center text-xs text-zinc-400">{t('cycles.detail.velocity.empty')}</p>
+    );
   }
 
   return (
@@ -99,7 +105,7 @@ function VelocityBarChart({ cycles }: VelocityBarChartProps) {
             />
             <span
               className="max-w-full truncate text-[9px] text-zinc-400"
-              title={`Cycle ${c.cycleNumber}`}
+              title={t('cycles.defaultName', { number: c.cycleNumber })}
             >
               #{c.cycleNumber}
             </span>
@@ -120,6 +126,8 @@ export const CycleDetailView = observer(function CycleDetailView({
   teamKey,
 }: CycleDetailViewProps) {
   const { cycleStore, issueStore, teamStore, workflowStateStore } = useStore();
+  const t = useTranslations();
+  const { locale } = useLocale();
 
   const txQueue = useMemo(() => new TransactionQueue(), []);
 
@@ -210,12 +218,12 @@ export const CycleDetailView = observer(function CycleDetailView({
             if (snapshot) {
               issueStore.optimisticUpdate(issueId, snapshot);
             }
-            toast.error('Failed to remove issue from cycle');
+            toast.error(t('cycles.detail.removeIssueError'));
           },
         },
       );
     },
-    [issueStore, txQueue],
+    [issueStore, txQueue, t],
   );
 
   const handleRollover = useCallback(async () => {
@@ -226,7 +234,7 @@ export const CycleDetailView = observer(function CycleDetailView({
     try {
       const res = await gql(CYCLE_ROLLOVER_MUTATION, { cycleId });
       if (res.errors?.length) {
-        toast.error('Failed to roll over cycle');
+        toast.error(t('cycles.detail.rolloverError'));
         return;
       }
       const payload = res.data?.cycleRollover as
@@ -239,25 +247,35 @@ export const CycleDetailView = observer(function CycleDetailView({
       if (payload?.success) {
         if (payload.nextCycleId) {
           toast.success(
-            `Rolled over. ${payload.movedCount} incomplete issue${payload.movedCount === 1 ? '' : 's'} moved to next cycle.`,
+            t(
+              payload.movedCount === 1
+                ? 'cycles.detail.rolledOverSingular'
+                : 'cycles.detail.rolledOverPlural',
+              { count: payload.movedCount },
+            ),
           );
         } else {
           toast.success(
-            `${payload.movedCount} issue${payload.movedCount === 1 ? '' : 's'} unassigned.`,
+            t(
+              payload.movedCount === 1
+                ? 'cycles.detail.unassignedSingular'
+                : 'cycles.detail.unassignedPlural',
+              { count: payload.movedCount },
+            ),
           );
         }
       }
     } catch {
-      toast.error('Failed to roll over cycle');
+      toast.error(t('cycles.detail.rolloverError'));
     } finally {
       setRollingOver(false);
     }
-  }, [cycleId, rollingOver]);
+  }, [cycleId, rollingOver, t]);
 
   if (!cycle) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Cycle not found.
+        {t('cycles.detail.notFound')}
       </div>
     );
   }
@@ -277,14 +295,18 @@ export const CycleDetailView = observer(function CycleDetailView({
   // Show rollover button for active cycles or cycles whose end date has passed
   const showRollover = isActive || endsAtMs <= now;
 
-  const statusLabel = isActive ? 'Active' : isUpcoming ? 'Upcoming' : 'Completed';
+  const statusLabel = isActive
+    ? t('cycles.status.active')
+    : isUpcoming
+      ? t('cycles.status.upcoming')
+      : t('cycles.status.completed');
   const statusColor = isActive
     ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
     : isUpcoming
       ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400'
       : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400';
 
-  const displayName = cycle.name || `Cycle ${cycle.number}`;
+  const displayName = cycle.name || t('cycles.defaultName', { number: cycle.number });
 
   const handleSaveName = () => {
     const trimmed = nameValue.trim();
@@ -302,7 +324,7 @@ export const CycleDetailView = observer(function CycleDetailView({
       {
         onError: () => {
           cycleStore.optimisticUpdate(cycle.id, snapshot);
-          toast.error('Failed to update cycle name');
+          toast.error(t('cycles.detail.updateNameError'));
         },
       },
     );
@@ -342,7 +364,7 @@ export const CycleDetailView = observer(function CycleDetailView({
               setNameValue(cycle.name ?? '');
               setEditingName(true);
             }}
-            title="Click to edit name"
+            title={t('cycles.detail.clickToEditName')}
             type="button"
           >
             {displayName}
@@ -358,7 +380,7 @@ export const CycleDetailView = observer(function CycleDetailView({
             type="button"
           >
             <RotateCcw className="h-3.5 w-3.5" />
-            {rollingOver ? 'Rolling over…' : 'Roll over'}
+            {rollingOver ? t('cycles.detail.rollingOver') : t('cycles.detail.rollOver')}
           </button>
         )}
       </div>
@@ -373,7 +395,8 @@ export const CycleDetailView = observer(function CycleDetailView({
             <div className="flex items-center gap-1.5">
               <Calendar className="h-3.5 w-3.5 text-zinc-400" />
               <span className="text-xs text-zinc-500">
-                {formatDate(cycle.startsAt)} &rarr; {formatDate(cycle.endsAt)}
+                {formatDate(cycle.startsAt, INTL_LOCALES[locale])} &rarr;{' '}
+                {formatDate(cycle.endsAt, INTL_LOCALES[locale])}
               </span>
             </div>
           </div>
@@ -385,9 +408,15 @@ export const CycleDetailView = observer(function CycleDetailView({
           {/* Progress */}
           <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Progress</span>
+              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                {t('cycles.detail.progress')}
+              </span>
               <span className="text-xs tabular-nums text-zinc-500">
-                {completedIssues.length} / {cycleIssues.length} issues ({progress}%)
+                {t('cycles.detail.progressCount', {
+                  completed: completedIssues.length,
+                  progress,
+                  total: cycleIssues.length,
+                })}
               </span>
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
@@ -404,7 +433,7 @@ export const CycleDetailView = observer(function CycleDetailView({
               <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
                   <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
-                    Planned
+                    {t('cycles.detail.scope.planned')}
                   </p>
                   <p className="mt-1 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
                     {scopeMetrics.plannedCount}
@@ -412,34 +441,40 @@ export const CycleDetailView = observer(function CycleDetailView({
                 </div>
                 <div className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
                   <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
-                    Scope creep
+                    {t('cycles.detail.scope.creep')}
                   </p>
                   <p className="mt-1 text-xl font-semibold text-orange-500">
                     {scopeMetrics.scopeCreepCount}
                   </p>
                   <p className="text-[11px] text-zinc-400">
-                    {Math.round(scopeMetrics.scopeCreepPct)}% of total
+                    {t('cycles.detail.scope.pctOfTotal', {
+                      pct: Math.round(scopeMetrics.scopeCreepPct),
+                    })}
                   </p>
                 </div>
                 <div className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
                   <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
-                    Carried over
+                    {t('cycles.detail.scope.carriedOver')}
                   </p>
                   <p className="mt-1 text-xl font-semibold text-blue-500">
                     {scopeMetrics.carryoverCount}
                   </p>
                   <p className="text-[11px] text-zinc-400">
-                    {Math.round(scopeMetrics.carryoverPct)}% of total
+                    {t('cycles.detail.scope.pctOfTotal', {
+                      pct: Math.round(scopeMetrics.carryoverPct),
+                    })}
                   </p>
                 </div>
                 <div className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
                   <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
-                    Completed
+                    {t('cycles.detail.scope.completed')}
                   </p>
                   <p className="mt-1 text-xl font-semibold text-green-500">
                     {scopeMetrics.completedCount}
                   </p>
-                  <p className="text-[11px] text-zinc-400">of {scopeMetrics.totalCount} total</p>
+                  <p className="text-[11px] text-zinc-400">
+                    {t('cycles.detail.scope.ofTotal', { total: scopeMetrics.totalCount })}
+                  </p>
                 </div>
               </div>
             )}
@@ -449,7 +484,7 @@ export const CycleDetailView = observer(function CycleDetailView({
             <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                  {chartView === 'burndown' ? 'Burndown' : 'Burnup'}
+                  {chartView === 'burndown' ? t('cycles.burndown.title') : t('cycles.burnup.title')}
                 </h3>
                 <div className="flex rounded-md border border-zinc-200 text-xs dark:border-zinc-700">
                   {(['burndown', 'burnup'] as const).map(v => (
@@ -464,7 +499,7 @@ export const CycleDetailView = observer(function CycleDetailView({
                       onClick={() => setChartView(v)}
                       type="button"
                     >
-                      {v.charAt(0).toUpperCase() + v.slice(1)}
+                      {v === 'burndown' ? t('cycles.burndown.title') : t('cycles.burnup.title')}
                     </button>
                   ))}
                 </div>
@@ -483,21 +518,26 @@ export const CycleDetailView = observer(function CycleDetailView({
           {velocity && (
             <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
               <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                Velocity
+                {t('cycles.detail.velocity.title')}
               </h3>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Avg velocity:{' '}
+                {t('cycles.detail.velocity.avgLabel')}{' '}
                 <span className="font-medium text-zinc-700 dark:text-zinc-200">
-                  {velocity.averageIssues} issues/cycle
+                  {t('cycles.detail.velocity.issuesPerCycle', { count: velocity.averageIssues })}
                 </span>
                 {velocity.cycles.length > 0 &&
-                  ` (based on last ${velocity.cycles.length} cycle${velocity.cycles.length === 1 ? '' : 's'})`}
+                  ` (${t(
+                    velocity.cycles.length === 1
+                      ? 'cycles.detail.velocity.basedOnLastSingular'
+                      : 'cycles.detail.velocity.basedOnLastPlural',
+                    { count: velocity.cycles.length },
+                  )})`}
               </p>
               {isUpcoming && (
                 <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                  Capacity estimate:{' '}
+                  {t('cycles.detail.velocity.capacityLabel')}{' '}
                   <span className="font-medium text-zinc-700 dark:text-zinc-200">
-                    ~{velocity.averageIssues} issues
+                    {t('cycles.detail.velocity.approxIssues', { count: velocity.averageIssues })}
                   </span>
                 </p>
               )}
@@ -509,15 +549,15 @@ export const CycleDetailView = observer(function CycleDetailView({
           <div className="mt-6">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                Issues ({cycleIssues.length})
+                {t('cycles.detail.issuesHeading', { count: cycleIssues.length })}
               </h3>
             </div>
             <div className="mt-2 flex flex-col gap-0.5">
               {cycleIssues.length === 0 ? (
                 <p className="py-8 text-center text-xs text-zinc-400">
-                  No issues in this cycle yet. Use{' '}
-                  <kbd className="mx-0.5 rounded border px-1 font-mono text-[10px]">Q</kbd> on any
-                  issue to assign it to a cycle.
+                  {t('cycles.detail.noIssuesBefore')}{' '}
+                  <kbd className="mx-0.5 rounded border px-1 font-mono text-[10px]">Q</kbd>{' '}
+                  {t('cycles.detail.noIssuesAfter')}
                 </p>
               ) : (
                 cycleIssues.map(issue => {
@@ -546,10 +586,10 @@ export const CycleDetailView = observer(function CycleDetailView({
                       <button
                         className="hidden rounded px-1.5 py-0.5 text-[10px] text-zinc-400 transition-colors hover:bg-zinc-200 hover:text-zinc-600 group-hover:block dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
                         onClick={() => handleRemoveIssue(issue.id)}
-                        title="Remove from cycle"
+                        title={t('cycles.detail.removeFromCycle')}
                         type="button"
                       >
-                        Remove
+                        {t('cycles.detail.remove')}
                       </button>
                     </div>
                   );

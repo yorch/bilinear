@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { ISSUE_TEMPLATES_QUERY } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
@@ -72,6 +73,7 @@ export function CreateIssueModal({
   defaultStateId,
   teamId,
 }: CreateIssueModalProps) {
+  const t = useTranslations();
   const titleRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<FormState>(() => initialForm(defaultStateId, states[0]?.id));
   const [submitting, setSubmitting] = useState(false);
@@ -181,7 +183,7 @@ export function CreateIssueModal({
       .replace(/\s+/g, ' ')
       .trim();
     if (!text) {
-      toast.error('Add a description first to suggest a title');
+      toast.error(t('issueDetail.createModal.addDescriptionFirst'));
       return;
     }
     setSuggestingTitle(true);
@@ -196,7 +198,7 @@ export function CreateIssueModal({
         patchForm({ title });
       }
     } catch {
-      toast.error('Could not suggest a title');
+      toast.error(t('issueDetail.createModal.couldNotSuggestTitle'));
     } finally {
       setSuggestingTitle(false);
     }
@@ -229,14 +231,19 @@ export function CreateIssueModal({
   };
 
   return (
-    <ModalDialog aria-label="Create issue" maxWidth="lg" onClose={onClose} open={open}>
+    <ModalDialog
+      aria-label={t('issueDetail.createModal.createIssue')}
+      maxWidth="lg"
+      onClose={onClose}
+      open={open}
+    >
       <form className="flex flex-col" onSubmit={handleSubmit}>
         {/* Title */}
         <div className="flex items-center gap-2 px-5 pt-5">
           <input
             className="w-full bg-transparent text-lg font-medium text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
             onChange={e => patchForm({ title: e.target.value })}
-            placeholder="Issue title"
+            placeholder={t('issueDetail.createModal.titlePlaceholder')}
             ref={titleRef}
             required
             type="text"
@@ -251,10 +258,10 @@ export function CreateIssueModal({
               )}
               disabled={suggestingTitle}
               onClick={handleSuggestTitle}
-              title="Suggest a title from the description"
+              title={t('issueDetail.createModal.suggestTitleFromDescription')}
               type="button"
             >
-              {suggestingTitle ? '…' : '✨ Suggest'}
+              {suggestingTitle ? '…' : `✨ ${t('issueDetail.createModal.suggest')}`}
             </button>
           )}
         </div>
@@ -265,7 +272,7 @@ export function CreateIssueModal({
             className="text-sm text-zinc-600 dark:text-zinc-400"
             content={form.description}
             onChange={html => patchForm({ description: html })}
-            placeholder="Add description… (optional, supports **markdown**)"
+            placeholder={t('issueDetail.createModal.descriptionPlaceholder')}
           />
         </div>
 
@@ -306,7 +313,7 @@ export function CreateIssueModal({
             onClick={onClose}
             type="button"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             className={cn(
@@ -316,7 +323,9 @@ export function CreateIssueModal({
             disabled={!form.title.trim() || submitting}
             type="submit"
           >
-            {submitting ? 'Creating…' : 'Create issue'}
+            {submitting
+              ? t('issueDetail.createModal.creating')
+              : t('issueDetail.createModal.createIssue')}
           </button>
         </div>
       </form>

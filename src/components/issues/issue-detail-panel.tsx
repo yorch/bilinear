@@ -3,16 +3,20 @@
 import { Bell, BellOff } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { priorityLabelKey } from '@/components/properties/priority-icon';
 import { useHotkeys } from '@/hooks/use-hotkeys';
+import { useTranslations } from '@/hooks/use-translations';
+import { DATE_FNS_LOCALES } from '@/lib/date-fns-locale';
 import { gql } from '@/lib/graphql';
 import {
   ISSUE_SUBSCRIBE_MUTATION,
   ISSUE_SUBSCRIPTION_QUERY,
   ISSUE_UNSUBSCRIBE_MUTATION,
 } from '@/lib/graphql-queries';
-import { formatDueDate, getDueDateColor, getPriorityConfig } from '@/lib/issue-utils';
+import { formatDueDate, getDueDateColor } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { useLocale } from '@/providers/locale-provider';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 import { CustomFieldsEditor } from '../custom-fields/custom-fields-editor';
@@ -50,9 +54,11 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
   onClose,
   onUpdate,
 }: IssueDetailPanelProps) {
+  const t = useTranslations();
+  const { locale } = useLocale();
   const { userStore, teamStore, issueStore } = useStore();
   const currentUserId = userStore.currentUser?.id;
-  const currentUserName = userStore.currentUser?.displayName ?? 'User';
+  const currentUserName = userStore.currentUser?.displayName ?? t('issueDetail.defaultUserName');
   const mentionUsers = useMemo(() => users.map(u => ({ id: u.id, label: u.displayName })), [users]);
   // observer() tracks issueStore.all reads reactively; plain map is correct here.
   const mentionIssues = issueStore.all.map(i => ({ id: i.id, label: i.identifier, sub: i.title }));
@@ -116,13 +122,15 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
       const res = await gql(mutation, { issueId: issue.id });
       if (res.errors?.length) {
         setSubscribed(prev);
-        toast.error(prev ? 'Failed to unsubscribe' : 'Failed to subscribe');
+        toast.error(
+          prev ? t('issueDetail.failedToUnsubscribe') : t('issueDetail.failedToSubscribe'),
+        );
       }
     } catch {
       setSubscribed(prev);
-      toast.error(prev ? 'Failed to unsubscribe' : 'Failed to subscribe');
+      toast.error(prev ? t('issueDetail.failedToUnsubscribe') : t('issueDetail.failedToSubscribe'));
     }
-  }, [issue?.id, subscribed]);
+  }, [issue?.id, subscribed, t]);
 
   useHotkeys('shift+s', handleToggleSubscription, {}, [subscribed, issue?.id]);
 
@@ -142,7 +150,6 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
 
   const _state = states.find(s => s.id === issue.stateId);
   const assignee = users.find(u => u.id === issue.assigneeId);
-  const priorityConfig = getPriorityConfig(issue.priority);
   const dueDateColor = getDueDateColor(issue.dueDate);
 
   const saveTitle = () => {
@@ -175,17 +182,25 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
           <div className="flex items-center gap-1">
             {subscribed !== null && (
               <button
-                aria-label={subscribed ? 'Unsubscribe (Shift+S)' : 'Subscribe (Shift+S)'}
+                aria-label={
+                  subscribed
+                    ? t('issueDetail.unsubscribeShortcut')
+                    : t('issueDetail.subscribeShortcut')
+                }
                 className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                 onClick={handleToggleSubscription}
-                title={subscribed ? 'Unsubscribe (Shift+S)' : 'Subscribe (Shift+S)'}
+                title={
+                  subscribed
+                    ? t('issueDetail.unsubscribeShortcut')
+                    : t('issueDetail.subscribeShortcut')
+                }
                 type="button"
               >
                 {subscribed ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
               </button>
             )}
             <button
-              aria-label="Close"
+              aria-label={t('common.close')}
               className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
               onClick={onClose}
               type="button"
@@ -232,7 +247,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
           {/* Properties grid */}
           <div className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
             {/* Status */}
-            <span className="text-zinc-500">Status</span>
+            <span className="text-zinc-500">{t('issueDetail.properties.status')}</span>
             <StatusSelect
               onChange={stateId => handleUpdate(issue.id, { stateId })}
               states={states}
@@ -240,17 +255,17 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
             />
 
             {/* Priority */}
-            <span className="text-zinc-500">Priority</span>
+            <span className="text-zinc-500">{t('issueDetail.properties.priority')}</span>
             <div className="flex items-center gap-1.5">
               <PrioritySelect
                 onChange={priority => handleUpdate(issue.id, { priority })}
                 value={issue.priority}
               />
-              <span className="text-xs text-zinc-600">{priorityConfig.label}</span>
+              <span className="text-xs text-zinc-600">{t(priorityLabelKey(issue.priority))}</span>
             </div>
 
             {/* Assignee */}
-            <span className="text-zinc-500">Assignee</span>
+            <span className="text-zinc-500">{t('issueDetail.properties.assignee')}</span>
             <div className="flex items-center gap-1.5">
               <AssigneeSelect
                 onChange={assigneeId => handleUpdate(issue.id, { assigneeId })}
@@ -258,12 +273,12 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
                 value={issue.assigneeId}
               />
               <span className="text-xs text-zinc-600">
-                {assignee?.displayName ?? 'No assignee'}
+                {assignee?.displayName ?? t('issueDetail.properties.noAssignee')}
               </span>
             </div>
 
             {/* Labels */}
-            <span className="text-zinc-500">Labels</span>
+            <span className="text-zinc-500">{t('issueDetail.properties.labels')}</span>
             <div className="flex items-center gap-1 flex-wrap">
               <LabelSelect
                 labels={labels}
@@ -279,28 +294,30 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
             </div>
 
             {/* Project */}
-            <span className="text-zinc-500">Project</span>
+            <span className="text-zinc-500">{t('issueDetail.properties.project')}</span>
             <ProjectSelect
               onChange={projectId => handleUpdate(issue.id, { projectId })}
               value={issue.projectId ?? null}
             />
 
             {/* Due date */}
-            <span className="text-zinc-500">Due date</span>
+            <span className="text-zinc-500">{t('issueDetail.properties.dueDate')}</span>
             <div className="flex items-center gap-1.5">
               <DueDatePicker
                 onChange={dueDate => handleUpdate(issue.id, { dueDate })}
                 value={issue.dueDate}
               />
               {issue.dueDate && (
-                <span className={cn('text-xs', dueDateColor)}>{formatDueDate(issue.dueDate)}</span>
+                <span className={cn('text-xs', dueDateColor)}>
+                  {formatDueDate(issue.dueDate, DATE_FNS_LOCALES[locale])}
+                </span>
               )}
             </div>
 
             {/* Estimate — only shown when the team uses estimation */}
             {estimationType !== 'notUsed' && (
               <>
-                <span className="text-zinc-500">Estimate</span>
+                <span className="text-zinc-500">{t('issueDetail.properties.estimate')}</span>
                 <EstimatePicker
                   estimationType={estimationType}
                   onChange={estimate => handleUpdate(issue.id, { estimate: estimate ?? undefined })}
@@ -315,7 +332,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
 
           {/* Description */}
           <div className="mt-6">
-            <p className="mb-1 text-xs font-medium text-zinc-500">Description</p>
+            <p className="mb-1 text-xs font-medium text-zinc-500">{t('issueDetail.description')}</p>
             {editingDesc ? (
               <div className="rounded-md border border-indigo-400 bg-transparent p-2 transition-colors">
                 <TipTapEditor
@@ -327,7 +344,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
                   mentionUsers={mentionUsers}
                   onBlur={saveDesc}
                   onChange={html => setDescDraft(html)}
-                  placeholder="Add a description… (supports **markdown**, /slash commands, @mentions, #issues)"
+                  placeholder={t('issueDetail.descriptionPlaceholderFull')}
                   readOnly={false}
                   showToolbar={true}
                   uploadIssueId={issue.id}
@@ -344,7 +361,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
                   content={descDraft}
                   onBlur={saveDesc}
                   onChange={html => setDescDraft(html)}
-                  placeholder="Add a description… (supports **markdown**, /slash commands, @mentions)"
+                  placeholder={t('issueDetail.descriptionPlaceholder')}
                   readOnly={true}
                   showToolbar={false}
                 />
@@ -374,7 +391,9 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
 
           {/* Comments */}
           <div className="mt-6">
-            <p className="mb-3 text-xs font-medium text-zinc-500">Comments</p>
+            <p className="mb-3 text-xs font-medium text-zinc-500">
+              {t('issueDetail.comments.title')}
+            </p>
             <CommentThread
               currentUserId={currentUserId}
               issueId={issue.id}
@@ -386,7 +405,9 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
 
           {/* Activity */}
           <div className="mt-6">
-            <p className="mb-3 text-xs font-medium text-zinc-500">Activity</p>
+            <p className="mb-3 text-xs font-medium text-zinc-500">
+              {t('issueDetail.activity.title')}
+            </p>
             <ActivityTimeline issueId={issue.id} refetchKey={activityKey} />
           </div>
         </div>

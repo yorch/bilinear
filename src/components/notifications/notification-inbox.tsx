@@ -4,6 +4,7 @@ import { Bell, Check, CheckCheck, Clock, MessageSquare, RefreshCw, User } from '
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
 import { useOutsideClick } from '@/hooks/use-outside-click';
+import { useTranslations } from '@/hooks/use-translations';
 import type { DBNotification } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import {
@@ -12,25 +13,27 @@ import {
   NOTIFICATION_MARK_READ_MUTATION,
   NOTIFICATION_SNOOZE_MUTATION,
 } from '@/lib/graphql-queries';
+import { INTL_LOCALES } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
 import { cn, formatRelativeTime } from '@/lib/utils';
+import { useLocale } from '@/providers/locale-provider';
 import { useStore } from '@/providers/store-provider';
 
 // ─── Snooze helpers ───────────────────────────────────────────────────────────
 
 interface SnoozePreset {
   getUntil: () => Date;
-  label: string;
+  labelKey: string;
 }
 
 const SNOOZE_PRESETS: SnoozePreset[] = [
   {
     getUntil: () => new Date(Date.now() + 60 * 60 * 1000),
-    label: '1 hour',
+    labelKey: 'notifications.snooze.oneHour',
   },
   {
     getUntil: () => new Date(Date.now() + 4 * 60 * 60 * 1000),
-    label: '4 hours',
+    labelKey: 'notifications.snooze.fourHours',
   },
   {
     getUntil: () => {
@@ -39,7 +42,7 @@ const SNOOZE_PRESETS: SnoozePreset[] = [
       d.setHours(9, 0, 0, 0);
       return d;
     },
-    label: 'Tomorrow 9am',
+    labelKey: 'notifications.snooze.tomorrow9am',
   },
   {
     getUntil: () => {
@@ -51,7 +54,7 @@ const SNOOZE_PRESETS: SnoozePreset[] = [
       d.setHours(9, 0, 0, 0);
       return d;
     },
-    label: 'Next week',
+    labelKey: 'notifications.snooze.nextWeek',
   },
 ];
 
@@ -76,18 +79,18 @@ function getNotificationIcon(type: string) {
   }
 }
 
-function getNotificationLabel(type: string): string {
+function getNotificationLabelKey(type: string): string {
   switch (type) {
     case 'ISSUE_ASSIGNED':
-      return 'assigned you to an issue';
+      return 'notifications.labels.issueAssigned';
     case 'ISSUE_MENTIONED':
-      return 'mentioned you in an issue';
+      return 'notifications.labels.issueMentioned';
     case 'ISSUE_COMMENTED':
-      return 'commented on an issue';
+      return 'notifications.labels.issueCommented';
     case 'ISSUE_STATUS_CHANGED':
-      return 'changed the status of an issue';
+      return 'notifications.labels.issueStatusChanged';
     default:
-      return 'sent a notification';
+      return 'notifications.labels.default';
   }
 }
 
@@ -108,6 +111,8 @@ function NotificationItem({
   markingId,
   snoozingId,
 }: NotificationItemProps) {
+  const t = useTranslations();
+  const { locale } = useLocale();
   const { type, read, createdAt, id } = notification;
   const isMarkingThis = markingId === id;
   const isSnoozingThis = snoozingId === id;
@@ -146,12 +151,12 @@ function NotificationItem({
               read ? 'text-zinc-600 dark:text-zinc-400' : 'text-zinc-900 dark:text-zinc-100',
             )}
           >
-            {getNotificationLabel(type)}
+            {t(getNotificationLabelKey(type))}
           </span>
         </div>
 
         <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
-          {formatRelativeTime(createdAt)}
+          {formatRelativeTime(createdAt, t, INTL_LOCALES[locale])}
         </p>
       </div>
 
@@ -164,7 +169,7 @@ function NotificationItem({
               className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300 disabled:opacity-50"
               disabled={isSnoozingThis}
               onClick={() => setSnoozeOpen(o => !o)}
-              title="Snooze"
+              title={t('notifications.snooze.buttonTitle')}
               type="button"
             >
               <Clock className="h-3.5 w-3.5" />
@@ -175,14 +180,14 @@ function NotificationItem({
                 {SNOOZE_PRESETS.map(preset => (
                   <button
                     className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                    key={preset.label}
+                    key={preset.labelKey}
                     onClick={() => {
                       setSnoozeOpen(false);
                       onSnooze(id, preset.getUntil());
                     }}
                     type="button"
                   >
-                    {preset.label}
+                    {t(preset.labelKey)}
                   </button>
                 ))}
               </div>
@@ -194,7 +199,7 @@ function NotificationItem({
             className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-indigo-600 dark:hover:bg-zinc-800 dark:hover:text-indigo-400 disabled:opacity-50"
             disabled={isMarkingThis}
             onClick={() => onMarkRead(id)}
-            title="Mark as read"
+            title={t('notifications.markAsRead')}
             type="button"
           >
             <Check className="h-3.5 w-3.5" />
@@ -210,6 +215,7 @@ function NotificationItem({
 export const NotificationInbox = observer(function NotificationInbox() {
   const store = useStore();
   const { notificationStore } = store;
+  const t = useTranslations();
 
   const [loading, setLoading] = useState(true);
   const [markingId, setMarkingId] = useState<string | null>(null);
@@ -233,7 +239,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
       })
       .catch(() => {
         if (!cancelled) {
-          toast.error('Failed to load notifications');
+          toast.error(t('notifications.toasts.loadFailed'));
           setLoading(false);
         }
       });
@@ -241,7 +247,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
     return () => {
       cancelled = true;
     };
-  }, [notificationStore]);
+  }, [notificationStore, t]);
 
   // Reactive — re-renders when the store is updated (e.g. via WS sync actions)
   const notifications = notificationStore.all;
@@ -259,14 +265,14 @@ export const NotificationInbox = observer(function NotificationInbox() {
     try {
       const res = await gql(NOTIFICATION_MARK_READ_MUTATION, { id });
       if (res.errors?.length) {
-        throw new Error('Failed to mark notification as read');
+        throw new Error(t('notifications.toasts.markReadFailed'));
       }
     } catch {
       notificationStore.optimisticUpdate(id, {
         read: prevRead,
         readAt: prevReadAt,
       });
-      toast.error('Failed to mark notification as read');
+      toast.error(t('notifications.toasts.markReadFailed'));
     } finally {
       setMarkingId(null);
     }
@@ -288,12 +294,12 @@ export const NotificationInbox = observer(function NotificationInbox() {
         until: until.toISOString(),
       });
       if (res.errors?.length) {
-        throw new Error('Failed to snooze notification');
+        throw new Error(t('notifications.toasts.snoozeFailed'));
       }
-      toast.success('Notification snoozed');
+      toast.success(t('notifications.toasts.snoozed'));
     } catch {
       notificationStore.optimisticUpdate(id, { snoozedUntilAt: prevSnoozedUntilAt });
-      toast.error('Failed to snooze notification');
+      toast.error(t('notifications.toasts.snoozeFailed'));
     } finally {
       setSnoozingId(null);
     }
@@ -304,11 +310,11 @@ export const NotificationInbox = observer(function NotificationInbox() {
     try {
       const res = await gql(NOTIFICATION_MARK_ALL_READ_MUTATION, {});
       if (res.errors?.length) {
-        throw new Error('Failed to mark all notifications as read');
+        throw new Error(t('notifications.toasts.markAllReadFailed'));
       }
       notificationStore.markAllRead();
     } catch {
-      toast.error('Failed to mark all notifications as read');
+      toast.error(t('notifications.toasts.markAllReadFailed'));
     } finally {
       setMarkingAll(false);
     }
@@ -324,7 +330,9 @@ export const NotificationInbox = observer(function NotificationInbox() {
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Bell className="h-5 w-5 text-zinc-500" />
-          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Inbox</h1>
+          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+            {t('notifications.title')}
+          </h1>
           {hasUnread && (
             <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-xs font-medium text-white">
               {unread.length}
@@ -340,7 +348,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
             type="button"
           >
             <CheckCheck className="h-3.5 w-3.5" />
-            {markingAll ? 'Marking…' : 'Mark all read'}
+            {markingAll ? t('notifications.marking') : t('notifications.markAllRead')}
           </button>
         )}
       </div>
@@ -358,9 +366,11 @@ export const NotificationInbox = observer(function NotificationInbox() {
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
             <Bell className="h-6 w-6 text-zinc-400" />
           </div>
-          <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">All caught up</p>
+          <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+            {t('notifications.emptyState.title')}
+          </p>
           <p className="text-xs text-zinc-400 dark:text-zinc-500">
-            No notifications yet. You'll be notified when something needs your attention.
+            {t('notifications.emptyState.detail')}
           </p>
         </div>
       )}
@@ -369,7 +379,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
       {!loading && unread.length > 0 && (
         <section className="mb-6">
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            Unread ({unread.length})
+            {t('notifications.unreadCount', { count: unread.length })}
           </h2>
           <div className="flex flex-col gap-2">
             {unread.map(notification => (
@@ -390,7 +400,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
       {!loading && read.length > 0 && (
         <section>
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            {hasUnread ? 'Read' : 'All notifications'}
+            {hasUnread ? t('notifications.read') : t('notifications.allNotifications')}
           </h2>
           <div className="flex flex-col gap-2">
             {read.map(notification => (

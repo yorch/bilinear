@@ -3,6 +3,7 @@
 import { Edit2, Plus, Star, Trash2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn, gqlError } from '@/lib/utils';
@@ -61,13 +62,15 @@ interface TemplateFormData {
   };
 }
 
-const PRIORITY_OPTIONS = [
-  { label: 'No priority', value: '' },
-  { label: 'Urgent', value: '1' },
-  { label: 'High', value: '2' },
-  { label: 'Medium', value: '3' },
-  { label: 'Low', value: '4' },
-];
+function getPriorityOptions(t: ReturnType<typeof useTranslations>) {
+  return [
+    { label: t('issueDetail.templates.priorities.none'), value: '' },
+    { label: t('issueDetail.templates.priorities.urgent'), value: '1' },
+    { label: t('issueDetail.templates.priorities.high'), value: '2' },
+    { label: t('issueDetail.templates.priorities.medium'), value: '3' },
+    { label: t('issueDetail.templates.priorities.low'), value: '4' },
+  ];
+}
 
 const emptyForm = (): TemplateFormData => ({
   description: '',
@@ -81,6 +84,8 @@ const emptyForm = (): TemplateFormData => ({
 // ---------------------------------------------------------------------------
 
 export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) => {
+  const t = useTranslations();
+  const PRIORITY_OPTIONS = getPriorityOptions(t);
   const { issueTemplateStore, workflowStateStore, labelStore, userStore } = useStore();
 
   const templates = issueTemplateStore.findByTeamId(teamId);
@@ -103,14 +108,14 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
       },
     });
     if (result.errors?.length) {
-      throw new Error(gqlError(result, 'Failed to create template'));
+      throw new Error(gqlError(result, t('issueDetail.templates.failedToCreate')));
     }
     const raw = (result.data?.issueTemplateCreate as { issueTemplate?: Record<string, unknown> })
       ?.issueTemplate;
     if (raw) {
       issueTemplateStore.applySyncAction('I', raw.id as string, raw as never);
     }
-    toast.success('Template created');
+    toast.success(t('issueDetail.templates.created'));
     setIsAdding(false);
   };
 
@@ -125,14 +130,14 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
       },
     });
     if (result.errors?.length) {
-      throw new Error(gqlError(result, 'Failed to update template'));
+      throw new Error(gqlError(result, t('issueDetail.templates.failedToUpdate')));
     }
     const raw = (result.data?.issueTemplateUpdate as { issueTemplate?: Record<string, unknown> })
       ?.issueTemplate;
     if (raw) {
       issueTemplateStore.applySyncAction('U', id, raw as never);
     }
-    toast.success('Template updated');
+    toast.success(t('issueDetail.templates.updated'));
     setEditingId(null);
   };
 
@@ -141,11 +146,11 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
     try {
       const result = await gql(DELETE_MUTATION, { id });
       if (result.errors?.length) {
-        toast.error(gqlError(result, 'Failed to delete template'));
+        toast.error(gqlError(result, t('issueDetail.templates.failedToDelete')));
         return;
       }
       issueTemplateStore.applySyncAction('D', id, null);
-      toast.success('Template deleted');
+      toast.success(t('issueDetail.templates.deleted'));
     } finally {
       setDeletingId(null);
     }
@@ -154,13 +159,15 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
   return (
     <section>
       <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-        Issue Templates
+        {t('issueDetail.templates.sectionTitle')}
       </h2>
       <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
         {/* Header row */}
         <div className="flex items-center justify-between border-b border-zinc-100 p-4 dark:border-zinc-800">
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            {templates.length} template{templates.length !== 1 ? 's' : ''}
+            {templates.length === 1
+              ? t('issueDetail.templates.countSingular', { count: templates.length })
+              : t('issueDetail.templates.countPlural', { count: templates.length })}
           </p>
           {!isAdding && (
             <button
@@ -169,7 +176,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
               type="button"
             >
               <Plus className="h-3.5 w-3.5" />
-              Add template
+              {t('issueDetail.templates.addTemplate')}
             </button>
           )}
         </div>
@@ -182,7 +189,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
               onCancel={() => setIsAdding(false)}
               onSubmit={handleCreate}
               states={states}
-              submitLabel="Create template"
+              submitLabel={t('issueDetail.templates.createTemplate')}
               users={users}
             />
           </div>
@@ -191,9 +198,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
         {/* Template list */}
         <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
           {templates.length === 0 && !isAdding && (
-            <li className="p-4 text-sm text-zinc-400">
-              No templates yet. Add one to give teammates a head-start when creating issues.
-            </li>
+            <li className="p-4 text-sm text-zinc-400">{t('issueDetail.templates.emptyState')}</li>
           )}
           {templates.map(tmpl => {
             const isEditing = editingId === tmpl.id;
@@ -232,7 +237,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                       onCancel={() => setEditingId(null)}
                       onSubmit={form => handleUpdate(tmpl.id, form)}
                       states={states}
-                      submitLabel="Save changes"
+                      submitLabel={t('issueDetail.templates.saveChanges')}
                       users={users}
                     />
                   </div>
@@ -257,22 +262,30 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                         <div className="mt-1.5 flex flex-wrap gap-1.5">
                           {stateName && (
                             <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                              State: {stateName}
+                              {t('issueDetail.templates.statePrefix', { state: stateName })}
                             </span>
                           )}
                           {priority && (
                             <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                              Priority: {priority}
+                              {t('issueDetail.templates.priorityPrefix', { priority })}
                             </span>
                           )}
                           {assigneeName && (
                             <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                              Assignee: {assigneeName}
+                              {t('issueDetail.templates.assigneePrefix', {
+                                assignee: assigneeName,
+                              })}
                             </span>
                           )}
                           {labelCount && (
                             <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                              {labelCount} label{labelCount !== 1 ? 's' : ''}
+                              {labelCount === 1
+                                ? t('issueDetail.templates.labelCountSingular', {
+                                    count: labelCount,
+                                  })
+                                : t('issueDetail.templates.labelCountPlural', {
+                                    count: labelCount,
+                                  })}
                             </span>
                           )}
                         </div>
@@ -280,7 +293,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
                       <button
-                        aria-label="Edit template"
+                        aria-label={t('issueDetail.templates.editTemplate')}
                         className="rounded p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
                         onClick={() => setEditingId(tmpl.id)}
                         type="button"
@@ -288,7 +301,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                         <Edit2 className="h-4 w-4" />
                       </button>
                       <button
-                        aria-label="Delete template"
+                        aria-label={t('issueDetail.templates.deleteTemplate')}
                         className={cn(
                           'rounded p-1 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20',
                           isDeleting && 'cursor-not-allowed opacity-50',
@@ -369,6 +382,8 @@ function TemplateForm({
   submitLabel: string;
   users: DBUserLike[];
 }) {
+  const t = useTranslations();
+  const PRIORITY_OPTIONS = getPriorityOptions(t);
   const init = initialData ?? emptyForm();
   const [name, setName] = useState(init.name);
   const [description, setDescription] = useState(init.description);
@@ -405,7 +420,7 @@ function TemplateForm({
         },
       });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Something went wrong';
+      const msg = err instanceof Error ? err.message : t('common.somethingWentWrong');
       toast.error(msg);
     } finally {
       setSubmitting(false);
@@ -427,13 +442,13 @@ function TemplateForm({
             className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
             htmlFor="tmpl-name"
           >
-            Name <span className="text-red-500">*</span>
+            {t('issueDetail.templates.form.name')} <span className="text-red-500">*</span>
           </label>
           <input
             className={inputCls}
             id="tmpl-name"
             onChange={e => setName(e.target.value)}
-            placeholder="e.g. Bug report"
+            placeholder={t('issueDetail.templates.form.namePlaceholder')}
             value={name}
           />
         </div>
@@ -442,13 +457,13 @@ function TemplateForm({
             className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
             htmlFor="tmpl-desc"
           >
-            Description
+            {t('issueDetail.templates.form.description')}
           </label>
           <textarea
             className={cn(inputCls, 'resize-none')}
             id="tmpl-desc"
             onChange={e => setDescription(e.target.value)}
-            placeholder="Short description of this template"
+            placeholder={t('issueDetail.templates.form.descriptionPlaceholder')}
             rows={1}
             value={description}
           />
@@ -458,7 +473,7 @@ function TemplateForm({
       {/* Template defaults */}
       <div className="rounded-md bg-zinc-50 p-3 dark:bg-zinc-800/50">
         <p className="mb-2.5 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-          Template defaults
+          {t('issueDetail.templates.form.templateDefaults')}
         </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {/* Status */}
@@ -467,7 +482,7 @@ function TemplateForm({
               className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
               htmlFor="tmpl-state"
             >
-              Status
+              {t('issueDetail.templates.form.status')}
             </label>
             <select
               className={selectCls}
@@ -475,7 +490,7 @@ function TemplateForm({
               onChange={e => setStateId(e.target.value)}
               value={stateId}
             >
-              <option value="">None</option>
+              <option value="">{t('issueDetail.templates.form.none')}</option>
               {states.map(s => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -490,7 +505,7 @@ function TemplateForm({
               className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
               htmlFor="tmpl-priority"
             >
-              Priority
+              {t('issueDetail.templates.form.priority')}
             </label>
             <select
               className={selectCls}
@@ -512,7 +527,7 @@ function TemplateForm({
               className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
               htmlFor="tmpl-assignee"
             >
-              Assignee
+              {t('issueDetail.templates.form.assignee')}
             </label>
             <select
               className={selectCls}
@@ -520,7 +535,7 @@ function TemplateForm({
               onChange={e => setAssigneeId(e.target.value)}
               value={assigneeId}
             >
-              <option value="">Unassigned</option>
+              <option value="">{t('issueDetail.templates.form.unassigned')}</option>
               {users.map(u => (
                 <option key={u.id} value={u.id}>
                   {u.displayName}
@@ -533,7 +548,9 @@ function TemplateForm({
         {/* Labels multi-select */}
         {labels.length > 0 && (
           <div className="mt-3 flex flex-col gap-1">
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Labels</p>
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              {t('issueDetail.templates.form.labels')}
+            </p>
             <div className="flex flex-wrap gap-1.5">
               {labels.map(l => {
                 const selected = labelIds.includes(l.id);
@@ -566,7 +583,7 @@ function TemplateForm({
           onChange={e => setIsDefault(e.target.checked)}
           type="checkbox"
         />
-        Set as default template for this team
+        {t('issueDetail.templates.form.setAsDefault')}
       </label>
 
       {/* Actions */}
@@ -576,7 +593,7 @@ function TemplateForm({
           onClick={onCancel}
           type="button"
         >
-          Cancel
+          {t('common.cancel')}
         </button>
         <button
           className={cn(
@@ -587,7 +604,7 @@ function TemplateForm({
           onClick={handleSubmit}
           type="button"
         >
-          {submitting ? 'Saving…' : submitLabel}
+          {submitting ? t('common.saving') : submitLabel}
         </button>
       </div>
     </div>

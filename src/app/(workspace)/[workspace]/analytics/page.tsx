@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { cn } from '@/lib/utils';
 
@@ -78,6 +79,7 @@ function ProgressBar({ pct, color }: { pct: number; color: string }) {
 // ---------------------------------------------------------------------------
 
 export default function WorkspaceAnalyticsPage() {
+  const t = useTranslations();
   const [data, setData] = useState<WorkspaceOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -87,15 +89,15 @@ export default function WorkspaceAnalyticsPage() {
       .then(res => {
         if (res.errors?.length) {
           const errMsg = (res.errors[0] as { message?: string } | undefined)?.message;
-          setError(errMsg ?? 'Failed to load analytics');
+          setError(errMsg ?? t('analytics.workspace.failedToLoad'));
           return;
         }
         const d = res.data as { analyticsWorkspaceOverview: WorkspaceOverview };
         setData(d.analyticsWorkspaceOverview);
       })
-      .catch(() => setError('Failed to load analytics'))
+      .catch(() => setError(t('analytics.workspace.failedToLoad')))
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   const maxCompleted = data ? Math.max(...data.teams.map(t => t.completedCount), 1) : 1;
 
@@ -104,13 +106,13 @@ export default function WorkspaceAnalyticsPage() {
       {/* Header */}
       <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
         <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
-          Workspace Analytics
+          {t('analytics.workspace.title')}
         </h1>
-        <p className="mt-0.5 text-xs text-zinc-400">Cross-team issue and velocity overview</p>
+        <p className="mt-0.5 text-xs text-zinc-400">{t('analytics.workspace.subtitle')}</p>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-5">
-        {loading && <p className="text-sm text-zinc-400">Loading…</p>}
+        {loading && <p className="text-sm text-zinc-400">{t('analytics.workspace.loading')}</p>}
 
         {error && <p className="text-sm text-red-500">{error}</p>}
 
@@ -118,33 +120,46 @@ export default function WorkspaceAnalyticsPage() {
           <>
             {/* Org-level stat cards */}
             <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatCard label="Total issues" value={data.totalIssues} />
-              <StatCard label="Open issues" value={data.totalOpen} />
+              <StatCard label={t('analytics.workspace.totalIssues')} value={data.totalIssues} />
+              <StatCard label={t('analytics.workspace.openIssues')} value={data.totalOpen} />
               <StatCard
-                label="Completed"
-                sub={`${data.totalIssues > 0 ? Math.round((data.totalCompleted / data.totalIssues) * 100) : 0}% completion rate`}
+                label={t('analytics.workspace.completed')}
+                sub={t('analytics.workspace.completionRateSub', {
+                  pct:
+                    data.totalIssues > 0
+                      ? Math.round((data.totalCompleted / data.totalIssues) * 100)
+                      : 0,
+                })}
                 value={data.totalCompleted}
               />
-              <StatCard label="Active teams" value={data.teams.length} />
+              <StatCard label={t('analytics.workspace.activeTeams')} value={data.teams.length} />
             </div>
 
             {/* Per-team table */}
             <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
               <div className="border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
-                <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">Teams</h2>
+                <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+                  {t('analytics.workspace.teams')}
+                </h2>
               </div>
 
               {data.teams.length === 0 ? (
-                <p className="px-5 py-8 text-center text-sm text-zinc-400">No teams found</p>
+                <p className="px-5 py-8 text-center text-sm text-zinc-400">
+                  {t('analytics.workspace.noTeamsFound')}
+                </p>
               ) : (
                 <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
                   {/* Table header */}
                   <div className="grid grid-cols-12 gap-2 px-5 py-2 text-[11px] font-medium uppercase tracking-wider text-zinc-400">
-                    <span className="col-span-3">Team</span>
-                    <span className="col-span-2 text-right">Total</span>
-                    <span className="col-span-2 text-right">Open</span>
-                    <span className="col-span-2 text-right">Completed</span>
-                    <span className="col-span-2 text-right">Avg cycle</span>
+                    <span className="col-span-3">{t('analytics.workspace.team')}</span>
+                    <span className="col-span-2 text-right">{t('analytics.workspace.total')}</span>
+                    <span className="col-span-2 text-right">{t('analytics.workspace.open')}</span>
+                    <span className="col-span-2 text-right">
+                      {t('analytics.workspace.completedCol')}
+                    </span>
+                    <span className="col-span-2 text-right">
+                      {t('analytics.workspace.avgCycle')}
+                    </span>
                     <span className="col-span-1" />
                   </div>
 
@@ -208,7 +223,7 @@ export default function WorkspaceAnalyticsPage() {
             {data.teams.length > 0 && (
               <div className="mt-5 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
                 <h2 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">
-                  Issues completed by team
+                  {t('analytics.workspace.issuesCompletedByTeam')}
                 </h2>
                 <div className="flex flex-col gap-2">
                   {data.teams.map(team => {

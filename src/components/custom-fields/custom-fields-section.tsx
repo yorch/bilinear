@@ -4,6 +4,7 @@ import { Plus, Trash2, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
 import { SimpleSelect } from '@/components/ui/select';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { getErrorMessage } from '@/lib/utils';
@@ -48,19 +49,24 @@ const ARCHIVE_MUTATION = `
   }
 `;
 
-const TYPE_OPTIONS: { value: CustomFieldType; label: string }[] = [
-  { label: 'Text', value: 'text' },
-  { label: 'Number', value: 'number' },
-  { label: 'Date', value: 'date' },
-  { label: 'URL', value: 'url' },
-  { label: 'Checkbox', value: 'checkbox' },
-  { label: 'Select (single)', value: 'select' },
-  { label: 'Select (multiple)', value: 'multi_select' },
-];
+function getTypeOptions(
+  t: ReturnType<typeof useTranslations>,
+): { value: CustomFieldType; label: string }[] {
+  return [
+    { label: t('customFields.fieldType.text'), value: 'text' },
+    { label: t('customFields.fieldType.number'), value: 'number' },
+    { label: t('customFields.fieldType.date'), value: 'date' },
+    { label: t('customFields.fieldType.url'), value: 'url' },
+    { label: t('customFields.fieldType.checkbox'), value: 'checkbox' },
+    { label: t('customFields.fieldType.selectSingle'), value: 'select' },
+    { label: t('customFields.fieldType.selectMultiple'), value: 'multi_select' },
+  ];
+}
 
 const MAX_FIELDS = 20;
 
 export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => {
+  const t = useTranslations();
   const { customFieldStore } = useStore();
   const definitions = customFieldStore.findDefinitionsByTeamId(teamId);
   const [isAdding, setIsAdding] = useState(false);
@@ -83,19 +89,19 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
           type: input.type,
         },
       });
-      toast.success('Custom field added');
+      toast.success(t('customFields.addSuccess'));
       setIsAdding(false);
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to create custom field'));
+      toast.error(getErrorMessage(err, t('customFields.createFailed')));
     }
   };
 
   const handleArchive = async (id: string) => {
     try {
       await gql(ARCHIVE_MUTATION, { id });
-      toast.success('Custom field archived');
+      toast.success(t('customFields.archiveSuccess'));
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to archive custom field'));
+      toast.error(getErrorMessage(err, t('customFields.archiveFailed')));
     }
   };
 
@@ -104,12 +110,12 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
   return (
     <section>
       <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-        Custom fields
+        {t('customFields.title')}
       </h2>
       <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
         <div className="flex items-center justify-between border-b border-zinc-100 p-4 dark:border-zinc-800">
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            {definitions.length} of {MAX_FIELDS} fields
+            {t('customFields.fieldCount', { count: definitions.length, max: MAX_FIELDS })}
           </p>
           {!isAdding && (
             <button
@@ -119,7 +125,7 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
               type="button"
             >
               <Plus className="h-3.5 w-3.5" />
-              Add field
+              {t('customFields.addField')}
             </button>
           )}
         </div>
@@ -132,9 +138,7 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
 
         <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
           {definitions.length === 0 && !isAdding && (
-            <li className="p-4 text-sm text-zinc-400">
-              No custom fields yet. Add one to capture extra metadata on issues.
-            </li>
+            <li className="p-4 text-sm text-zinc-400">{t('customFields.emptyState')}</li>
           )}
           {definitions.map(def => (
             <li className="flex items-center justify-between gap-3 p-4" key={def.id}>
@@ -147,7 +151,9 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
                     {def.type.replace('_', ' ')}
                   </span>
                   {def.required && (
-                    <span className="text-xs text-amber-600 dark:text-amber-400">required</span>
+                    <span className="text-xs text-amber-600 dark:text-amber-400">
+                      {t('customFields.required')}
+                    </span>
                   )}
                 </div>
                 {def.description && (
@@ -157,7 +163,7 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
                 )}
               </div>
               <button
-                aria-label="Archive"
+                aria-label={t('customFields.archive')}
                 className="rounded p-1 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
                 onClick={() => handleArchive(def.id)}
                 type="button"
@@ -189,6 +195,7 @@ function CustomFieldForm({
     options: Option[];
   }) => Promise<void>;
 }) {
+  const t = useTranslations();
   const [name, setName] = useState('');
   const [type, setType] = useState<CustomFieldType>('text');
   const [description, setDescription] = useState('');
@@ -235,23 +242,23 @@ function CustomFieldForm({
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-zinc-500" htmlFor="cf-name">
-            Name
+            {t('customFields.name')}
           </label>
           <input
             className="rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
             id="cf-name"
             onChange={e => setName(e.target.value)}
-            placeholder="e.g. Severity"
+            placeholder={t('customFields.namePlaceholder')}
             value={name}
           />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-zinc-500" htmlFor="cf-type">
-            Type
+            {t('customFields.type')}
           </label>
           <SimpleSelect
             onChange={v => setType(v as CustomFieldType)}
-            options={TYPE_OPTIONS}
+            options={getTypeOptions(t)}
             value={type}
           />
         </div>
@@ -259,7 +266,7 @@ function CustomFieldForm({
 
       <div className="flex flex-col gap-1">
         <label className="text-xs font-medium text-zinc-500" htmlFor="cf-desc">
-          Description (optional)
+          {t('customFields.descriptionOptional')}
         </label>
         <input
           className="rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
@@ -271,23 +278,23 @@ function CustomFieldForm({
 
       {needsOptions && (
         <div className="flex flex-col gap-2 rounded-md bg-zinc-50 p-3 dark:bg-zinc-800/50">
-          <p className="text-xs font-medium text-zinc-500">Options</p>
+          <p className="text-xs font-medium text-zinc-500">{t('customFields.options')}</p>
           {options.map(opt => (
             <div className="flex items-center gap-2" key={opt.key}>
               <input
                 className="w-24 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
                 onChange={e => updateOption(opt.key, { value: e.target.value })}
-                placeholder="Value"
+                placeholder={t('customFields.optionValue')}
                 value={opt.value}
               />
               <input
                 className="flex-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
                 onChange={e => updateOption(opt.key, { label: e.target.value })}
-                placeholder="Label"
+                placeholder={t('customFields.optionLabel')}
                 value={opt.label}
               />
               <button
-                aria-label="Remove option"
+                aria-label={t('customFields.removeOption')}
                 className="rounded p-1 text-zinc-400 hover:text-red-600"
                 onClick={() => removeOption(opt.key)}
                 type="button"
@@ -301,14 +308,14 @@ function CustomFieldForm({
             onClick={addOption}
             type="button"
           >
-            + Add option
+            {t('customFields.addOption')}
           </button>
         </div>
       )}
 
       <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
         <input checked={required} onChange={e => setRequired(e.target.checked)} type="checkbox" />
-        Required on issue creation
+        {t('customFields.requiredOnCreate')}
       </label>
 
       <div className="flex items-center justify-end gap-2">
@@ -317,7 +324,7 @@ function CustomFieldForm({
           onClick={onCancel}
           type="button"
         >
-          Cancel
+          {t('common.cancel')}
         </button>
         <button
           className="rounded bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
@@ -325,7 +332,7 @@ function CustomFieldForm({
           onClick={handleSubmit}
           type="button"
         >
-          {submitting ? 'Adding…' : 'Add field'}
+          {submitting ? t('customFields.adding') : t('customFields.addField')}
         </button>
       </div>
     </div>

@@ -3,6 +3,8 @@
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useMemo, useRef, useState } from 'react';
+import { priorityLabelKey } from '@/components/properties/priority-icon';
+import { useTranslations } from '@/hooks/use-translations';
 import { CREATE_SUB_ISSUE_MUTATION } from '@/lib/graphql-queries';
 import { getPriorityConfig } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
@@ -13,19 +15,23 @@ import { useStore } from '@/providers/store-provider';
 // State type categories in display order
 const STATE_CATEGORY_ORDER = ['started', 'unstarted', 'backlog', 'completed', 'cancelled'] as const;
 
-const STATE_CATEGORY_LABELS: Record<string, string> = {
-  backlog: 'Backlog',
-  cancelled: 'Cancelled',
-  completed: 'Done',
-  started: 'In Progress',
-  unstarted: 'Todo',
-};
+function getStateCategoryLabels(t: ReturnType<typeof useTranslations>): Record<string, string> {
+  return {
+    backlog: t('issueDetail.subIssues.categories.backlog'),
+    cancelled: t('issueDetail.subIssues.categories.cancelled'),
+    completed: t('issueDetail.subIssues.categories.done'),
+    started: t('issueDetail.subIssues.categories.inProgress'),
+    unstarted: t('issueDetail.subIssues.categories.todo'),
+  };
+}
 
 interface SubIssueListProps {
   parentIssueId: string;
 }
 
 export const SubIssueList = observer(function SubIssueList({ parentIssueId }: SubIssueListProps) {
+  const t = useTranslations();
+  const STATE_CATEGORY_LABELS = useMemo(() => getStateCategoryLabels(t), [t]);
   const { issueStore, workflowStateStore } = useStore();
 
   // Resolve the parent issue's teamId, projectId, and cycleId so sub-issue
@@ -86,7 +92,7 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
           ) : (
             <ChevronDown className="h-3.5 w-3.5" />
           )}
-          Sub-issues ({subIssues.length})
+          {t('issueDetail.subIssues.title')} ({subIssues.length})
         </button>
         {subIssues.length > 0 && (
           <div className="flex items-center gap-2">
@@ -108,7 +114,7 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
             type="button"
           >
             <Plus className="h-3.5 w-3.5" />
-            Add sub-issue
+            {t('issueDetail.subIssues.addSubIssue')}
           </button>
         )}
       </div>
@@ -149,7 +155,7 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
                         <span
                           className="h-2 w-2 shrink-0 rounded-full"
                           style={{ backgroundColor: priorityCfg.color }}
-                          title={priorityCfg.label}
+                          title={t(priorityLabelKey(issue.priority))}
                         />
                         {/* State color dot */}
                         <span
@@ -186,7 +192,9 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
           })}
 
           {subIssues.length === 0 && !showCreateForm && (
-            <p className="py-2 text-center text-xs text-zinc-400 italic">No sub-issues yet.</p>
+            <p className="py-2 text-center text-xs text-zinc-400 italic">
+              {t('issueDetail.subIssues.empty')}
+            </p>
           )}
         </div>
       )}
@@ -213,6 +221,7 @@ function CreateSubIssueForm({
   parentProjectId,
   parentCycleId,
 }: CreateSubIssueFormProps) {
+  const t = useTranslations();
   const [title, setTitle] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -245,7 +254,7 @@ function CreateSubIssueForm({
       });
       onClose();
     } catch {
-      toast.error('Failed to create sub-issue');
+      toast.error(t('issueDetail.subIssues.failedToCreate'));
       setSubmitting(false);
     }
   };
@@ -263,7 +272,7 @@ function CreateSubIssueForm({
             onClose();
           }
         }}
-        placeholder="Sub-issue title…"
+        placeholder={t('issueDetail.subIssues.titlePlaceholder')}
         ref={inputRef}
         type="text"
         value={title}
@@ -273,14 +282,14 @@ function CreateSubIssueForm({
         onClick={onClose}
         type="button"
       >
-        Cancel
+        {t('common.cancel')}
       </button>
       <button
         className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
         disabled={!title.trim() || submitting}
         type="submit"
       >
-        {submitting ? 'Adding…' : 'Add'}
+        {submitting ? t('issueDetail.subIssues.adding') : t('issueDetail.subIssues.add')}
       </button>
     </form>
   );

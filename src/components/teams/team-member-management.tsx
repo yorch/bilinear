@@ -3,6 +3,7 @@
 import { Crown, UserMinus, UserPlus, X } from 'lucide-react';
 import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { toast } from '@/lib/toast';
 import { cn, getErrorMessage } from '@/lib/utils';
 
@@ -38,12 +39,6 @@ interface TeamMemberManagementProps {
   onUpdateRole?: (membershipId: string, role: TeamRole) => Promise<void>;
   orgUsers: OrgUser[];
 }
-
-const ROLE_LABELS: Record<TeamRole, string> = {
-  admin: 'Admin',
-  guest: 'Guest',
-  member: 'Member',
-};
 
 const ROLE_COLORS: Record<TeamRole, string> = {
   admin: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
@@ -99,6 +94,12 @@ export function TeamMemberManagement({
   onToggleOwner,
   onUpdateRole,
 }: TeamMemberManagementProps) {
+  const t = useTranslations();
+  const ROLE_LABELS: Record<TeamRole, string> = {
+    admin: t('teams.roleAdmin'),
+    guest: t('teams.roleGuest'),
+    member: t('teams.roleMember'),
+  };
   const [addOpen, setAddOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [adding, setAdding] = useState(false);
@@ -133,7 +134,7 @@ export function TeamMemberManagement({
       await onAddMember(userId);
       setAddOpen(false);
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to add member'));
+      toast.error(getErrorMessage(err, t('teams.failedToAddMember')));
     } finally {
       setAdding(false);
     }
@@ -144,7 +145,7 @@ export function TeamMemberManagement({
     try {
       await onRemoveMember(membershipId);
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to remove member'));
+      toast.error(getErrorMessage(err, t('teams.failedToRemoveMember')));
     } finally {
       setLoadingMembershipId(null);
     }
@@ -155,7 +156,7 @@ export function TeamMemberManagement({
     try {
       await onToggleOwner(membershipId, !currentIsOwner);
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to update role'));
+      toast.error(getErrorMessage(err, t('teams.failedToUpdateRole')));
     } finally {
       setLoadingMembershipId(null);
     }
@@ -169,7 +170,7 @@ export function TeamMemberManagement({
     try {
       await onUpdateRole(membershipId, role);
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to update role'));
+      toast.error(getErrorMessage(err, t('teams.failedToUpdateRole')));
     } finally {
       setLoadingMembershipId(null);
     }
@@ -188,12 +189,14 @@ export function TeamMemberManagement({
                 <div className="flex items-center gap-1.5">
                   <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
                     {member.displayName}
-                    {isSelf && <span className="ml-1 text-xs text-zinc-400">(you)</span>}
+                    {isSelf && (
+                      <span className="ml-1 text-xs text-zinc-400">({t('teams.you')})</span>
+                    )}
                   </span>
                   {member.isOwner && (
                     <span className="flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
                       <Crown className="h-2.5 w-2.5" />
-                      Owner
+                      {t('teams.owner')}
                     </span>
                   )}
                 </div>
@@ -236,7 +239,7 @@ export function TeamMemberManagement({
                 {pendingRemoveId === member.membershipId ? (
                   <>
                     <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                      {isSelf ? 'Leave?' : 'Remove?'}
+                      {isSelf ? t('teams.leaveConfirm') : t('teams.removeConfirm')}
                     </span>
                     <button
                       className="rounded bg-red-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
@@ -247,14 +250,14 @@ export function TeamMemberManagement({
                       }}
                       type="button"
                     >
-                      {isLoading ? '…' : 'Yes'}
+                      {isLoading ? '…' : t('teams.yes')}
                     </button>
                     <button
                       className="rounded px-2 py-0.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                       onClick={() => setPendingRemoveId(null)}
                       type="button"
                     >
-                      Cancel
+                      {t('common.cancel')}
                     </button>
                   </>
                 ) : (
@@ -269,7 +272,7 @@ export function TeamMemberManagement({
                         )}
                         disabled={isLoading}
                         onClick={() => handleToggleOwner(member.membershipId, member.isOwner)}
-                        title={member.isOwner ? 'Remove owner role' : 'Make owner'}
+                        title={member.isOwner ? t('teams.removeOwnerRole') : t('teams.makeOwner')}
                         type="button"
                       >
                         <Crown className="h-3.5 w-3.5" />
@@ -280,7 +283,7 @@ export function TeamMemberManagement({
                         className="flex h-7 w-7 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                         disabled={isLoading}
                         onClick={() => setPendingRemoveId(member.membershipId)}
-                        title={isSelf ? 'Leave team' : 'Remove member'}
+                        title={isSelf ? t('teams.leaveTeam') : t('teams.removeMember')}
                         type="button"
                       >
                         {isSelf ? (
@@ -303,7 +306,7 @@ export function TeamMemberManagement({
           <input
             className="w-full bg-transparent px-2 py-1 text-sm text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search members to add…"
+            placeholder={t('teams.searchMembersToAdd')}
             ref={searchRef}
             type="text"
             value={search}
@@ -311,7 +314,7 @@ export function TeamMemberManagement({
           <ul className="mt-1 max-h-48 overflow-y-auto">
             {availableUsers.length === 0 ? (
               <li className="px-2 py-1.5 text-sm text-zinc-400">
-                {search ? 'No matches' : 'All org members are already in this team'}
+                {search ? t('teams.noMatches') : t('teams.allMembersAlreadyInTeam')}
               </li>
             ) : (
               availableUsers.map(user => (
@@ -340,7 +343,7 @@ export function TeamMemberManagement({
               onClick={() => setAddOpen(false)}
               type="button"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
           </div>
         </div>
@@ -351,7 +354,7 @@ export function TeamMemberManagement({
           type="button"
         >
           <UserPlus className="h-4 w-4" />
-          Add member
+          {t('teams.addMember')}
         </button>
       )}
     </div>

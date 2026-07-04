@@ -13,6 +13,7 @@ import {
   type TeamRole,
 } from '@/components/teams/team-member-management';
 import { SimpleSelect } from '@/components/ui/select';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn, gqlError } from '@/lib/utils';
@@ -142,6 +143,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
   }>();
   const router = useRouter();
   const { teamStore, userStore } = useStore();
+  const t = useTranslations();
 
   const team = teamStore.findByKey(teamKey);
 
@@ -208,7 +210,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         }
 
         if (membersResult.errors?.length) {
-          toast.error(gqlError(membersResult, 'Failed to load members'));
+          toast.error(gqlError(membersResult, t('settings.team.loadMembersError')));
           return;
         }
 
@@ -217,7 +219,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
 
         setMembers(rawMembers.map(rawToMember));
       } catch {
-        toast.error('Failed to load members');
+        toast.error(t('settings.team.loadMembersError'));
       } finally {
         if (!cancelled) {
           setLoadingMembers(false);
@@ -229,7 +231,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [team?.id]);
+  }, [team?.id, t]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -256,20 +258,20 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         },
       });
       if (result.errors?.length) {
-        setSaveError(gqlError(result, 'Failed to save'));
+        setSaveError(gqlError(result, t('settings.team.saveError')));
         return;
       }
       const updated = (result.data?.teamUpdate as { team?: typeof team })?.team;
       if (updated) {
         teamStore.applySyncAction('U', updated.id, updated);
       }
-      toast.success('Team settings saved');
+      toast.success(t('settings.team.settingsSaved'));
     } catch {
-      setSaveError('Failed to save — please try again');
+      setSaveError(t('settings.team.saveErrorRetry'));
     } finally {
       setSaving(false);
     }
-  }, [team, name, description, isPrivate, parentId, triageEnabled, saving, teamStore]);
+  }, [team, name, description, isPrivate, parentId, triageEnabled, saving, teamStore, t]);
 
   const handleAddMember = useCallback(
     async (userId: string) => {
@@ -280,16 +282,16 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         input: { isOwner: false, teamId: team.id, userId },
       });
       if (result.errors?.length) {
-        throw new Error(gqlError(result, 'Failed to add member'));
+        throw new Error(gqlError(result, t('settings.team.addMemberError')));
       }
       const raw = (result.data?.teamMembershipCreate as { teamMembership?: RawMembership })
         ?.teamMembership;
       if (raw) {
         setMembers(prev => [...prev, rawToMember(raw)]);
-        toast.success(`${raw.user.displayName} added to team`);
+        toast.success(t('settings.team.memberAdded', { name: raw.user.displayName }));
       }
     },
-    [team],
+    [team, t],
   );
 
   const handleRemoveMember = useCallback(
@@ -299,49 +301,57 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         id: membershipId,
       });
       if (result.errors?.length) {
-        throw new Error(gqlError(result, 'Failed to remove member'));
+        throw new Error(gqlError(result, t('settings.team.removeMemberError')));
       }
       setMembers(prev => prev.filter(m => m.membershipId !== membershipId));
       // If current user removed themselves, go back to team page
       if (member?.userId === currentUserId) {
         router.push(`/${workspace}/team/${teamKey}`);
       } else {
-        toast.success('Member removed');
+        toast.success(t('settings.team.memberRemoved'));
       }
     },
-    [members, currentUserId, workspace, teamKey, router],
+    [members, currentUserId, workspace, teamKey, router, t],
   );
 
-  const handleToggleOwner = useCallback(async (membershipId: string, isOwner: boolean) => {
-    const result = await gql(MEMBERSHIP_UPDATE_MUTATION, {
-      id: membershipId,
-      input: { isOwner },
-    });
-    if (result.errors?.length) {
-      throw new Error(gqlError(result, 'Failed to update role'));
-    }
-    setMembers(prev => prev.map(m => (m.membershipId === membershipId ? { ...m, isOwner } : m)));
-    toast.success(isOwner ? 'Owner role granted' : 'Owner role removed');
-  }, []);
+  const handleToggleOwner = useCallback(
+    async (membershipId: string, isOwner: boolean) => {
+      const result = await gql(MEMBERSHIP_UPDATE_MUTATION, {
+        id: membershipId,
+        input: { isOwner },
+      });
+      if (result.errors?.length) {
+        throw new Error(gqlError(result, t('settings.team.updateRoleError')));
+      }
+      setMembers(prev => prev.map(m => (m.membershipId === membershipId ? { ...m, isOwner } : m)));
+      toast.success(
+        isOwner ? t('settings.team.ownerRoleGranted') : t('settings.team.ownerRoleRemoved'),
+      );
+    },
+    [t],
+  );
 
-  const handleUpdateRole = useCallback(async (membershipId: string, role: TeamRole) => {
-    const result = await gql(MEMBERSHIP_UPDATE_MUTATION, {
-      id: membershipId,
-      input: { role },
-    });
-    if (result.errors?.length) {
-      throw new Error(gqlError(result, 'Failed to update role'));
-    }
-    setMembers(prev => prev.map(m => (m.membershipId === membershipId ? { ...m, role } : m)));
-    toast.success('Role updated');
-  }, []);
+  const handleUpdateRole = useCallback(
+    async (membershipId: string, role: TeamRole) => {
+      const result = await gql(MEMBERSHIP_UPDATE_MUTATION, {
+        id: membershipId,
+        input: { role },
+      });
+      if (result.errors?.length) {
+        throw new Error(gqlError(result, t('settings.team.updateRoleError')));
+      }
+      setMembers(prev => prev.map(m => (m.membershipId === membershipId ? { ...m, role } : m)));
+      toast.success(t('settings.team.roleUpdated'));
+    },
+    [t],
+  );
 
   const handleDelete = useCallback(async () => {
     if (!team || deleting) {
       return;
     }
     if (issueAction === 'MOVE' && !moveToTeamId) {
-      toast.error('Please select a team to move issues to');
+      toast.error(t('settings.team.selectTeamToMoveIssues'));
       return;
     }
     setDeleting(true);
@@ -357,7 +367,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         input,
       });
       if (result.errors?.length) {
-        toast.error(gqlError(result, 'Failed to delete team'));
+        toast.error(gqlError(result, t('settings.team.deleteTeamError')));
         return;
       }
       teamStore.applySyncAction('D', team.id, null);
@@ -365,14 +375,14 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
     } finally {
       setDeleting(false);
     }
-  }, [team, deleting, issueAction, moveToTeamId, teamStore, router, workspace]);
+  }, [team, deleting, issueAction, moveToTeamId, teamStore, router, workspace, t]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (!team) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Team not found.
+        {t('settings.team.notFound')}
       </div>
     );
   }
@@ -385,18 +395,18 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
           href={`/${workspace}/team/${teamKey}`}
         >
           <ArrowLeft className="h-4 w-4" />
-          Back
+          {t('settings.team.back')}
         </Link>
         <span className="text-zinc-300 dark:text-zinc-700">/</span>
         <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          {team.displayName || team.name} — Settings
+          {t('settings.team.settingsHeading', { name: team.displayName || team.name })}
         </h1>
       </div>
 
       <div className="mx-auto w-full max-w-2xl px-6 py-8 flex flex-col gap-8">
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            General
+            {t('settings.team.general')}
           </h2>
           <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900 flex flex-col gap-4">
             <div className="flex flex-col gap-1">
@@ -404,7 +414,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                 className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
                 htmlFor="settings-name"
               >
-                Team name
+                {t('settings.team.teamName')}
               </label>
               <input
                 className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
@@ -420,26 +430,28 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                 className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
                 htmlFor="settings-description"
               >
-                Description
+                {t('settings.team.description')}
               </label>
               <textarea
                 className="resize-none rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-600 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-400"
                 id="settings-description"
                 onChange={e => setDescription(e.target.value)}
-                placeholder="What does this team work on?"
+                placeholder={t('settings.team.descriptionPlaceholder')}
                 rows={2}
                 value={description}
               />
             </div>
 
             <div className="flex flex-col gap-1">
-              <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Identifier</p>
+              <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                {t('settings.team.identifier')}
+              </p>
               <div className="flex items-center gap-2">
                 <span className="font-mono text-sm text-zinc-700 dark:text-zinc-300 rounded-md border border-zinc-200 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 dark:border-zinc-700">
                   {team.key}
                 </span>
                 <span className="text-xs text-zinc-400">
-                  Used in issue IDs (e.g. {team.key}-123). Cannot be changed.
+                  {t('settings.team.identifierHint', { key: team.key })}
                 </span>
               </div>
             </div>
@@ -450,7 +462,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                 className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
                 htmlFor="settings-parent"
               >
-                Parent team
+                {t('settings.team.parentTeam')}
               </label>
               <select
                 className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100 dark:bg-zinc-900"
@@ -458,32 +470,30 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                 onChange={e => setParentId(e.target.value)}
                 value={parentId}
               >
-                <option value="">None (top-level team)</option>
-                {parentTeamOptions.map(t => (
-                  <option key={t.id} value={t.id}>
-                    {t.displayName || t.name} ({t.key})
+                <option value="">{t('settings.team.noParentTeam')}</option>
+                {parentTeamOptions.map(pt => (
+                  <option key={pt.id} value={pt.id}>
+                    {pt.displayName || pt.name} ({pt.key})
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-zinc-400">
-                Makes this a sub-team that inherits settings from its parent.
-              </p>
+              <p className="text-xs text-zinc-400">{t('settings.team.parentTeamHint')}</p>
             </div>
           </div>
         </section>
 
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            Workflow
+            {t('settings.team.workflow')}
           </h2>
           <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900 flex flex-col gap-5">
             {/* Private team toggle */}
             <label className="flex cursor-pointer items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Private team</p>
-                <p className="text-xs text-zinc-400">
-                  Only team members can see this team and its issues
+                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  {t('settings.team.privateTeam')}
                 </p>
+                <p className="text-xs text-zinc-400">{t('settings.team.privateTeamDescription')}</p>
               </div>
               <button
                 aria-checked={isPrivate}
@@ -507,10 +517,10 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
             {/* Triage toggle */}
             <label className="flex cursor-pointer items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Triage</p>
-                <p className="text-xs text-zinc-400">
-                  New issues start in Triage and must be reviewed before entering the backlog
+                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  {t('settings.team.triage')}
                 </p>
+                <p className="text-xs text-zinc-400">{t('settings.team.triageDescription')}</p>
               </div>
               <button
                 aria-checked={triageEnabled}
@@ -543,19 +553,19 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
             onClick={handleSave}
             type="button"
           >
-            {saving ? 'Saving…' : 'Save changes'}
+            {saving ? t('common.saving') : t('settings.team.saveChanges')}
           </button>
           {saveError && <p className="text-sm text-red-500">{saveError}</p>}
         </div>
 
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            Members
+            {t('settings.team.members')}
           </h2>
           <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
             {loadingMembers ? (
               <div className="flex items-center justify-center py-6 text-sm text-zinc-400">
-                Loading members…
+                {t('settings.team.loadingMembers')}
               </div>
             ) : (
               <TeamMemberManagement
@@ -577,19 +587,19 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
 
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-red-400">
-            Danger Zone
+            {t('settings.team.dangerZone')}
           </h2>
           <div className="rounded-lg border border-red-200 bg-white p-5 dark:border-red-900/50 dark:bg-zinc-900">
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                    Delete team
+                    {t('settings.team.deleteTeam')}
                   </p>
                   <p className="text-xs text-zinc-400">
-                    This will archive the team. Choose what happens to its
-                    {team.issueCount > 0 ? ` ${team.issueCount} ` : ' '}
-                    issue{team.issueCount === 1 ? '' : 's'}.
+                    {team.issueCount === 1
+                      ? t('settings.team.deleteTeamHintSingular')
+                      : t('settings.team.deleteTeamHintPlural', { count: team.issueCount })}
                   </p>
                 </div>
                 {!deleteConfirm && (
@@ -599,7 +609,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                     type="button"
                   >
                     <Trash2 className="h-4 w-4" />
-                    Delete team
+                    {t('settings.team.deleteTeam')}
                   </button>
                 )}
               </div>
@@ -607,7 +617,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
               {deleteConfirm && (
                 <div className="flex flex-col gap-3 rounded-md border border-red-100 bg-red-50/50 p-4 dark:border-red-900/30 dark:bg-red-900/10">
                   <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                    What should happen to this team&apos;s issues?
+                    {t('settings.team.whatShouldHappenToIssues')}
                   </p>
 
                   <label className="flex items-start gap-2 cursor-pointer">
@@ -620,9 +630,11 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                       value="DELETE"
                     />
                     <div>
-                      <p className="text-sm text-zinc-700 dark:text-zinc-300">Delete all issues</p>
+                      <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                        {t('settings.team.deleteAllIssues')}
+                      </p>
                       <p className="text-xs text-zinc-400">
-                        Issues will be archived along with the team
+                        {t('settings.team.deleteAllIssuesHint')}
                       </p>
                     </div>
                   </label>
@@ -644,11 +656,9 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                     />
                     <div className="flex-1">
                       <p className="text-sm text-zinc-700 dark:text-zinc-300">
-                        Move issues to another team
+                        {t('settings.team.moveIssuesToAnotherTeam')}
                       </p>
-                      <p className="text-xs text-zinc-400">
-                        Issues will be reassigned with new identifiers
-                      </p>
+                      <p className="text-xs text-zinc-400">{t('settings.team.moveIssuesHint')}</p>
                     </div>
                   </label>
 
@@ -656,11 +666,11 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                     <SimpleSelect
                       className="ml-6"
                       onChange={setMoveToTeamId}
-                      options={otherTeams.map(t => ({
-                        label: `${t.displayName || t.name} (${t.key})`,
-                        value: t.id,
+                      options={otherTeams.map(ot => ({
+                        label: `${ot.displayName || ot.name} (${ot.key})`,
+                        value: ot.id,
                       }))}
-                      placeholder="Select a team…"
+                      placeholder={t('settings.team.selectATeam')}
                       placement="top"
                       value={moveToTeamId}
                     />
@@ -676,7 +686,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                       }}
                       type="button"
                     >
-                      Cancel
+                      {t('common.cancel')}
                     </button>
                     <button
                       className="rounded bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -684,7 +694,9 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                       onClick={handleDelete}
                       type="button"
                     >
-                      {deleting ? 'Deleting…' : 'Delete team'}
+                      {deleting
+                        ? t('settings.team.deletingEllipsis')
+                        : t('settings.team.deleteTeam')}
                     </button>
                   </div>
                 </div>

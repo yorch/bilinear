@@ -1,8 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
+import { INTL_LOCALES } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
+import { useLocale } from '@/providers/locale-provider';
 
 interface AutomationRule {
   actions: Array<{ config: Record<string, unknown>; type: string }>;
@@ -58,6 +61,8 @@ interface RulesData {
 }
 
 export default function AutomationsSettingsPage() {
+  const t = useTranslations();
+  const { locale } = useLocale();
   const [data, setData] = useState<RulesData | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -74,10 +79,10 @@ export default function AutomationsSettingsPage() {
     if (res.data) {
       setData(res.data as unknown as RulesData);
     } else {
-      toast.error('Failed to load automation rules');
+      toast.error(t('settings.automations.loadError'));
     }
     setLoading(false);
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -90,7 +95,7 @@ export default function AutomationsSettingsPage() {
     try {
       actionConfig = JSON.parse(actionConfigText);
     } catch {
-      toast.error('Action config must be valid JSON');
+      toast.error(t('settings.automations.invalidJsonError'));
       setCreating(false);
       return;
     }
@@ -107,7 +112,7 @@ export default function AutomationsSettingsPage() {
       toast.error((res.errors[0] as { message: string }).message);
       return;
     }
-    toast.success('Rule created');
+    toast.success(t('settings.automations.ruleCreated'));
     setName('');
     setActionConfigText('{"priority": 1}');
     void load();
@@ -126,7 +131,7 @@ export default function AutomationsSettingsPage() {
   };
 
   const handleArchive = async (rule: AutomationRule) => {
-    if (!confirm(`Delete rule "${rule.name}"?`)) {
+    if (!confirm(t('settings.automations.deleteRuleConfirm', { name: rule.name }))) {
       return;
     }
     const res = await gql(RULE_ARCHIVE_MUTATION, { id: rule.id });
@@ -134,29 +139,30 @@ export default function AutomationsSettingsPage() {
       toast.error((res.errors[0] as { message: string }).message);
       return;
     }
-    toast.success('Rule deleted');
+    toast.success(t('settings.automations.ruleDeleted'));
     void load();
   };
 
   if (loading) {
-    return <div className="p-6 text-sm text-zinc-500">Loading…</div>;
+    return <div className="p-6 text-sm text-zinc-500">{t('common.loading')}</div>;
   }
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-6">
-      <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Automations</h1>
-      <p className="mt-1 text-sm text-zinc-500">
-        Rules fire on workspace events. Each rule has a trigger, optional conditions, and one or
-        more actions. Owner / admin only.
-      </p>
+      <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+        {t('settings.automations.title')}
+      </h1>
+      <p className="mt-1 text-sm text-zinc-500">{t('settings.automations.description')}</p>
 
       <section className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Create rule</h2>
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          {t('settings.automations.createRule')}
+        </h2>
         <form className="mt-3 flex flex-col gap-3" onSubmit={handleCreate}>
           <input
             className="rounded-md border border-zinc-200 px-2 py-1.5 text-sm dark:border-zinc-800 dark:bg-zinc-950"
             onChange={e => setName(e.target.value)}
-            placeholder="Rule name (e.g. Auto-assign urgent bugs)"
+            placeholder={t('settings.automations.ruleNamePlaceholder')}
             required
             value={name}
           />
@@ -172,7 +178,9 @@ export default function AutomationsSettingsPage() {
                 </option>
               ))}
             </select>
-            <span className="self-center text-xs text-zinc-500">then</span>
+            <span className="self-center text-xs text-zinc-500">
+              {t('settings.automations.then')}
+            </span>
             <select
               className="flex-1 rounded-md border border-zinc-200 px-2 py-1.5 text-sm dark:border-zinc-800 dark:bg-zinc-950"
               onChange={e => setActionType(e.target.value)}
@@ -188,7 +196,7 @@ export default function AutomationsSettingsPage() {
           <textarea
             className="rounded-md border border-zinc-200 px-2 py-1.5 font-mono text-xs dark:border-zinc-800 dark:bg-zinc-950"
             onChange={e => setActionConfigText(e.target.value)}
-            placeholder='Action config JSON, e.g. {"priority": 1} or {"stateId": "..."}'
+            placeholder={t('settings.automations.actionConfigPlaceholder')}
             rows={3}
             value={actionConfigText}
           />
@@ -197,17 +205,19 @@ export default function AutomationsSettingsPage() {
             disabled={creating || !name}
             type="submit"
           >
-            {creating ? 'Creating…' : 'Create rule'}
+            {creating
+              ? t('settings.automations.creatingEllipsis')
+              : t('settings.automations.createRule')}
           </button>
         </form>
       </section>
 
       <section className="mt-6">
         <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          Rules ({data?.automationRules.length ?? 0})
+          {t('settings.automations.rulesCount', { count: data?.automationRules.length ?? 0 })}
         </h2>
         {data?.automationRules.length === 0 ? (
-          <p className="text-sm text-zinc-500">No rules yet.</p>
+          <p className="text-sm text-zinc-500">{t('settings.automations.noRulesYet')}</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {data?.automationRules.map(rule => (
@@ -216,7 +226,11 @@ export default function AutomationsSettingsPage() {
                 key={rule.id}
               >
                 <button
-                  aria-label={rule.enabled ? 'Disable rule' : 'Enable rule'}
+                  aria-label={
+                    rule.enabled
+                      ? t('settings.automations.disableRule')
+                      : t('settings.automations.enableRule')
+                  }
                   className="text-xs"
                   onClick={() => handleToggle(rule)}
                   type="button"
@@ -228,15 +242,17 @@ export default function AutomationsSettingsPage() {
                     {rule.name}
                   </div>
                   <div className="text-xs text-zinc-500">
-                    when <code className="font-mono">{rule.triggerType}</code> →{' '}
+                    {t('settings.automations.when')}{' '}
+                    <code className="font-mono">{rule.triggerType}</code> →{' '}
                     {rule.actions.map(a => (
                       <span className="font-mono" key={a.type}>
                         {a.type}
                       </span>
                     ))}
                     {' · '}
-                    runs: {rule.runCount}
-                    {rule.lastRunAt && ` · last: ${new Date(rule.lastRunAt).toLocaleString()}`}
+                    {t('settings.automations.runs', { count: rule.runCount })}
+                    {rule.lastRunAt &&
+                      ` · ${t('settings.automations.last', { date: new Date(rule.lastRunAt).toLocaleString(INTL_LOCALES[locale]) })}`}
                   </div>
                 </div>
                 <button
@@ -244,7 +260,7 @@ export default function AutomationsSettingsPage() {
                   onClick={() => handleArchive(rule)}
                   type="button"
                 >
-                  Delete
+                  {t('common.delete')}
                 </button>
               </li>
             ))}

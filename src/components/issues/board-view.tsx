@@ -15,11 +15,11 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-
 import { CSS } from '@dnd-kit/utilities';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
+import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
+import { useTranslations } from '@/hooks/use-translations';
 import type { DBWorkflowState } from '@/lib/db';
-import { PRIORITY_LABELS } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser } from '@/types/issues';
-import { PriorityIcon } from '../properties/priority-icon';
 import { UserAvatar } from '../ui/user-avatar';
 import type { IssueRowData } from './issue-row';
 
@@ -138,6 +138,7 @@ function SortableCard({
   onMultiSelect,
   columnIssueIds,
 }: SortableCardProps) {
+  const t = useTranslations();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: issue.id,
   });
@@ -170,7 +171,7 @@ function SortableCard({
       />
       {/* Invisible overlay to intercept clicks without interfering with DnD listeners */}
       <button
-        aria-label="Open issue"
+        aria-label={t('issues.openIssue')}
         className="absolute inset-0 cursor-pointer bg-transparent"
         onClick={handleClick}
         onDoubleClick={onOpen}
@@ -199,6 +200,7 @@ function BoardColumn({
   onOpen: (id: string) => void;
   onMultiSelect: (e: React.MouseEvent, issueId: string, columnIssueIds: string[]) => void;
 }) {
+  const t = useTranslations();
   const { setNodeRef } = useDroppable({ id: column.id });
   const columnIssueIds = column.issues.map(i => i.id);
 
@@ -240,7 +242,7 @@ function BoardColumn({
 
         {column.issues.length === 0 && (
           <div className="flex items-center justify-center py-8 text-xs text-zinc-400 dark:text-zinc-500">
-            No issues
+            {t('issues.noIssues')}
           </div>
         )}
       </div>
@@ -324,6 +326,8 @@ function buildColumnDefs(
   groupBy: BoardGroupBy,
   states: DBWorkflowState[],
   users: IssueUser[],
+  unassignedLabel: string,
+  priorityLabel: (p: number) => string,
 ): Omit<Column, 'issues'>[] {
   switch (groupBy) {
     case 'status':
@@ -337,7 +341,7 @@ function buildColumnDefs(
         }));
 
     case 'assignee': {
-      const cols: Omit<Column, 'issues'>[] = [{ id: 'unassigned', label: 'Unassigned' }];
+      const cols: Omit<Column, 'issues'>[] = [{ id: 'unassigned', label: unassignedLabel }];
       for (const user of users) {
         cols.push({ id: user.id, label: user.displayName });
       }
@@ -347,7 +351,7 @@ function buildColumnDefs(
     case 'priority':
       return [1, 2, 3, 4, 0].map(p => ({
         id: `priority-${p}`,
-        label: PRIORITY_LABELS[p] ?? `Priority ${p}`,
+        label: priorityLabel(p),
       }));
 
     default:
@@ -398,6 +402,7 @@ export function BoardView({
   onOpen,
   onUpdate,
 }: BoardViewProps) {
+  const t = useTranslations();
   const [activeId, setActiveId] = useState<string | null>(null);
   // Multi-select state (internal to the board, separate from parent selectedId)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -413,7 +418,9 @@ export function BoardView({
   const sensors = useSensors(mouseSensor, touchSensor);
 
   // Build column definitions
-  const colDefs = buildColumnDefs(groupBy, states, users);
+  const colDefs = buildColumnDefs(groupBy, states, users, t('issues.unassigned'), p =>
+    t(priorityLabelKey(p)),
+  );
 
   // Build full columns (with issues) for flat board mode
   const columns: Column[] = assignIssuesToColumns(colDefs, issues, groupBy);
@@ -439,7 +446,7 @@ export function BoardView({
             groups.push({
               id: 'unassigned',
               issues: unassigned,
-              label: 'Unassigned',
+              label: t('issues.unassigned'),
             });
           }
           for (const user of users) {
@@ -459,7 +466,7 @@ export function BoardView({
           .map(p => ({
             id: `priority-${p}`,
             issues: issues.filter(i => i.priority === p),
-            label: PRIORITY_LABELS[p] ?? `Priority ${p}`,
+            label: t(priorityLabelKey(p)),
           }))
           .filter(g => g.issues.length > 0);
       })()
@@ -588,7 +595,7 @@ export function BoardView({
   if (issues.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center py-20 text-sm text-zinc-400 dark:text-zinc-500">
-        No issues
+        {t('issues.noIssues')}
       </div>
     );
   }
@@ -635,7 +642,7 @@ export function BoardView({
           (isDraggingMultiple ? (
             <div className="flex items-center gap-2 rounded-lg border border-blue-500 bg-white px-4 py-3 shadow-lg dark:bg-zinc-900">
               <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
-                Dragging {selectedIds.size} issues
+                {t('issues.draggingCount', { count: selectedIds.size })}
               </span>
             </div>
           ) : (

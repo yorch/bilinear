@@ -4,8 +4,11 @@ import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOutsideClick } from '@/hooks/use-outside-click';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
+import { INTL_LOCALES } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
+import { useLocale } from '@/providers/locale-provider';
 import { useStore } from '@/providers/store-provider';
 
 /**
@@ -59,10 +62,10 @@ const TRIAGE_SNOOZE_MUTATION = `
   }
 `;
 
-const SNOOZE_PRESETS: Array<{ label: string; hours: number }> = [
-  { hours: 4, label: '4 hours' },
-  { hours: 24, label: '1 day' },
-  { hours: 168, label: '1 week' },
+const SNOOZE_PRESETS: Array<{ labelKey: string; hours: number }> = [
+  { hours: 4, labelKey: 'settings.triage.snooze4Hours' },
+  { hours: 24, labelKey: 'settings.triage.snooze1Day' },
+  { hours: 168, labelKey: 'settings.triage.snooze1Week' },
 ];
 
 /**
@@ -77,6 +80,7 @@ function SnoozeButton({
   disabled: boolean;
   onSelect: (hours: number) => void;
 }) {
+  const t = useTranslations();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
 
@@ -104,7 +108,7 @@ function SnoozeButton({
         onClick={() => setOpen(o => !o)}
         type="button"
       >
-        Snooze
+        {t('settings.triage.snooze')}
       </button>
       {open ? (
         <div
@@ -122,7 +126,7 @@ function SnoozeButton({
               role="menuitem"
               type="button"
             >
-              {p.label}
+              {t(p.labelKey)}
             </button>
           ))}
         </div>
@@ -134,6 +138,8 @@ function SnoozeButton({
 const TriagePage = observer(function TriagePage() {
   const { key: teamKey } = useParams<{ workspace: string; key: string }>();
   const { issueStore, teamStore, workflowStateStore, userStore, syncStore } = useStore();
+  const t = useTranslations();
+  const { locale } = useLocale();
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const team = teamStore.findByKey(teamKey);
@@ -190,18 +196,20 @@ const TriagePage = observer(function TriagePage() {
           issueId,
         });
         if (res.errors?.length) {
-          throw new Error((res.errors[0] as { message?: string })?.message ?? 'Accept failed');
+          throw new Error(
+            (res.errors[0] as { message?: string })?.message ?? t('settings.triage.acceptFailed'),
+          );
         }
       } catch (err) {
         if (snapshot) {
           issueStore.optimisticUpdate(issueId, snapshot);
         }
-        toast.error(err instanceof Error ? err.message : 'Failed to accept issue');
+        toast.error(err instanceof Error ? err.message : t('settings.triage.acceptFailed'));
       } finally {
         setBusyId(null);
       }
     },
-    [defaultTargetStateId, issueStore],
+    [defaultTargetStateId, issueStore, t],
   );
 
   const handleDecline = useCallback(
@@ -217,18 +225,20 @@ const TriagePage = observer(function TriagePage() {
       try {
         const res = await gql(TRIAGE_DECLINE_MUTATION, { issueId });
         if (res.errors?.length) {
-          throw new Error((res.errors[0] as { message?: string })?.message ?? 'Decline failed');
+          throw new Error(
+            (res.errors[0] as { message?: string })?.message ?? t('settings.triage.declineFailed'),
+          );
         }
       } catch (err) {
         if (snapshot) {
           issueStore.optimisticUpdate(issueId, snapshot);
         }
-        toast.error(err instanceof Error ? err.message : 'Failed to decline issue');
+        toast.error(err instanceof Error ? err.message : t('settings.triage.declineFailed'));
       } finally {
         setBusyId(null);
       }
     },
-    [issueStore],
+    [issueStore, t],
   );
 
   const handleSnooze = useCallback(
@@ -243,18 +253,20 @@ const TriagePage = observer(function TriagePage() {
           until: until.toISOString(),
         });
         if (res.errors?.length) {
-          throw new Error((res.errors[0] as { message?: string })?.message ?? 'Snooze failed');
+          throw new Error(
+            (res.errors[0] as { message?: string })?.message ?? t('settings.triage.snoozeFailed'),
+          );
         }
       } catch (err) {
         if (snapshot) {
           issueStore.optimisticUpdate(issueId, snapshot);
         }
-        toast.error(err instanceof Error ? err.message : 'Failed to snooze issue');
+        toast.error(err instanceof Error ? err.message : t('settings.triage.snoozeFailed'));
       } finally {
         setBusyId(null);
       }
     },
-    [issueStore],
+    [issueStore, t],
   );
 
   const handleMarkDuplicate = useCallback(
@@ -262,18 +274,18 @@ const TriagePage = observer(function TriagePage() {
       // Minimal UX: prompt for the canonical identifier (e.g. "ENG-42").
       // The user resolves the lookup against the local issue store; the
       // resolver re-validates org/team membership server-side.
-      const input = window.prompt('Mark as duplicate of (issue identifier, e.g. ENG-42):');
+      const input = window.prompt(t('settings.triage.markDuplicatePrompt'));
       if (!input) {
         return;
       }
       const ident = input.trim().toUpperCase();
       const canonical = Array.from(issueStore.pool.values()).find(i => i.identifier === ident);
       if (!canonical) {
-        toast.error(`Issue ${ident} not found in your workspace`);
+        toast.error(t('settings.triage.issueNotFound', { identifier: ident }));
         return;
       }
       if (canonical.id === issueId) {
-        toast.error('Cannot mark an issue as a duplicate of itself');
+        toast.error(t('settings.triage.cannotMarkDuplicateOfItself'));
         return;
       }
       const snapshot = issueStore.findById(issueId);
@@ -288,20 +300,21 @@ const TriagePage = observer(function TriagePage() {
         });
         if (res.errors?.length) {
           throw new Error(
-            (res.errors[0] as { message?: string })?.message ?? 'Mark duplicate failed',
+            (res.errors[0] as { message?: string })?.message ??
+              t('settings.triage.markDuplicateFailed'),
           );
         }
-        toast.success(`Marked as duplicate of ${ident}`);
+        toast.success(t('settings.triage.markedAsDuplicate', { identifier: ident }));
       } catch (err) {
         if (snapshot) {
           issueStore.optimisticUpdate(issueId, snapshot);
         }
-        toast.error(err instanceof Error ? err.message : 'Failed to mark duplicate');
+        toast.error(err instanceof Error ? err.message : t('settings.triage.markDuplicateFailed'));
       } finally {
         setBusyId(null);
       }
     },
-    [issueStore],
+    [issueStore, t],
   );
 
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
@@ -309,7 +322,7 @@ const TriagePage = observer(function TriagePage() {
   if (isLoading) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Loading...
+        {t('common.loading')}
       </div>
     );
   }
@@ -317,7 +330,7 @@ const TriagePage = observer(function TriagePage() {
   if (!team) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Team not found.
+        {t('settings.triage.teamNotFound')}
       </div>
     );
   }
@@ -325,8 +338,8 @@ const TriagePage = observer(function TriagePage() {
   if (!triageStateId) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-2 text-sm text-zinc-400">
-        <p>Triage is not enabled for this team.</p>
-        <p className="text-xs">Enable it in team settings to route incoming issues here.</p>
+        <p>{t('settings.triage.triageNotEnabled')}</p>
+        <p className="text-xs">{t('settings.triage.triageNotEnabledHint')}</p>
       </div>
     );
   }
@@ -335,15 +348,17 @@ const TriagePage = observer(function TriagePage() {
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
         <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          {team.displayName ?? team.name} — Triage
+          {t('settings.triage.pageTitle', { name: team.displayName ?? team.name })}
         </h1>
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">{queue.length} to triage</span>
+        <span className="text-xs text-zinc-400 dark:text-zinc-500">
+          {t('settings.triage.toTriageCount', { count: queue.length })}
+        </span>
       </div>
 
       <div className="flex-1 overflow-y-auto">
         {queue.length === 0 ? (
           <div className="flex items-center justify-center py-20 text-sm text-zinc-400 dark:text-zinc-500">
-            All clear — nothing in triage.
+            {t('settings.triage.allClear')}
           </div>
         ) : (
           queue.map(issue => {
@@ -363,7 +378,10 @@ const TriagePage = observer(function TriagePage() {
                   </div>
                   {creator ? (
                     <div className="text-xs text-zinc-400 dark:text-zinc-500">
-                      from {creator.displayName} · {new Date(issue.createdAt).toLocaleDateString()}
+                      {t('settings.triage.fromCreator', {
+                        date: new Date(issue.createdAt).toLocaleDateString(INTL_LOCALES[locale]),
+                        name: creator.displayName,
+                      })}
                     </div>
                   ) : null}
                 </div>
@@ -374,7 +392,7 @@ const TriagePage = observer(function TriagePage() {
                     onClick={() => handleAccept(issue.id)}
                     type="button"
                   >
-                    Accept
+                    {t('settings.triage.accept')}
                   </button>
                   <button
                     className="rounded border border-zinc-300 px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -382,16 +400,16 @@ const TriagePage = observer(function TriagePage() {
                     onClick={() => handleDecline(issue.id)}
                     type="button"
                   >
-                    Decline
+                    {t('settings.triage.decline')}
                   </button>
                   <button
                     className="rounded border border-zinc-300 px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                     disabled={busy}
                     onClick={() => handleMarkDuplicate(issue.id)}
-                    title="Mark as duplicate of another issue"
+                    title={t('settings.triage.markDuplicateTitle')}
                     type="button"
                   >
-                    Duplicate
+                    {t('settings.triage.duplicate')}
                   </button>
                   <SnoozeButton disabled={busy} onSelect={hours => handleSnooze(issue.id, hours)} />
                 </div>

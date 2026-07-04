@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 import type { MentionItem } from '../editor/mention-list';
 import { TipTapEditor } from '../editor/tiptap-editor.lazy';
@@ -25,6 +26,7 @@ export function CommentComposer({
   compact?: boolean;
   issueId?: string;
 }) {
+  const t = useTranslations();
   const isEmpty = !value || value === '<p></p>' || value.trim() === '';
 
   return (
@@ -55,7 +57,7 @@ export function CommentComposer({
           onClick={() => onSubmit(value)}
           type="button"
         >
-          {submitting ? 'Posting…' : 'Comment'}
+          {submitting ? t('issueDetail.comments.posting') : t('issueDetail.comments.commentButton')}
         </button>
       </div>
     </div>

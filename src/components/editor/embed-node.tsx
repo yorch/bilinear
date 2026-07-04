@@ -5,6 +5,7 @@ import { mergeAttributes, Node } from '@tiptap/core';
 import type { NodeViewProps } from '@tiptap/react';
 import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import { useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 
 const YOUTUBE_RE = /(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
@@ -23,6 +24,7 @@ function getEmbedUrl(url: string): string | null {
 }
 
 function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
+  const t = useTranslations();
   const url = (node.attrs.url as string) ?? '';
   const [editing, setEditing] = useState(!url);
   const embedUrl = url ? getEmbedUrl(url) : null;
@@ -36,7 +38,7 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
     return (
       <NodeViewWrapper>
         <div className="embed-editor my-2 rounded-md border border-zinc-300 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-900">
-          <p className="mb-2 text-xs font-medium text-zinc-500">Embed URL (YouTube or Loom)</p>
+          <p className="mb-2 text-xs font-medium text-zinc-500">{t('editor.embed.urlLabel')}</p>
           <form
             className="flex gap-2"
             onSubmit={e => {
@@ -55,13 +57,11 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
               className="rounded bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-700"
               type="submit"
             >
-              Embed
+              {t('editor.embed.submit')}
             </button>
           </form>
           {url && !embedUrl && (
-            <p className="mt-1 text-xs text-red-500">
-              Unsupported URL — paste a YouTube or Loom link
-            </p>
+            <p className="mt-1 text-xs text-red-500">{t('editor.embed.unsupportedUrl')}</p>
           )}
         </div>
       </NodeViewWrapper>
@@ -82,13 +82,13 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
           allowFullScreen
           className="absolute inset-0 h-full w-full"
           src={embedUrl}
-          title="Embedded video"
+          title={t('editor.embed.videoTitle')}
         />
         <button
-          aria-label="Edit embed URL"
+          aria-label={t('editor.embed.editAriaLabel')}
           className="absolute right-2 top-2 z-10 rounded bg-black/50 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100"
           onClick={() => setEditing(true)}
-          title="Edit embed URL"
+          title={t('editor.embed.editAriaLabel')}
           type="button"
         >
           <svg

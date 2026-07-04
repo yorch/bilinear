@@ -4,8 +4,11 @@ import { Calendar, RefreshCw } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import type { DBCycle } from '@/lib/db';
+import { INTL_LOCALES } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { useLocale } from '@/providers/locale-provider';
 import { useStore } from '@/providers/store-provider';
 
 interface CycleListViewProps {
@@ -14,33 +17,33 @@ interface CycleListViewProps {
   workspaceKey: string;
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, intlLocale: string): string {
   const d = new Date(iso);
-  return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+  return d.toLocaleDateString(intlLocale, { day: 'numeric', month: 'short' });
 }
 
-function getCycleDisplayName(cycle: DBCycle): string {
-  return cycle.name || `Cycle ${cycle.number}`;
+function getCycleDisplayName(cycle: DBCycle, t: ReturnType<typeof useTranslations>): string {
+  return cycle.name || t('cycles.defaultName', { number: cycle.number });
 }
 
 type CycleStatus = 'active' | 'completed' | 'upcoming';
 
-function getCycleStatusBadge(status: CycleStatus) {
+function getCycleStatusBadge(status: CycleStatus, t: ReturnType<typeof useTranslations>) {
   switch (status) {
     case 'active':
       return {
         className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
-        label: 'Active',
+        label: t('cycles.status.active'),
       };
     case 'completed':
       return {
         className: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400',
-        label: 'Completed',
+        label: t('cycles.status.completed'),
       };
     case 'upcoming':
       return {
         className: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400',
-        label: 'Upcoming',
+        label: t('cycles.status.upcoming'),
       };
   }
 }
@@ -51,6 +54,7 @@ export const CycleListView = observer(function CycleListView({
   teamKey,
 }: CycleListViewProps) {
   const { cycleStore } = useStore();
+  const t = useTranslations();
 
   const activeCycle = cycleStore.getActiveCycle(teamId);
   const upcomingCycles = cycleStore.getUpcomingCycles(teamId);
@@ -63,7 +67,9 @@ export const CycleListView = observer(function CycleListView({
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex h-12 items-center justify-between border-b border-zinc-200 px-4 dark:border-zinc-800">
-        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Cycles</h1>
+        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          {t('cycles.list.title')}
+        </h1>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
@@ -73,10 +79,10 @@ export const CycleListView = observer(function CycleListView({
               <RefreshCw className="h-6 w-6 text-zinc-400" />
             </div>
             <div>
-              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">No cycles yet</p>
-              <p className="mt-1 text-xs text-zinc-500">
-                Cycles help you plan and track work in time-boxed iterations.
+              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                {t('cycles.list.emptyTitle')}
               </p>
+              <p className="mt-1 text-xs text-zinc-500">{t('cycles.list.emptyDescription')}</p>
             </div>
           </div>
         ) : (
@@ -86,7 +92,7 @@ export const CycleListView = observer(function CycleListView({
                 cycles={activeCycles}
                 status="active"
                 teamKey={teamKey}
-                title="Active"
+                title={t('cycles.status.active')}
                 workspaceKey={workspaceKey}
               />
             )}
@@ -96,7 +102,7 @@ export const CycleListView = observer(function CycleListView({
                 cycles={upcomingCycles}
                 status="upcoming"
                 teamKey={teamKey}
-                title="Upcoming"
+                title={t('cycles.status.upcoming')}
                 workspaceKey={workspaceKey}
               />
             )}
@@ -107,7 +113,7 @@ export const CycleListView = observer(function CycleListView({
                 defaultCollapsed
                 status="completed"
                 teamKey={teamKey}
-                title="Completed"
+                title={t('cycles.status.completed')}
                 workspaceKey={workspaceKey}
               />
             )}
@@ -134,6 +140,8 @@ const CycleGroup = observer(function CycleGroup({
   defaultCollapsed?: boolean;
 }) {
   const { issueStore } = useStore();
+  const t = useTranslations();
+  const { locale } = useLocale();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
   return (
@@ -161,7 +169,7 @@ const CycleGroup = observer(function CycleGroup({
       {!collapsed && (
         <div className="mt-1 flex flex-col gap-1">
           {cycles.map(cycle => {
-            const badge = getCycleStatusBadge(status);
+            const badge = getCycleStatusBadge(status, t);
             const cycleIssues = issueStore.findByCycleId(cycle.id);
             const completedIssues = cycleIssues.filter(i => i.completedAt);
             const progress =
@@ -181,12 +189,13 @@ const CycleGroup = observer(function CycleGroup({
 
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                    {getCycleDisplayName(cycle)}
+                    {getCycleDisplayName(cycle, t)}
                   </span>
                   <div className="mt-0.5 flex items-center gap-2">
                     <span className="flex items-center gap-1 text-xs text-zinc-500">
                       <Calendar className="h-3 w-3" />
-                      {formatDate(cycle.startsAt)} &ndash; {formatDate(cycle.endsAt)}
+                      {formatDate(cycle.startsAt, INTL_LOCALES[locale])} &ndash;{' '}
+                      {formatDate(cycle.endsAt, INTL_LOCALES[locale])}
                     </span>
                   </div>
                 </div>

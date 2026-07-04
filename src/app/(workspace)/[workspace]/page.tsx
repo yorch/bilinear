@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { prisma } from '@/server/lib/prisma';
+import { WorkspaceNoTeams } from './workspace-no-teams';
 
 /**
  * Workspace root — redirects to the first team's issue list.
@@ -32,9 +33,5 @@ export default async function WorkspacePage({
   }
 
   // No teams yet — prompt the user to create one
-  return (
-    <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-      No teams yet. Create a team to get started.
-    </div>
-  );
+  return <WorkspaceNoTeams />;
 }

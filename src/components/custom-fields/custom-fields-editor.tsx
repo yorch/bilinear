@@ -1,6 +1,7 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { getErrorMessage } from '@/lib/utils';
@@ -21,6 +22,7 @@ const VALUES_SET_MUTATION = `
 
 export const CustomFieldsEditor = observer(
   ({ issueId, teamId }: { issueId: string; teamId: string }) => {
+    const t = useTranslations();
     const { customFieldStore } = useStore();
     const definitions = customFieldStore.findDefinitionsByTeamId(teamId);
 
@@ -35,13 +37,13 @@ export const CustomFieldsEditor = observer(
           values: [{ definitionId, value }],
         });
       } catch (err) {
-        toast.error(getErrorMessage(err, 'Failed to save custom field'));
+        toast.error(getErrorMessage(err, t('customFields.saveFailed')));
       }
     };
 
     return (
       <div className="mt-6">
-        <p className="mb-2 text-xs font-medium text-zinc-500">Custom fields</p>
+        <p className="mb-2 text-xs font-medium text-zinc-500">{t('customFields.title')}</p>
         <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
           {definitions.map(def => {
             const current = customFieldStore.findValue(issueId, def.id);

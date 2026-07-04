@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 
 interface HistogramBucket {
@@ -45,11 +46,11 @@ const INSIGHTS_QUERY = `
 
 type RangePreset = '30d' | '90d' | '180d' | 'all';
 
-const PRESETS: Array<{ label: string; value: RangePreset }> = [
-  { label: '30d', value: '30d' },
-  { label: '90d', value: '90d' },
-  { label: '180d', value: '180d' },
-  { label: 'All', value: 'all' },
+const PRESETS: Array<{ value: RangePreset }> = [
+  { value: '30d' },
+  { value: '90d' },
+  { value: '180d' },
+  { value: 'all' },
 ];
 
 function rangeForPreset(preset: RangePreset): { from?: string; to?: string } {
@@ -70,9 +71,14 @@ function fmtBucketLabel(b: HistogramBucket): string {
 }
 
 function Histogram({ buckets, color }: { buckets: HistogramBucket[]; color: string }) {
+  const t = useTranslations();
   const max = Math.max(...buckets.map(b => b.count), 1);
   if (buckets.every(b => b.count === 0)) {
-    return <p className="py-4 text-center text-xs text-zinc-400">No completed issues in range</p>;
+    return (
+      <p className="py-4 text-center text-xs text-zinc-400">
+        {t('analytics.insights.noCompletedIssuesInRange')}
+      </p>
+    );
   }
   return (
     <div className="flex h-32 items-end gap-1.5">
@@ -103,8 +109,13 @@ function Histogram({ buckets, color }: { buckets: HistogramBucket[]; color: stri
 }
 
 function ThroughputChart({ points }: { points: ThroughputPoint[] }) {
+  const t = useTranslations();
   if (points.length === 0) {
-    return <p className="py-4 text-center text-xs text-zinc-400">No throughput data in range</p>;
+    return (
+      <p className="py-4 text-center text-xs text-zinc-400">
+        {t('analytics.insights.noThroughputDataInRange')}
+      </p>
+    );
   }
   const max = Math.max(...points.map(p => p.count), 1);
   return (
@@ -119,7 +130,10 @@ function ThroughputChart({ points }: { points: ThroughputPoint[] }) {
                 height: `${Math.max(pct, 4)}%`,
                 minHeight: '4px',
               }}
-              title={`${p.count} completed week of ${p.weekStart}`}
+              title={t('analytics.insights.completedWeekOf', {
+                count: p.count,
+                weekStart: p.weekStart,
+              })}
             />
           </div>
         );
@@ -135,12 +149,17 @@ function TimeInStateChart({
   rows: TimeInStateRow[];
   states: Array<{ color: string; id: string; name: string }>;
 }) {
+  const t = useTranslations();
   const stateById = new Map(states.map(s => [s.id, s]));
   const visible = rows
     .filter(r => stateById.has(r.stateId))
     .sort((a, b) => b.avgHours - a.avgHours);
   if (visible.length === 0) {
-    return <p className="py-4 text-center text-xs text-zinc-400">No state-transition data yet</p>;
+    return (
+      <p className="py-4 text-center text-xs text-zinc-400">
+        {t('analytics.insights.noStateTransitionData')}
+      </p>
+    );
   }
   const max = Math.max(...visible.map(r => r.avgHours), 1);
   return (
@@ -183,6 +202,7 @@ export function InsightsSection({
   states,
   teamId,
 }: InsightsSectionProps) {
+  const t = useTranslations();
   const [localPreset, setLocalPreset] = useState<RangePreset>(presetProp ?? '90d');
   const preset = presetProp ?? localPreset;
   const setPreset = (p: RangePreset) => {
@@ -225,7 +245,9 @@ export function InsightsSection({
   return (
     <div className="mt-5">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">Insights</h2>
+        <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+          {t('analytics.insights.title')}
+        </h2>
         <div className="flex rounded-md border border-zinc-200 p-0.5 dark:border-zinc-800">
           {PRESETS.map(p => (
             <button
@@ -238,44 +260,52 @@ export function InsightsSection({
               onClick={() => setPreset(p.value)}
               type="button"
             >
-              {p.label}
+              {p.value === 'all' ? t('analytics.insights.rangeAll') : p.value}
             </button>
           ))}
         </div>
       </div>
 
       {loading ? (
-        <p className="text-xs text-zinc-400">Loading insights…</p>
+        <p className="text-xs text-zinc-400">{t('analytics.insights.loading')}</p>
       ) : (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-            <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">Lead time</h3>
-            <p className="mb-3 text-[11px] text-zinc-400">created → completed, in days</p>
+            <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">
+              {t('analytics.insights.leadTime')}
+            </h3>
+            <p className="mb-3 text-[11px] text-zinc-400">
+              {t('analytics.insights.leadTimeSubtitle')}
+            </p>
             <Histogram buckets={data?.lead ?? []} color="#6366f1" />
           </div>
 
           <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
             <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">
-              Cycle time
+              {t('analytics.insights.cycleTime')}
             </h3>
-            <p className="mb-3 text-[11px] text-zinc-400">started → completed, in days</p>
+            <p className="mb-3 text-[11px] text-zinc-400">
+              {t('analytics.insights.cycleTimeSubtitle')}
+            </p>
             <Histogram buckets={data?.cycle ?? []} color="#10b981" />
           </div>
 
           <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
             <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">
-              Throughput trend
+              {t('analytics.insights.throughputTrend')}
             </h3>
-            <p className="mb-3 text-[11px] text-zinc-400">issues completed per week</p>
+            <p className="mb-3 text-[11px] text-zinc-400">
+              {t('analytics.insights.throughputTrendSubtitle')}
+            </p>
             <ThroughputChart points={data?.throughput ?? []} />
           </div>
 
           <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
             <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">
-              Avg time in state
+              {t('analytics.insights.avgTimeInState')}
             </h3>
             <p className="mb-3 text-[11px] text-zinc-400">
-              approximation from lifecycle timestamps; full audit log is a follow-up
+              {t('analytics.insights.avgTimeInStateSubtitle')}
             </p>
             <TimeInStateChart rows={data?.timeInState ?? []} states={states} />
           </div>

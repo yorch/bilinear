@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
@@ -22,6 +23,7 @@ const buttonClass = cn(
 );
 
 export function AiInsights({ issueId }: AiInsightsProps) {
+  const t = useTranslations();
   const [available, setAvailable] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
@@ -59,13 +61,13 @@ export function AiInsights({ issueId }: AiInsightsProps) {
         { issueId },
       );
       if (res.errors?.length) {
-        toast.error('Could not summarize issue');
+        toast.error(t('issueDetail.ai.couldNotSummarize'));
         return;
       }
       const result = (res.data as { aiSummarizeIssue?: { summary?: string } })?.aiSummarizeIssue;
       setSummary(result?.summary ?? '');
     } catch {
-      toast.error('Could not summarize issue');
+      toast.error(t('issueDetail.ai.couldNotSummarize'));
     } finally {
       setSummarizing(false);
     }
@@ -79,14 +81,14 @@ export function AiInsights({ issueId }: AiInsightsProps) {
         { issueId },
       );
       if (res.errors?.length) {
-        toast.error('Could not check for duplicates');
+        toast.error(t('issueDetail.ai.couldNotFindDuplicates'));
         return;
       }
       const result = (res.data as { aiFindDuplicateIssues?: { duplicates?: DuplicateIssue[] } })
         ?.aiFindDuplicateIssues;
       setDuplicates(result?.duplicates ?? []);
     } catch {
-      toast.error('Could not check for duplicates');
+      toast.error(t('issueDetail.ai.couldNotFindDuplicates'));
     } finally {
       setFindingDuplicates(false);
     }
@@ -98,25 +100,25 @@ export function AiInsights({ issueId }: AiInsightsProps) {
 
   return (
     <div className="mt-6">
-      <p className="mb-1 text-xs font-medium text-zinc-500">AI</p>
+      <p className="mb-1 text-xs font-medium text-zinc-500">{t('issueDetail.ai.title')}</p>
       <div className="flex items-center gap-2">
         <button
           className={buttonClass}
           disabled={summarizing}
           onClick={handleSummarize}
-          title="Summarize this issue"
+          title={t('issueDetail.ai.summarizeTitle')}
           type="button"
         >
-          {summarizing ? '…' : '✨ Summarize'}
+          {summarizing ? '…' : `✨ ${t('issueDetail.ai.summarize')}`}
         </button>
         <button
           className={buttonClass}
           disabled={findingDuplicates}
           onClick={handleFindDuplicates}
-          title="Find likely duplicate issues"
+          title={t('issueDetail.ai.findDuplicatesTitle')}
           type="button"
         >
-          {findingDuplicates ? '…' : '🔍 Find duplicates'}
+          {findingDuplicates ? '…' : `🔍 ${t('issueDetail.ai.findDuplicates')}`}
         </button>
       </div>
 
@@ -128,7 +130,7 @@ export function AiInsights({ issueId }: AiInsightsProps) {
 
       {duplicates !== null &&
         (duplicates.length === 0 ? (
-          <p className="mt-2 text-sm text-zinc-500">No likely duplicates found.</p>
+          <p className="mt-2 text-sm text-zinc-500">{t('issueDetail.ai.noDuplicatesFound')}</p>
         ) : (
           <ul className="mt-2 space-y-1">
             {duplicates.map(dup => (

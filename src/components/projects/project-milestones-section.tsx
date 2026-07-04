@@ -1,13 +1,17 @@
 'use client';
 
+import type { Locale as DateFnsLocale } from 'date-fns';
 import { format, parseISO } from 'date-fns';
 import { Check, Pencil, Plus, Target, Trash2, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
+import { DATE_FNS_LOCALES } from '@/lib/date-fns-locale';
 import type { DBProjectMilestone } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { useLocale } from '@/providers/locale-provider';
 import { useStore } from '@/providers/store-provider';
 
 const MILESTONE_FIELDS =
@@ -25,9 +29,9 @@ interface MilestoneFormState {
 
 const EMPTY_FORM: MilestoneFormState = { description: '', name: '', targetDate: '' };
 
-function formatTargetDate(dateStr: string): string {
+function formatTargetDate(dateStr: string, dateFnsLocale: DateFnsLocale): string {
   try {
-    return format(parseISO(dateStr), 'MMM d, yyyy');
+    return format(parseISO(dateStr), 'MMM d, yyyy', { locale: dateFnsLocale });
   } catch {
     return dateStr;
   }
@@ -46,6 +50,7 @@ function MilestoneForm({
   onSubmit,
   submitLabel,
 }: MilestoneFormProps) {
+  const t = useTranslations();
   const [values, setValues] = useState<MilestoneFormState>(initialValues);
   const [saving, setSaving] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -81,7 +86,7 @@ function MilestoneForm({
             'dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-indigo-500',
           )}
           onChange={e => setValues(v => ({ ...v, name: e.target.value }))}
-          placeholder="Milestone name"
+          placeholder={t('projects.milestoneName')}
           ref={nameRef}
           required
           type="text"
@@ -94,7 +99,7 @@ function MilestoneForm({
             'dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-indigo-500',
           )}
           onChange={e => setValues(v => ({ ...v, description: e.target.value }))}
-          placeholder="Description (optional)"
+          placeholder={t('projects.descriptionOptionalPlaceholder')}
           rows={2}
           value={values.description}
         />
@@ -117,7 +122,7 @@ function MilestoneForm({
           type="button"
         >
           <X className="h-3.5 w-3.5" />
-          Cancel
+          {t('common.cancel')}
         </button>
         <button
           className={cn(
@@ -128,7 +133,7 @@ function MilestoneForm({
           type="submit"
         >
           <Check className="h-3.5 w-3.5" />
-          {saving ? 'Saving…' : submitLabel}
+          {saving ? t('common.saving') : submitLabel}
         </button>
       </div>
     </form>
@@ -142,10 +147,12 @@ interface MilestoneRowProps {
 }
 
 function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
+  const t = useTranslations();
+  const { locale } = useLocale();
   const [deleting, setDeleting] = useState(false);
 
   const handleDelete = async () => {
-    if (!window.confirm(`Delete milestone "${milestone.name}"?`)) {
+    if (!window.confirm(t('projects.deleteMilestoneConfirm', { name: milestone.name }))) {
       return;
     }
     setDeleting(true);
@@ -171,14 +178,14 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
       </div>
       {milestone.targetDate && (
         <span className="shrink-0 text-xs text-zinc-400">
-          {formatTargetDate(milestone.targetDate)}
+          {formatTargetDate(milestone.targetDate, DATE_FNS_LOCALES[locale])}
         </span>
       )}
       <div className="flex shrink-0 items-center gap-0.5">
         <button
           className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
           onClick={() => onEdit(milestone.id)}
-          title="Edit milestone"
+          title={t('projects.editMilestone')}
           type="button"
         >
           <Pencil className="h-3.5 w-3.5" />
@@ -187,7 +194,7 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
           className="rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950 dark:hover:text-red-400"
           disabled={deleting}
           onClick={handleDelete}
-          title="Delete milestone"
+          title={t('projects.deleteMilestone')}
           type="button"
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -200,6 +207,7 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
 export const ProjectMilestonesSection = observer(function ProjectMilestonesSection({
   projectId,
 }: ProjectMilestonesSectionProps) {
+  const t = useTranslations();
   const { projectStore } = useStore();
   const milestones = projectStore.getMilestones(projectId);
 
@@ -235,7 +243,9 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
         },
       );
       if (res.errors?.length) {
-        throw new Error((res.errors[0] as { message: string }).message ?? 'mutation failed');
+        throw new Error(
+          (res.errors[0] as { message: string }).message ?? t('common.somethingWentWrong'),
+        );
       }
       const milestone = (
         res.data as { projectMilestoneCreate?: { projectMilestone?: DBProjectMilestone } }
@@ -245,7 +255,7 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
       }
       setCreating(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create milestone');
+      toast.error(err instanceof Error ? err.message : t('projects.failedToCreateMilestone'));
     }
   };
 
@@ -268,7 +278,9 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
         },
       );
       if (res.errors?.length) {
-        throw new Error((res.errors[0] as { message: string }).message ?? 'mutation failed');
+        throw new Error(
+          (res.errors[0] as { message: string }).message ?? t('common.somethingWentWrong'),
+        );
       }
       const milestone = (
         res.data as { projectMilestoneUpdate?: { projectMilestone?: DBProjectMilestone } }
@@ -278,7 +290,7 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
       }
       setEditingId(null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update milestone');
+      toast.error(err instanceof Error ? err.message : t('projects.failedToUpdateMilestone'));
     }
   };
 
@@ -291,11 +303,13 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
         { id },
       );
       if (res.errors?.length) {
-        throw new Error((res.errors[0] as { message: string }).message ?? 'mutation failed');
+        throw new Error(
+          (res.errors[0] as { message: string }).message ?? t('common.somethingWentWrong'),
+        );
       }
       projectStore.applyMilestoneSyncAction('D', id, null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete milestone');
+      toast.error(err instanceof Error ? err.message : t('projects.failedToDeleteMilestone'));
     }
   };
 
@@ -303,7 +317,7 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
     <div className="mt-6">
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-          Milestones ({milestones.length})
+          {t('projects.milestonesCount', { count: milestones.length })}
         </h3>
         {!creating && !editingId && (
           <button
@@ -312,7 +326,7 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
             type="button"
           >
             <Plus className="h-3.5 w-3.5" />
-            Add milestone
+            {t('projects.addMilestone')}
           </button>
         )}
       </div>
@@ -321,14 +335,12 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
         <MilestoneForm
           onCancel={() => setCreating(false)}
           onSubmit={handleCreate}
-          submitLabel="Create"
+          submitLabel={t('common.create')}
         />
       )}
 
       {milestones.length === 0 && !creating ? (
-        <p className="py-6 text-center text-xs text-zinc-400">
-          No milestones yet. Add one to track key checkpoints.
-        </p>
+        <p className="py-6 text-center text-xs text-zinc-400">{t('projects.noMilestonesYet')}</p>
       ) : (
         <div className="mt-2 flex flex-col gap-2">
           {milestones.map(milestone => {
@@ -343,7 +355,7 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
                   key={milestone.id}
                   onCancel={() => setEditingId(null)}
                   onSubmit={values => handleUpdate(milestone.id, values)}
-                  submitLabel="Save"
+                  submitLabel={t('common.save')}
                 />
               );
             }

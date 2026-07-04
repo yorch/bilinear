@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 
@@ -68,6 +69,7 @@ const WEBHOOK_ROTATE_SECRET_MUTATION = `
 `;
 
 export default function WebhooksSettingsPage() {
+  const t = useTranslations();
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [availableEvents, setAvailableEvents] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,7 +87,9 @@ export default function WebhooksSettingsPage() {
         return;
       }
       if (res.errors?.length) {
-        toast.error((res.errors[0] as { message?: string })?.message ?? 'Failed to load webhooks');
+        toast.error(
+          (res.errors[0] as { message?: string })?.message ?? t('settings.webhooks.loadError'),
+        );
       } else {
         const data = (res.data ?? {}) as {
           webhooks?: Webhook[];
@@ -99,11 +103,11 @@ export default function WebhooksSettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   const handleCreate = async () => {
     if (!name.trim() || !url.trim() || selectedEvents.size === 0) {
-      toast.error('Name, URL, and at least one event are required.');
+      toast.error(t('settings.webhooks.createValidationError'));
       return;
     }
     const res = await gql(WEBHOOK_CREATE_MUTATION, {
@@ -114,7 +118,9 @@ export default function WebhooksSettingsPage() {
       },
     });
     if (res.errors?.length) {
-      toast.error((res.errors[0] as { message?: string })?.message ?? 'Failed to create webhook');
+      toast.error(
+        (res.errors[0] as { message?: string })?.message ?? t('settings.webhooks.createError'),
+      );
       return;
     }
     const created = (res.data as { webhookCreate?: { webhook?: Webhook } } | undefined)
@@ -123,7 +129,7 @@ export default function WebhooksSettingsPage() {
       setWebhooks(w => [created, ...w]);
       // Reveal secret once on create so the user can copy it.
       setRevealedSecrets(s => new Set(s).add(created.id));
-      toast.success('Webhook created');
+      toast.success(t('settings.webhooks.webhookCreated'));
     }
     setName('');
     setUrl('');
@@ -149,7 +155,7 @@ export default function WebhooksSettingsPage() {
   };
 
   const handleDelete = async (hook: Webhook) => {
-    if (!confirm(`Delete webhook "${hook.name}"?`)) {
+    if (!confirm(t('settings.webhooks.deleteConfirm', { name: hook.name }))) {
       return;
     }
     const res = await gql(WEBHOOK_DELETE_MUTATION, { id: hook.id });
@@ -159,7 +165,7 @@ export default function WebhooksSettingsPage() {
   };
 
   const handleRotate = async (hook: Webhook) => {
-    if (!confirm('Rotate the signing secret? Existing receivers will need the new value.')) {
+    if (!confirm(t('settings.webhooks.rotateConfirm'))) {
       return;
     }
     const res = await gql(WEBHOOK_ROTATE_SECRET_MUTATION, { id: hook.id });
@@ -171,7 +177,7 @@ export default function WebhooksSettingsPage() {
           w.map(h => (h.id === hook.id ? { ...h, signingSecret: updated.signingSecret } : h)),
         );
         setRevealedSecrets(s => new Set(s).add(hook.id));
-        toast.success('Signing secret rotated');
+        toast.success(t('settings.webhooks.secretRotated'));
       }
     }
   };
@@ -179,7 +185,7 @@ export default function WebhooksSettingsPage() {
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Loading...
+        {t('common.loading')}
       </div>
     );
   }
@@ -188,10 +194,11 @@ export default function WebhooksSettingsPage() {
     <div className="mx-auto w-full max-w-3xl px-6 py-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Webhooks</h1>
+          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+            {t('settings.webhooks.title')}
+          </h1>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Send events to external HTTP endpoints. Each delivery is signed with HMAC SHA-256
-            (X-Bilinear-Signature header).
+            {t('settings.webhooks.description')}
           </p>
         </div>
         <button
@@ -199,7 +206,7 @@ export default function WebhooksSettingsPage() {
           onClick={() => setCreating(c => !c)}
           type="button"
         >
-          {creating ? 'Cancel' : '+ Add webhook'}
+          {creating ? t('common.cancel') : t('settings.webhooks.addWebhook')}
         </button>
       </div>
 
@@ -207,16 +214,20 @@ export default function WebhooksSettingsPage() {
         <div className="mb-6 rounded border border-zinc-200 p-4 dark:border-zinc-800">
           <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="text-xs">
-              <span className="mb-1 block text-zinc-700 dark:text-zinc-300">Name</span>
+              <span className="mb-1 block text-zinc-700 dark:text-zinc-300">
+                {t('settings.webhooks.name')}
+              </span>
               <input
                 className="w-full rounded border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
                 onChange={e => setName(e.target.value)}
-                placeholder="Production CI"
+                placeholder={t('settings.webhooks.namePlaceholder')}
                 value={name}
               />
             </label>
             <label className="text-xs">
-              <span className="mb-1 block text-zinc-700 dark:text-zinc-300">URL</span>
+              <span className="mb-1 block text-zinc-700 dark:text-zinc-300">
+                {t('settings.webhooks.url')}
+              </span>
               <input
                 className="w-full rounded border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
                 onChange={e => setUrl(e.target.value)}
@@ -226,7 +237,9 @@ export default function WebhooksSettingsPage() {
             </label>
           </div>
           <div className="mb-3">
-            <span className="mb-1 block text-xs text-zinc-700 dark:text-zinc-300">Events</span>
+            <span className="mb-1 block text-xs text-zinc-700 dark:text-zinc-300">
+              {t('settings.webhooks.events')}
+            </span>
             <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
               {availableEvents.map(e => (
                 <label className="flex items-center gap-1.5 text-xs" key={e}>
@@ -255,14 +268,14 @@ export default function WebhooksSettingsPage() {
             onClick={handleCreate}
             type="button"
           >
-            Create webhook
+            {t('settings.webhooks.createWebhook')}
           </button>
         </div>
       ) : null}
 
       {webhooks.length === 0 ? (
         <div className="rounded border border-dashed border-zinc-300 px-4 py-8 text-center text-sm text-zinc-400 dark:border-zinc-700">
-          No webhooks yet.
+          {t('settings.webhooks.noWebhooksYet')}
         </div>
       ) : (
         <div className="space-y-3">
@@ -281,11 +294,15 @@ export default function WebhooksSettingsPage() {
                           : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
                       }`}
                     >
-                      {hook.enabled ? 'Enabled' : 'Disabled'}
+                      {hook.enabled
+                        ? t('settings.webhooks.enabled')
+                        : t('settings.webhooks.disabled')}
                     </span>
                     {hook.consecutiveFailures > 0 ? (
                       <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                        {hook.consecutiveFailures} consecutive failures
+                        {t('settings.webhooks.consecutiveFailures', {
+                          count: hook.consecutiveFailures,
+                        })}
                       </span>
                     ) : null}
                   </div>
@@ -303,10 +320,12 @@ export default function WebhooksSettingsPage() {
                     ))}
                   </div>
                   <div className="mt-2 flex items-center gap-2 text-xs">
-                    <span className="text-zinc-500 dark:text-zinc-400">Signing secret:</span>
+                    <span className="text-zinc-500 dark:text-zinc-400">
+                      {t('settings.webhooks.signingSecret')}
+                    </span>
                     {revealedSecrets.has(hook.id) ? (
                       <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs dark:bg-zinc-800">
-                        {hook.signingSecret ?? '(hidden — non-admin)'}
+                        {hook.signingSecret ?? t('settings.webhooks.hiddenNonAdmin')}
                       </code>
                     ) : (
                       <button
@@ -320,7 +339,7 @@ export default function WebhooksSettingsPage() {
                         }
                         type="button"
                       >
-                        Reveal
+                        {t('settings.webhooks.reveal')}
                       </button>
                     )}
                   </div>
@@ -331,21 +350,21 @@ export default function WebhooksSettingsPage() {
                     onClick={() => handleToggle(hook)}
                     type="button"
                   >
-                    {hook.enabled ? 'Disable' : 'Enable'}
+                    {hook.enabled ? t('settings.webhooks.disable') : t('settings.webhooks.enable')}
                   </button>
                   <button
                     className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
                     onClick={() => handleRotate(hook)}
                     type="button"
                   >
-                    Rotate
+                    {t('settings.webhooks.rotate')}
                   </button>
                   <button
                     className="rounded border border-zinc-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-zinc-700 dark:hover:bg-red-950/30"
                     onClick={() => handleDelete(hook)}
                     type="button"
                   >
-                    Delete
+                    {t('common.delete')}
                   </button>
                 </div>
               </div>

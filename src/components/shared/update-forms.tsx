@@ -3,6 +3,7 @@
 import { MessageSquare, X } from 'lucide-react';
 import { useState } from 'react';
 import { UpdateFormFields } from '@/components/shared/update-form-fields';
+import { useTranslations } from '@/hooks/use-translations';
 import { toast } from '@/lib/toast';
 
 // ─── Create form ─────────────────────────────────────────────────────────────
@@ -20,9 +21,10 @@ export function CreateUpdateForm({
   initialHealth = '',
   onClose,
   onSubmit,
-  placeholder = 'Describe the current status, blockers, or progress...',
+  placeholder,
   showNone,
 }: CreateUpdateFormProps) {
+  const t = useTranslations();
   const [body, setBody] = useState('');
   const [health, setHealth] = useState(initialHealth);
   const [submitting, setSubmitting] = useState(false);
@@ -37,7 +39,7 @@ export function CreateUpdateForm({
       await onSubmit(body.trim(), health);
       succeeded = true;
     } catch {
-      toast.error('Failed to post update');
+      toast.error(t('properties.updateForm.failedToPostUpdate'));
     } finally {
       setSubmitting(false);
     }
@@ -50,7 +52,9 @@ export function CreateUpdateForm({
     <div className="mt-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
       <div className="flex items-center gap-2 pb-2">
         <MessageSquare className="h-4 w-4 text-zinc-400" />
-        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">New update</span>
+        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+          {t('properties.updateForm.newUpdate')}
+        </span>
         <button
           className="ml-auto rounded p-0.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
           onClick={onClose}
@@ -64,7 +68,7 @@ export function CreateUpdateForm({
         health={health}
         onBodyChange={setBody}
         onHealthChange={setHealth}
-        placeholder={placeholder}
+        placeholder={placeholder ?? t('properties.updateForm.bodyPlaceholder')}
         showNone={showNone}
       />
       <div className="mt-2 flex justify-end gap-2">
@@ -73,7 +77,7 @@ export function CreateUpdateForm({
           onClick={onClose}
           type="button"
         >
-          Cancel
+          {t('common.cancel')}
         </button>
         <button
           className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
@@ -81,7 +85,7 @@ export function CreateUpdateForm({
           onClick={handleSubmit}
           type="button"
         >
-          {submitting ? 'Posting...' : 'Post update'}
+          {submitting ? t('properties.updateForm.posting') : t('properties.updateForm.postUpdate')}
         </button>
       </div>
     </div>
@@ -106,6 +110,7 @@ export function EditUpdateForm({
   onSave,
   showNone,
 }: EditUpdateFormProps) {
+  const t = useTranslations();
   const [body, setBody] = useState(initialBody);
   const [health, setHealth] = useState(initialHealth);
   const [submitting, setSubmitting] = useState(false);
@@ -120,7 +125,7 @@ export function EditUpdateForm({
       await onSave(body.trim(), health);
       succeeded = true;
     } catch {
-      toast.error('Failed to save update');
+      toast.error(t('properties.updateForm.failedToSaveUpdate'));
     } finally {
       setSubmitting(false);
     }
@@ -144,7 +149,7 @@ export function EditUpdateForm({
           onClick={onClose}
           type="button"
         >
-          Cancel
+          {t('common.cancel')}
         </button>
         <button
           className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
@@ -152,7 +157,7 @@ export function EditUpdateForm({
           onClick={handleSave}
           type="button"
         >
-          {submitting ? 'Saving...' : 'Save'}
+          {submitting ? t('common.saving') : t('common.save')}
         </button>
       </div>
     </div>

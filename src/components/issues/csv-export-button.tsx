@@ -1,9 +1,10 @@
 'use client';
 
 import { Download } from 'lucide-react';
+import { priorityLabelKey } from '@/components/properties/priority-icon';
+import { useTranslations } from '@/hooks/use-translations';
 import { downloadCsv, rowsToCsv } from '@/lib/csv-export';
 import type { DBCustomFieldDefinition } from '@/lib/db';
-import { PRIORITY_LABELS } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 
@@ -45,9 +46,10 @@ export function CsvExportButton({
   /** Filename stem — ".csv" and a UTC date stamp are appended. */
   stem: string;
 }) {
+  const t = useTranslations();
   const handleExport = () => {
     if (issues.length === 0) {
-      toast.error('Nothing to export — apply different filters or add issues.');
+      toast.error(t('issues.nothingToExport'));
       return;
     }
 
@@ -55,18 +57,18 @@ export function CsvExportButton({
     const usersById = new Map(users.map(u => [u.id, u]));
 
     const baseHeaders = [
-      'ID',
-      'Title',
-      'Status',
-      'Priority',
-      'Assignee',
-      'Labels',
-      'Due date',
-      'Estimate',
-      'Cycle',
-      'Project',
-      'Created',
-      'Updated',
+      t('issues.csvHeaderId'),
+      t('issues.csvHeaderTitle'),
+      t('issues.status'),
+      t('issues.priority'),
+      t('issues.assignee'),
+      t('issues.labels'),
+      t('issues.dueDate'),
+      t('issues.estimate'),
+      t('issues.cycle'),
+      t('issues.project'),
+      t('issues.csvHeaderCreated'),
+      t('issues.csvHeaderUpdated'),
     ];
     const customHeaders = (customFields ?? []).map(d => d.name);
     const headers = [...baseHeaders, ...customHeaders];
@@ -81,12 +83,12 @@ export function CsvExportButton({
         issue.identifier,
         issue.title,
         state?.name ?? '',
-        PRIORITY_LABELS[issue.priority] ?? String(issue.priority),
+        t(priorityLabelKey(issue.priority)),
         assignee?.displayName ?? '',
         issue.labels.map(l => l.name),
         issue.dueDate ?? '',
         issue.estimate ?? '',
-        cycle ? (cycle.name ?? `Cycle ${cycle.number}`) : '',
+        cycle ? (cycle.name ?? t('issues.cycleNumber', { number: cycle.number })) : '',
         project?.name ?? '',
         issue.createdAt ?? '',
         issue.updatedAt ?? '',
@@ -114,13 +116,13 @@ export function CsvExportButton({
 
   return (
     <button
-      aria-label="Export CSV"
+      aria-label={t('issues.exportCsv')}
       className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
       onClick={handleExport}
       type="button"
     >
       <Download className="h-3.5 w-3.5" />
-      Export CSV
+      {t('issues.exportCsv')}
     </button>
   );
 }

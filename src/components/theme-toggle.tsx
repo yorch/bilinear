@@ -3,12 +3,13 @@
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTheme } from '@/hooks/use-theme';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 
 const OPTIONS = [
-  { icon: Sun, label: 'Light', value: 'light' as const },
-  { icon: Moon, label: 'Dark', value: 'dark' as const },
-  { icon: Monitor, label: 'System', value: 'system' as const },
+  { icon: Sun, key: 'theme.light', value: 'light' as const },
+  { icon: Moon, key: 'theme.dark', value: 'dark' as const },
+  { icon: Monitor, key: 'theme.system', value: 'system' as const },
 ];
 
 const CYCLE: Record<string, 'light' | 'dark' | 'system'> = {
@@ -29,21 +30,23 @@ interface ThemeToggleProps {
  */
 export function ThemeToggle({ className, compact = false }: ThemeToggleProps) {
   const { setTheme, theme } = useTheme();
+  const t = useTranslations();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
   if (compact) {
     const current = mounted ? (OPTIONS.find(o => o.value === theme) ?? OPTIONS[2]) : OPTIONS[2];
     const Icon = current.icon;
+    const label = t(current.key);
     return (
       <button
-        aria-label={`Current theme: ${current.label}. Click to cycle.`}
+        aria-label={t('theme.currentTheme', { theme: label })}
         className={cn(
           'flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
           className,
         )}
         onClick={() => setTheme(CYCLE[theme])}
-        title={`Theme: ${current.label} (click to cycle)`}
+        title={t('theme.currentTheme', { theme: label })}
         type="button"
       >
         <Icon className="h-4 w-4" />
@@ -58,8 +61,8 @@ export function ThemeToggle({ className, compact = false }: ThemeToggleProps) {
         className,
       )}
     >
-      <legend className="sr-only">Color theme</legend>
-      {OPTIONS.map(({ icon: Icon, label, value }) => (
+      <legend className="sr-only">{t('theme.colorTheme')}</legend>
+      {OPTIONS.map(({ icon: Icon, key, value }) => (
         <button
           aria-pressed={mounted ? theme === value : undefined}
           className={cn(
@@ -70,7 +73,7 @@ export function ThemeToggle({ className, compact = false }: ThemeToggleProps) {
           )}
           key={value}
           onClick={() => setTheme(value)}
-          title={label}
+          title={t(key)}
           type="button"
         >
           <Icon className="h-3.5 w-3.5" />

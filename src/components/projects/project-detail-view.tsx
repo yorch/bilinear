@@ -8,8 +8,14 @@ import { ProgressSparkline } from '@/components/projects/progress-sparkline';
 import { ProjectMilestonesSection } from '@/components/projects/project-milestones-section';
 import { ProjectUpdatesSection } from '@/components/projects/project-updates-section';
 import { SimpleSelect } from '@/components/ui/select';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
-import { PROJECT_HEALTH_OPTIONS, PROJECT_STATUS_CONFIG } from '@/lib/project-constants';
+import {
+  PROJECT_HEALTH_LABEL_KEYS,
+  PROJECT_HEALTH_OPTIONS,
+  PROJECT_STATUS_CONFIG,
+  PROJECT_STATUS_LABEL_KEYS,
+} from '@/lib/project-constants';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -23,6 +29,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
   projectSlugId,
   workspaceKey,
 }: ProjectDetailViewProps) {
+  const t = useTranslations();
   const { projectStore, issueStore, userStore, teamStore, workflowStateStore } = useStore();
   const viewerId = userStore.currentUserId ?? '';
   const project = projectStore.findBySlugId(projectSlugId);
@@ -46,7 +53,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
   if (!project) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Project not found.
+        {t('projects.projectNotFound')}
       </div>
     );
   }
@@ -63,7 +70,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
         { id: project.id, input: { statusType: newStatus } },
       );
     } catch {
-      toast.error('Failed to update status');
+      toast.error(t('projects.failedToUpdateStatus'));
     }
   };
 
@@ -76,7 +83,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
         { id: project.id, input: { health: newHealth } },
       );
     } catch {
-      toast.error('Failed to update health');
+      toast.error(t('projects.failedToUpdateHealth'));
     }
   };
 
@@ -108,8 +115,8 @@ export const ProjectDetailView = observer(function ProjectDetailView({
               <CircleDot className={cn('h-4 w-4', status.color)} />
               <SimpleSelect
                 onChange={handleStatusChange}
-                options={Object.entries(PROJECT_STATUS_CONFIG).map(([value, cfg]) => ({
-                  label: cfg.label,
+                options={Object.entries(PROJECT_STATUS_CONFIG).map(([value]) => ({
+                  label: t(PROJECT_STATUS_LABEL_KEYS[value]),
                   value,
                 }))}
                 value={project.statusType}
@@ -117,7 +124,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
               />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-zinc-400">Health:</span>
+              <span className="text-xs text-zinc-400">{t('projects.healthLabel')}</span>
               <div className="flex gap-1">
                 {PROJECT_HEALTH_OPTIONS.map(h => (
                   <button
@@ -131,7 +138,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
                     onClick={() => handleHealthChange(h.value)}
                     type="button"
                   >
-                    {h.label}
+                    {t(PROJECT_HEALTH_LABEL_KEYS[h.value])}
                   </button>
                 ))}
               </div>
@@ -156,9 +163,15 @@ export const ProjectDetailView = observer(function ProjectDetailView({
           )}
           <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Progress</span>
+              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                {t('projects.progress')}
+              </span>
               <span className="text-xs tabular-nums text-zinc-500">
-                {completedIssues.length} / {projectIssues.length} issues ({progress}%)
+                {t('projects.issuesCountRatio', {
+                  completed: completedIssues.length,
+                  progress,
+                  total: projectIssues.length,
+                })}
               </span>
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
@@ -168,7 +181,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
               />
             </div>
             <div className="mt-3 flex items-center justify-between">
-              <span className="text-xs text-zinc-400">Trend</span>
+              <span className="text-xs text-zinc-400">{t('projects.trend')}</span>
               <ProgressSparkline projectId={project.id} />
             </div>
           </div>
@@ -176,13 +189,13 @@ export const ProjectDetailView = observer(function ProjectDetailView({
           <div className="mt-6">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                Issues ({projectIssues.length})
+                {t('projects.issuesCount', { count: projectIssues.length })}
               </h3>
             </div>
             <div className="mt-2 flex flex-col gap-0.5">
               {projectIssues.length === 0 ? (
                 <p className="py-8 text-center text-xs text-zinc-400">
-                  No issues assigned to this project yet. Use Shift+P on any issue to assign it.
+                  {t('projects.noIssuesAssigned')}
                 </p>
               ) : (
                 projectIssues.map(issue => {

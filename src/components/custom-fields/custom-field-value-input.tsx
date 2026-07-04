@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { SimpleSelect } from '@/components/ui/select';
+import { useTranslations } from '@/hooks/use-translations';
 import type { DBCustomFieldDefinition } from '@/lib/db';
 
 /**
@@ -17,6 +18,7 @@ export function CustomFieldValueInput({
   value: unknown;
   onSave: (next: unknown) => void;
 }) {
+  const t = useTranslations();
   const options = definition.options ?? [];
 
   switch (definition.type) {
@@ -31,7 +33,7 @@ export function CustomFieldValueInput({
       return (
         <TextInput
           onSave={v => onSave(v.length > 0 ? v : null)}
-          placeholder="https://…"
+          placeholder={t('customFields.urlPlaceholder')}
           type="url"
           value={typeof value === 'string' ? value : ''}
         />

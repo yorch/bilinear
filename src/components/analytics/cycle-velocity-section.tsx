@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 
 // ---------------------------------------------------------------------------
@@ -62,10 +63,15 @@ interface VelocityBarChartProps {
 }
 
 function VelocityBarChart({ data }: VelocityBarChartProps) {
+  const t = useTranslations();
   const max = Math.max(...data.map(d => d.value), 1);
 
   if (data.length === 0 || data.every(d => d.value === 0)) {
-    return <p className="py-8 text-center text-sm text-zinc-400">No completed cycles yet</p>;
+    return (
+      <p className="py-8 text-center text-sm text-zinc-400">
+        {t('analytics.velocity.noCompletedCycles')}
+      </p>
+    );
   }
 
   return (
@@ -122,6 +128,7 @@ function RollingCard({ label, value }: RollingCardProps) {
 type MetricMode = 'issues' | 'points';
 
 export function CycleVelocitySection({ teamId }: CycleVelocitySectionProps) {
+  const t = useTranslations();
   const [data, setData] = useState<CycleVelocityTrendResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<MetricMode>('issues');
@@ -170,7 +177,9 @@ export function CycleVelocitySection({ teamId }: CycleVelocitySectionProps) {
   return (
     <div className="mt-5">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">Cycle Velocity</h2>
+        <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+          {t('analytics.velocity.title')}
+        </h2>
         <div className="flex rounded-md border border-zinc-200 p-0.5 dark:border-zinc-800">
           {(['issues', 'points'] as MetricMode[]).map(m => (
             <button
@@ -183,28 +192,30 @@ export function CycleVelocitySection({ teamId }: CycleVelocitySectionProps) {
               onClick={() => setMode(m)}
               type="button"
             >
-              {m === 'issues' ? 'Issues' : 'Points'}
+              {m === 'issues' ? t('analytics.velocity.issues') : t('analytics.velocity.points')}
             </button>
           ))}
         </div>
       </div>
 
       {loading ? (
-        <p className="text-xs text-zinc-400">Loading cycle velocity…</p>
+        <p className="text-xs text-zinc-400">{t('analytics.velocity.loading')}</p>
       ) : (
         <>
           <div className="mb-3 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
             <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">
-              {mode === 'issues' ? 'Completed issues per cycle' : 'Completed points per cycle'}
+              {mode === 'issues'
+                ? t('analytics.velocity.completedIssuesPerCycle')
+                : t('analytics.velocity.completedPointsPerCycle')}
             </h3>
-            <p className="mb-3 text-[11px] text-zinc-400">Last 8 completed cycles</p>
+            <p className="mb-3 text-[11px] text-zinc-400">{t('analytics.velocity.last8Cycles')}</p>
             <VelocityBarChart data={chartData} />
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            <RollingCard label="3-cycle avg" value={rolling3} />
-            <RollingCard label="6-cycle avg" value={rolling6} />
-            <RollingCard label="12-cycle avg" value={rolling12} />
+            <RollingCard label={t('analytics.velocity.avg3Cycle')} value={rolling3} />
+            <RollingCard label={t('analytics.velocity.avg6Cycle')} value={rolling6} />
+            <RollingCard label={t('analytics.velocity.avg12Cycle')} value={rolling12} />
           </div>
         </>
       )}

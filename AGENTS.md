@@ -9,6 +9,7 @@ A Linear-style issue tracker built with Next.js 16 (App Router), Apollo Server G
 ### Recently shipped (2026-07-03)
 
 - **Platform admin console** — the first cross-tenant privilege in the app. New `User.isPlatformAdmin` flag (first user in an empty DB is auto-bootstrapped), org suspension (`suspendedAt`/`suspendedReason`) and a `platform_audit_logs` trail. `requirePlatformAdmin` gates a `PlatformAdminService` (tenant + user management, platform metrics) and the `(admin)` UI console at `/admin`. Impersonation via `/api/admin/impersonate[/stop]` issues a 30-min token carrying an `impersonatorId` claim; an `ImpersonationBanner` offers one-click exit. Suspension is enforced per-request in `extractAuthContext`. See PATTERNS.md §74 and DATABASE_SCHEMA.md §2.37.
+- **Internationalization (i18n)** — full English/Spanish coverage across the app via a client-side `LocaleProvider` + `useTranslations()` hook (cookie-persisted locale, no URL-segment routing). `LanguageToggle` in the sidebar footer. ~1,080 keys spanning auth, issues, projects, cycles, roadmap, analytics, initiatives, teams, custom fields, documents, editor, layout/command palette/notifications, and every settings page. Extend by adding keys to `src/lib/i18n/locales/{en,es}.json`. See PATTERNS.md §75.
 
 ### Recently shipped (2026-05-05)
 

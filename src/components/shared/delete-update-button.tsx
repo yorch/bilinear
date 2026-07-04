@@ -2,6 +2,7 @@
 
 import { Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 
@@ -12,6 +13,7 @@ interface DeleteUpdateButtonProps {
 }
 
 export function DeleteUpdateButton({ updateId, mutation, onDeleted }: DeleteUpdateButtonProps) {
+  const t = useTranslations();
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -21,7 +23,7 @@ export function DeleteUpdateButton({ updateId, mutation, onDeleted }: DeleteUpda
       await gql(mutation, { id: updateId });
       onDeleted?.();
     } catch {
-      toast.error('Failed to delete update');
+      toast.error(t('properties.updateForm.failedToDeleteUpdate'));
       setDeleting(false);
       setConfirming(false);
     }
@@ -30,21 +32,21 @@ export function DeleteUpdateButton({ updateId, mutation, onDeleted }: DeleteUpda
   if (confirming) {
     return (
       <div className="flex items-center gap-1">
-        <span className="text-xs text-zinc-500">Delete?</span>
+        <span className="text-xs text-zinc-500">{t('properties.updateForm.deleteConfirm')}</span>
         <button
           className="rounded px-1.5 py-0.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
           disabled={deleting}
           onClick={handleDelete}
           type="button"
         >
-          {deleting ? '...' : 'Yes'}
+          {deleting ? '...' : t('properties.updateForm.yes')}
         </button>
         <button
           className="rounded px-1.5 py-0.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
           onClick={() => setConfirming(false)}
           type="button"
         >
-          No
+          {t('properties.updateForm.no')}
         </button>
       </div>
     );
@@ -54,7 +56,7 @@ export function DeleteUpdateButton({ updateId, mutation, onDeleted }: DeleteUpda
     <button
       className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-red-500 dark:hover:bg-zinc-800"
       onClick={() => setConfirming(true)}
-      title="Delete"
+      title={t('common.delete')}
       type="button"
     >
       <Trash2 className="h-3.5 w-3.5" />
