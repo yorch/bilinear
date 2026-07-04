@@ -181,7 +181,9 @@ export function applyFilters<T extends FilterableIssue>(
   filterSet: FilterSet,
   customFieldResolver?: CustomFieldValueResolver,
 ): T[] {
-  if (filterSet.conditions.length === 0) {
+  // Defensive: persisted CustomView.filters is unvalidated JSON, so a stored
+  // `{}` (the server default) must not crash the engine.
+  if (!filterSet?.conditions?.length) {
     return issues;
   }
 

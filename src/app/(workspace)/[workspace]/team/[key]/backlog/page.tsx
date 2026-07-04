@@ -11,6 +11,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
 import { ISSUE_ARCHIVE_MUTATION } from '@/lib/graphql-queries';
+import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn } from '@/lib/utils';
@@ -264,19 +265,9 @@ const BacklogPage = observer(function BacklogPage() {
       .map(p => ({ issues: groups.get(p) ?? [], priority: p }));
   }, [filteredIssues]);
 
-  const users: IssueUser[] = userStore.all.map(u => ({
-    avatarBackgroundColor: u.avatarBgColor,
-    avatarUrl: u.avatarUrl ?? null,
-    displayName: u.displayName,
-    id: u.id,
-    initials: u.initials,
-  }));
+  const users: IssueUser[] = toIssueUsers(userStore.all);
 
-  const labels: IssueLabel[] = labelStore.all.map(l => ({
-    color: l.color,
-    id: l.id,
-    name: l.name,
-  }));
+  const labels: IssueLabel[] = toIssueLabels(labelStore.all);
 
   const states = rawStates;
 

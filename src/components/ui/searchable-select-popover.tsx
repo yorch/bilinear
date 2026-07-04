@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { usePopover } from '@/hooks/use-popover';
+import { useRestoreFocus } from '@/hooks/use-restore-focus';
 import { cn } from '@/lib/utils';
 
 interface SearchableSelectPopoverProps<T> {
@@ -51,26 +52,20 @@ export function SearchableSelectPopover<T>({
   const [activeIndex, setActiveIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const wasOpen = useRef(false);
   const listboxId = useId();
+  useRestoreFocus(isOpen, triggerRef);
 
   const filtered = search.trim() ? items.filter(item => matchesSearch(item, search)) : items;
   const activeItem = activeIndex >= 0 ? filtered[activeIndex] : undefined;
   const activeOptionId = activeItem ? `${listboxId}-${getKey(activeItem)}` : undefined;
 
+  // Reset and focus the search input on open (useRestoreFocus returns focus
+  // to the trigger on close).
   useEffect(() => {
     if (isOpen) {
-      wasOpen.current = true;
       setSearch('');
       setActiveIndex(-1);
       inputRef.current?.focus();
-    } else if (wasOpen.current) {
-      wasOpen.current = false;
-      // Unmounting the focused input drops focus on <body>; return it to the
-      // trigger. Outside clicks put focus elsewhere, so they're unaffected.
-      if (document.activeElement === document.body) {
-        triggerRef.current?.focus();
-      }
     }
   }, [isOpen]);
 

@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useId, useRef } from 'react';
 import { usePopover } from '@/hooks/use-popover';
+import { useRestoreFocus } from '@/hooks/use-restore-focus';
 import { cn } from '@/lib/utils';
 
 interface SelectPopoverProps {
@@ -37,25 +38,17 @@ export function SelectPopover({
   const panelId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const wasOpen = useRef(false);
+  useRestoreFocus(open, triggerRef);
 
   const close = useCallback(() => {
     setOpen(false);
     onClose?.();
   }, [setOpen, onClose]);
 
-  // Move focus into the panel on open; return it to the trigger on close —
-  // but only when focus actually died with the panel (unmount drops it on
-  // <body>), so outside clicks don't have their focus stolen.
+  // Move focus into the panel on open (useRestoreFocus returns it on close).
   useEffect(() => {
     if (open) {
-      wasOpen.current = true;
       panelRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)?.focus();
-    } else if (wasOpen.current) {
-      wasOpen.current = false;
-      if (document.activeElement === document.body) {
-        triggerRef.current?.focus();
-      }
     }
   }, [open]);
 

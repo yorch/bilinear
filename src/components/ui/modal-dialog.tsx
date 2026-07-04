@@ -64,8 +64,7 @@ function ModalDialogInner({
       ref={dialogRef}
     >
       {/* No overflow clipping here: property dropdowns inside modals render
-          position:absolute panels that must overflow the dialog box. Tall
-          modals scroll via the dialog element itself if ever needed. */}
+          position:absolute panels that must overflow the dialog box. */}
       <div
         className={cn(
           'w-full rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900',

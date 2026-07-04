@@ -269,6 +269,10 @@ function CreateSubIssueForm({
         onChange={e => setTitle(e.target.value)}
         onKeyDown={e => {
           if (e.key === 'Escape') {
+            // Consume the keypress so the detail panel's window-level
+            // Escape listener doesn't also close the whole panel.
+            e.preventDefault();
+            e.stopPropagation();
             onClose();
           }
         }}

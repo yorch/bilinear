@@ -16,6 +16,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue, DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
 import { ISSUES_BULK_UPDATE_MUTATION } from '@/lib/graphql-queries';
+import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
@@ -74,28 +75,10 @@ const MyIssuesPage = observer(function MyIssuesPage() {
   const issues = applyFilters(allMyIssues, filterSet);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the MobX reactive trigger
-  const users: IssueUser[] = useMemo(
-    () =>
-      userStore.all.map(u => ({
-        avatarBackgroundColor: u.avatarBgColor,
-        avatarUrl: u.avatarUrl ?? null,
-        displayName: u.displayName,
-        id: u.id,
-        initials: u.initials,
-      })),
-    [userStore.pool.size],
-  );
+  const users: IssueUser[] = useMemo(() => toIssueUsers(userStore.all), [userStore.pool.size]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the MobX reactive trigger
-  const labels: IssueLabel[] = useMemo(
-    () =>
-      labelStore.all.map(l => ({
-        color: l.color,
-        id: l.id,
-        name: l.name,
-      })),
-    [labelStore.pool.size],
-  );
+  const labels: IssueLabel[] = useMemo(() => toIssueLabels(labelStore.all), [labelStore.pool.size]);
 
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
   const hasError = syncStore.status === 'error';
