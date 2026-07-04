@@ -1,17 +1,15 @@
 'use client';
 
-import type { Locale as DateFnsLocale } from 'date-fns';
 import { format, parseISO } from 'date-fns';
 import { Check, Pencil, Plus, Target, Trash2, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
-import { DATE_FNS_LOCALES } from '@/lib/date-fns-locale';
 import type { DBProjectMilestone } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
-import { useLocale } from '@/providers/locale-provider';
 import { useStore } from '@/providers/store-provider';
 
 const MILESTONE_FIELDS =
@@ -28,14 +26,6 @@ interface MilestoneFormState {
 }
 
 const EMPTY_FORM: MilestoneFormState = { description: '', name: '', targetDate: '' };
-
-function formatTargetDate(dateStr: string, dateFnsLocale: DateFnsLocale): string {
-  try {
-    return format(parseISO(dateStr), 'MMM d, yyyy', { locale: dateFnsLocale });
-  } catch {
-    return dateStr;
-  }
-}
 
 interface MilestoneFormProps {
   initialValues?: MilestoneFormState;
@@ -148,7 +138,7 @@ interface MilestoneRowProps {
 
 function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
   const t = useTranslations();
-  const { locale } = useLocale();
+  const { dateFnsLocale } = useFormatters();
   const [deleting, setDeleting] = useState(false);
 
   const handleDelete = async () => {
@@ -178,7 +168,7 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
       </div>
       {milestone.targetDate && (
         <span className="shrink-0 text-xs text-zinc-400">
-          {formatTargetDate(milestone.targetDate, DATE_FNS_LOCALES[locale])}
+          {format(parseISO(milestone.targetDate), 'MMM d, yyyy', { locale: dateFnsLocale })}
         </span>
       )}
       <div className="flex shrink-0 items-center gap-0.5">

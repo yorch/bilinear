@@ -1,6 +1,8 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { gql } from '@/lib/graphql';
+import { USER_UPDATE_LOCALE_MUTATION } from '@/lib/graphql-queries';
 import { LOCALE_COOKIE, type Locale } from '@/lib/i18n';
 
 interface LocaleContextValue {
@@ -27,6 +29,10 @@ export function LocaleProvider({
     setLocaleState(next);
     // biome-ignore lint/suspicious/noDocumentCookie: Cookie Store API isn't broadly supported yet; this is a simple, short-lived preference cookie
     document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
+    // Persist to the account so transactional emails (which never see the
+    // cookie) match the chosen language. Fire-and-forget: unauthenticated
+    // pages (login/verify) simply get an ignored UNAUTHENTICATED error.
+    void gql(USER_UPDATE_LOCALE_MUTATION, { locale: next }).catch(() => {});
   }, []);
 
   return <LocaleContext.Provider value={{ locale, setLocale }}>{children}</LocaleContext.Provider>;

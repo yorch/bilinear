@@ -597,9 +597,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                     {t('settings.team.deleteTeam')}
                   </p>
                   <p className="text-xs text-zinc-400">
-                    {team.issueCount === 1
-                      ? t('settings.team.deleteTeamHintSingular')
-                      : t('settings.team.deleteTeamHintPlural', { count: team.issueCount })}
+                    {t('settings.team.deleteTeamHint', { count: team.issueCount })}
                   </p>
                 </div>
                 {!deleteConfirm && (

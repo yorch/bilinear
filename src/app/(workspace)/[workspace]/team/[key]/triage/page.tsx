@@ -3,12 +3,11 @@
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
-import { INTL_LOCALES } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
-import { useLocale } from '@/providers/locale-provider';
 import { useStore } from '@/providers/store-provider';
 
 /**
@@ -139,7 +138,7 @@ const TriagePage = observer(function TriagePage() {
   const { key: teamKey } = useParams<{ workspace: string; key: string }>();
   const { issueStore, teamStore, workflowStateStore, userStore, syncStore } = useStore();
   const t = useTranslations();
-  const { locale } = useLocale();
+  const { formatDate } = useFormatters();
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const team = teamStore.findByKey(teamKey);
@@ -379,7 +378,7 @@ const TriagePage = observer(function TriagePage() {
                   {creator ? (
                     <div className="text-xs text-zinc-400 dark:text-zinc-500">
                       {t('settings.triage.fromCreator', {
-                        date: new Date(issue.createdAt).toLocaleDateString(INTL_LOCALES[locale]),
+                        date: formatDate(issue.createdAt),
                         name: creator.displayName,
                       })}
                     </div>

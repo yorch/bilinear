@@ -6,12 +6,11 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
-import { INTL_LOCALES } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
-import { useLocale } from '@/providers/locale-provider';
 import { useStore } from '@/providers/store-provider';
 
 // ---------------------------------------------------------------------------
@@ -158,8 +157,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const { workspace } = useParams<{ workspace: string }>();
   const { userStore, teamStore } = useStore();
   const t = useTranslations();
-  const { locale } = useLocale();
-  const intlLocale = INTL_LOCALES[locale];
+  const { formatDate } = useFormatters();
 
   const [org, setOrg] = useState<OrgInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -413,7 +411,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                     {t('settings.workspace.created')}
                   </dt>
                   <dd className="col-span-2 text-sm text-zinc-500 dark:text-zinc-400">
-                    {new Date(org.createdAt).toLocaleDateString(intlLocale, {
+                    {formatDate(org.createdAt, {
                       day: 'numeric',
                       month: 'long',
                       year: 'numeric',
@@ -815,7 +813,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                       </p>
                       <p className="text-xs text-zinc-400 mt-0.5">
                         {t('settings.workspace.created')}{' '}
-                        {new Date(token.createdAt).toLocaleDateString(intlLocale, {
+                        {formatDate(token.createdAt, {
                           day: 'numeric',
                           month: 'short',
                           year: 'numeric',
@@ -823,7 +821,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                         {' · '}
                         {token.lastUsedAt
                           ? t('settings.workspace.lastUsedOn', {
-                              date: new Date(token.lastUsedAt).toLocaleDateString(intlLocale, {
+                              date: formatDate(token.lastUsedAt, {
                                 day: 'numeric',
                                 month: 'short',
                                 year: 'numeric',
@@ -832,7 +830,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                           : t('settings.workspace.neverUsed')}
                         {' · '}
                         {t('settings.workspace.expires')}{' '}
-                        {new Date(token.expiresAt).toLocaleDateString(intlLocale, {
+                        {formatDate(token.expiresAt, {
                           day: 'numeric',
                           month: 'short',
                           year: 'numeric',

@@ -1,6 +1,5 @@
+import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
-import { INTL_LOCALES } from '@/lib/i18n';
-import { useLocale } from '@/providers/locale-provider';
 
 interface BurnupPoint {
   completed: number;
@@ -14,7 +13,7 @@ interface BurnupChartProps {
 
 export function BurnupChart({ data }: BurnupChartProps) {
   const t = useTranslations();
-  const { locale } = useLocale();
+  const { formatDate } = useFormatters();
 
   if (data.length === 0) {
     return <p className="py-6 text-center text-xs text-zinc-400">{t('cycles.burnup.empty')}</p>;
@@ -56,7 +55,7 @@ export function BurnupChart({ data }: BurnupChartProps) {
   const xLabels = data
     .map((d, i) => ({
       i,
-      label: new Date(d.date).toLocaleDateString(INTL_LOCALES[locale], {
+      label: formatDate(d.date, {
         day: 'numeric',
         month: 'short',
       }),

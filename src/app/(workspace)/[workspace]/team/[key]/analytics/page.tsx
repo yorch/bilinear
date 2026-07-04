@@ -5,11 +5,10 @@ import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { CycleVelocitySection } from '@/components/analytics/cycle-velocity-section';
 import { InsightsSection } from '@/components/analytics/insights-section';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
-import { INTL_LOCALES } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { useLocale } from '@/providers/locale-provider';
 import { useStore } from '@/providers/store-provider';
 
 // ---------------------------------------------------------------------------
@@ -24,11 +23,6 @@ function weekStart(date: Date): Date {
   d.setDate(d.getDate() + diff);
   d.setHours(0, 0, 0, 0);
   return d;
-}
-
-/** Format a Date as "MMM D". */
-function fmtShort(date: Date, intlLocale: string): string {
-  return date.toLocaleDateString(intlLocale, { day: 'numeric', month: 'short' });
 }
 
 // ---------------------------------------------------------------------------
@@ -201,7 +195,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
   const t = useTranslations();
-  const { locale } = useLocale();
+  const { formatDate } = useFormatters();
   const { key: teamKey } = useParams<{ workspace: string; key: string }>();
   const { issueStore, teamStore, workflowStateStore, userStore, syncStore } = useStore();
 
@@ -340,10 +334,10 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
 
     return weeks.map(w => ({
       color: 'var(--chart-primary)',
-      label: fmtShort(w.start, INTL_LOCALES[locale]),
+      label: formatDate(w.start, { day: 'numeric', month: 'short' }),
       value: w.count,
     }));
-  }, [issues, preset, locale]);
+  }, [issues, preset, formatDate]);
 
   const avgVelocity = useMemo(() => {
     const nonZero = velocityData.filter(w => w.value > 0);

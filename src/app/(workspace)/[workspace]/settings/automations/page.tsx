@@ -1,11 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
-import { INTL_LOCALES } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
-import { useLocale } from '@/providers/locale-provider';
 
 interface AutomationRule {
   actions: Array<{ config: Record<string, unknown>; type: string }>;
@@ -62,7 +61,7 @@ interface RulesData {
 
 export default function AutomationsSettingsPage() {
   const t = useTranslations();
-  const { locale } = useLocale();
+  const { formatDateTime } = useFormatters();
   const [data, setData] = useState<RulesData | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -252,7 +251,7 @@ export default function AutomationsSettingsPage() {
                     {' · '}
                     {t('settings.automations.runs', { count: rule.runCount })}
                     {rule.lastRunAt &&
-                      ` · ${t('settings.automations.last', { date: new Date(rule.lastRunAt).toLocaleString(INTL_LOCALES[locale]) })}`}
+                      ` · ${t('settings.automations.last', { date: formatDateTime(rule.lastRunAt) })}`}
                   </div>
                 </div>
                 <button

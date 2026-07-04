@@ -37,6 +37,7 @@ export const TEST_USER = {
   initials: 'TU',
   isPlatformAdmin: false,
   lastSeen: null,
+  locale: null,
   name: 'Test User',
   passwordHash: null,
   statusEmoji: null,

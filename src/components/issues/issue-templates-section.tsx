@@ -165,9 +165,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
         {/* Header row */}
         <div className="flex items-center justify-between border-b border-zinc-100 p-4 dark:border-zinc-800">
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            {templates.length === 1
-              ? t('issueDetail.templates.countSingular', { count: templates.length })
-              : t('issueDetail.templates.countPlural', { count: templates.length })}
+            {t('issueDetail.templates.count', { count: templates.length })}
           </p>
           {!isAdding && (
             <button
@@ -279,13 +277,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                           )}
                           {labelCount && (
                             <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                              {labelCount === 1
-                                ? t('issueDetail.templates.labelCountSingular', {
-                                    count: labelCount,
-                                  })
-                                : t('issueDetail.templates.labelCountPlural', {
-                                    count: labelCount,
-                                  })}
+                              {t('issueDetail.templates.labelCount', { count: labelCount })}
                             </span>
                           )}
                         </div>

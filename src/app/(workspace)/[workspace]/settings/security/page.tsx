@@ -2,11 +2,10 @@
 
 import { Copy, ExternalLink } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
-import { INTL_LOCALES } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
-import { useLocale } from '@/providers/locale-provider';
 
 // ---------------------------------------------------------------------------
 // GraphQL
@@ -135,7 +134,7 @@ const DEFAULT_FORM: FormState = {
 
 export default function SecuritySettingsPage() {
   const t = useTranslations();
-  const { locale } = useLocale();
+  const { formatDate } = useFormatters();
   const [config, setConfig] = useState<SamlConfig | null>(null);
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
   const [loading, setLoading] = useState(true);
@@ -357,10 +356,10 @@ export default function SecuritySettingsPage() {
                         <p className="truncate text-sm font-medium">{tok.label}</p>
                         <p className="text-xs text-muted-foreground">
                           {t('settings.security.createdOn', {
-                            date: new Date(tok.createdAt).toLocaleDateString(INTL_LOCALES[locale]),
+                            date: formatDate(tok.createdAt),
                           })}
                           {tok.lastUsedAt
-                            ? ` · ${t('settings.security.lastUsedOn', { date: new Date(tok.lastUsedAt).toLocaleDateString(INTL_LOCALES[locale]) })}`
+                            ? ` · ${t('settings.security.lastUsedOn', { date: formatDate(tok.lastUsedAt) })}`
                             : ` · ${t('settings.security.neverUsed')}`}
                         </p>
                       </div>

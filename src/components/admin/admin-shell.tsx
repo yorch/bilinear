@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 
 const NAV = [
-  { href: '/admin', label: 'Dashboard' },
-  { href: '/admin/tenants', label: 'Tenants' },
-  { href: '/admin/users', label: 'Users' },
-  { href: '/admin/audit', label: 'Audit log' },
+  { href: '/admin', labelKey: 'admin.nav.dashboard' },
+  { href: '/admin/tenants', labelKey: 'admin.nav.tenants' },
+  { href: '/admin/users', labelKey: 'admin.nav.users' },
+  { href: '/admin/audit', labelKey: 'admin.nav.audit' },
 ] as const;
 
 function isActive(pathname: string, href: string): boolean {
@@ -31,6 +32,7 @@ export function AdminShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const t = useTranslations();
 
   return (
     <div className="min-h-full bg-zinc-50 dark:bg-zinc-950">
@@ -38,9 +40,11 @@ export function AdminShell({
         <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-6 px-6">
           <div className="flex items-center gap-2">
             <span className="rounded bg-indigo-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-              Platform
+              {t('admin.nav.platformBadge')}
             </span>
-            <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Admin</span>
+            <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              {t('admin.nav.adminTitle')}
+            </span>
           </div>
           <nav className="flex items-center gap-1">
             {NAV.map(item => (
@@ -54,7 +58,7 @@ export function AdminShell({
                 href={item.href}
                 key={item.href}
               >
-                {item.label}
+                {t(item.labelKey)}
               </Link>
             ))}
           </nav>
@@ -64,7 +68,7 @@ export function AdminShell({
               className="rounded border border-zinc-300 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
               href="/"
             >
-              Back to app
+              {t('admin.nav.backToApp')}
             </Link>
           </div>
         </div>

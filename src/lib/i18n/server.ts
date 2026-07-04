@@ -1,10 +1,25 @@
-import { cookies } from 'next/headers';
-import { defaultLocale, isLocale, LOCALE_COOKIE, translate } from './index';
+import { cookies, headers } from 'next/headers';
+import {
+  defaultLocale,
+  isLocale,
+  LOCALE_COOKIE,
+  pickLocaleFromAcceptLanguage,
+  translate,
+} from './index';
 
-/** Server-only: resolve the active locale from the request's `locale` cookie. */
+/**
+ * Server-only: resolve the active locale. An explicit choice (the `locale`
+ * cookie, written by `LocaleProvider.setLocale`) always wins. First-time
+ * visitors with no cookie yet fall back to their browser's `Accept-Language`
+ * preference, then to the app default.
+ */
 export async function getServerLocale() {
   const cookieLocale = (await cookies()).get(LOCALE_COOKIE)?.value;
-  return isLocale(cookieLocale) ? cookieLocale : defaultLocale;
+  if (isLocale(cookieLocale)) {
+    return cookieLocale;
+  }
+  const acceptLanguage = (await headers()).get('accept-language');
+  return pickLocaleFromAcceptLanguage(acceptLanguage) ?? defaultLocale;
 }
 
 /**

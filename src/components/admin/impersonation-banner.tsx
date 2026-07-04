@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { stopImpersonation } from '@/lib/admin-api';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -23,6 +24,7 @@ const IMPERSONATION_STATE_QUERY = `
  * restores the admin's own session. Renders nothing for normal sessions.
  */
 export function ImpersonationBanner() {
+  const t = useTranslations();
   const [state, setState] = useState<ImpersonationState | null>(null);
   const [stopping, setStopping] = useState(false);
 
@@ -66,8 +68,9 @@ export function ImpersonationBanner() {
       data-testid="impersonation-banner"
     >
       <span>
-        Impersonating this workspace
-        {state.adminName ? ` as ${state.adminName}` : ''} — signed in from the platform console.
+        {state.adminName
+          ? t('admin.impersonation.bannerAs', { name: state.adminName })
+          : t('admin.impersonation.banner')}
       </span>
       <button
         className="rounded bg-amber-950/20 px-2 py-0.5 font-semibold hover:bg-amber-950/30 disabled:opacity-50"
@@ -76,7 +79,7 @@ export function ImpersonationBanner() {
         onClick={handleStop}
         type="button"
       >
-        {stopping ? 'Stopping…' : 'Stop impersonating'}
+        {stopping ? t('admin.impersonation.stopping') : t('admin.impersonation.stop')}
       </button>
     </div>
   );

@@ -2,10 +2,9 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useRef } from 'react';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
-import { INTL_LOCALES } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { useLocale } from '@/providers/locale-provider';
 
 interface RoadmapProject {
   color: string;
@@ -67,17 +66,6 @@ const HEALTH_DOTS: Record<string, string> = {
   onTrack: 'bg-green-500',
 };
 
-function formatDate(d: Date | string | null, intlLocale: string): string | null {
-  if (!d) {
-    return null;
-  }
-  const date = typeof d === 'string' ? new Date(d) : d;
-  return date.toLocaleDateString(intlLocale, {
-    month: 'short',
-    year: 'numeric',
-  });
-}
-
 function PasswordForm({ slug }: { slug: string }) {
   const t = useTranslations();
   const router = useRouter();
@@ -123,7 +111,7 @@ function PasswordForm({ slug }: { slug: string }) {
 
 export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props) {
   const t = useTranslations();
-  const { locale } = useLocale();
+  const { formatDate } = useFormatters();
   if (requiresPassword) {
     return (
       <Suspense fallback={<div className="flex min-h-screen items-center justify-center" />}>
@@ -155,7 +143,9 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
             {projects.map(project => {
               const statusInfo = STATUS_BADGES[project.statusType] ?? STATUS_BADGES.planned;
               const healthDot = project.health ? HEALTH_DOTS[project.health] : null;
-              const targetDateStr = formatDate(project.targetDate, INTL_LOCALES[locale]);
+              const targetDateStr = project.targetDate
+                ? formatDate(project.targetDate, { month: 'short', year: 'numeric' })
+                : null;
               const progressPct = Math.round(project.progress * 100);
 
               return (

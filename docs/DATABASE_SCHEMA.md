@@ -143,6 +143,13 @@ CREATE TABLE users (
     -- Notification preferences
     email_notifications_enabled  BOOLEAN NOT NULL DEFAULT true,
 
+    -- Persisted UI/email language preference (app locale, e.g. 'en'/'es').
+    -- Written by userUpdateLocale when the user switches language; null = never
+    -- set -> transactional emails fall back to the app default locale. Distinct
+    -- from the browser `locale` cookie, which drives the UI but never reaches
+    -- server-side email rendering. See PATTERNS.md §75.1.
+    locale          VARCHAR(10),
+
     -- iCal cycle feed token (32-byte random hex, rotated via userCalendarFeedTokenRotate)
     calendar_feed_token          VARCHAR(64) UNIQUE,
 

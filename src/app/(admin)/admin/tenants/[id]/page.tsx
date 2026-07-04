@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import { useFormatters } from '@/hooks/use-formatters';
+import { useTranslations } from '@/hooks/use-translations';
 import {
   deleteTenant,
   fetchTenant,
@@ -45,6 +47,8 @@ function Stat({ label, value }: { label: string; value: number }) {
 }
 
 export default function AdminTenantDetailPage() {
+  const t = useTranslations();
+  const { formatDate } = useFormatters();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [tenant, setTenant] = useState<PlatformTenantDetail | null>(null);
@@ -56,16 +60,16 @@ export default function AdminTenantDetailPage() {
     setLoading(true);
     setError(null);
     fetchTenant(id)
-      .then(t => {
-        if (!t) {
-          setError('Tenant not found.');
+      .then(result => {
+        if (!result) {
+          setError(t('admin.tenants.notFound'));
         } else {
-          setTenant(t);
+          setTenant(result);
         }
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, t]);
 
   useEffect(() => {
     load();
@@ -92,13 +96,13 @@ export default function AdminTenantDetailPage() {
     if (!tenant) {
       return;
     }
-    const reason = window.prompt(`Suspend "${tenant.name}"? Optional reason:`, '');
+    const reason = window.prompt(t('admin.tenants.suspendPrompt', { name: tenant.name }), '');
     if (reason === null) {
       return;
     }
     await withBusy(async () => {
       mergeBase(await suspendTenant(tenant.id, reason.trim() || null));
-      toast.success(`Suspended ${tenant.name}`);
+      toast.success(t('admin.tenants.suspendedToast', { name: tenant.name }));
     });
   }
 
@@ -108,7 +112,7 @@ export default function AdminTenantDetailPage() {
     }
     await withBusy(async () => {
       mergeBase(await restoreTenant(tenant.id));
-      toast.success(`Restored ${tenant.name}`);
+      toast.success(t('admin.tenants.restoredToast', { name: tenant.name }));
     });
   }
 
@@ -116,16 +120,12 @@ export default function AdminTenantDetailPage() {
     if (!tenant) {
       return;
     }
-    if (
-      !window.confirm(
-        `Delete (archive) "${tenant.name}"? Members lose access immediately. Data is retained.`,
-      )
-    ) {
+    if (!window.confirm(t('admin.tenants.deleteConfirmDetail', { name: tenant.name }))) {
       return;
     }
     await withBusy(async () => {
       await deleteTenant(tenant.id);
-      toast.success(`Archived ${tenant.name}`);
+      toast.success(t('admin.tenants.archivedToast', { name: tenant.name }));
       router.push('/admin/tenants');
     });
   }
@@ -141,17 +141,17 @@ export default function AdminTenantDetailPage() {
   }
 
   if (loading) {
-    return <p className="text-sm text-zinc-400">Loading tenant…</p>;
+    return <p className="text-sm text-zinc-400">{t('admin.tenants.loadingDetail')}</p>;
   }
   if (error || !tenant) {
     return (
       <div className="flex flex-col gap-4">
-        <p className="text-sm text-red-500">{error ?? 'Tenant not found.'}</p>
+        <p className="text-sm text-red-500">{error ?? t('admin.tenants.notFound')}</p>
         <Link
           className="text-sm text-indigo-600 hover:underline dark:text-indigo-400"
           href="/admin/tenants"
         >
-          ← Back to tenants
+          {t('admin.tenants.backToTenants')}
         </Link>
       </div>
     );
@@ -166,7 +166,7 @@ export default function AdminTenantDetailPage() {
           className="text-xs text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
           href="/admin/tenants"
         >
-          ← Tenants
+          {t('admin.tenants.backBreadcrumb')}
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{tenant.name}</h1>
@@ -176,16 +176,16 @@ export default function AdminTenantDetailPage() {
               STATUS_STYLES[status],
             )}
           >
-            {status}
+            {t(`admin.tenants.status.${status}`)}
           </span>
           <span className="font-mono text-xs text-zinc-400">
-            {tenant.urlKey} · {tenant.dataRegion} · created{' '}
-            {new Date(tenant.createdAt).toLocaleDateString()}
+            {tenant.urlKey} · {tenant.dataRegion} · {t('admin.tenants.createdPrefix')}{' '}
+            {formatDate(tenant.createdAt)}
           </span>
         </div>
         {tenant.suspendedReason ? (
           <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-            Suspended: {tenant.suspendedReason}
+            {t('admin.tenants.suspendedReasonLabel', { reason: tenant.suspendedReason })}
           </p>
         ) : null}
       </div>
@@ -198,7 +198,7 @@ export default function AdminTenantDetailPage() {
             onClick={handleRestore}
             type="button"
           >
-            Restore
+            {t('admin.tenants.restore')}
           </button>
         ) : status === 'active' ? (
           <button
@@ -207,7 +207,7 @@ export default function AdminTenantDetailPage() {
             onClick={handleSuspend}
             type="button"
           >
-            Suspend
+            {t('admin.tenants.suspend')}
           </button>
         ) : null}
         {status !== 'archived' && (
@@ -217,22 +217,24 @@ export default function AdminTenantDetailPage() {
             onClick={handleDelete}
             type="button"
           >
-            Delete
+            {t('common.delete')}
           </button>
         )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Members" value={tenant.memberCount} />
-        <Stat label="Issues" value={tenant.issueCount} />
-        <Stat label="Teams" value={tenant.teamCount} />
-        <Stat label="Projects" value={tenant.projectCount} />
+        <Stat label={t('admin.tenants.statMembers')} value={tenant.memberCount} />
+        <Stat label={t('admin.tenants.statIssues')} value={tenant.issueCount} />
+        <Stat label={t('admin.tenants.statTeams')} value={tenant.teamCount} />
+        <Stat label={t('admin.tenants.statProjects')} value={tenant.projectCount} />
       </div>
 
       <section>
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">Owners</h2>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+          {t('admin.tenants.owners')}
+        </h2>
         {tenant.owners.length === 0 ? (
-          <p className="text-sm text-zinc-400">No owners.</p>
+          <p className="text-sm text-zinc-400">{t('admin.tenants.noOwners')}</p>
         ) : (
           <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
             <table className="w-full text-sm">
@@ -251,11 +253,13 @@ export default function AdminTenantDetailPage() {
                         disabled={busy || status !== 'active'}
                         onClick={() => handleImpersonateOwner(o.id)}
                         title={
-                          status === 'active' ? 'Sign in as this owner' : 'Tenant is not active'
+                          status === 'active'
+                            ? t('admin.tenants.impersonateOwnerActive')
+                            : t('admin.tenants.impersonateOwnerInactive')
                         }
                         type="button"
                       >
-                        Impersonate
+                        {t('admin.tenants.impersonate')}
                       </button>
                     </td>
                   </tr>
