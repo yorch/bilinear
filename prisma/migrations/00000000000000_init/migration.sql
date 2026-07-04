@@ -47,6 +47,7 @@ CREATE TABLE "users" (
     "google_id" VARCHAR(255),
     "github_id" VARCHAR(255),
     "email_notifications_enabled" BOOLEAN NOT NULL DEFAULT true,
+    "locale" VARCHAR(10),
     "is_platform_admin" BOOLEAN NOT NULL DEFAULT false,
     "calendar_feed_token" VARCHAR(64),
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
