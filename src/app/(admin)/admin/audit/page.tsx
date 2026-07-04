@@ -1,9 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useFormatters } from '@/hooks/use-formatters';
+import { useTranslations } from '@/hooks/use-translations';
 import { fetchAuditLog, type PlatformAuditEntry } from '@/lib/admin-api';
 
 export default function AdminAuditPage() {
+  const t = useTranslations();
+  const { formatDateTime } = useFormatters();
   const [entries, setEntries] = useState<PlatformAuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,30 +62,28 @@ export default function AdminAuditPage() {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-          Platform audit log
+          {t('admin.audit.title')}
         </h1>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          Every cross-tenant action taken from the platform console, including impersonation.
-        </p>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t('admin.audit.subtitle')}</p>
       </div>
 
       {loading ? (
-        <p className="text-sm text-zinc-400">Loading…</p>
+        <p className="text-sm text-zinc-400">{t('common.loading')}</p>
       ) : error ? (
         <p className="text-sm text-red-500">{error}</p>
       ) : entries.length === 0 ? (
         <p className="rounded border border-dashed border-zinc-300 px-4 py-8 text-center text-sm text-zinc-400 dark:border-zinc-700">
-          No platform actions recorded yet.
+          {t('admin.audit.empty')}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-                <th className="px-4 py-2">Action</th>
-                <th className="px-4 py-2">Admin</th>
-                <th className="px-4 py-2">Target</th>
-                <th className="px-4 py-2">When</th>
+                <th className="px-4 py-2">{t('admin.audit.colAction')}</th>
+                <th className="px-4 py-2">{t('admin.audit.colAdmin')}</th>
+                <th className="px-4 py-2">{t('admin.audit.colTarget')}</th>
+                <th className="px-4 py-2">{t('admin.audit.colWhen')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -119,7 +121,7 @@ export default function AdminAuditPage() {
                     )}
                   </td>
                   <td className="px-4 py-2 text-xs text-zinc-500 dark:text-zinc-400">
-                    {new Date(entry.createdAt).toLocaleString()}
+                    {formatDateTime(entry.createdAt)}
                   </td>
                 </tr>
               ))}
@@ -136,7 +138,7 @@ export default function AdminAuditPage() {
             onClick={handleLoadMore}
             type="button"
           >
-            {loadingMore ? 'Loading…' : 'Load more'}
+            {loadingMore ? t('common.loading') : t('admin.audit.loadMore')}
           </button>
         </div>
       )}

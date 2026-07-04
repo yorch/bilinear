@@ -6,6 +6,10 @@ This file provides guidance to AI Agents when working with code in this reposito
 
 A Linear-style issue tracker built with Next.js 16 (App Router), Apollo Server GraphQL, Prisma 7, PostgreSQL, MobX, and real-time sync via WebSocket + Redis Pub/Sub. Offline-first with Dexie.js (IndexedDB) client cache.
 
+### Recently shipped (2026-07-04)
+
+- **i18n follow-ups** — (1) transactional emails are now localized: every `send*Email` in `src/server/lib/email.ts` takes a `locale` resolved via `emailT()`, sourced from the new `User.locale` column (written by the `userUpdateLocale` mutation, fired fire-and-forget by `LocaleProvider.setLocale` so cookie/UI and DB/email stay in sync). (2) The `/admin` platform console is fully translated under the `admin.*` namespace. (3) New `useFormatters()` hook (`src/hooks/use-formatters.ts`) bundles locale-bound date/relative-time formatters. See PATTERNS.md §75.1 and DATABASE_SCHEMA.md §2.1.
+
 ### Recently shipped (2026-07-03)
 
 - **Platform admin console** — the first cross-tenant privilege in the app. New `User.isPlatformAdmin` flag (first user in an empty DB is auto-bootstrapped), org suspension (`suspendedAt`/`suspendedReason`) and a `platform_audit_logs` trail. `requirePlatformAdmin` gates a `PlatformAdminService` (tenant + user management, platform metrics) and the `(admin)` UI console at `/admin`. Impersonation via `/api/admin/impersonate[/stop]` issues a 30-min token carrying an `impersonatorId` claim; an `ImpersonationBanner` offers one-click exit. Suspension is enforced per-request in `extractAuthContext`. See PATTERNS.md §74 and DATABASE_SCHEMA.md §2.37.

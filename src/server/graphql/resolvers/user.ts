@@ -61,6 +61,25 @@ export const userResolvers = {
       return { success: true, user };
     },
 
+    userUpdateLocale: async (
+      _parent: unknown,
+      { locale }: { locale: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      try {
+        const user = await ctx.services.user.updateLocale(ctx.userId, locale);
+        return { success: true, user };
+      } catch (err) {
+        if ((err as Error).name === 'InvalidLocaleError') {
+          throw new GraphQLError((err as Error).message, {
+            extensions: { code: 'BAD_USER_INPUT' },
+          });
+        }
+        throw err;
+      }
+    },
+
     userUpdateNotificationPreferences: async (
       _parent: unknown,
       { emailNotificationsEnabled }: { emailNotificationsEnabled: boolean },

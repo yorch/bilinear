@@ -98,7 +98,9 @@ export class AuthService {
       });
     }
 
-    await sendMagicLinkEmail(email, code);
+    // Localize to a returning user's saved preference; brand-new accounts have
+    // no stored locale yet, so they fall back to the app default.
+    await sendMagicLinkEmail(email, code, user?.locale);
 
     return { success: true };
   }

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { fetchMetrics, type PlatformMetrics } from '@/lib/admin-api';
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
@@ -15,6 +16,7 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
 }
 
 export default function AdminDashboardPage() {
+  const t = useTranslations();
   const [metrics, setMetrics] = useState<PlatformMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,71 +45,73 @@ export default function AdminDashboardPage() {
   }, []);
 
   if (loading) {
-    return <p className="text-sm text-zinc-400">Loading platform metrics…</p>;
+    return <p className="text-sm text-zinc-400">{t('admin.dashboard.loading')}</p>;
   }
   if (error || !metrics) {
-    return <p className="text-sm text-red-500">{error ?? 'Failed to load metrics.'}</p>;
+    return <p className="text-sm text-red-500">{error ?? t('admin.dashboard.loadError')}</p>;
   }
 
   return (
     <div className="flex flex-col gap-8">
       <div>
         <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-          Platform overview
+          {t('admin.dashboard.title')}
         </h1>
         <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          Cross-tenant metrics across every organization in this deployment.
+          {t('admin.dashboard.subtitle')}
         </p>
       </div>
 
       <section>
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
-          Organizations
+          {t('admin.dashboard.organizations')}
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard label="Total" value={metrics.totalOrgs} />
-          <StatCard label="Active" value={metrics.activeOrgs} />
-          <StatCard label="Suspended" value={metrics.suspendedOrgs} />
+          <StatCard label={t('admin.dashboard.total')} value={metrics.totalOrgs} />
+          <StatCard label={t('admin.dashboard.active')} value={metrics.activeOrgs} />
+          <StatCard label={t('admin.dashboard.suspended')} value={metrics.suspendedOrgs} />
           <StatCard
-            label="New (30d)"
-            sub={`${metrics.newOrgs7d} in last 7d`}
+            label={t('admin.dashboard.new30d')}
+            sub={t('admin.dashboard.inLast7d', { count: metrics.newOrgs7d })}
             value={metrics.newOrgs30d}
           />
         </div>
       </section>
 
       <section>
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">Users</h2>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+          {t('admin.dashboard.users')}
+        </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard label="Total" value={metrics.totalUsers} />
-          <StatCard label="Active" value={metrics.activeUsers} />
-          <StatCard label="Suspended" value={metrics.suspendedUsers} />
-          <StatCard label="Platform admins" value={metrics.platformAdmins} />
+          <StatCard label={t('admin.dashboard.total')} value={metrics.totalUsers} />
+          <StatCard label={t('admin.dashboard.active')} value={metrics.activeUsers} />
+          <StatCard label={t('admin.dashboard.suspended')} value={metrics.suspendedUsers} />
+          <StatCard label={t('admin.dashboard.platformAdmins')} value={metrics.platformAdmins} />
         </div>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard
-            label="New users (30d)"
-            sub={`${metrics.newUsers7d} in last 7d`}
+            label={t('admin.dashboard.newUsers30d')}
+            sub={t('admin.dashboard.inLast7d', { count: metrics.newUsers7d })}
             value={metrics.newUsers30d}
           />
-          <StatCard label="Total issues" value={metrics.totalIssues} />
+          <StatCard label={t('admin.dashboard.totalIssues')} value={metrics.totalIssues} />
         </div>
       </section>
 
       <section>
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
-          Most active organizations
+          {t('admin.dashboard.mostActiveOrgs')}
         </h2>
         {metrics.topOrgs.length === 0 ? (
-          <p className="text-sm text-zinc-400">No organizations yet.</p>
+          <p className="text-sm text-zinc-400">{t('admin.dashboard.noOrgs')}</p>
         ) : (
           <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-                  <th className="px-4 py-2">Organization</th>
-                  <th className="px-4 py-2 text-right">Members</th>
-                  <th className="px-4 py-2 text-right">Issues</th>
+                  <th className="px-4 py-2">{t('admin.dashboard.colOrganization')}</th>
+                  <th className="px-4 py-2 text-right">{t('admin.dashboard.colMembers')}</th>
+                  <th className="px-4 py-2 text-right">{t('admin.dashboard.colIssues')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">

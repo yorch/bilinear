@@ -1,4 +1,120 @@
 {
+  "admin": {
+    "audit": {
+      "colAction": "Action",
+      "colAdmin": "Admin",
+      "colTarget": "Target",
+      "colWhen": "When",
+      "empty": "No platform actions recorded yet.",
+      "loadMore": "Load more",
+      "subtitle": "Every cross-tenant action taken from the platform console, including impersonation.",
+      "title": "Platform audit log"
+    },
+    "dashboard": {
+      "active": "Active",
+      "colIssues": "Issues",
+      "colMembers": "Members",
+      "colOrganization": "Organization",
+      "inLast7d": "{count} in last 7d",
+      "loadError": "Failed to load metrics.",
+      "loading": "Loading platform metrics…",
+      "mostActiveOrgs": "Most active organizations",
+      "new30d": "New (30d)",
+      "newUsers30d": "New users (30d)",
+      "noOrgs": "No organizations yet.",
+      "organizations": "Organizations",
+      "platformAdmins": "Platform admins",
+      "subtitle": "Cross-tenant metrics across every organization in this deployment.",
+      "suspended": "Suspended",
+      "title": "Platform overview",
+      "total": "Total",
+      "totalIssues": "Total issues",
+      "users": "Users"
+    },
+    "impersonation": {
+      "banner": "Impersonating this workspace — signed in from the platform console.",
+      "bannerAs": "Impersonating this workspace as {name} — signed in from the platform console.",
+      "stop": "Stop impersonating",
+      "stopping": "Stopping…"
+    },
+    "nav": {
+      "adminTitle": "Admin",
+      "audit": "Audit log",
+      "backToApp": "Back to app",
+      "dashboard": "Dashboard",
+      "platformBadge": "Platform",
+      "tenants": "Tenants",
+      "users": "Users"
+    },
+    "tenants": {
+      "archivedToast": "Archived {name}",
+      "backBreadcrumb": "← Tenants",
+      "backToTenants": "← Back to tenants",
+      "colActions": "Actions",
+      "colCreated": "Created",
+      "colIssues": "Issues",
+      "colMembers": "Members",
+      "colOrganization": "Organization",
+      "colStatus": "Status",
+      "createdPrefix": "created",
+      "deleteConfirm": "Delete (archive) \"{name}\"? Members lose access immediately. Data is retained and this can be undone from the database.",
+      "deleteConfirmDetail": "Delete (archive) \"{name}\"? Members lose access immediately. Data is retained.",
+      "empty": "No tenants found.",
+      "impersonate": "Impersonate",
+      "impersonateOwnerActive": "Sign in as this owner",
+      "impersonateOwnerInactive": "Tenant is not active",
+      "includeArchived": "Include archived",
+      "loadingDetail": "Loading tenant…",
+      "noOwners": "No owners.",
+      "notFound": "Tenant not found.",
+      "owners": "Owners",
+      "restore": "Restore",
+      "restoredToast": "Restored {name}",
+      "searchPlaceholder": "Search name or URL key",
+      "statIssues": "Issues",
+      "statMembers": "Members",
+      "statProjects": "Projects",
+      "statTeams": "Teams",
+      "status": {
+        "active": "Active",
+        "archived": "Archived",
+        "suspended": "Suspended"
+      },
+      "subtitle": "Every organization in this deployment. Suspend to lock members out without deleting data.",
+      "suspend": "Suspend",
+      "suspendedReasonLabel": "Suspended: {reason}",
+      "suspendedToast": "Suspended {name}",
+      "suspendPrompt": "Suspend \"{name}\"? Optional reason:",
+      "title": "Tenants"
+    },
+    "users": {
+      "adminBadge": "Admin",
+      "adminGrantedToast": "Platform admin granted",
+      "adminRevokedToast": "Platform admin revoked",
+      "colActions": "Actions",
+      "colOrganizations": "Organizations",
+      "colStatus": "Status",
+      "colUser": "User",
+      "empty": "No users found.",
+      "impersonate": "Impersonate",
+      "impersonateActive": "Sign in as this user",
+      "impersonateNoOrg": "No organization to impersonate into",
+      "makeAdmin": "Make admin",
+      "noOrgToImpersonate": "User has no organization to impersonate into",
+      "pickOrgPrompt": "Impersonate {name} in which org?",
+      "reactivate": "Reactivate",
+      "reactivatedToast": "Reactivated {name}",
+      "revokeAdmin": "Revoke admin",
+      "revokeAdminConfirm": "Revoke platform-admin from {name}?",
+      "searchPlaceholder": "Search name or email",
+      "statusActive": "Active",
+      "statusSuspended": "Suspended",
+      "subtitle": "Every account across all organizations. Suspend to block sign-in globally.",
+      "suspend": "Suspend",
+      "suspendedToast": "Suspended {name}",
+      "title": "Users"
+    }
+  },
   "analytics": {
     "insights": {
       "avgTimeInState": "Avg time in state",
@@ -376,6 +492,40 @@
       "taskList": "Task list",
       "underline": "Underline"
     }
+  },
+  "email": {
+    "assignment": {
+      "body": "{actor} assigned you to an issue:",
+      "subject": "You were assigned to {identifier}: {title}",
+      "text": "{actor} assigned you to {identifier}: {title}\n\n{url}"
+    },
+    "comment": {
+      "body": "{actor} commented on {issueLink}:",
+      "subject": "{actor} commented on {identifier}: {title}",
+      "text": "{actor} commented on {identifier}: {title}\n{excerpt}\n{url}"
+    },
+    "footer": "You're receiving this because you have notifications enabled. To stop, turn off email notifications in your account settings.",
+    "magicLink": {
+      "clickHere": "click here to sign in",
+      "codeIntro": "Your sign-in code is:",
+      "expiry": "This code expires in 15 minutes. If you didn't request this, you can safely ignore this email.",
+      "heading": "Sign in to {appName}",
+      "or": "Or",
+      "subject": "Your sign-in code: {code}",
+      "textBody": "Your sign-in code is: {code}\n\nOr click the link below:\n{url}\n\nThis code expires in 15 minutes."
+    },
+    "mention": {
+      "body": "{actor} mentioned you in {issueLink}:",
+      "subject": "{actor} mentioned you in {identifier}: {title}",
+      "text": "{actor} mentioned you in {identifier}: {title}\n{excerpt}\n{url}"
+    },
+    "statusChange": {
+      "body": "{actor} updated the status of {issueLink}:",
+      "subject": "{identifier} moved to {state}",
+      "text": "{actor} moved {identifier}: {title} from {oldState} to {newState}.\n\n{url}"
+    },
+    "viewComment": "View comment",
+    "viewIssue": "View issue"
   },
   "errors": {
     "errorRef": "Error ref:",

@@ -1,3 +1,4 @@
+import { isLocale } from '@/lib/i18n';
 import type { PrismaClient, User } from '../../generated/prisma';
 
 /**
@@ -106,6 +107,24 @@ export class UserService {
       data: { lastSeen: new Date() },
       where: { id: userId },
     });
+  }
+
+  /**
+   * Persist the user's language preference so transactional emails (which have
+   * no browser locale cookie) can be localized. Ignores unsupported values.
+   */
+  async updateLocale(userId: string, locale: string): Promise<User> {
+    if (!isLocale(locale)) {
+      throw new InvalidLocaleError(locale);
+    }
+    return this.prisma.user.update({ data: { locale }, where: { id: userId } });
+  }
+}
+
+export class InvalidLocaleError extends Error {
+  constructor(locale: string) {
+    super(`Unsupported locale: ${locale}`);
+    this.name = 'InvalidLocaleError';
   }
 }
 

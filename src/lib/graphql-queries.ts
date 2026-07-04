@@ -521,3 +521,14 @@ export const INITIATIVE_UPDATE_EDIT_MUTATION = `
     }
   }
 `;
+
+// ── User preferences ──────────────────────────────────────────────────────
+
+export const USER_UPDATE_LOCALE_MUTATION = `
+  mutation UserUpdateLocale($locale: String!) {
+    userUpdateLocale(locale: $locale) {
+      success
+      user { id locale }
+    }
+  }
+`;

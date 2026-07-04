@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import {
   fetchUsers,
   type PlatformUser,
@@ -13,7 +14,10 @@ import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 
 /** Choose which org to impersonate into when a user belongs to several. */
-function pickOrg(user: PlatformUser): PlatformUser['organizations'][number] | null {
+function pickOrg(
+  user: PlatformUser,
+  t: ReturnType<typeof useTranslations>,
+): PlatformUser['organizations'][number] | null {
   if (user.organizations.length === 0) {
     return null;
   }
@@ -21,7 +25,10 @@ function pickOrg(user: PlatformUser): PlatformUser['organizations'][number] | nu
     return user.organizations[0];
   }
   const list = user.organizations.map((o, i) => `${i + 1}. ${o.name} (${o.role})`).join('\n');
-  const choice = window.prompt(`Impersonate ${user.displayName} in which org?\n${list}`, '1');
+  const choice = window.prompt(
+    `${t('admin.users.pickOrgPrompt', { name: user.displayName })}\n${list}`,
+    '1',
+  );
   if (choice === null) {
     return null;
   }
@@ -30,6 +37,7 @@ function pickOrg(user: PlatformUser): PlatformUser['organizations'][number] | nu
 }
 
 export default function AdminUsersPage() {
+  const t = useTranslations();
   const [query, setQuery] = useState('');
   const [applied, setApplied] = useState('');
   const [users, setUsers] = useState<PlatformUser[]>([]);
@@ -68,27 +76,36 @@ export default function AdminUsersPage() {
   async function handleToggleActive(u: PlatformUser) {
     await withBusy(u.id, async () => {
       replaceRow(u.active ? await suspendUser(u.id) : await reactivateUser(u.id));
-      toast.success(u.active ? `Suspended ${u.displayName}` : `Reactivated ${u.displayName}`);
+      toast.success(
+        u.active
+          ? t('admin.users.suspendedToast', { name: u.displayName })
+          : t('admin.users.reactivatedToast', { name: u.displayName }),
+      );
     });
   }
 
   async function handleToggleAdmin(u: PlatformUser) {
-    if (u.isPlatformAdmin && !window.confirm(`Revoke platform-admin from ${u.displayName}?`)) {
+    if (
+      u.isPlatformAdmin &&
+      !window.confirm(t('admin.users.revokeAdminConfirm', { name: u.displayName }))
+    ) {
       return;
     }
     await withBusy(u.id, async () => {
       replaceRow(await setUserAdmin(u.id, !u.isPlatformAdmin));
-      toast.success(u.isPlatformAdmin ? 'Platform admin revoked' : 'Platform admin granted');
+      toast.success(
+        u.isPlatformAdmin ? t('admin.users.adminRevokedToast') : t('admin.users.adminGrantedToast'),
+      );
     });
   }
 
   async function handleImpersonate(u: PlatformUser) {
-    const org = pickOrg(u);
+    const org = pickOrg(u, t);
     if (!org) {
       if (u.organizations.length > 0) {
         return;
       }
-      toast.error('User has no organization to impersonate into');
+      toast.error(t('admin.users.noOrgToImpersonate'));
       return;
     }
     await withBusy(u.id, async () => {
@@ -101,10 +118,10 @@ export default function AdminUsersPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Users</h1>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          Every account across all organizations. Suspend to block sign-in globally.
-        </p>
+        <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          {t('admin.users.title')}
+        </h1>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t('admin.users.subtitle')}</p>
       </div>
 
       <form
@@ -117,34 +134,34 @@ export default function AdminUsersPage() {
         <input
           className="rounded border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
           onChange={e => setQuery(e.target.value)}
-          placeholder="Search name or email"
+          placeholder={t('admin.users.searchPlaceholder')}
           value={query}
         />
         <button
           className="rounded bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-700"
           type="submit"
         >
-          Search
+          {t('common.search')}
         </button>
       </form>
 
       {loading ? (
-        <p className="text-sm text-zinc-400">Loading…</p>
+        <p className="text-sm text-zinc-400">{t('common.loading')}</p>
       ) : error ? (
         <p className="text-sm text-red-500">{error}</p>
       ) : users.length === 0 ? (
         <p className="rounded border border-dashed border-zinc-300 px-4 py-8 text-center text-sm text-zinc-400 dark:border-zinc-700">
-          No users found.
+          {t('admin.users.empty')}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-                <th className="px-4 py-2">User</th>
-                <th className="px-4 py-2">Organizations</th>
-                <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2 text-right">Actions</th>
+                <th className="px-4 py-2">{t('admin.users.colUser')}</th>
+                <th className="px-4 py-2">{t('admin.users.colOrganizations')}</th>
+                <th className="px-4 py-2">{t('admin.users.colStatus')}</th>
+                <th className="px-4 py-2 text-right">{t('admin.users.colActions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -157,7 +174,7 @@ export default function AdminUsersPage() {
                       </p>
                       {u.isPlatformAdmin && (
                         <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400">
-                          Admin
+                          {t('admin.users.adminBadge')}
                         </span>
                       )}
                     </div>
@@ -189,7 +206,7 @@ export default function AdminUsersPage() {
                           : 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400',
                       )}
                     >
-                      {u.active ? 'Active' : 'Suspended'}
+                      {u.active ? t('admin.users.statusActive') : t('admin.users.statusSuspended')}
                     </span>
                   </td>
                   <td className="px-4 py-2">
@@ -200,12 +217,12 @@ export default function AdminUsersPage() {
                         onClick={() => handleImpersonate(u)}
                         title={
                           u.organizations.length === 0
-                            ? 'No organization to impersonate into'
-                            : 'Sign in as this user'
+                            ? t('admin.users.impersonateNoOrg')
+                            : t('admin.users.impersonateActive')
                         }
                         type="button"
                       >
-                        Impersonate
+                        {t('admin.users.impersonate')}
                       </button>
                       <button
                         className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
@@ -213,7 +230,9 @@ export default function AdminUsersPage() {
                         onClick={() => handleToggleAdmin(u)}
                         type="button"
                       >
-                        {u.isPlatformAdmin ? 'Revoke admin' : 'Make admin'}
+                        {u.isPlatformAdmin
+                          ? t('admin.users.revokeAdmin')
+                          : t('admin.users.makeAdmin')}
                       </button>
                       <button
                         className={cn(
@@ -226,7 +245,7 @@ export default function AdminUsersPage() {
                         onClick={() => handleToggleActive(u)}
                         type="button"
                       >
-                        {u.active ? 'Suspend' : 'Reactivate'}
+                        {u.active ? t('admin.users.suspend') : t('admin.users.reactivate')}
                       </button>
                     </div>
                   </td>

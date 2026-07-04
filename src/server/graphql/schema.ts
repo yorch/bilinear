@@ -28,6 +28,8 @@ export const typeDefs = `
     statusLabel: String
     statusUntilAt: DateTime
     emailNotificationsEnabled: Boolean!
+    "Persisted language preference (app locale, e.g. 'en' / 'es'); null if never set."
+    locale: String
     calendarFeedUrl: String
     createdAt: DateTime!
     updatedAt: DateTime!
@@ -1825,6 +1827,10 @@ export const typeDefs = `
 
     # User notification preferences
     userUpdateNotificationPreferences(emailNotificationsEnabled: Boolean!): UserPayload!
+
+    # Persist the user's language preference (used to localize transactional
+    # emails, which have no access to the browser locale cookie).
+    userUpdateLocale(locale: String!): UserPayload!
 
     # Rotate the per-user iCal feed token. Returns the updated user so the
     # caller can immediately display the new feed URL.

@@ -1,4 +1,120 @@
 {
+  "admin": {
+    "audit": {
+      "colAction": "Acción",
+      "colAdmin": "Administrador",
+      "colTarget": "Objetivo",
+      "colWhen": "Cuándo",
+      "empty": "Todavía no se registraron acciones de la plataforma.",
+      "loadMore": "Cargar más",
+      "subtitle": "Cada acción entre organizaciones realizada desde la consola de la plataforma, incluida la suplantación.",
+      "title": "Registro de auditoría de la plataforma"
+    },
+    "dashboard": {
+      "active": "Activas",
+      "colIssues": "Tareas",
+      "colMembers": "Miembros",
+      "colOrganization": "Organización",
+      "inLast7d": "{count} en los últimos 7d",
+      "loadError": "No se pudieron cargar las métricas.",
+      "loading": "Cargando métricas de la plataforma…",
+      "mostActiveOrgs": "Organizaciones más activas",
+      "new30d": "Nuevas (30d)",
+      "newUsers30d": "Usuarios nuevos (30d)",
+      "noOrgs": "Todavía no hay organizaciones.",
+      "organizations": "Organizaciones",
+      "platformAdmins": "Administradores de plataforma",
+      "subtitle": "Métricas de todas las organizaciones de este despliegue.",
+      "suspended": "Suspendidas",
+      "title": "Resumen de la plataforma",
+      "total": "Total",
+      "totalIssues": "Total de tareas",
+      "users": "Usuarios"
+    },
+    "impersonation": {
+      "banner": "Estás suplantando este espacio de trabajo — con sesión iniciada desde la consola de la plataforma.",
+      "bannerAs": "Estás suplantando este espacio de trabajo como {name} — con sesión iniciada desde la consola de la plataforma.",
+      "stop": "Dejar de suplantar",
+      "stopping": "Deteniendo…"
+    },
+    "nav": {
+      "adminTitle": "Administración",
+      "audit": "Registro de auditoría",
+      "backToApp": "Volver a la app",
+      "dashboard": "Panel",
+      "platformBadge": "Plataforma",
+      "tenants": "Organizaciones",
+      "users": "Usuarios"
+    },
+    "tenants": {
+      "archivedToast": "Se archivó {name}",
+      "backBreadcrumb": "← Organizaciones",
+      "backToTenants": "← Volver a las organizaciones",
+      "colActions": "Acciones",
+      "colCreated": "Creada",
+      "colIssues": "Tareas",
+      "colMembers": "Miembros",
+      "colOrganization": "Organización",
+      "colStatus": "Estado",
+      "createdPrefix": "creada el",
+      "deleteConfirm": "¿Eliminar (archivar) \"{name}\"? Los miembros pierden el acceso de inmediato. Los datos se conservan y esto se puede deshacer desde la base de datos.",
+      "deleteConfirmDetail": "¿Eliminar (archivar) \"{name}\"? Los miembros pierden el acceso de inmediato. Los datos se conservan.",
+      "empty": "No se encontraron organizaciones.",
+      "impersonate": "Suplantar",
+      "impersonateOwnerActive": "Iniciar sesión como este propietario",
+      "impersonateOwnerInactive": "La organización no está activa",
+      "includeArchived": "Incluir archivadas",
+      "loadingDetail": "Cargando organización…",
+      "noOwners": "Sin propietarios.",
+      "notFound": "Organización no encontrada.",
+      "owners": "Propietarios",
+      "restore": "Restaurar",
+      "restoredToast": "Se restauró {name}",
+      "searchPlaceholder": "Buscar por nombre o clave de URL",
+      "statIssues": "Tareas",
+      "statMembers": "Miembros",
+      "statProjects": "Proyectos",
+      "statTeams": "Equipos",
+      "status": {
+        "active": "Activa",
+        "archived": "Archivada",
+        "suspended": "Suspendida"
+      },
+      "subtitle": "Todas las organizaciones de este despliegue. Suspende para bloquear el acceso de los miembros sin eliminar datos.",
+      "suspend": "Suspender",
+      "suspendedReasonLabel": "Suspendida: {reason}",
+      "suspendedToast": "Se suspendió {name}",
+      "suspendPrompt": "¿Suspender \"{name}\"? Motivo opcional:",
+      "title": "Organizaciones"
+    },
+    "users": {
+      "adminBadge": "Admin",
+      "adminGrantedToast": "Se otorgó el administrador de plataforma",
+      "adminRevokedToast": "Se revocó el administrador de plataforma",
+      "colActions": "Acciones",
+      "colOrganizations": "Organizaciones",
+      "colStatus": "Estado",
+      "colUser": "Usuario",
+      "empty": "No se encontraron usuarios.",
+      "impersonate": "Suplantar",
+      "impersonateActive": "Iniciar sesión como este usuario",
+      "impersonateNoOrg": "No hay ninguna organización en la que suplantar",
+      "makeAdmin": "Hacer administrador",
+      "noOrgToImpersonate": "El usuario no tiene ninguna organización en la que suplantar",
+      "pickOrgPrompt": "¿En qué organización quieres suplantar a {name}?",
+      "reactivate": "Reactivar",
+      "reactivatedToast": "Se reactivó a {name}",
+      "revokeAdmin": "Revocar administrador",
+      "revokeAdminConfirm": "¿Revocar el rol de administrador de plataforma a {name}?",
+      "searchPlaceholder": "Buscar por nombre o correo",
+      "statusActive": "Activo",
+      "statusSuspended": "Suspendido",
+      "subtitle": "Todas las cuentas de todas las organizaciones. Suspende para bloquear el inicio de sesión de forma global.",
+      "suspend": "Suspender",
+      "suspendedToast": "Se suspendió a {name}",
+      "title": "Usuarios"
+    }
+  },
   "analytics": {
     "insights": {
       "avgTimeInState": "Tiempo promedio en estado",
@@ -376,6 +492,40 @@
       "taskList": "Lista de tareas",
       "underline": "Subrayado"
     }
+  },
+  "email": {
+    "assignment": {
+      "body": "{actor} te asignó a una tarea:",
+      "subject": "Se te asignó a {identifier}: {title}",
+      "text": "{actor} te asignó a {identifier}: {title}\n\n{url}"
+    },
+    "comment": {
+      "body": "{actor} comentó en {issueLink}:",
+      "subject": "{actor} comentó en {identifier}: {title}",
+      "text": "{actor} comentó en {identifier}: {title}\n{excerpt}\n{url}"
+    },
+    "footer": "Recibes este correo porque tienes las notificaciones activadas. Para dejar de recibirlos, desactiva las notificaciones por correo en la configuración de tu cuenta.",
+    "magicLink": {
+      "clickHere": "haz clic aquí para iniciar sesión",
+      "codeIntro": "Tu código de inicio de sesión es:",
+      "expiry": "Este código caduca en 15 minutos. Si no lo solicitaste, puedes ignorar este correo con seguridad.",
+      "heading": "Inicia sesión en {appName}",
+      "or": "O",
+      "subject": "Tu código de inicio de sesión: {code}",
+      "textBody": "Tu código de inicio de sesión es: {code}\n\nO haz clic en el siguiente enlace:\n{url}\n\nEste código caduca en 15 minutos."
+    },
+    "mention": {
+      "body": "{actor} te mencionó en {issueLink}:",
+      "subject": "{actor} te mencionó en {identifier}: {title}",
+      "text": "{actor} te mencionó en {identifier}: {title}\n{excerpt}\n{url}"
+    },
+    "statusChange": {
+      "body": "{actor} actualizó el estado de {issueLink}:",
+      "subject": "{identifier} pasó a {state}",
+      "text": "{actor} movió {identifier}: {title} de {oldState} a {newState}.\n\n{url}"
+    },
+    "viewComment": "Ver comentario",
+    "viewIssue": "Ver tarea"
   },
   "errors": {
     "errorRef": "Referencia de error:",

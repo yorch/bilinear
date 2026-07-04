@@ -86,6 +86,12 @@ model User {
 
   emailNotificationsEnabled Boolean @default(true) @map("email_notifications_enabled")
 
+  // Persisted UI/email language preference (app locale, e.g. "en" / "es").
+  // Written when the user switches language; null = never set -> fall back to the
+  // app default. Used server-side to localize transactional emails, which have
+  // no access to the browser's locale cookie.
+  locale String? @db.VarChar(10)
+
   // Cross-tenant platform operator. Grants access to the /admin console
   // (tenant + user management, impersonation, platform metrics). Independent
   // of org/team roles — this is a global privilege, not org-scoped. The first
