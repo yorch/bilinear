@@ -2,6 +2,14 @@
 
 _Date: 2026-07-04. Method: six parallel code audits (design system, navigation/IA, core issue flows, accessibility, feedback/states, responsive+i18n) over `src/components` (~92 components), `src/app`, and the sync/i18n/toast infrastructure. All headline findings were re-verified against the source before inclusion; file:line references point at the audited revision (`4855b34`)._
 
+> **Progress (same branch, 2026-07-04):** Phases 0–2 of the roadmap in §8 are implemented, followed by a full code-review + simplify pass over the changes.
+>
+> - **Phase 0** — all nine §1 bugs fixed (dead sidebar links + new saved-view route, destructive token, palette submenus wired + persisted, `showModal()`, board due dates, `--font-sans`, global shortcuts + `GlobalCreateIssueModal`, automations link).
+> - **Phase 1** — toast wrapper extended (`undo`/`promise`/`loading`/`dismiss`); every silent optimistic rollback now toasts; archive undo (new `issueUnarchive` client mutation); shared `ConfirmDialog` gating issue delete; `ConnectionStatus` pill + `ConnectionToasts`; `global-error.tsx` + `not-found.tsx`; `TransactionQueue` default error handler for callback-less permanent failures.
+> - **Phase 2** — `SelectPopover`/`SearchableSelectPopover` ARIA + keyboard + focus management with a coherent Escape contract (an open popover consumes the keypress; parent surfaces ignore handled Escapes); new `Input`/`Textarea`/`Switch` primitives (switches fully migrated; create-project/team/save-view modals on `Input`/`Textarea`); `prefers-reduced-motion`; skip link; board `KeyboardSensor` with labeled drag handles; shared `useIssueCreate`/`useIssueUpdate` hooks and `toIssueUsers`/`toIssueLabels` mappers replacing per-page copies.
+>
+> Still open: Phase 3 (token migration), Phase 4 (flow polish — includes `ConfirmDialog`/`SettingToggleRow` adoption across settings, remaining `Input` call sites), Phase 5 (mobile), Phase 6 (i18n round-out), plus the Phase 1 leftovers (inline retry for swallowed fetch errors, bootstrap-error retry, pending-write indicators, in-modal team picker for the global create modal).
+
 ---
 
 ## Executive summary
