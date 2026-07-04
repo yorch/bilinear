@@ -6,9 +6,12 @@ import { useState } from 'react';
 import { DeleteUpdateButton } from '@/components/shared/delete-update-button';
 import { CreateUpdateForm, EditUpdateForm } from '@/components/shared/update-forms';
 import { Badge } from '@/components/ui/badge';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
-import { PROJECT_HEALTH_CONFIG } from '@/lib/project-constants';
+import { INTL_LOCALES } from '@/lib/i18n';
+import { PROJECT_HEALTH_CONFIG, PROJECT_HEALTH_LABEL_KEYS } from '@/lib/project-constants';
 import { formatRelativeTime } from '@/lib/utils';
+import { useLocale } from '@/providers/locale-provider';
 import { useStore } from '@/providers/store-provider';
 import { UserAvatar } from '../ui/user-avatar';
 
@@ -21,6 +24,8 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
   projectId,
   viewerId,
 }: ProjectUpdatesSectionProps) {
+  const t = useTranslations();
+  const { locale } = useLocale();
   const { projectStore, userStore } = useStore();
   const updates = projectStore.getUpdates(projectId);
 
@@ -41,7 +46,7 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
     <div className="mt-6">
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-          Updates ({updates.length})
+          {t('projects.updatesCount', { count: updates.length })}
         </h3>
         {!creating && !editingId && (
           <button
@@ -50,7 +55,7 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
             type="button"
           >
             <Plus className="h-3.5 w-3.5" />
-            Add update
+            {t('projects.addUpdate')}
           </button>
         )}
       </div>
@@ -66,7 +71,7 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
               { input: { body, health: health || null, projectId } },
             );
             if (res.errors?.length) {
-              throw new Error('mutation failed');
+              throw new Error(t('common.somethingWentWrong'));
             }
           }}
           showNone
@@ -74,9 +79,7 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
       )}
 
       {updates.length === 0 && !creating ? (
-        <p className="py-6 text-center text-xs text-zinc-400">
-          No updates yet. Add one to share project health and progress.
-        </p>
+        <p className="py-6 text-center text-xs text-zinc-400">{t('projects.noUpdatesYet')}</p>
       ) : (
         <div className="mt-3 flex flex-col gap-3">
           {updates.map(update => {
@@ -99,7 +102,7 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
                       { id: update.id, input: { body, health: health || null } },
                     );
                     if (res.errors?.length) {
-                      throw new Error('mutation failed');
+                      throw new Error(t('common.somethingWentWrong'));
                     }
                   }}
                   showNone
@@ -126,16 +129,16 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
                       />
                     )}
                     <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                      {author?.displayName ?? 'Unknown'}
+                      {author?.displayName ?? t('projects.unknownAuthor')}
                     </span>
                     {health && (
                       <Badge className={health.color} variant="solid">
-                        {health.label}
+                        {t(PROJECT_HEALTH_LABEL_KEYS[update.health ?? ''])}
                       </Badge>
                     )}
                     <span className="text-xs text-zinc-400">
-                      {formatRelativeTime(update.createdAt)}
-                      {update.editedAt && ' (edited)'}
+                      {formatRelativeTime(update.createdAt, t, INTL_LOCALES[locale])}
+                      {update.editedAt && ` (${t('projects.edited')})`}
                     </span>
                   </div>
                   {isOwner && (
@@ -143,7 +146,7 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
                       <button
                         className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
                         onClick={() => openEdit(update.id)}
-                        title="Edit"
+                        title={t('common.edit')}
                         type="button"
                       >
                         <Pencil className="h-3.5 w-3.5" />

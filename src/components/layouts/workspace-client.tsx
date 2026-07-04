@@ -8,6 +8,7 @@ import { ShortcutHelpModal } from '@/components/layouts/shortcut-help-modal';
 import { CreateTeamModal } from '@/components/teams/create-team-modal';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useRecentItems } from '@/hooks/use-recent-items';
+import { useTranslations } from '@/hooks/use-translations';
 import type { DBTeam, DBWorkflowState } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { TEAM_CREATE_MUTATION } from '@/lib/graphql-queries';
@@ -33,6 +34,7 @@ export const WorkspaceClient = observer(function WorkspaceClient({
   children: React.ReactNode;
 }) {
   const { uiStore, teamStore, workflowStateStore } = useStore();
+  const t = useTranslations();
   const params = useParams<{ workspace: string }>();
   const workspaceKey = params.workspace;
   const { items: recentItems } = useRecentItems(workspaceKey);
@@ -49,7 +51,7 @@ export const WorkspaceClient = observer(function WorkspaceClient({
     async (input: { name: string; key: string; description?: string; private: boolean }) => {
       const result = await gql(TEAM_CREATE_MUTATION, { input });
       if (result.errors?.length) {
-        throw new Error(gqlError(result, 'Failed to create team'));
+        throw new Error(gqlError(result, t('teams.failedToCreate')));
       }
       const payload = result.data?.teamCreate as {
         team?: DBTeam & { states?: DBWorkflowState[] };
@@ -68,7 +70,7 @@ export const WorkspaceClient = observer(function WorkspaceClient({
         }
       }
     },
-    [teamStore, workflowStateStore, workspaceKey, router],
+    [teamStore, workflowStateStore, workspaceKey, router, t],
   );
 
   return (

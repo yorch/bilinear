@@ -2,7 +2,10 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useRef } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
+import { INTL_LOCALES } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { useLocale } from '@/providers/locale-provider';
 
 interface RoadmapProject {
   color: string;
@@ -30,30 +33,30 @@ interface Props {
   roadmap: RoadmapMeta;
 }
 
-const STATUS_BADGES: Record<string, { cls: string; label: string }> = {
+const STATUS_BADGES: Record<string, { cls: string; labelKey: string }> = {
   backlog: {
     cls: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400',
-    label: 'Backlog',
+    labelKey: 'roadmap.public.status.backlog',
   },
   cancelled: {
     cls: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
-    label: 'Cancelled',
+    labelKey: 'roadmap.public.status.cancelled',
   },
   completed: {
     cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-    label: 'Completed',
+    labelKey: 'roadmap.public.status.completed',
   },
   inProgress: {
     cls: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
-    label: 'In Progress',
+    labelKey: 'roadmap.public.status.inProgress',
   },
   paused: {
     cls: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-    label: 'Paused',
+    labelKey: 'roadmap.public.status.paused',
   },
   planned: {
     cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-    label: 'Planned',
+    labelKey: 'roadmap.public.status.planned',
   },
 };
 
@@ -64,18 +67,19 @@ const HEALTH_DOTS: Record<string, string> = {
   onTrack: 'bg-green-500',
 };
 
-function formatDate(d: Date | string | null): string | null {
+function formatDate(d: Date | string | null, intlLocale: string): string | null {
   if (!d) {
     return null;
   }
   const date = typeof d === 'string' ? new Date(d) : d;
-  return date.toLocaleDateString(undefined, {
+  return date.toLocaleDateString(intlLocale, {
     month: 'short',
     year: 'numeric',
   });
 }
 
 function PasswordForm({ slug }: { slug: string }) {
+  const t = useTranslations();
   const router = useRouter();
   const searchParams = useSearchParams();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -92,15 +96,15 @@ function PasswordForm({ slug }: { slug: string }) {
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950 px-4">
       <div className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
         <h2 className="mb-1 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-          Password required
+          {t('roadmap.public.passwordRequired')}
         </h2>
         <p className="mb-6 text-sm text-zinc-500 dark:text-zinc-400">
-          This roadmap is password protected.
+          {t('roadmap.public.passwordProtected')}
         </p>
         <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
           <input
             className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-indigo-500 dark:focus:ring-indigo-800/40"
-            placeholder="Enter password"
+            placeholder={t('roadmap.public.enterPassword')}
             ref={inputRef}
             required
             type="password"
@@ -109,7 +113,7 @@ function PasswordForm({ slug }: { slug: string }) {
             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 dark:focus:ring-offset-zinc-900"
             type="submit"
           >
-            Continue
+            {t('roadmap.public.continue')}
           </button>
         </form>
       </div>
@@ -118,6 +122,8 @@ function PasswordForm({ slug }: { slug: string }) {
 }
 
 export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props) {
+  const t = useTranslations();
+  const { locale } = useLocale();
   if (requiresPassword) {
     return (
       <Suspense fallback={<div className="flex min-h-screen items-center justify-center" />}>
@@ -142,14 +148,14 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
         {/* Project grid */}
         {projects.length === 0 ? (
           <div className="rounded-xl border border-zinc-200 bg-white p-10 text-center dark:border-zinc-700 dark:bg-zinc-900">
-            <p className="text-sm text-zinc-400">No projects on this roadmap yet.</p>
+            <p className="text-sm text-zinc-400">{t('roadmap.public.noProjects')}</p>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {projects.map(project => {
               const statusInfo = STATUS_BADGES[project.statusType] ?? STATUS_BADGES.planned;
               const healthDot = project.health ? HEALTH_DOTS[project.health] : null;
-              const targetDateStr = formatDate(project.targetDate);
+              const targetDateStr = formatDate(project.targetDate, INTL_LOCALES[locale]);
               const progressPct = Math.round(project.progress * 100);
 
               return (
@@ -180,7 +186,7 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
                         statusInfo.cls,
                       )}
                     >
-                      {project.statusName ?? statusInfo.label}
+                      {project.statusName ?? t(statusInfo.labelKey)}
                     </span>
                     {healthDot && (
                       <span className="flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
@@ -190,7 +196,7 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
                     )}
                     {targetDateStr && (
                       <span className="text-xs text-zinc-400 dark:text-zinc-500">
-                        Target: {targetDateStr}
+                        {t('roadmap.public.target', { date: targetDateStr })}
                       </span>
                     )}
                   </div>
@@ -198,7 +204,9 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
                   {/* Progress bar */}
                   <div>
                     <div className="mb-1 flex items-center justify-between">
-                      <span className="text-xs text-zinc-400 dark:text-zinc-500">Progress</span>
+                      <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                        {t('roadmap.public.progress')}
+                      </span>
                       <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
                         {progressPct}%
                       </span>
@@ -215,7 +223,9 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
                   {project.milestoneCount > 0 && (
                     <p className="text-xs text-zinc-400 dark:text-zinc-500">
                       {project.milestoneCount}{' '}
-                      {project.milestoneCount === 1 ? 'milestone' : 'milestones'}
+                      {project.milestoneCount === 1
+                        ? t('roadmap.public.milestone')
+                        : t('roadmap.public.milestones')}
                     </p>
                   )}
                 </div>

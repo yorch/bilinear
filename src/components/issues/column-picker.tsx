@@ -3,16 +3,9 @@
 import { Settings2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useOutsideClick } from '@/hooks/use-outside-click';
+import { useTranslations } from '@/hooks/use-translations';
 import type { BuiltInColumn, ColumnKey } from '@/hooks/use-visible-columns';
 import type { DBCustomFieldDefinition } from '@/lib/db';
-
-const BUILT_IN_LABELS: { key: BuiltInColumn; label: string }[] = [
-  { key: 'labels', label: 'Labels' },
-  { key: 'dueDate', label: 'Due date' },
-  { key: 'assignee', label: 'Assignee' },
-  { key: 'cycle', label: 'Cycle' },
-  { key: 'estimate', label: 'Estimate' },
-];
 
 export function ColumnPicker({
   isVisible,
@@ -23,8 +16,17 @@ export function ColumnPicker({
   onToggle: (key: ColumnKey) => void;
   customFields?: DBCustomFieldDefinition[];
 }) {
+  const t = useTranslations();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  const BUILT_IN_LABELS: { key: BuiltInColumn; label: string }[] = [
+    { key: 'labels', label: t('issues.labels') },
+    { key: 'dueDate', label: t('issues.dueDate') },
+    { key: 'assignee', label: t('issues.assignee') },
+    { key: 'cycle', label: t('issues.cycle') },
+    { key: 'estimate', label: t('issues.estimate') },
+  ];
 
   useOutsideClick(ref, () => setOpen(false), open, true);
 
@@ -32,19 +34,19 @@ export function ColumnPicker({
     <div className="relative" ref={ref}>
       <button
         aria-expanded={open}
-        aria-label="Column picker"
+        aria-label={t('issues.columnPicker')}
         className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
         onClick={() => setOpen(v => !v)}
         type="button"
       >
         <Settings2 className="h-3.5 w-3.5" />
-        Columns
+        {t('issues.columns')}
       </button>
 
       {open && (
         <div className="absolute right-0 z-20 mt-1 w-56 rounded-lg border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
           <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-            Built-in
+            {t('issues.builtIn')}
           </p>
           {BUILT_IN_LABELS.map(({ key, label }) => (
             <CheckRow
@@ -57,7 +59,7 @@ export function ColumnPicker({
           {customFields && customFields.length > 0 && (
             <>
               <p className="mt-1 border-t border-zinc-100 px-2 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:border-zinc-800">
-                Custom fields
+                {t('issues.customFields')}
               </p>
               {customFields.map(def => {
                 const k: ColumnKey = `custom:${def.id}`;

@@ -1,6 +1,7 @@
 'use client';
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 
 export interface MentionItem {
@@ -28,6 +29,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
   { items, command },
   ref,
 ) {
+  const t = useTranslations();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
 
@@ -71,7 +73,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
   if (items.length === 0) {
     return (
       <div className="mention-popup rounded-md border border-zinc-200 bg-white p-2 text-xs text-zinc-400 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-        No results
+        {t('editor.noResults')}
       </div>
     );
   }

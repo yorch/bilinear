@@ -3,12 +3,14 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useTranslations } from '@/hooks/use-translations';
 import { installSessionCookies } from '@/lib/auth-session';
 import { gql } from '@/lib/graphql';
 import { EMAIL_VERIFY_MUTATION } from '@/lib/graphql-queries';
 
 export function VerifyCodeForm() {
   const router = useRouter();
+  const t = useTranslations();
   const searchParams = useSearchParams();
   const email = searchParams.get('email') ?? '';
   const prefillCode = searchParams.get('code') ?? '';
@@ -44,11 +46,7 @@ export function VerifyCodeForm() {
           message: string;
           extensions?: { code: string };
         };
-        setError(
-          err.extensions?.code === 'INVALID_CODE'
-            ? 'Invalid or expired code. Please try again.'
-            : err.message,
-        );
+        setError(err.extensions?.code === 'INVALID_CODE' ? t('auth.invalidCode') : err.message);
         return;
       }
 
@@ -63,7 +61,7 @@ export function VerifyCodeForm() {
 
       router.push('/');
     } catch {
-      setError('Something went wrong. Please try again.');
+      setError(t('common.somethingWentWrong'));
     } finally {
       setLoading(false);
     }
@@ -88,14 +86,14 @@ export function VerifyCodeForm() {
     <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
       {email && (
         <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
-          We sent a code to{' '}
+          {t('auth.weSentCodeTo')}{' '}
           <span className="font-medium text-zinc-900 dark:text-zinc-100">{email}</span>
         </p>
       )}
 
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="code">
-          Verification code
+          {t('auth.verificationCode')}
         </label>
         <input
           className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-center text-2xl font-mono tracking-[0.5em] text-zinc-900 placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-700 dark:focus:ring-zinc-100"
@@ -118,7 +116,7 @@ export function VerifyCodeForm() {
       )}
 
       <Button className="w-full" disabled={loading || code.length < 6} type="submit">
-        {loading ? 'Verifying…' : 'Verify code'}
+        {loading ? t('auth.verifying') : t('auth.verifyCode')}
       </Button>
 
       <button
@@ -126,7 +124,7 @@ export function VerifyCodeForm() {
         onClick={() => router.push(`/login`)}
         type="button"
       >
-        Use a different email
+        {t('auth.useDifferentEmail')}
       </button>
     </form>
   );

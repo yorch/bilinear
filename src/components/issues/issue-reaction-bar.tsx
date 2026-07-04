@@ -3,6 +3,7 @@
 import { Smile } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useOutsideClick } from '@/hooks/use-outside-click';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import {
   ISSUE_REACTION_ADD_MUTATION,
@@ -26,6 +27,7 @@ interface IssueReactionBarProps {
 }
 
 export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarProps) {
+  const t = useTranslations();
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [showPicker, setShowPicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -63,11 +65,11 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
         ? await gql(ISSUE_REACTION_REMOVE_MUTATION, { emoji, issueId })
         : await gql(ISSUE_REACTION_ADD_MUTATION, { emoji, issueId });
       if (res.errors?.length) {
-        throw new Error('mutation failed');
+        throw new Error(t('common.somethingWentWrong'));
       }
       await fetchReactions();
     } catch {
-      toast.error('Failed to update reaction');
+      toast.error(t('issueDetail.reactions.failedToUpdate'));
     }
   };
 
@@ -98,11 +100,11 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
             hasAny ? '' : 'flex items-center gap-1 px-2 text-xs',
           )}
           onClick={() => setShowPicker(v => !v)}
-          title="Add reaction"
+          title={t('issueDetail.reactions.addReaction')}
           type="button"
         >
           <Smile className="h-3.5 w-3.5" />
-          {!hasAny && <span>React</span>}
+          {!hasAny && <span>{t('issueDetail.reactions.react')}</span>}
         </button>
         {showPicker && (
           <div className="absolute left-0 top-7 z-50 flex gap-1 rounded-lg border border-zinc-200 bg-white p-1.5 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">

@@ -4,6 +4,7 @@ import { ExternalLink, Eye, EyeOff } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { useStore } from '@/providers/store-provider';
@@ -57,6 +58,7 @@ interface RoadmapSettings {
 }
 
 const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
+  const t = useTranslations();
   const { projectStore } = useStore();
 
   const [roadmap, setRoadmap] = useState<RoadmapSettings | null>(null);
@@ -140,9 +142,9 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
         setNewPassword('');
         setClearPassword(false);
       }
-      toast.success('Roadmap settings saved');
+      toast.success(t('roadmap.settings.saveSuccess'));
     } catch {
-      toast.error('Failed to save roadmap settings');
+      toast.error(t('roadmap.settings.saveError'));
     } finally {
       setSaving(false);
     }
@@ -155,9 +157,13 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
         id: projectId,
         visible: !currentlyVisible,
       });
-      toast.success(currentlyVisible ? 'Project removed from roadmap' : 'Project added to roadmap');
+      toast.success(
+        currentlyVisible
+          ? t('roadmap.settings.projectRemoved')
+          : t('roadmap.settings.projectAdded'),
+      );
     } catch {
-      toast.error('Failed to update project');
+      toast.error(t('roadmap.settings.projectUpdateError'));
     } finally {
       setTogglingProjectId(null);
     }
@@ -168,14 +174,16 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <div className="flex items-center border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
-        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Public Roadmap</h1>
+        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          {t('roadmap.settings.title')}
+        </h1>
       </div>
 
       <div className="mx-auto w-full max-w-2xl px-6 py-8 flex flex-col gap-8">
         {/* Settings form */}
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            Roadmap Settings
+            {t('roadmap.settings.sectionHeading')}
           </h2>
           <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
             {loading ? (
@@ -189,10 +197,10 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                      Public roadmap
+                      {t('roadmap.settings.publicRoadmap')}
                     </p>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      Allow anyone with the link to view your roadmap
+                      {t('roadmap.settings.publicRoadmapDescription')}
                     </p>
                   </div>
                   <button
@@ -214,13 +222,13 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                     className="text-xs font-medium text-zinc-600 dark:text-zinc-400"
                     htmlFor="roadmap-title"
                   >
-                    Title
+                    {t('roadmap.settings.titleLabel')}
                   </label>
                   <input
                     className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-indigo-500 dark:focus:ring-indigo-800/40"
                     id="roadmap-title"
                     onChange={e => setTitle(e.target.value)}
-                    placeholder="Product Roadmap"
+                    placeholder={t('roadmap.settings.titlePlaceholder')}
                     required
                     type="text"
                     value={title}
@@ -233,13 +241,13 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                     className="text-xs font-medium text-zinc-600 dark:text-zinc-400"
                     htmlFor="roadmap-description"
                   >
-                    Description
+                    {t('roadmap.settings.descriptionLabel')}
                   </label>
                   <textarea
                     className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-indigo-500 dark:focus:ring-indigo-800/40 resize-none"
                     id="roadmap-description"
                     onChange={e => setDescription(e.target.value)}
-                    placeholder="An optional description shown at the top of the roadmap"
+                    placeholder={t('roadmap.settings.descriptionPlaceholder')}
                     rows={2}
                     value={description}
                   />
@@ -251,7 +259,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                     className="text-xs font-medium text-zinc-600 dark:text-zinc-400"
                     htmlFor="roadmap-slug"
                   >
-                    Slug
+                    {t('roadmap.settings.slugLabel')}
                   </label>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-zinc-400 dark:text-zinc-500 shrink-0">
@@ -262,7 +270,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                       id="roadmap-slug"
                       onChange={e => setSlug(e.target.value)}
                       pattern="[a-z0-9-]+"
-                      placeholder="my-org"
+                      placeholder={t('roadmap.settings.slugPlaceholder')}
                       required
                       type="text"
                       value={slug}
@@ -276,7 +284,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                       target="_blank"
                     >
                       <ExternalLink className="h-3 w-3" />
-                      View public roadmap
+                      {t('roadmap.settings.viewPublicRoadmap')}
                     </Link>
                   )}
                 </div>
@@ -284,12 +292,12 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                 {/* Password */}
                 <div className="flex flex-col gap-2">
                   <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                    Password protection
+                    {t('roadmap.settings.passwordProtection')}
                   </p>
                   {roadmap?.hasPassword && !clearPassword ? (
                     <div className="flex items-center gap-3">
                       <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                        Password is set
+                        {t('roadmap.settings.passwordIsSet')}
                       </span>
                       <button
                         className="text-xs text-red-500 hover:text-red-600 dark:text-red-400"
@@ -299,33 +307,33 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                         }}
                         type="button"
                       >
-                        Remove password
+                        {t('roadmap.settings.removePassword')}
                       </button>
                     </div>
                   ) : (
                     <>
                       {clearPassword && (
                         <p className="text-xs text-amber-600 dark:text-amber-400">
-                          Password will be removed on save.{' '}
+                          {t('roadmap.settings.passwordWillBeRemoved')}{' '}
                           <button
                             className="underline"
                             onClick={() => setClearPassword(false)}
                             type="button"
                           >
-                            Cancel
+                            {t('common.cancel')}
                           </button>
                         </p>
                       )}
                       {!clearPassword && (
                         <>
                           <label className="sr-only" htmlFor="roadmap-password">
-                            New password
+                            {t('roadmap.settings.newPassword')}
                           </label>
                           <input
                             className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-indigo-500 dark:focus:ring-indigo-800/40"
                             id="roadmap-password"
                             onChange={e => setNewPassword(e.target.value)}
-                            placeholder="Set a new password (optional)"
+                            placeholder={t('roadmap.settings.newPasswordPlaceholder')}
                             type="password"
                             value={newPassword}
                           />
@@ -341,7 +349,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                     disabled={saving}
                     type="submit"
                   >
-                    {saving ? 'Saving…' : 'Save settings'}
+                    {saving ? t('common.saving') : t('roadmap.settings.saveSettings')}
                   </button>
                 </div>
               </form>
@@ -352,14 +360,16 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
         {/* Projects */}
         <section>
           <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            Projects on Roadmap
+            {t('roadmap.settings.projectsHeading')}
           </h2>
           <p className="mb-4 text-xs text-zinc-500 dark:text-zinc-400">
-            Toggle which projects appear on your public roadmap.
+            {t('roadmap.settings.projectsDescription')}
           </p>
           <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 overflow-hidden">
             {projects.length === 0 ? (
-              <p className="px-5 py-4 text-sm text-zinc-400">No active projects found.</p>
+              <p className="px-5 py-4 text-sm text-zinc-400">
+                {t('roadmap.settings.noActiveProjects')}
+              </p>
             ) : (
               <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {projects.map(project => {
@@ -380,23 +390,33 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                       </div>
                       <button
                         aria-label={
-                          project.roadmapVisible ? 'Remove from roadmap' : 'Add to roadmap'
+                          project.roadmapVisible
+                            ? t('roadmap.settings.removeFromRoadmap')
+                            : t('roadmap.settings.addToRoadmap')
                         }
                         className="shrink-0 flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50"
                         disabled={isToggling}
                         onClick={() => handleToggleProject(project.id, project.roadmapVisible)}
-                        title={project.roadmapVisible ? 'Remove from roadmap' : 'Add to roadmap'}
+                        title={
+                          project.roadmapVisible
+                            ? t('roadmap.settings.removeFromRoadmap')
+                            : t('roadmap.settings.addToRoadmap')
+                        }
                         type="button"
                       >
                         {project.roadmapVisible ? (
                           <>
                             <Eye className="h-3.5 w-3.5 text-indigo-500" />
-                            <span className="text-indigo-600 dark:text-indigo-400">Visible</span>
+                            <span className="text-indigo-600 dark:text-indigo-400">
+                              {t('roadmap.settings.visible')}
+                            </span>
                           </>
                         ) : (
                           <>
                             <EyeOff className="h-3.5 w-3.5 text-zinc-400" />
-                            <span className="text-zinc-500 dark:text-zinc-400">Hidden</span>
+                            <span className="text-zinc-500 dark:text-zinc-400">
+                              {t('roadmap.settings.hidden')}
+                            </span>
                           </>
                         )}
                       </button>

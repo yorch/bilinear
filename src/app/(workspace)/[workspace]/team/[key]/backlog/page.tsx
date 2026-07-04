@@ -4,12 +4,12 @@ import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import { FilterBuilder } from '@/components/issues/filter-builder';
-import { PriorityIcon } from '@/components/properties/priority-icon';
+import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
 import { useHotkeys } from '@/hooks/use-hotkeys';
+import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue, DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
 import { ISSUE_ARCHIVE_MUTATION, ISSUE_UPDATE_MUTATION } from '@/lib/graphql-queries';
-import { PRIORITY_LABELS } from '@/lib/issue-utils';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -18,6 +18,7 @@ import type { IssueLabel, IssueUser } from '@/types/issues';
 // ─── Staleness indicator ────────────────────────────────────────────────────
 
 function StalenessIndicator({ updatedAt }: { updatedAt: string }) {
+  const t = useTranslations();
   const daysSince = Math.floor(
     (Date.now() - new Date(updatedAt).getTime()) / (1000 * 60 * 60 * 24),
   );
@@ -36,7 +37,7 @@ function StalenessIndicator({ updatedAt }: { updatedAt: string }) {
             ? 'text-amber-500'
             : 'text-zinc-400 dark:text-zinc-500',
       )}
-      title={`Last updated ${daysSince} days ago`}
+      title={t('issues.lastUpdatedDaysAgo', { count: daysSince })}
     >
       {daysSince}d
     </span>
@@ -67,6 +68,7 @@ interface BacklogRowProps {
 }
 
 function BacklogRow({ issue, selected, onSelect, onUpdate }: BacklogRowProps) {
+  const t = useTranslations();
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: row contains interactive children; top-level click selects
     // biome-ignore lint/a11y/useKeyWithClickEvents: keyboard nav handled at page level
@@ -87,7 +89,7 @@ function BacklogRow({ issue, selected, onSelect, onUpdate }: BacklogRowProps) {
           const next = issue.priority >= 4 ? 0 : issue.priority + 1;
           onUpdate(issue.id, { priority: next });
         }}
-        title={PRIORITY_LABELS[issue.priority]}
+        title={t(priorityLabelKey(issue.priority))}
         type="button"
       >
         <PriorityIcon className="h-3.5 w-3.5" priority={issue.priority} />
@@ -108,13 +110,13 @@ function BacklogRow({ issue, selected, onSelect, onUpdate }: BacklogRowProps) {
         className="w-8 flex-shrink-0 text-center text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
         onClick={e => {
           e.stopPropagation();
-          const val = prompt('Estimate:', String(issue.estimate ?? ''));
+          const val = prompt(t('issues.estimatePrompt'), String(issue.estimate ?? ''));
           if (val !== null) {
             const num = val === '' ? null : parseFloat(val);
             onUpdate(issue.id, { estimate: num });
           }
         }}
-        title="Set estimate"
+        title={t('issues.setEstimate')}
         type="button"
       >
         {issue.estimate ?? '—'}
@@ -155,6 +157,7 @@ function PriorityGroup({
   onToggleSelect: (id: string) => void;
   onUpdate: (id: string, patch: Record<string, unknown>) => void;
 }) {
+  const t = useTranslations();
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -165,7 +168,7 @@ function PriorityGroup({
         type="button"
       >
         <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-          {PRIORITY_LABELS[priority] ?? `Priority ${priority}`}
+          {t(priorityLabelKey(priority))}
         </span>
         <span className="text-xs text-zinc-400 dark:text-zinc-500">{issues.length}</span>
         <span className="text-xs text-zinc-400 dark:text-zinc-500">{collapsed ? '▸' : '▾'}</span>
@@ -201,6 +204,7 @@ const BacklogPage = observer(function BacklogPage() {
     syncStore,
   } = useStore();
 
+  const t = useTranslations();
   const txQueue = useMemo(() => new TransactionQueue(), []);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filterSet, setFilterSet] = useState<FilterSet>(createEmptyFilterSet());
@@ -363,7 +367,7 @@ const BacklogPage = observer(function BacklogPage() {
   if (isLoading) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Loading...
+        {t('common.loading')}
       </div>
     );
   }
@@ -371,7 +375,7 @@ const BacklogPage = observer(function BacklogPage() {
   if (!team) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Team not found.
+        {t('issues.teamNotFound')}
       </div>
     );
   }
@@ -381,10 +385,10 @@ const BacklogPage = observer(function BacklogPage() {
       {/* Header */}
       <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
         <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          {team.displayName ?? team.name} — Backlog
+          {t('issues.teamBacklogTitle', { team: team.displayName ?? team.name })}
         </h1>
         <span className="text-xs text-zinc-400 dark:text-zinc-500">
-          {filteredIssues.length} issues
+          {t('issues.issuesCount', { count: filteredIssues.length })}
         </span>
       </div>
 
@@ -404,7 +408,7 @@ const BacklogPage = observer(function BacklogPage() {
       {selectedIds.size > 0 && (
         <div className="flex items-center gap-2 border-b border-indigo-200 bg-indigo-50 px-4 py-2 dark:border-indigo-800 dark:bg-indigo-950/30">
           <span className="text-xs font-medium text-indigo-700 dark:text-indigo-300">
-            {selectedIds.size} selected
+            {t('issues.selectedCount', { count: selectedIds.size })}
           </span>
           <div className="flex items-center gap-1">
             {[1, 2, 3, 4].map(p => (
@@ -412,7 +416,9 @@ const BacklogPage = observer(function BacklogPage() {
                 className="rounded px-1.5 py-0.5 text-xs text-zinc-600 hover:bg-indigo-100 dark:text-zinc-400 dark:hover:bg-indigo-900"
                 key={p}
                 onClick={() => handleBulkSetPriority(p)}
-                title={`Set ${PRIORITY_LABELS[p]}`}
+                title={t('issues.setPriorityN', {
+                  priority: t(priorityLabelKey(p)),
+                })}
                 type="button"
               >
                 <PriorityIcon className="h-3 w-3" priority={p} />
@@ -422,7 +428,7 @@ const BacklogPage = observer(function BacklogPage() {
           <button
             className="rounded px-2 py-0.5 text-xs text-zinc-600 hover:bg-indigo-100 dark:text-zinc-400 dark:hover:bg-indigo-900"
             onClick={() => {
-              const val = prompt('Set estimate for selected issues:');
+              const val = prompt(t('issues.setEstimateForSelectedPrompt'));
               if (val !== null) {
                 const num = val === '' ? null : parseFloat(val);
                 handleBulkSetEstimate(num);
@@ -430,21 +436,21 @@ const BacklogPage = observer(function BacklogPage() {
             }}
             type="button"
           >
-            Estimate
+            {t('issues.estimate')}
           </button>
           <button
             className="rounded px-2 py-0.5 text-xs text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/30"
             onClick={handleBulkArchive}
             type="button"
           >
-            Archive
+            {t('issues.archive')}
           </button>
           <button
             className="ml-auto text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
             onClick={() => setSelectedIds(new Set())}
             type="button"
           >
-            Clear
+            {t('issues.clear')}
           </button>
         </div>
       )}
@@ -453,7 +459,7 @@ const BacklogPage = observer(function BacklogPage() {
       <div className="flex-1 overflow-y-auto">
         {priorityGroups.length === 0 ? (
           <div className="flex items-center justify-center py-20 text-sm text-zinc-400 dark:text-zinc-500">
-            No backlog issues
+            {t('issues.noBacklogIssues')}
           </div>
         ) : (
           priorityGroups.map(({ priority, issues: groupIssues }) => (

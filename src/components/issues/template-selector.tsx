@@ -3,6 +3,7 @@
 import { ChevronDown, FileText, Star, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { usePopover } from '@/hooks/use-popover';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
@@ -41,6 +42,7 @@ interface TemplateSelectorProps {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: TemplateSelectorProps) {
+  const t = useTranslations();
   const [templates, setTemplates] = useState<IssueTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const { open, setOpen, ref: dropdownRef } = usePopover({ forceOpen, onClose });
@@ -59,12 +61,12 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
         }
       })
       .catch(() => {
-        toast.error('Failed to load templates');
+        toast.error(t('issueDetail.templates.failedToLoad'));
       })
       .finally(() => {
         setLoading(false);
       });
-  }, [teamId]);
+  }, [teamId, t]);
 
   // Close on Escape
   useEffect(() => {
@@ -122,23 +124,23 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
         type="button"
       >
         <FileText className="h-3.5 w-3.5" />
-        Apply template
+        {t('issueDetail.templates.applyTemplate')}
         <ChevronDown className={cn('h-3 w-3 transition-transform', open && 'rotate-180')} />
       </button>
 
       {open && (
         <div
-          aria-label="Issue templates"
+          aria-label={t('issueDetail.templates.title')}
           className="absolute left-0 top-full z-20 mt-1 w-72 rounded-lg border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
           role="listbox"
         >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-zinc-100 px-3 py-2 dark:border-zinc-800">
             <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-              Templates
+              {t('issueDetail.templates.title')}
             </span>
             <button
-              aria-label="Close"
+              aria-label={t('common.close')}
               className="rounded p-0.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
               onClick={closeDropdown}
               type="button"
@@ -148,10 +150,12 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
           </div>
 
           {loading ? (
-            <p className="px-3 py-4 text-center text-xs text-zinc-400">Loading templates…</p>
+            <p className="px-3 py-4 text-center text-xs text-zinc-400">
+              {t('issueDetail.templates.loading')}
+            </p>
           ) : sorted.length === 0 ? (
             <p className="px-3 py-4 text-center text-xs text-zinc-400 italic">
-              No templates for this team.
+              {t('issueDetail.templates.noneForTeam')}
             </p>
           ) : (
             <ul className="max-h-64 overflow-y-auto py-1">

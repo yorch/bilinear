@@ -19,6 +19,7 @@ import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { type SaveViewInput, SaveViewModal } from '@/components/views/save-view-modal';
 import { useChord, useHotkeys } from '@/hooks/use-hotkeys';
 import { useRecentItems } from '@/hooks/use-recent-items';
+import { useTranslations } from '@/hooks/use-translations';
 import { useVisibleColumns } from '@/hooks/use-visible-columns';
 import type { DBIssue, DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
@@ -67,6 +68,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     key: string;
   }>();
   const router = useRouter();
+  const t = useTranslations();
   const {
     issueStore,
     teamStore,
@@ -501,14 +503,16 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">Loading…</div>
+      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+        {t('common.loading')}
+      </div>
     );
   }
 
   if (hasError) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-red-500">
-        Failed to load data. Please refresh.
+        {t('issues.failedToLoad')}
       </div>
     );
   }
@@ -516,7 +520,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   if (!team) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Team not found.
+        {t('issues.teamNotFound')}
       </div>
     );
   }
@@ -528,7 +532,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
       {/* Page header */}
       <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
         <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          {team.displayName ?? team.name} — Issues
+          {t('issues.teamIssuesTitle', { team: team.displayName ?? team.name })}
         </h1>
         <div className="flex items-center gap-2">
           {viewMode === 'board' && (
@@ -538,18 +542,18 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
                 onChange={e => setBoardGroupBy(e.target.value as BoardGroupBy)}
                 value={boardGroupBy}
               >
-                <option value="status">Group by status</option>
-                <option value="assignee">Group by assignee</option>
-                <option value="priority">Group by priority</option>
+                <option value="status">{t('issues.groupByStatus')}</option>
+                <option value="assignee">{t('issues.groupByAssignee')}</option>
+                <option value="priority">{t('issues.groupByPriority')}</option>
               </select>
               <select
                 className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
                 onChange={e => setSwimlaneBy(e.target.value as BoardSwimlaneBy)}
                 value={swimlaneBy}
               >
-                <option value="none">No swimlanes</option>
-                <option value="assignee">Swimlane by assignee</option>
-                <option value="priority">Swimlane by priority</option>
+                <option value="none">{t('issues.noSwimlanes')}</option>
+                <option value="assignee">{t('issues.swimlaneByAssignee')}</option>
+                <option value="priority">{t('issues.swimlaneByPriority')}</option>
               </select>
             </>
           )}
@@ -557,7 +561,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
           <Link
             className="flex items-center justify-center rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
             href={`/${workspace}/team/${teamKey}/settings`}
-            title="Team settings"
+            title={t('issues.teamSettings')}
           >
             <Settings className="h-4 w-4" />
           </Link>
@@ -566,7 +570,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
             onClick={() => setCreateOpen(true)}
             type="button"
           >
-            New issue
+            {t('issues.newIssue')}
           </button>
         </div>
       </div>
@@ -610,10 +614,10 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
               onToggle={toggleColumn}
             />
             <button
-              aria-label="Save view"
+              aria-label={t('issues.saveView')}
               className="flex items-center justify-center rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
               onClick={() => setSaveViewOpen(true)}
-              title="Save current filters as a view"
+              title={t('issues.saveCurrentFiltersAsView')}
               type="button"
             >
               <Bookmark className="h-4 w-4" />
@@ -648,7 +652,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
           />
         ) : viewMode === 'timeline' ? (
           <GanttView
-            emptyMessage="No issues with start or due dates. Add dates to issues to populate the timeline."
+            emptyMessage={t('issues.ganttEmptyMessage')}
             items={issues
               .filter(i => i.startDate ?? i.dueDate)
               .map<GanttItem>(i => ({
@@ -716,7 +720,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
           if (res.errors?.length) {
             throw new Error((res.errors[0] as { message: string }).message);
           }
-          toast.success('View saved');
+          toast.success(t('issues.viewSaved'));
         }}
         open={saveViewOpen}
         teamId={teamId ?? undefined}

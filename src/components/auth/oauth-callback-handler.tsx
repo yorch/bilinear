@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { installSessionCookies } from '@/lib/auth-session';
 import { gql } from '@/lib/graphql';
 import { createClientLogger } from '@/lib/logger';
@@ -36,6 +37,7 @@ export interface OAuthProvider {
 export function OAuthCallbackHandler({ provider }: { provider: OAuthProvider }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const t = useTranslations();
   const [error, setError] = useState<string | null>(null);
   // The OAuth code is single-use and the stored state is consumed on read, so
   // the exchange must run exactly once even if the effect re-fires (React
@@ -59,7 +61,7 @@ export function OAuthCallbackHandler({ provider }: { provider: OAuthProvider }) 
         // Expected-degraded (expired session / reopened tab / tampering) —
         // breadcrumb only, not a Sentry event.
         log.warn('Missing or mismatched OAuth state', undefined, { provider: provider.label });
-        setError('Sign-in session expired or was tampered with. Please try again.');
+        setError(t('auth.sessionExpiredOrTampered'));
         return;
       }
 
@@ -73,7 +75,7 @@ export function OAuthCallbackHandler({ provider }: { provider: OAuthProvider }) 
           log.error('OAuth exchange returned no session', undefined, {
             provider: provider.label,
           });
-          setError(gqlError(result, `${provider.label} sign-in failed. Please try again.`));
+          setError(gqlError(result, t('auth.oauthSignInFailed', { provider: provider.label })));
           return;
         }
 
@@ -81,14 +83,14 @@ export function OAuthCallbackHandler({ provider }: { provider: OAuthProvider }) 
           log.error('Failed to install session cookies', undefined, {
             provider: provider.label,
           });
-          setError('Failed to establish a session. Please try again.');
+          setError(t('auth.failedToEstablishSession'));
           return;
         }
 
         router.push('/');
       } catch (err) {
         log.error('OAuth exchange threw', err, { provider: provider.label });
-        setError('Something went wrong. Please try again.');
+        setError(t('common.somethingWentWrong'));
       }
     }
 
@@ -107,12 +109,12 @@ export function OAuthCallbackHandler({ provider }: { provider: OAuthProvider }) 
             onClick={() => router.push('/login')}
             type="button"
           >
-            Back to sign in
+            {t('auth.backToSignIn')}
           </button>
         </>
       ) : (
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          Signing you in with {provider.label}…
+          {t('auth.signingInWithProvider', { provider: provider.label })}
         </p>
       )}
     </div>

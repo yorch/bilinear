@@ -3,6 +3,7 @@
 import { ExternalLink, GitMerge, GitPullRequest, GitPullRequestClosed } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { PULL_REQUESTS_QUERY } from '@/lib/graphql-queries';
 import { cn } from '@/lib/utils';
@@ -26,6 +27,7 @@ interface IssuePullRequestsSectionProps {
 }
 
 export function PullRequestsSection({ issueId }: IssuePullRequestsSectionProps) {
+  const t = useTranslations();
   const [prs, setPrs] = useState<PullRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -47,7 +49,7 @@ export function PullRequestsSection({ issueId }: IssuePullRequestsSectionProps) 
   return (
     <div className="space-y-1.5">
       <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-        Pull Requests
+        {t('issueDetail.pullRequests.title')}
       </h3>
       <ul className="space-y-1.5">
         {prs.map(pr => (
@@ -65,7 +67,12 @@ export function PullRequestsSection({ issueId }: IssuePullRequestsSectionProps) 
                   <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
                 </div>
                 <div className="mt-0.5 text-xs text-muted-foreground">
-                  {pr.repoFullName}#{pr.prNumber} · {pr.headBranch} · by {pr.authorLogin}
+                  {t('issueDetail.pullRequests.metaLine', {
+                    author: pr.authorLogin,
+                    branch: pr.headBranch,
+                    number: pr.prNumber,
+                    repo: pr.repoFullName,
+                  })}
                 </div>
               </div>
               <PrStateBadge draft={pr.draft} state={pr.state} />
@@ -100,26 +107,31 @@ function PrStateIcon({
 }
 
 function PrStateBadge({ state, draft }: { state: string; draft: boolean }) {
+  const t = useTranslations();
   if (state === 'merged') {
     return (
       <Badge className="shrink-0 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
-        Merged
+        {t('issueDetail.pullRequests.merged')}
       </Badge>
     );
   }
   if (state === 'closed') {
     return (
       <Badge className="shrink-0 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">
-        Closed
+        {t('issueDetail.pullRequests.closed')}
       </Badge>
     );
   }
   if (draft) {
-    return <Badge className="shrink-0 bg-muted text-muted-foreground">Draft</Badge>;
+    return (
+      <Badge className="shrink-0 bg-muted text-muted-foreground">
+        {t('issueDetail.pullRequests.draft')}
+      </Badge>
+    );
   }
   return (
     <Badge className="shrink-0 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
-      Open
+      {t('issueDetail.pullRequests.open')}
     </Badge>
   );
 }

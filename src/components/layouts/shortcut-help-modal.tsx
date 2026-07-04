@@ -1,64 +1,65 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 
 interface ShortcutEntry {
-  description: string;
+  descriptionKey: string;
   keys: string[];
 }
 
 interface ShortcutSection {
   shortcuts: ShortcutEntry[];
-  title: string;
+  titleKey: string;
 }
 
 const SECTIONS: ShortcutSection[] = [
   {
     shortcuts: [
-      { description: 'Command palette', keys: ['Ctrl/⌘', 'K'] },
-      { description: 'Toggle sidebar', keys: ['Ctrl/⌘', 'B'] },
-      { description: 'Create issue', keys: ['C'] },
-      { description: 'Open shortcuts', keys: ['?'] },
+      { descriptionKey: 'layout.shortcutHelp.commandPalette', keys: ['Ctrl/⌘', 'K'] },
+      { descriptionKey: 'layout.shortcutHelp.toggleSidebar', keys: ['Ctrl/⌘', 'B'] },
+      { descriptionKey: 'layout.shortcutHelp.createIssue', keys: ['C'] },
+      { descriptionKey: 'layout.shortcutHelp.openShortcuts', keys: ['?'] },
     ],
-    title: 'Global',
+    titleKey: 'layout.shortcutHelp.sections.global',
   },
   {
     shortcuts: [
-      { description: 'Go to My Issues', keys: ['G', 'I'] },
-      { description: 'Go to Inbox', keys: ['G', 'N'] },
+      { descriptionKey: 'layout.shortcutHelp.goToMyIssues', keys: ['G', 'I'] },
+      { descriptionKey: 'layout.shortcutHelp.goToInbox', keys: ['G', 'N'] },
     ],
-    title: 'Navigation',
+    titleKey: 'layout.shortcutHelp.sections.navigation',
   },
   {
     shortcuts: [
-      { description: 'Move down', keys: ['J'] },
-      { description: 'Move up', keys: ['K'] },
-      { description: 'Open issue', keys: ['Enter'] },
-      { description: 'Close / deselect', keys: ['Esc'] },
+      { descriptionKey: 'layout.shortcutHelp.moveDown', keys: ['J'] },
+      { descriptionKey: 'layout.shortcutHelp.moveUp', keys: ['K'] },
+      { descriptionKey: 'layout.shortcutHelp.openIssue', keys: ['Enter'] },
+      { descriptionKey: 'layout.shortcutHelp.closeDeselect', keys: ['Esc'] },
     ],
-    title: 'Issue List',
+    titleKey: 'layout.shortcutHelp.sections.issueList',
   },
   {
     shortcuts: [
-      { description: 'Set status', keys: ['S'] },
-      { description: 'Set assignee', keys: ['A'] },
-      { description: 'Set priority', keys: ['P'] },
-      { description: 'Set label', keys: ['L'] },
-      { description: 'Set due date', keys: ['D'] },
-      { description: 'Set estimate', keys: ['Shift', 'E'] },
-      { description: 'Set project', keys: ['Shift', 'P'] },
-      { description: 'Set cycle', keys: ['Q'] },
-      { description: 'Archive issue', keys: ['Backspace'] },
+      { descriptionKey: 'layout.shortcutHelp.setStatus', keys: ['S'] },
+      { descriptionKey: 'layout.shortcutHelp.setAssignee', keys: ['A'] },
+      { descriptionKey: 'layout.shortcutHelp.setPriority', keys: ['P'] },
+      { descriptionKey: 'layout.shortcutHelp.setLabel', keys: ['L'] },
+      { descriptionKey: 'layout.shortcutHelp.setDueDate', keys: ['D'] },
+      { descriptionKey: 'layout.shortcutHelp.setEstimate', keys: ['Shift', 'E'] },
+      { descriptionKey: 'layout.shortcutHelp.setProject', keys: ['Shift', 'P'] },
+      { descriptionKey: 'layout.shortcutHelp.setCycle', keys: ['Q'] },
+      { descriptionKey: 'layout.shortcutHelp.archiveIssue', keys: ['Backspace'] },
     ],
-    title: 'Issue Actions',
+    titleKey: 'layout.shortcutHelp.sections.issueActions',
   },
   {
     shortcuts: [
-      { description: 'List view', keys: ['Alt', '1'] },
-      { description: 'Board view', keys: ['Alt', '2'] },
-      { description: 'Timeline view', keys: ['Alt', '3'] },
+      { descriptionKey: 'layout.shortcutHelp.listView', keys: ['Alt', '1'] },
+      { descriptionKey: 'layout.shortcutHelp.boardView', keys: ['Alt', '2'] },
+      { descriptionKey: 'layout.shortcutHelp.timelineView', keys: ['Alt', '3'] },
     ],
-    title: 'View',
+    titleKey: 'layout.shortcutHelp.sections.view',
   },
 ];
 
@@ -84,6 +85,8 @@ function KbdGroup({ keys }: { keys: string[] }) {
 }
 
 export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
+  const t = useTranslations();
+
   // Close on Escape
   useEffect(() => {
     if (!open) {
@@ -120,7 +123,7 @@ export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
   return (
     // Backdrop
     <div
-      aria-label="Keyboard shortcuts"
+      aria-label={t('layout.shortcutHelp.title')}
       aria-modal="true"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onClick={handleBackdropClick}
@@ -132,10 +135,10 @@ export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-            Keyboard Shortcuts
+            {t('layout.shortcutHelp.title')}
           </h2>
           <button
-            aria-label="Close shortcuts"
+            aria-label={t('layout.shortcutHelp.closeAriaLabel')}
             className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
             onClick={onClose}
             type="button"
@@ -161,18 +164,18 @@ export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
         <div className="max-h-[70vh] overflow-y-auto p-6">
           <div className="grid grid-cols-2 gap-x-8 gap-y-6">
             {SECTIONS.map(section => (
-              <div key={section.title}>
+              <div key={section.titleKey}>
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
-                  {section.title}
+                  {t(section.titleKey)}
                 </p>
                 <div className="space-y-1.5">
                   {section.shortcuts.map(shortcut => (
                     <div
                       className="flex items-center justify-between gap-4"
-                      key={shortcut.description}
+                      key={shortcut.descriptionKey}
                     >
                       <span className="text-sm text-zinc-700 dark:text-zinc-300">
-                        {shortcut.description}
+                        {t(shortcut.descriptionKey)}
                       </span>
                       <KbdGroup keys={shortcut.keys} />
                     </div>
@@ -186,11 +189,11 @@ export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
         {/* Footer */}
         <div className="flex items-center justify-end border-t border-zinc-100 px-6 py-3 dark:border-zinc-800">
           <span className="text-xs text-zinc-400">
-            Press{' '}
+            {t('layout.shortcutHelp.pressPrefix')}{' '}
             <kbd className="rounded border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 text-xs font-mono dark:border-zinc-600 dark:bg-zinc-800">
               Esc
             </kbd>{' '}
-            to close
+            {t('layout.shortcutHelp.pressSuffix')}
           </span>
         </div>
       </div>

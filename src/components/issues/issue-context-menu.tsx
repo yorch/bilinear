@@ -3,6 +3,7 @@
 import { useParams } from 'next/navigation';
 import { useRef } from 'react';
 import { useOutsideClick } from '@/hooks/use-outside-click';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 
 interface IssueContextMenuProps {
@@ -42,6 +43,7 @@ export function IssueContextMenu({
   onArchive,
   onDelete,
 }: IssueContextMenuProps) {
+  const t = useTranslations();
   const params = useParams<{ workspace?: string }>();
   const workspaceKey = params.workspace ?? '';
   const menuRef = useRef<HTMLDivElement>(null);
@@ -56,14 +58,14 @@ export function IssueContextMenu({
 
   const items: MenuEntry[] = [
     {
-      label: 'Open issue',
+      label: t('issues.openIssue'),
       onClick: () => {
         onOpen();
         onClose();
       },
     },
     {
-      label: 'Open in new tab',
+      label: t('issues.openInNewTab'),
       onClick: () => {
         window.open(`/${workspaceKey}/issue/${issueId}`, '_blank');
         onClose();
@@ -71,14 +73,14 @@ export function IssueContextMenu({
     },
     { separator: true },
     {
-      label: 'Copy issue ID',
+      label: t('issues.copyIssueId'),
       onClick: () => {
         navigator.clipboard.writeText(identifier).catch(() => undefined);
         onClose();
       },
     },
     {
-      label: 'Copy issue URL',
+      label: t('issues.copyIssueUrl'),
       onClick: () => {
         navigator.clipboard.writeText(issueUrl).catch(() => undefined);
         onClose();
@@ -87,7 +89,7 @@ export function IssueContextMenu({
     { separator: true },
     {
       danger: false,
-      label: 'Archive',
+      label: t('issues.archive'),
       onClick: () => {
         onArchive();
         onClose();
@@ -95,7 +97,7 @@ export function IssueContextMenu({
     },
     {
       danger: true,
-      label: 'Delete',
+      label: t('common.delete'),
       onClick: () => {
         onDelete();
         onClose();
@@ -105,7 +107,7 @@ export function IssueContextMenu({
 
   return (
     <div
-      aria-label={`Actions for ${title}`}
+      aria-label={t('issues.actionsFor', { title })}
       className="min-w-[200px] overflow-hidden rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
       ref={menuRef}
       role="menu"

@@ -4,14 +4,9 @@ import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
 import { ModalDialog } from '@/components/ui/modal-dialog';
 import { SimpleSelect } from '@/components/ui/select';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn, getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
-
-const STATUS_OPTIONS = [
-  { label: 'Backlog', value: 'backlog' },
-  { label: 'Planned', value: 'planned' },
-  { label: 'In Progress', value: 'inProgress' },
-] as const;
 
 interface CreateProjectModalProps {
   onClose: () => void;
@@ -32,6 +27,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
   onClose,
   onSubmit,
 }: CreateProjectModalProps) {
+  const t = useTranslations();
   const { teamStore } = useStore();
   const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState('');
@@ -44,6 +40,12 @@ export const CreateProjectModal = observer(function CreateProjectModal({
   const [submitError, setSubmitError] = useState('');
 
   const teams = teamStore.all;
+
+  const STATUS_OPTIONS = [
+    { label: t('projects.status.backlog'), value: 'backlog' },
+    { label: t('projects.status.planned'), value: 'planned' },
+    { label: t('projects.status.inProgress'), value: 'inProgress' },
+  ] as const;
 
   // Reset form state only on open transitions — including `teams` here
   // re-fires the effect whenever the MobX-derived array gets a new identity
@@ -96,7 +98,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
       });
       onClose();
     } catch (err) {
-      setSubmitError(getErrorMessage(err, 'Failed to create project'));
+      setSubmitError(getErrorMessage(err, t('projects.failedToCreate')));
     } finally {
       setSubmitting(false);
     }
@@ -105,10 +107,12 @@ export const CreateProjectModal = observer(function CreateProjectModal({
   const canSubmit = name.trim().length > 0 && selectedTeamIds.length > 0 && !submitting;
 
   return (
-    <ModalDialog aria-label="Create project" onClose={onClose} open={open}>
+    <ModalDialog aria-label={t('projects.createProject')} onClose={onClose} open={open}>
       <form className="flex flex-col" onSubmit={handleSubmit}>
         <div className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Create project</h2>
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            {t('projects.createProject')}
+          </h2>
         </div>
 
         <div className="flex flex-col gap-4 px-5 py-4">
@@ -117,13 +121,13 @@ export const CreateProjectModal = observer(function CreateProjectModal({
               className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
               htmlFor="project-name"
             >
-              Name
+              {t('projects.name')}
             </label>
             <input
               className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
               id="project-name"
               onChange={e => setName(e.target.value)}
-              placeholder="e.g. Q2 Launch"
+              placeholder={t('projects.namePlaceholder')}
               ref={nameRef}
               required
               type="text"
@@ -136,13 +140,14 @@ export const CreateProjectModal = observer(function CreateProjectModal({
               className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
               htmlFor="project-description"
             >
-              Description <span className="font-normal text-zinc-400">(optional)</span>
+              {t('projects.description')}{' '}
+              <span className="font-normal text-zinc-400">({t('projects.optional')})</span>
             </label>
             <textarea
               className="resize-none rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-600 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-400"
               id="project-description"
               onChange={e => setDescription(e.target.value)}
-              placeholder="What is this project about?"
+              placeholder={t('projects.descriptionPlaceholder')}
               rows={2}
               value={description}
             />
@@ -153,7 +158,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
               className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
               htmlFor="project-status"
             >
-              Status
+              {t('projects.status.label')}
             </label>
             <SimpleSelect
               id="project-status"
@@ -164,7 +169,9 @@ export const CreateProjectModal = observer(function CreateProjectModal({
           </div>
 
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Teams</span>
+            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              {t('projects.teams')}
+            </span>
             <div className="flex flex-wrap gap-2">
               {teams.map(team => (
                 <button
@@ -184,7 +191,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
               ))}
             </div>
             {teams.length === 0 && (
-              <p className="text-xs text-zinc-400">No teams available. Create a team first.</p>
+              <p className="text-xs text-zinc-400">{t('projects.noTeamsAvailable')}</p>
             )}
           </div>
 
@@ -194,7 +201,8 @@ export const CreateProjectModal = observer(function CreateProjectModal({
                 className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
                 htmlFor="project-start"
               >
-                Start date <span className="font-normal text-zinc-400">(optional)</span>
+                {t('projects.startDate')}{' '}
+                <span className="font-normal text-zinc-400">({t('projects.optional')})</span>
               </label>
               <input
                 className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
@@ -209,7 +217,8 @@ export const CreateProjectModal = observer(function CreateProjectModal({
                 className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
                 htmlFor="project-target"
               >
-                Target date <span className="font-normal text-zinc-400">(optional)</span>
+                {t('projects.targetDate')}{' '}
+                <span className="font-normal text-zinc-400">({t('projects.optional')})</span>
               </label>
               <input
                 className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
@@ -229,7 +238,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
             onClick={onClose}
             type="button"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             className={cn(
@@ -239,7 +248,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
             disabled={!canSubmit}
             type="submit"
           >
-            {submitting ? 'Creating...' : 'Create project'}
+            {submitting ? t('projects.creating') : t('projects.createProject')}
           </button>
         </div>
       </form>

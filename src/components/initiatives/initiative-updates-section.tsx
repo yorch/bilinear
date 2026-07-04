@@ -5,14 +5,17 @@ import { useCallback, useEffect, useState } from 'react';
 import { DeleteUpdateButton } from '@/components/shared/delete-update-button';
 import { CreateUpdateForm, EditUpdateForm } from '@/components/shared/update-forms';
 import { Badge } from '@/components/ui/badge';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import {
   INITIATIVE_UPDATE_CREATE_MUTATION,
   INITIATIVE_UPDATE_EDIT_MUTATION,
   INITIATIVE_UPDATES_QUERY,
 } from '@/lib/graphql-queries';
-import { PROJECT_HEALTH_CONFIG } from '@/lib/project-constants';
+import { INTL_LOCALES } from '@/lib/i18n';
+import { PROJECT_HEALTH_CONFIG, PROJECT_HEALTH_LABEL_KEYS } from '@/lib/project-constants';
 import { formatRelativeTime } from '@/lib/utils';
+import { useLocale } from '@/providers/locale-provider';
 
 interface InitiativeUpdate {
   body: string;
@@ -32,6 +35,8 @@ export function InitiativeUpdatesSection({
   initiativeId,
   viewerId,
 }: InitiativeUpdatesSectionProps) {
+  const t = useTranslations();
+  const { locale } = useLocale();
   const [updates, setUpdates] = useState<InitiativeUpdate[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -62,14 +67,14 @@ export function InitiativeUpdatesSection({
   };
 
   if (loading) {
-    return <div className="mt-3 text-xs text-zinc-400">Loading updates…</div>;
+    return <div className="mt-3 text-xs text-zinc-400">{t('initiatives.updates.loading')}</div>;
   }
 
   return (
     <div className="mt-4">
       <div className="flex items-center justify-between">
         <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-          Updates ({updates.length})
+          {t('initiatives.updates.title', { count: updates.length })}
         </h4>
         {!creating && !editingId && (
           <button
@@ -78,7 +83,7 @@ export function InitiativeUpdatesSection({
             type="button"
           >
             <Plus className="h-3.5 w-3.5" />
-            Add update
+            {t('initiatives.updates.addUpdate')}
           </button>
         )}
       </div>
@@ -91,7 +96,7 @@ export function InitiativeUpdatesSection({
               input: { body, bodyData: {}, health: health || null, initiativeId },
             });
             if (res.errors?.length) {
-              throw new Error('mutation failed');
+              throw new Error(t('common.somethingWentWrong'));
             }
             await fetchUpdates();
           }}
@@ -100,9 +105,7 @@ export function InitiativeUpdatesSection({
       )}
 
       {updates.length === 0 && !creating ? (
-        <p className="py-4 text-center text-xs text-zinc-400">
-          No updates yet. Share initiative health and progress.
-        </p>
+        <p className="py-4 text-center text-xs text-zinc-400">{t('initiatives.updates.empty')}</p>
       ) : (
         <div className="mt-3 flex flex-col gap-3">
           {updates.map(update => {
@@ -122,7 +125,7 @@ export function InitiativeUpdatesSection({
                       input: { body, bodyData: {}, health: health || null },
                     });
                     if (res.errors?.length) {
-                      throw new Error('mutation failed');
+                      throw new Error(t('common.somethingWentWrong'));
                     }
                     await fetchUpdates();
                   }}
@@ -143,12 +146,12 @@ export function InitiativeUpdatesSection({
                     </span>
                     {health && (
                       <Badge className={health.color} variant="solid">
-                        {health.label}
+                        {t(PROJECT_HEALTH_LABEL_KEYS[update.health ?? ''])}
                       </Badge>
                     )}
                     <span className="text-xs text-zinc-400">
-                      {formatRelativeTime(update.createdAt)}
-                      {update.editedAt && ' (edited)'}
+                      {formatRelativeTime(update.createdAt, t, INTL_LOCALES[locale])}
+                      {update.editedAt && ` (${t('initiatives.updates.edited')})`}
                     </span>
                   </div>
                   {isOwner && (
@@ -156,7 +159,7 @@ export function InitiativeUpdatesSection({
                       <button
                         className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
                         onClick={() => openEdit(update.id)}
-                        title="Edit"
+                        title={t('common.edit')}
                         type="button"
                       >
                         <Pencil className="h-3.5 w-3.5" />

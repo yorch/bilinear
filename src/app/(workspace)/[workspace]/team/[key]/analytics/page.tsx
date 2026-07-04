@@ -5,8 +5,11 @@ import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { CycleVelocitySection } from '@/components/analytics/cycle-velocity-section';
 import { InsightsSection } from '@/components/analytics/insights-section';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
+import { INTL_LOCALES } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { useLocale } from '@/providers/locale-provider';
 import { useStore } from '@/providers/store-provider';
 
 // ---------------------------------------------------------------------------
@@ -24,8 +27,8 @@ function weekStart(date: Date): Date {
 }
 
 /** Format a Date as "MMM D". */
-function fmtShort(date: Date): string {
-  return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+function fmtShort(date: Date, intlLocale: string): string {
+  return date.toLocaleDateString(intlLocale, { day: 'numeric', month: 'short' });
 }
 
 // ---------------------------------------------------------------------------
@@ -65,11 +68,16 @@ interface BarChartProps {
   unit?: string;
 }
 
-function BarChart({ data, maxValue, unit = '', emptyMessage = 'No data' }: BarChartProps) {
+function BarChart({ data, maxValue, unit = '', emptyMessage }: BarChartProps) {
+  const t = useTranslations();
   const max = maxValue ?? Math.max(...data.map(d => d.value), 1);
 
   if (data.length === 0 || data.every(d => d.value === 0)) {
-    return <p className="py-8 text-center text-sm text-zinc-400">{emptyMessage}</p>;
+    return (
+      <p className="py-8 text-center text-sm text-zinc-400">
+        {emptyMessage ?? t('analytics.team.noData')}
+      </p>
+    );
   }
 
   return (
@@ -114,11 +122,16 @@ interface HBarChartProps {
   maxValue?: number;
 }
 
-function HBarChart({ data, maxValue, emptyMessage = 'No data' }: HBarChartProps) {
+function HBarChart({ data, maxValue, emptyMessage }: HBarChartProps) {
+  const t = useTranslations();
   const max = maxValue ?? Math.max(...data.map(d => d.value), 1);
 
   if (data.length === 0) {
-    return <p className="py-8 text-center text-sm text-zinc-400">{emptyMessage}</p>;
+    return (
+      <p className="py-8 text-center text-sm text-zinc-400">
+        {emptyMessage ?? t('analytics.team.noData')}
+      </p>
+    );
   }
 
   return (
@@ -187,6 +200,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 // ---------------------------------------------------------------------------
 
 const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
+  const t = useTranslations();
+  const { locale } = useLocale();
   const { key: teamKey } = useParams<{ workspace: string; key: string }>();
   const { issueStore, teamStore, workflowStateStore, userStore, syncStore } = useStore();
 
@@ -325,10 +340,10 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
 
     return weeks.map(w => ({
       color: 'var(--chart-primary)',
-      label: fmtShort(w.start),
+      label: fmtShort(w.start, INTL_LOCALES[locale]),
       value: w.count,
     }));
-  }, [issues, preset]);
+  }, [issues, preset, locale]);
 
   const avgVelocity = useMemo(() => {
     const nonZero = velocityData.filter(w => w.value > 0);
@@ -364,11 +379,15 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
       .sort((a, b) => b.value - a.value);
 
     if (unassigned > 0) {
-      rows.push({ color: 'var(--chart-muted)', label: 'Unassigned', value: unassigned });
+      rows.push({
+        color: 'var(--chart-muted)',
+        label: t('analytics.team.unassigned'),
+        value: unassigned,
+      });
     }
 
     return rows;
-  }, [issues, users, completedStateIds, canceledStateIds]);
+  }, [issues, users, completedStateIds, canceledStateIds, t]);
 
   // ── Cycle time (avg days from started → completed) ─────────────────────────
 
@@ -418,7 +437,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
   if (isLoading) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Loading...
+        {t('analytics.team.loading')}
       </div>
     );
   }
@@ -426,7 +445,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
   if (!team) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Team not found.
+        {t('analytics.team.teamNotFound')}
       </div>
     );
   }
@@ -437,10 +456,14 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
       <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Analytics</h1>
+            <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+              {t('analytics.team.title')}
+            </h1>
             <p className="mt-0.5 text-xs text-zinc-400">
               {team.displayName || team.name}
-              {preset !== 'all' ? ` · last ${preset}` : ' · all time'}
+              {preset !== 'all'
+                ? ` · ${t('analytics.team.lastPreset', { preset })}`
+                : ` · ${t('analytics.team.allTime')}`}
             </p>
           </div>
           <div className="flex shrink-0 rounded-md border border-zinc-200 p-0.5 dark:border-zinc-800">
@@ -456,7 +479,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
                 onClick={() => setPreset(p)}
                 type="button"
               >
-                {p === 'all' ? 'All' : p}
+                {p === 'all' ? t('analytics.team.rangeAll') : p}
               </button>
             ))}
           </div>
@@ -467,23 +490,30 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
         {/* Summary stats row */}
         <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard
-            label="Total issues"
-            sub={preset !== 'all' ? `last ${preset}` : 'all time'}
+            label={t('analytics.team.totalIssues')}
+            sub={
+              preset !== 'all'
+                ? t('analytics.team.lastPreset', { preset })
+                : t('analytics.team.allTime')
+            }
             value={rangeIssues.length}
           />
           <StatCard
-            label="Completion rate"
-            sub={`${completedCount} of ${rangeIssues.length} closed`}
+            label={t('analytics.team.completionRate')}
+            sub={t('analytics.team.closedOfTotal', {
+              completed: completedCount,
+              total: rangeIssues.length,
+            })}
             value={`${completionRate}%`}
           />
           <StatCard
-            label="Avg velocity"
-            sub="over active weeks"
+            label={t('analytics.team.avgVelocity')}
+            sub={t('analytics.team.overActiveWeeks')}
             value={avgVelocity === 0 ? '—' : `${avgVelocity}/wk`}
           />
           <StatCard
-            label="Avg cycle time"
-            sub="started → completed"
+            label={t('analytics.team.avgCycleTime')}
+            sub={t('analytics.team.startedToCompleted')}
             value={avgCycleTimeDays !== null ? `${avgCycleTimeDays}d` : '—'}
           />
         </div>
@@ -491,18 +521,22 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
         {/* Issue status breakdown */}
         <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            { color: 'text-zinc-400', label: 'Open', value: openCount },
+            { color: 'text-zinc-400', label: t('analytics.team.statusOpen'), value: openCount },
             {
               color: 'text-blue-500',
-              label: 'In progress',
+              label: t('analytics.team.statusInProgress'),
               value: inProgressCount,
             },
             {
               color: 'text-green-500',
-              label: 'Completed',
+              label: t('analytics.team.statusCompleted'),
               value: completedCount,
             },
-            { color: 'text-zinc-400', label: 'Canceled', value: canceledCount },
+            {
+              color: 'text-zinc-400',
+              label: t('analytics.team.statusCanceled'),
+              value: canceledCount,
+            },
           ].map(item => (
             <div
               className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
@@ -518,22 +552,25 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
 
         {/* Charts grid */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-          <Section title="Issues by state">
-            <BarChart data={byStateData} emptyMessage="No issues yet" />
+          <Section title={t('analytics.team.issuesByState')}>
+            <BarChart data={byStateData} emptyMessage={t('analytics.team.noIssuesYet')} />
           </Section>
 
-          <Section title="Velocity (issues completed per week)">
-            <BarChart data={velocityData} emptyMessage="No completed issues yet" />
+          <Section title={t('analytics.team.velocityPerWeek')}>
+            <BarChart data={velocityData} emptyMessage={t('analytics.team.noCompletedIssuesYet')} />
           </Section>
 
-          <Section title="Assignee workload (open issues)">
-            <HBarChart data={workloadData} emptyMessage="No open issues assigned" />
+          <Section title={t('analytics.team.assigneeWorkload')}>
+            <HBarChart
+              data={workloadData}
+              emptyMessage={t('analytics.team.noOpenIssuesAssigned')}
+            />
           </Section>
 
-          <Section title="Issue breakdown">
+          <Section title={t('analytics.team.issueBreakdown')}>
             <div className="space-y-3">
               {byStateData.length === 0 ? (
-                <p className="text-sm text-zinc-400">No issues yet</p>
+                <p className="text-sm text-zinc-400">{t('analytics.team.noIssuesYet')}</p>
               ) : (
                 byStateData.map(item => {
                   const pct =
@@ -584,37 +621,39 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
         {teamHealth && (
           <div className="mt-5">
             <h2 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-200">
-              Team Health
+              {t('analytics.team.teamHealth')}
             </h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
                 <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
-                  Open issues
+                  {t('analytics.team.openIssues')}
                 </p>
                 <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
                   {teamHealth.openCount}
                 </p>
               </div>
               <div className="rounded-lg border border-red-100 bg-red-50 p-4 dark:border-red-900/40 dark:bg-red-950/30">
-                <p className="text-xs font-medium uppercase tracking-wider text-red-400">Overdue</p>
+                <p className="text-xs font-medium uppercase tracking-wider text-red-400">
+                  {t('analytics.team.overdue')}
+                </p>
                 <p className="mt-1 text-2xl font-semibold text-red-600 dark:text-red-400">
                   {teamHealth.overdueCount}
                 </p>
               </div>
               <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
                 <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
-                  Unestimated
+                  {t('analytics.team.unestimated')}
                 </p>
                 <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
                   {teamHealth.unestimatedCount}
                 </p>
                 <p className="mt-0.5 text-xs text-zinc-400">
-                  {teamHealth.unestimatedPct.toFixed(0)}% of open
+                  {t('analytics.team.pctOfOpen', { pct: teamHealth.unestimatedPct.toFixed(0) })}
                 </p>
               </div>
               <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
                 <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
-                  Oldest open
+                  {t('analytics.team.oldestOpen')}
                 </p>
                 <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
                   {teamHealth.oldestOpenAgeDays.toFixed(0)}d
@@ -622,12 +661,12 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
               </div>
               <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
                 <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
-                  P75 age
+                  {t('analytics.team.p75Age')}
                 </p>
                 <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
                   {teamHealth.p75AgeDays.toFixed(0)}d
                 </p>
-                <p className="mt-0.5 text-xs text-zinc-400">75th percentile</p>
+                <p className="mt-0.5 text-xs text-zinc-400">{t('analytics.team.percentile75')}</p>
               </div>
             </div>
           </div>

@@ -4,7 +4,13 @@ import { Calendar, Plus, Target } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { PROJECT_HEALTH_CONFIG, PROJECT_STATUS_CONFIG } from '@/lib/project-constants';
+import { useTranslations } from '@/hooks/use-translations';
+import {
+  PROJECT_HEALTH_CONFIG,
+  PROJECT_HEALTH_LABEL_KEYS,
+  PROJECT_STATUS_CONFIG,
+  PROJECT_STATUS_LABEL_KEYS,
+} from '@/lib/project-constants';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -18,6 +24,7 @@ const COMPLETED_STATUSES = ['completed', 'canceled'];
 export const ProjectListView = observer(function ProjectListView({
   workspaceKey,
 }: ProjectListViewProps) {
+  const t = useTranslations();
   const { projectStore, uiStore } = useStore();
   const projects = projectStore.all;
 
@@ -42,11 +49,9 @@ export const ProjectListView = observer(function ProjectListView({
             </div>
             <div>
               <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                No projects yet
+                {t('projects.noProjectsYet')}
               </p>
-              <p className="mt-1 text-xs text-zinc-500">
-                Create a project to track work across teams.
-              </p>
+              <p className="mt-1 text-xs text-zinc-500">{t('projects.createProjectPrompt')}</p>
             </div>
             <button
               className="mt-2 flex items-center gap-1.5 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
@@ -54,20 +59,24 @@ export const ProjectListView = observer(function ProjectListView({
               type="button"
             >
               <Plus className="h-4 w-4" />
-              Create project
+              {t('projects.createProject')}
             </button>
           </div>
         ) : (
           <div className="flex flex-col gap-6">
             {activeProjects.length > 0 && (
-              <ProjectGroup projects={activeProjects} title="Active" workspaceKey={workspaceKey} />
+              <ProjectGroup
+                projects={activeProjects}
+                title={t('projects.active')}
+                workspaceKey={workspaceKey}
+              />
             )}
 
             {completedProjects.length > 0 && (
               <ProjectGroup
                 defaultCollapsed
                 projects={completedProjects}
-                title="Completed"
+                title={t('projects.completed')}
                 workspaceKey={workspaceKey}
               />
             )}
@@ -100,6 +109,7 @@ const ProjectGroup = observer(function ProjectGroup({
   workspaceKey: string;
   defaultCollapsed?: boolean;
 }) {
+  const t = useTranslations();
   const { issueStore, userStore } = useStore();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
@@ -176,11 +186,16 @@ const ProjectGroup = observer(function ProjectGroup({
                     {project.name}
                   </span>
                   <div className="mt-0.5 flex items-center gap-2">
-                    <span className={cn('text-xs', status.color)}>{status.label}</span>
+                    <span className={cn('text-xs', status.color)}>
+                      {t(
+                        PROJECT_STATUS_LABEL_KEYS[project.statusType] ??
+                          PROJECT_STATUS_LABEL_KEYS.planned,
+                      )}
+                    </span>
                     {health && (
                       <span className="flex items-center gap-1 text-xs text-zinc-500">
                         <span className={cn('h-1.5 w-1.5 rounded-full', health.color)} />
-                        {health.label}
+                        {t(PROJECT_HEALTH_LABEL_KEYS[project.health ?? ''])}
                       </span>
                     )}
                   </div>

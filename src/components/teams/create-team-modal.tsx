@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ModalDialog } from '@/components/ui/modal-dialog';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn, getErrorMessage } from '@/lib/utils';
 
 interface CreateTeamInput {
@@ -40,6 +41,7 @@ function deriveKey(name: string): string {
 const KEY_PATTERN = /^[A-Z]{1,10}$/;
 
 export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProps) {
+  const t = useTranslations();
   const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState('');
   const [key, setKey] = useState('');
@@ -100,7 +102,7 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
       });
       onClose();
     } catch (err) {
-      const msg = getErrorMessage(err, 'Failed to create team');
+      const msg = getErrorMessage(err, t('teams.failedToCreate'));
       // Duplicate key errors shown inline; others go to the action bar
       if (msg.toLowerCase().includes('key')) {
         setKeyError(msg);
@@ -115,10 +117,12 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
   const canSubmit = name.trim().length > 0 && KEY_PATTERN.test(key) && !submitting;
 
   return (
-    <ModalDialog aria-label="Create team" onClose={onClose} open={open}>
+    <ModalDialog aria-label={t('teams.createTeam')} onClose={onClose} open={open}>
       <form className="flex flex-col" onSubmit={handleSubmit}>
         <div className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Create team</h2>
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            {t('teams.createTeam')}
+          </h2>
         </div>
 
         <div className="flex flex-col gap-4 px-5 py-4">
@@ -127,13 +131,13 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
               className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
               htmlFor="team-name"
             >
-              Name
+              {t('teams.name')}
             </label>
             <input
               className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
               id="team-name"
               onChange={e => setName(e.target.value)}
-              placeholder="e.g. Engineering"
+              placeholder={t('teams.namePlaceholder')}
               ref={nameRef}
               required
               type="text"
@@ -146,10 +150,8 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
               className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
               htmlFor="team-key"
             >
-              Identifier
-              <span className="ml-1 font-normal text-zinc-400">
-                (used in issue IDs like ENG-123)
-              </span>
+              {t('teams.identifier')}
+              <span className="ml-1 font-normal text-zinc-400">{t('teams.identifierHint')}</span>
             </label>
             <input
               className={cn(
@@ -173,14 +175,14 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
               className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
               htmlFor="team-description"
             >
-              Description
-              <span className="ml-1 font-normal text-zinc-400">(optional)</span>
+              {t('teams.description')}
+              <span className="ml-1 font-normal text-zinc-400">({t('teams.optional')})</span>
             </label>
             <textarea
               className="resize-none rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-600 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-400"
               id="team-description"
               onChange={e => setDescription(e.target.value)}
-              placeholder="What does this team work on?"
+              placeholder={t('teams.descriptionPlaceholder')}
               rows={2}
               value={description}
             />
@@ -194,8 +196,10 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
               type="checkbox"
             />
             <div>
-              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Private team</p>
-              <p className="text-xs text-zinc-400">Only members can see this team and its issues</p>
+              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                {t('teams.privateTeam')}
+              </p>
+              <p className="text-xs text-zinc-400">{t('teams.privateTeamHint')}</p>
             </div>
           </label>
         </div>
@@ -207,7 +211,7 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
             onClick={onClose}
             type="button"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             className={cn(
@@ -217,7 +221,7 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
             disabled={!canSubmit}
             type="submit"
           >
-            {submitting ? 'Creating…' : 'Create team'}
+            {submitting ? t('teams.creating') : t('teams.createTeam')}
           </button>
         </div>
       </form>

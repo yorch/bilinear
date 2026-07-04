@@ -3,10 +3,11 @@
 import { observer } from 'mobx-react-lite';
 import { useParams, useRouter } from 'next/navigation';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { priorityLabelKey } from '@/components/properties/priority-icon';
 import type { RecentItem } from '@/hooks/use-recent-items';
+import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue } from '@/lib/db';
 import { IDENTIFIER_RE } from '@/lib/identifiers';
-import { getPriorityConfig } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -39,11 +40,11 @@ type SubMenuMode =
 
 type SubMenuItem = { id: string; label: string; onSelect: () => void };
 
-const SUBMENU_PLACEHOLDERS = {
-  setAssignee: 'Set assignee…',
-  setLabel: 'Set label…',
-  setPriority: 'Set priority…',
-  setStatus: 'Set status…',
+const SUBMENU_PLACEHOLDER_KEYS = {
+  setAssignee: 'commandPalette.submenu.setAssignee',
+  setLabel: 'commandPalette.submenu.setLabel',
+  setPriority: 'commandPalette.submenu.setPriority',
+  setStatus: 'commandPalette.submenu.setStatus',
 } satisfies Record<Exclude<SubMenuMode['type'], 'none'>, string>;
 
 // ---------------------------------------------------------------------------
@@ -70,6 +71,7 @@ const ResultsList = observer(function ResultsList({
   workspaceKey,
 }: ResultsListProps) {
   const { issueStore, teamStore, uiStore, workflowStateStore } = useStore();
+  const t = useTranslations();
 
   const trimmed = (query || '').trim().toUpperCase();
   const exactIdentifier = IDENTIFIER_RE.test(trimmed)
@@ -99,7 +101,7 @@ const ResultsList = observer(function ResultsList({
         id: 'create-issue',
         keywords: ['create issue', 'new issue', 'add issue'],
         kind: 'action',
-        label: 'Create new issue',
+        label: t('commandPalette.actions.createIssue'),
         onSelect: () => {
           uiStore.closeCommandPalette();
           uiStore.openCreateIssueModal();
@@ -110,14 +112,14 @@ const ResultsList = observer(function ResultsList({
         id: 'go-settings',
         keywords: ['settings', 'preferences', 'config'],
         kind: 'action',
-        label: 'Go to Settings',
+        label: t('commandPalette.actions.goToSettings'),
         onSelect: () => {
           uiStore.closeCommandPalette();
           router.push(`/${workspaceKey}/settings`);
         },
       },
     ],
-    [router, uiStore, workspaceKey],
+    [router, uiStore, workspaceKey, t],
   );
   const actionItems: ActionItem[] = query
     ? baseActions.filter(a => {
@@ -135,13 +137,15 @@ const ResultsList = observer(function ResultsList({
   return (
     <>
       {allItems.length === 0 && (
-        <p className="px-4 py-3 text-sm text-zinc-400">No results for &ldquo;{query}&rdquo;</p>
+        <p className="px-4 py-3 text-sm text-zinc-400">
+          {t('commandPalette.noResultsFor', { query })}
+        </p>
       )}
 
       {issueItems.length > 0 && (
         <>
           <p className="px-4 py-1.5 text-xs font-medium uppercase tracking-wide text-zinc-400">
-            {query ? 'Issues' : 'Recent'}
+            {query ? t('commandPalette.sections.issues') : t('commandPalette.sections.recent')}
           </p>
           {issueItems.map((item, i) => (
             <button
@@ -183,7 +187,7 @@ const ResultsList = observer(function ResultsList({
       {actionItems.length > 0 && (
         <>
           <p className="px-4 py-1.5 text-xs font-medium uppercase tracking-wide text-zinc-400">
-            Actions
+            {t('commandPalette.sections.actions')}
           </p>
           {actionItems.map((item, i) => {
             const globalIdx = issueItems.length + i;
@@ -239,6 +243,7 @@ const SubMenuList = observer(function SubMenuList({
   subMenu,
 }: SubMenuListProps) {
   const { issueStore, labelStore, userStore, workflowStateStore } = useStore();
+  const t = useTranslations();
 
   let subItems: SubMenuItem[] = [];
 
@@ -260,7 +265,7 @@ const SubMenuList = observer(function SubMenuList({
     subItems = [
       {
         id: 'no-assignee',
-        label: 'No assignee',
+        label: t('commandPalette.submenu.noAssignee'),
         onSelect: () => {
           issueStore.optimisticUpdate(subMenu.issueId, { assigneeId: null });
           onClose();
@@ -278,7 +283,7 @@ const SubMenuList = observer(function SubMenuList({
   } else if (subMenu.type === 'setPriority') {
     subItems = ([0, 1, 2, 3, 4] as const).map(p => ({
       id: String(p),
-      label: getPriorityConfig(p).label,
+      label: t(priorityLabelKey(p)),
       onSelect: () => {
         issueStore.optimisticUpdate(subMenu.issueId, { priority: p });
         onClose();
@@ -307,7 +312,9 @@ const SubMenuList = observer(function SubMenuList({
 
   return (
     <>
-      {subItems.length === 0 && <p className="px-4 py-3 text-sm text-zinc-400">No options</p>}
+      {subItems.length === 0 && (
+        <p className="px-4 py-3 text-sm text-zinc-400">{t('commandPalette.submenu.noOptions')}</p>
+      )}
       {subItems.map((item, i) => (
         <button
           aria-selected={i === activeIndex}
@@ -339,17 +346,20 @@ const CommandPaletteFooter = memo(function CommandPaletteFooter({
 }: {
   inSubMenu: boolean;
 }) {
+  const t = useTranslations();
   return (
     <div className="flex items-center gap-4 border-t border-zinc-100 px-4 py-2 dark:border-zinc-800">
       <span className="text-[10px] text-zinc-400">
-        <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">↑↓</kbd> Navigate
+        <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">↑↓</kbd>{' '}
+        {t('commandPalette.footer.navigate')}
       </span>
       <span className="text-[10px] text-zinc-400">
-        <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">↵</kbd> Select
+        <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">↵</kbd>{' '}
+        {t('commandPalette.footer.select')}
       </span>
       <span className="text-[10px] text-zinc-400">
         <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">Esc</kbd>{' '}
-        {inSubMenu ? 'Back' : 'Close'}
+        {inSubMenu ? t('commandPalette.footer.back') : t('commandPalette.footer.close')}
       </span>
     </div>
   );
@@ -361,6 +371,7 @@ const CommandPaletteFooter = memo(function CommandPaletteFooter({
 
 function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
   const { uiStore } = useStore();
+  const t = useTranslations();
   const router = useRouter();
   const params = useParams<{ workspace?: string }>();
   const workspaceKey = params.workspace ?? '';
@@ -496,7 +507,7 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
 
       {/* Dialog */}
       <div
-        aria-label="Command palette"
+        aria-label={t('commandPalette.dialogAriaLabel')}
         aria-modal="true"
         className="fixed left-1/2 top-[20%] z-50 w-full max-w-xl -translate-x-1/2 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900"
         data-testid="command-palette"
@@ -506,7 +517,7 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
         <div className="flex items-center gap-2 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
           {inSubMenu && (
             <button
-              aria-label="Back"
+              aria-label={t('commandPalette.footer.back')}
               className="flex-shrink-0 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
               onClick={() => {
                 setSubMenu({ type: 'none' });
@@ -514,7 +525,7 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
               }}
               type="button"
             >
-              ← Back
+              ← {t('commandPalette.footer.back')}
             </button>
           )}
           <svg
@@ -534,18 +545,24 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
           <input
             aria-label={
               inSubMenu
-                ? (SUBMENU_PLACEHOLDERS[subMenu.type as keyof typeof SUBMENU_PLACEHOLDERS] ??
-                  'Search')
-                : 'Search issues and commands'
+                ? t(
+                    SUBMENU_PLACEHOLDER_KEYS[
+                      subMenu.type as keyof typeof SUBMENU_PLACEHOLDER_KEYS
+                    ] ?? 'commandPalette.searchAriaLabel',
+                  )
+                : t('commandPalette.searchAriaLabel')
             }
             autoComplete="off"
             className="flex-1 bg-transparent text-sm text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
             onChange={e => setQuery(e.target.value)}
             placeholder={
               inSubMenu
-                ? (SUBMENU_PLACEHOLDERS[subMenu.type as keyof typeof SUBMENU_PLACEHOLDERS] ??
-                  'Search…')
-                : 'Search issues, commands…'
+                ? t(
+                    SUBMENU_PLACEHOLDER_KEYS[
+                      subMenu.type as keyof typeof SUBMENU_PLACEHOLDER_KEYS
+                    ] ?? 'commandPalette.searchPlaceholder',
+                  )
+                : t('commandPalette.searchPlaceholder')
             }
             ref={inputRef}
             spellCheck={false}

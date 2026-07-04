@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
+import { INTL_LOCALES } from '@/lib/i18n';
+import { useLocale } from '@/providers/locale-provider';
 
 /**
  * Audit log page (admins only).
@@ -80,6 +83,8 @@ const AUDIT_ACTIONS = [
 ] as const;
 
 export default function AuditLogPage() {
+  const t = useTranslations();
+  const { locale } = useLocale();
   const [entries, setEntries] = useState<AuditLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
@@ -175,7 +180,7 @@ export default function AuditLogPage() {
     return (
       <div className="flex flex-1 items-center justify-center">
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          You need admin access to view audit logs.
+          {t('settings.auditLog.forbidden')}
         </p>
       </div>
     );
@@ -184,9 +189,11 @@ export default function AuditLogPage() {
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-8">
       <div className="mb-6">
-        <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Audit Log</h1>
+        <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          {t('settings.auditLog.title')}
+        </h1>
         <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          Security-relevant events for your organization. Only admins can view this log.
+          {t('settings.auditLog.description')}
         </p>
       </div>
 
@@ -197,7 +204,7 @@ export default function AuditLogPage() {
           onChange={e => setActionFilter(e.target.value)}
           value={actionFilter}
         >
-          <option value="">All actions</option>
+          <option value="">{t('settings.auditLog.allActions')}</option>
           {AUDIT_ACTIONS.map(a => (
             <option key={a} value={a}>
               {a}
@@ -207,7 +214,7 @@ export default function AuditLogPage() {
         <input
           className="rounded border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
           onChange={e => setUserIdFilter(e.target.value)}
-          placeholder="Filter by user ID"
+          placeholder={t('settings.auditLog.filterByUserId')}
           value={userIdFilter}
         />
         <button
@@ -215,7 +222,7 @@ export default function AuditLogPage() {
           onClick={handleApplyFilters}
           type="button"
         >
-          Apply
+          {t('settings.auditLog.apply')}
         </button>
         {(appliedAction || appliedUserId) && (
           <button
@@ -223,18 +230,18 @@ export default function AuditLogPage() {
             onClick={handleClearFilters}
             type="button"
           >
-            Clear
+            {t('settings.auditLog.clear')}
           </button>
         )}
       </div>
 
       {loading ? (
         <div className="flex flex-1 items-center justify-center py-16 text-sm text-zinc-400">
-          Loading...
+          {t('common.loading')}
         </div>
       ) : entries.length === 0 ? (
         <div className="rounded border border-dashed border-zinc-300 px-4 py-8 text-center text-sm text-zinc-400 dark:border-zinc-700">
-          No audit log entries found.
+          {t('settings.auditLog.noEntriesFound')}
         </div>
       ) : (
         <div className="overflow-hidden rounded border border-zinc-200 dark:border-zinc-800">
@@ -242,19 +249,19 @@ export default function AuditLogPage() {
             <thead>
               <tr className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
                 <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                  Action
+                  {t('settings.auditLog.columnAction')}
                 </th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                  User
+                  {t('settings.auditLog.columnUser')}
                 </th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                  Resource
+                  {t('settings.auditLog.columnResource')}
                 </th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                  IP
+                  {t('settings.auditLog.columnIp')}
                 </th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                  Timestamp
+                  {t('settings.auditLog.columnTimestamp')}
                 </th>
               </tr>
             </thead>
@@ -280,7 +287,9 @@ export default function AuditLogPage() {
                     ) : entry.userId ? (
                       <span className="font-mono text-xs text-zinc-400">{entry.userId}</span>
                     ) : (
-                      <span className="text-xs text-zinc-300 dark:text-zinc-600">system</span>
+                      <span className="text-xs text-zinc-300 dark:text-zinc-600">
+                        {t('settings.auditLog.system')}
+                      </span>
                     )}
                   </td>
                   <td className="px-4 py-2">
@@ -308,7 +317,7 @@ export default function AuditLogPage() {
                   </td>
                   <td className="px-4 py-2">
                     <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                      {new Date(entry.createdAt).toLocaleString(undefined, {
+                      {new Date(entry.createdAt).toLocaleString(INTL_LOCALES[locale], {
                         day: 'numeric',
                         hour: '2-digit',
                         minute: '2-digit',
@@ -332,7 +341,7 @@ export default function AuditLogPage() {
             onClick={handleLoadMore}
             type="button"
           >
-            {loadingMore ? 'Loading...' : 'Load more'}
+            {loadingMore ? t('common.loading') : t('settings.auditLog.loadMore')}
           </button>
         </div>
       )}

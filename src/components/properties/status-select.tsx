@@ -1,6 +1,7 @@
 'use client';
 
 import { SelectPopover } from '@/components/ui/select-popover';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 
 interface WorkflowState {
@@ -36,6 +37,7 @@ export function StatusSelect({
   forceOpen,
   onClose,
 }: StatusSelectProps) {
+  const t = useTranslations();
   const current = states.find(s => s.id === value);
 
   return (
@@ -52,7 +54,7 @@ export function StatusSelect({
         </>
       }
       triggerClassName="gap-1.5 px-1.5 py-1 text-xs"
-      triggerTitle={current?.name ?? 'Status'}
+      triggerTitle={current?.name ?? t('properties.status.status')}
     >
       {close =>
         states.map(state => (

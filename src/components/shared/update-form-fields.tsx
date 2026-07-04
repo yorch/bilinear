@@ -1,6 +1,7 @@
 'use client';
 
-import { PROJECT_HEALTH_OPTIONS } from '@/lib/project-constants';
+import { useTranslations } from '@/hooks/use-translations';
+import { PROJECT_HEALTH_LABEL_KEYS, PROJECT_HEALTH_OPTIONS } from '@/lib/project-constants';
 import { cn } from '@/lib/utils';
 
 interface UpdateFormFieldsProps {
@@ -20,10 +21,13 @@ export function UpdateFormFields({
   placeholder,
   showNone = false,
 }: UpdateFormFieldsProps) {
+  const t = useTranslations();
   return (
     <>
       <div className="mb-3 flex gap-1">
-        <span className="mr-1 self-center text-xs text-zinc-500 dark:text-zinc-400">Health:</span>
+        <span className="mr-1 self-center text-xs text-zinc-500 dark:text-zinc-400">
+          {t('properties.updateForm.health.label')}
+        </span>
         {showNone && (
           <button
             className={cn(
@@ -35,7 +39,7 @@ export function UpdateFormFields({
             onClick={() => onHealthChange('')}
             type="button"
           >
-            None
+            {t('properties.updateForm.health.none')}
           </button>
         )}
         {PROJECT_HEALTH_OPTIONS.map(h => (
@@ -50,7 +54,7 @@ export function UpdateFormFields({
             onClick={() => onHealthChange(h.value)}
             type="button"
           >
-            {h.label}
+            {t(PROJECT_HEALTH_LABEL_KEYS[h.value] ?? h.label)}
           </button>
         ))}
       </div>

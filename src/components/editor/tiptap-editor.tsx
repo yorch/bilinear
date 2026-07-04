@@ -30,6 +30,7 @@ import { common, createLowlight } from 'lowlight';
 import { ImageIcon, Link2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import * as Y from 'yjs';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 import { Details, DetailsSummary } from './details-node';
 import { EmbedNode } from './embed-node';
@@ -448,7 +449,7 @@ function buildProjectMentionExtension(projectsRef: React.RefObject<MentionItem[]
 
 export function TipTapEditor({
   content = '',
-  placeholder = 'Add a description…',
+  placeholder: placeholderProp,
   onChange,
   onBlur,
   className,
@@ -461,8 +462,11 @@ export function TipTapEditor({
   uploadIssueId,
   uploadProjectId,
   collabDocId,
-  collabUserName = 'User',
+  collabUserName,
 }: TipTapEditorProps) {
+  const t = useTranslations();
+  const placeholder = placeholderProp ?? t('editor.placeholder');
+  const resolvedCollabUserName = collabUserName ?? t('issueDetail.defaultUserName');
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
@@ -565,7 +569,7 @@ export function TipTapEditor({
     // Stamp cursor awareness with user identity for CollaborationCursor.
     providerRef.current.setAwarenessField('user', {
       color: cursorColor,
-      name: collabUserName,
+      name: resolvedCollabUserName,
     });
   }
 
@@ -575,10 +579,10 @@ export function TipTapEditor({
     if (collabEnabled && providerRef.current && cursorColorRef.current) {
       providerRef.current.setAwarenessField('user', {
         color: cursorColorRef.current,
-        name: collabUserName,
+        name: resolvedCollabUserName,
       });
     }
-  }, [collabEnabled, collabUserName]);
+  }, [collabEnabled, resolvedCollabUserName]);
 
   // Destroy provider and YJS doc on unmount.
   useEffect(
@@ -735,7 +739,7 @@ export function TipTapEditor({
       return;
     }
     const prev = editor.getAttributes('link').href ?? '';
-    const url = window.prompt('URL', prev);
+    const url = window.prompt(t('editor.linkPrompt'), prev);
     if (url === null) {
       return;
     }
@@ -744,7 +748,7 @@ export function TipTapEditor({
     } else {
       editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
     }
-  }, [editor]);
+  }, [editor, t]);
 
   /**
    * Insert an image from a file input — converts to a base64 data URL.
@@ -783,53 +787,57 @@ export function TipTapEditor({
           <ToolbarButton
             active={editor.isActive('bold')}
             onClick={() => editor.chain().focus().toggleBold().run()}
-            title="Bold"
+            title={t('editor.toolbar.bold')}
           >
             <strong>B</strong>
           </ToolbarButton>
           <ToolbarButton
             active={editor.isActive('italic')}
             onClick={() => editor.chain().focus().toggleItalic().run()}
-            title="Italic"
+            title={t('editor.toolbar.italic')}
           >
             <em>I</em>
           </ToolbarButton>
           <ToolbarButton
             active={editor.isActive('underline')}
             onClick={() => editor.chain().focus().toggleUnderline().run()}
-            title="Underline"
+            title={t('editor.toolbar.underline')}
           >
             <span className="underline">U</span>
           </ToolbarButton>
           <ToolbarButton
             active={editor.isActive('strike')}
             onClick={() => editor.chain().focus().toggleStrike().run()}
-            title="Strikethrough"
+            title={t('editor.toolbar.strikethrough')}
           >
             <span className="line-through">S</span>
           </ToolbarButton>
-          <ToolbarButton active={editor.isActive('link')} onClick={setLink} title="Link">
+          <ToolbarButton
+            active={editor.isActive('link')}
+            onClick={setLink}
+            title={t('editor.toolbar.link')}
+          >
             <Link2 className="h-3 w-3" />
           </ToolbarButton>
           <div className="mx-1 h-4 w-px bg-zinc-300 dark:bg-zinc-600" />
           <ToolbarButton
             active={editor.isActive('heading', { level: 1 })}
             onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-            title="Heading 1"
+            title={t('editor.toolbar.heading1')}
           >
             H1
           </ToolbarButton>
           <ToolbarButton
             active={editor.isActive('heading', { level: 2 })}
             onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-            title="Heading 2"
+            title={t('editor.toolbar.heading2')}
           >
             H2
           </ToolbarButton>
           <ToolbarButton
             active={editor.isActive('heading', { level: 3 })}
             onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-            title="Heading 3"
+            title={t('editor.toolbar.heading3')}
           >
             H3
           </ToolbarButton>
@@ -837,21 +845,21 @@ export function TipTapEditor({
           <ToolbarButton
             active={editor.isActive('bulletList')}
             onClick={() => editor.chain().focus().toggleBulletList().run()}
-            title="Bullet list"
+            title={t('editor.toolbar.bulletList')}
           >
             •—
           </ToolbarButton>
           <ToolbarButton
             active={editor.isActive('orderedList')}
             onClick={() => editor.chain().focus().toggleOrderedList().run()}
-            title="Ordered list"
+            title={t('editor.toolbar.orderedList')}
           >
             1.
           </ToolbarButton>
           <ToolbarButton
             active={editor.isActive('taskList')}
             onClick={() => editor.chain().focus().toggleTaskList().run()}
-            title="Task list"
+            title={t('editor.toolbar.taskList')}
           >
             ☐
           </ToolbarButton>
@@ -859,14 +867,14 @@ export function TipTapEditor({
           <ToolbarButton
             active={editor.isActive('codeBlock')}
             onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-            title="Code block"
+            title={t('editor.toolbar.codeBlock')}
           >
             {'{}'}
           </ToolbarButton>
           <ToolbarButton
             active={editor.isActive('blockquote')}
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
-            title="Blockquote"
+            title={t('editor.toolbar.blockquote')}
           >
             ❝
           </ToolbarButton>
@@ -875,14 +883,14 @@ export function TipTapEditor({
             onClick={() =>
               editor.chain().focus().insertTable({ cols: 3, rows: 3, withHeaderRow: true }).run()
             }
-            title="Insert table"
+            title={t('editor.toolbar.insertTable')}
           >
             ⊞
           </ToolbarButton>
           <ToolbarButton
             active={false}
             onClick={() => editor.chain().focus().setHorizontalRule().run()}
-            title="Divider"
+            title={t('editor.toolbar.divider')}
           >
             —
           </ToolbarButton>
@@ -891,7 +899,7 @@ export function TipTapEditor({
           <ToolbarButton
             active={false}
             onClick={() => imageInputRef.current?.click()}
-            title="Insert image"
+            title={t('editor.toolbar.insertImage')}
           >
             <ImageIcon className="h-3 w-3" />
           </ToolbarButton>

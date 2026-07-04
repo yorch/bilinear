@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { APP_NAME } from '@/lib/app-config';
 import { childLogger } from './logger';
 
 const log = childLogger({ module: 'email' });
@@ -49,7 +50,7 @@ function escapeHtml(text: string): string {
 function fromAddress(): string {
   const host = process.env.SMTP_HOST ?? 'example.com';
   const domain = host.startsWith('smtp.') ? host.slice(5) : host;
-  return `"Bilinear" <noreply@${domain}>`;
+  return `"${APP_NAME}" <noreply@${domain}>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -81,7 +82,7 @@ export async function sendMagicLinkEmail(email: string, code: string): Promise<v
   const info = await transport.sendMail({
     from: fromAddress(),
     html: htmlWrap(`
-      <h2 style="font-size:20px;font-weight:600;margin-bottom:8px">Sign in to Bilinear</h2>
+      <h2 style="font-size:20px;font-weight:600;margin-bottom:8px">Sign in to ${APP_NAME}</h2>
       <p style="color:#374151">Your sign-in code is:</p>
       <div style="font-size:36px;font-weight:700;letter-spacing:10px;padding:16px 0;color:#111">${code}</div>
       <p>Or <a href="${verifyUrl}" style="color:#6366f1">click here to sign in</a>.</p>

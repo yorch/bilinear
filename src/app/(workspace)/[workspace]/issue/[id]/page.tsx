@@ -4,6 +4,7 @@ import { observer } from 'mobx-react-lite';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
@@ -47,6 +48,7 @@ const ISSUE_UPDATE_MUTATION = `
 `;
 
 const IssueDetailPage = observer(function IssueDetailPage() {
+  const t = useTranslations();
   const { workspace, id } = useParams<{ workspace: string; id: string }>();
   const router = useRouter();
   const { issueStore, teamStore, workflowStateStore, labelStore, userStore } = useStore();
@@ -139,14 +141,16 @@ const IssueDetailPage = observer(function IssueDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">Loading…</div>
+      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+        {t('common.loading')}
+      </div>
     );
   }
 
   if (!issue) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Issue not found.
+        {t('issueDetail.issueNotFound')}
       </div>
     );
   }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import type { ColumnKey } from '@/hooks/use-visible-columns';
 import type { DBCustomFieldDefinition } from '@/lib/db';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
@@ -63,6 +64,7 @@ export function IssueListView({
   customFields,
   getCustomFieldValue,
 }: IssueListViewProps) {
+  const t = useTranslations();
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const lastCheckedIndexRef = useRef<number>(-1);
@@ -123,7 +125,7 @@ export function IssueListView({
       state: {
         color: 'var(--muted-foreground)',
         id: '__ungrouped__',
-        name: 'Issues',
+        name: t('issues.issuesGroupName'),
         type: 'backlog',
       },
     });
@@ -135,8 +137,9 @@ export function IssueListView({
         className="flex flex-1 items-center justify-center py-20 text-sm text-zinc-400"
         data-testid="empty-state"
       >
-        No issues found. Press <kbd className="mx-1 rounded border px-1 font-mono text-xs">C</kbd>{' '}
-        to create one.
+        {t('issues.noIssuesFoundPrefix')}{' '}
+        <kbd className="mx-1 rounded border px-1 font-mono text-xs">C</kbd>{' '}
+        {t('issues.noIssuesFoundSuffix')}
       </div>
     );
   }

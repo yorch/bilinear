@@ -5,6 +5,7 @@ import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { createDocument } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { useStore } from '@/providers/store-provider';
@@ -21,6 +22,7 @@ export const DocumentList = observer(function DocumentList({
   const { workspace } = useParams<{ workspace: string }>();
   const router = useRouter();
   const { documentStore } = useStore();
+  const t = useTranslations();
   const [creating, setCreating] = useState(false);
 
   // Plain selector — observer() picks up the observable reads, so the
@@ -38,7 +40,7 @@ export const DocumentList = observer(function DocumentList({
       const result = await createDocument({
         projectId: projectId ?? undefined,
         teamId: teamId ?? undefined,
-        title: 'Untitled',
+        title: t('documents.untitled'),
       });
       const id = (result.data as { documentCreate?: { document?: { id: string } } })?.documentCreate
         ?.document?.id;
@@ -46,7 +48,7 @@ export const DocumentList = observer(function DocumentList({
         router.push(`/${workspace}/docs/${id}`);
       }
     } catch {
-      toast.error('Failed to create document');
+      toast.error(t('documents.createFailed'));
     } finally {
       setCreating(false);
     }
@@ -55,7 +57,9 @@ export const DocumentList = observer(function DocumentList({
   return (
     <div className="flex flex-col gap-1 p-4">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Documents</h2>
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          {t('documents.title')}
+        </h2>
         <button
           className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
           disabled={creating}
@@ -63,21 +67,21 @@ export const DocumentList = observer(function DocumentList({
           type="button"
         >
           <Plus className="h-3 w-3" />
-          {creating ? 'Creating…' : 'New Document'}
+          {creating ? t('documents.creating') : t('documents.newDocument')}
         </button>
       </div>
 
       {documents.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 py-12 text-zinc-400">
           <FileText className="h-8 w-8" />
-          <p className="text-sm">No documents yet</p>
+          <p className="text-sm">{t('documents.emptyState')}</p>
           <button
             className="text-xs text-indigo-500 hover:text-indigo-600 disabled:opacity-50"
             disabled={creating}
             onClick={handleNewDocument}
             type="button"
           >
-            {creating ? 'Creating…' : 'Create your first document'}
+            {creating ? t('documents.creating') : t('documents.createFirst')}
           </button>
         </div>
       ) : (
@@ -95,7 +99,7 @@ export const DocumentList = observer(function DocumentList({
                     <FileText className="h-4 w-4 text-zinc-400" />
                   )}
                 </span>
-                <span className="truncate">{doc.title || 'Untitled'}</span>
+                <span className="truncate">{doc.title || t('documents.untitled')}</span>
               </Link>
               {documentStore.getChildren(doc.id).map(child => (
                 <Link
@@ -110,7 +114,7 @@ export const DocumentList = observer(function DocumentList({
                       <FileText className="h-3 w-3 text-zinc-400" />
                     )}
                   </span>
-                  <span className="truncate">{child.title || 'Untitled'}</span>
+                  <span className="truncate">{child.title || t('documents.untitled')}</span>
                 </Link>
               ))}
             </li>

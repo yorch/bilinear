@@ -1,6 +1,7 @@
 'use client';
 
 import { SelectPopover } from '@/components/ui/select-popover';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 import { UserAvatar } from '../ui/user-avatar';
 
@@ -29,6 +30,7 @@ export function AssigneeSelect({
   forceOpen,
   onClose,
 }: AssigneeSelectProps) {
+  const t = useTranslations();
   const current = users.find(u => u.id === value);
 
   return (
@@ -46,7 +48,7 @@ export function AssigneeSelect({
         )
       }
       triggerClassName="px-1 py-1"
-      triggerTitle={current?.displayName ?? 'No assignee'}
+      triggerTitle={current?.displayName ?? t('properties.assignee.noAssignee')}
     >
       {close => (
         <>
@@ -59,7 +61,7 @@ export function AssigneeSelect({
             }}
             type="button"
           >
-            No assignee
+            {t('properties.assignee.noAssignee')}
           </button>
           {users.map(user => (
             <button

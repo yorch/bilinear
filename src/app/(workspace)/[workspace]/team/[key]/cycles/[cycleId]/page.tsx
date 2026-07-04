@@ -3,9 +3,11 @@
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { CycleDetailView } from '@/components/cycles/cycle-detail-view';
+import { useTranslations } from '@/hooks/use-translations';
 import { useStore } from '@/providers/store-provider';
 
 const CycleDetailPage = observer(function CycleDetailPage() {
+  const t = useTranslations();
   const {
     workspace,
     key: teamKey,
@@ -21,7 +23,7 @@ const CycleDetailPage = observer(function CycleDetailPage() {
   if (isLoading) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Loading...
+        {t('common.loading')}
       </div>
     );
   }
@@ -30,7 +32,7 @@ const CycleDetailPage = observer(function CycleDetailPage() {
   if (!team) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Team not found.
+        {t('cycles.teamNotFound')}
       </div>
     );
   }
@@ -39,7 +41,7 @@ const CycleDetailPage = observer(function CycleDetailPage() {
   if (!cycle || cycle.teamId !== team.id) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Cycle not found.
+        {t('cycles.cycleNotFound')}
       </div>
     );
   }

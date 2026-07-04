@@ -11,6 +11,7 @@ import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-pane
 import { type ViewMode, ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { useHotkeys } from '@/hooks/use-hotkeys';
+import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue, DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
 import { ISSUE_UPDATE_MUTATION, ISSUES_BULK_UPDATE_MUTATION } from '@/lib/graphql-queries';
@@ -25,6 +26,7 @@ import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
 const MyIssuesPage = observer(function MyIssuesPage() {
   const { workspace } = useParams<{ workspace: string }>();
   const router = useRouter();
+  const t = useTranslations();
   const { issueStore, userStore, workflowStateStore, labelStore, syncStore } = useStore();
 
   const txQueue = useMemo(() => new TransactionQueue(), []);
@@ -247,14 +249,16 @@ const MyIssuesPage = observer(function MyIssuesPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">Loading…</div>
+      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+        {t('common.loading')}
+      </div>
     );
   }
 
   if (hasError) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-red-500">
-        Failed to load data. Please refresh.
+        {t('issues.failedToLoad')}
       </div>
     );
   }
@@ -264,7 +268,9 @@ const MyIssuesPage = observer(function MyIssuesPage() {
       {/* Page header */}
       <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
         <div className="flex items-center gap-2">
-          <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">My Issues</h1>
+          <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            {t('issues.myIssues')}
+          </h1>
           <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
             {issues.length}
           </span>
@@ -277,18 +283,18 @@ const MyIssuesPage = observer(function MyIssuesPage() {
                 onChange={e => setBoardGroupBy(e.target.value as BoardGroupBy)}
                 value={boardGroupBy}
               >
-                <option value="status">Group by status</option>
-                <option value="assignee">Group by assignee</option>
-                <option value="priority">Group by priority</option>
+                <option value="status">{t('issues.groupByStatus')}</option>
+                <option value="assignee">{t('issues.groupByAssignee')}</option>
+                <option value="priority">{t('issues.groupByPriority')}</option>
               </select>
               <select
                 className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
                 onChange={e => setSwimlaneBy(e.target.value as BoardSwimlaneBy)}
                 value={swimlaneBy}
               >
-                <option value="none">No swimlanes</option>
-                <option value="assignee">Swimlane by assignee</option>
-                <option value="priority">Swimlane by priority</option>
+                <option value="none">{t('issues.noSwimlanes')}</option>
+                <option value="assignee">{t('issues.swimlaneByAssignee')}</option>
+                <option value="priority">{t('issues.swimlaneByPriority')}</option>
               </select>
             </>
           )}
@@ -325,7 +331,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
           />
         ) : viewMode === 'timeline' ? (
           <GanttView
-            emptyMessage="No issues with start or due dates. Add dates to issues to populate the timeline."
+            emptyMessage={t('issues.ganttEmptyMessage')}
             items={issues
               .filter(i => i.startDate ?? i.dueDate)
               .map<GanttItem>(i => ({

@@ -1,9 +1,11 @@
 'use client';
 
 import { X } from 'lucide-react';
+import { priorityLabelKey } from '@/components/properties/priority-icon';
 import { StatusDot } from '@/components/properties/status-select';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { UserAvatar } from '@/components/ui/user-avatar';
+import { useTranslations } from '@/hooks/use-translations';
 import { getPriorityConfig } from '@/lib/issue-utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 
@@ -26,16 +28,17 @@ export function BulkActionBar({
   onUpdate,
   onClear,
 }: BulkActionBarProps) {
+  const t = useTranslations();
   return (
     <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
       <span className="mr-2 whitespace-nowrap text-sm font-medium text-zinc-700 dark:text-zinc-300">
-        {count} selected
+        {t('issues.selectedCount', { count })}
       </span>
 
       <SelectPopover
         triggerChildren={
           <span className="px-2 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-400">
-            Status
+            {t('issues.status')}
           </span>
         }
         triggerClassName="rounded border border-zinc-200 dark:border-zinc-700"
@@ -63,7 +66,7 @@ export function BulkActionBar({
       <SelectPopover
         triggerChildren={
           <span className="px-2 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-400">
-            Priority
+            {t('issues.priority')}
           </span>
         }
         triggerClassName="rounded border border-zinc-200 dark:border-zinc-700"
@@ -86,7 +89,7 @@ export function BulkActionBar({
                     className="h-2 w-2 shrink-0 rounded-full"
                     style={{ backgroundColor: cfg.color }}
                   />
-                  <span>{cfg.label}</span>
+                  <span>{t(priorityLabelKey(p))}</span>
                 </button>
               );
             })}
@@ -97,7 +100,7 @@ export function BulkActionBar({
       <SelectPopover
         triggerChildren={
           <span className="px-2 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-400">
-            Assignee
+            {t('issues.assignee')}
           </span>
         }
         triggerClassName="rounded border border-zinc-200 dark:border-zinc-700"
@@ -115,7 +118,7 @@ export function BulkActionBar({
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-xs text-zinc-500 dark:bg-zinc-700">
                 —
               </span>
-              <span>Unassigned</span>
+              <span>{t('issues.unassigned')}</span>
             </button>
             {users.map(u => (
               <button
@@ -139,7 +142,7 @@ export function BulkActionBar({
         <SelectPopover
           triggerChildren={
             <span className="px-2 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-400">
-              Label
+              {t('issues.label')}
             </span>
           }
           triggerClassName="rounded border border-zinc-200 dark:border-zinc-700"
@@ -173,7 +176,7 @@ export function BulkActionBar({
       <button
         className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
         onClick={onClear}
-        title="Clear selection"
+        title={t('issues.clearSelection')}
         type="button"
       >
         <X className="h-4 w-4" />

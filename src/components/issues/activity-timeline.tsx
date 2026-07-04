@@ -2,9 +2,12 @@
 
 import { Activity, Clock } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { ISSUE_ACTIVITIES_QUERY } from '@/lib/graphql-queries';
+import { INTL_LOCALES } from '@/lib/i18n';
 import { cn, formatRelativeTime } from '@/lib/utils';
+import { useLocale } from '@/providers/locale-provider';
 
 interface ActivityActor {
   avatarBgColor: string | null;
@@ -28,39 +31,50 @@ interface ActivityTimelineProps {
   refetchKey?: number;
 }
 
-const FIELD_LABELS: Record<string, string> = {
-  assigneeId: 'assignee',
-  cycleId: 'cycle',
-  description: 'description',
-  dueDate: 'due date',
-  estimate: 'estimate',
-  labels: 'labels',
-  priority: 'priority',
-  projectId: 'project',
-  status: 'status',
-  title: 'title',
+const FIELD_LABEL_KEYS: Record<string, string> = {
+  assigneeId: 'issueDetail.activity.fields.assignee',
+  cycleId: 'issueDetail.activity.fields.cycle',
+  description: 'issueDetail.activity.fields.description',
+  dueDate: 'issueDetail.activity.fields.dueDate',
+  estimate: 'issueDetail.activity.fields.estimate',
+  labels: 'issueDetail.activity.fields.labels',
+  priority: 'issueDetail.activity.fields.priority',
+  projectId: 'issueDetail.activity.fields.project',
+  status: 'issueDetail.activity.fields.status',
+  title: 'issueDetail.activity.fields.title',
 };
 
-function getFieldLabel(field: string): string {
-  return FIELD_LABELS[field] ?? field;
+function getFieldLabel(field: string, t: ReturnType<typeof useTranslations>): string {
+  const key = FIELD_LABEL_KEYS[field];
+  return key ? t(key) : field;
 }
 
-function formatActivityDescription(activity: IssueActivity): string {
-  const actorName = activity.actor?.displayName ?? 'System';
-  const field = getFieldLabel(activity.field);
+function formatActivityDescription(
+  activity: IssueActivity,
+  t: ReturnType<typeof useTranslations>,
+): string {
+  const actorName = activity.actor?.displayName ?? t('issueDetail.activity.system');
+  const field = getFieldLabel(activity.field, t);
 
   if (activity.newValue === null) {
-    return `${actorName} cleared ${field}`;
+    return t('issueDetail.activity.cleared', { actor: actorName, field });
   }
   if (activity.oldValue === null) {
-    return `${actorName} set ${field} to ${activity.newValue}`;
+    return t('issueDetail.activity.set', { actor: actorName, field, value: activity.newValue });
   }
-  return `${actorName} changed ${field} from ${activity.oldValue} to ${activity.newValue}`;
+  return t('issueDetail.activity.changed', {
+    actor: actorName,
+    field,
+    newValue: activity.newValue,
+    oldValue: activity.oldValue,
+  });
 }
 
 const COLLAPSE_THRESHOLD = 5;
 
 export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps) {
+  const t = useTranslations();
+  const { locale } = useLocale();
   const [activities, setActivities] = useState<IssueActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
@@ -107,7 +121,7 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
     return (
       <div className="flex items-center gap-2 py-4 text-xs text-zinc-400">
         <Clock className="h-3.5 w-3.5 animate-pulse" />
-        <span>Loading activity…</span>
+        <span>{t('issueDetail.activity.loading')}</span>
       </div>
     );
   }
@@ -116,7 +130,7 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
     return (
       <div className="flex items-center gap-2 py-4 text-xs text-zinc-400">
         <Activity className="h-3.5 w-3.5" />
-        <span>No activity recorded yet.</span>
+        <span>{t('issueDetail.activity.empty')}</span>
       </div>
     );
   }
@@ -142,7 +156,7 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
                   actor?.avatarBgColor ? '' : 'bg-zinc-400 dark:bg-zinc-600',
                 )}
                 style={actor?.avatarBgColor ? { backgroundColor: actor.avatarBgColor } : undefined}
-                title={actor?.displayName ?? 'System'}
+                title={actor?.displayName ?? t('issueDetail.activity.system')}
               >
                 {actor?.initials ?? 'S'}
               </span>
@@ -152,10 +166,10 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
             {/* Content */}
             <div className={cn('min-w-0 flex-1 pb-3', isLast && 'pb-0')}>
               <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                {formatActivityDescription(activity)}
+                {formatActivityDescription(activity, t)}
               </p>
               <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
-                {formatRelativeTime(activity.createdAt)}
+                {formatRelativeTime(activity.createdAt, t, INTL_LOCALES[locale])}
               </p>
             </div>
           </div>
@@ -168,7 +182,9 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
           onClick={() => setExpanded(e => !e)}
           type="button"
         >
-          {expanded ? 'Show less' : `Show ${hiddenCount} more`}
+          {expanded
+            ? t('issueDetail.activity.showLess')
+            : t('issueDetail.activity.showMore', { count: hiddenCount })}
         </button>
       )}
     </div>

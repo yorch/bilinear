@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ModalDialog } from '@/components/ui/modal-dialog';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn, getErrorMessage } from '@/lib/utils';
 
 export interface SaveViewInput {
@@ -38,6 +39,7 @@ export function SaveViewModal({
   initialGroupBy,
   initialLayout,
 }: SaveViewModalProps) {
+  const t = useTranslations();
   const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -78,7 +80,7 @@ export function SaveViewModal({
       });
       onClose();
     } catch (err) {
-      setSubmitError(getErrorMessage(err, 'Failed to save view'));
+      setSubmitError(getErrorMessage(err, t('properties.saveView.failedToSaveView')));
     } finally {
       setSubmitting(false);
     }
@@ -87,10 +89,12 @@ export function SaveViewModal({
   const canSubmit = name.trim().length > 0 && !submitting;
 
   return (
-    <ModalDialog aria-label="Save view" onClose={onClose} open={open}>
+    <ModalDialog aria-label={t('properties.saveView.title')} onClose={onClose} open={open}>
       <form className="flex flex-col" onSubmit={handleSubmit}>
         <div className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Save view</h2>
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            {t('properties.saveView.title')}
+          </h2>
         </div>
 
         <div className="flex flex-col gap-4 px-5 py-4">
@@ -99,13 +103,13 @@ export function SaveViewModal({
               className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
               htmlFor="view-name"
             >
-              Name
+              {t('properties.saveView.name')}
             </label>
             <input
               className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
               id="view-name"
               onChange={e => setName(e.target.value)}
-              placeholder="e.g. My Active Issues"
+              placeholder={t('properties.saveView.namePlaceholder')}
               ref={nameRef}
               required
               type="text"
@@ -118,14 +122,16 @@ export function SaveViewModal({
               className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
               htmlFor="view-description"
             >
-              Description
-              <span className="ml-1 font-normal text-zinc-400">(optional)</span>
+              {t('properties.saveView.description')}
+              <span className="ml-1 font-normal text-zinc-400">
+                ({t('properties.saveView.optional')})
+              </span>
             </label>
             <textarea
               className="resize-none rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-600 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-400"
               id="view-description"
               onChange={e => setDescription(e.target.value)}
-              placeholder="Describe this view"
+              placeholder={t('properties.saveView.descriptionPlaceholder')}
               rows={2}
               value={description}
             />
@@ -140,9 +146,9 @@ export function SaveViewModal({
             />
             <div>
               <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Share with team
+                {t('properties.saveView.shareWithTeam')}
               </p>
-              <p className="text-xs text-zinc-400">Other members can see and use this view</p>
+              <p className="text-xs text-zinc-400">{t('properties.saveView.shareDescription')}</p>
             </div>
           </label>
         </div>
@@ -154,7 +160,7 @@ export function SaveViewModal({
             onClick={onClose}
             type="button"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             className={cn(
@@ -164,7 +170,7 @@ export function SaveViewModal({
             disabled={!canSubmit}
             type="submit"
           >
-            {submitting ? 'Saving...' : 'Save view'}
+            {submitting ? t('common.saving') : t('properties.saveView.saveView')}
           </button>
         </div>
       </form>

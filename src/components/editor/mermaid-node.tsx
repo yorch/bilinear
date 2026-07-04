@@ -5,6 +5,7 @@ import { mergeAttributes, Node } from '@tiptap/core';
 import type { NodeViewProps } from '@tiptap/react';
 import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import { useEffect, useRef, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 
 // Mermaid is large — lazy-load it only when a diagram is first rendered.
@@ -28,6 +29,7 @@ async function renderMermaid(code: string, id: string): Promise<string> {
 }
 
 function MermaidView({ node, updateAttributes, selected }: NodeViewProps) {
+  const t = useTranslations();
   const code = (node.attrs.code as string) ?? '';
   const [svg, setSvg] = useState<string>('');
   const [error, setError] = useState<string>('');
@@ -53,7 +55,7 @@ function MermaidView({ node, updateAttributes, selected }: NodeViewProps) {
     return (
       <NodeViewWrapper>
         <div className="mermaid-editor my-2 rounded-md border border-zinc-300 bg-zinc-50 p-2 dark:border-zinc-700 dark:bg-zinc-900">
-          <p className="mb-1 text-xs font-medium text-zinc-500">Mermaid diagram</p>
+          <p className="mb-1 text-xs font-medium text-zinc-500">{t('editor.mermaid.label')}</p>
           <textarea
             className="w-full rounded border border-zinc-200 bg-white p-2 font-mono text-xs text-zinc-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
             defaultValue={code}
@@ -81,7 +83,7 @@ function MermaidView({ node, updateAttributes, selected }: NodeViewProps) {
             : 'border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900',
         )}
         onDoubleClick={() => setEditing(true)}
-        title="Double-click to edit"
+        title={t('editor.mermaid.editHint')}
         type="button"
       >
         {error ? (

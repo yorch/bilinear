@@ -24,8 +24,11 @@ import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { LanguageToggle } from '@/components/language-toggle';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useAuth } from '@/hooks/use-auth';
+import { useTranslations } from '@/hooks/use-translations';
+import { APP_NAME } from '@/lib/app-config';
 import { gql } from '@/lib/graphql';
 import { FAVORITE_DELETE_MUTATION, FAVORITES_QUERY } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
@@ -137,6 +140,7 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
   pathname: string;
 }) {
   const { favoriteStore, teamStore } = useStore();
+  const t = useTranslations();
   const [favorites, setFavorites] = useState<FavoriteMeta[]>([]);
 
   // Derive a stable string from the MobX store that changes on any insert,
@@ -158,12 +162,12 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
     try {
       const res = await gql(FAVORITE_DELETE_MUTATION, { id });
       if (res.errors?.length) {
-        toast.error('Failed to remove favorite');
+        toast.error(t('nav.failedToRemoveFavorite'));
       } else {
         setFavorites(prev => prev.filter(f => f.id !== id));
       }
     } catch {
-      toast.error('Failed to remove favorite');
+      toast.error(t('nav.failedToRemoveFavorite'));
     }
   }
 
@@ -175,7 +179,7 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
     <div className="mt-4 px-1.5">
       <div className="mb-1 flex items-center px-2">
         <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-          Favorites
+          {t('nav.favorites')}
         </span>
       </div>
       <ul className="flex flex-col gap-0.5">
@@ -199,10 +203,10 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
                 <span className="truncate text-xs">{label}</span>
               </Link>
               <button
-                aria-label={`Remove ${label} from favorites`}
+                aria-label={t('nav.removeNamedFromFavorites', { name: label })}
                 className="mr-1 hidden shrink-0 rounded p-0.5 text-zinc-400 hover:text-zinc-700 group-hover:flex dark:hover:text-zinc-200"
                 onClick={() => void removeFavorite(fav.id)}
-                title="Remove from favorites"
+                title={t('nav.removeFromFavorites')}
                 type="button"
               >
                 <X className="h-3 w-3" />
@@ -227,6 +231,7 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
   pathname: string;
 }) {
   const { customViewStore, teamStore, uiStore } = useStore();
+  const t = useTranslations();
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the intentional reactive trigger
   const teams = useMemo(() => {
@@ -251,13 +256,13 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
         <div className="mt-4 px-1.5">
           <div className="mb-1 flex items-center justify-between px-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-              Teams
+              {t('nav.teams')}
             </span>
             <button
-              aria-label="New team"
+              aria-label={t('nav.newTeam')}
               className="flex h-5 w-5 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-zinc-200 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
               onClick={() => uiStore.openCreateTeamModal()}
-              title="New team"
+              title={t('nav.newTeam')}
               type="button"
             >
               <Plus className="h-3 w-3" />
@@ -272,7 +277,7 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                   type="button"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  Create a team
+                  {t('nav.createTeam')}
                 </button>
               </li>
             ) : (
@@ -327,10 +332,10 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                           : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
                       )}
                       href={backlogHref}
-                      title="Backlog"
+                      title={t('nav.backlog')}
                     >
                       <Archive className="h-3 w-3" />
-                      Backlog
+                      {t('nav.backlog')}
                     </Link>
                     <Link
                       className={cn(
@@ -340,10 +345,10 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                           : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
                       )}
                       href={cyclesHref}
-                      title="Cycles"
+                      title={t('nav.cycles')}
                     >
                       <RefreshCw className="h-3 w-3" />
-                      Cycles
+                      {t('nav.cycles')}
                     </Link>
                     <Link
                       className={cn(
@@ -353,10 +358,10 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                           : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
                       )}
                       href={analyticsHref}
-                      title="Analytics"
+                      title={t('nav.analytics')}
                     >
                       <BarChart2 className="h-3 w-3" />
-                      Analytics
+                      {t('nav.analytics')}
                     </Link>
                     <Link
                       className={cn(
@@ -366,10 +371,10 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                           : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
                       )}
                       href={docsHref}
-                      title="Docs"
+                      title={t('nav.docs')}
                     >
                       <FileText className="h-3 w-3" />
-                      Docs
+                      {t('nav.docs')}
                     </Link>
                     {customViewStore.getByTeamId(team.id).map(view => {
                       const viewHref = `${href}/view/${view.id}`;
@@ -447,28 +452,29 @@ export const Sidebar = observer(function Sidebar({
 }: SidebarProps) {
   const { syncStore } = useStore();
   const pathname = usePathname();
+  const t = useTranslations();
   const base = workspaceKey ? `/${workspaceKey}` : '';
 
   const globalNavItems = [
     {
       href: `${base}/my-issues`,
       icon: <User className="h-4 w-4" />,
-      label: 'My Issues',
+      label: t('nav.myIssues'),
     },
     {
       href: `${base}/inbox`,
       icon: <Inbox className="h-4 w-4" />,
-      label: 'Inbox',
+      label: t('nav.inbox'),
     },
     {
       href: `${base}/projects`,
       icon: <Target className="h-4 w-4" />,
-      label: 'Projects',
+      label: t('nav.projects'),
     },
     {
       href: `${base}/analytics`,
       icon: <BarChart2 className="h-4 w-4" />,
-      label: 'Analytics',
+      label: t('nav.analytics'),
     },
   ];
 
@@ -483,17 +489,17 @@ export const Sidebar = observer(function Sidebar({
       {/* Workspace header */}
       <div className="flex h-12 items-center gap-2 border-b border-zinc-200 px-2 dark:border-zinc-800">
         <button
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
           onClick={onToggle}
-          title={collapsed ? 'Expand sidebar (⌘B)' : 'Collapse sidebar (⌘B)'}
+          title={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
           type="button"
         >
           <PanelLeft className="h-4 w-4" />
         </button>
         {!collapsed && (
           <span className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-            {syncStore.organizationName ?? workspaceKey ?? 'Issue Tracker'}
+            {syncStore.organizationName ?? workspaceKey ?? APP_NAME}
           </span>
         )}
       </div>
@@ -544,6 +550,7 @@ function SidebarFooter({
   pathname: string;
 }) {
   const { logout, user } = useAuth();
+  const t = useTranslations();
   return (
     <div className="border-t border-zinc-200 p-1.5 dark:border-zinc-800">
       {collapsed ? (
@@ -555,16 +562,17 @@ function SidebarFooter({
                 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50',
             )}
             href={`${base}/settings`}
-            title="Settings"
+            title={t('common.settings')}
           >
             <Settings className="h-4 w-4" />
           </Link>
           <ThemeToggle compact />
+          <LanguageToggle compact />
           <button
-            aria-label="Sign out"
+            aria-label={t('common.signOut')}
             className="flex items-center justify-center rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
             onClick={() => void logout()}
-            title="Sign out"
+            title={t('common.signOut')}
             type="button"
           >
             <LogOut className="h-4 w-4" />
@@ -580,12 +588,15 @@ function SidebarFooter({
                   'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50',
               )}
               href={`${base}/settings`}
-              title="Workspace settings"
+              title={t('nav.workspaceSettings')}
             >
               <Settings className="h-4 w-4" />
-              Settings
+              {t('common.settings')}
             </Link>
-            <ThemeToggle />
+            <div className="flex items-center gap-1">
+              <LanguageToggle />
+              <ThemeToggle />
+            </div>
           </div>
           {user && (
             <div className="flex items-center justify-between gap-2 px-2 py-1 text-xs text-zinc-500">
@@ -593,14 +604,14 @@ function SidebarFooter({
                 {user.displayName}
               </span>
               <button
-                aria-label="Sign out"
+                aria-label={t('common.signOut')}
                 className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
                 onClick={() => void logout()}
-                title="Sign out"
+                title={t('common.signOut')}
                 type="button"
               >
                 <LogOut className="h-3 w-3" />
-                Sign out
+                {t('common.signOut')}
               </button>
             </div>
           )}

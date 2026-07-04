@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { usePopover } from '@/hooks/use-popover';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 
 /** Estimation scale point values per estimation type. */
@@ -87,6 +88,7 @@ export function EstimatePicker({
   onClose,
   onChange,
 }: EstimatePickerProps) {
+  const t = useTranslations();
   const { open, setOpen, ref: containerRef } = usePopover({ forceOpen, onClose });
 
   const scale = SCALE_OPTIONS[estimationType];
@@ -100,7 +102,7 @@ export function EstimatePicker({
   return (
     <div className="relative inline-block" ref={containerRef}>
       <button
-        aria-label="Set estimate"
+        aria-label={t('properties.estimate.setEstimate')}
         className="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"
         onClick={() => setOpen(v => !v)}
         type="button"
@@ -117,7 +119,7 @@ export function EstimatePicker({
               onClick={() => handleSelect(null)}
               type="button"
             >
-              No estimate
+              {t('properties.estimate.noEstimate')}
             </button>
           )}
 
@@ -154,6 +156,7 @@ function NumericInput({
   value?: number;
   onSubmit: (v: number | null) => void;
 }) {
+  const t = useTranslations();
   const [draft, setDraft] = useState(value?.toString() ?? '');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -190,7 +193,7 @@ function NumericInput({
         }}
         type="button"
       >
-        Set
+        {t('properties.estimate.set')}
       </button>
     </div>
   );
