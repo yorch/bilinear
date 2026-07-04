@@ -17,8 +17,11 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
 import { useTranslations } from '@/hooks/use-translations';
+import { DATE_FNS_LOCALES } from '@/lib/date-fns-locale';
 import type { DBWorkflowState } from '@/lib/db';
+import { formatDueDate, getDueDateColor } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
+import { useLocale } from '@/providers/locale-provider';
 import type { IssueLabel, IssueUser } from '@/types/issues';
 import { UserAvatar } from '../ui/user-avatar';
 import type { IssueRowData } from './issue-row';
@@ -69,6 +72,7 @@ function BoardCardInner({
   onOpen,
   isDragging,
 }: BoardCardProps) {
+  const { locale } = useLocale();
   const assignee = issue.assigneeId ? users.find(u => u.id === issue.assigneeId) : null;
 
   return (
@@ -115,7 +119,9 @@ function BoardCardInner({
 
       {/* Due date */}
       {issue.dueDate && (
-        <div className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-500">{issue.dueDate}</div>
+        <div className={cn('mt-1.5 text-xs', getDueDateColor(issue.dueDate))}>
+          {formatDueDate(issue.dueDate, DATE_FNS_LOCALES[locale])}
+        </div>
       )}
     </button>
   );

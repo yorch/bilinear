@@ -103,10 +103,8 @@ function favoriteHref(
     return '#';
   }
   switch (e.__typename) {
-    case 'Issue': {
-      const key = findTeamById(e.teamId)?.key;
-      return key ? `${base}/team/${key}/issues/${e.id}` : '#';
-    }
+    case 'Issue':
+      return `${base}/issue/${e.id}`;
     case 'Project':
       return `${base}/project/${e.slugId}`;
     case 'Initiative':

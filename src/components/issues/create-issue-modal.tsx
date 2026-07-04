@@ -41,7 +41,7 @@ function initialForm(defaultStateId?: string, firstStateId?: string): FormState 
   };
 }
 
-interface CreateIssueInput {
+export interface CreateIssueInput {
   assigneeId?: string;
   description?: string;
   dueDate?: string | null;

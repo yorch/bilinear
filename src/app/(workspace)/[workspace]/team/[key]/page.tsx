@@ -17,7 +17,7 @@ import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-pane
 import { type ViewMode, ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { type SaveViewInput, SaveViewModal } from '@/components/views/save-view-modal';
-import { useChord, useHotkeys } from '@/hooks/use-hotkeys';
+import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useRecentItems } from '@/hooks/use-recent-items';
 import { useTranslations } from '@/hooks/use-translations';
 import { useVisibleColumns } from '@/hooks/use-visible-columns';
@@ -371,8 +371,8 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   const selectedIndex = issues.findIndex(i => i.id === selectedId);
   const hasSelection = selectedId !== null;
 
-  // C — create issue
-  useHotkeys('c', () => setCreateOpen(true), {}, []);
+  // C is registered globally in WorkspaceClient and opens the shared
+  // GlobalCreateIssueModal; this page's local modal is button-driven only.
 
   // J / K — navigate list
   useHotkeys(
@@ -474,10 +474,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   useHotkeys('alt+2', () => setViewMode('board'), {}, []);
   useHotkeys('alt+3', () => setViewMode('timeline'), {}, []);
 
-  // G then I — go to my issues (placeholder navigation)
-  useChord('g', 'i', () => router.push(`/${workspace}/my-issues`), [workspace]);
-  // G then N — go to inbox (placeholder navigation)
-  useChord('g', 'n', () => router.push(`/${workspace}/inbox`), [workspace]);
+  // G→I / G→N navigation chords are registered globally in WorkspaceClient.
 
   // ── Open issue and track as recent ────────────────────────────────────────
 

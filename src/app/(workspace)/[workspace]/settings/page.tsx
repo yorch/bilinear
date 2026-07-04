@@ -934,6 +934,11 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   label: t('settings.workspace.publicRoadmap'),
                 },
                 {
+                  description: t('settings.workspace.automationsDescription'),
+                  href: `/${workspace}/settings/automations`,
+                  label: t('settings.workspace.automations'),
+                },
+                {
                   description: t('settings.workspace.auditLogDescription'),
                   href: `/${workspace}/settings/audit-log`,
                   label: t('settings.workspace.auditLog'),

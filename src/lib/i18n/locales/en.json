@@ -243,6 +243,7 @@
     "footer": {
       "back": "Back",
       "close": "Close",
+      "issueActions": "Issue actions",
       "navigate": "Navigate",
       "select": "Select"
     },
@@ -255,6 +256,7 @@
       "recent": "Recent"
     },
     "submenu": {
+      "actions": "Issue actions…",
       "noAssignee": "No assignee",
       "noOptions": "No options",
       "setAssignee": "Set assignee…",
@@ -319,6 +321,9 @@
     "title": "Custom fields",
     "type": "Type",
     "urlPlaceholder": "https://…"
+  },
+  "customViews": {
+    "notFound": "This view no longer exists or was deleted."
   },
   "cycles": {
     "burndown": {
@@ -775,6 +780,7 @@
     "columns": "Columns",
     "copyIssueId": "Copy issue ID",
     "copyIssueUrl": "Copy issue URL",
+    "createFailed": "Failed to create issue",
     "creator": "Creator",
     "csvHeaderCreated": "Created",
     "csvHeaderId": "ID",
@@ -840,6 +846,7 @@
     "timelineViewShortcut": "Timeline view (Alt+3)",
     "true": "True",
     "unassigned": "Unassigned",
+    "updateFailed": "Failed to update issue",
     "valueEllipsis": "Value…",
     "viewSaved": "View saved"
   },
@@ -1448,6 +1455,8 @@
       "apiTokens": "API Tokens",
       "auditLog": "Audit Log",
       "auditLogDescription": "Security-relevant event history (admins only)",
+      "automations": "Automations",
+      "automationsDescription": "Event-triggered rules that update issues automatically",
       "calendarUrlRotated": "Calendar feed URL rotated",
       "calendarUrlRotateError": "Failed to rotate calendar URL",
       "configuration": "Configuration",

@@ -7,7 +7,10 @@ import { priorityLabelKey } from '@/components/properties/priority-icon';
 import type { RecentItem } from '@/hooks/use-recent-items';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue } from '@/lib/db';
+import { ISSUE_UPDATE_MUTATION } from '@/lib/graphql-queries';
 import { IDENTIFIER_RE } from '@/lib/identifiers';
+import { toast } from '@/lib/toast';
+import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -33,6 +36,7 @@ type ResultItem = IssueItem | ActionItem;
 
 type SubMenuMode =
   | { type: 'none' }
+  | { issueId: string; type: 'actions' }
   | { issueId: string; type: 'setStatus' }
   | { issueId: string; type: 'setAssignee' }
   | { issueId: string; type: 'setPriority' }
@@ -41,6 +45,7 @@ type SubMenuMode =
 type SubMenuItem = { id: string; label: string; onSelect: () => void };
 
 const SUBMENU_PLACEHOLDER_KEYS = {
+  actions: 'commandPalette.submenu.actions',
   setAssignee: 'commandPalette.submenu.setAssignee',
   setLabel: 'commandPalette.submenu.setLabel',
   setPriority: 'commandPalette.submenu.setPriority',
@@ -233,6 +238,7 @@ interface SubMenuListProps {
   activeIndex: number;
   onClose: () => void;
   onItemsChange: (items: SubMenuItem[]) => void;
+  onNavigate: (mode: SubMenuMode) => void;
   subMenu: SubMenuMode;
 }
 
@@ -240,14 +246,58 @@ const SubMenuList = observer(function SubMenuList({
   activeIndex,
   onClose,
   onItemsChange,
+  onNavigate,
   subMenu,
 }: SubMenuListProps) {
   const { issueStore, labelStore, userStore, workflowStateStore } = useStore();
   const t = useTranslations();
+  const txQueue = useMemo(() => new TransactionQueue(), []);
+
+  // Optimistic write + enqueue so submenu edits actually persist; snapshot
+  // rollback + toast on failure (same idiom as the team page).
+  const applyPatch = useCallback(
+    (issueId: string, patch: Record<string, unknown>) => {
+      const snapshot = issueStore.findById(issueId);
+      issueStore.optimisticUpdate(issueId, patch as Partial<DBIssue>);
+      txQueue.enqueue(
+        ISSUE_UPDATE_MUTATION,
+        { id: issueId, input: patch },
+        {
+          onError: err => {
+            toast.error(err instanceof Error ? err.message : t('issues.updateFailed'));
+            if (snapshot) {
+              issueStore.optimisticUpdate(issueId, snapshot);
+            }
+          },
+          onSuccess: data => {
+            const updated = (data as { issueUpdate?: { issue?: DBIssue } })?.issueUpdate?.issue;
+            if (updated) {
+              issueStore.applySyncAction('U', issueId, updated);
+            }
+          },
+        },
+      );
+    },
+    [issueStore, txQueue, t],
+  );
 
   let subItems: SubMenuItem[] = [];
 
-  if (subMenu.type === 'setStatus') {
+  if (subMenu.type === 'actions') {
+    const { issueId } = subMenu;
+    subItems = (
+      [
+        ['setStatus', 'commandPalette.submenu.setStatus'],
+        ['setAssignee', 'commandPalette.submenu.setAssignee'],
+        ['setPriority', 'commandPalette.submenu.setPriority'],
+        ['setLabel', 'commandPalette.submenu.setLabel'],
+      ] as const
+    ).map(([type, labelKey]) => ({
+      id: type,
+      label: t(labelKey),
+      onSelect: () => onNavigate({ issueId, type }),
+    }));
+  } else if (subMenu.type === 'setStatus') {
     const issue = issueStore.findById(subMenu.issueId);
     if (issue) {
       const states = workflowStateStore.findByTeamId(issue.teamId);
@@ -255,7 +305,7 @@ const SubMenuList = observer(function SubMenuList({
         id: s.id,
         label: s.name,
         onSelect: () => {
-          issueStore.optimisticUpdate(subMenu.issueId, { stateId: s.id });
+          applyPatch(subMenu.issueId, { stateId: s.id });
           onClose();
         },
       }));
@@ -267,7 +317,7 @@ const SubMenuList = observer(function SubMenuList({
         id: 'no-assignee',
         label: t('commandPalette.submenu.noAssignee'),
         onSelect: () => {
-          issueStore.optimisticUpdate(subMenu.issueId, { assigneeId: null });
+          applyPatch(subMenu.issueId, { assigneeId: null });
           onClose();
         },
       },
@@ -275,7 +325,7 @@ const SubMenuList = observer(function SubMenuList({
         id: u.id,
         label: u.displayName,
         onSelect: () => {
-          issueStore.optimisticUpdate(subMenu.issueId, { assigneeId: u.id });
+          applyPatch(subMenu.issueId, { assigneeId: u.id });
           onClose();
         },
       })),
@@ -285,7 +335,7 @@ const SubMenuList = observer(function SubMenuList({
       id: String(p),
       label: t(priorityLabelKey(p)),
       onSelect: () => {
-        issueStore.optimisticUpdate(subMenu.issueId, { priority: p });
+        applyPatch(subMenu.issueId, { priority: p });
         onClose();
       },
     }));
@@ -300,7 +350,7 @@ const SubMenuList = observer(function SubMenuList({
           const next = current.includes(l.id)
             ? current.filter(id => id !== l.id)
             : [...current, l.id];
-          issueStore.optimisticUpdate(subMenu.issueId, { labelIds: next });
+          applyPatch(subMenu.issueId, { labelIds: next });
           onClose();
         },
       }));
@@ -357,6 +407,12 @@ const CommandPaletteFooter = memo(function CommandPaletteFooter({
         <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">↵</kbd>{' '}
         {t('commandPalette.footer.select')}
       </span>
+      {!inSubMenu && (
+        <span className="text-[10px] text-zinc-400">
+          <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">Tab</kbd>{' '}
+          {t('commandPalette.footer.issueActions')}
+        </span>
+      )}
       <span className="text-[10px] text-zinc-400">
         <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">Esc</kbd>{' '}
         {inSubMenu ? t('commandPalette.footer.back') : t('commandPalette.footer.close')}
@@ -486,10 +542,26 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
           const target = idx === -1 ? allRef.current[0] : allRef.current[idx];
           select(target);
         }
+      } else if (e.key === 'Tab' || e.key === 'ArrowRight') {
+        if (!inSub) {
+          const target = idx === -1 ? allRef.current[0] : allRef.current[idx];
+          if (target?.kind === 'issue') {
+            e.preventDefault();
+            setSub({ issueId: target.issue.id, type: 'actions' });
+            setIdx(0);
+          }
+        }
       } else if (e.key === 'Escape') {
         e.preventDefault();
         if (inSub) {
-          setSub({ type: 'none' });
+          // Leaf submenus step back to the actions list; actions closes to
+          // the main results. keyStateRef only tracks a boolean, so read the
+          // concrete mode from the state setter to decide.
+          setSub(prev =>
+            prev.type === 'none' || prev.type === 'actions'
+              ? { type: 'none' }
+              : { issueId: prev.issueId, type: 'actions' },
+          );
           setIdx(0);
         } else {
           ui.closeCommandPalette();
@@ -583,6 +655,10 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
               activeIndex={activeIndex}
               onClose={onPaletteClose}
               onItemsChange={onSubItemsChange}
+              onNavigate={mode => {
+                setSubMenu(mode);
+                setActiveIndex(0);
+              }}
               subMenu={subMenu}
             />
           ) : (

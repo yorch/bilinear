@@ -243,6 +243,7 @@
     "footer": {
       "back": "Atrás",
       "close": "Cerrar",
+      "issueActions": "Acciones",
       "navigate": "Navegar",
       "select": "Seleccionar"
     },
@@ -255,6 +256,7 @@
       "recent": "Recientes"
     },
     "submenu": {
+      "actions": "Acciones de la tarea…",
       "noAssignee": "Sin responsable",
       "noOptions": "Sin opciones",
       "setAssignee": "Establecer responsable…",
@@ -319,6 +321,9 @@
     "title": "Campos personalizados",
     "type": "Tipo",
     "urlPlaceholder": "https://…"
+  },
+  "customViews": {
+    "notFound": "Esta vista ya no existe o fue eliminada."
   },
   "cycles": {
     "burndown": {
@@ -775,6 +780,7 @@
     "columns": "Columnas",
     "copyIssueId": "Copiar ID de la tarea",
     "copyIssueUrl": "Copiar URL de la tarea",
+    "createFailed": "Error al crear la tarea",
     "creator": "Creador",
     "csvHeaderCreated": "Creado",
     "csvHeaderId": "ID",
@@ -840,6 +846,7 @@
     "timelineViewShortcut": "Vista de cronograma (Alt+3)",
     "true": "Verdadero",
     "unassigned": "Sin asignar",
+    "updateFailed": "Error al actualizar la tarea",
     "valueEllipsis": "Valor…",
     "viewSaved": "Vista guardada"
   },
@@ -1448,6 +1455,8 @@
       "apiTokens": "Tokens de API",
       "auditLog": "Registro de auditoría",
       "auditLogDescription": "Historial de eventos relevantes para la seguridad (solo administradores)",
+      "automations": "Automatizaciones",
+      "automationsDescription": "Reglas activadas por eventos que actualizan los issues automáticamente",
       "calendarUrlRotated": "URL de la fuente de calendario rotada",
       "calendarUrlRotateError": "Error al rotar la URL del calendario",
       "configuration": "Configuración",
