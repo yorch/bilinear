@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { DeleteUpdateButton } from '@/components/shared/delete-update-button';
 import { CreateUpdateForm, EditUpdateForm } from '@/components/shared/update-forms';
 import { Badge } from '@/components/ui/badge';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import {
@@ -12,10 +13,7 @@ import {
   INITIATIVE_UPDATE_EDIT_MUTATION,
   INITIATIVE_UPDATES_QUERY,
 } from '@/lib/graphql-queries';
-import { INTL_LOCALES } from '@/lib/i18n';
 import { PROJECT_HEALTH_CONFIG, PROJECT_HEALTH_LABEL_KEYS } from '@/lib/project-constants';
-import { formatRelativeTime } from '@/lib/utils';
-import { useLocale } from '@/providers/locale-provider';
 
 interface InitiativeUpdate {
   body: string;
@@ -36,7 +34,7 @@ export function InitiativeUpdatesSection({
   viewerId,
 }: InitiativeUpdatesSectionProps) {
   const t = useTranslations();
-  const { locale } = useLocale();
+  const { formatRelativeTime } = useFormatters();
   const [updates, setUpdates] = useState<InitiativeUpdate[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -150,7 +148,7 @@ export function InitiativeUpdatesSection({
                       </Badge>
                     )}
                     <span className="text-xs text-zinc-400">
-                      {formatRelativeTime(update.createdAt, t, INTL_LOCALES[locale])}
+                      {formatRelativeTime(update.createdAt)}
                       {update.editedAt && ` (${t('initiatives.updates.edited')})`}
                     </span>
                   </div>

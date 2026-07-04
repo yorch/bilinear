@@ -1,11 +1,10 @@
 'use client';
 
 import { SelectPopover } from '@/components/ui/select-popover';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
-import { DATE_FNS_LOCALES } from '@/lib/date-fns-locale';
-import { formatDueDate, getDueDateColor } from '@/lib/issue-utils';
+import { getDueDateColor } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
-import { useLocale } from '@/providers/locale-provider';
 
 interface DueDatePickerProps {
   className?: string;
@@ -23,9 +22,8 @@ export function DueDatePicker({
   onClose,
 }: DueDatePickerProps) {
   const t = useTranslations();
-  const { locale } = useLocale();
+  const { formatDueDate } = useFormatters();
   const colorClass = getDueDateColor(value);
-  const dateFnsLocale = DATE_FNS_LOCALES[locale];
 
   return (
     <SelectPopover
@@ -34,13 +32,11 @@ export function DueDatePicker({
       forceOpen={forceOpen}
       onClose={onClose}
       panelClassName="p-2"
-      triggerChildren={
-        value ? formatDueDate(value, dateFnsLocale) : t('properties.dueDate.dueDate')
-      }
+      triggerChildren={value ? formatDueDate(value) : t('properties.dueDate.dueDate')}
       triggerClassName={cn('px-1.5 py-1 text-xs', value ? colorClass : 'text-zinc-400')}
       triggerTitle={
         value
-          ? t('properties.dueDate.dueOn', { date: formatDueDate(value, dateFnsLocale) })
+          ? t('properties.dueDate.dueOn', { date: formatDueDate(value) })
           : t('properties.dueDate.noDueDate')
       }
     >

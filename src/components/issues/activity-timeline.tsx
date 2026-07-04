@@ -2,12 +2,11 @@
 
 import { Activity, Clock } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { ISSUE_ACTIVITIES_QUERY } from '@/lib/graphql-queries';
-import { INTL_LOCALES } from '@/lib/i18n';
-import { cn, formatRelativeTime } from '@/lib/utils';
-import { useLocale } from '@/providers/locale-provider';
+import { cn } from '@/lib/utils';
 
 interface ActivityActor {
   avatarBgColor: string | null;
@@ -74,7 +73,7 @@ const COLLAPSE_THRESHOLD = 5;
 
 export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps) {
   const t = useTranslations();
-  const { locale } = useLocale();
+  const { formatRelativeTime } = useFormatters();
   const [activities, setActivities] = useState<IssueActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
@@ -169,7 +168,7 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
                 {formatActivityDescription(activity, t)}
               </p>
               <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
-                {formatRelativeTime(activity.createdAt, t, INTL_LOCALES[locale])}
+                {formatRelativeTime(activity.createdAt)}
               </p>
             </div>
           </div>

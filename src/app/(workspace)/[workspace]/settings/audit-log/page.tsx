@@ -1,10 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
-import { INTL_LOCALES } from '@/lib/i18n';
-import { useLocale } from '@/providers/locale-provider';
 
 /**
  * Audit log page (admins only).
@@ -84,7 +83,7 @@ const AUDIT_ACTIONS = [
 
 export default function AuditLogPage() {
   const t = useTranslations();
-  const { locale } = useLocale();
+  const { formatDateTime } = useFormatters();
   const [entries, setEntries] = useState<AuditLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
@@ -317,7 +316,7 @@ export default function AuditLogPage() {
                   </td>
                   <td className="px-4 py-2">
                     <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                      {new Date(entry.createdAt).toLocaleString(INTL_LOCALES[locale], {
+                      {formatDateTime(entry.createdAt, {
                         day: 'numeric',
                         hour: '2-digit',
                         minute: '2-digit',

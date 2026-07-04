@@ -6,12 +6,10 @@ import { useState } from 'react';
 import { DeleteUpdateButton } from '@/components/shared/delete-update-button';
 import { CreateUpdateForm, EditUpdateForm } from '@/components/shared/update-forms';
 import { Badge } from '@/components/ui/badge';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
-import { INTL_LOCALES } from '@/lib/i18n';
 import { PROJECT_HEALTH_CONFIG, PROJECT_HEALTH_LABEL_KEYS } from '@/lib/project-constants';
-import { formatRelativeTime } from '@/lib/utils';
-import { useLocale } from '@/providers/locale-provider';
 import { useStore } from '@/providers/store-provider';
 import { UserAvatar } from '../ui/user-avatar';
 
@@ -25,7 +23,7 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
   viewerId,
 }: ProjectUpdatesSectionProps) {
   const t = useTranslations();
-  const { locale } = useLocale();
+  const { formatRelativeTime } = useFormatters();
   const { projectStore, userStore } = useStore();
   const updates = projectStore.getUpdates(projectId);
 
@@ -137,7 +135,7 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
                       </Badge>
                     )}
                     <span className="text-xs text-zinc-400">
-                      {formatRelativeTime(update.createdAt, t, INTL_LOCALES[locale])}
+                      {formatRelativeTime(update.createdAt)}
                       {update.editedAt && ` (${t('projects.edited')})`}
                     </span>
                   </div>

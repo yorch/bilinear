@@ -2,11 +2,10 @@
 
 import { observer } from 'mobx-react-lite';
 import { useEffect, useState } from 'react';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
-import { INTL_LOCALES } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
-import { useLocale } from '@/providers/locale-provider';
 import { useStore } from '@/providers/store-provider';
 
 interface GitHubIntegration {
@@ -64,7 +63,7 @@ const GITHUB_ROTATE_SECRET_MUTATION = `
 
 const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
   const t = useTranslations();
-  const { locale } = useLocale();
+  const { formatDate } = useFormatters();
   const { teamStore } = useStore();
   const teams = teamStore.all;
   const [integration, setIntegration] = useState<GitHubIntegration | null>(null);
@@ -213,7 +212,7 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
             <div className="rounded-md bg-muted/50 px-4 py-3 text-sm">
               <p>
                 {t('settings.integrations.connectedAs', { login: integration.githubLogin })}{' '}
-                {new Date(integration.createdAt).toLocaleDateString(INTL_LOCALES[locale])}
+                {formatDate(integration.createdAt)}
               </p>
               <p className="mt-2 text-muted-foreground">
                 {t('settings.integrations.webhookUrlHint')}
@@ -320,7 +319,7 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
             <div className="rounded-md bg-muted/50 px-4 py-3 text-sm">
               <p>
                 {t('settings.integrations.connectedTo', { name: slack.slackTeamName })}{' '}
-                {new Date(slack.createdAt).toLocaleDateString(INTL_LOCALES[locale])}
+                {formatDate(slack.createdAt)}
               </p>
             </div>
             <div>

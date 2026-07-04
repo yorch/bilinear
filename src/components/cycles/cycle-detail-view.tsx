@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BurndownChart } from '@/components/cycles/burndown-chart';
 import { BurnupChart } from '@/components/cycles/burnup-chart';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { isActiveCycle } from '@/lib/cycle-utils';
 import { gql } from '@/lib/graphql';
@@ -15,26 +16,15 @@ import {
   CYCLE_SCOPE_METRICS_QUERY,
   CYCLE_VELOCITY_QUERY,
 } from '@/lib/graphql-queries';
-import { INTL_LOCALES } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn } from '@/lib/utils';
-import { useLocale } from '@/providers/locale-provider';
 import { useStore } from '@/providers/store-provider';
 
 interface CycleDetailViewProps {
   cycleId: string;
   teamKey: string;
   workspaceKey: string;
-}
-
-function formatDate(iso: string, intlLocale: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString(intlLocale, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +117,7 @@ export const CycleDetailView = observer(function CycleDetailView({
 }: CycleDetailViewProps) {
   const { cycleStore, issueStore, teamStore, workflowStateStore } = useStore();
   const t = useTranslations();
-  const { locale } = useLocale();
+  const { formatDate } = useFormatters();
 
   const txQueue = useMemo(() => new TransactionQueue(), []);
 
@@ -395,8 +385,9 @@ export const CycleDetailView = observer(function CycleDetailView({
             <div className="flex items-center gap-1.5">
               <Calendar className="h-3.5 w-3.5 text-zinc-400" />
               <span className="text-xs text-zinc-500">
-                {formatDate(cycle.startsAt, INTL_LOCALES[locale])} &rarr;{' '}
-                {formatDate(cycle.endsAt, INTL_LOCALES[locale])}
+                {formatDate(cycle.startsAt, { day: 'numeric', month: 'short', year: 'numeric' })}{' '}
+                &rarr;{' '}
+                {formatDate(cycle.endsAt, { day: 'numeric', month: 'short', year: 'numeric' })}
               </span>
             </div>
           </div>

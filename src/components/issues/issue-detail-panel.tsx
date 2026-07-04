@@ -4,19 +4,18 @@ import { Bell, BellOff } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { priorityLabelKey } from '@/components/properties/priority-icon';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useTranslations } from '@/hooks/use-translations';
-import { DATE_FNS_LOCALES } from '@/lib/date-fns-locale';
 import { gql } from '@/lib/graphql';
 import {
   ISSUE_SUBSCRIBE_MUTATION,
   ISSUE_SUBSCRIPTION_QUERY,
   ISSUE_UNSUBSCRIBE_MUTATION,
 } from '@/lib/graphql-queries';
-import { formatDueDate, getDueDateColor } from '@/lib/issue-utils';
+import { getDueDateColor } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
-import { useLocale } from '@/providers/locale-provider';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 import { CustomFieldsEditor } from '../custom-fields/custom-fields-editor';
@@ -55,7 +54,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
   onUpdate,
 }: IssueDetailPanelProps) {
   const t = useTranslations();
-  const { locale } = useLocale();
+  const { formatDueDate } = useFormatters();
   const { userStore, teamStore, issueStore } = useStore();
   const currentUserId = userStore.currentUser?.id;
   const currentUserName = userStore.currentUser?.displayName ?? t('issueDetail.defaultUserName');
@@ -308,9 +307,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
                 value={issue.dueDate}
               />
               {issue.dueDate && (
-                <span className={cn('text-xs', dueDateColor)}>
-                  {formatDueDate(issue.dueDate, DATE_FNS_LOCALES[locale])}
-                </span>
+                <span className={cn('text-xs', dueDateColor)}>{formatDueDate(issue.dueDate)}</span>
               )}
             </div>
 

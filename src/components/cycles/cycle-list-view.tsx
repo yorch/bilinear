@@ -4,22 +4,16 @@ import { Calendar, RefreshCw } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useState } from 'react';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBCycle } from '@/lib/db';
-import { INTL_LOCALES } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { useLocale } from '@/providers/locale-provider';
 import { useStore } from '@/providers/store-provider';
 
 interface CycleListViewProps {
   teamId: string;
   teamKey: string;
   workspaceKey: string;
-}
-
-function formatDate(iso: string, intlLocale: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString(intlLocale, { day: 'numeric', month: 'short' });
 }
 
 function getCycleDisplayName(cycle: DBCycle, t: ReturnType<typeof useTranslations>): string {
@@ -141,7 +135,7 @@ const CycleGroup = observer(function CycleGroup({
 }) {
   const { issueStore } = useStore();
   const t = useTranslations();
-  const { locale } = useLocale();
+  const { formatDate } = useFormatters();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
   return (
@@ -194,8 +188,8 @@ const CycleGroup = observer(function CycleGroup({
                   <div className="mt-0.5 flex items-center gap-2">
                     <span className="flex items-center gap-1 text-xs text-zinc-500">
                       <Calendar className="h-3 w-3" />
-                      {formatDate(cycle.startsAt, INTL_LOCALES[locale])} &ndash;{' '}
-                      {formatDate(cycle.endsAt, INTL_LOCALES[locale])}
+                      {formatDate(cycle.startsAt, { day: 'numeric', month: 'short' })} &ndash;{' '}
+                      {formatDate(cycle.endsAt, { day: 'numeric', month: 'short' })}
                     </span>
                   </div>
                 </div>

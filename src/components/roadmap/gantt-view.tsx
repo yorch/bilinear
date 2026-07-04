@@ -2,10 +2,9 @@
 
 import { addDays, addMonths, differenceInDays, format, startOfMonth } from 'date-fns';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
-import { DATE_FNS_LOCALES } from '@/lib/date-fns-locale';
 import { cn } from '@/lib/utils';
-import { useLocale } from '@/providers/locale-provider';
 
 export interface GanttItem {
   color?: string | null;
@@ -70,8 +69,7 @@ function fmtIso(date: Date): string {
 
 export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage }: GanttViewProps) {
   const t = useTranslations();
-  const { locale } = useLocale();
-  const dateFnsLocale = DATE_FNS_LOCALES[locale];
+  const { dateFnsLocale } = useFormatters();
   const resolvedEmptyMessage = emptyMessage ?? t('roadmap.gantt.emptyMessage');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [zoom, setZoom] = useState<GanttZoom>('week');

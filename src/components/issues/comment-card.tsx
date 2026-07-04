@@ -3,15 +3,14 @@
 import { CheckCircle, CornerDownRight, MoreHorizontal, Smile } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { useFormatters } from '@/hooks/use-formatters';
 import { usePopover } from '@/hooks/use-popover';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { COMMENT_UPDATE_MUTATION, CONVERT_TO_SUB_ISSUE_MUTATION } from '@/lib/graphql-queries';
-import { INTL_LOCALES } from '@/lib/i18n';
 import { QUICK_EMOJIS } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
-import { cn, formatRelativeTime } from '@/lib/utils';
-import { useLocale } from '@/providers/locale-provider';
+import { cn } from '@/lib/utils';
 import type { MentionItem } from '../editor/mention-list';
 import { TipTapEditor } from '../editor/tiptap-editor.lazy';
 import { UserAvatar } from '../ui/user-avatar';
@@ -82,7 +81,7 @@ export function CommentCard({
   onConvertToSubIssue: (id: string) => void;
 }) {
   const t = useTranslations();
-  const { locale } = useLocale();
+  const { formatRelativeTime } = useFormatters();
   const [editing, setEditing] = useState(false);
   const [editBody, setEditBody] = useState(comment.body);
   const [replyBody, setReplyBody] = useState('');
@@ -179,9 +178,7 @@ export function CommentCard({
             <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
               {comment.author.displayName}
             </span>
-            <span className="text-xs text-zinc-400">
-              {formatRelativeTime(comment.createdAt, t, INTL_LOCALES[locale])}
-            </span>
+            <span className="text-xs text-zinc-400">{formatRelativeTime(comment.createdAt)}</span>
             {comment.editedAt && (
               <span className="text-xs italic text-zinc-400">
                 ({t('issueDetail.comments.edited')})

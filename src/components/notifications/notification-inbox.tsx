@@ -3,6 +3,7 @@
 import { Bell, Check, CheckCheck, Clock, MessageSquare, RefreshCw, User } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBNotification } from '@/lib/db';
@@ -13,10 +14,8 @@ import {
   NOTIFICATION_MARK_READ_MUTATION,
   NOTIFICATION_SNOOZE_MUTATION,
 } from '@/lib/graphql-queries';
-import { INTL_LOCALES } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
-import { cn, formatRelativeTime } from '@/lib/utils';
-import { useLocale } from '@/providers/locale-provider';
+import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 // ─── Snooze helpers ───────────────────────────────────────────────────────────
@@ -112,7 +111,7 @@ function NotificationItem({
   snoozingId,
 }: NotificationItemProps) {
   const t = useTranslations();
-  const { locale } = useLocale();
+  const { formatRelativeTime } = useFormatters();
   const { type, read, createdAt, id } = notification;
   const isMarkingThis = markingId === id;
   const isSnoozingThis = snoozingId === id;
@@ -156,7 +155,7 @@ function NotificationItem({
         </div>
 
         <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
-          {formatRelativeTime(createdAt, t, INTL_LOCALES[locale])}
+          {formatRelativeTime(createdAt)}
         </p>
       </div>
 
