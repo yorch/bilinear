@@ -8,7 +8,9 @@ _Date: 2026-07-04. Method: six parallel code audits (design system, navigation/I
 > - **Phase 1** — toast wrapper extended (`undo`/`promise`/`loading`/`dismiss`); every silent optimistic rollback now toasts; archive undo (new `issueUnarchive` client mutation); shared `ConfirmDialog` gating issue delete; `ConnectionStatus` pill + `ConnectionToasts`; `global-error.tsx` + `not-found.tsx`; `TransactionQueue` default error handler for callback-less permanent failures.
 > - **Phase 2** — `SelectPopover`/`SearchableSelectPopover` ARIA + keyboard + focus management with a coherent Escape contract (an open popover consumes the keypress; parent surfaces ignore handled Escapes); new `Input`/`Textarea`/`Switch` primitives (switches fully migrated; create-project/team/save-view modals on `Input`/`Textarea`); `prefers-reduced-motion`; skip link; board `KeyboardSensor` with labeled drag handles; shared `useIssueCreate`/`useIssueUpdate` hooks and `toIssueUsers`/`toIssueLabels` mappers replacing per-page copies.
 >
-> Still open: Phase 3 (token migration), Phase 4 (flow polish — includes `ConfirmDialog`/`SettingToggleRow` adoption across settings, remaining `Input` call sites), Phase 5 (mobile), Phase 6 (i18n round-out), plus the Phase 1 leftovers (inline retry for swallowed fetch errors, bootstrap-error retry, pending-write indicators, in-modal team picker for the global create modal).
+> Still open: Phase 3 (token migration), Phase 4 (flow polish — includes `ConfirmDialog`/`SettingToggleRow` adoption across settings, remaining `Input` call sites), Phase 5 (mobile), plus the Phase 1 leftovers (inline retry for swallowed fetch errors, bootstrap-error retry, pending-write indicators, in-modal team picker for the global create modal).
+>
+> **Rebased onto `main` (2026-07-04, PRs #87/#88):** three of the four §7 i18n gaps and most of Phase 6 landed independently on `main` — admin console fully translated under `admin.*`, real `Intl.PluralRules` pluralization (`_one`/`_other` suffixes, replacing the manual `*Singular`/`*Plural` pairs this branch's new keys were careful not to depend on), and locale-aware admin dates via the new `useFormatters()` hook. This branch's `board-view.tsx` due-date formatting was migrated to `useFormatters()` to match. Remaining open: `formatFileSize` decimal locale, sidebar text-expansion audit, surfacing the locale toggle outside the sidebar footer.
 
 ---
 
@@ -28,7 +30,7 @@ The encouraging part: most problems are **systemic, not scattered**. Roughly fiv
 | Accessibility | 🟡 Moderate | Biome a11y lint on, palette is exemplary; but `SelectPopover`, `ModalDialog`, and `usePopover` fail basics, multiplied across the app |
 | Feedback & state UX | ⚠️ Weak | Silent optimistic rollbacks, no offline indicator, destructive delete with no confirm/undo, swallowed fetch errors |
 | Responsiveness | 🔴 Absent | 10 breakpoint utilities in the whole tree; no mobile nav; fixed 480px panel; desktop-only today |
-| i18n | 🟢 Good | ~85% coverage, locale-threaded dates, no flash-of-English; gaps: admin console (0%), no plural rules, `formatFileSize` |
+| i18n | 🟢 Good | ~85% coverage, locale-threaded dates, no flash-of-English; admin console and plural rules fixed on `main` since; remaining gap: `formatFileSize` |
 
 ---
 
@@ -218,12 +220,12 @@ Current state: 10 breakpoint utilities across 8 files, none on the app frame. Th
 
 ## 7. i18n gaps
 
-1. **Admin console is 0% translated** — `admin-shell.tsx:8-11,43` and all four admin pages have zero `useTranslations`; `ImpersonationBanner` too (`impersonation-banner.tsx:69-79`). Add an `admin.*` namespace.
-2. **No plural rules** — `translate()` (`src/lib/i18n/index.ts:43-57`) only interpolates. Live bugs: `"{count} issues"` → "1 issues" (`en.json:647`), "1 days ago" (`:651`), `(s)` hacks (`:1059-1060`). Add `Intl.PluralRules` with `key_one`/`key_other` suffixes; delete the manual `*Singular/*Plural` pairs.
-3. **`formatFileSize`** hardcodes `.` decimals (`src/lib/utils.ts:51-59`) — use `Intl.NumberFormat` with the active locale.
-4. **Admin dates** use bare `.toLocaleDateString()` with no locale (contrast: workspace app threads `INTL_LOCALES` correctly in ~15 places).
-5. **Text-expansion headroom**: Spanish runs ~25% longer; the frozen `w-56` sidebar truncates "Configuración"/"Cerrar sesión". Verify truncating labels against `es`, consider `w-60`.
-6. Locale toggle only lives in the sidebar footer — it disappears once the sidebar becomes a mobile drawer; also surface in settings.
+1. ~~**Admin console is 0% translated**~~ — **Fixed on `main`** (PR #87): the `(admin)` console and `ImpersonationBanner` are now fully translated under the `admin.*` namespace.
+2. ~~**No plural rules**~~ — **Fixed on `main`** (PR #87): `translate()` resolves `key_one`/`key_other` CLDR-category siblings via `Intl.PluralRules` whenever a call passes `{ count }`; the manual `*Singular`/`*Plural` key pairs were deleted in favor of the suffixed form.
+3. **`formatFileSize`** hardcodes `.` decimals (`src/lib/utils.ts:51-59`) — use `Intl.NumberFormat` with the active locale. *(Still open.)*
+4. ~~**Admin dates** use bare `.toLocaleDateString()` with no locale~~ — **Fixed on `main`** (PR #87): admin pages now go through the new `useFormatters()` hook (`src/hooks/use-formatters.ts`), which threads `INTL_LOCALES` automatically.
+5. **Text-expansion headroom**: Spanish runs ~25% longer; the frozen `w-56` sidebar truncates "Configuración"/"Cerrar sesión". Verify truncating labels against `es`, consider `w-60`. *(Still open.)*
+6. Locale toggle only lives in the sidebar footer — it disappears once the sidebar becomes a mobile drawer; also surface in settings. *(Still open.)*
 
 ---
 
@@ -237,7 +239,7 @@ Current state: 10 breakpoint utilities across 8 files, none on the app frame. Th
 | **3. Token migration** | Design system | Indigo `--primary`; primitives → tokens; codemod raw palette → tokens (deletes ~1k `dark:` overrides); charts → `var(--chart-*)`; lint guard; Button/Badge adoption | ~1 week, mechanical |
 | **4. Flow polish** | Linear parity | Settings layout rail; document titles; breadcrumbs/return-to-referrer; palette actions; create-more + dirty-guard; detail-panel batching + cycle field; select-all + list group/sort; context-menu quick edits; copy-branch-name; triage hotkeys; searchable duplicate picker; filter popovers; full issue page | ~2 weeks, parallelizable |
 | **5. Mobile** | New surface | §6 phases 1–4 | ~1–2 weeks |
-| **6. i18n round-out** | Coverage | Admin namespace; plural rules; number/date locale in admin; expansion audit | ~2–3 days |
+| **6. i18n round-out** | Coverage | ~~Admin namespace; plural rules; number/date locale in admin~~ (done on `main`, PR #87); `formatFileSize` locale, expansion audit, locale-toggle discoverability remain | ~1 day remaining |
 
 Phases 1–3 are the highest leverage: they fix shared infrastructure that every later phase builds on, and phase 3 is largely mechanical once the primitives are token-based.
 
