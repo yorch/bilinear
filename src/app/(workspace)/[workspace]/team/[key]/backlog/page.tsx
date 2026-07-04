@@ -10,6 +10,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue, DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
 import { ISSUE_ARCHIVE_MUTATION, ISSUE_UPDATE_MUTATION } from '@/lib/graphql-queries';
+import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -291,7 +292,8 @@ const BacklogPage = observer(function BacklogPage() {
         ISSUE_UPDATE_MUTATION,
         { id, input: patch },
         {
-          onError: () => {
+          onError: err => {
+            toast.error(err instanceof Error ? err.message : t('issues.updateFailed'));
             if (snapshot) {
               issueStore.optimisticUpdate(id, snapshot);
             }
@@ -305,7 +307,7 @@ const BacklogPage = observer(function BacklogPage() {
         },
       );
     },
-    [issueStore, txQueue],
+    [issueStore, txQueue, t],
   );
 
   const handleToggleSelect = useCallback((id: string) => {
@@ -349,14 +351,15 @@ const BacklogPage = observer(function BacklogPage() {
         ISSUE_ARCHIVE_MUTATION,
         { id },
         {
-          onError: () => {
+          onError: err => {
+            toast.error(err instanceof Error ? err.message : t('issues.archiveFailed'));
             issueStore.optimisticUpdate(id, { archivedAt: null });
           },
         },
       );
     }
     setSelectedIds(new Set());
-  }, [selectedIds, issueStore, txQueue]);
+  }, [selectedIds, issueStore, txQueue, t]);
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
 

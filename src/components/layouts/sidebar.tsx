@@ -25,6 +25,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { LanguageToggle } from '@/components/language-toggle';
+import { ConnectionStatus } from '@/components/layouts/connection-status';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useAuth } from '@/hooks/use-auth';
 import { useTranslations } from '@/hooks/use-translations';
@@ -553,6 +554,7 @@ function SidebarFooter({
     <div className="border-t border-zinc-200 p-1.5 dark:border-zinc-800">
       {collapsed ? (
         <div className="flex flex-col items-center gap-1">
+          <ConnectionStatus compact />
           <Link
             className={cn(
               'flex items-center justify-center rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
@@ -578,6 +580,7 @@ function SidebarFooter({
         </div>
       ) : (
         <div className="flex flex-col gap-1">
+          <ConnectionStatus />
           <div className="flex items-center justify-between">
             <Link
               className={cn(

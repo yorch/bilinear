@@ -15,6 +15,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue, DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
 import { ISSUE_UPDATE_MUTATION, ISSUES_BULK_UPDATE_MUTATION } from '@/lib/graphql-queries';
+import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
@@ -125,7 +126,8 @@ const MyIssuesPage = observer(function MyIssuesPage() {
         ISSUE_UPDATE_MUTATION,
         { id, input: patch },
         {
-          onError: () => {
+          onError: err => {
+            toast.error(err instanceof Error ? err.message : t('issues.updateFailed'));
             if (snapshot) {
               issueStore.optimisticUpdate(id, snapshot);
             }
@@ -139,7 +141,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
         },
       );
     },
-    [issueStore, txQueue],
+    [issueStore, txQueue, t],
   );
 
   const handleBulkUpdate = useCallback(
@@ -152,7 +154,8 @@ const MyIssuesPage = observer(function MyIssuesPage() {
         ISSUES_BULK_UPDATE_MUTATION,
         { ids, input: patch },
         {
-          onError: () => {
+          onError: err => {
+            toast.error(err instanceof Error ? err.message : t('issues.bulkUpdateFailed'));
             for (const { id, snapshot } of snapshots) {
               if (snapshot) {
                 issueStore.optimisticUpdate(id, snapshot);
@@ -170,7 +173,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
         },
       );
     },
-    [issueStore, txQueue],
+    [issueStore, txQueue, t],
   );
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────────

@@ -1,7 +1,6 @@
 'use client';
 
 import { Bookmark, Settings } from 'lucide-react';
-import { runInAction } from 'mobx';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -16,8 +15,10 @@ import type { OpenProperty } from '@/components/issues/issue-row';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
 import { type ViewMode, ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { type SaveViewInput, SaveViewModal } from '@/components/views/save-view-modal';
 import { useHotkeys } from '@/hooks/use-hotkeys';
+import { useIssueCreate } from '@/hooks/use-issue-create';
 import { useRecentItems } from '@/hooks/use-recent-items';
 import { useTranslations } from '@/hooks/use-translations';
 import { useVisibleColumns } from '@/hooks/use-visible-columns';
@@ -26,7 +27,7 @@ import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter
 import { gql } from '@/lib/graphql';
 import {
   ISSUE_ARCHIVE_MUTATION,
-  ISSUE_CREATE_MUTATION,
+  ISSUE_UNARCHIVE_MUTATION,
   ISSUE_UPDATE_MUTATION,
   ISSUES_BULK_UPDATE_MUTATION,
 } from '@/lib/graphql-queries';
@@ -198,7 +199,8 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         ISSUE_UPDATE_MUTATION,
         { id, input: patch },
         {
-          onError: () => {
+          onError: err => {
+            toast.error(err instanceof Error ? err.message : t('issues.updateFailed'));
             if (snapshot) {
               issueStore.optimisticUpdate(id, snapshot);
             }
@@ -212,7 +214,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         },
       );
     },
-    [issueStore, txQueue],
+    [issueStore, txQueue, t],
   );
 
   const handleBulkUpdate = useCallback(
@@ -225,7 +227,8 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         ISSUES_BULK_UPDATE_MUTATION,
         { ids, input: patch },
         {
-          onError: () => {
+          onError: err => {
+            toast.error(err instanceof Error ? err.message : t('issues.bulkUpdateFailed'));
             for (const { id, snapshot } of snapshots) {
               if (snapshot) {
                 issueStore.optimisticUpdate(id, snapshot);
@@ -243,82 +246,26 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         },
       );
     },
-    [issueStore, txQueue],
+    [issueStore, txQueue, t],
   );
 
-  const handleCreate = useCallback(
-    async (input: {
-      title: string;
-      description?: string;
-      stateId?: string;
-      assigneeId?: string;
-      priority: number;
-      labelIds: string[];
-      dueDate?: string | null;
-      projectId?: string;
-    }) => {
-      if (!teamId || !team) {
-        return;
-      }
+  const handleCreate = useIssueCreate(team, states);
 
-      // Optimistically add the issue so it appears immediately (offline support).
-      const tempId = `temp-${crypto.randomUUID()}`;
-      const now = new Date().toISOString();
-      const effectiveStateId =
-        input.stateId ?? states.find(s => s.type === 'backlog')?.id ?? states[0]?.id ?? '';
-      issueStore.applySyncAction('I', tempId, {
-        archivedAt: null,
-        assigneeId: input.assigneeId ?? null,
-        branchName: null,
-        canceledAt: null,
-        completedAt: null,
-        createdAt: now,
-        creatorId: null,
-        cycleId: null,
-        description: input.description ?? null,
-        dueDate: input.dueDate ?? null,
-        estimate: null,
-        id: tempId,
-        identifier: `${team.key}-…`,
-        labelIds: input.labelIds,
-        number: 0,
-        organizationId: team.organizationId,
-        parentId: null,
-        priority: input.priority,
-        prioritySortOrder: 0,
-        projectId: input.projectId ?? null,
-        sortOrder: 0,
-        startedAt: null,
-        stateId: effectiveStateId,
-        teamId,
-        title: input.title,
-        trashed: false,
-        updatedAt: now,
-      } as DBIssue);
-
+  const handleUnarchive = useCallback(
+    (id: string) => {
+      issueStore.optimisticUpdate(id, { archivedAt: null });
       txQueue.enqueue(
-        ISSUE_CREATE_MUTATION,
-        { input: { ...input, stateId: effectiveStateId || undefined, teamId } },
+        ISSUE_UNARCHIVE_MUTATION,
+        { id },
         {
           onError: err => {
-            console.error('[TeamPage] issueCreate failed:', err);
-            runInAction(() => {
-              issueStore.pool.delete(tempId);
-            });
-          },
-          onSuccess: data => {
-            const created = (data as { issueCreate?: { issue?: DBIssue } })?.issueCreate?.issue;
-            runInAction(() => {
-              issueStore.pool.delete(tempId);
-              if (created) {
-                issueStore.applySyncAction('I', created.id, created);
-              }
-            });
+            toast.error(err instanceof Error ? err.message : t('issues.restoreFailed'));
+            issueStore.optimisticUpdate(id, { archivedAt: new Date().toISOString() });
           },
         },
       );
     },
-    [teamId, team, issueStore, txQueue, states],
+    [issueStore, txQueue, t],
   );
 
   const handleArchive = useCallback(
@@ -328,7 +275,8 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         ISSUE_ARCHIVE_MUTATION,
         { id },
         {
-          onError: () => {
+          onError: err => {
+            toast.error(err instanceof Error ? err.message : t('issues.archiveFailed'));
             issueStore.optimisticUpdate(id, { archivedAt: null });
           },
           onSuccess: () => {
@@ -336,11 +284,12 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
           },
         },
       );
+      toast.undo(t('issues.archivedToast'), t('common.undo'), () => handleUnarchive(id));
       if (selectedId === id) {
         setSelectedId(null);
       }
     },
-    [issueStore, txQueue, selectedId],
+    [issueStore, txQueue, selectedId, t, handleUnarchive],
   );
 
   const handleDelete = useCallback(
@@ -351,7 +300,8 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         ISSUE_DELETE_MUTATION,
         { id },
         {
-          onError: () => {
+          onError: err => {
+            toast.error(err instanceof Error ? err.message : t('issues.deleteFailed'));
             // Restore the issue optimistically if the server rejects the delete
             if (snapshot) {
               issueStore.applySyncAction('I', id, snapshot);
@@ -363,7 +313,20 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         setSelectedId(null);
       }
     },
-    [issueStore, txQueue, selectedId],
+    [issueStore, txQueue, selectedId, t],
+  );
+
+  // Delete is irreversible (no restore mutation), so it goes through a
+  // confirmation dialog instead of firing straight from the context menu.
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; identifier: string } | null>(
+    null,
+  );
+  const requestDelete = useCallback(
+    (id: string) => {
+      const issue = issueStore.findById(id);
+      setPendingDelete({ id, identifier: issue?.identifier ?? '' });
+    },
+    [issueStore],
   );
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
@@ -636,7 +599,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
             labels={labels}
             onArchive={handleArchive}
             onBulkUpdate={handleBulkUpdate}
-            onDelete={handleDelete}
+            onDelete={requestDelete}
             onOpen={handleOpen}
             onPropertyClosed={() => setOpenProperty(null)}
             onSelect={setSelectedId}
@@ -690,6 +653,20 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         onUpdate={handleUpdate}
         states={states}
         users={users}
+      />
+
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        message={t('issues.deleteConfirmBody', { identifier: pendingDelete?.identifier ?? '' })}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          if (pendingDelete) {
+            handleDelete(pendingDelete.id);
+          }
+          setPendingDelete(null);
+        }}
+        open={pendingDelete !== null}
+        title={t('issues.deleteConfirmTitle')}
       />
 
       {/* Create modal */}

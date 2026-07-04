@@ -286,7 +286,8 @@
     "search": "Buscar",
     "settings": "Configuración",
     "signOut": "Cerrar sesión",
-    "somethingWentWrong": "Algo salió mal. Inténtalo de nuevo."
+    "somethingWentWrong": "Algo salió mal. Inténtalo de nuevo.",
+    "undo": "Deshacer"
   },
   "customFields": {
     "addField": "Agregar campo",
@@ -535,6 +536,8 @@
   "errors": {
     "errorRef": "Referencia de error:",
     "goHome": "Ir al inicio",
+    "notFoundDetail": "Esta página no existe o pudo haber sido movida.",
+    "notFoundTitle": "Página no encontrada",
     "somethingWentWrong": "Algo salió mal",
     "tryAgain": "Intentar de nuevo",
     "unexpectedErrorDetail": "La página tuvo un error inesperado. Inténtalo de nuevo; si sigue ocurriendo, recarga o vuelve en un minuto."
@@ -770,9 +773,12 @@
     "add": "Agregar",
     "and": "Y",
     "archive": "Archivar",
+    "archivedToast": "Tarea archivada",
+    "archiveFailed": "Error al archivar la tarea",
     "assignee": "Responsable",
     "boardViewShortcut": "Vista de tablero (Alt+2)",
     "builtIn": "Integradas",
+    "bulkUpdateFailed": "Error al actualizar las tareas",
     "clear": "Limpiar",
     "clearAll": "Limpiar todo",
     "clearSelection": "Limpiar selección",
@@ -788,6 +794,9 @@
     "csvHeaderUpdated": "Actualizado",
     "customFields": "Campos personalizados",
     "cycle": "Ciclo",
+    "deleteConfirmBody": "{identifier} se eliminará permanentemente. Esta acción no se puede deshacer.",
+    "deleteConfirmTitle": "¿Eliminar tarea?",
+    "deleteFailed": "Error al eliminar la tarea",
     "draggingCount_one": "Arrastrando {count} tarea",
     "draggingCount_other": "Arrastrando {count} tareas",
     "dueDate": "Fecha de entrega",
@@ -829,6 +838,7 @@
     "priority": "Prioridad",
     "priorityN": "Prioridad {priority}",
     "project": "Proyecto",
+    "restoreFailed": "Error al restaurar la tarea",
     "saveCurrentFiltersAsView": "Guardar filtros actuales como vista",
     "saveView": "Guardar vista",
     "selectEllipsis": "Seleccionar…",
@@ -1518,6 +1528,12 @@
       "webhooks": "Webhooks",
       "webhooksDescription": "Envía eventos HTTP salientes"
     }
+  },
+  "sync": {
+    "backOnline": "De nuevo en línea — sincronizando cambios",
+    "connectionLost": "Conexión perdida — los cambios se sincronizarán al reconectar",
+    "offline": "Sin conexión",
+    "reconnecting": "Reconectando…"
   },
   "teams": {
     "addMember": "Agregar miembro",

@@ -286,7 +286,8 @@
     "search": "Search",
     "settings": "Settings",
     "signOut": "Sign out",
-    "somethingWentWrong": "Something went wrong. Please try again."
+    "somethingWentWrong": "Something went wrong. Please try again.",
+    "undo": "Undo"
   },
   "customFields": {
     "addField": "Add field",
@@ -535,6 +536,8 @@
   "errors": {
     "errorRef": "Error ref:",
     "goHome": "Go home",
+    "notFoundDetail": "This page doesn't exist or may have been moved.",
+    "notFoundTitle": "Page not found",
     "somethingWentWrong": "Something went wrong",
     "tryAgain": "Try again",
     "unexpectedErrorDetail": "The page hit an unexpected error. Try again — if it keeps happening, reload or come back in a minute."
@@ -770,9 +773,12 @@
     "add": "Add",
     "and": "AND",
     "archive": "Archive",
+    "archivedToast": "Issue archived",
+    "archiveFailed": "Failed to archive issue",
     "assignee": "Assignee",
     "boardViewShortcut": "Board view (Alt+2)",
     "builtIn": "Built-in",
+    "bulkUpdateFailed": "Failed to update issues",
     "clear": "Clear",
     "clearAll": "Clear all",
     "clearSelection": "Clear selection",
@@ -788,6 +794,9 @@
     "csvHeaderUpdated": "Updated",
     "customFields": "Custom fields",
     "cycle": "Cycle",
+    "deleteConfirmBody": "{identifier} will be permanently deleted. This cannot be undone.",
+    "deleteConfirmTitle": "Delete issue?",
+    "deleteFailed": "Failed to delete issue",
     "draggingCount_one": "Dragging {count} issue",
     "draggingCount_other": "Dragging {count} issues",
     "dueDate": "Due date",
@@ -829,6 +838,7 @@
     "priority": "Priority",
     "priorityN": "Priority {priority}",
     "project": "Project",
+    "restoreFailed": "Failed to restore issue",
     "saveCurrentFiltersAsView": "Save current filters as a view",
     "saveView": "Save view",
     "selectEllipsis": "Select…",
@@ -1518,6 +1528,12 @@
       "webhooks": "Webhooks",
       "webhooksDescription": "Send outbound HTTP events"
     }
+  },
+  "sync": {
+    "backOnline": "Back online — syncing changes",
+    "connectionLost": "Connection lost — changes will sync when you're back online",
+    "offline": "Offline",
+    "reconnecting": "Reconnecting…"
   },
   "teams": {
     "addMember": "Add member",
