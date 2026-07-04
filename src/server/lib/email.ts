@@ -149,20 +149,55 @@ export interface NotificationEmailBase {
   to: string;
 }
 
+/**
+ * Shared send envelope for the notification emails: wraps the caller-built
+ * `bodyHtml` (already localized and escaped) in the standard chrome, sends it,
+ * and emits the dev-mode log. Each public `send*` function only has to build
+ * its body + subject/text, so the transport/from/log boilerplate lives once.
+ */
+async function sendNotificationEmail(params: {
+  to: string;
+  locale?: string | null;
+  bodyHtml: string;
+  subject: string;
+  text: string;
+  issueIdentifier: string;
+  logLabel: string;
+}): Promise<void> {
+  const { to, locale, bodyHtml, subject, text, issueIdentifier, logLabel } = params;
+  const transport = createTransport();
+  const info = await transport.sendMail({
+    from: fromAddress(),
+    html: htmlWrap(bodyHtml, locale),
+    subject,
+    text,
+    to,
+  });
+
+  if (process.env.NODE_ENV !== 'production') {
+    log.info({ info, issueIdentifier, to }, logLabel);
+  }
+}
+
+/** Optional italic blockquote for a comment/mention excerpt (empty when absent). */
+function excerptBlockquote(excerpt: string | undefined): string {
+  if (!excerpt) {
+    return '';
+  }
+  return `<blockquote style="border-left:3px solid #d1d5db;margin:12px 0;padding:8px 12px;color:#4b5563;font-style:italic">${escapeHtml(excerpt)}</blockquote>`;
+}
+
 export async function sendAssignmentNotificationEmail(
   params: NotificationEmailBase,
 ): Promise<void> {
-  const transport = createTransport();
   const { to, actorName, issueIdentifier, issueTitle, issueUrl, locale } = params;
 
   const safeActor = escapeHtml(actorName);
   const safeId = escapeHtml(issueIdentifier);
   const safeTitle = escapeHtml(issueTitle);
 
-  const info = await transport.sendMail({
-    from: fromAddress(),
-    html: htmlWrap(
-      `
+  await sendNotificationEmail({
+    bodyHtml: `
       <p style="color:#374151">${emailT(locale, 'email.assignment.body', { actor: `<strong>${safeActor}</strong>` })}</p>
       <div style="border-left:3px solid #6366f1;padding:12px 16px;margin:16px 0;background:#f9fafb;border-radius:4px">
         <a href="${issueUrl}" style="color:#111;font-weight:600;text-decoration:none">
@@ -172,8 +207,9 @@ export async function sendAssignmentNotificationEmail(
       </div>
       ${ctaButton(issueUrl, emailT(locale, 'email.viewIssue'))}
     `,
-      locale,
-    ),
+    issueIdentifier,
+    locale,
+    logLabel: 'Assignment notification email (dev)',
     subject: emailT(locale, 'email.assignment.subject', {
       identifier: issueIdentifier,
       title: issueTitle,
@@ -186,10 +222,6 @@ export async function sendAssignmentNotificationEmail(
     }),
     to,
   });
-
-  if (process.env.NODE_ENV !== 'production') {
-    log.info({ info, issueIdentifier, to }, 'Assignment notification email (dev)');
-  }
 }
 
 export interface MentionNotificationEmailParams extends NotificationEmailBase {
@@ -200,27 +232,22 @@ export interface MentionNotificationEmailParams extends NotificationEmailBase {
 export async function sendMentionNotificationEmail(
   params: MentionNotificationEmailParams,
 ): Promise<void> {
-  const transport = createTransport();
   const { to, actorName, issueIdentifier, issueTitle, issueUrl, excerpt, locale } = params;
 
   const safeActor = escapeHtml(actorName);
-  const excerptHtml = excerpt
-    ? `<blockquote style="border-left:3px solid #d1d5db;margin:12px 0;padding:8px 12px;color:#4b5563;font-style:italic">${escapeHtml(excerpt)}</blockquote>`
-    : '';
 
-  const info = await transport.sendMail({
-    from: fromAddress(),
-    html: htmlWrap(
-      `
+  await sendNotificationEmail({
+    bodyHtml: `
       <p style="color:#374151">${emailT(locale, 'email.mention.body', {
         actor: `<strong>${safeActor}</strong>`,
         issueLink: issueLinkHtml(issueUrl, issueIdentifier, issueTitle),
       })}</p>
-      ${excerptHtml}
+      ${excerptBlockquote(excerpt)}
       ${ctaButton(issueUrl, emailT(locale, 'email.viewIssue'))}
     `,
-      locale,
-    ),
+    issueIdentifier,
+    locale,
+    logLabel: 'Mention notification email (dev)',
     subject: emailT(locale, 'email.mention.subject', {
       actor: actorName,
       identifier: issueIdentifier,
@@ -235,10 +262,6 @@ export async function sendMentionNotificationEmail(
     }),
     to,
   });
-
-  if (process.env.NODE_ENV !== 'production') {
-    log.info({ info, issueIdentifier, to }, 'Mention notification email (dev)');
-  }
 }
 
 export interface CommentNotificationEmailParams extends NotificationEmailBase {
@@ -249,27 +272,22 @@ export interface CommentNotificationEmailParams extends NotificationEmailBase {
 export async function sendCommentNotificationEmail(
   params: CommentNotificationEmailParams,
 ): Promise<void> {
-  const transport = createTransport();
   const { to, actorName, issueIdentifier, issueTitle, issueUrl, excerpt, locale } = params;
 
   const safeActor = escapeHtml(actorName);
-  const excerptHtml = excerpt
-    ? `<blockquote style="border-left:3px solid #d1d5db;margin:12px 0;padding:8px 12px;color:#4b5563;font-style:italic">${escapeHtml(excerpt)}</blockquote>`
-    : '';
 
-  const info = await transport.sendMail({
-    from: fromAddress(),
-    html: htmlWrap(
-      `
+  await sendNotificationEmail({
+    bodyHtml: `
       <p style="color:#374151">${emailT(locale, 'email.comment.body', {
         actor: `<strong>${safeActor}</strong>`,
         issueLink: issueLinkHtml(issueUrl, issueIdentifier, issueTitle),
       })}</p>
-      ${excerptHtml}
+      ${excerptBlockquote(excerpt)}
       ${ctaButton(issueUrl, emailT(locale, 'email.viewComment'))}
     `,
-      locale,
-    ),
+    issueIdentifier,
+    locale,
+    logLabel: 'Comment notification email (dev)',
     subject: emailT(locale, 'email.comment.subject', {
       actor: actorName,
       identifier: issueIdentifier,
@@ -284,10 +302,6 @@ export async function sendCommentNotificationEmail(
     }),
     to,
   });
-
-  if (process.env.NODE_ENV !== 'production') {
-    log.info({ info, issueIdentifier, to }, 'Comment notification email (dev)');
-  }
 }
 
 export interface StatusChangeNotificationEmailParams extends NotificationEmailBase {
@@ -298,7 +312,6 @@ export interface StatusChangeNotificationEmailParams extends NotificationEmailBa
 export async function sendStatusChangeNotificationEmail(
   params: StatusChangeNotificationEmailParams,
 ): Promise<void> {
-  const transport = createTransport();
   const {
     to,
     actorName,
@@ -314,10 +327,8 @@ export async function sendStatusChangeNotificationEmail(
   const safeOld = escapeHtml(oldStateName);
   const safeNew = escapeHtml(newStateName);
 
-  const info = await transport.sendMail({
-    from: fromAddress(),
-    html: htmlWrap(
-      `
+  await sendNotificationEmail({
+    bodyHtml: `
       <p style="color:#374151">${emailT(locale, 'email.statusChange.body', {
         actor: `<strong>${safeActor}</strong>`,
         issueLink: issueLinkHtml(issueUrl, issueIdentifier, issueTitle),
@@ -329,8 +340,9 @@ export async function sendStatusChangeNotificationEmail(
       </p>
       ${ctaButton(issueUrl, emailT(locale, 'email.viewIssue'))}
     `,
-      locale,
-    ),
+    issueIdentifier,
+    locale,
+    logLabel: 'Status change notification email (dev)',
     subject: emailT(locale, 'email.statusChange.subject', {
       identifier: issueIdentifier,
       state: newStateName,
@@ -345,8 +357,4 @@ export async function sendStatusChangeNotificationEmail(
     }),
     to,
   });
-
-  if (process.env.NODE_ENV !== 'production') {
-    log.info({ info, issueIdentifier, to }, 'Status change notification email (dev)');
-  }
 }
