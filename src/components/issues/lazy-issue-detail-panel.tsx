@@ -9,6 +9,7 @@ const IssueDetailPanel = lazy(() =>
 );
 
 interface Props {
+  breadcrumb?: { label: string; onNavigate: () => void } | null;
   issue: IssueDetail | null;
   labels: IssueLabel[];
   onClose: () => void;

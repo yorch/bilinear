@@ -11,6 +11,7 @@ import { SimpleSelect } from '@/components/ui/select';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
+import { buildIssueHref } from '@/lib/issue-nav';
 import {
   PROJECT_HEALTH_LABEL_KEYS,
   PROJECT_HEALTH_OPTIONS,
@@ -31,7 +32,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
   workspaceKey,
 }: ProjectDetailViewProps) {
   const t = useTranslations();
-  const { projectStore, issueStore, userStore, teamStore, workflowStateStore } = useStore();
+  const { projectStore, issueStore, userStore, workflowStateStore } = useStore();
   const viewerId = userStore.currentUserId ?? '';
   const project = projectStore.findBySlugId(projectSlugId);
 
@@ -203,11 +204,13 @@ export const ProjectDetailView = observer(function ProjectDetailView({
               ) : (
                 projectIssues.map(issue => {
                   const state = workflowStateStore.findById(issue.stateId);
-                  const team = teamStore.findById(issue.teamId);
                   return (
                     <Link
                       className="flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent"
-                      href={`/${workspaceKey}/team/${team?.key ?? ''}`}
+                      href={buildIssueHref(workspaceKey, issue.id, {
+                        label: project.name,
+                        path: `/${workspaceKey}/project/${project.slugId}`,
+                      })}
                       key={issue.id}
                     >
                       {state && (

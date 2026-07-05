@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, BellOff } from 'lucide-react';
+import { ArrowLeft, Bell, BellOff } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { priorityLabelKey } from '@/components/properties/priority-icon';
@@ -37,6 +37,7 @@ import { RelationsSection } from './relations-section';
 import { SubIssueList } from './sub-issue-list';
 
 interface IssueDetailPanelProps {
+  breadcrumb?: { label: string; onNavigate: () => void } | null;
   issue: IssueDetail | null;
   labels: IssueLabel[];
   onClose: () => void;
@@ -46,6 +47,7 @@ interface IssueDetailPanelProps {
 }
 
 export const IssueDetailPanel = observer(function IssueDetailPanel({
+  breadcrumb,
   issue,
   states,
   users,
@@ -177,7 +179,22 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
-          <span className="font-mono text-xs text-zinc-400">{issue.identifier}</span>
+          <div className="flex min-w-0 items-center gap-1.5">
+            {breadcrumb && (
+              <>
+                <button
+                  className="flex items-center gap-1 truncate text-xs text-muted-foreground hover:text-foreground"
+                  onClick={breadcrumb.onNavigate}
+                  type="button"
+                >
+                  <ArrowLeft className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{breadcrumb.label}</span>
+                </button>
+                <span className="text-muted-foreground">/</span>
+              </>
+            )}
+            <span className="font-mono text-xs text-zinc-400">{issue.identifier}</span>
+          </div>
           <div className="flex items-center gap-1">
             {subscribed !== null && (
               <button

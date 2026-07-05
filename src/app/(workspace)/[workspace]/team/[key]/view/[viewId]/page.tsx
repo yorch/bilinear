@@ -10,6 +10,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssueLabel } from '@/lib/db';
 import { applyFilters, coerceFilterSet } from '@/lib/filter-engine';
 import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
+import { buildIssueHref } from '@/lib/issue-nav';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
 
@@ -78,9 +79,13 @@ const CustomViewPage = observer(function CustomViewPage() {
 
   const handleOpen = useCallback(
     (id: string) => {
-      router.push(`/${workspace}/issue/${id}`);
+      const href = buildIssueHref(workspace, id, {
+        label: view?.name ?? team?.name ?? teamKey,
+        path: `/${workspace}/team/${teamKey}/view/${viewId}`,
+      });
+      router.push(href);
     },
-    [router, workspace],
+    [router, workspace, teamKey, viewId, view?.name, team?.name],
   );
 
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';

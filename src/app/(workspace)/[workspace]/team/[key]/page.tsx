@@ -31,6 +31,7 @@ import {
   ISSUES_BULK_UPDATE_MUTATION,
 } from '@/lib/graphql-queries';
 import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
+import { buildIssueHref } from '@/lib/issue-nav';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
@@ -414,7 +415,11 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   const handleOpen = useCallback(
     (id: string) => {
       setDetailIssueId(id);
-      router.replace(`/${workspace}/issue/${id}`, { scroll: false });
+      const href = buildIssueHref(workspace, id, {
+        label: team?.name ?? teamKey,
+        path: `/${workspace}/team/${teamKey}`,
+      });
+      router.replace(href, { scroll: false });
       const issue = issueStore.findById(id);
       const issueTeam = issue ? teamStore.findById(issue.teamId) : null;
       if (issue && issueTeam) {
@@ -426,7 +431,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         });
       }
     },
-    [workspace, issueStore, teamStore, addRecent, router],
+    [workspace, teamKey, team?.name, issueStore, teamStore, addRecent, router],
   );
 
   // ── Render ────────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter } from 'next/navigation';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { priorityLabelKey } from '@/components/properties/priority-icon';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
@@ -9,6 +9,7 @@ import type { RecentItem } from '@/hooks/use-recent-items';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue } from '@/lib/db';
 import { IDENTIFIER_RE } from '@/lib/identifiers';
+import { buildIssueHref } from '@/lib/issue-nav';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -389,6 +390,7 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
   const { uiStore } = useStore();
   const t = useTranslations();
   const router = useRouter();
+  const pathname = usePathname();
   const params = useParams<{ workspace?: string }>();
   const workspaceKey = params.workspace ?? '';
 
@@ -426,13 +428,17 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
         return;
       }
       if (item.kind === 'issue') {
-        router.push(`/${workspaceKey}/issue/${item.issue.id}`);
+        const href = buildIssueHref(workspaceKey, item.issue.id, {
+          label: t('commandPalette.footer.back'),
+          path: pathname,
+        });
+        router.push(href);
         uiStore.closeCommandPalette();
       } else {
         item.onSelect();
       }
     },
-    [router, workspaceKey, uiStore],
+    [router, workspaceKey, uiStore, pathname, t],
   );
 
   const onAllItemsChange = useCallback((items: ResultItem[]) => {

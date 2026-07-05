@@ -1,7 +1,7 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
 import { useDocumentTitle } from '@/hooks/use-document-title';
@@ -52,7 +52,16 @@ const IssueDetailPage = observer(function IssueDetailPage() {
   const t = useTranslations();
   const { workspace, id } = useParams<{ workspace: string; id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { issueStore, teamStore, workflowStateStore, labelStore, userStore } = useStore();
+
+  // `from`/`fromLabel` are set by list pages (my-issues, project, custom
+  // views, etc.) when linking into this route, so close/breadcrumb can
+  // return to the actual referrer instead of always falling back to the
+  // issue's own team page. Validated to stay within this workspace.
+  const fromPath = searchParams.get('from');
+  const fromLabel = searchParams.get('fromLabel');
+  const returnTo = fromPath?.startsWith(`/${workspace}/`) && fromLabel ? fromPath : null;
 
   const [issue, setIssue] = useState<IssueWithTeam | null>(null);
   const [labels, setLabels] = useState<IssueLabel[]>([]);
@@ -135,7 +144,9 @@ const IssueDetailPage = observer(function IssueDetailPage() {
   };
 
   const handleClose = () => {
-    if (issue) {
+    if (returnTo) {
+      router.push(returnTo);
+    } else if (issue) {
       router.push(`/${workspace}/team/${issue.team.key}`);
     } else {
       router.push(`/${workspace}`);
@@ -161,6 +172,9 @@ const IssueDetailPage = observer(function IssueDetailPage() {
   return (
     <div className="flex flex-1">
       <LazyIssueDetailPanel
+        breadcrumb={
+          returnTo ? { label: fromLabel ?? '', onNavigate: () => router.push(returnTo) } : null
+        }
         issue={issue}
         labels={labels}
         onClose={handleClose}

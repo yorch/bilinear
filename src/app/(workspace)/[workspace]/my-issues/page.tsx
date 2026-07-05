@@ -18,6 +18,7 @@ import type { DBIssue, DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
 import { ISSUES_BULK_UPDATE_MUTATION } from '@/lib/graphql-queries';
 import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
+import { buildIssueHref } from '@/lib/issue-nav';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
@@ -205,9 +206,13 @@ const MyIssuesPage = observer(function MyIssuesPage() {
   const handleOpen = useCallback(
     (id: string) => {
       setDetailIssueId(id);
-      router.replace(`/${workspace}/issue/${id}`, { scroll: false });
+      const href = buildIssueHref(workspace, id, {
+        label: t('nav.myIssues'),
+        path: `/${workspace}/my-issues`,
+      });
+      router.replace(href, { scroll: false });
     },
-    [workspace, router],
+    [workspace, router, t],
   );
 
   // ── Render ────────────────────────────────────────────────────────────────
