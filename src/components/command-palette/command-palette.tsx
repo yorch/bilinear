@@ -6,6 +6,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { priorityLabelKey } from '@/components/properties/priority-icon';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import type { RecentItem } from '@/hooks/use-recent-items';
+import { type Theme, useTheme } from '@/hooks/use-theme';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue } from '@/lib/db';
 import { IDENTIFIER_RE } from '@/lib/identifiers';
@@ -76,6 +77,7 @@ const ResultsList = observer(function ResultsList({
 }: ResultsListProps) {
   const { issueStore, teamStore, uiStore, workflowStateStore } = useStore();
   const t = useTranslations();
+  const { setTheme } = useTheme();
 
   const trimmed = (query || '').trim().toUpperCase();
   const exactIdentifier = IDENTIFIER_RE.test(trimmed)
@@ -99,8 +101,29 @@ const ResultsList = observer(function ResultsList({
     teamKey: teamStore.findById(issue.teamId)?.key ?? '',
   }));
 
-  const baseActions = useMemo<ActionItem[]>(
-    () => [
+  const baseActions = useMemo<ActionItem[]>(() => {
+    const goTo = (id: string, keywords: string[], labelKey: string, path: string): ActionItem => ({
+      id,
+      keywords,
+      kind: 'action',
+      label: t(labelKey),
+      onSelect: () => {
+        uiStore.closeCommandPalette();
+        router.push(`/${workspaceKey}${path}`);
+      },
+    });
+    const switchTheme = (id: string, theme: Theme, themeLabelKey: string): ActionItem => ({
+      id,
+      keywords: ['theme', 'appearance', theme],
+      kind: 'action',
+      label: t('commandPalette.actions.switchTheme', { theme: t(themeLabelKey) }),
+      onSelect: () => {
+        uiStore.closeCommandPalette();
+        setTheme(theme);
+      },
+    });
+
+    return [
       {
         id: 'create-issue',
         keywords: ['create issue', 'new issue', 'add issue'],
@@ -113,18 +136,52 @@ const ResultsList = observer(function ResultsList({
         shortcut: 'C',
       },
       {
-        id: 'go-settings',
-        keywords: ['settings', 'preferences', 'config'],
+        id: 'create-project',
+        keywords: ['create project', 'new project', 'add project'],
         kind: 'action',
-        label: t('commandPalette.actions.goToSettings'),
+        label: t('commandPalette.actions.createProject'),
         onSelect: () => {
           uiStore.closeCommandPalette();
-          router.push(`/${workspaceKey}/settings`);
+          router.push(`/${workspaceKey}/projects`);
+          uiStore.openCreateProjectModal();
         },
       },
-    ],
-    [router, uiStore, workspaceKey, t],
-  );
+      {
+        id: 'create-team',
+        keywords: ['create team', 'new team', 'add team'],
+        kind: 'action',
+        label: t('commandPalette.actions.createTeam'),
+        onSelect: () => {
+          uiStore.closeCommandPalette();
+          uiStore.openCreateTeamModal();
+        },
+      },
+      goTo('go-my-issues', ['my issues'], 'commandPalette.actions.goToMyIssues', '/my-issues'),
+      goTo('go-inbox', ['inbox', 'notifications'], 'commandPalette.actions.goToInbox', '/inbox'),
+      goTo('go-projects', ['projects'], 'commandPalette.actions.goToProjects', '/projects'),
+      goTo(
+        'go-initiatives',
+        ['initiatives'],
+        'commandPalette.actions.goToInitiatives',
+        '/initiatives',
+      ),
+      goTo(
+        'go-analytics',
+        ['analytics', 'insights'],
+        'commandPalette.actions.goToAnalytics',
+        '/analytics',
+      ),
+      goTo(
+        'go-settings',
+        ['settings', 'preferences', 'config'],
+        'commandPalette.actions.goToSettings',
+        '/settings',
+      ),
+      switchTheme('theme-light', 'light', 'theme.light'),
+      switchTheme('theme-dark', 'dark', 'theme.dark'),
+      switchTheme('theme-system', 'system', 'theme.system'),
+    ];
+  }, [router, uiStore, workspaceKey, t, setTheme]);
   const actionItems: ActionItem[] = query
     ? baseActions.filter(a => {
         const q = query.toLowerCase();

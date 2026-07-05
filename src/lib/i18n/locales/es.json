@@ -237,7 +237,15 @@
   "commandPalette": {
     "actions": {
       "createIssue": "Crear nueva tarea",
-      "goToSettings": "Ir a Configuración"
+      "createProject": "Crear nuevo proyecto",
+      "createTeam": "Crear nuevo equipo",
+      "goToAnalytics": "Ir a Analítica",
+      "goToInbox": "Ir a Bandeja de entrada",
+      "goToInitiatives": "Ir a Iniciativas",
+      "goToMyIssues": "Ir a Mis tareas",
+      "goToProjects": "Ir a Proyectos",
+      "goToSettings": "Ir a Configuración",
+      "switchTheme": "Cambiar a tema {theme}"
     },
     "dialogAriaLabel": "Paleta de comandos",
     "footer": {

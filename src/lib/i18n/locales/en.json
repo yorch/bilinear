@@ -237,7 +237,15 @@
   "commandPalette": {
     "actions": {
       "createIssue": "Create new issue",
-      "goToSettings": "Go to Settings"
+      "createProject": "Create new project",
+      "createTeam": "Create new team",
+      "goToAnalytics": "Go to Analytics",
+      "goToInbox": "Go to Inbox",
+      "goToInitiatives": "Go to Initiatives",
+      "goToMyIssues": "Go to My Issues",
+      "goToProjects": "Go to Projects",
+      "goToSettings": "Go to Settings",
+      "switchTheme": "Switch to {theme} theme"
     },
     "dialogAriaLabel": "Command palette",
     "footer": {
