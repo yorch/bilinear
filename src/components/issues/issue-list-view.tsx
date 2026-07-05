@@ -208,19 +208,31 @@ export function IssueListView({
         />
       ))}
 
-      {ctxMenu && (
-        <IssueContextMenu
-          identifier={ctxMenu.identifier}
-          issueId={ctxMenu.issueId}
-          onArchive={() => onArchive?.(ctxMenu.issueId)}
-          onClose={() => setCtxMenu(null)}
-          onDelete={() => onDelete?.(ctxMenu.issueId)}
-          onOpen={() => onOpen(ctxMenu.issueId)}
-          title={ctxMenu.title}
-          x={ctxMenu.x}
-          y={ctxMenu.y}
-        />
-      )}
+      {ctxMenu &&
+        (() => {
+          const ctxIssue = issues.find(i => i.id === ctxMenu.issueId);
+          return (
+            <IssueContextMenu
+              currentAssigneeId={ctxIssue?.assigneeId}
+              currentLabelIds={ctxIssue?.labels.map(l => l.id)}
+              currentPriority={ctxIssue?.priority}
+              currentStateId={ctxIssue?.stateId}
+              identifier={ctxMenu.identifier}
+              issueId={ctxMenu.issueId}
+              labels={labels}
+              onArchive={() => onArchive?.(ctxMenu.issueId)}
+              onClose={() => setCtxMenu(null)}
+              onDelete={() => onDelete?.(ctxMenu.issueId)}
+              onOpen={() => onOpen(ctxMenu.issueId)}
+              onUpdate={patch => onUpdate(ctxMenu.issueId, patch)}
+              states={states}
+              title={ctxMenu.title}
+              users={users}
+              x={ctxMenu.x}
+              y={ctxMenu.y}
+            />
+          );
+        })()}
 
       {onBulkUpdate && checkedIds.size > 0 && (
         <BulkActionBar

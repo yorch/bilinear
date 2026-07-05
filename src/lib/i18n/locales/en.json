@@ -798,6 +798,7 @@
     "clearSelection": "Clear selection",
     "columnPicker": "Column picker",
     "columns": "Columns",
+    "copyBranchName": "Copy branch name",
     "copyIssueId": "Copy issue ID",
     "copyIssueUrl": "Copy issue URL",
     "createFailed": "Failed to create issue",

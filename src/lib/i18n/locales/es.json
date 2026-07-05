@@ -798,6 +798,7 @@
     "clearSelection": "Limpiar selección",
     "columnPicker": "Selector de columnas",
     "columns": "Columnas",
+    "copyBranchName": "Copiar nombre de rama",
     "copyIssueId": "Copiar ID de la tarea",
     "copyIssueUrl": "Copiar URL de la tarea",
     "createFailed": "Error al crear la tarea",
