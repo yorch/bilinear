@@ -856,6 +856,7 @@
     "restoreFailed": "Failed to restore issue",
     "saveCurrentFiltersAsView": "Save current filters as a view",
     "saveView": "Save view",
+    "selectAllCount": "Select all {count}",
     "selectEllipsis": "Select…",
     "selectedCount": "{count} selected",
     "setEstimate": "Set estimate",

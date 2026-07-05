@@ -15,8 +15,10 @@ interface BulkActionBarProps {
   count: number;
   labels: IssueLabel[];
   onClear: () => void;
+  onSelectAll?: () => void;
   onUpdate: (patch: Record<string, unknown>) => void;
   states: WorkflowState[];
+  totalCount?: number;
   users: IssueUser[];
 }
 
@@ -27,6 +29,8 @@ export function BulkActionBar({
   labels,
   onUpdate,
   onClear,
+  onSelectAll,
+  totalCount,
 }: BulkActionBarProps) {
   const t = useTranslations();
   return (
@@ -34,6 +38,16 @@ export function BulkActionBar({
       <span className="mr-2 whitespace-nowrap text-sm font-medium text-zinc-700 dark:text-zinc-300">
         {t('issues.selectedCount', { count })}
       </span>
+
+      {onSelectAll && totalCount !== undefined && count < totalCount && (
+        <button
+          className="mr-1 whitespace-nowrap rounded px-2 py-1 text-xs font-medium text-primary hover:bg-accent"
+          onClick={onSelectAll}
+          type="button"
+        >
+          {t('issues.selectAllCount', { count: totalCount })}
+        </button>
+      )}
 
       <SelectPopover
         triggerChildren={

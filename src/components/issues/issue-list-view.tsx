@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useTranslations } from '@/hooks/use-translations';
 import type { ColumnKey } from '@/hooks/use-visible-columns';
 import type { DBCustomFieldDefinition } from '@/lib/db';
@@ -75,6 +76,13 @@ export function IssueListView({
     setCheckedIds(new Set());
     lastCheckedIndexRef.current = -1;
   }, [issueIds]);
+
+  const selectAll = () => setCheckedIds(new Set(issues.map(i => i.id)));
+
+  useHotkeys(['meta+a', 'ctrl+a'], selectAll, { enabled: Boolean(onBulkUpdate) }, [
+    issues,
+    onBulkUpdate,
+  ]);
 
   function handleCheck(issueId: string, shiftKey: boolean) {
     if (!onBulkUpdate) {
@@ -219,11 +227,13 @@ export function IssueListView({
           count={checkedIds.size}
           labels={labels}
           onClear={() => setCheckedIds(new Set())}
+          onSelectAll={selectAll}
           onUpdate={patch => {
             onBulkUpdate([...checkedIds], patch);
             setCheckedIds(new Set());
           }}
           states={states}
+          totalCount={issues.length}
           users={users}
         />
       )}
