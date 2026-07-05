@@ -1,8 +1,10 @@
 'use client';
 
-import { Plus, X } from 'lucide-react';
+import { ChevronDown, Plus, X } from 'lucide-react';
 import { useState } from 'react';
 import { priorityLabelKey } from '@/components/properties/priority-icon';
+import { SearchableSelectPopover } from '@/components/ui/searchable-select-popover';
+import { SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBCustomFieldDefinition, DBWorkflowState } from '@/lib/db';
 import type {
@@ -204,47 +206,93 @@ function AddFilterForm({
 
   return (
     <div className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white p-2 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-      <select
-        className="rounded border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-        onChange={e => {
-          setFieldValue(e.target.value);
-          setValue('');
-        }}
-        value={fieldValue}
+      <SelectPopover
+        triggerChildren={
+          <>
+            <span className="truncate">
+              {fieldOptions.find(f => f.value === fieldValue)?.label}
+            </span>
+            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+          </>
+        }
+        triggerClassName="gap-1 border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700"
       >
-        {fieldOptions.map(f => (
-          <option key={f.value} value={f.value}>
-            {f.label}
-          </option>
-        ))}
-      </select>
+        {close => (
+          <div className="max-h-64 w-40 overflow-y-auto py-1">
+            {fieldOptions.map(f => (
+              <button
+                className={cn(
+                  'flex w-full items-center px-3 py-1.5 text-left text-xs hover:bg-accent',
+                  f.value === fieldValue && 'bg-accent/50',
+                )}
+                key={f.value}
+                onClick={() => {
+                  setFieldValue(f.value);
+                  setValue('');
+                  close();
+                }}
+                type="button"
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </SelectPopover>
 
-      <select
-        className="rounded border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-        onChange={e => setOperator(e.target.value as FilterOperator)}
-        value={operator}
+      <SelectPopover
+        triggerChildren={
+          <>
+            <span className="truncate">{operators.find(o => o.value === operator)?.label}</span>
+            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+          </>
+        }
+        triggerClassName="gap-1 border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700"
       >
-        {operators.map(o => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+        {close => (
+          <div className="max-h-64 w-44 overflow-y-auto py-1">
+            {operators.map(o => (
+              <button
+                className={cn(
+                  'flex w-full items-center px-3 py-1.5 text-left text-xs hover:bg-accent',
+                  o.value === operator && 'bg-accent/50',
+                )}
+                key={o.value}
+                onClick={() => {
+                  setOperator(o.value);
+                  close();
+                }}
+                type="button"
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </SelectPopover>
 
       {needsValue &&
         (getValueOptions().length > 0 ? (
-          <select
-            className="rounded border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-            onChange={e => setValue(e.target.value)}
-            value={value}
-          >
-            <option value="">{t('issues.selectEllipsis')}</option>
-            {getValueOptions().map(opt => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+          <SearchableSelectPopover
+            emptyText={t('commandPalette.submenu.noOptions')}
+            getKey={opt => opt.value}
+            isSelected={opt => opt.value === value}
+            items={getValueOptions()}
+            matchesSearch={(opt, search) => opt.label.toLowerCase().includes(search.toLowerCase())}
+            onSelect={opt => setValue(opt.value)}
+            renderItem={opt => <span className="truncate text-left">{opt.label}</span>}
+            searchPlaceholder={t('common.search')}
+            triggerChildren={
+              <>
+                <span className="truncate">
+                  {getValueOptions().find(opt => opt.value === value)?.label ??
+                    t('issues.selectEllipsis')}
+                </span>
+                <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+              </>
+            }
+            triggerClassName="gap-1 border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700"
+          />
         ) : (
           <input
             className="w-28 rounded border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
