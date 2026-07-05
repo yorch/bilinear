@@ -67,7 +67,7 @@ function ModalDialogInner({
           position:absolute panels that must overflow the dialog box. */}
       <div
         className={cn(
-          'w-full rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900',
+          'w-full rounded-xl border border-border bg-card shadow-2xl',
           maxWidth === 'lg' ? 'max-w-lg' : 'max-w-md',
         )}
       >

@@ -136,7 +136,7 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
         >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-zinc-100 px-3 py-2 dark:border-zinc-800">
-            <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+            <span className="text-xs font-semibold text-muted-foreground">
               {t('issueDetail.templates.title')}
             </span>
             <button
@@ -163,7 +163,7 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
                 <li key={template.id}>
                   <button
                     aria-selected={false}
-                    className="w-full px-3 py-2 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                    className="w-full px-3 py-2 text-left hover:bg-accent"
                     onClick={() => handleSelect(template)}
                     role="option"
                     type="button"

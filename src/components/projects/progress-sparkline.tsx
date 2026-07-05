@@ -41,7 +41,7 @@ export function ProgressSparkline({ projectId, width = 160, height = 28 }: Progr
   }, [fetchHistory]);
 
   if (!loaded) {
-    return <div className="h-7 w-40 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />;
+    return <div className="h-7 w-40 animate-pulse rounded bg-muted" />;
   }
   if (points.length < 2) {
     return <span className="text-xs text-zinc-400">{t('projects.notEnoughHistory')}</span>;

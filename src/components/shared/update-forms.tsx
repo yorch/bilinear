@@ -52,7 +52,7 @@ export function CreateUpdateForm({
     <div className="mt-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
       <div className="flex items-center gap-2 pb-2">
         <MessageSquare className="h-4 w-4 text-zinc-400" />
-        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+        <span className="text-xs font-medium text-muted-foreground">
           {t('properties.updateForm.newUpdate')}
         </span>
         <button
@@ -73,14 +73,14 @@ export function CreateUpdateForm({
       />
       <div className="mt-2 flex justify-end gap-2">
         <button
-          className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-accent"
           onClick={onClose}
           type="button"
         >
           {t('common.cancel')}
         </button>
         <button
-          className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+          className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary/90 disabled:opacity-50"
           disabled={!body.trim() || submitting}
           onClick={handleSubmit}
           type="button"
@@ -145,14 +145,14 @@ export function EditUpdateForm({
       />
       <div className="mt-2 flex justify-end gap-2">
         <button
-          className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-accent"
           onClick={onClose}
           type="button"
         >
           {t('common.cancel')}
         </button>
         <button
-          className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+          className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary/90 disabled:opacity-50"
           disabled={!body.trim() || submitting}
           onClick={handleSave}
           type="button"

@@ -39,10 +39,10 @@ export function AdminShell({
       <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-6 px-6">
           <div className="flex items-center gap-2">
-            <span className="rounded bg-indigo-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+            <span className="rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
               {t('admin.nav.platformBadge')}
             </span>
-            <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            <span className="text-sm font-semibold text-foreground">
               {t('admin.nav.adminTitle')}
             </span>
           </div>

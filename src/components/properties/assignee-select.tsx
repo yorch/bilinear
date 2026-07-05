@@ -44,7 +44,7 @@ export function AssigneeSelect({
         current ? (
           <UserAvatar size="xs" user={current} />
         ) : (
-          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border-2 border-dashed border-zinc-300 dark:border-zinc-600" />
+          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border-2 border-dashed border-border" />
         )
       }
       triggerClassName="px-1 py-1"
@@ -53,7 +53,7 @@ export function AssigneeSelect({
       {close => (
         <>
           <button
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-zinc-500 hover:bg-accent"
             onClick={e => {
               e.stopPropagation();
               onChange(null);
@@ -66,7 +66,7 @@ export function AssigneeSelect({
           {users.map(user => (
             <button
               className={cn(
-                'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800',
+                'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent',
                 user.id === value && 'font-medium',
               )}
               key={user.id}

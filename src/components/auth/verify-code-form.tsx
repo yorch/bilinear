@@ -85,9 +85,8 @@ export function VerifyCodeForm() {
   return (
     <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
       {email && (
-        <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
-          {t('auth.weSentCodeTo')}{' '}
-          <span className="font-medium text-zinc-900 dark:text-zinc-100">{email}</span>
+        <p className="text-center text-sm text-muted-foreground">
+          {t('auth.weSentCodeTo')} <span className="font-medium text-foreground">{email}</span>
         </p>
       )}
 
@@ -120,7 +119,7 @@ export function VerifyCodeForm() {
       </Button>
 
       <button
-        className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+        className="text-sm text-zinc-500 hover:text-foreground"
         onClick={() => router.push(`/login`)}
         type="button"
       >

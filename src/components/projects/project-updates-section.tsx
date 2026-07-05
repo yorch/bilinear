@@ -43,7 +43,7 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
   return (
     <div className="mt-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {t('projects.updatesCount', { count: updates.length })}
         </h3>
         {!creating && !editingId && (

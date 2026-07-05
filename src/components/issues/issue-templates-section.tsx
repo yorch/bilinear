@@ -158,13 +158,13 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
 
   return (
     <section>
-      <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+      <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {t('issueDetail.templates.sectionTitle')}
       </h2>
       <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
         {/* Header row */}
         <div className="flex items-center justify-between border-b border-zinc-100 p-4 dark:border-zinc-800">
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="text-xs text-muted-foreground">
             {t('issueDetail.templates.count', { count: templates.length })}
           </p>
           {!isAdding && (
@@ -194,7 +194,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
         )}
 
         {/* Template list */}
-        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+        <ul className="divide-y divide-border">
           {templates.length === 0 && !isAdding && (
             <li className="p-4 text-sm text-zinc-400">{t('issueDetail.templates.emptyState')}</li>
           )}
@@ -251,7 +251,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                         )}
                       </div>
                       {tmpl.description && (
-                        <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
                           {tmpl.description}
                         </p>
                       )}
@@ -430,10 +430,7 @@ function TemplateForm({
       {/* Name + Description */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1">
-          <label
-            className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-            htmlFor="tmpl-name"
-          >
+          <label className="text-xs font-medium text-muted-foreground" htmlFor="tmpl-name">
             {t('issueDetail.templates.form.name')} <span className="text-red-500">*</span>
           </label>
           <input
@@ -445,10 +442,7 @@ function TemplateForm({
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label
-            className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-            htmlFor="tmpl-desc"
-          >
+          <label className="text-xs font-medium text-muted-foreground" htmlFor="tmpl-desc">
             {t('issueDetail.templates.form.description')}
           </label>
           <textarea
@@ -464,16 +458,13 @@ function TemplateForm({
 
       {/* Template defaults */}
       <div className="rounded-md bg-zinc-50 p-3 dark:bg-zinc-800/50">
-        <p className="mb-2.5 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+        <p className="mb-2.5 text-xs font-medium text-muted-foreground">
           {t('issueDetail.templates.form.templateDefaults')}
         </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {/* Status */}
           <div className="flex flex-col gap-1">
-            <label
-              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-              htmlFor="tmpl-state"
-            >
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="tmpl-state">
               {t('issueDetail.templates.form.status')}
             </label>
             <select
@@ -493,10 +484,7 @@ function TemplateForm({
 
           {/* Priority */}
           <div className="flex flex-col gap-1">
-            <label
-              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-              htmlFor="tmpl-priority"
-            >
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="tmpl-priority">
               {t('issueDetail.templates.form.priority')}
             </label>
             <select
@@ -515,10 +503,7 @@ function TemplateForm({
 
           {/* Assignee */}
           <div className="flex flex-col gap-1">
-            <label
-              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-              htmlFor="tmpl-assignee"
-            >
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="tmpl-assignee">
               {t('issueDetail.templates.form.assignee')}
             </label>
             <select
@@ -540,7 +525,7 @@ function TemplateForm({
         {/* Labels multi-select */}
         {labels.length > 0 && (
           <div className="mt-3 flex flex-col gap-1">
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+            <p className="text-xs font-medium text-muted-foreground">
               {t('issueDetail.templates.form.labels')}
             </p>
             <div className="flex flex-wrap gap-1.5">
@@ -581,7 +566,7 @@ function TemplateForm({
       {/* Actions */}
       <div className="flex items-center justify-end gap-2">
         <button
-          className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-accent"
           onClick={onCancel}
           type="button"
         >
@@ -590,7 +575,7 @@ function TemplateForm({
         <button
           className={cn(
             'rounded px-3 py-1.5 text-xs font-medium text-white transition-colors',
-            'bg-indigo-600 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50',
+            'bg-primary hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50',
           )}
           disabled={!canSubmit || submitting}
           onClick={handleSubmit}

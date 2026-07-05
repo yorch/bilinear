@@ -335,12 +335,7 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
           {/* Header */}
           <div className="sticky top-0 z-10 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
             {/* Month row */}
-            <div
-              className={cn(
-                'flex border-b border-zinc-100 dark:border-zinc-800',
-                hasSubRow ? 'h-6' : 'h-8',
-              )}
-            >
+            <div className={cn('flex border-b border-border', hasSubRow ? 'h-6' : 'h-8')}>
               {monthMarkers.map((m, i) => {
                 const nextX = monthMarkers[i + 1]?.x ?? totalWidth;
                 return (
@@ -372,10 +367,10 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
                   dayMarkers.map(dm => (
                     <div
                       className={cn(
-                        'absolute top-0 border-l px-0.5 text-[10px] leading-5 text-zinc-400 dark:text-zinc-500',
+                        'absolute top-0 border-l px-0.5 text-[10px] leading-5 text-muted-foreground',
                         dm.isMonthStart
                           ? 'border-zinc-300 font-semibold dark:border-zinc-600'
-                          : 'border-zinc-100 dark:border-zinc-800',
+                          : 'border-border',
                       )}
                       key={dm.x}
                       style={{ left: dm.x, width: pxPerDay }}
@@ -402,7 +397,7 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
               weekMarkers.map(wm => (
                 <div
                   aria-hidden="true"
-                  className="absolute top-0 w-px bg-zinc-100 dark:bg-zinc-800"
+                  className="absolute top-0 w-px bg-muted"
                   key={wm.x}
                   style={{ height: items.length * rowHeight, left: wm.x }}
                 />

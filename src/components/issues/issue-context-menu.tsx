@@ -122,7 +122,7 @@ export function IssueContextMenu({
         if ('separator' in entry && entry.separator) {
           return (
             <div
-              className="my-1 border-t border-zinc-100 dark:border-zinc-800"
+              className="my-1 border-t border-border"
               // biome-ignore lint/suspicious/noArrayIndexKey: separator items have no stable id
               key={`sep-${i}`}
             />
@@ -132,7 +132,7 @@ export function IssueContextMenu({
         return (
           <button
             className={cn(
-              'flex w-full items-center justify-between px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800',
+              'flex w-full items-center justify-between px-3 py-1.5 text-sm hover:bg-accent',
               item.danger && 'text-red-600 dark:text-red-400',
             )}
             key={item.label}

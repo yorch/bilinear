@@ -106,7 +106,7 @@ const CustomViewPage = observer(function CustomViewPage() {
       {/* Header */}
       <header className="flex items-center gap-2 border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
         <Eye className="h-4 w-4 text-zinc-400" />
-        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{view.name}</h1>
+        <h1 className="text-sm font-semibold text-foreground">{view.name}</h1>
         <span className="text-xs text-zinc-400">
           {t('issues.issuesCount', { count: issues.length })}
         </span>

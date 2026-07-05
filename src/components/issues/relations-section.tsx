@@ -190,7 +190,7 @@ export const RelationsSection = observer(function RelationsSection({
   return (
     <div className="mt-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {t('issueDetail.relations.title')} {relations.length > 0 && `(${relations.length})`}
         </h3>
         {!showAddForm && (
@@ -220,7 +220,7 @@ export const RelationsSection = observer(function RelationsSection({
             }
             return (
               <div key={type}>
-                <p className="mb-1 text-xs font-medium text-zinc-400 dark:text-zinc-500">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">
                   {RELATION_TYPE_LABELS[type]}
                 </p>
                 <ul className="space-y-0.5">
@@ -229,7 +229,7 @@ export const RelationsSection = observer(function RelationsSection({
                     const other = rel.issueId === issueId ? rel.relatedIssue : rel.issue;
                     return (
                       <li
-                        className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                        className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
                         key={rel.id}
                       >
                         <span className="shrink-0 font-mono text-xs text-zinc-400">
@@ -315,7 +315,7 @@ function AddRelationForm({ onSubmit, onClose }: AddRelationFormProps) {
               {RELATION_TYPES.map(t => (
                 <button
                   className={cn(
-                    'w-full px-3 py-1.5 text-left text-xs hover:bg-zinc-50 dark:hover:bg-zinc-800',
+                    'w-full px-3 py-1.5 text-left text-xs hover:bg-accent',
                     t === type
                       ? 'text-indigo-600 dark:text-indigo-400'
                       : 'text-zinc-700 dark:text-zinc-300',
@@ -364,14 +364,14 @@ function AddRelationForm({ onSubmit, onClose }: AddRelationFormProps) {
 
       <div className="mt-2 flex justify-end gap-2">
         <button
-          className="rounded px-3 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          className="rounded px-3 py-1 text-xs text-zinc-500 hover:bg-accent"
           onClick={onClose}
           type="button"
         >
           {t('common.cancel')}
         </button>
         <button
-          className="rounded bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+          className="rounded bg-primary px-3 py-1 text-xs font-medium text-white hover:bg-primary/90 disabled:opacity-50"
           disabled={!identifier.trim() || submitting}
           type="submit"
         >

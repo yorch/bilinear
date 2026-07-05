@@ -58,7 +58,7 @@ export function EstimateBadge({
   estimationType?: string;
 }) {
   if (!value) {
-    return <span className="text-xs text-zinc-400 dark:text-zinc-500">–</span>;
+    return <span className="text-xs text-muted-foreground">–</span>;
   }
 
   if (estimationType === 'tShirt') {
@@ -103,7 +103,7 @@ export function EstimatePicker({
     <div className="relative inline-block" ref={containerRef}>
       <button
         aria-label={t('properties.estimate.setEstimate')}
-        className="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+        className="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-accent"
         onClick={() => setOpen(v => !v)}
         type="button"
       >
@@ -115,7 +115,7 @@ export function EstimatePicker({
           {/* Clear estimate */}
           {value != null && (
             <button
-              className="w-full px-3 py-1.5 text-left text-xs text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              className="w-full px-3 py-1.5 text-left text-xs text-zinc-400 hover:bg-accent"
               onClick={() => handleSelect(null)}
               type="button"
             >
@@ -186,7 +186,7 @@ function NumericInput({
         value={draft}
       />
       <button
-        className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700"
+        className="rounded bg-primary px-2 py-1 text-xs font-medium text-white hover:bg-primary/90"
         onClick={() => {
           const n = Number(draft);
           onSubmit(draft === '' ? null : Number.isFinite(n) ? n : null);

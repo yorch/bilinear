@@ -37,17 +37,17 @@ export function BulkActionBar({
 
       <SelectPopover
         triggerChildren={
-          <span className="px-2 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+          <span className="px-2 py-1 text-xs font-medium text-muted-foreground">
             {t('issues.status')}
           </span>
         }
-        triggerClassName="rounded border border-zinc-200 dark:border-zinc-700"
+        triggerClassName="rounded border border-border"
       >
         {close => (
           <div className="w-48 py-1">
             {states.map(s => (
               <button
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
                 key={s.id}
                 onClick={() => {
                   onUpdate({ stateId: s.id });
@@ -65,11 +65,11 @@ export function BulkActionBar({
 
       <SelectPopover
         triggerChildren={
-          <span className="px-2 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+          <span className="px-2 py-1 text-xs font-medium text-muted-foreground">
             {t('issues.priority')}
           </span>
         }
-        triggerClassName="rounded border border-zinc-200 dark:border-zinc-700"
+        triggerClassName="rounded border border-border"
       >
         {close => (
           <div className="w-40 py-1">
@@ -77,7 +77,7 @@ export function BulkActionBar({
               const cfg = getPriorityConfig(p);
               return (
                 <button
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
                   key={p}
                   onClick={() => {
                     onUpdate({ priority: p });
@@ -99,16 +99,16 @@ export function BulkActionBar({
 
       <SelectPopover
         triggerChildren={
-          <span className="px-2 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+          <span className="px-2 py-1 text-xs font-medium text-muted-foreground">
             {t('issues.assignee')}
           </span>
         }
-        triggerClassName="rounded border border-zinc-200 dark:border-zinc-700"
+        triggerClassName="rounded border border-border"
       >
         {close => (
           <div className="w-48 py-1">
             <button
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
               onClick={() => {
                 onUpdate({ assigneeId: null });
                 close();
@@ -122,7 +122,7 @@ export function BulkActionBar({
             </button>
             {users.map(u => (
               <button
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
                 key={u.id}
                 onClick={() => {
                   onUpdate({ assigneeId: u.id });
@@ -141,17 +141,17 @@ export function BulkActionBar({
       {labels.length > 0 && (
         <SelectPopover
           triggerChildren={
-            <span className="px-2 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+            <span className="px-2 py-1 text-xs font-medium text-muted-foreground">
               {t('issues.label')}
             </span>
           }
-          triggerClassName="rounded border border-zinc-200 dark:border-zinc-700"
+          triggerClassName="rounded border border-border"
         >
           {close => (
             <div className="w-48 py-1">
               {labels.map(l => (
                 <button
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
                   key={l.id}
                   onClick={() => {
                     onUpdate({ labelIds: [l.id] });

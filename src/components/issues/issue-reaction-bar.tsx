@@ -113,7 +113,7 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
               return (
                 <button
                   className={cn(
-                    'rounded px-1 py-0.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700',
+                    'rounded px-1 py-0.5 text-sm hover:bg-accent',
                     info?.reacted && 'bg-indigo-100 dark:bg-indigo-900/30',
                   )}
                   key={emoji}

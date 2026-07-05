@@ -24,12 +24,8 @@ export default function WorkspaceError({
 
   return (
     <div className="flex h-full flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
-      <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-        {t('layout.workspaceError.title')}
-      </h2>
-      <p className="max-w-md text-sm text-zinc-600 dark:text-zinc-400">
-        {t('layout.workspaceError.detail')}
-      </p>
+      <h2 className="text-lg font-semibold text-foreground">{t('layout.workspaceError.title')}</h2>
+      <p className="max-w-md text-sm text-muted-foreground">{t('layout.workspaceError.detail')}</p>
       {error.digest ? (
         <p className="font-mono text-xs text-zinc-500">
           {t('errors.errorRef')} {error.digest}

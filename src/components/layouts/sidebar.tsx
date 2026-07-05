@@ -177,7 +177,7 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
   return (
     <div className="mt-4 px-1.5">
       <div className="mb-1 flex items-center px-2">
-        <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {t('nav.favorites')}
         </span>
       </div>
@@ -254,7 +254,7 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
       {!collapsed && (
         <div className="mt-4 px-1.5">
           <div className="mb-1 flex items-center justify-between px-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {t('nav.teams')}
             </span>
             <button
@@ -497,7 +497,7 @@ export const Sidebar = observer(function Sidebar({
           <PanelLeft className="h-4 w-4" />
         </button>
         {!collapsed && (
-          <span className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+          <span className="truncate text-sm font-semibold text-foreground">
             {syncStore.organizationName ?? workspaceKey ?? APP_NAME}
           </span>
         )}

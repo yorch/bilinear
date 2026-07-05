@@ -39,9 +39,7 @@ function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
       <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
-        {value}
-      </p>
+      <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{value}</p>
     </div>
   );
 }
@@ -169,7 +167,7 @@ export default function AdminTenantDetailPage() {
           {t('admin.tenants.backBreadcrumb')}
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-3">
-          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{tenant.name}</h1>
+          <h1 className="text-lg font-semibold text-foreground">{tenant.name}</h1>
           <span
             className={cn(
               'rounded px-1.5 py-0.5 text-xs font-medium capitalize',
@@ -236,15 +234,13 @@ export default function AdminTenantDetailPage() {
         {tenant.owners.length === 0 ? (
           <p className="text-sm text-zinc-400">{t('admin.tenants.noOwners')}</p>
         ) : (
-          <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
+          <div className="overflow-hidden rounded-lg border border-border">
             <table className="w-full text-sm">
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              <tbody className="divide-y divide-border">
                 {tenant.owners.map(o => (
                   <tr className="bg-white dark:bg-zinc-950" key={o.id}>
                     <td className="px-4 py-2">
-                      <p className="font-medium text-zinc-900 dark:text-zinc-100">
-                        {o.displayName}
-                      </p>
+                      <p className="font-medium text-foreground">{o.displayName}</p>
                       <p className="text-xs text-zinc-400">{o.email}</p>
                     </td>
                     <td className="px-4 py-2 text-right">

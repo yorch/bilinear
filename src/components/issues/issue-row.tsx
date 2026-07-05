@@ -124,7 +124,7 @@ export function IssueRow({
     <div
       className={cn(
         'group flex items-center gap-2 border-b border-zinc-100 px-4 py-0 h-9 select-none hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900',
-        selected && 'bg-zinc-100 dark:bg-zinc-800',
+        selected && 'bg-muted',
       )}
       data-selected={selected ? 'true' : undefined}
       data-testid="issue-row"
@@ -158,7 +158,7 @@ export function IssueRow({
 
       {/* Title — clicking anywhere in this area opens the issue */}
       <button
-        className="flex-1 truncate cursor-pointer text-left text-sm text-zinc-900 dark:text-zinc-100"
+        className="flex-1 truncate cursor-pointer text-left text-sm text-foreground"
         onClick={onOpen}
         type="button"
       >
@@ -227,7 +227,7 @@ export function IssueRow({
         const raw = getCustomFieldValue?.(def.id);
         return (
           <span
-            className="max-w-[10rem] shrink-0 truncate text-xs text-zinc-500 dark:text-zinc-400"
+            className="max-w-[10rem] shrink-0 truncate text-xs text-muted-foreground"
             key={def.id}
             title={def.name}
           >

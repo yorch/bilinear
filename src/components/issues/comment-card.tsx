@@ -211,7 +211,7 @@ export function CommentCard({
                     return (
                       <button
                         className={cn(
-                          'rounded px-1 py-0.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700',
+                          'rounded px-1 py-0.5 text-sm hover:bg-accent',
                           info?.reacted && 'bg-indigo-100 dark:bg-indigo-900/30',
                         )}
                         key={emoji}
@@ -322,7 +322,7 @@ export function CommentCard({
             />
             <div className="flex gap-2">
               <button
-                className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700"
+                className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-white hover:bg-primary/90"
                 onClick={saveEdit}
                 type="button"
               >

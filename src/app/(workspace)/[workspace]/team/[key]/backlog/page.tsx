@@ -38,7 +38,7 @@ function StalenessIndicator({ updatedAt }: { updatedAt: string }) {
           ? 'text-red-500'
           : daysSince >= 14
             ? 'text-amber-500'
-            : 'text-zinc-400 dark:text-zinc-500',
+            : 'text-muted-foreground',
       )}
       title={t('issues.lastUpdatedDaysAgo', { count: daysSince })}
     >
@@ -78,9 +78,7 @@ function BacklogRow({ issue, selected, onSelect, onUpdate }: BacklogRowProps) {
     <div
       className={cn(
         'flex items-center gap-3 border-b border-zinc-100 px-4 py-2 transition-colors dark:border-zinc-800',
-        selected
-          ? 'bg-indigo-50 dark:bg-indigo-950/30'
-          : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/50',
+        selected ? 'bg-indigo-50 dark:bg-indigo-950/30' : 'hover:bg-accent/50',
       )}
       onClick={onSelect}
     >
@@ -99,14 +97,10 @@ function BacklogRow({ issue, selected, onSelect, onUpdate }: BacklogRowProps) {
       </button>
 
       {/* Identifier */}
-      <span className="w-16 flex-shrink-0 text-xs text-zinc-400 dark:text-zinc-500">
-        {issue.identifier}
-      </span>
+      <span className="w-16 flex-shrink-0 text-xs text-muted-foreground">{issue.identifier}</span>
 
       {/* Title */}
-      <span className="min-w-0 flex-1 truncate text-sm text-zinc-900 dark:text-zinc-100">
-        {issue.title}
-      </span>
+      <span className="min-w-0 flex-1 truncate text-sm text-foreground">{issue.title}</span>
 
       {/* Estimate — inline editable */}
       <button
@@ -173,8 +167,8 @@ function PriorityGroup({
         <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
           {t(priorityLabelKey(priority))}
         </span>
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">{issues.length}</span>
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">{collapsed ? '▸' : '▾'}</span>
+        <span className="text-xs text-muted-foreground">{issues.length}</span>
+        <span className="text-xs text-muted-foreground">{collapsed ? '▸' : '▾'}</span>
       </button>
       {!collapsed &&
         issues.map(issue => (
@@ -354,10 +348,10 @@ const BacklogPage = observer(function BacklogPage() {
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
-        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+        <h1 className="text-sm font-semibold text-foreground">
           {t('issues.teamBacklogTitle', { team: team.displayName ?? team.name })}
         </h1>
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">
+        <span className="text-xs text-muted-foreground">
           {t('issues.issuesCount', { count: filteredIssues.length })}
         </span>
       </div>
@@ -428,7 +422,7 @@ const BacklogPage = observer(function BacklogPage() {
       {/* Backlog list */}
       <div className="flex-1 overflow-y-auto">
         {priorityGroups.length === 0 ? (
-          <div className="flex items-center justify-center py-20 text-sm text-zinc-400 dark:text-zinc-500">
+          <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
             {t('issues.noBacklogIssues')}
           </div>
         ) : (

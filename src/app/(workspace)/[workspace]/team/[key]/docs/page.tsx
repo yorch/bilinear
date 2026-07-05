@@ -43,7 +43,7 @@ const TeamDocsPage = observer(function TeamDocsPage() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex items-center border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
-        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+        <h1 className="text-sm font-semibold text-foreground">
           {t('documents.teamDocsTitle', { teamName: team.displayName ?? team.name })}
         </h1>
       </div>

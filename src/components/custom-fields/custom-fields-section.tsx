@@ -109,12 +109,12 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
 
   return (
     <section>
-      <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+      <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {t('customFields.title')}
       </h2>
       <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
         <div className="flex items-center justify-between border-b border-zinc-100 p-4 dark:border-zinc-800">
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="text-xs text-muted-foreground">
             {t('customFields.fieldCount', { count: definitions.length, max: MAX_FIELDS })}
           </p>
           {!isAdding && (
@@ -136,7 +136,7 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
           </div>
         )}
 
-        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+        <ul className="divide-y divide-border">
           {definitions.length === 0 && !isAdding && (
             <li className="p-4 text-sm text-zinc-400">{t('customFields.emptyState')}</li>
           )}
@@ -157,9 +157,7 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
                   )}
                 </div>
                 {def.description && (
-                  <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                    {def.description}
-                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{def.description}</p>
                 )}
               </div>
               <button
@@ -313,14 +311,14 @@ function CustomFieldForm({
         </div>
       )}
 
-      <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+      <label className="flex items-center gap-2 text-xs text-muted-foreground">
         <input checked={required} onChange={e => setRequired(e.target.checked)} type="checkbox" />
         {t('customFields.requiredOnCreate')}
       </label>
 
       <div className="flex items-center justify-end gap-2">
         <button
-          className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-accent"
           onClick={onCancel}
           type="button"
         >

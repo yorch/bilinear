@@ -94,17 +94,14 @@ export function SaveViewModal({
     <ModalDialog aria-label={t('properties.saveView.title')} onClose={onClose} open={open}>
       <form className="flex flex-col" onSubmit={handleSubmit}>
         <div className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          <h2 className="text-sm font-semibold text-foreground">
             {t('properties.saveView.title')}
           </h2>
         </div>
 
         <div className="flex flex-col gap-4 px-5 py-4">
           <div className="flex flex-col gap-1">
-            <label
-              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-              htmlFor="view-name"
-            >
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="view-name">
               {t('properties.saveView.name')}
             </label>
             <Input
@@ -118,10 +115,7 @@ export function SaveViewModal({
           </div>
 
           <div className="flex flex-col gap-1">
-            <label
-              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-              htmlFor="view-description"
-            >
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="view-description">
               {t('properties.saveView.description')}
               <span className="ml-1 font-normal text-zinc-400">
                 ({t('properties.saveView.optional')})
@@ -165,7 +159,7 @@ export function SaveViewModal({
           <button
             className={cn(
               'rounded-md px-4 py-1.5 text-sm font-medium text-white transition-colors',
-              'bg-indigo-600 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50',
+              'bg-primary hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50',
             )}
             disabled={!canSubmit}
             type="submit"

@@ -61,21 +61,17 @@ export const CycleListView = observer(function CycleListView({
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex h-12 items-center justify-between border-b border-zinc-200 px-4 dark:border-zinc-800">
-        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          {t('cycles.list.title')}
-        </h1>
+        <h1 className="text-sm font-semibold text-foreground">{t('cycles.list.title')}</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {hasNoCycles ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
               <RefreshCw className="h-6 w-6 text-zinc-400" />
             </div>
             <div>
-              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                {t('cycles.list.emptyTitle')}
-              </p>
+              <p className="text-sm font-medium text-foreground">{t('cycles.list.emptyTitle')}</p>
               <p className="mt-1 text-xs text-zinc-500">{t('cycles.list.emptyDescription')}</p>
             </div>
           </div>
@@ -182,7 +178,7 @@ const CycleGroup = observer(function CycleGroup({
                 </span>
 
                 <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                  <span className="truncate text-sm font-medium text-foreground">
                     {getCycleDisplayName(cycle, t)}
                   </span>
                   <div className="mt-0.5 flex items-center gap-2">

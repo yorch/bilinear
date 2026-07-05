@@ -346,17 +346,17 @@ const TriagePage = observer(function TriagePage() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
-        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+        <h1 className="text-sm font-semibold text-foreground">
           {t('settings.triage.pageTitle', { name: team.displayName ?? team.name })}
         </h1>
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">
+        <span className="text-xs text-muted-foreground">
           {t('settings.triage.toTriageCount', { count: queue.length })}
         </span>
       </div>
 
       <div className="flex-1 overflow-y-auto">
         {queue.length === 0 ? (
-          <div className="flex items-center justify-center py-20 text-sm text-zinc-400 dark:text-zinc-500">
+          <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
             {t('settings.triage.allClear')}
           </div>
         ) : (
@@ -368,15 +368,13 @@ const TriagePage = observer(function TriagePage() {
                 className="flex items-center gap-3 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800"
                 key={issue.id}
               >
-                <span className="w-16 flex-shrink-0 text-xs text-zinc-400 dark:text-zinc-500">
+                <span className="w-16 flex-shrink-0 text-xs text-muted-foreground">
                   {issue.identifier}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm text-zinc-900 dark:text-zinc-100">
-                    {issue.title}
-                  </div>
+                  <div className="truncate text-sm text-foreground">{issue.title}</div>
                   {creator ? (
-                    <div className="text-xs text-zinc-400 dark:text-zinc-500">
+                    <div className="text-xs text-muted-foreground">
                       {t('settings.triage.fromCreator', {
                         date: formatDate(issue.createdAt),
                         name: creator.displayName,
@@ -386,7 +384,7 @@ const TriagePage = observer(function TriagePage() {
                 </div>
                 <div className="flex flex-shrink-0 gap-1">
                   <button
-                    className="rounded bg-indigo-600 px-2.5 py-1 text-xs text-white hover:bg-indigo-700 disabled:opacity-50"
+                    className="rounded bg-primary px-2.5 py-1 text-xs text-white hover:bg-primary/90 disabled:opacity-50"
                     disabled={busy || !defaultTargetStateId}
                     onClick={() => handleAccept(issue.id)}
                     type="button"

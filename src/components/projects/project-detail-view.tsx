@@ -105,7 +105,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
         >
           {project.icon ?? ''}
         </span>
-        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{project.name}</h1>
+        <h1 className="text-sm font-semibold text-foreground">{project.name}</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -146,7 +146,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
             {lead && (
               <div className="flex items-center gap-1.5">
                 <User className="h-3.5 w-3.5 text-zinc-400" />
-                <span className="text-xs text-zinc-600 dark:text-zinc-400">{lead.displayName}</span>
+                <span className="text-xs text-muted-foreground">{lead.displayName}</span>
               </div>
             )}
             {(project.startDate || project.targetDate) && (
@@ -159,11 +159,11 @@ export const ProjectDetailView = observer(function ProjectDetailView({
             )}
           </div>
           {project.description && (
-            <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">{project.description}</p>
+            <p className="mt-4 text-sm text-muted-foreground">{project.description}</p>
           )}
           <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              <span className="text-xs font-medium text-muted-foreground">
                 {t('projects.progress')}
               </span>
               <span className="text-xs tabular-nums text-zinc-500">
@@ -188,7 +188,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
           <ProjectMilestonesSection projectId={project.id} />
           <div className="mt-6">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {t('projects.issuesCount', { count: projectIssues.length })}
               </h3>
             </div>
@@ -203,7 +203,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
                   const team = teamStore.findById(issue.teamId);
                   return (
                     <Link
-                      className="flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                      className="flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent"
                       href={`/${workspaceKey}/team/${team?.key ?? ''}`}
                       key={issue.id}
                     >
@@ -216,9 +216,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
                       <span className="shrink-0 text-xs font-mono text-zinc-400">
                         {issue.identifier}
                       </span>
-                      <span className="min-w-0 flex-1 truncate text-zinc-900 dark:text-zinc-100">
-                        {issue.title}
-                      </span>
+                      <span className="min-w-0 flex-1 truncate text-foreground">{issue.title}</span>
                     </Link>
                   );
                 })

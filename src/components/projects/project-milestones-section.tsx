@@ -116,7 +116,7 @@ function MilestoneForm({
         <button
           className={cn(
             'flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-white transition-colors',
-            'bg-indigo-600 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50',
+            'bg-primary hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50',
           )}
           disabled={saving || !values.name.trim()}
           type="submit"
@@ -156,11 +156,9 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
     <div className="flex items-start gap-3 rounded-md border border-zinc-200 px-3 py-2.5 dark:border-zinc-800">
       <Target className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
       <div className="min-w-0 flex-1">
-        <span className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          {milestone.name}
-        </span>
+        <span className="block text-sm font-medium text-foreground">{milestone.name}</span>
         {milestone.description && (
-          <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
+          <span className="mt-0.5 block text-xs text-muted-foreground">
             {milestone.description}
           </span>
         )}
@@ -305,7 +303,7 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
   return (
     <div className="mt-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {t('projects.milestonesCount', { count: milestones.length })}
         </h3>
         {!creating && !editingId && (

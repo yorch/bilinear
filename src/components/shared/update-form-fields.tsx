@@ -25,7 +25,7 @@ export function UpdateFormFields({
   return (
     <>
       <div className="mb-3 flex gap-1">
-        <span className="mr-1 self-center text-xs text-zinc-500 dark:text-zinc-400">
+        <span className="mr-1 self-center text-xs text-muted-foreground">
           {t('properties.updateForm.health.label')}
         </span>
         {showNone && (

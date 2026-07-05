@@ -14,7 +14,7 @@ export default function WorkspaceLoading() {
       </aside>
       <main className="flex flex-1 flex-col">
         <div className="flex h-12 shrink-0 items-center gap-3 border-b border-zinc-200 px-4 dark:border-zinc-800">
-          <div className="h-3.5 w-32 animate-pulse rounded-md bg-zinc-200 dark:bg-zinc-800" />
+          <div className="h-3.5 w-32 animate-pulse rounded-md bg-muted" />
         </div>
         <IssueListSkeleton count={10} />
       </main>

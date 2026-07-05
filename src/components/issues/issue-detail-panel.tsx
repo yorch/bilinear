@@ -186,7 +186,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
                     ? t('issueDetail.unsubscribeShortcut')
                     : t('issueDetail.subscribeShortcut')
                 }
-                className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                className="rounded p-1 text-zinc-400 hover:bg-accent"
                 onClick={handleToggleSubscription}
                 title={
                   subscribed
@@ -200,7 +200,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
             )}
             <button
               aria-label={t('common.close')}
-              className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="rounded p-1 text-zinc-400 hover:bg-accent"
               onClick={onClose}
               type="button"
             >
@@ -232,7 +232,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
             />
           ) : (
             <button
-              className="cursor-text text-left text-xl font-semibold text-zinc-900 dark:text-zinc-100"
+              className="cursor-text text-left text-xl font-semibold text-foreground"
               onClick={() => {
                 setEditingTitle(true);
                 setTimeout(() => titleRef.current?.focus(), 20);
@@ -349,7 +349,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
               </div>
             ) : (
               <button
-                className="w-full cursor-text rounded-md p-2 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                className="w-full cursor-text rounded-md p-2 text-left transition-colors hover:bg-accent/50"
                 onClick={() => setEditingDesc(true)}
                 type="button"
               >

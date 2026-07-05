@@ -155,9 +155,7 @@ const ResultsList = observer(function ResultsList({
               aria-selected={i === activeIndex}
               className={cn(
                 'flex w-full items-center gap-3 px-4 py-2 text-sm',
-                i === activeIndex
-                  ? 'bg-zinc-100 dark:bg-zinc-800'
-                  : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
+                i === activeIndex ? 'bg-muted' : 'hover:bg-accent/50',
               )}
               data-highlighted={i === activeIndex ? 'true' : undefined}
               data-idx={i}
@@ -176,9 +174,7 @@ const ResultsList = observer(function ResultsList({
               <span className="w-16 flex-shrink-0 font-mono text-xs text-zinc-400">
                 {item.issue.identifier}
               </span>
-              <span className="flex-1 truncate text-zinc-900 dark:text-zinc-100">
-                {item.issue.title}
-              </span>
+              <span className="flex-1 truncate text-foreground">{item.issue.title}</span>
               {item.teamKey && (
                 <span className="flex-shrink-0 text-xs text-zinc-400">{item.teamKey}</span>
               )}
@@ -199,9 +195,7 @@ const ResultsList = observer(function ResultsList({
                 aria-selected={globalIdx === activeIndex}
                 className={cn(
                   'flex w-full items-center gap-3 px-4 py-2 text-sm',
-                  globalIdx === activeIndex
-                    ? 'bg-zinc-100 dark:bg-zinc-800'
-                    : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
+                  globalIdx === activeIndex ? 'bg-muted' : 'hover:bg-accent/50',
                 )}
                 data-highlighted={globalIdx === activeIndex ? 'true' : undefined}
                 data-idx={globalIdx}
@@ -211,9 +205,7 @@ const ResultsList = observer(function ResultsList({
                 role="option"
                 type="button"
               >
-                <span className="flex-1 truncate text-zinc-900 dark:text-zinc-100">
-                  {item.label}
-                </span>
+                <span className="flex-1 truncate text-foreground">{item.label}</span>
                 {item.shortcut && (
                   <kbd className="flex-shrink-0 rounded border border-zinc-200 px-1.5 py-0.5 font-mono text-[10px] text-zinc-400 dark:border-zinc-600">
                     {item.shortcut}
@@ -340,9 +332,7 @@ const SubMenuList = observer(function SubMenuList({
           aria-selected={i === activeIndex}
           className={cn(
             'flex w-full items-center gap-3 px-4 py-2 text-sm',
-            i === activeIndex
-              ? 'bg-zinc-100 dark:bg-zinc-800'
-              : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
+            i === activeIndex ? 'bg-muted' : 'hover:bg-accent/50',
           )}
           data-idx={i}
           key={item.id}
@@ -350,7 +340,7 @@ const SubMenuList = observer(function SubMenuList({
           role="option"
           type="button"
         >
-          <span className="text-zinc-900 dark:text-zinc-100">{item.label}</span>
+          <span className="text-foreground">{item.label}</span>
         </button>
       ))}
     </>

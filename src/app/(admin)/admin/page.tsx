@@ -9,8 +9,8 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
       <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-100">{value}</p>
-      {sub ? <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{sub}</p> : null}
+      <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
+      {sub ? <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p> : null}
     </div>
   );
 }
@@ -54,12 +54,8 @@ export default function AdminDashboardPage() {
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-          {t('admin.dashboard.title')}
-        </h1>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          {t('admin.dashboard.subtitle')}
-        </p>
+        <h1 className="text-lg font-semibold text-foreground">{t('admin.dashboard.title')}</h1>
+        <p className="mt-1 text-xs text-muted-foreground">{t('admin.dashboard.subtitle')}</p>
       </div>
 
       <section>
@@ -105,7 +101,7 @@ export default function AdminDashboardPage() {
         {metrics.topOrgs.length === 0 ? (
           <p className="text-sm text-zinc-400">{t('admin.dashboard.noOrgs')}</p>
         ) : (
-          <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
+          <div className="overflow-hidden rounded-lg border border-border">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
@@ -114,7 +110,7 @@ export default function AdminDashboardPage() {
                   <th className="px-4 py-2 text-right">{t('admin.dashboard.colIssues')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              <tbody className="divide-y divide-border">
                 {metrics.topOrgs.map(o => (
                   <tr className="bg-white dark:bg-zinc-950" key={o.id}>
                     <td className="px-4 py-2">
@@ -126,10 +122,10 @@ export default function AdminDashboardPage() {
                       </Link>
                       <span className="ml-2 font-mono text-xs text-zinc-400">{o.urlKey}</span>
                     </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-zinc-600 dark:text-zinc-300">
+                    <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
                       {o.memberCount}
                     </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-zinc-600 dark:text-zinc-300">
+                    <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
                       {o.issueCount}
                     </td>
                   </tr>

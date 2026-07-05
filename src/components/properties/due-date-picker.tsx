@@ -53,7 +53,7 @@ export function DueDatePicker({
           />
           {value && (
             <button
-              className="mt-1 block w-full rounded px-2 py-1 text-center text-xs text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              className="mt-1 block w-full rounded px-2 py-1 text-center text-xs text-zinc-500 hover:bg-accent"
               onClick={() => {
                 onChange(null);
                 close();

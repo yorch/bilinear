@@ -11,12 +11,8 @@ export default async function NotFound() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
       <p className="font-mono text-xs text-zinc-400">404</p>
-      <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-        {t('errors.notFoundTitle')}
-      </h1>
-      <p className="max-w-md text-sm text-zinc-600 dark:text-zinc-400">
-        {t('errors.notFoundDetail')}
-      </p>
+      <h1 className="text-xl font-semibold text-foreground">{t('errors.notFoundTitle')}</h1>
+      <p className="max-w-md text-sm text-muted-foreground">{t('errors.notFoundDetail')}</p>
       <Link
         className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground shadow hover:bg-primary/90"
         href="/"

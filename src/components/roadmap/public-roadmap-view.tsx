@@ -83,10 +83,10 @@ function PasswordForm({ slug }: { slug: string }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950 px-4">
       <div className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
-        <h2 className="mb-1 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+        <h2 className="mb-1 text-lg font-semibold text-foreground">
           {t('roadmap.public.passwordRequired')}
         </h2>
-        <p className="mb-6 text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="mb-6 text-sm text-muted-foreground">
           {t('roadmap.public.passwordProtected')}
         </p>
         <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
@@ -98,7 +98,7 @@ function PasswordForm({ slug }: { slug: string }) {
             type="password"
           />
           <button
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 dark:focus:ring-offset-zinc-900"
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 dark:focus:ring-offset-zinc-900"
             type="submit"
           >
             {t('roadmap.public.continue')}
@@ -125,11 +125,9 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
       <div className="mx-auto max-w-4xl px-6 py-12">
         {/* Header */}
         <div className="mb-10">
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-            {roadmap.title}
-          </h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">{roadmap.title}</h1>
           {roadmap.description && (
-            <p className="mt-3 text-base text-zinc-500 dark:text-zinc-400">{roadmap.description}</p>
+            <p className="mt-3 text-base text-muted-foreground">{roadmap.description}</p>
           )}
         </div>
 
@@ -163,7 +161,7 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
                         style={{ backgroundColor: project.color }}
                       />
                     )}
-                    <span className="flex-1 truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                    <span className="flex-1 truncate text-sm font-semibold text-foreground">
                       {project.name}
                     </span>
                   </div>
@@ -179,13 +177,13 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
                       {project.statusName ?? t(statusInfo.labelKey)}
                     </span>
                     {healthDot && (
-                      <span className="flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
                         <span className={cn('h-2 w-2 rounded-full', healthDot)} />
                         {project.health}
                       </span>
                     )}
                     {targetDateStr && (
-                      <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                      <span className="text-xs text-muted-foreground">
                         {t('roadmap.public.target', { date: targetDateStr })}
                       </span>
                     )}
@@ -194,14 +192,14 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
                   {/* Progress bar */}
                   <div>
                     <div className="mb-1 flex items-center justify-between">
-                      <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                      <span className="text-xs text-muted-foreground">
                         {t('roadmap.public.progress')}
                       </span>
-                      <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                      <span className="text-xs font-medium text-muted-foreground">
                         {progressPct}%
                       </span>
                     </div>
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                       <div
                         className="h-full rounded-full bg-indigo-500 transition-all"
                         style={{ width: `${progressPct}%` }}
@@ -211,7 +209,7 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
 
                   {/* Milestones */}
                   {project.milestoneCount > 0 && (
-                    <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                    <p className="text-xs text-muted-foreground">
                       {project.milestoneCount}{' '}
                       {project.milestoneCount === 1
                         ? t('roadmap.public.milestone')

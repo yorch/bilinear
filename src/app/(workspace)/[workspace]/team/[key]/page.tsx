@@ -456,7 +456,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Page header */}
       <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
-        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+        <h1 className="text-sm font-semibold text-foreground">
           {t('issues.teamIssuesTitle', { team: team.displayName ?? team.name })}
         </h1>
         <div className="flex items-center gap-2">
@@ -491,7 +491,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
             <Settings className="h-4 w-4" />
           </Link>
           <button
-            className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+            className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary/90"
             onClick={() => uiStore.openCreateIssueModal()}
             type="button"
           >

@@ -118,10 +118,8 @@ export default function AdminUsersPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-          {t('admin.users.title')}
-        </h1>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t('admin.users.subtitle')}</p>
+        <h1 className="text-lg font-semibold text-foreground">{t('admin.users.title')}</h1>
+        <p className="mt-1 text-xs text-muted-foreground">{t('admin.users.subtitle')}</p>
       </div>
 
       <form
@@ -138,7 +136,7 @@ export default function AdminUsersPage() {
           value={query}
         />
         <button
-          className="rounded bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-700"
+          className="rounded bg-primary px-3 py-1 text-xs text-white hover:bg-primary/90"
           type="submit"
         >
           {t('common.search')}
@@ -154,7 +152,7 @@ export default function AdminUsersPage() {
           {t('admin.users.empty')}
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+        <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
@@ -164,14 +162,12 @@ export default function AdminUsersPage() {
                 <th className="px-4 py-2 text-right">{t('admin.users.colActions')}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            <tbody className="divide-y divide-border">
               {users.map(u => (
                 <tr className="bg-white dark:bg-zinc-950" key={u.id}>
                   <td className="px-4 py-2">
                     <div className="flex items-center gap-2">
-                      <p className="font-medium text-zinc-900 dark:text-zinc-100">
-                        {u.displayName}
-                      </p>
+                      <p className="font-medium text-foreground">{u.displayName}</p>
                       {u.isPlatformAdmin && (
                         <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400">
                           {t('admin.users.adminBadge')}

@@ -89,10 +89,7 @@ export function SelectPopover({
         aria-controls={open ? panelId : undefined}
         aria-expanded={open}
         aria-haspopup="true"
-        className={cn(
-          'flex items-center rounded hover:bg-zinc-100 dark:hover:bg-zinc-800',
-          triggerClassName,
-        )}
+        className={cn('flex items-center rounded hover:bg-accent', triggerClassName)}
         onClick={e => {
           e.stopPropagation();
           setOpen(o => !o);
@@ -113,7 +110,7 @@ export function SelectPopover({
         // biome-ignore lint/a11y/noStaticElementInteractions: keydown implements roving focus for the option buttons inside; the buttons themselves are the interactive elements
         <div
           className={cn(
-            'absolute top-full z-50 mt-1 rounded-md border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900',
+            'absolute top-full z-50 mt-1 rounded-md border border-border bg-popover shadow-lg',
             align === 'right' ? 'right-0' : 'left-0',
             panelClassName,
           )}

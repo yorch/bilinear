@@ -112,17 +112,12 @@ export const CreateProjectModal = observer(function CreateProjectModal({
     <ModalDialog aria-label={t('projects.createProject')} onClose={onClose} open={open}>
       <form className="flex flex-col" onSubmit={handleSubmit}>
         <div className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-            {t('projects.createProject')}
-          </h2>
+          <h2 className="text-sm font-semibold text-foreground">{t('projects.createProject')}</h2>
         </div>
 
         <div className="flex flex-col gap-4 px-5 py-4">
           <div className="flex flex-col gap-1">
-            <label
-              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-              htmlFor="project-name"
-            >
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="project-name">
               {t('projects.name')}
             </label>
             <Input
@@ -137,7 +132,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
 
           <div className="flex flex-col gap-1">
             <label
-              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+              className="text-xs font-medium text-muted-foreground"
               htmlFor="project-description"
             >
               {t('projects.description')}{' '}
@@ -154,10 +149,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
           </div>
 
           <div className="flex flex-col gap-1">
-            <label
-              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-              htmlFor="project-status"
-            >
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="project-status">
               {t('projects.status.label')}
             </label>
             <SimpleSelect
@@ -169,9 +161,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
           </div>
 
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-              {t('projects.teams')}
-            </span>
+            <span className="text-xs font-medium text-muted-foreground">{t('projects.teams')}</span>
             <div className="flex flex-wrap gap-2">
               {teams.map(team => (
                 <button
@@ -197,10 +187,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
-              <label
-                className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-                htmlFor="project-start"
-              >
+              <label className="text-xs font-medium text-muted-foreground" htmlFor="project-start">
                 {t('projects.startDate')}{' '}
                 <span className="font-normal text-zinc-400">({t('projects.optional')})</span>
               </label>
@@ -212,10 +199,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label
-                className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-                htmlFor="project-target"
-              >
+              <label className="text-xs font-medium text-muted-foreground" htmlFor="project-target">
                 {t('projects.targetDate')}{' '}
                 <span className="font-normal text-zinc-400">({t('projects.optional')})</span>
               </label>
@@ -241,7 +225,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
           <button
             className={cn(
               'rounded-md px-4 py-1.5 text-sm font-medium text-white transition-colors',
-              'bg-indigo-600 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50',
+              'bg-primary hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50',
             )}
             disabled={!canSubmit}
             type="submit"

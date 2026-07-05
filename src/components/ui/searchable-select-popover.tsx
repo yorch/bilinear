@@ -104,7 +104,7 @@ export function SearchableSelectPopover<T>({
         aria-controls={isOpen ? listboxId : undefined}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
-        className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+        className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         onClick={() => (isOpen ? close() : setOpen(true))}
         ref={triggerRef}
         title={triggerTitle}
@@ -114,13 +114,13 @@ export function SearchableSelectPopover<T>({
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-56 rounded-lg border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="absolute left-0 top-full z-50 mt-1 w-56 rounded-lg border border-border bg-popover p-1 shadow-lg">
           <input
             aria-activedescendant={activeOptionId}
             aria-autocomplete="list"
             aria-controls={listboxId}
             aria-expanded="true"
-            className="mb-1 w-full rounded-md border border-zinc-200 bg-transparent px-2 py-1 text-xs outline-none placeholder:text-zinc-400 focus:border-indigo-500 dark:border-zinc-700"
+            className="mb-1 w-full rounded-md border border-input bg-transparent px-2 py-1 text-xs outline-none placeholder:text-muted-foreground focus:border-ring"
             onChange={e => {
               setSearch(e.target.value);
               setActiveIndex(-1);
@@ -135,7 +135,7 @@ export function SearchableSelectPopover<T>({
 
           {onClear && (
             <button
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent"
               onClick={() => {
                 onClear();
                 close();
@@ -148,17 +148,17 @@ export function SearchableSelectPopover<T>({
 
           <div className="max-h-48 overflow-y-auto" id={listboxId} role="listbox">
             {filtered.length === 0 ? (
-              <p className="px-2 py-3 text-center text-xs text-zinc-400">{emptyText}</p>
+              <p className="px-2 py-3 text-center text-xs text-muted-foreground">{emptyText}</p>
             ) : (
               filtered.map((item, i) => (
                 <button
                   aria-selected={isSelected(item)}
                   className={cn(
-                    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800',
+                    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-accent',
                     isSelected(item)
                       ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
-                      : 'text-zinc-700 dark:text-zinc-300',
-                    i === activeIndex && 'bg-zinc-100 dark:bg-zinc-800',
+                      : 'text-foreground',
+                    i === activeIndex && 'bg-muted',
                   )}
                   id={`${listboxId}-${getKey(item)}`}
                   key={getKey(item)}

@@ -71,7 +71,7 @@ export function InitiativeUpdatesSection({
   return (
     <div className="mt-4">
       <div className="flex items-center justify-between">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {t('initiatives.updates.title', { count: updates.length })}
         </h4>
         {!creating && !editingId && (

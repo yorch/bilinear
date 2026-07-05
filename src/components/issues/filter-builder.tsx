@@ -104,7 +104,7 @@ function FilterPill({ condition, states, users, labels, customFields, onRemove }
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-0.5 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
       <span className="font-medium">{fieldLabel}</span>
-      <span className="text-zinc-400 dark:text-zinc-500">{opLabel}</span>
+      <span className="text-muted-foreground">{opLabel}</span>
       {valueLabel && <span>{valueLabel}</span>}
       <button
         className="ml-0.5 text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
@@ -256,7 +256,7 @@ function AddFilterForm({
         ))}
 
       <button
-        className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+        className="rounded bg-primary px-2 py-1 text-xs font-medium text-white hover:bg-primary/90 disabled:opacity-50"
         disabled={needsValue && !value}
         onClick={() => {
           let resolvedValue: string | number | boolean = value;

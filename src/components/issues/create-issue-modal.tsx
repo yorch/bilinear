@@ -269,7 +269,7 @@ export function CreateIssueModal({
         {/* Description */}
         <div className="px-5 pt-2">
           <TipTapEditor
-            className="text-sm text-zinc-600 dark:text-zinc-400"
+            className="text-sm text-muted-foreground"
             content={form.description}
             onChange={html => patchForm({ description: html })}
             placeholder={t('issueDetail.createModal.descriptionPlaceholder')}
@@ -318,7 +318,7 @@ export function CreateIssueModal({
           <button
             className={cn(
               'rounded-md px-4 py-1.5 text-sm font-medium text-white transition-colors',
-              'bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed',
+              'bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed',
             )}
             disabled={!form.title.trim() || submitting}
             type="submit"
