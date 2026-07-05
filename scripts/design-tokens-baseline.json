@@ -72,7 +72,7 @@
   "src/components/issues/issue-reaction-bar.tsx": 19,
   "src/components/issues/issue-row.tsx": 5,
   "src/components/issues/issue-templates-section.tsx": 65,
-  "src/components/issues/relations-section.tsx": 38,
+  "src/components/issues/relations-section.tsx": 34,
   "src/components/issues/sub-issue-list.tsx": 22,
   "src/components/issues/template-selector.tsx": 27,
   "src/components/issues/view-toggle.tsx": 24,

@@ -3,10 +3,12 @@
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { IssuePicker } from '@/components/issues/issue-picker';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { useTranslations } from '@/hooks/use-translations';
+import type { DBIssue } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
@@ -143,6 +145,7 @@ const TriagePage = observer(function TriagePage() {
   const { formatDate } = useFormatters();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [duplicatePickerFor, setDuplicatePickerFor] = useState<string | null>(null);
 
   const team = teamStore.findByKey(teamKey);
   const teamId = team?.id ?? null;
@@ -276,21 +279,8 @@ const TriagePage = observer(function TriagePage() {
     [issueStore, t],
   );
 
-  const handleMarkDuplicate = useCallback(
-    async (issueId: string) => {
-      // Minimal UX: prompt for the canonical identifier (e.g. "ENG-42").
-      // The user resolves the lookup against the local issue store; the
-      // resolver re-validates org/team membership server-side.
-      const input = window.prompt(t('settings.triage.markDuplicatePrompt'));
-      if (!input) {
-        return;
-      }
-      const ident = input.trim().toUpperCase();
-      const canonical = Array.from(issueStore.pool.values()).find(i => i.identifier === ident);
-      if (!canonical) {
-        toast.error(t('settings.triage.issueNotFound', { identifier: ident }));
-        return;
-      }
+  const submitMarkDuplicate = useCallback(
+    async (issueId: string, canonical: DBIssue) => {
       if (canonical.id === issueId) {
         toast.error(t('settings.triage.cannotMarkDuplicateOfItself'));
         return;
@@ -311,7 +301,7 @@ const TriagePage = observer(function TriagePage() {
               t('settings.triage.markDuplicateFailed'),
           );
         }
-        toast.success(t('settings.triage.markedAsDuplicate', { identifier: ident }));
+        toast.success(t('settings.triage.markedAsDuplicate', { identifier: canonical.identifier }));
       } catch (err) {
         if (snapshot) {
           issueStore.optimisticUpdate(issueId, snapshot);
@@ -319,10 +309,15 @@ const TriagePage = observer(function TriagePage() {
         toast.error(err instanceof Error ? err.message : t('settings.triage.markDuplicateFailed'));
       } finally {
         setBusyId(null);
+        setDuplicatePickerFor(null);
       }
     },
     [issueStore, t],
   );
+
+  const handleMarkDuplicate = useCallback((issueId: string) => {
+    setDuplicatePickerFor(issueId);
+  }, []);
 
   // j/k — move focus within the queue; a/d/s/m act on the focused issue.
   // Snooze defaults to the shortest preset since a keyboard shortcut can't
@@ -473,15 +468,16 @@ const TriagePage = observer(function TriagePage() {
                   >
                     {t('settings.triage.decline')}
                   </button>
-                  <button
-                    className="rounded border border-zinc-300 px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  <IssuePicker
                     disabled={busy}
-                    onClick={() => handleMarkDuplicate(issue.id)}
-                    title={t('settings.triage.markDuplicateTitle')}
-                    type="button"
-                  >
-                    {t('settings.triage.duplicate')}
-                  </button>
+                    excludeId={issue.id}
+                    forceOpen={duplicatePickerFor === issue.id}
+                    onClose={() => setDuplicatePickerFor(null)}
+                    onSelect={canonical => submitMarkDuplicate(issue.id, canonical)}
+                    triggerChildren={t('settings.triage.duplicate')}
+                    triggerClassName="rounded border border-zinc-300 px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    triggerTitle={t('settings.triage.markDuplicateTitle')}
+                  />
                   <SnoozeButton disabled={busy} onSelect={hours => handleSnooze(issue.id, hours)} />
                 </div>
               </div>
