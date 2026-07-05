@@ -27,6 +27,7 @@ export interface IssueLabel {
 
 export interface IssueBase {
   assigneeId?: string | null;
+  cycleId?: string | null;
   dueDate?: string | null;
   id: string;
   identifier: string;

@@ -675,6 +675,7 @@
     "issueNotFound": "Issue not found.",
     "properties": {
       "assignee": "Assignee",
+      "cycle": "Cycle",
       "dueDate": "Due date",
       "estimate": "Estimate",
       "labels": "Labels",

@@ -675,6 +675,7 @@
     "issueNotFound": "No se encontró la tarea.",
     "properties": {
       "assignee": "Responsable",
+      "cycle": "Ciclo",
       "dueDate": "Fecha límite",
       "estimate": "Estimación",
       "labels": "Etiquetas",

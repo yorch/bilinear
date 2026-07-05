@@ -7,6 +7,7 @@ import { priorityLabelKey } from '@/components/properties/priority-icon';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useTranslations } from '@/hooks/use-translations';
+import { getCycleDisplayName } from '@/lib/cycle-utils';
 import { gql } from '@/lib/graphql';
 import {
   ISSUE_SUBSCRIBE_MUTATION,
@@ -21,6 +22,7 @@ import type { IssueDetail, IssueLabel, IssueUser, WorkflowState } from '@/types/
 import { CustomFieldsEditor } from '../custom-fields/custom-fields-editor';
 import { TipTapEditor } from '../editor/tiptap-editor.lazy';
 import { AssigneeSelect } from '../properties/assignee-select';
+import { CycleSelect } from '../properties/cycle-select';
 import { DueDatePicker } from '../properties/due-date-picker';
 import { EstimatePicker } from '../properties/estimate-picker';
 import { LabelDot, LabelSelect } from '../properties/label-select';
@@ -57,7 +59,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
 }: IssueDetailPanelProps) {
   const t = useTranslations();
   const { formatDueDate } = useFormatters();
-  const { userStore, teamStore, issueStore } = useStore();
+  const { userStore, teamStore, issueStore, cycleStore } = useStore();
   const currentUserId = userStore.currentUser?.id;
   const currentUserName = userStore.currentUser?.displayName ?? t('issueDetail.defaultUserName');
   const mentionUsers = useMemo(() => users.map(u => ({ id: u.id, label: u.displayName })), [users]);
@@ -152,6 +154,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
   const _state = states.find(s => s.id === issue.stateId);
   const assignee = users.find(u => u.id === issue.assigneeId);
   const dueDateColor = getDueDateColor(issue.dueDate);
+  const currentCycle = issue.cycleId ? cycleStore.findById(issue.cycleId) : null;
 
   const saveTitle = () => {
     if (titleDraft.trim() && titleDraft.trim() !== issue.title) {
@@ -315,6 +318,19 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
               onChange={projectId => handleUpdate(issue.id, { projectId })}
               value={issue.projectId ?? null}
             />
+
+            {/* Cycle */}
+            <span className="text-zinc-500">{t('issueDetail.properties.cycle')}</span>
+            <div className="flex items-center gap-1.5">
+              <CycleSelect
+                onChange={cycleId => handleUpdate(issue.id, { cycleId })}
+                teamId={issue.teamId}
+                value={issue.cycleId ?? null}
+              />
+              {currentCycle && (
+                <span className="text-xs text-zinc-600">{getCycleDisplayName(currentCycle)}</span>
+              )}
+            </div>
 
             {/* Due date */}
             <span className="text-zinc-500">{t('issueDetail.properties.dueDate')}</span>
