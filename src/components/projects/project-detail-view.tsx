@@ -8,6 +8,7 @@ import { ProgressSparkline } from '@/components/projects/progress-sparkline';
 import { ProjectMilestonesSection } from '@/components/projects/project-milestones-section';
 import { ProjectUpdatesSection } from '@/components/projects/project-updates-section';
 import { SimpleSelect } from '@/components/ui/select';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import {
@@ -33,6 +34,8 @@ export const ProjectDetailView = observer(function ProjectDetailView({
   const { projectStore, issueStore, userStore, teamStore, workflowStateStore } = useStore();
   const viewerId = userStore.currentUserId ?? '';
   const project = projectStore.findBySlugId(projectSlugId);
+
+  useDocumentTitle(project?.name);
 
   // useMemo must be called before any early return (Rules of Hooks).
   // pool.size is the MobX reactive dependency per repo convention.

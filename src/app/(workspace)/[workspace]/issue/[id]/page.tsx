@@ -4,6 +4,7 @@ import { observer } from 'mobx-react-lite';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { useStore } from '@/providers/store-provider';
@@ -56,6 +57,8 @@ const IssueDetailPage = observer(function IssueDetailPage() {
   const [issue, setIssue] = useState<IssueWithTeam | null>(null);
   const [labels, setLabels] = useState<IssueLabel[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useDocumentTitle(issue ? `${issue.identifier} ${issue.title}` : null);
 
   useEffect(() => {
     // If the issue is only in the local store (e.g. optimistic or temp id),

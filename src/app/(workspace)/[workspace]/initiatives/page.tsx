@@ -3,6 +3,7 @@
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
 import { InitiativeUpdatesSection } from '@/components/initiatives/initiative-updates-section';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBInitiative } from '@/lib/db';
 import { gql } from '@/lib/graphql';
@@ -238,6 +239,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
 
 const InitiativesPage = observer(function InitiativesPage() {
   const t = useTranslations();
+  useDocumentTitle(t('initiatives.page.title'));
   const STATUS_LABELS = useStatusLabels();
   const { initiativeStore, syncStore } = useStore();
   const [creating, setCreating] = useState(false);

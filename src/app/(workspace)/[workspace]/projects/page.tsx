@@ -7,6 +7,7 @@ import { useCallback, useState } from 'react';
 import { CreateProjectModal } from '@/components/projects/create-project-modal';
 import { ProjectListView } from '@/components/projects/project-list-view';
 import { ProjectRoadmapView } from '@/components/projects/project-roadmap-view';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -33,6 +34,7 @@ const PROJECT_CREATE_MUTATION = `
 
 export default observer(function ProjectsPage() {
   const t = useTranslations();
+  useDocumentTitle(t('nav.projects'));
   const { workspace } = useParams<{ workspace: string }>();
   const { uiStore } = useStore();
   const [layout, setLayout] = useState<ProjectsLayout>(() => {

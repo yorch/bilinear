@@ -16,6 +16,7 @@ import { type ViewMode, ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { type SaveViewInput, SaveViewModal } from '@/components/views/save-view-modal';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useRecentItems } from '@/hooks/use-recent-items';
@@ -105,6 +106,8 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
 
   const team = teamStore.findByKey(teamKey);
   const teamId = team?.id ?? null;
+
+  useDocumentTitle(team?.name);
 
   const rawStates = teamId ? workflowStateStore.findByTeamId(teamId) : [];
   const states = rawStates;

@@ -10,6 +10,7 @@ import type { OpenProperty } from '@/components/issues/issue-row';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
 import { type ViewMode, ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useTranslations } from '@/hooks/use-translations';
@@ -31,6 +32,8 @@ const MyIssuesPage = observer(function MyIssuesPage() {
   const router = useRouter();
   const t = useTranslations();
   const { issueStore, userStore, workflowStateStore, labelStore, syncStore } = useStore();
+
+  useDocumentTitle(t('nav.myIssues'));
 
   const txQueue = useMemo(() => new TransactionQueue(), []);
 
