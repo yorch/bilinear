@@ -4,10 +4,12 @@ import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
+import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 /**
@@ -140,6 +142,7 @@ const TriagePage = observer(function TriagePage() {
   const t = useTranslations();
   const { formatDate } = useFormatters();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
 
   const team = teamStore.findByKey(teamKey);
   const teamId = team?.id ?? null;
@@ -178,6 +181,11 @@ const TriagePage = observer(function TriagePage() {
               (!i.snoozedUntilAt || new Date(i.snoozedUntilAt).getTime() <= now),
           )
           .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+  // Falls back to the first row whenever the explicitly-focused issue has
+  // left the queue (accepted/declined/snoozed elsewhere, or on first load).
+  const focusedIndex = queue.findIndex(i => i.id === focusedId);
+  const effectiveFocusedId = focusedIndex >= 0 ? focusedId : (queue[0]?.id ?? null);
 
   /** Snapshot the issue so we can roll back optimistic edits on error. */
   const handleAccept = useCallback(
@@ -316,6 +324,68 @@ const TriagePage = observer(function TriagePage() {
     [issueStore, t],
   );
 
+  // j/k — move focus within the queue; a/d/s/m act on the focused issue.
+  // Snooze defaults to the shortest preset since a keyboard shortcut can't
+  // drive the picker popover; the button remains for the other presets.
+  useHotkeys(
+    'j',
+    () => {
+      const next = Math.min(focusedIndex + 1, queue.length - 1);
+      setFocusedId(queue[next]?.id ?? null);
+    },
+    { enabled: queue.length > 0 },
+    [focusedIndex, queue],
+  );
+  useHotkeys(
+    'k',
+    () => {
+      const prev = Math.max(focusedIndex - 1, 0);
+      setFocusedId(queue[prev]?.id ?? null);
+    },
+    { enabled: queue.length > 0 },
+    [focusedIndex, queue],
+  );
+  useHotkeys(
+    'a',
+    () => {
+      if (effectiveFocusedId && !busyId) {
+        handleAccept(effectiveFocusedId);
+      }
+    },
+    { enabled: queue.length > 0 && Boolean(defaultTargetStateId) },
+    [effectiveFocusedId, busyId, handleAccept, queue.length, defaultTargetStateId],
+  );
+  useHotkeys(
+    'd',
+    () => {
+      if (effectiveFocusedId && !busyId) {
+        handleDecline(effectiveFocusedId);
+      }
+    },
+    { enabled: queue.length > 0 },
+    [effectiveFocusedId, busyId, handleDecline, queue.length],
+  );
+  useHotkeys(
+    's',
+    () => {
+      if (effectiveFocusedId && !busyId) {
+        handleSnooze(effectiveFocusedId, SNOOZE_PRESETS[0].hours);
+      }
+    },
+    { enabled: queue.length > 0 },
+    [effectiveFocusedId, busyId, handleSnooze, queue.length],
+  );
+  useHotkeys(
+    'm',
+    () => {
+      if (effectiveFocusedId && !busyId) {
+        handleMarkDuplicate(effectiveFocusedId);
+      }
+    },
+    { enabled: queue.length > 0 },
+    [effectiveFocusedId, busyId, handleMarkDuplicate, queue.length],
+  );
+
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
 
   if (isLoading) {
@@ -363,9 +433,13 @@ const TriagePage = observer(function TriagePage() {
           queue.map(issue => {
             const creator = issue.creatorId ? userStore.findById(issue.creatorId) : null;
             const busy = busyId === issue.id;
+            const focused = issue.id === effectiveFocusedId;
             return (
               <div
-                className="flex items-center gap-3 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800"
+                className={cn(
+                  'flex items-center gap-3 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800',
+                  focused && 'bg-accent/50',
+                )}
                 key={issue.id}
               >
                 <span className="w-16 flex-shrink-0 text-xs text-muted-foreground">
@@ -415,6 +489,32 @@ const TriagePage = observer(function TriagePage() {
           })
         )}
       </div>
+
+      {queue.length > 0 && (
+        <div className="flex items-center gap-3 border-t border-border px-4 py-1.5 text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <kbd className="rounded border px-1 font-mono">J</kbd>
+            <kbd className="rounded border px-1 font-mono">K</kbd>
+            {t('commandPalette.footer.navigate')}
+          </span>
+          <span className="flex items-center gap-1">
+            <kbd className="rounded border px-1 font-mono">A</kbd>
+            {t('settings.triage.accept')}
+          </span>
+          <span className="flex items-center gap-1">
+            <kbd className="rounded border px-1 font-mono">D</kbd>
+            {t('settings.triage.decline')}
+          </span>
+          <span className="flex items-center gap-1">
+            <kbd className="rounded border px-1 font-mono">S</kbd>
+            {t('settings.triage.snooze')}
+          </span>
+          <span className="flex items-center gap-1">
+            <kbd className="rounded border px-1 font-mono">M</kbd>
+            {t('settings.triage.duplicate')}
+          </span>
+        </div>
+      )}
     </div>
   );
 });
