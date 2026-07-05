@@ -85,7 +85,7 @@ export function BurnupChart({ data }: BurnupChartProps) {
                 y2={y}
               />
               <text
-                className="fill-zinc-400 dark:fill-zinc-500"
+                className="fill-muted-foreground"
                 fontSize={10}
                 textAnchor="end"
                 x={paddingLeft - 4}
@@ -100,7 +100,7 @@ export function BurnupChart({ data }: BurnupChartProps) {
         {/* X-axis labels */}
         {xLabels.map(({ i, label }) => (
           <text
-            className="fill-zinc-400 dark:fill-zinc-500"
+            className="fill-muted-foreground"
             fontSize={9}
             key={i}
             textAnchor="middle"
@@ -112,18 +112,24 @@ export function BurnupChart({ data }: BurnupChartProps) {
         ))}
 
         {/* Ideal line (gray dashed) */}
-        <path d={idealPath} fill="none" stroke="#a1a1aa" strokeDasharray="4 3" strokeWidth={1.5} />
+        <path
+          d={idealPath}
+          fill="none"
+          stroke="var(--chart-grid)"
+          strokeDasharray="4 3"
+          strokeWidth={1.5}
+        />
 
         {/* Scope line (blue) */}
-        <path d={scopePath} fill="none" stroke="#6366f1" strokeWidth={2} />
+        <path d={scopePath} fill="none" stroke="var(--chart-ideal)" strokeWidth={2} />
 
         {/* Completed line (green) */}
-        <path d={completedPath} fill="none" stroke="#22c55e" strokeWidth={2} />
+        <path d={completedPath} fill="none" stroke="var(--chart-actual)" strokeWidth={2} />
 
         {/* Legend */}
         <g transform={`translate(${paddingLeft + 8}, ${paddingTop + 8})`}>
           <line
-            stroke="#a1a1aa"
+            stroke="var(--chart-grid)"
             strokeDasharray="4 3"
             strokeWidth={1.5}
             x1={0}
@@ -131,15 +137,15 @@ export function BurnupChart({ data }: BurnupChartProps) {
             y1={5}
             y2={5}
           />
-          <text className="fill-zinc-500 dark:fill-zinc-400" fontSize={9} x={20} y={9}>
+          <text className="fill-muted-foreground" fontSize={9} x={20} y={9}>
             {t('cycles.chart.ideal')}
           </text>
-          <line stroke="#6366f1" strokeWidth={2} x1={50} x2={66} y1={5} y2={5} />
-          <text className="fill-zinc-500 dark:fill-zinc-400" fontSize={9} x={70} y={9}>
+          <line stroke="var(--chart-ideal)" strokeWidth={2} x1={50} x2={66} y1={5} y2={5} />
+          <text className="fill-muted-foreground" fontSize={9} x={70} y={9}>
             {t('cycles.chart.scope')}
           </text>
-          <line stroke="#22c55e" strokeWidth={2} x1={106} x2={122} y1={5} y2={5} />
-          <text className="fill-zinc-500 dark:fill-zinc-400" fontSize={9} x={126} y={9}>
+          <line stroke="var(--chart-actual)" strokeWidth={2} x1={106} x2={122} y1={5} y2={5} />
+          <text className="fill-muted-foreground" fontSize={9} x={126} y={9}>
             {t('cycles.chart.completed')}
           </text>
         </g>

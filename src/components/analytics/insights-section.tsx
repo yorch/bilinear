@@ -277,7 +277,7 @@ export function InsightsSection({
             <p className="mb-3 text-[11px] text-zinc-400">
               {t('analytics.insights.leadTimeSubtitle')}
             </p>
-            <Histogram buckets={data?.lead ?? []} color="#6366f1" />
+            <Histogram buckets={data?.lead ?? []} color="var(--chart-ideal)" />
           </div>
 
           <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">

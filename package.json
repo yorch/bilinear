@@ -11,6 +11,8 @@
     "start": "next start",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
+    "lint:tokens": "node scripts/check-design-tokens.mjs",
+    "lint:tokens:update": "node scripts/check-design-tokens.mjs --update",
     "typecheck": "tsc --noEmit",
     "format": "biome format --write .",
     "test": "vitest run",

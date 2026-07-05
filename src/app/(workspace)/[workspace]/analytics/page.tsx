@@ -205,10 +205,10 @@ export default function WorkspaceAnalyticsPage() {
                         <ProgressBar
                           color={
                             team.completionRate >= 70
-                              ? '#22c55e'
+                              ? 'var(--chart-actual)'
                               : team.completionRate >= 40
                                 ? '#eab308'
-                                : '#a1a1aa'
+                                : 'var(--chart-grid)'
                           }
                           pct={team.completionRate}
                         />
@@ -240,7 +240,7 @@ export default function WorkspaceAnalyticsPage() {
                           <div
                             className="h-5 rounded transition-all"
                             style={{
-                              backgroundColor: '#6366f1',
+                              backgroundColor: 'var(--chart-primary)',
                               width: `${Math.max(pct, team.completedCount > 0 ? 2 : 0)}%`,
                             }}
                           />

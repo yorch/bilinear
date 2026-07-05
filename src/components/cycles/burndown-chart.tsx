@@ -85,7 +85,7 @@ export function BurndownChart({ data }: BurndownChartProps) {
                 y2={y}
               />
               <text
-                className="fill-zinc-400 dark:fill-zinc-500"
+                className="fill-muted-foreground"
                 fontSize={10}
                 textAnchor="end"
                 x={paddingLeft - 4}
@@ -100,7 +100,7 @@ export function BurndownChart({ data }: BurndownChartProps) {
         {/* X-axis labels */}
         {xLabels.map(({ i, label }) => (
           <text
-            className="fill-zinc-400 dark:fill-zinc-500"
+            className="fill-muted-foreground"
             fontSize={9}
             key={i}
             textAnchor="middle"
@@ -112,15 +112,21 @@ export function BurndownChart({ data }: BurndownChartProps) {
         ))}
 
         {/* Ideal burndown line (gray dashed) */}
-        <path d={idealPath} fill="none" stroke="#a1a1aa" strokeDasharray="4 3" strokeWidth={1.5} />
+        <path
+          d={idealPath}
+          fill="none"
+          stroke="var(--chart-grid)"
+          strokeDasharray="4 3"
+          strokeWidth={1.5}
+        />
 
         {/* Remaining line (indigo) */}
-        <path d={remainingPath} fill="none" stroke="#6366f1" strokeWidth={2} />
+        <path d={remainingPath} fill="none" stroke="var(--chart-ideal)" strokeWidth={2} />
 
         {/* Legend */}
         <g transform={`translate(${paddingLeft + 8}, ${paddingTop + 8})`}>
           <line
-            stroke="#a1a1aa"
+            stroke="var(--chart-grid)"
             strokeDasharray="4 3"
             strokeWidth={1.5}
             x1={0}
@@ -128,11 +134,11 @@ export function BurndownChart({ data }: BurndownChartProps) {
             y1={5}
             y2={5}
           />
-          <text className="fill-zinc-500 dark:fill-zinc-400" fontSize={9} x={20} y={9}>
+          <text className="fill-muted-foreground" fontSize={9} x={20} y={9}>
             {t('cycles.chart.ideal')}
           </text>
-          <line stroke="#6366f1" strokeWidth={2} x1={50} x2={66} y1={5} y2={5} />
-          <text className="fill-zinc-500 dark:fill-zinc-400" fontSize={9} x={70} y={9}>
+          <line stroke="var(--chart-ideal)" strokeWidth={2} x1={50} x2={66} y1={5} y2={5} />
+          <text className="fill-muted-foreground" fontSize={9} x={70} y={9}>
             {t('cycles.chart.remaining')}
           </text>
         </g>

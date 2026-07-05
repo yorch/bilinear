@@ -40,6 +40,9 @@ jobs:
       - name: Lint
         run: yarn lint
 
+      - name: Design token check
+        run: yarn lint:tokens
+
       - name: Type check
         run: yarn typecheck
 
