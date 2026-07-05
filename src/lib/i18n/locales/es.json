@@ -655,8 +655,13 @@
       "addDescriptionFirst": "Agrega una descripción primero para sugerir un título",
       "couldNotSuggestTitle": "No se pudo sugerir un título",
       "createIssue": "Crear tarea",
+      "createMore": "Crear más",
       "creating": "Creando…",
       "descriptionPlaceholder": "Agrega una descripción… (opcional, admite **markdown**)",
+      "discard": "Descartar",
+      "discardConfirmBody": "Tienes cambios sin guardar que se perderán si cierras esto.",
+      "discardConfirmTitle": "¿Descartar esta tarea?",
+      "issueCreated": "Tarea creada",
       "suggest": "Sugerir",
       "suggestTitleFromDescription": "Sugerir un título a partir de la descripción",
       "titlePlaceholder": "Título de la tarea"

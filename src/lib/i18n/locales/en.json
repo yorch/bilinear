@@ -655,8 +655,13 @@
       "addDescriptionFirst": "Add a description first to suggest a title",
       "couldNotSuggestTitle": "Could not suggest a title",
       "createIssue": "Create issue",
+      "createMore": "Create more",
       "creating": "Creating…",
       "descriptionPlaceholder": "Add description… (optional, supports **markdown**)",
+      "discard": "Discard",
+      "discardConfirmBody": "You have unsaved changes that will be lost if you close this.",
+      "discardConfirmTitle": "Discard this issue?",
+      "issueCreated": "Issue created",
       "suggest": "Suggest",
       "suggestTitleFromDescription": "Suggest a title from the description",
       "titlePlaceholder": "Issue title"
