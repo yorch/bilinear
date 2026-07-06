@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from '@/hooks/use-translations';
 import type { ColumnKey } from '@/hooks/use-visible-columns';
 import type { DBCustomFieldDefinition } from '@/lib/db';
 import { cn } from '@/lib/utils';
@@ -61,6 +62,8 @@ interface IssueRowProps {
   onUpdate: (id: string, patch: Record<string, unknown>) => void;
   /** Open a specific property popover immediately (keyboard shortcut support). */
   openProperty?: OpenProperty;
+  /** Whether this row has an unconfirmed optimistic write in flight. */
+  pending?: boolean;
   selected: boolean;
   states: WorkflowState[];
   style?: React.CSSProperties;
@@ -112,8 +115,10 @@ export function IssueRow({
   isColumnVisible,
   customFields,
   getCustomFieldValue,
+  pending,
   style,
 }: IssueRowProps) {
+  const t = useTranslations();
   const isBulkMode = onCheck !== undefined;
   // If no visibility function is provided, every built-in column renders
   // (callers that haven't adopted the column picker keep their current UX).
@@ -155,6 +160,16 @@ export function IssueRow({
 
       {/* Identifier */}
       <span className="w-16 flex-shrink-0 font-mono text-xs text-zinc-400">{issue.identifier}</span>
+
+      {/* Pending-write indicator — an unconfirmed optimistic write is in flight */}
+      {pending && (
+        <span
+          aria-label={t('issues.syncingRow')}
+          className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary"
+          role="status"
+          title={t('issues.syncingRow')}
+        />
+      )}
 
       {/* Title — clicking anywhere in this area opens the issue */}
       <button

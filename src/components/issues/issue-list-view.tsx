@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useHotkeys } from '@/hooks/use-hotkeys';
+import { usePendingIds } from '@/hooks/use-pending-ids';
 import { useTranslations } from '@/hooks/use-translations';
 import type { ColumnKey } from '@/hooks/use-visible-columns';
 import type { DBCustomFieldDefinition } from '@/lib/db';
@@ -66,6 +67,7 @@ export function IssueListView({
   getCustomFieldValue,
 }: IssueListViewProps) {
   const t = useTranslations();
+  const pendingIds = usePendingIds();
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const lastCheckedIndexRef = useRef<number>(-1);
@@ -198,6 +200,7 @@ export function IssueListView({
                 onSelect={() => onSelect(issue.id)}
                 onUpdate={onUpdate}
                 openProperty={issue.id === selectedId ? openProperty : null}
+                pending={pendingIds.has(issue.id)}
                 selected={issue.id === selectedId}
                 states={states}
                 teamId={teamId}

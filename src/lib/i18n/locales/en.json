@@ -872,6 +872,7 @@
     "status": "Status",
     "swimlaneByAssignee": "Swimlane by assignee",
     "swimlaneByPriority": "Swimlane by priority",
+    "syncingRow": "Saving changes…",
     "teamBacklogTitle": "{team} — Backlog",
     "teamIssuesTitle": "{team} — Issues",
     "teamNotFound": "Team not found.",

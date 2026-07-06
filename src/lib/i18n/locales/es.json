@@ -872,6 +872,7 @@
     "status": "Estado",
     "swimlaneByAssignee": "Carriles por responsable",
     "swimlaneByPriority": "Carriles por prioridad",
+    "syncingRow": "Guardando cambios…",
     "teamBacklogTitle": "{team} — Pendientes",
     "teamIssuesTitle": "{team} — Tareas",
     "teamNotFound": "Equipo no encontrado.",

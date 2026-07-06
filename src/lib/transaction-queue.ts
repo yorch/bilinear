@@ -52,6 +52,35 @@ const callbackMap = new Map<string, Callbacks>();
 let processing = false;
 let hydrated = false;
 let activeSession: ActiveSession | null = null;
+// Notified whenever the queue's contents change (enqueue, drain, drop) so
+// `usePendingIds()` can re-render rows with an in-flight write indicator.
+const queueListeners = new Set<() => void>();
+// Cached so getPendingIds() returns a stable reference between changes —
+// useSyncExternalStore requires this to avoid re-rendering every commit.
+let cachedPendingIds: Set<string> | null = null;
+
+function notifyQueueChanged(): void {
+  cachedPendingIds = null;
+  for (const listener of queueListeners) {
+    listener();
+  }
+}
+
+/** Pull every string id referenced by a transaction's variables (`id` or `ids`). */
+function idsFromVariables(variables: Record<string, unknown>): string[] {
+  const ids: string[] = [];
+  if (typeof variables.id === 'string') {
+    ids.push(variables.id);
+  }
+  if (Array.isArray(variables.ids)) {
+    for (const v of variables.ids) {
+      if (typeof v === 'string') {
+        ids.push(v);
+      }
+    }
+  }
+  return ids;
+}
 // Fallback error surface for permanent failures with no per-call onError —
 // rehydrated transactions (callbacks don't survive reload) and enqueue sites
 // that omit callbacks would otherwise fail silently. Registered by
@@ -85,6 +114,7 @@ export class TransactionQueue {
     if (callbacks) {
       callbackMap.set(tx.id, callbacks);
     }
+    notifyQueueChanged();
     void persist(tx).then(() => {
       void processNext();
     });
@@ -93,6 +123,32 @@ export class TransactionQueue {
 
   static setActiveSession(session: ActiveSession): void {
     activeSession = session;
+  }
+
+  /**
+   * Ids (from `variables.id` or `variables.ids`) currently in the queue —
+   * i.e. rows with an unconfirmed optimistic write. Used to render a
+   * pending-write indicator; a false negative (mutation shapes that don't
+   * carry `id`/`ids`) just means no dot, never a stuck one.
+   */
+  static getPendingIds(): Set<string> {
+    if (!cachedPendingIds) {
+      cachedPendingIds = new Set<string>();
+      for (const tx of queue) {
+        for (const id of idsFromVariables(tx.variables)) {
+          cachedPendingIds.add(id);
+        }
+      }
+    }
+    return cachedPendingIds;
+  }
+
+  /** Subscribe to queue-content changes (enqueue, drain, drop). Returns an unsubscribe fn. */
+  static subscribe(listener: () => void): () => void {
+    queueListeners.add(listener);
+    return () => {
+      queueListeners.delete(listener);
+    };
   }
 
   /** Register the fallback surface for permanent failures without onError. */
@@ -160,6 +216,7 @@ export class TransactionQueue {
       }
     }
     if (queue.length > 0) {
+      notifyQueueChanged();
       void processNext();
     }
   }
@@ -168,6 +225,8 @@ export class TransactionQueue {
   static __reset() {
     queue.length = 0;
     callbackMap.clear();
+    queueListeners.clear();
+    cachedPendingIds = null;
     processing = false;
     hydrated = false;
     activeSession = null;
@@ -218,6 +277,7 @@ async function processNext(): Promise<void> {
       window.dispatchEvent(new CustomEvent('bilinear:transaction-drained'));
     }
     queue.shift();
+    notifyQueueChanged();
     await unpersist(tx.id);
     const cb = callbackMap.get(tx.id);
     callbackMap.delete(tx.id);
@@ -228,6 +288,7 @@ async function processNext(): Promise<void> {
 
     if (isPermanent) {
       queue.shift();
+      notifyQueueChanged();
       await unpersist(tx.id);
       const cb = callbackMap.get(tx.id);
       callbackMap.delete(tx.id);
