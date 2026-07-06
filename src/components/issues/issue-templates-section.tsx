@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { cn, gqlError } from '@/lib/utils';
+import { cn, getErrorMessage, gqlError } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 // ---------------------------------------------------------------------------
@@ -412,8 +412,7 @@ function TemplateForm({
         },
       });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t('common.somethingWentWrong');
-      toast.error(msg);
+      toast.error(getErrorMessage(err, t('common.somethingWentWrong')));
     } finally {
       setSubmitting(false);
     }

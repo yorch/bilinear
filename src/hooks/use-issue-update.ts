@@ -6,6 +6,7 @@ import type { DBIssue } from '@/lib/db';
 import { ISSUE_UPDATE_MUTATION } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
+import { getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 /**
@@ -29,7 +30,7 @@ export function useIssueUpdate(): (id: string, patch: Record<string, unknown>) =
         { id, input: patch },
         {
           onError: err => {
-            toast.error(err instanceof Error ? err.message : t('issues.updateFailed'));
+            toast.error(getErrorMessage(err, t('issues.updateFailed')));
             if (snapshot) {
               issueStore.optimisticUpdate(id, snapshot);
             }

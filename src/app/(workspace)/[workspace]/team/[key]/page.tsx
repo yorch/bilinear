@@ -31,6 +31,7 @@ import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { buildIssueHref } from '@/lib/issue-nav';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
+import { getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
 
@@ -191,7 +192,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         { id },
         {
           onError: err => {
-            toast.error(err instanceof Error ? err.message : t('issues.restoreFailed'));
+            toast.error(getErrorMessage(err, t('issues.restoreFailed')));
             issueStore.optimisticUpdate(id, { archivedAt: new Date().toISOString() });
           },
         },
@@ -214,7 +215,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
             // The archive never happened server-side: retire the stale Undo
             // affordance before surfacing the failure and rolling back.
             toast.dismiss(undoToastId);
-            toast.error(err instanceof Error ? err.message : t('issues.archiveFailed'));
+            toast.error(getErrorMessage(err, t('issues.archiveFailed')));
             issueStore.optimisticUpdate(id, { archivedAt: null });
           },
           onSuccess: () => {
@@ -238,7 +239,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         { id },
         {
           onError: err => {
-            toast.error(err instanceof Error ? err.message : t('issues.deleteFailed'));
+            toast.error(getErrorMessage(err, t('issues.deleteFailed')));
             // Restore the issue optimistically if the server rejects the delete
             if (snapshot) {
               issueStore.applySyncAction('I', id, snapshot);

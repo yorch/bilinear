@@ -11,7 +11,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 /**
@@ -214,7 +214,7 @@ const TriagePage = observer(function TriagePage() {
         if (snapshot) {
           issueStore.optimisticUpdate(issueId, snapshot);
         }
-        toast.error(err instanceof Error ? err.message : t('settings.triage.acceptFailed'));
+        toast.error(getErrorMessage(err, t('settings.triage.acceptFailed')));
       } finally {
         setBusyId(null);
       }
@@ -243,7 +243,7 @@ const TriagePage = observer(function TriagePage() {
         if (snapshot) {
           issueStore.optimisticUpdate(issueId, snapshot);
         }
-        toast.error(err instanceof Error ? err.message : t('settings.triage.declineFailed'));
+        toast.error(getErrorMessage(err, t('settings.triage.declineFailed')));
       } finally {
         setBusyId(null);
       }
@@ -271,7 +271,7 @@ const TriagePage = observer(function TriagePage() {
         if (snapshot) {
           issueStore.optimisticUpdate(issueId, snapshot);
         }
-        toast.error(err instanceof Error ? err.message : t('settings.triage.snoozeFailed'));
+        toast.error(getErrorMessage(err, t('settings.triage.snoozeFailed')));
       } finally {
         setBusyId(null);
       }
@@ -306,7 +306,7 @@ const TriagePage = observer(function TriagePage() {
         if (snapshot) {
           issueStore.optimisticUpdate(issueId, snapshot);
         }
-        toast.error(err instanceof Error ? err.message : t('settings.triage.markDuplicateFailed'));
+        toast.error(getErrorMessage(err, t('settings.triage.markDuplicateFailed')));
       } finally {
         setBusyId(null);
         setDuplicatePickerFor(null);

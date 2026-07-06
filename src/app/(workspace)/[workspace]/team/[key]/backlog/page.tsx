@@ -14,7 +14,7 @@ import { ISSUE_ARCHIVE_MUTATION } from '@/lib/graphql-queries';
 import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import type { IssueLabel, IssueUser } from '@/types/issues';
 
@@ -313,7 +313,7 @@ const BacklogPage = observer(function BacklogPage() {
         { id },
         {
           onError: err => {
-            toast.error(err instanceof Error ? err.message : t('issues.archiveFailed'));
+            toast.error(getErrorMessage(err, t('issues.archiveFailed')));
             issueStore.optimisticUpdate(id, { archivedAt: null });
           },
         },

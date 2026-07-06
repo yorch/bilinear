@@ -8,7 +8,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import type { DBProjectMilestone } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 const MILESTONE_FIELDS =
@@ -242,7 +242,7 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
       }
       setCreating(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('projects.failedToCreateMilestone'));
+      toast.error(getErrorMessage(err, t('projects.failedToCreateMilestone')));
     }
   };
 
@@ -277,7 +277,7 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
       }
       setEditingId(null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('projects.failedToUpdateMilestone'));
+      toast.error(getErrorMessage(err, t('projects.failedToUpdateMilestone')));
     }
   };
 
@@ -296,7 +296,7 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
       }
       projectStore.applyMilestoneSyncAction('D', id, null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('projects.failedToDeleteMilestone'));
+      toast.error(getErrorMessage(err, t('projects.failedToDeleteMilestone')));
     }
   };
 
