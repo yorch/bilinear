@@ -481,7 +481,7 @@ export const Sidebar = observer(function Sidebar({
     <aside
       className={cn(
         'flex h-full flex-shrink-0 flex-col border-r border-zinc-200 bg-zinc-50 transition-[width] duration-200 dark:border-zinc-800 dark:bg-zinc-950',
-        collapsed ? 'w-12' : 'w-56',
+        collapsed ? 'w-12' : 'w-60',
       )}
       data-collapsed={collapsed ? 'true' : 'false'}
     >
@@ -511,7 +511,7 @@ export const Sidebar = observer(function Sidebar({
             <li key={item.href}>
               <Link
                 className={cn(
-                  'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+                  'flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
                   collapsed && 'justify-center px-0',
                   pathname === item.href
                     ? 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
@@ -521,7 +521,7 @@ export const Sidebar = observer(function Sidebar({
                 title={item.label}
               >
                 {item.icon}
-                {!collapsed && item.label}
+                {!collapsed && <span className="truncate">{item.label}</span>}
               </Link>
             </li>
           ))}
@@ -581,38 +581,38 @@ function SidebarFooter({
       ) : (
         <div className="flex flex-col gap-1">
           <ConnectionStatus />
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-1">
             <Link
               className={cn(
-                'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
+                'flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
                 pathname.startsWith(`${base}/settings`) &&
                   'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50',
               )}
               href={`${base}/settings`}
               title={t('nav.workspaceSettings')}
             >
-              <Settings className="h-4 w-4" />
-              {t('common.settings')}
+              <Settings className="h-4 w-4 shrink-0" />
+              <span className="truncate">{t('common.settings')}</span>
             </Link>
-            <div className="flex items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1">
               <LanguageToggle />
               <ThemeToggle />
             </div>
           </div>
           {user && (
             <div className="flex items-center justify-between gap-2 px-2 py-1 text-xs text-zinc-500">
-              <span className="truncate" title={user.email}>
+              <span className="min-w-0 flex-1 truncate" title={user.email}>
                 {user.displayName}
               </span>
               <button
                 aria-label={t('common.signOut')}
-                className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
+                className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
                 onClick={() => void logout()}
                 title={t('common.signOut')}
                 type="button"
               >
                 <LogOut className="h-3 w-3" />
-                {t('common.signOut')}
+                <span className="truncate">{t('common.signOut')}</span>
               </button>
             </div>
           )}

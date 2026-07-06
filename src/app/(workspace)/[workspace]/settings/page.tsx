@@ -6,6 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { LanguageToggle } from '@/components/language-toggle';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { useFormatters } from '@/hooks/use-formatters';
@@ -589,6 +590,20 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
             {t('settings.workspace.myPreferences')}
           </h2>
           <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 divide-y divide-border">
+            {/* Language — also available in the sidebar footer, surfaced here too
+                since the sidebar collapses to a drawer on small screens. */}
+            <div className="px-5 py-3">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">{t('language.language')}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('settings.workspace.languageDescription')}
+                  </p>
+                </div>
+                <LanguageToggle />
+              </div>
+            </div>
+
             {/* Email notifications toggle */}
             <div className="px-5 py-3">
               <SettingToggleRow

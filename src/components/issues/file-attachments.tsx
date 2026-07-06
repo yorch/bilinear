@@ -2,9 +2,10 @@
 
 import { FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { toast } from '@/lib/toast';
-import { formatFileSize, getErrorMessage } from '@/lib/utils';
+import { getErrorMessage } from '@/lib/utils';
 
 interface Attachment {
   id: string;
@@ -52,6 +53,7 @@ async function deleteFile(fileId: string): Promise<void> {
 
 export function FileAttachments({ issueId }: FileAttachmentsProps) {
   const t = useTranslations();
+  const { formatFileSize } = useFormatters();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);

@@ -113,6 +113,10 @@ describe('formatFileSize', () => {
   it('uses KB right at the 1024 boundary', () => {
     expect(formatFileSize(1024)).toBe('1.0 KB');
   });
+
+  it('uses the locale decimal separator', () => {
+    expect(formatFileSize(1536, 'es-ES')).toBe('1,5 KB');
+  });
 });
 
 describe('translate placeholder interpolation', () => {

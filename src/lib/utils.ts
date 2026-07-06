@@ -47,13 +47,18 @@ export function formatRelativeTime(dateStr: string, t: Translate, intlLocale = '
   return date.toLocaleDateString(intlLocale, { day: 'numeric', month: 'short' });
 }
 
-/** Format a byte count as a human-readable file size string. */
-export function formatFileSize(bytes: number): string {
+/** Format a byte count as a human-readable, locale-aware file size string. */
+export function formatFileSize(bytes: number, intlLocale = 'en-US'): string {
   if (bytes < 1024) {
     return `${bytes} B`;
   }
+  const format = (value: number) =>
+    new Intl.NumberFormat(intlLocale, {
+      maximumFractionDigits: 1,
+      minimumFractionDigits: 1,
+    }).format(value);
   if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${format(bytes / 1024)} KB`;
   }
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${format(bytes / (1024 * 1024))} MB`;
 }
