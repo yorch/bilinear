@@ -175,9 +175,10 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
       {/* Backdrop */}
       <div aria-hidden="true" className="fixed inset-0 z-30" onClick={onClose} />
 
-      {/* Panel */}
+      {/* Panel — full-screen sheet below md (no room for a side panel on a
+          phone-width viewport); the fixed 480px side panel returns at md+. */}
       <div
-        className="fixed right-0 top-0 z-40 flex h-full w-[480px] flex-col border-l border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+        className="fixed inset-0 z-40 flex h-full w-full flex-col border-l border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900 md:inset-y-0 md:right-0 md:left-auto md:w-[480px]"
         data-testid="issue-detail-panel"
       >
         {/* Header */}
