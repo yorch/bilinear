@@ -948,6 +948,7 @@
   "nav": {
     "analytics": "Analítica",
     "backlog": "Pendientes",
+    "closeMenu": "Cerrar menú",
     "collapseSidebar": "Contraer barra lateral (⌘B)",
     "createTeam": "Crear un equipo",
     "cycles": "Ciclos",
@@ -958,6 +959,7 @@
     "inbox": "Bandeja de entrada",
     "myIssues": "Mis tareas",
     "newTeam": "Nuevo equipo",
+    "openMenu": "Abrir menú",
     "projects": "Proyectos",
     "removeFromFavorites": "Quitar de favoritos",
     "removeNamedFromFavorites": "Quitar {name} de favoritos",

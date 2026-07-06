@@ -132,10 +132,12 @@ function favoriteHref(
 const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
   base,
   collapsed,
+  onNavigate,
   pathname,
 }: {
   base: string;
   collapsed: boolean;
+  onNavigate?: () => void;
   pathname: string;
 }) {
   const { favoriteStore, teamStore } = useStore();
@@ -196,6 +198,7 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
                     : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
                 )}
                 href={href}
+                onClick={onNavigate}
                 title={label}
               >
                 <span className="shrink-0 text-zinc-400">{favoriteIcon(fav.entityType)}</span>
@@ -223,10 +226,12 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
 const SidebarTeamsSection = observer(function SidebarTeamsSection({
   base,
   collapsed,
+  onNavigate,
   pathname,
 }: {
   base: string;
   collapsed: boolean;
+  onNavigate?: () => void;
   pathname: string;
 }) {
   const { customViewStore, teamStore, uiStore } = useStore();
@@ -310,6 +315,7 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                           : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
                       )}
                       href={href}
+                      onClick={onNavigate}
                       title={team.displayName || team.name}
                     >
                       <span className="flex h-4 w-4 shrink-0 items-center justify-center">
@@ -331,6 +337,7 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                           : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
                       )}
                       href={backlogHref}
+                      onClick={onNavigate}
                       title={t('nav.backlog')}
                     >
                       <Archive className="h-3 w-3" />
@@ -344,6 +351,7 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                           : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
                       )}
                       href={cyclesHref}
+                      onClick={onNavigate}
                       title={t('nav.cycles')}
                     >
                       <RefreshCw className="h-3 w-3" />
@@ -357,6 +365,7 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                           : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
                       )}
                       href={analyticsHref}
+                      onClick={onNavigate}
                       title={t('nav.analytics')}
                     >
                       <BarChart2 className="h-3 w-3" />
@@ -370,6 +379,7 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                           : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
                       )}
                       href={docsHref}
+                      onClick={onNavigate}
                       title={t('nav.docs')}
                     >
                       <FileText className="h-3 w-3" />
@@ -388,6 +398,7 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                           )}
                           href={viewHref}
                           key={view.id}
+                          onClick={onNavigate}
                           title={view.name}
                         >
                           <Eye className="h-3 w-3" />
@@ -419,6 +430,7 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                       : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
                   )}
                   href={href}
+                  onClick={onNavigate}
                   title={team.displayName || team.name}
                 >
                   {team.icon ? (
@@ -440,6 +452,10 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
 
 interface SidebarProps {
   collapsed?: boolean;
+  /** Whether the off-canvas mobile drawer is open (ignored at md+, which is always visible). */
+  mobileOpen?: boolean;
+  /** Close the mobile drawer (X button, backdrop click, or navigating). */
+  onMobileClose?: () => void;
   onToggle?: () => void;
   workspaceKey?: string;
 }
@@ -447,12 +463,17 @@ interface SidebarProps {
 export const Sidebar = observer(function Sidebar({
   collapsed = false,
   onToggle,
+  mobileOpen = false,
+  onMobileClose,
   workspaceKey,
 }: SidebarProps) {
   const { syncStore } = useStore();
   const pathname = usePathname();
   const t = useTranslations();
   const base = workspaceKey ? `/${workspaceKey}` : '';
+  // The mobile drawer always shows full content — the desktop collapse
+  // preference (a persistent-rail concept) doesn't apply to a transient overlay.
+  const effectiveCollapsed = collapsed && !mobileOpen;
 
   const globalNavItems = [
     {
@@ -480,27 +501,39 @@ export const Sidebar = observer(function Sidebar({
   return (
     <aside
       className={cn(
-        'flex h-full flex-shrink-0 flex-col border-r border-zinc-200 bg-zinc-50 transition-[width] duration-200 dark:border-zinc-800 dark:bg-zinc-950',
-        collapsed ? 'w-12' : 'w-60',
+        'fixed inset-y-0 left-0 z-40 flex h-full w-64 flex-shrink-0 flex-col border-r border-zinc-200 bg-zinc-50 transition-transform duration-200 dark:border-zinc-800 dark:bg-zinc-950',
+        mobileOpen ? 'translate-x-0' : '-translate-x-full',
+        'md:relative md:z-auto md:translate-x-0 md:transition-[width]',
+        collapsed ? 'md:w-12' : 'md:w-60',
       )}
       data-collapsed={collapsed ? 'true' : 'false'}
+      data-mobile-open={mobileOpen ? 'true' : 'false'}
     >
       {/* Workspace header */}
       <div className="flex h-12 items-center gap-2 border-b border-zinc-200 px-2 dark:border-zinc-800">
         <button
           aria-label={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
+          className="hidden h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50 md:flex"
           onClick={onToggle}
           title={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
           type="button"
         >
           <PanelLeft className="h-4 w-4" />
         </button>
-        {!collapsed && (
+        {!effectiveCollapsed && (
           <span className="truncate text-sm font-semibold text-foreground">
             {syncStore.organizationName ?? workspaceKey ?? APP_NAME}
           </span>
         )}
+        <button
+          aria-label={t('nav.closeMenu')}
+          className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground md:hidden"
+          onClick={onMobileClose}
+          title={t('nav.closeMenu')}
+          type="button"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
 
       {/* Navigation */}
@@ -512,27 +545,43 @@ export const Sidebar = observer(function Sidebar({
               <Link
                 className={cn(
                   'flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
-                  collapsed && 'justify-center px-0',
+                  effectiveCollapsed && 'justify-center px-0',
                   pathname === item.href
                     ? 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
                     : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
                 )}
                 href={item.href}
+                onClick={onMobileClose}
                 title={item.label}
               >
                 {item.icon}
-                {!collapsed && <span className="truncate">{item.label}</span>}
+                {!effectiveCollapsed && <span className="truncate">{item.label}</span>}
               </Link>
             </li>
           ))}
         </ul>
 
-        <SidebarFavoritesSection base={base} collapsed={collapsed} pathname={pathname} />
-        <SidebarTeamsSection base={base} collapsed={collapsed} pathname={pathname} />
+        <SidebarFavoritesSection
+          base={base}
+          collapsed={effectiveCollapsed}
+          onNavigate={onMobileClose}
+          pathname={pathname}
+        />
+        <SidebarTeamsSection
+          base={base}
+          collapsed={effectiveCollapsed}
+          onNavigate={onMobileClose}
+          pathname={pathname}
+        />
       </nav>
 
       {/* Footer */}
-      <SidebarFooter base={base} collapsed={collapsed} pathname={pathname} />
+      <SidebarFooter
+        base={base}
+        collapsed={effectiveCollapsed}
+        onNavigate={onMobileClose}
+        pathname={pathname}
+      />
     </aside>
   );
 });
@@ -542,10 +591,12 @@ export const Sidebar = observer(function Sidebar({
 function SidebarFooter({
   base,
   collapsed,
+  onNavigate,
   pathname,
 }: {
   base: string;
   collapsed: boolean;
+  onNavigate?: () => void;
   pathname: string;
 }) {
   const { logout, user } = useAuth();
@@ -562,6 +613,7 @@ function SidebarFooter({
                 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50',
             )}
             href={`${base}/settings`}
+            onClick={onNavigate}
             title={t('common.settings')}
           >
             <Settings className="h-4 w-4" />
@@ -589,6 +641,7 @@ function SidebarFooter({
                   'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50',
               )}
               href={`${base}/settings`}
+              onClick={onNavigate}
               title={t('nav.workspaceSettings')}
             >
               <Settings className="h-4 w-4 shrink-0" />

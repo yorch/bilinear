@@ -948,6 +948,7 @@
   "nav": {
     "analytics": "Analytics",
     "backlog": "Backlog",
+    "closeMenu": "Close menu",
     "collapseSidebar": "Collapse sidebar (⌘B)",
     "createTeam": "Create a team",
     "cycles": "Cycles",
@@ -958,6 +959,7 @@
     "inbox": "Inbox",
     "myIssues": "My Issues",
     "newTeam": "New team",
+    "openMenu": "Open menu",
     "projects": "Projects",
     "removeFromFavorites": "Remove from favorites",
     "removeNamedFromFavorites": "Remove {name} from favorites",
