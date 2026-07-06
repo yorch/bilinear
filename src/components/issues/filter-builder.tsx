@@ -109,8 +109,10 @@ function FilterPill({ condition, states, users, labels, customFields, onRemove }
       <span className="text-muted-foreground">{opLabel}</span>
       {valueLabel && <span>{valueLabel}</span>}
       <button
+        aria-label={t('issues.removeFilter')}
         className="ml-0.5 text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
         onClick={onRemove}
+        title={t('issues.removeFilter')}
         type="button"
       >
         <X className="h-3 w-3" />

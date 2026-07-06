@@ -861,6 +861,7 @@
     "priority": "Priority",
     "priorityN": "Priority {priority}",
     "project": "Project",
+    "removeFilter": "Remove filter",
     "restoreFailed": "Failed to restore issue",
     "saveCurrentFiltersAsView": "Save current filters as a view",
     "saveView": "Save view",

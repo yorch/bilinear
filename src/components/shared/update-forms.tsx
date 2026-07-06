@@ -56,8 +56,10 @@ export function CreateUpdateForm({
           {t('properties.updateForm.newUpdate')}
         </span>
         <button
+          aria-label={t('common.close')}
           className="ml-auto rounded p-0.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
           onClick={onClose}
+          title={t('common.close')}
           type="button"
         >
           <X className="h-3.5 w-3.5" />

@@ -188,6 +188,7 @@ export function BulkActionBar({
       <div className="mx-1 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
 
       <button
+        aria-label={t('issues.clearSelection')}
         className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
         onClick={onClear}
         title={t('issues.clearSelection')}

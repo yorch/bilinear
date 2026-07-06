@@ -190,7 +190,7 @@ export function CommentCard({
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100 transition-opacity">
             {/* Emoji reaction */}
             <SelectPopover
               align="right"
@@ -227,6 +227,7 @@ export function CommentCard({
             {/* Quote reply */}
             {depth === 0 && (
               <button
+                aria-label={t('issueDetail.comments.quoteReply')}
                 className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
                 onClick={handleQuoteReply}
                 title={t('issueDetail.comments.quoteReply')}
@@ -238,6 +239,9 @@ export function CommentCard({
 
             {/* Resolve */}
             <button
+              aria-label={
+                isResolved ? t('issueDetail.comments.unresolve') : t('issueDetail.comments.resolve')
+              }
               className={cn(
                 'rounded p-1 transition-colors',
                 isResolved
