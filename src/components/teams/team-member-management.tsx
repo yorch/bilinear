@@ -3,6 +3,7 @@
 import { Crown, UserMinus, UserPlus, X } from 'lucide-react';
 import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { useTranslations } from '@/hooks/use-translations';
 import { toast } from '@/lib/toast';
 import { cn, getErrorMessage } from '@/lib/utils';
@@ -178,7 +179,7 @@ export function TeamMemberManagement({
 
   return (
     <div className="flex flex-col gap-3">
-      <ul className="flex flex-col divide-y divide-zinc-100 dark:divide-zinc-800">
+      <ul className="flex flex-col divide-y divide-border">
         {members.map(member => {
           const isLoading = loadingMembershipId === member.membershipId;
           const isSelf = member.userId === currentUserId;
@@ -187,7 +188,7 @@ export function TeamMemberManagement({
               <Avatar user={member} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                  <span className="text-sm font-medium text-foreground truncate">
                     {member.displayName}
                     {isSelf && (
                       <span className="ml-1 text-xs text-zinc-400">({t('teams.you')})</span>
@@ -238,7 +239,7 @@ export function TeamMemberManagement({
               <div className="flex items-center gap-1">
                 {pendingRemoveId === member.membershipId ? (
                   <>
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    <span className="text-xs text-muted-foreground">
                       {isSelf ? t('teams.leaveConfirm') : t('teams.removeConfirm')}
                     </span>
                     <button
@@ -253,7 +254,7 @@ export function TeamMemberManagement({
                       {isLoading ? '…' : t('teams.yes')}
                     </button>
                     <button
-                      className="rounded px-2 py-0.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      className="rounded px-2 py-0.5 text-xs text-zinc-500 hover:bg-accent"
                       onClick={() => setPendingRemoveId(null)}
                       type="button"
                     >
@@ -327,9 +328,7 @@ export function TeamMemberManagement({
                   >
                     <Avatar size="sm" user={user} />
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-zinc-900 dark:text-zinc-100">
-                        {user.displayName}
-                      </p>
+                      <p className="truncate font-medium text-foreground">{user.displayName}</p>
                       <p className="truncate text-xs text-zinc-400">{user.email}</p>
                     </div>
                   </button>
@@ -338,13 +337,9 @@ export function TeamMemberManagement({
             )}
           </ul>
           <div className="mt-2 flex justify-end">
-            <button
-              className="rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-              onClick={() => setAddOpen(false)}
-              type="button"
-            >
+            <Button onClick={() => setAddOpen(false)} size="sm" type="button" variant="ghost">
               {t('common.cancel')}
-            </button>
+            </Button>
           </div>
         </div>
       ) : (

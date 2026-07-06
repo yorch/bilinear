@@ -65,7 +65,7 @@ export function LoginForm() {
 
       <div className="relative">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-zinc-200 dark:border-zinc-800" />
+          <div className="w-full border-t border-border" />
         </div>
         <div className="relative flex justify-center text-xs text-zinc-500">
           <span className="bg-zinc-50 px-2 dark:bg-zinc-950">{t('common.or')}</span>

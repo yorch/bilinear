@@ -89,7 +89,7 @@ function Histogram({ buckets, color }: { buckets: HistogramBucket[]; color: stri
             className="flex flex-1 flex-col items-center gap-1"
             key={`${b.bucketStart}-${b.bucketEnd}`}
           >
-            <span className="text-[10px] font-medium text-zinc-600 dark:text-zinc-300">
+            <span className="text-[10px] font-medium text-muted-foreground">
               {b.count > 0 ? b.count : ''}
             </span>
             <div
@@ -175,7 +175,7 @@ function TimeInStateChart({
             <span className="w-24 shrink-0 truncate text-xs text-zinc-500" title={state.name}>
               {state.name}
             </span>
-            <div className="flex-1 rounded bg-zinc-100 dark:bg-zinc-800">
+            <div className="flex-1 rounded bg-muted">
               <div
                 className="h-4 rounded transition-all"
                 style={{
@@ -184,7 +184,7 @@ function TimeInStateChart({
                 }}
               />
             </div>
-            <span className="w-14 shrink-0 text-right text-xs font-medium text-zinc-600 dark:text-zinc-300">
+            <span className="w-14 shrink-0 text-right text-xs font-medium text-muted-foreground">
               {row.avgHours < 24
                 ? `${row.avgHours.toFixed(1)}h`
                 : `${(row.avgHours / 24).toFixed(1)}d`}
@@ -254,7 +254,7 @@ export function InsightsSection({
               className={
                 preset === p.value
                   ? 'rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
-                  : 'px-2 py-0.5 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
+                  : 'px-2 py-0.5 text-xs text-zinc-500 hover:text-foreground'
               }
               key={p.value}
               onClick={() => setPreset(p.value)}
@@ -277,7 +277,7 @@ export function InsightsSection({
             <p className="mb-3 text-[11px] text-zinc-400">
               {t('analytics.insights.leadTimeSubtitle')}
             </p>
-            <Histogram buckets={data?.lead ?? []} color="#6366f1" />
+            <Histogram buckets={data?.lead ?? []} color="var(--chart-ideal)" />
           </div>
 
           <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">

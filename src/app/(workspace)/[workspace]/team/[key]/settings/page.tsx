@@ -7,6 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CustomFieldsSection } from '@/components/custom-fields/custom-fields-section';
 import { IssueTemplatesSection } from '@/components/issues/issue-templates-section';
+import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import {
   type TeamMember,
   TeamMemberManagement,
@@ -391,29 +392,26 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
     <div className="flex flex-1 flex-col overflow-y-auto">
       <div className="flex items-center gap-3 border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
         <Link
-          className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+          className="flex items-center gap-1 text-sm text-zinc-500 hover:text-foreground"
           href={`/${workspace}/team/${teamKey}`}
         >
           <ArrowLeft className="h-4 w-4" />
           {t('settings.team.back')}
         </Link>
         <span className="text-zinc-300 dark:text-zinc-700">/</span>
-        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+        <h1 className="text-sm font-semibold text-foreground">
           {t('settings.team.settingsHeading', { name: team.displayName || team.name })}
         </h1>
       </div>
 
       <div className="mx-auto w-full max-w-2xl px-6 py-8 flex flex-col gap-8">
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.team.general')}
           </h2>
           <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900 flex flex-col gap-4">
             <div className="flex flex-col gap-1">
-              <label
-                className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-                htmlFor="settings-name"
-              >
+              <label className="text-xs font-medium text-muted-foreground" htmlFor="settings-name">
                 {t('settings.team.teamName')}
               </label>
               <input
@@ -427,7 +425,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
 
             <div className="flex flex-col gap-1">
               <label
-                className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+                className="text-xs font-medium text-muted-foreground"
                 htmlFor="settings-description"
               >
                 {t('settings.team.description')}
@@ -443,7 +441,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
             </div>
 
             <div className="flex flex-col gap-1">
-              <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              <p className="text-xs font-medium text-muted-foreground">
                 {t('settings.team.identifier')}
               </p>
               <div className="flex items-center gap-2">
@@ -459,7 +457,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
             {/* Parent team */}
             <div className="flex flex-col gap-1">
               <label
-                className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+                className="text-xs font-medium text-muted-foreground"
                 htmlFor="settings-parent"
               >
                 {t('settings.team.parentTeam')}
@@ -483,63 +481,25 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         </section>
 
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.team.workflow')}
           </h2>
           <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900 flex flex-col gap-5">
             {/* Private team toggle */}
-            <label className="flex cursor-pointer items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  {t('settings.team.privateTeam')}
-                </p>
-                <p className="text-xs text-zinc-400">{t('settings.team.privateTeamDescription')}</p>
-              </div>
-              <button
-                aria-checked={isPrivate}
-                className={cn(
-                  'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
-                  isPrivate ? 'bg-indigo-600' : 'bg-zinc-200 dark:bg-zinc-700',
-                )}
-                onClick={() => setIsPrivate(v => !v)}
-                role="switch"
-                type="button"
-              >
-                <span
-                  className={cn(
-                    'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-200',
-                    isPrivate ? 'translate-x-4' : 'translate-x-0',
-                  )}
-                />
-              </button>
-            </label>
+            <SettingToggleRow
+              checked={isPrivate}
+              description={t('settings.team.privateTeamDescription')}
+              label={t('settings.team.privateTeam')}
+              onCheckedChange={setIsPrivate}
+            />
 
             {/* Triage toggle */}
-            <label className="flex cursor-pointer items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  {t('settings.team.triage')}
-                </p>
-                <p className="text-xs text-zinc-400">{t('settings.team.triageDescription')}</p>
-              </div>
-              <button
-                aria-checked={triageEnabled}
-                className={cn(
-                  'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
-                  triageEnabled ? 'bg-indigo-600' : 'bg-zinc-200 dark:bg-zinc-700',
-                )}
-                onClick={() => setTriageEnabled(v => !v)}
-                role="switch"
-                type="button"
-              >
-                <span
-                  className={cn(
-                    'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-200',
-                    triageEnabled ? 'translate-x-4' : 'translate-x-0',
-                  )}
-                />
-              </button>
-            </label>
+            <SettingToggleRow
+              checked={triageEnabled}
+              description={t('settings.team.triageDescription')}
+              label={t('settings.team.triage')}
+              onCheckedChange={setTriageEnabled}
+            />
           </div>
         </section>
 
@@ -547,7 +507,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
           <button
             className={cn(
               'rounded-md px-4 py-1.5 text-sm font-medium text-white transition-colors',
-              'bg-indigo-600 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50',
+              'bg-primary hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50',
             )}
             disabled={saving || !name.trim()}
             onClick={handleSave}
@@ -559,7 +519,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         </div>
 
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.team.members')}
           </h2>
           <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
@@ -614,7 +574,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
 
               {deleteConfirm && (
                 <div className="flex flex-col gap-3 rounded-md border border-red-100 bg-red-50/50 p-4 dark:border-red-900/30 dark:bg-red-900/10">
-                  <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                  <p className="text-xs font-medium text-muted-foreground">
                     {t('settings.team.whatShouldHappenToIssues')}
                   </p>
 
@@ -676,7 +636,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
 
                   <div className="flex items-center gap-2 pt-1">
                     <button
-                      className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-accent"
                       onClick={() => {
                         setDeleteConfirm(false);
                         setIssueAction('DELETE');

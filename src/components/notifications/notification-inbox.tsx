@@ -2,9 +2,9 @@
 
 import { Bell, Check, CheckCheck, Clock, MessageSquare, RefreshCw, User } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { SelectPopover } from '@/components/ui/select-popover';
 import { useFormatters } from '@/hooks/use-formatters';
-import { useOutsideClick } from '@/hooks/use-outside-click';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBNotification } from '@/lib/db';
 import { gql } from '@/lib/graphql';
@@ -115,17 +115,12 @@ function NotificationItem({
   const { type, read, createdAt, id } = notification;
   const isMarkingThis = markingId === id;
   const isSnoozingThis = snoozingId === id;
-  const [snoozeOpen, setSnoozeOpen] = useState(false);
-  const snoozeRef = useRef<HTMLDivElement>(null);
-
-  useOutsideClick(snoozeRef, () => setSnoozeOpen(false), snoozeOpen);
-
   return (
     <div
       className={cn(
         'flex items-start gap-3 rounded-lg border px-4 py-3 transition-colors',
         read
-          ? 'border-zinc-100 dark:border-zinc-800'
+          ? 'border-border'
           : 'border-indigo-100 bg-indigo-50/40 dark:border-indigo-900/40 dark:bg-indigo-950/20',
       )}
     >
@@ -144,44 +139,34 @@ function NotificationItem({
       {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-1 text-sm">
-          <span
-            className={cn(
-              'font-medium',
-              read ? 'text-zinc-600 dark:text-zinc-400' : 'text-zinc-900 dark:text-zinc-100',
-            )}
-          >
+          <span className={cn('font-medium', read ? 'text-muted-foreground' : 'text-foreground')}>
             {t(getNotificationLabelKey(type))}
           </span>
         </div>
 
-        <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
-          {formatRelativeTime(createdAt)}
-        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{formatRelativeTime(createdAt)}</p>
       </div>
 
       {/* Action buttons (unread only) */}
       {!read && (
         <div className="flex shrink-0 items-center gap-1">
           {/* Snooze button with dropdown */}
-          <div className="relative" ref={snoozeRef}>
-            <button
-              className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300 disabled:opacity-50"
-              disabled={isSnoozingThis}
-              onClick={() => setSnoozeOpen(o => !o)}
-              title={t('notifications.snooze.buttonTitle')}
-              type="button"
-            >
-              <Clock className="h-3.5 w-3.5" />
-            </button>
-
-            {snoozeOpen && (
-              <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+          <SelectPopover
+            align="right"
+            disabled={isSnoozingThis}
+            panelClassName="w-44 py-1 shadow-xl"
+            triggerChildren={<Clock className="h-3.5 w-3.5" />}
+            triggerClassName="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+            triggerTitle={t('notifications.snooze.buttonTitle')}
+          >
+            {close => (
+              <>
                 {SNOOZE_PRESETS.map(preset => (
                   <button
                     className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
                     key={preset.labelKey}
                     onClick={() => {
-                      setSnoozeOpen(false);
+                      close();
                       onSnooze(id, preset.getUntil());
                     }}
                     type="button"
@@ -189,9 +174,9 @@ function NotificationItem({
                     {t(preset.labelKey)}
                   </button>
                 ))}
-              </div>
+              </>
             )}
-          </div>
+          </SelectPopover>
 
           {/* Mark read button */}
           <button
@@ -329,11 +314,9 @@ export const NotificationInbox = observer(function NotificationInbox() {
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Bell className="h-5 w-5 text-zinc-500" />
-          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-            {t('notifications.title')}
-          </h1>
+          <h1 className="text-lg font-semibold text-foreground">{t('notifications.title')}</h1>
           {hasUnread && (
-            <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-xs font-medium text-white">
+            <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-white">
               {unread.length}
             </span>
           )}
@@ -362,22 +345,20 @@ export const NotificationInbox = observer(function NotificationInbox() {
       {/* Empty state */}
       {!loading && notifications.length === 0 && (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
             <Bell className="h-6 w-6 text-zinc-400" />
           </div>
-          <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+          <p className="text-sm font-medium text-muted-foreground">
             {t('notifications.emptyState.title')}
           </p>
-          <p className="text-xs text-zinc-400 dark:text-zinc-500">
-            {t('notifications.emptyState.detail')}
-          </p>
+          <p className="text-xs text-muted-foreground">{t('notifications.emptyState.detail')}</p>
         </div>
       )}
 
       {/* Unread section */}
       {!loading && unread.length > 0 && (
         <section className="mb-6">
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('notifications.unreadCount', { count: unread.length })}
           </h2>
           <div className="flex flex-col gap-2">
@@ -398,7 +379,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
       {/* Read section */}
       {!loading && read.length > 0 && (
         <section>
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {hasUnread ? t('notifications.read') : t('notifications.allNotifications')}
           </h2>
           <div className="flex flex-col gap-2">

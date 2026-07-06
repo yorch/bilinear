@@ -105,7 +105,7 @@ export function OAuthCallbackHandler({ provider }: { provider: OAuthProvider }) 
             {error}
           </p>
           <button
-            className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+            className="text-sm text-zinc-500 hover:text-foreground"
             onClick={() => router.push('/login')}
             type="button"
           >
@@ -113,7 +113,7 @@ export function OAuthCallbackHandler({ provider }: { provider: OAuthProvider }) 
           </button>
         </>
       ) : (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="text-sm text-muted-foreground">
           {t('auth.signingInWithProvider', { provider: provider.label })}
         </p>
       )}

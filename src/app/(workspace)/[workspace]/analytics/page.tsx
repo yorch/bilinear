@@ -57,7 +57,7 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
       <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{value}</p>
+      <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
       {sub && <p className="mt-0.5 text-xs text-zinc-400">{sub}</p>}
     </div>
   );
@@ -65,7 +65,7 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
 
 function ProgressBar({ pct, color }: { pct: number; color: string }) {
   return (
-    <div className="h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800">
+    <div className="h-1.5 w-full rounded-full bg-muted">
       <div
         className="h-1.5 rounded-full transition-all"
         style={{ backgroundColor: color, width: `${Math.min(pct, 100)}%` }}
@@ -105,7 +105,7 @@ export default function WorkspaceAnalyticsPage() {
     <div className="flex flex-1 flex-col overflow-y-auto">
       {/* Header */}
       <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
-        <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+        <h1 className="text-base font-semibold text-foreground">
           {t('analytics.workspace.title')}
         </h1>
         <p className="mt-0.5 text-xs text-zinc-400">{t('analytics.workspace.subtitle')}</p>
@@ -148,7 +148,7 @@ export default function WorkspaceAnalyticsPage() {
                   {t('analytics.workspace.noTeamsFound')}
                 </p>
               ) : (
-                <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                <div className="divide-y divide-border">
                   {/* Table header */}
                   <div className="grid grid-cols-12 gap-2 px-5 py-2 text-[11px] font-medium uppercase tracking-wider text-zinc-400">
                     <span className="col-span-3">{t('analytics.workspace.team')}</span>
@@ -169,7 +169,7 @@ export default function WorkspaceAnalyticsPage() {
                       key={team.teamId}
                     >
                       <span
-                        className="col-span-3 truncate text-sm font-medium text-zinc-800 dark:text-zinc-100"
+                        className="col-span-3 truncate text-sm font-medium text-foreground"
                         title={team.teamName}
                       >
                         {team.teamName}
@@ -205,10 +205,10 @@ export default function WorkspaceAnalyticsPage() {
                         <ProgressBar
                           color={
                             team.completionRate >= 70
-                              ? '#22c55e'
+                              ? 'var(--chart-actual)'
                               : team.completionRate >= 40
                                 ? '#eab308'
-                                : '#a1a1aa'
+                                : 'var(--chart-grid)'
                           }
                           pct={team.completionRate}
                         />
@@ -236,16 +236,16 @@ export default function WorkspaceAnalyticsPage() {
                         >
                           {team.teamName}
                         </span>
-                        <div className="flex-1 rounded bg-zinc-100 dark:bg-zinc-800">
+                        <div className="flex-1 rounded bg-muted">
                           <div
                             className="h-5 rounded transition-all"
                             style={{
-                              backgroundColor: '#6366f1',
+                              backgroundColor: 'var(--chart-primary)',
                               width: `${Math.max(pct, team.completedCount > 0 ? 2 : 0)}%`,
                             }}
                           />
                         </div>
-                        <span className="w-10 shrink-0 text-right text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                        <span className="w-10 shrink-0 text-right text-xs font-medium text-muted-foreground">
                           {team.completedCount}
                         </span>
                       </div>

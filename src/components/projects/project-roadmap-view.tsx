@@ -78,9 +78,7 @@ export const ProjectRoadmapView = observer(function ProjectRoadmapView({
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          {t('projects.roadmap')}
-        </h2>
+        <h2 className="text-sm font-semibold text-foreground">{t('projects.roadmap')}</h2>
         <p className="text-xs text-zinc-500">{t('projects.roadmapHint')}</p>
       </div>
       <div className="flex-1 overflow-y-auto">

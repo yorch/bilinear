@@ -40,7 +40,7 @@ export function PrioritySelect({
           return (
             <button
               className={cn(
-                'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800',
+                'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent',
                 p === value && 'font-medium',
               )}
               key={p}

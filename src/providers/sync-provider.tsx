@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { createClientLogger } from '@/lib/logger';
 import { SyncManager } from '@/lib/sync-manager';
+import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { WsClient } from '@/lib/ws-client';
 import { useStore } from './store-provider';
@@ -21,6 +23,19 @@ const log = createClientLogger('SyncProvider');
 export function SyncProvider({ children }: { children: React.ReactNode }) {
   const store = useStore();
   const syncManagerRef = useRef<SyncManager | null>(null);
+  const t = useTranslations();
+
+  // Fallback surface for permanent mutation failures whose enqueue site has
+  // no onError (including transactions rehydrated after a reload, whose
+  // callbacks never survive). Without this they fail silently.
+  useEffect(() => {
+    TransactionQueue.setDefaultErrorHandler(err => {
+      toast.error(err.message || t('sync.changeFailed'));
+    });
+    return () => {
+      TransactionQueue.setDefaultErrorHandler(null);
+    };
+  }, [t]);
 
   useEffect(() => {
     let cancelled = false;

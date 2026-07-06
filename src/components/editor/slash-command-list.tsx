@@ -113,7 +113,7 @@ export const SlashCommandList = forwardRef<SlashCommandListHandle, SlashCommandL
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium">{title}</span>
-                  <span className="block truncate text-xs text-zinc-400 dark:text-zinc-500">
+                  <span className="block truncate text-xs text-muted-foreground">
                     {description}
                   </span>
                 </span>

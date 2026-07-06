@@ -83,7 +83,7 @@ function VelocityBarChart({ cycles }: VelocityBarChartProps) {
         const pct = max > 0 ? (c.completedIssues / max) * 100 : 0;
         return (
           <div className="flex flex-1 flex-col items-center gap-1" key={c.cycleId}>
-            <span className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400">
+            <span className="text-[10px] font-medium text-muted-foreground">
               {c.completedIssues > 0 ? c.completedIssues : ''}
             </span>
             <div
@@ -379,13 +379,13 @@ export const CycleDetailView = observer(function CycleDetailView({
           </div>
 
           {cycle.description && (
-            <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">{cycle.description}</p>
+            <p className="mt-4 text-sm text-muted-foreground">{cycle.description}</p>
           )}
 
           {/* Progress */}
           <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              <span className="text-xs font-medium text-muted-foreground">
                 {t('cycles.detail.progress')}
               </span>
               <span className="text-xs tabular-nums text-zinc-500">
@@ -412,7 +412,7 @@ export const CycleDetailView = observer(function CycleDetailView({
                   <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
                     {t('cycles.detail.scope.planned')}
                   </p>
-                  <p className="mt-1 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+                  <p className="mt-1 text-xl font-semibold text-foreground">
                     {scopeMetrics.plannedCount}
                   </p>
                 </div>
@@ -460,7 +460,7 @@ export const CycleDetailView = observer(function CycleDetailView({
           {(isActive || isCompleted) && (
             <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   {chartView === 'burndown' ? t('cycles.burndown.title') : t('cycles.burnup.title')}
                 </h3>
                 <div className="flex rounded-md border border-zinc-200 text-xs dark:border-zinc-700">
@@ -482,7 +482,7 @@ export const CycleDetailView = observer(function CycleDetailView({
                 </div>
               </div>
               {burndownLoading ? (
-                <div className="h-[300px] animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
+                <div className="h-[300px] animate-pulse rounded bg-muted" />
               ) : chartView === 'burndown' ? (
                 <BurndownChart data={burndown ?? []} />
               ) : (
@@ -494,10 +494,10 @@ export const CycleDetailView = observer(function CycleDetailView({
           {/* Velocity / capacity section */}
           {velocity && (
             <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {t('cycles.detail.velocity.title')}
               </h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              <p className="text-xs text-muted-foreground">
                 {t('cycles.detail.velocity.avgLabel')}{' '}
                 <span className="font-medium text-zinc-700 dark:text-zinc-200">
                   {t('cycles.detail.velocity.issuesPerCycle', { count: velocity.averageIssues })}
@@ -506,7 +506,7 @@ export const CycleDetailView = observer(function CycleDetailView({
                   ` (${t('cycles.detail.velocity.basedOnLast', { count: velocity.cycles.length })})`}
               </p>
               {isUpcoming && (
-                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                <p className="mt-0.5 text-xs text-muted-foreground">
                   {t('cycles.detail.velocity.capacityLabel')}{' '}
                   <span className="font-medium text-zinc-700 dark:text-zinc-200">
                     {t('cycles.detail.velocity.approxIssues', { count: velocity.averageIssues })}
@@ -520,7 +520,7 @@ export const CycleDetailView = observer(function CycleDetailView({
           {/* Issues */}
           <div className="mt-6">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {t('cycles.detail.issuesHeading', { count: cycleIssues.length })}
               </h3>
             </div>
@@ -537,7 +537,7 @@ export const CycleDetailView = observer(function CycleDetailView({
                   const team = teamStore.findById(issue.teamId);
                   return (
                     <div
-                      className="group flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                      className="group flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent"
                       key={issue.id}
                     >
                       {state && (

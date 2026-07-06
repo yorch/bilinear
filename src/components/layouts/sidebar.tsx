@@ -25,6 +25,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { LanguageToggle } from '@/components/language-toggle';
+import { ConnectionStatus } from '@/components/layouts/connection-status';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useAuth } from '@/hooks/use-auth';
 import { useTranslations } from '@/hooks/use-translations';
@@ -103,10 +104,8 @@ function favoriteHref(
     return '#';
   }
   switch (e.__typename) {
-    case 'Issue': {
-      const key = findTeamById(e.teamId)?.key;
-      return key ? `${base}/team/${key}/issues/${e.id}` : '#';
-    }
+    case 'Issue':
+      return `${base}/issue/${e.id}`;
     case 'Project':
       return `${base}/project/${e.slugId}`;
     case 'Initiative':
@@ -178,7 +177,7 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
   return (
     <div className="mt-4 px-1.5">
       <div className="mb-1 flex items-center px-2">
-        <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {t('nav.favorites')}
         </span>
       </div>
@@ -255,7 +254,7 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
       {!collapsed && (
         <div className="mt-4 px-1.5">
           <div className="mb-1 flex items-center justify-between px-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {t('nav.teams')}
             </span>
             <button
@@ -498,7 +497,7 @@ export const Sidebar = observer(function Sidebar({
           <PanelLeft className="h-4 w-4" />
         </button>
         {!collapsed && (
-          <span className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+          <span className="truncate text-sm font-semibold text-foreground">
             {syncStore.organizationName ?? workspaceKey ?? APP_NAME}
           </span>
         )}
@@ -555,6 +554,7 @@ function SidebarFooter({
     <div className="border-t border-zinc-200 p-1.5 dark:border-zinc-800">
       {collapsed ? (
         <div className="flex flex-col items-center gap-1">
+          <ConnectionStatus compact />
           <Link
             className={cn(
               'flex items-center justify-center rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
@@ -580,6 +580,7 @@ function SidebarFooter({
         </div>
       ) : (
         <div className="flex flex-col gap-1">
+          <ConnectionStatus />
           <div className="flex items-center justify-between">
             <Link
               className={cn(

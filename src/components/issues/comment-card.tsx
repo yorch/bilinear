@@ -3,8 +3,8 @@
 import { CheckCircle, CornerDownRight, MoreHorizontal, Smile } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { SelectPopover } from '@/components/ui/select-popover';
 import { useFormatters } from '@/hooks/use-formatters';
-import { usePopover } from '@/hooks/use-popover';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { COMMENT_UPDATE_MUTATION, CONVERT_TO_SUB_ISSUE_MUTATION } from '@/lib/graphql-queries';
@@ -86,8 +86,6 @@ export function CommentCard({
   const [editBody, setEditBody] = useState(comment.body);
   const [replyBody, setReplyBody] = useState('');
   const [replySubmitting, setReplySubmitting] = useState(false);
-  const { open: showMenu, setOpen: setShowMenu, ref: menuRef } = usePopover();
-  const { open: showEmojiPicker, setOpen: setShowEmojiPicker, ref: emojiRef } = usePopover();
 
   const isOwn = comment.author.id === currentUserId;
   const isResolved = !!comment.resolvedAt;
@@ -138,7 +136,6 @@ export function CommentCard({
   };
 
   const handleConvertToSubIssue = async () => {
-    setShowMenu(false);
     if (!teamId) {
       toast.error(t('issueDetail.comments.cannotConvertTeamUnresolved'));
       return;
@@ -195,29 +192,27 @@ export function CommentCard({
           {/* Actions */}
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
             {/* Emoji reaction */}
-            <div className="relative" ref={emojiRef}>
-              <button
-                className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
-                onClick={() => setShowEmojiPicker(v => !v)}
-                title={t('issueDetail.comments.react')}
-                type="button"
-              >
-                <Smile className="h-3.5 w-3.5" />
-              </button>
-              {showEmojiPicker && (
-                <div className="absolute right-0 top-6 z-50 flex gap-1 rounded-lg border border-zinc-200 bg-white p-1.5 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+            <SelectPopover
+              align="right"
+              panelClassName="flex gap-1 p-1.5"
+              triggerChildren={<Smile className="h-3.5 w-3.5" />}
+              triggerClassName="p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
+              triggerTitle={t('issueDetail.comments.react')}
+            >
+              {close => (
+                <>
                   {QUICK_EMOJIS.map(emoji => {
                     const info = reactionCounts[emoji];
                     return (
                       <button
                         className={cn(
-                          'rounded px-1 py-0.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700',
+                          'rounded px-1 py-0.5 text-sm hover:bg-accent',
                           info?.reacted && 'bg-indigo-100 dark:bg-indigo-900/30',
                         )}
                         key={emoji}
                         onClick={() => {
                           onToggleReaction(comment.id, emoji, info?.reacted ?? false);
-                          setShowEmojiPicker(false);
+                          close();
                         }}
                         type="button"
                       >
@@ -225,9 +220,9 @@ export function CommentCard({
                       </button>
                     );
                   })}
-                </div>
+                </>
               )}
-            </div>
+            </SelectPopover>
 
             {/* Quote reply */}
             {depth === 0 && (
@@ -259,22 +254,20 @@ export function CommentCard({
             </button>
 
             {/* More menu (edit/delete/convert) */}
-            <div className="relative" ref={menuRef}>
-              <button
-                className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
-                onClick={() => setShowMenu(v => !v)}
-                type="button"
-              >
-                <MoreHorizontal className="h-3.5 w-3.5" />
-              </button>
-              {showMenu && (
-                <div className="absolute right-0 top-6 z-50 min-w-[160px] rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+            <SelectPopover
+              align="right"
+              panelClassName="min-w-[160px] py-1"
+              triggerChildren={<MoreHorizontal className="h-3.5 w-3.5" />}
+              triggerClassName="p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
+            >
+              {close => (
+                <>
                   {isOwn && (
                     <button
                       className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
                       onClick={() => {
                         setEditing(true);
-                        setShowMenu(false);
+                        close();
                       }}
                       type="button"
                     >
@@ -285,7 +278,10 @@ export function CommentCard({
                   {depth === 0 && (
                     <button
                       className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
-                      onClick={handleConvertToSubIssue}
+                      onClick={() => {
+                        handleConvertToSubIssue();
+                        close();
+                      }}
                       type="button"
                     >
                       {t('issueDetail.comments.convertToSubIssue')}
@@ -296,16 +292,16 @@ export function CommentCard({
                       className="w-full px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
                       onClick={() => {
                         onDelete(comment.id);
-                        setShowMenu(false);
+                        close();
                       }}
                       type="button"
                     >
                       {t('common.delete')}
                     </button>
                   )}
-                </div>
+                </>
               )}
-            </div>
+            </SelectPopover>
           </div>
         </div>
 
@@ -322,7 +318,7 @@ export function CommentCard({
             />
             <div className="flex gap-2">
               <button
-                className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700"
+                className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-white hover:bg-primary/90"
                 onClick={saveEdit}
                 type="button"
               >

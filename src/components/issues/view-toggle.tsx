@@ -14,7 +14,7 @@ interface ViewToggleProps {
 export function ViewToggle({ mode, onChange }: ViewToggleProps) {
   const t = useTranslations();
   return (
-    <div className="flex items-center rounded-md border border-zinc-200 dark:border-zinc-700">
+    <div className="flex items-center rounded-md border border-border">
       <button
         className={cn(
           'flex items-center justify-center rounded-l-md px-2 py-1 transition-colors',

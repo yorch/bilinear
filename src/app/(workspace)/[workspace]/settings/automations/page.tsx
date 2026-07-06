@@ -148,13 +148,11 @@ export default function AutomationsSettingsPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-6">
-      <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-        {t('settings.automations.title')}
-      </h1>
+      <h1 className="text-lg font-semibold text-foreground">{t('settings.automations.title')}</h1>
       <p className="mt-1 text-sm text-zinc-500">{t('settings.automations.description')}</p>
 
       <section className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+        <h2 className="text-sm font-semibold text-foreground">
           {t('settings.automations.createRule')}
         </h2>
         <form className="mt-3 flex flex-col gap-3" onSubmit={handleCreate}>
@@ -200,7 +198,7 @@ export default function AutomationsSettingsPage() {
             value={actionConfigText}
           />
           <button
-            className="self-start rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+            className="self-start rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary/90 disabled:opacity-50"
             disabled={creating || !name}
             type="submit"
           >
@@ -212,7 +210,7 @@ export default function AutomationsSettingsPage() {
       </section>
 
       <section className="mt-6">
-        <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+        <h2 className="mb-3 text-sm font-semibold text-foreground">
           {t('settings.automations.rulesCount', { count: data?.automationRules.length ?? 0 })}
         </h2>
         {data?.automationRules.length === 0 ? (
@@ -237,9 +235,7 @@ export default function AutomationsSettingsPage() {
                   {rule.enabled ? '🟢' : '⚪️'}
                 </button>
                 <div className="flex-1">
-                  <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                    {rule.name}
-                  </div>
+                  <div className="text-sm font-medium text-foreground">{rule.name}</div>
                   <div className="text-xs text-zinc-500">
                     {t('settings.automations.when')}{' '}
                     <code className="font-mono">{rule.triggerType}</code> →{' '}

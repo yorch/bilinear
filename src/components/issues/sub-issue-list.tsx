@@ -96,10 +96,10 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
         </button>
         {subIssues.length > 0 && (
           <div className="flex items-center gap-2">
-            <span className="text-xs tabular-nums text-zinc-400 dark:text-zinc-500">
+            <span className="text-xs tabular-nums text-muted-foreground">
               {completedCount}/{subIssues.length}
             </span>
-            <div className="h-1 w-20 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <div className="h-1 w-20 overflow-hidden rounded-full bg-muted">
               <div
                 className="h-full rounded-full bg-green-500 transition-all duration-300"
                 style={{ width: `${completionPct}%` }}
@@ -139,7 +139,7 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
             }
             return (
               <div key={category}>
-                <p className="mb-1 text-xs font-medium text-zinc-400 dark:text-zinc-500">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">
                   {STATE_CATEGORY_LABELS[category] ?? category}
                 </p>
                 <ul className="space-y-0.5">
@@ -148,7 +148,7 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
                     const state = workflowStateStore.findById(issue.stateId);
                     return (
                       <li
-                        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
                         key={issue.id}
                       >
                         {/* Priority dot */}
@@ -269,6 +269,10 @@ function CreateSubIssueForm({
         onChange={e => setTitle(e.target.value)}
         onKeyDown={e => {
           if (e.key === 'Escape') {
+            // Consume the keypress so the detail panel's window-level
+            // Escape listener doesn't also close the whole panel.
+            e.preventDefault();
+            e.stopPropagation();
             onClose();
           }
         }}
@@ -285,7 +289,7 @@ function CreateSubIssueForm({
         {t('common.cancel')}
       </button>
       <button
-        className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+        className="rounded bg-primary px-2 py-1 text-xs font-medium text-white hover:bg-primary/90 disabled:opacity-50"
         disabled={!title.trim() || submitting}
         type="submit"
       >

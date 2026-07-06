@@ -7,6 +7,7 @@ import { useCallback, useState } from 'react';
 import { CreateProjectModal } from '@/components/projects/create-project-modal';
 import { ProjectListView } from '@/components/projects/project-list-view';
 import { ProjectRoadmapView } from '@/components/projects/project-roadmap-view';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -33,6 +34,7 @@ const PROJECT_CREATE_MUTATION = `
 
 export default observer(function ProjectsPage() {
   const t = useTranslations();
+  useDocumentTitle(t('nav.projects'));
   const { workspace } = useParams<{ workspace: string }>();
   const { uiStore } = useStore();
   const [layout, setLayout] = useState<ProjectsLayout>(() => {
@@ -74,9 +76,7 @@ export default observer(function ProjectsPage() {
   return (
     <>
       <div className="flex h-12 items-center gap-2 border-b border-zinc-200 px-4 dark:border-zinc-800">
-        <h1 className="flex-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          {t('projects.title')}
-        </h1>
+        <h1 className="flex-1 text-sm font-semibold text-foreground">{t('projects.title')}</h1>
         <div className="flex rounded-md border border-zinc-200 p-0.5 dark:border-zinc-800">
           <button
             aria-label={t('projects.listView')}
@@ -84,7 +84,7 @@ export default observer(function ProjectsPage() {
               'flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors',
               layout === 'list'
                 ? 'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
-                : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100',
+                : 'text-zinc-500 hover:text-foreground',
             )}
             onClick={() => setLayoutPersisted('list')}
             type="button"
@@ -98,7 +98,7 @@ export default observer(function ProjectsPage() {
               'flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors',
               layout === 'roadmap'
                 ? 'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
-                : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100',
+                : 'text-zinc-500 hover:text-foreground',
             )}
             onClick={() => setLayoutPersisted('roadmap')}
             type="button"
@@ -108,7 +108,7 @@ export default observer(function ProjectsPage() {
           </button>
         </div>
         <button
-          className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-700"
+          className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-primary/90"
           onClick={() => uiStore.openCreateProjectModal()}
           type="button"
         >

@@ -134,7 +134,7 @@ export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
       <div className="w-full max-w-xl overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          <h2 className="text-sm font-semibold text-foreground">
             {t('layout.shortcutHelp.title')}
           </h2>
           <button

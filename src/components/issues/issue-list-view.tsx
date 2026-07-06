@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useTranslations } from '@/hooks/use-translations';
 import type { ColumnKey } from '@/hooks/use-visible-columns';
 import type { DBCustomFieldDefinition } from '@/lib/db';
@@ -75,6 +76,13 @@ export function IssueListView({
     setCheckedIds(new Set());
     lastCheckedIndexRef.current = -1;
   }, [issueIds]);
+
+  const selectAll = () => setCheckedIds(new Set(issues.map(i => i.id)));
+
+  useHotkeys(['meta+a', 'ctrl+a'], selectAll, { enabled: Boolean(onBulkUpdate) }, [
+    issues,
+    onBulkUpdate,
+  ]);
 
   function handleCheck(issueId: string, shiftKey: boolean) {
     if (!onBulkUpdate) {
@@ -200,30 +208,44 @@ export function IssueListView({
         />
       ))}
 
-      {ctxMenu && (
-        <IssueContextMenu
-          identifier={ctxMenu.identifier}
-          issueId={ctxMenu.issueId}
-          onArchive={() => onArchive?.(ctxMenu.issueId)}
-          onClose={() => setCtxMenu(null)}
-          onDelete={() => onDelete?.(ctxMenu.issueId)}
-          onOpen={() => onOpen(ctxMenu.issueId)}
-          title={ctxMenu.title}
-          x={ctxMenu.x}
-          y={ctxMenu.y}
-        />
-      )}
+      {ctxMenu &&
+        (() => {
+          const ctxIssue = issues.find(i => i.id === ctxMenu.issueId);
+          return (
+            <IssueContextMenu
+              currentAssigneeId={ctxIssue?.assigneeId}
+              currentLabelIds={ctxIssue?.labels.map(l => l.id)}
+              currentPriority={ctxIssue?.priority}
+              currentStateId={ctxIssue?.stateId}
+              identifier={ctxMenu.identifier}
+              issueId={ctxMenu.issueId}
+              labels={labels}
+              onArchive={() => onArchive?.(ctxMenu.issueId)}
+              onClose={() => setCtxMenu(null)}
+              onDelete={() => onDelete?.(ctxMenu.issueId)}
+              onOpen={() => onOpen(ctxMenu.issueId)}
+              onUpdate={patch => onUpdate(ctxMenu.issueId, patch)}
+              states={states}
+              title={ctxMenu.title}
+              users={users}
+              x={ctxMenu.x}
+              y={ctxMenu.y}
+            />
+          );
+        })()}
 
       {onBulkUpdate && checkedIds.size > 0 && (
         <BulkActionBar
           count={checkedIds.size}
           labels={labels}
           onClear={() => setCheckedIds(new Set())}
+          onSelectAll={selectAll}
           onUpdate={patch => {
             onBulkUpdate([...checkedIds], patch);
             setCheckedIds(new Set());
           }}
           states={states}
+          totalCount={issues.length}
           users={users}
         />
       )}

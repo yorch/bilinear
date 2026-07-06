@@ -3,6 +3,7 @@
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
 import { InitiativeUpdatesSection } from '@/components/initiatives/initiative-updates-section';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBInitiative } from '@/lib/db';
 import { gql } from '@/lib/graphql';
@@ -87,9 +88,9 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
 
   const indentPx = depth * 20;
   return (
-    <div className="border-b border-zinc-100 dark:border-zinc-800">
+    <div className="border-b border-border">
       <button
-        className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
+        className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-accent/50"
         onClick={() => setExpanded(e => !e)}
         style={{ paddingLeft: `${16 + indentPx}px` }}
         type="button"
@@ -106,11 +107,11 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
           style={{ backgroundColor: initiative.color }}
         />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          <span className="block truncate text-sm font-medium text-foreground">
             {initiative.name}
           </span>
           {initiative.description ? (
-            <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">
+            <span className="block truncate text-xs text-muted-foreground">
               {initiative.description}
             </span>
           ) : null}
@@ -118,12 +119,10 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
         <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
           {STATUS_LABELS[initiative.status] ?? initiative.status}
         </span>
-        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+        <span className="text-xs text-muted-foreground">
           {Math.round(initiative.progress * 100)}%
         </span>
-        <span className="w-20 text-xs text-zinc-400 dark:text-zinc-500">
-          {initiative.targetDate ?? ''}
-        </span>
+        <span className="w-20 text-xs text-muted-foreground">{initiative.targetDate ?? ''}</span>
       </button>
       {expanded ? (
         <div className="px-12 pb-3">
@@ -140,7 +139,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
             </button>
           </div>
           {adding ? (
-            <div className="mb-2 max-h-40 overflow-y-auto rounded border border-zinc-200 dark:border-zinc-700">
+            <div className="mb-2 max-h-40 overflow-y-auto rounded border border-border">
               {allProjects.length === 0 ? (
                 <div className="px-3 py-2 text-xs text-zinc-400">
                   {t('initiatives.row.noProjectsToAdd')}
@@ -148,7 +147,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
               ) : (
                 allProjects.map(p => (
                   <button
-                    className="block w-full px-3 py-1.5 text-left text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    className="block w-full px-3 py-1.5 text-left text-xs hover:bg-accent"
                     key={p.id}
                     onClick={async () => {
                       const res = await gql(INITIATIVE_ADD_PROJECT_MUTATION, {
@@ -213,7 +212,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
           <div className="mt-3 flex gap-1">
             {STATUS_ORDER.map(s => (
               <button
-                className={`rounded border px-2 py-0.5 text-xs ${initiative.status === s ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300' : 'border-zinc-300 dark:border-zinc-700'}`}
+                className={`rounded border px-2 py-0.5 text-xs ${initiative.status === s ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300' : 'border-border'}`}
                 key={s}
                 onClick={async () => {
                   await gql(INITIATIVE_UPDATE_MUTATION, {
@@ -240,6 +239,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
 
 const InitiativesPage = observer(function InitiativesPage() {
   const t = useTranslations();
+  useDocumentTitle(t('initiatives.page.title'));
   const STATUS_LABELS = useStatusLabels();
   const { initiativeStore, syncStore } = useStore();
   const [creating, setCreating] = useState(false);
@@ -286,11 +286,9 @@ const InitiativesPage = observer(function InitiativesPage() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
-        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          {t('initiatives.page.title')}
-        </h1>
+        <h1 className="text-sm font-semibold text-foreground">{t('initiatives.page.title')}</h1>
         <button
-          className="rounded bg-indigo-600 px-2.5 py-1 text-xs text-white hover:bg-indigo-700"
+          className="rounded bg-primary px-2.5 py-1 text-xs text-white hover:bg-primary/90"
           onClick={() => setCreating(c => !c)}
           type="button"
         >
@@ -316,7 +314,7 @@ const InitiativesPage = observer(function InitiativesPage() {
             value={name}
           />
           <button
-            className="rounded bg-indigo-600 px-2.5 py-1 text-xs text-white hover:bg-indigo-700"
+            className="rounded bg-primary px-2.5 py-1 text-xs text-white hover:bg-primary/90"
             onClick={handleCreate}
             type="button"
           >
@@ -327,7 +325,7 @@ const InitiativesPage = observer(function InitiativesPage() {
 
       <div className="flex-1 overflow-y-auto">
         {grouped.length === 0 ? (
-          <div className="flex items-center justify-center py-20 text-sm text-zinc-400 dark:text-zinc-500">
+          <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
             {t('initiatives.page.empty')}
           </div>
         ) : (
@@ -337,9 +335,7 @@ const InitiativesPage = observer(function InitiativesPage() {
                 <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
                   {STATUS_LABELS[status]}
                 </span>
-                <span className="ml-2 text-xs text-zinc-400 dark:text-zinc-500">
-                  {items.length}
-                </span>
+                <span className="ml-2 text-xs text-muted-foreground">{items.length}</span>
               </div>
               {items.map(initiative => (
                 <InitiativeRow initiative={initiative} key={initiative.id} />

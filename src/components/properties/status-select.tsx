@@ -50,7 +50,7 @@ export function StatusSelect({
       triggerChildren={
         <>
           {current && <StatusDot color={current.color} />}
-          <span className="text-zinc-600 dark:text-zinc-400">{current?.name ?? '—'}</span>
+          <span className="text-muted-foreground">{current?.name ?? '—'}</span>
         </>
       }
       triggerClassName="gap-1.5 px-1.5 py-1 text-xs"
@@ -60,7 +60,7 @@ export function StatusSelect({
         states.map(state => (
           <button
             className={cn(
-              'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800',
+              'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent',
               state.id === value && 'font-medium',
             )}
             key={state.id}

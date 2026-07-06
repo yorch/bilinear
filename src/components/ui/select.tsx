@@ -43,9 +43,9 @@ export function SimpleSelect({
         className={cn(
           'flex items-center gap-1.5 text-sm outline-none',
           variant === 'default' &&
-            'w-full justify-between rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-zinc-900 hover:border-zinc-300 dark:border-zinc-700 dark:text-zinc-100 dark:hover:border-zinc-600',
+            'w-full justify-between rounded-md border border-input bg-transparent px-3 py-1.5 text-foreground hover:border-ring',
           variant === 'ghost' &&
-            'rounded px-1.5 py-0.5 font-medium text-zinc-900 hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800',
+            'rounded px-1.5 py-0.5 font-medium text-foreground hover:bg-accent',
         )}
         id={id}
         onClick={() => setOpen(o => !o)}
@@ -54,7 +54,7 @@ export function SimpleSelect({
         <span>{current?.label ?? placeholder ?? '—'}</span>
         <ChevronDown
           className={cn(
-            'h-3.5 w-3.5 shrink-0 text-zinc-400 transition-transform',
+            'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
             open && 'rotate-180',
           )}
         />
@@ -63,13 +63,13 @@ export function SimpleSelect({
       {open && (
         <div
           className={cn(
-            'absolute left-0 z-50 min-w-full rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900',
+            'absolute left-0 z-50 min-w-full rounded-md border border-border bg-popover py-1 shadow-lg',
             placement === 'bottom' ? 'top-full mt-1' : 'bottom-full mb-1',
           )}
         >
           {placeholder && (
             <button
-              className="flex w-full cursor-default items-center px-3 py-1.5 text-sm text-zinc-400"
+              className="flex w-full cursor-default items-center px-3 py-1.5 text-sm text-muted-foreground"
               disabled
               type="button"
             >
@@ -79,10 +79,8 @@ export function SimpleSelect({
           {options.map(opt => (
             <button
               className={cn(
-                'flex w-full items-center px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800',
-                opt.value === value
-                  ? 'font-medium text-zinc-900 dark:text-zinc-100'
-                  : 'text-zinc-700 dark:text-zinc-300',
+                'flex w-full items-center px-3 py-1.5 text-sm text-foreground hover:bg-accent',
+                opt.value === value && 'font-medium',
               )}
               key={opt.value}
               onClick={() => {

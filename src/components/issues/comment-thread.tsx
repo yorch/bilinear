@@ -149,7 +149,7 @@ export function CommentThread({
             <div className="h-7 w-7 shrink-0 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-700" />
             <div className="flex-1 space-y-2">
               <div className="h-3 w-32 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" />
-              <div className="h-12 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
+              <div className="h-12 animate-pulse rounded bg-muted" />
             </div>
           </div>
         ))}

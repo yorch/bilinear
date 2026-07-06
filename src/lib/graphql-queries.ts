@@ -255,6 +255,15 @@ export const ISSUE_ARCHIVE_MUTATION = `
   }
 `;
 
+export const ISSUE_UNARCHIVE_MUTATION = `
+  mutation IssueUnarchive($id: ID!) {
+    issueUnarchive(id: $id) {
+      success
+      lastSyncId
+    }
+  }
+`;
+
 // ── Comments ─────────────────────────────────────────────────────────────────
 
 const COMMENTS_FRAGMENT = `

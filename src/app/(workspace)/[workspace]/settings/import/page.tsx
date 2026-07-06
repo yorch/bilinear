@@ -153,8 +153,8 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
   }
 
   const inputCls = cn(
-    'rounded-md border border-zinc-200 dark:border-zinc-700 bg-transparent',
-    'px-2 py-1 text-sm text-zinc-900 dark:text-zinc-100',
+    'rounded-md border border-border bg-transparent',
+    'px-2 py-1 text-sm text-foreground',
     'focus:outline-none focus:ring-1 focus:ring-indigo-500',
   );
 
@@ -225,7 +225,7 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
               ))}
             </div>
             <button
-              className="rounded-md bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+              className="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
               disabled={importing || !mapping.title}
               onClick={() => void runImport()}
               type="button"

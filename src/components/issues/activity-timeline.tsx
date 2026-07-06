@@ -164,10 +164,10 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
 
             {/* Content */}
             <div className={cn('min-w-0 flex-1 pb-3', isLast && 'pb-0')}>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400">
+              <p className="text-xs text-muted-foreground">
                 {formatActivityDescription(activity, t)}
               </p>
-              <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
+              <p className="mt-0.5 text-xs text-muted-foreground">
                 {formatRelativeTime(activity.createdAt)}
               </p>
             </div>

@@ -59,3 +59,18 @@ export function formatDueDate(
   }
   return format(new Date(dueDate), 'MMM d', dateFnsLocale ? { locale: dateFnsLocale } : undefined);
 }
+
+/**
+ * Derives a git-friendly branch name from an issue, e.g. `eng-123-fix-login-bug`.
+ * Mirrors Linear's "Copy git branch name" — purely a client-side slug, not
+ * backed by the (currently unused) `branchName` DB column.
+ */
+export function getBranchName(identifier: string, title: string): string {
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 50)
+    .replace(/-+$/g, '');
+  return slug ? `${identifier.toLowerCase()}-${slug}` : identifier.toLowerCase();
+}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { ISSUE_TEMPLATES_QUERY } from '@/lib/graphql-queries';
@@ -14,8 +15,19 @@ import { LabelSelect } from '../properties/label-select';
 import { PrioritySelect } from '../properties/priority-select';
 import { ProjectSelect } from '../properties/project-select';
 import { StatusSelect } from '../properties/status-select';
+import { Button } from '../ui/button';
 import { ModalDialog } from '../ui/modal-dialog';
+import { Switch } from '../ui/switch';
 import { TemplateSelector } from './template-selector';
+
+const CREATE_MORE_STORAGE_KEY = 'bilinear:create-issue:create-more';
+
+function loadCreateMore(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return window.localStorage.getItem(CREATE_MORE_STORAGE_KEY) === '1';
+}
 
 interface FormState {
   assigneeId: string | null;
@@ -41,7 +53,7 @@ function initialForm(defaultStateId?: string, firstStateId?: string): FormState 
   };
 }
 
-interface CreateIssueInput {
+export interface CreateIssueInput {
   assigneeId?: string;
   description?: string;
   dueDate?: string | null;
@@ -80,6 +92,8 @@ export function CreateIssueModal({
   const [templateOpen, setTemplateOpen] = useState(false);
   const [aiAvailable, setAiAvailable] = useState(false);
   const [suggestingTitle, setSuggestingTitle] = useState(false);
+  const [createMore, setCreateMore] = useState(loadCreateMore);
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   // Synchronous re-entry guard. The disabled prop on the submit button
   // races React's state-update commit, so a fast double click (notably
   // under Firefox + Playwright) can dispatch two handleSubmit runs before
@@ -223,18 +237,50 @@ export function CreateIssueModal({
         stateId: form.stateId || undefined,
         title: form.title.trim(),
       });
-      onClose();
+      if (createMore) {
+        toast.success(t('issueDetail.createModal.issueCreated'));
+        setForm(initialForm(defaultStateId, states[0]?.id));
+        setTemplateOpen(false);
+        titleRef.current?.focus();
+      } else {
+        onClose();
+      }
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
     }
   };
 
+  // Bare-minimum text content, stripped of TipTap's HTML wrapper — an empty
+  // editor still emits '<p></p>', which would otherwise read as dirty.
+  const descriptionText = form.description.replace(/<[^>]+>/g, '').trim();
+  const isDirty =
+    form.title.trim() !== '' ||
+    descriptionText !== '' ||
+    form.assigneeId !== null ||
+    form.dueDate !== null ||
+    form.labelIds.length > 0 ||
+    form.priority !== 0 ||
+    form.projectId !== null;
+
+  const requestClose = () => {
+    if (isDirty) {
+      setConfirmingDiscard(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleCreateMoreChange = (checked: boolean) => {
+    setCreateMore(checked);
+    window.localStorage.setItem(CREATE_MORE_STORAGE_KEY, checked ? '1' : '0');
+  };
+
   return (
     <ModalDialog
       aria-label={t('issueDetail.createModal.createIssue')}
       maxWidth="lg"
-      onClose={onClose}
+      onClose={requestClose}
       open={open}
     >
       <form className="flex flex-col" onSubmit={handleSubmit}>
@@ -269,7 +315,7 @@ export function CreateIssueModal({
         {/* Description */}
         <div className="px-5 pt-2">
           <TipTapEditor
-            className="text-sm text-zinc-600 dark:text-zinc-400"
+            className="text-sm text-muted-foreground"
             content={form.description}
             onChange={html => patchForm({ description: html })}
             placeholder={t('issueDetail.createModal.descriptionPlaceholder')}
@@ -307,28 +353,38 @@ export function CreateIssueModal({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
-          <button
-            className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-            onClick={onClose}
-            type="button"
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            className={cn(
-              'rounded-md px-4 py-1.5 text-sm font-medium text-white transition-colors',
-              'bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed',
-            )}
-            disabled={!form.title.trim() || submitting}
-            type="submit"
-          >
-            {submitting
-              ? t('issueDetail.createModal.creating')
-              : t('issueDetail.createModal.createIssue')}
-          </button>
+        <div className="flex items-center justify-between gap-2 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
+          <span className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Switch
+              aria-label={t('issueDetail.createModal.createMore')}
+              checked={createMore}
+              onCheckedChange={handleCreateMoreChange}
+            />
+            {t('issueDetail.createModal.createMore')}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button onClick={requestClose} size="sm" type="button" variant="ghost">
+              {t('common.cancel')}
+            </Button>
+            <Button disabled={!form.title.trim() || submitting} size="sm" type="submit">
+              {submitting
+                ? t('issueDetail.createModal.creating')
+                : t('issueDetail.createModal.createIssue')}
+            </Button>
+          </div>
         </div>
       </form>
+      <ConfirmDialog
+        confirmLabel={t('issueDetail.createModal.discard')}
+        message={t('issueDetail.createModal.discardConfirmBody')}
+        onCancel={() => setConfirmingDiscard(false)}
+        onConfirm={() => {
+          setConfirmingDiscard(false);
+          onClose();
+        }}
+        open={confirmingDiscard}
+        title={t('issueDetail.createModal.discardConfirmTitle')}
+      />
     </ModalDialog>
   );
 }

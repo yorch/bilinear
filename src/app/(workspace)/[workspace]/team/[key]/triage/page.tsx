@@ -3,11 +3,15 @@
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { IssuePicker } from '@/components/issues/issue-picker';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { useTranslations } from '@/hooks/use-translations';
+import type { DBIssue } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 /**
@@ -140,6 +144,8 @@ const TriagePage = observer(function TriagePage() {
   const t = useTranslations();
   const { formatDate } = useFormatters();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [duplicatePickerFor, setDuplicatePickerFor] = useState<string | null>(null);
 
   const team = teamStore.findByKey(teamKey);
   const teamId = team?.id ?? null;
@@ -179,6 +185,11 @@ const TriagePage = observer(function TriagePage() {
           )
           .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
+  // Falls back to the first row whenever the explicitly-focused issue has
+  // left the queue (accepted/declined/snoozed elsewhere, or on first load).
+  const focusedIndex = queue.findIndex(i => i.id === focusedId);
+  const effectiveFocusedId = focusedIndex >= 0 ? focusedId : (queue[0]?.id ?? null);
+
   /** Snapshot the issue so we can roll back optimistic edits on error. */
   const handleAccept = useCallback(
     async (issueId: string) => {
@@ -203,7 +214,7 @@ const TriagePage = observer(function TriagePage() {
         if (snapshot) {
           issueStore.optimisticUpdate(issueId, snapshot);
         }
-        toast.error(err instanceof Error ? err.message : t('settings.triage.acceptFailed'));
+        toast.error(getErrorMessage(err, t('settings.triage.acceptFailed')));
       } finally {
         setBusyId(null);
       }
@@ -232,7 +243,7 @@ const TriagePage = observer(function TriagePage() {
         if (snapshot) {
           issueStore.optimisticUpdate(issueId, snapshot);
         }
-        toast.error(err instanceof Error ? err.message : t('settings.triage.declineFailed'));
+        toast.error(getErrorMessage(err, t('settings.triage.declineFailed')));
       } finally {
         setBusyId(null);
       }
@@ -260,7 +271,7 @@ const TriagePage = observer(function TriagePage() {
         if (snapshot) {
           issueStore.optimisticUpdate(issueId, snapshot);
         }
-        toast.error(err instanceof Error ? err.message : t('settings.triage.snoozeFailed'));
+        toast.error(getErrorMessage(err, t('settings.triage.snoozeFailed')));
       } finally {
         setBusyId(null);
       }
@@ -268,21 +279,8 @@ const TriagePage = observer(function TriagePage() {
     [issueStore, t],
   );
 
-  const handleMarkDuplicate = useCallback(
-    async (issueId: string) => {
-      // Minimal UX: prompt for the canonical identifier (e.g. "ENG-42").
-      // The user resolves the lookup against the local issue store; the
-      // resolver re-validates org/team membership server-side.
-      const input = window.prompt(t('settings.triage.markDuplicatePrompt'));
-      if (!input) {
-        return;
-      }
-      const ident = input.trim().toUpperCase();
-      const canonical = Array.from(issueStore.pool.values()).find(i => i.identifier === ident);
-      if (!canonical) {
-        toast.error(t('settings.triage.issueNotFound', { identifier: ident }));
-        return;
-      }
+  const submitMarkDuplicate = useCallback(
+    async (issueId: string, canonical: DBIssue) => {
       if (canonical.id === issueId) {
         toast.error(t('settings.triage.cannotMarkDuplicateOfItself'));
         return;
@@ -303,17 +301,84 @@ const TriagePage = observer(function TriagePage() {
               t('settings.triage.markDuplicateFailed'),
           );
         }
-        toast.success(t('settings.triage.markedAsDuplicate', { identifier: ident }));
+        toast.success(t('settings.triage.markedAsDuplicate', { identifier: canonical.identifier }));
       } catch (err) {
         if (snapshot) {
           issueStore.optimisticUpdate(issueId, snapshot);
         }
-        toast.error(err instanceof Error ? err.message : t('settings.triage.markDuplicateFailed'));
+        toast.error(getErrorMessage(err, t('settings.triage.markDuplicateFailed')));
       } finally {
         setBusyId(null);
+        setDuplicatePickerFor(null);
       }
     },
     [issueStore, t],
+  );
+
+  const handleMarkDuplicate = useCallback((issueId: string) => {
+    setDuplicatePickerFor(issueId);
+  }, []);
+
+  // j/k — move focus within the queue; a/d/s/m act on the focused issue.
+  // Snooze defaults to the shortest preset since a keyboard shortcut can't
+  // drive the picker popover; the button remains for the other presets.
+  useHotkeys(
+    'j',
+    () => {
+      const next = Math.min(focusedIndex + 1, queue.length - 1);
+      setFocusedId(queue[next]?.id ?? null);
+    },
+    { enabled: queue.length > 0 },
+    [focusedIndex, queue],
+  );
+  useHotkeys(
+    'k',
+    () => {
+      const prev = Math.max(focusedIndex - 1, 0);
+      setFocusedId(queue[prev]?.id ?? null);
+    },
+    { enabled: queue.length > 0 },
+    [focusedIndex, queue],
+  );
+  useHotkeys(
+    'a',
+    () => {
+      if (effectiveFocusedId && !busyId) {
+        handleAccept(effectiveFocusedId);
+      }
+    },
+    { enabled: queue.length > 0 && Boolean(defaultTargetStateId) },
+    [effectiveFocusedId, busyId, handleAccept, queue.length, defaultTargetStateId],
+  );
+  useHotkeys(
+    'd',
+    () => {
+      if (effectiveFocusedId && !busyId) {
+        handleDecline(effectiveFocusedId);
+      }
+    },
+    { enabled: queue.length > 0 },
+    [effectiveFocusedId, busyId, handleDecline, queue.length],
+  );
+  useHotkeys(
+    's',
+    () => {
+      if (effectiveFocusedId && !busyId) {
+        handleSnooze(effectiveFocusedId, SNOOZE_PRESETS[0].hours);
+      }
+    },
+    { enabled: queue.length > 0 },
+    [effectiveFocusedId, busyId, handleSnooze, queue.length],
+  );
+  useHotkeys(
+    'm',
+    () => {
+      if (effectiveFocusedId && !busyId) {
+        handleMarkDuplicate(effectiveFocusedId);
+      }
+    },
+    { enabled: queue.length > 0 },
+    [effectiveFocusedId, busyId, handleMarkDuplicate, queue.length],
   );
 
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
@@ -346,37 +411,39 @@ const TriagePage = observer(function TriagePage() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
-        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+        <h1 className="text-sm font-semibold text-foreground">
           {t('settings.triage.pageTitle', { name: team.displayName ?? team.name })}
         </h1>
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">
+        <span className="text-xs text-muted-foreground">
           {t('settings.triage.toTriageCount', { count: queue.length })}
         </span>
       </div>
 
       <div className="flex-1 overflow-y-auto">
         {queue.length === 0 ? (
-          <div className="flex items-center justify-center py-20 text-sm text-zinc-400 dark:text-zinc-500">
+          <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
             {t('settings.triage.allClear')}
           </div>
         ) : (
           queue.map(issue => {
             const creator = issue.creatorId ? userStore.findById(issue.creatorId) : null;
             const busy = busyId === issue.id;
+            const focused = issue.id === effectiveFocusedId;
             return (
               <div
-                className="flex items-center gap-3 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800"
+                className={cn(
+                  'flex items-center gap-3 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800',
+                  focused && 'bg-accent/50',
+                )}
                 key={issue.id}
               >
-                <span className="w-16 flex-shrink-0 text-xs text-zinc-400 dark:text-zinc-500">
+                <span className="w-16 flex-shrink-0 text-xs text-muted-foreground">
                   {issue.identifier}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm text-zinc-900 dark:text-zinc-100">
-                    {issue.title}
-                  </div>
+                  <div className="truncate text-sm text-foreground">{issue.title}</div>
                   {creator ? (
-                    <div className="text-xs text-zinc-400 dark:text-zinc-500">
+                    <div className="text-xs text-muted-foreground">
                       {t('settings.triage.fromCreator', {
                         date: formatDate(issue.createdAt),
                         name: creator.displayName,
@@ -386,7 +453,7 @@ const TriagePage = observer(function TriagePage() {
                 </div>
                 <div className="flex flex-shrink-0 gap-1">
                   <button
-                    className="rounded bg-indigo-600 px-2.5 py-1 text-xs text-white hover:bg-indigo-700 disabled:opacity-50"
+                    className="rounded bg-primary px-2.5 py-1 text-xs text-white hover:bg-primary/90 disabled:opacity-50"
                     disabled={busy || !defaultTargetStateId}
                     onClick={() => handleAccept(issue.id)}
                     type="button"
@@ -401,15 +468,16 @@ const TriagePage = observer(function TriagePage() {
                   >
                     {t('settings.triage.decline')}
                   </button>
-                  <button
-                    className="rounded border border-zinc-300 px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  <IssuePicker
                     disabled={busy}
-                    onClick={() => handleMarkDuplicate(issue.id)}
-                    title={t('settings.triage.markDuplicateTitle')}
-                    type="button"
-                  >
-                    {t('settings.triage.duplicate')}
-                  </button>
+                    excludeId={issue.id}
+                    forceOpen={duplicatePickerFor === issue.id}
+                    onClose={() => setDuplicatePickerFor(null)}
+                    onSelect={canonical => submitMarkDuplicate(issue.id, canonical)}
+                    triggerChildren={t('settings.triage.duplicate')}
+                    triggerClassName="rounded border border-zinc-300 px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    triggerTitle={t('settings.triage.markDuplicateTitle')}
+                  />
                   <SnoozeButton disabled={busy} onSelect={hours => handleSnooze(issue.id, hours)} />
                 </div>
               </div>
@@ -417,6 +485,32 @@ const TriagePage = observer(function TriagePage() {
           })
         )}
       </div>
+
+      {queue.length > 0 && (
+        <div className="flex items-center gap-3 border-t border-border px-4 py-1.5 text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <kbd className="rounded border px-1 font-mono">J</kbd>
+            <kbd className="rounded border px-1 font-mono">K</kbd>
+            {t('commandPalette.footer.navigate')}
+          </span>
+          <span className="flex items-center gap-1">
+            <kbd className="rounded border px-1 font-mono">A</kbd>
+            {t('settings.triage.accept')}
+          </span>
+          <span className="flex items-center gap-1">
+            <kbd className="rounded border px-1 font-mono">D</kbd>
+            {t('settings.triage.decline')}
+          </span>
+          <span className="flex items-center gap-1">
+            <kbd className="rounded border px-1 font-mono">S</kbd>
+            {t('settings.triage.snooze')}
+          </span>
+          <span className="flex items-center gap-1">
+            <kbd className="rounded border px-1 font-mono">M</kbd>
+            {t('settings.triage.duplicate')}
+          </span>
+        </div>
+      )}
     </div>
   );
 });

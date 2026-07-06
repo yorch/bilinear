@@ -42,7 +42,7 @@ export function DeleteUpdateButton({ updateId, mutation, onDeleted }: DeleteUpda
           {deleting ? '...' : t('properties.updateForm.yes')}
         </button>
         <button
-          className="rounded px-1.5 py-0.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          className="rounded px-1.5 py-0.5 text-xs text-zinc-500 hover:bg-accent"
           onClick={() => setConfirming(false)}
           type="button"
         >

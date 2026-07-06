@@ -30,12 +30,7 @@ export function CommentComposer({
   const isEmpty = !value || value === '<p></p>' || value.trim() === '';
 
   return (
-    <div
-      className={cn(
-        'rounded-lg border border-zinc-200 dark:border-zinc-700',
-        compact ? 'p-2' : 'p-3',
-      )}
-    >
+    <div className={cn('rounded-lg border border-border', compact ? 'p-2' : 'p-3')}>
       <TipTapEditor
         className={cn('text-sm', compact ? 'min-h-[40px]' : 'min-h-[80px]')}
         content={value}
@@ -50,7 +45,7 @@ export function CommentComposer({
         <button
           className={cn(
             'rounded-md px-3 py-1.5 text-xs font-medium text-white transition-colors',
-            'bg-indigo-600 hover:bg-indigo-700',
+            'bg-primary hover:bg-primary/90',
             'disabled:cursor-not-allowed disabled:opacity-40',
           )}
           disabled={isEmpty || submitting}

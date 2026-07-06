@@ -4,7 +4,7 @@ import { FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from '@/hooks/use-translations';
 import { toast } from '@/lib/toast';
-import { formatFileSize } from '@/lib/utils';
+import { formatFileSize, getErrorMessage } from '@/lib/utils';
 
 interface Attachment {
   id: string;
@@ -101,7 +101,7 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
       await deleteFile(att.id);
       setAttachments(prev => prev.filter(a => a.id !== att.id));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('issueDetail.attachments.failedToDelete'));
+      toast.error(getErrorMessage(err, t('issueDetail.attachments.failedToDelete')));
     }
   };
 

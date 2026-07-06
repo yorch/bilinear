@@ -54,7 +54,7 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
               type="url"
             />
             <button
-              className="rounded bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-700"
+              className="rounded bg-primary px-2 py-1 text-xs text-white hover:bg-primary/90"
               type="submit"
             >
               {t('editor.embed.submit')}
@@ -73,7 +73,7 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
       <div
         className={cn(
           'embed-block group relative my-2 overflow-hidden rounded-md border',
-          selected ? 'border-indigo-400' : 'border-zinc-200 dark:border-zinc-700',
+          selected ? 'border-indigo-400' : 'border-border',
         )}
         style={{ paddingBottom: '56.25%' }}
       >

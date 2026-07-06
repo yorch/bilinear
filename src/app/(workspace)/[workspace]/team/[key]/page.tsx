@@ -1,37 +1,37 @@
 'use client';
 
 import { Bookmark, Settings } from 'lucide-react';
-import { runInAction } from 'mobx';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import { type BoardGroupBy, type BoardSwimlaneBy, BoardView } from '@/components/issues/board-view';
 import { ColumnPicker } from '@/components/issues/column-picker';
-import { CreateIssueModal } from '@/components/issues/create-issue-modal';
 import { CsvExportButton } from '@/components/issues/csv-export-button';
 import { FilterBuilder } from '@/components/issues/filter-builder';
 import { IssueListView } from '@/components/issues/issue-list-view';
-import type { OpenProperty } from '@/components/issues/issue-row';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
-import { type ViewMode, ViewToggle } from '@/components/issues/view-toggle';
+import { ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { type SaveViewInput, SaveViewModal } from '@/components/views/save-view-modal';
-import { useChord, useHotkeys } from '@/hooks/use-hotkeys';
+import { useDocumentTitle } from '@/hooks/use-document-title';
+import { useHotkeys } from '@/hooks/use-hotkeys';
+import { useIssueListPage } from '@/hooks/use-issue-list-page';
+import { useIssueUpdate } from '@/hooks/use-issue-update';
+import { useIssuesBulkUpdate } from '@/hooks/use-issues-bulk-update';
 import { useRecentItems } from '@/hooks/use-recent-items';
 import { useTranslations } from '@/hooks/use-translations';
 import { useVisibleColumns } from '@/hooks/use-visible-columns';
-import type { DBIssue, DBIssueLabel } from '@/lib/db';
+import type { DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
 import { gql } from '@/lib/graphql';
-import {
-  ISSUE_ARCHIVE_MUTATION,
-  ISSUE_CREATE_MUTATION,
-  ISSUE_UPDATE_MUTATION,
-  ISSUES_BULK_UPDATE_MUTATION,
-} from '@/lib/graphql-queries';
+import { ISSUE_ARCHIVE_MUTATION, ISSUE_UNARCHIVE_MUTATION } from '@/lib/graphql-queries';
+import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
+import { buildIssueHref } from '@/lib/issue-nav';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
+import { getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
 
@@ -67,7 +67,6 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     workspace: string;
     key: string;
   }>();
-  const router = useRouter();
   const t = useTranslations();
   const {
     issueStore,
@@ -79,22 +78,14 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     projectStore,
     cycleStore,
     syncStore,
+    uiStore,
   } = useStore();
 
   // One queue per component mount — unmounting the page cleans up the reference
   const txQueue = useMemo(() => new TransactionQueue(), []);
 
   // UI state (local to this page)
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detailIssueId, setDetailIssueId] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
   const [saveViewOpen, setSaveViewOpen] = useState(false);
-  // Which property popover to force-open on the selected row (keyboard shortcut)
-  const [openProperty, setOpenProperty] = useState<OpenProperty>(null);
-  // View mode (list vs board), board group-by, and swimlane
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [boardGroupBy, setBoardGroupBy] = useState<BoardGroupBy>('status');
-  const [swimlaneBy, setSwimlaneBy] = useState<BoardSwimlaneBy>('none');
   // Filters
   const [filterSet, setFilterSet] = useState<FilterSet>(createEmptyFilterSet());
 
@@ -105,6 +96,8 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
 
   const team = teamStore.findByKey(teamKey);
   const teamId = team?.id ?? null;
+
+  useDocumentTitle(team?.name);
 
   const rawStates = teamId ? workflowStateStore.findByTeamId(teamId) : [];
   const states = rawStates;
@@ -155,180 +148,89 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     (issueId, definitionId) => customFieldStore.findValue(issueId, definitionId)?.value ?? null,
   );
 
-  const users: IssueUser[] = userStore.all.map(u => ({
-    avatarBackgroundColor: u.avatarBgColor,
-    avatarUrl: u.avatarUrl ?? null,
-    displayName: u.displayName,
-    id: u.id,
-    initials: u.initials,
-  }));
+  const users: IssueUser[] = toIssueUsers(userStore.all);
 
-  const labels: IssueLabel[] = labelStore.all.map(l => ({
-    color: l.color,
-    id: l.id,
-    name: l.name,
-  }));
+  const labels: IssueLabel[] = toIssueLabels(labelStore.all);
 
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
   const hasError = syncStore.status === 'error';
 
-  const detailIssue: IssueDetail | null = (() => {
-    if (!detailIssueId) {
-      return null;
-    }
-    const raw = issueStore.findById(detailIssueId);
-    if (!raw) {
-      return null;
-    }
-    const issueLabels = (raw.labelIds ?? [])
-      .map(id => labelStore.findById(id))
-      .filter((l): l is DBIssueLabel => l !== null)
-      .map(l => ({ color: l.color, id: l.id, name: l.name }));
-    return { ...raw, dueDate: raw.dueDate ?? null, labels: issueLabels };
-  })();
+  // ── Selection, detail panel, view mode, keyboard shortcuts ──────────────────
+
+  const {
+    boardGroupBy,
+    closeDetail,
+    detailIssue,
+    handleOpen,
+    hasSelection,
+    openProperty,
+    selectedId,
+    setBoardGroupBy,
+    setOpenProperty,
+    setSelectedId,
+    setSwimlaneBy,
+    setViewMode,
+    swimlaneBy,
+    viewMode,
+  } = useIssueListPage({
+    basePath: `/${workspace}/team/${teamKey}`,
+    buildHref: id =>
+      buildIssueHref(workspace, id, {
+        label: team?.name ?? teamKey,
+        path: `/${workspace}/team/${teamKey}`,
+      }),
+    issues,
+    onOpen: id => {
+      const issue = issueStore.findById(id);
+      const issueTeam = issue ? teamStore.findById(issue.teamId) : null;
+      if (issue && issueTeam) {
+        addRecent({
+          id: issue.id,
+          identifier: issue.identifier,
+          teamKey: issueTeam.key,
+          title: issue.title,
+        });
+      }
+    },
+  });
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
-  const handleUpdate = useCallback(
-    (id: string, patch: Record<string, unknown>) => {
-      const snapshot = issueStore.findById(id);
-      issueStore.optimisticUpdate(id, patch as Partial<DBIssue>);
+  const handleUpdate = useIssueUpdate();
+  const handleBulkUpdate = useIssuesBulkUpdate();
 
+  const handleUnarchive = useCallback(
+    (id: string) => {
+      issueStore.optimisticUpdate(id, { archivedAt: null });
       txQueue.enqueue(
-        ISSUE_UPDATE_MUTATION,
-        { id, input: patch },
-        {
-          onError: () => {
-            if (snapshot) {
-              issueStore.optimisticUpdate(id, snapshot);
-            }
-          },
-          onSuccess: data => {
-            const updated = (data as { issueUpdate?: { issue?: DBIssue } })?.issueUpdate?.issue;
-            if (updated) {
-              issueStore.applySyncAction('U', id, updated);
-            }
-          },
-        },
-      );
-    },
-    [issueStore, txQueue],
-  );
-
-  const handleBulkUpdate = useCallback(
-    (ids: string[], patch: Record<string, unknown>) => {
-      const snapshots = ids.map(id => ({ id, snapshot: issueStore.findById(id) }));
-      for (const id of ids) {
-        issueStore.optimisticUpdate(id, patch as Partial<DBIssue>);
-      }
-      txQueue.enqueue(
-        ISSUES_BULK_UPDATE_MUTATION,
-        { ids, input: patch },
-        {
-          onError: () => {
-            for (const { id, snapshot } of snapshots) {
-              if (snapshot) {
-                issueStore.optimisticUpdate(id, snapshot);
-              }
-            }
-          },
-          onSuccess: data => {
-            const updated =
-              (data as { issuesBulkUpdate?: { issues?: DBIssue[] } })?.issuesBulkUpdate?.issues ??
-              [];
-            for (const issue of updated) {
-              issueStore.applySyncAction('U', issue.id, issue);
-            }
-          },
-        },
-      );
-    },
-    [issueStore, txQueue],
-  );
-
-  const handleCreate = useCallback(
-    async (input: {
-      title: string;
-      description?: string;
-      stateId?: string;
-      assigneeId?: string;
-      priority: number;
-      labelIds: string[];
-      dueDate?: string | null;
-      projectId?: string;
-    }) => {
-      if (!teamId || !team) {
-        return;
-      }
-
-      // Optimistically add the issue so it appears immediately (offline support).
-      const tempId = `temp-${crypto.randomUUID()}`;
-      const now = new Date().toISOString();
-      const effectiveStateId =
-        input.stateId ?? states.find(s => s.type === 'backlog')?.id ?? states[0]?.id ?? '';
-      issueStore.applySyncAction('I', tempId, {
-        archivedAt: null,
-        assigneeId: input.assigneeId ?? null,
-        branchName: null,
-        canceledAt: null,
-        completedAt: null,
-        createdAt: now,
-        creatorId: null,
-        cycleId: null,
-        description: input.description ?? null,
-        dueDate: input.dueDate ?? null,
-        estimate: null,
-        id: tempId,
-        identifier: `${team.key}-…`,
-        labelIds: input.labelIds,
-        number: 0,
-        organizationId: team.organizationId,
-        parentId: null,
-        priority: input.priority,
-        prioritySortOrder: 0,
-        projectId: input.projectId ?? null,
-        sortOrder: 0,
-        startedAt: null,
-        stateId: effectiveStateId,
-        teamId,
-        title: input.title,
-        trashed: false,
-        updatedAt: now,
-      } as DBIssue);
-
-      txQueue.enqueue(
-        ISSUE_CREATE_MUTATION,
-        { input: { ...input, stateId: effectiveStateId || undefined, teamId } },
+        ISSUE_UNARCHIVE_MUTATION,
+        { id },
         {
           onError: err => {
-            console.error('[TeamPage] issueCreate failed:', err);
-            runInAction(() => {
-              issueStore.pool.delete(tempId);
-            });
-          },
-          onSuccess: data => {
-            const created = (data as { issueCreate?: { issue?: DBIssue } })?.issueCreate?.issue;
-            runInAction(() => {
-              issueStore.pool.delete(tempId);
-              if (created) {
-                issueStore.applySyncAction('I', created.id, created);
-              }
-            });
+            toast.error(getErrorMessage(err, t('issues.restoreFailed')));
+            issueStore.optimisticUpdate(id, { archivedAt: new Date().toISOString() });
           },
         },
       );
     },
-    [teamId, team, issueStore, txQueue, states],
+    [issueStore, txQueue, t],
   );
 
   const handleArchive = useCallback(
     (id: string) => {
       issueStore.optimisticUpdate(id, { archivedAt: new Date().toISOString() });
+      const undoToastId = toast.undo(t('issues.archivedToast'), t('common.undo'), () =>
+        handleUnarchive(id),
+      );
       txQueue.enqueue(
         ISSUE_ARCHIVE_MUTATION,
         { id },
         {
-          onError: () => {
+          onError: err => {
+            // The archive never happened server-side: retire the stale Undo
+            // affordance before surfacing the failure and rolling back.
+            toast.dismiss(undoToastId);
+            toast.error(getErrorMessage(err, t('issues.archiveFailed')));
             issueStore.optimisticUpdate(id, { archivedAt: null });
           },
           onSuccess: () => {
@@ -340,7 +242,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         setSelectedId(null);
       }
     },
-    [issueStore, txQueue, selectedId],
+    [issueStore, txQueue, selectedId, t, handleUnarchive, setSelectedId],
   );
 
   const handleDelete = useCallback(
@@ -351,7 +253,8 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         ISSUE_DELETE_MUTATION,
         { id },
         {
-          onError: () => {
+          onError: err => {
+            toast.error(getErrorMessage(err, t('issues.deleteFailed')));
             // Restore the issue optimistically if the server rejects the delete
             if (snapshot) {
               issueStore.applySyncAction('I', id, snapshot);
@@ -363,63 +266,28 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         setSelectedId(null);
       }
     },
-    [issueStore, txQueue, selectedId],
+    [issueStore, txQueue, selectedId, t, setSelectedId],
   );
 
-  // ── Keyboard shortcuts ────────────────────────────────────────────────────
-
-  const selectedIndex = issues.findIndex(i => i.id === selectedId);
-  const hasSelection = selectedId !== null;
-
-  // C — create issue
-  useHotkeys('c', () => setCreateOpen(true), {}, []);
-
-  // J / K — navigate list
-  useHotkeys(
-    'j',
-    () => {
-      const next = Math.min(selectedIndex + 1, issues.length - 1);
-      setSelectedId(issues[next]?.id ?? null);
+  // Delete is irreversible (no restore mutation), so it goes through a
+  // confirmation dialog instead of firing straight from the context menu.
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; identifier: string } | null>(
+    null,
+  );
+  const requestDelete = useCallback(
+    (id: string) => {
+      const issue = issueStore.findById(id);
+      setPendingDelete({ id, identifier: issue?.identifier ?? '' });
     },
-    {},
-    [selectedIndex, issues],
-  );
-  useHotkeys(
-    'k',
-    () => {
-      const prev = Math.max(selectedIndex - 1, 0);
-      setSelectedId(issues[prev]?.id ?? null);
-    },
-    {},
-    [selectedIndex, issues],
+    [issueStore],
   );
 
-  // Enter — open detail
-  useHotkeys(
-    'enter',
-    () => {
-      if (selectedId) {
-        setDetailIssueId(selectedId);
-      }
-    },
-    {},
-    [selectedId],
-  );
+  // ── Team-specific keyboard shortcuts ─────────────────────────────────────
+  // (j/k/enter/escape, common property pickers, and view-mode switches are
+  // registered by useIssueListPage above)
 
-  // Escape — clear selection / close detail
-  useHotkeys(
-    'escape',
-    () => {
-      if (detailIssueId) {
-        setDetailIssueId(null);
-        router.replace(`/${workspace}/team/${teamKey}`, { scroll: false });
-      } else {
-        setSelectedId(null);
-      }
-    },
-    {},
-    [detailIssueId, workspace, teamKey],
-  );
+  // C (create issue) is registered globally in WorkspaceClient and opens the
+  // shared GlobalCreateIssueModal; the New-issue button below uses it too.
 
   // X — toggle selection checkbox
   useHotkeys(
@@ -433,19 +301,11 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     [selectedId],
   );
 
-  // Issue context shortcuts — only active when an issue is selected
-  useHotkeys('s', () => setOpenProperty('status'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('a', () => setOpenProperty('assignee'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('p', () => setOpenProperty('priority'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('l', () => setOpenProperty('label'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('d', () => setOpenProperty('dueDate'), { enabled: hasSelection }, [hasSelection]);
+  // Project / cycle pickers — team issues only (my-issues spans teams)
   useHotkeys('shift+p', () => setOpenProperty('project'), { enabled: hasSelection }, [
     hasSelection,
   ]);
   useHotkeys('q', () => setOpenProperty('cycle'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('shift+e', () => setOpenProperty('estimate'), { enabled: hasSelection }, [
-    hasSelection,
-  ]);
 
   // Backspace / Delete — archive selected issue
   useHotkeys(
@@ -469,35 +329,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     [selectedId, handleArchive, hasSelection],
   );
 
-  // Alt+1 — list view, Alt+2 — board view, Alt+3 — timeline view
-  useHotkeys('alt+1', () => setViewMode('list'), {}, []);
-  useHotkeys('alt+2', () => setViewMode('board'), {}, []);
-  useHotkeys('alt+3', () => setViewMode('timeline'), {}, []);
-
-  // G then I — go to my issues (placeholder navigation)
-  useChord('g', 'i', () => router.push(`/${workspace}/my-issues`), [workspace]);
-  // G then N — go to inbox (placeholder navigation)
-  useChord('g', 'n', () => router.push(`/${workspace}/inbox`), [workspace]);
-
-  // ── Open issue and track as recent ────────────────────────────────────────
-
-  const handleOpen = useCallback(
-    (id: string) => {
-      setDetailIssueId(id);
-      router.replace(`/${workspace}/issue/${id}`, { scroll: false });
-      const issue = issueStore.findById(id);
-      const issueTeam = issue ? teamStore.findById(issue.teamId) : null;
-      if (issue && issueTeam) {
-        addRecent({
-          id: issue.id,
-          identifier: issue.identifier,
-          teamKey: issueTeam.key,
-          title: issue.title,
-        });
-      }
-    },
-    [workspace, issueStore, teamStore, addRecent, router],
-  );
+  // G→I / G→N navigation chords are registered globally in WorkspaceClient.
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -525,13 +357,11 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     );
   }
 
-  const defaultStateId = states.find(s => s.type === 'backlog')?.id ?? states[0]?.id;
-
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Page header */}
       <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
-        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+        <h1 className="text-sm font-semibold text-foreground">
           {t('issues.teamIssuesTitle', { team: team.displayName ?? team.name })}
         </h1>
         <div className="flex items-center gap-2">
@@ -566,8 +396,8 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
             <Settings className="h-4 w-4" />
           </Link>
           <button
-            className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
-            onClick={() => setCreateOpen(true)}
+            className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary/90"
+            onClick={() => uiStore.openCreateIssueModal()}
             type="button"
           >
             {t('issues.newIssue')}
@@ -639,7 +469,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
             labels={labels}
             onArchive={handleArchive}
             onBulkUpdate={handleBulkUpdate}
-            onDelete={handleDelete}
+            onDelete={requestDelete}
             onOpen={handleOpen}
             onPropertyClosed={() => setOpenProperty(null)}
             onSelect={setSelectedId}
@@ -686,25 +516,24 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
       <LazyIssueDetailPanel
         issue={detailIssue}
         labels={labels}
-        onClose={() => {
-          setDetailIssueId(null);
-          router.replace(`/${workspace}/team/${teamKey}`, { scroll: false });
-        }}
+        onClose={closeDetail}
         onUpdate={handleUpdate}
         states={states}
         users={users}
       />
 
-      {/* Create modal */}
-      <CreateIssueModal
-        defaultStateId={defaultStateId}
-        labels={labels}
-        onClose={() => setCreateOpen(false)}
-        onSubmit={handleCreate}
-        open={createOpen}
-        states={states}
-        teamId={teamId ?? undefined}
-        users={users}
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        message={t('issues.deleteConfirmBody', { identifier: pendingDelete?.identifier ?? '' })}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          if (pendingDelete) {
+            handleDelete(pendingDelete.id);
+          }
+          setPendingDelete(null);
+        }}
+        open={pendingDelete !== null}
+        title={t('issues.deleteConfirmTitle')}
       />
 
       {/* Save current filters as a custom view */}

@@ -80,7 +80,7 @@ function BarChart({ data, maxValue, unit = '', emptyMessage }: BarChartProps) {
         const pct = max > 0 ? (item.value / max) * 100 : 0;
         return (
           <div className="flex flex-1 flex-col items-center gap-1" key={item.label}>
-            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
+            <span className="text-xs font-medium text-muted-foreground">
               {item.value > 0 ? `${item.value}${unit}` : ''}
             </span>
             <div
@@ -137,7 +137,7 @@ function HBarChart({ data, maxValue, emptyMessage }: HBarChartProps) {
             <span className="w-28 shrink-0 truncate text-xs text-zinc-500" title={item.label}>
               {item.label}
             </span>
-            <div className="flex-1 rounded bg-zinc-100 dark:bg-zinc-800">
+            <div className="flex-1 rounded bg-muted">
               <div
                 className="h-5 rounded transition-all"
                 style={{
@@ -146,7 +146,7 @@ function HBarChart({ data, maxValue, emptyMessage }: HBarChartProps) {
                 }}
               />
             </div>
-            <span className="w-8 shrink-0 text-right text-xs font-medium text-zinc-600 dark:text-zinc-300">
+            <span className="w-8 shrink-0 text-right text-xs font-medium text-muted-foreground">
               {item.value}
             </span>
           </div>
@@ -170,7 +170,7 @@ function StatCard({ label, value, sub }: StatCardProps) {
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
       <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{value}</p>
+      <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
       {sub && <p className="mt-0.5 text-xs text-zinc-400">{sub}</p>}
     </div>
   );
@@ -450,9 +450,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
       <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
-              {t('analytics.team.title')}
-            </h1>
+            <h1 className="text-base font-semibold text-foreground">{t('analytics.team.title')}</h1>
             <p className="mt-0.5 text-xs text-zinc-400">
               {team.displayName || team.name}
               {preset !== 'all'
@@ -467,7 +465,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
                   'rounded px-2.5 py-1 text-xs',
                   preset === p
                     ? 'bg-zinc-100 font-medium text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
-                    : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100',
+                    : 'text-zinc-500 hover:text-foreground',
                 )}
                 key={p}
                 onClick={() => setPreset(p)}
@@ -574,7 +572,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
                   return (
                     <div className="flex flex-col gap-1" key={item.label}>
                       <div className="flex items-center justify-between text-xs">
-                        <span className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-300">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
                           <span
                             className="h-2.5 w-2.5 rounded-full"
                             style={{ backgroundColor: item.color }}
@@ -585,7 +583,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
                           {item.value} ({pct}%)
                         </span>
                       </div>
-                      <div className="h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800">
+                      <div className="h-1.5 w-full rounded-full bg-muted">
                         <div
                           className="h-1.5 rounded-full transition-all"
                           style={{
@@ -622,7 +620,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
                 <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
                   {t('analytics.team.openIssues')}
                 </p>
-                <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+                <p className="mt-1 text-2xl font-semibold text-foreground">
                   {teamHealth.openCount}
                 </p>
               </div>
@@ -638,7 +636,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
                 <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
                   {t('analytics.team.unestimated')}
                 </p>
-                <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+                <p className="mt-1 text-2xl font-semibold text-foreground">
                   {teamHealth.unestimatedCount}
                 </p>
                 <p className="mt-0.5 text-xs text-zinc-400">
@@ -649,7 +647,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
                 <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
                   {t('analytics.team.oldestOpen')}
                 </p>
-                <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+                <p className="mt-1 text-2xl font-semibold text-foreground">
                   {teamHealth.oldestOpenAgeDays.toFixed(0)}d
                 </p>
               </div>
@@ -657,7 +655,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
                 <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
                   {t('analytics.team.p75Age')}
                 </p>
-                <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+                <p className="mt-1 text-2xl font-semibold text-foreground">
                   {teamHealth.p75AgeDays.toFixed(0)}d
                 </p>
                 <p className="mt-0.5 text-xs text-zinc-400">{t('analytics.team.percentile75')}</p>

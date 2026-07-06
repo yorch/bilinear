@@ -237,12 +237,21 @@
   "commandPalette": {
     "actions": {
       "createIssue": "Crear nueva tarea",
-      "goToSettings": "Ir a Configuración"
+      "createProject": "Crear nuevo proyecto",
+      "createTeam": "Crear nuevo equipo",
+      "goToAnalytics": "Ir a Analítica",
+      "goToInbox": "Ir a Bandeja de entrada",
+      "goToInitiatives": "Ir a Iniciativas",
+      "goToMyIssues": "Ir a Mis tareas",
+      "goToProjects": "Ir a Proyectos",
+      "goToSettings": "Ir a Configuración",
+      "switchTheme": "Cambiar a tema {theme}"
     },
     "dialogAriaLabel": "Paleta de comandos",
     "footer": {
       "back": "Atrás",
       "close": "Cerrar",
+      "issueActions": "Acciones",
       "navigate": "Navegar",
       "select": "Seleccionar"
     },
@@ -255,6 +264,7 @@
       "recent": "Recientes"
     },
     "submenu": {
+      "actions": "Acciones de la tarea…",
       "noAssignee": "Sin responsable",
       "noOptions": "Sin opciones",
       "setAssignee": "Establecer responsable…",
@@ -284,7 +294,8 @@
     "search": "Buscar",
     "settings": "Configuración",
     "signOut": "Cerrar sesión",
-    "somethingWentWrong": "Algo salió mal. Inténtalo de nuevo."
+    "somethingWentWrong": "Algo salió mal. Inténtalo de nuevo.",
+    "undo": "Deshacer"
   },
   "customFields": {
     "addField": "Agregar campo",
@@ -292,6 +303,7 @@
     "addOption": "+ Agregar opción",
     "addSuccess": "Campo personalizado agregado",
     "archive": "Archivar",
+    "archiveConfirm": "¿Archivar el campo \"{name}\"? Se ocultará de las tareas, pero los valores existentes se conservan.",
     "archiveFailed": "Error al archivar el campo personalizado",
     "archiveSuccess": "Campo personalizado archivado",
     "createFailed": "Error al crear el campo personalizado",
@@ -319,6 +331,9 @@
     "title": "Campos personalizados",
     "type": "Tipo",
     "urlPlaceholder": "https://…"
+  },
+  "customViews": {
+    "notFound": "Esta vista ya no existe o fue eliminada."
   },
   "cycles": {
     "burndown": {
@@ -530,6 +545,8 @@
   "errors": {
     "errorRef": "Referencia de error:",
     "goHome": "Ir al inicio",
+    "notFoundDetail": "Esta página no existe o pudo haber sido movida.",
+    "notFoundTitle": "Página no encontrada",
     "somethingWentWrong": "Algo salió mal",
     "tryAgain": "Intentar de nuevo",
     "unexpectedErrorDetail": "La página tuvo un error inesperado. Inténtalo de nuevo; si sigue ocurriendo, recarga o vuelve en un minuto."
@@ -639,8 +656,13 @@
       "addDescriptionFirst": "Agrega una descripción primero para sugerir un título",
       "couldNotSuggestTitle": "No se pudo sugerir un título",
       "createIssue": "Crear tarea",
+      "createMore": "Crear más",
       "creating": "Creando…",
       "descriptionPlaceholder": "Agrega una descripción… (opcional, admite **markdown**)",
+      "discard": "Descartar",
+      "discardConfirmBody": "Tienes cambios sin guardar que se perderán si cierras esto.",
+      "discardConfirmTitle": "¿Descartar esta tarea?",
+      "issueCreated": "Tarea creada",
       "suggest": "Sugerir",
       "suggestTitleFromDescription": "Sugerir un título a partir de la descripción",
       "titlePlaceholder": "Título de la tarea"
@@ -654,6 +676,7 @@
     "issueNotFound": "No se encontró la tarea.",
     "properties": {
       "assignee": "Responsable",
+      "cycle": "Ciclo",
       "dueDate": "Fecha límite",
       "estimate": "Estimación",
       "labels": "Etiquetas",
@@ -676,7 +699,6 @@
       "react": "Reaccionar"
     },
     "relations": {
-      "add": "Agregar",
       "adding": "Agregando…",
       "addRelation": "Agregar relación",
       "blockedBy": "Bloqueado por",
@@ -686,8 +708,7 @@
       "failedToCreate": "No se pudo crear la relación",
       "failedToDelete": "No se pudo eliminar la relación",
       "failedToLoad": "No se pudieron cargar las relaciones",
-      "identifierPlaceholder": "Identificador de la tarea (p. ej. ENG-123)",
-      "issueNotFound": "No se encontró la tarea «{identifier}»",
+      "pickIssue": "Buscar una tarea…",
       "relatedTo": "Relacionado con",
       "removeRelation": "Quitar relación",
       "title": "Relaciones",
@@ -765,16 +786,21 @@
     "add": "Agregar",
     "and": "Y",
     "archive": "Archivar",
+    "archivedToast": "Tarea archivada",
+    "archiveFailed": "Error al archivar la tarea",
     "assignee": "Responsable",
     "boardViewShortcut": "Vista de tablero (Alt+2)",
     "builtIn": "Integradas",
+    "bulkUpdateFailed": "Error al actualizar las tareas",
     "clear": "Limpiar",
     "clearAll": "Limpiar todo",
     "clearSelection": "Limpiar selección",
     "columnPicker": "Selector de columnas",
     "columns": "Columnas",
+    "copyBranchName": "Copiar nombre de rama",
     "copyIssueId": "Copiar ID de la tarea",
     "copyIssueUrl": "Copiar URL de la tarea",
+    "createFailed": "Error al crear la tarea",
     "creator": "Creador",
     "csvHeaderCreated": "Creado",
     "csvHeaderId": "ID",
@@ -782,6 +808,9 @@
     "csvHeaderUpdated": "Actualizado",
     "customFields": "Campos personalizados",
     "cycle": "Ciclo",
+    "deleteConfirmBody": "{identifier} se eliminará permanentemente. Esta acción no se puede deshacer.",
+    "deleteConfirmTitle": "¿Eliminar tarea?",
+    "deleteFailed": "Error al eliminar la tarea",
     "draggingCount_one": "Arrastrando {count} tarea",
     "draggingCount_other": "Arrastrando {count} tareas",
     "dueDate": "Fecha de entrega",
@@ -803,6 +832,7 @@
     "lastUpdatedDaysAgo_one": "Actualizado hace {count} día",
     "lastUpdatedDaysAgo_other": "Actualizado hace {count} días",
     "listViewShortcut": "Vista de lista (Alt+1)",
+    "moveIssue": "Mover {identifier}",
     "myIssues": "Mis tareas",
     "newIssue": "Nueva tarea",
     "noBacklogIssues": "Sin tareas pendientes",
@@ -820,11 +850,15 @@
     "operatorIsNotSet": "no está definido",
     "operatorIsSet": "está definido",
     "or": "O",
+    "pickerNoIssuesFound": "No se encontraron tareas",
+    "pickerSearchPlaceholder": "Buscar tareas…",
     "priority": "Prioridad",
     "priorityN": "Prioridad {priority}",
     "project": "Proyecto",
+    "restoreFailed": "Error al restaurar la tarea",
     "saveCurrentFiltersAsView": "Guardar filtros actuales como vista",
     "saveView": "Guardar vista",
+    "selectAllCount": "Seleccionar las {count}",
     "selectEllipsis": "Seleccionar…",
     "selectedCount": "{count} seleccionadas",
     "setEstimate": "Definir estimación",
@@ -840,6 +874,7 @@
     "timelineViewShortcut": "Vista de cronograma (Alt+3)",
     "true": "Verdadero",
     "unassigned": "Sin asignar",
+    "updateFailed": "Error al actualizar la tarea",
     "valueEllipsis": "Valor…",
     "viewSaved": "Vista guardada"
   },
@@ -885,6 +920,7 @@
       "title": "Atajos de teclado",
       "toggleSidebar": "Mostrar/ocultar barra lateral"
     },
+    "skipToContent": "Saltar al contenido",
     "workspaceError": {
       "detail": "Algo salió mal dentro de la aplicación. Reintentar vuelve a montar solo esta sección sin perder el resto de tu sesión.",
       "retry": "Reintentar",
@@ -1392,9 +1428,7 @@
       "declineFailed": "Error al rechazar el issue",
       "duplicate": "Duplicado",
       "fromCreator": "de {name} · {date}",
-      "issueNotFound": "No se encontró el issue {identifier} en tu espacio de trabajo",
       "markDuplicateFailed": "Error al marcar como duplicado",
-      "markDuplicatePrompt": "Marcar como duplicado de (identificador del issue, p. ej. ENG-42):",
       "markDuplicateTitle": "Marcar como duplicado de otro issue",
       "markedAsDuplicate": "Marcado como duplicado de {identifier}",
       "pageTitle": "{name} — Clasificación",
@@ -1448,6 +1482,8 @@
       "apiTokens": "Tokens de API",
       "auditLog": "Registro de auditoría",
       "auditLogDescription": "Historial de eventos relevantes para la seguridad (solo administradores)",
+      "automations": "Automatizaciones",
+      "automationsDescription": "Reglas activadas por eventos que actualizan los issues automáticamente",
       "calendarUrlRotated": "URL de la fuente de calendario rotada",
       "calendarUrlRotateError": "Error al rotar la URL del calendario",
       "configuration": "Configuración",
@@ -1463,7 +1499,6 @@
       "dataRegion": "Región de datos",
       "emailNotifications": "Notificaciones por correo",
       "emailNotificationsDescription": "Recibe correos por asignaciones, menciones y cambios de estado",
-      "enableAiAssistant": "Habilitar asistente de IA",
       "expires": "Expira",
       "expiresIn": "Expira en",
       "generate": "Generar",
@@ -1509,6 +1544,13 @@
       "webhooks": "Webhooks",
       "webhooksDescription": "Envía eventos HTTP salientes"
     }
+  },
+  "sync": {
+    "backOnline": "De nuevo en línea — sincronizando cambios",
+    "changeFailed": "No se pudo guardar un cambio",
+    "connectionLost": "Conexión perdida — los cambios se sincronizarán al reconectar",
+    "offline": "Sin conexión",
+    "reconnecting": "Reconectando…"
   },
   "teams": {
     "addMember": "Agregar miembro",

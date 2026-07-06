@@ -61,10 +61,8 @@ export default function AdminAuditPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-          {t('admin.audit.title')}
-        </h1>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t('admin.audit.subtitle')}</p>
+        <h1 className="text-lg font-semibold text-foreground">{t('admin.audit.title')}</h1>
+        <p className="mt-1 text-xs text-muted-foreground">{t('admin.audit.subtitle')}</p>
       </div>
 
       {loading ? (
@@ -76,7 +74,7 @@ export default function AdminAuditPage() {
           {t('admin.audit.empty')}
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+        <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
@@ -86,7 +84,7 @@ export default function AdminAuditPage() {
                 <th className="px-4 py-2">{t('admin.audit.colWhen')}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            <tbody className="divide-y divide-border">
               {entries.map(entry => (
                 <tr className="bg-white dark:bg-zinc-950" key={entry.id}>
                   <td className="px-4 py-2">
@@ -97,7 +95,7 @@ export default function AdminAuditPage() {
                   <td className="px-4 py-2">
                     {entry.actor ? (
                       <div>
-                        <p className="text-xs font-medium text-zinc-900 dark:text-zinc-100">
+                        <p className="text-xs font-medium text-foreground">
                           {entry.actor.displayName}
                         </p>
                         <p className="text-[10px] text-zinc-400">{entry.actor.email}</p>
@@ -108,7 +106,7 @@ export default function AdminAuditPage() {
                   </td>
                   <td className="px-4 py-2">
                     {entry.targetType ? (
-                      <span className="text-xs text-zinc-600 dark:text-zinc-300">
+                      <span className="text-xs text-muted-foreground">
                         {entry.targetType}
                         {entry.targetId ? (
                           <span className="ml-1 font-mono text-zinc-400">
@@ -120,7 +118,7 @@ export default function AdminAuditPage() {
                       <span className="text-xs text-zinc-300 dark:text-zinc-600">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  <td className="px-4 py-2 text-xs text-muted-foreground">
                     {formatDateTime(entry.createdAt)}
                   </td>
                 </tr>

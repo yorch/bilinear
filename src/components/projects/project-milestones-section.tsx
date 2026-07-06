@@ -3,12 +3,13 @@
 import { Check, Pencil, Plus, Target, Trash2, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBProjectMilestone } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 const MILESTONE_FIELDS =
@@ -116,7 +117,7 @@ function MilestoneForm({
         <button
           className={cn(
             'flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-white transition-colors',
-            'bg-indigo-600 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50',
+            'bg-primary hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50',
           )}
           disabled={saving || !values.name.trim()}
           type="submit"
@@ -139,11 +140,10 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
   const t = useTranslations();
   const { formatDate } = useFormatters();
   const [deleting, setDeleting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const handleDelete = async () => {
-    if (!window.confirm(t('projects.deleteMilestoneConfirm', { name: milestone.name }))) {
-      return;
-    }
+    setConfirmingDelete(false);
     setDeleting(true);
     try {
       await onDelete(milestone.id);
@@ -156,11 +156,9 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
     <div className="flex items-start gap-3 rounded-md border border-zinc-200 px-3 py-2.5 dark:border-zinc-800">
       <Target className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
       <div className="min-w-0 flex-1">
-        <span className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          {milestone.name}
-        </span>
+        <span className="block text-sm font-medium text-foreground">{milestone.name}</span>
         {milestone.description && (
-          <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
+          <span className="mt-0.5 block text-xs text-muted-foreground">
             {milestone.description}
           </span>
         )}
@@ -182,13 +180,20 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
         <button
           className="rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950 dark:hover:text-red-400"
           disabled={deleting}
-          onClick={handleDelete}
+          onClick={() => setConfirmingDelete(true)}
           title={t('projects.deleteMilestone')}
           type="button"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
+      <ConfirmDialog
+        message={t('projects.deleteMilestoneConfirm', { name: milestone.name })}
+        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={handleDelete}
+        open={confirmingDelete}
+        title={t('projects.deleteMilestone')}
+      />
     </div>
   );
 }
@@ -244,7 +249,7 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
       }
       setCreating(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('projects.failedToCreateMilestone'));
+      toast.error(getErrorMessage(err, t('projects.failedToCreateMilestone')));
     }
   };
 
@@ -279,7 +284,7 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
       }
       setEditingId(null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('projects.failedToUpdateMilestone'));
+      toast.error(getErrorMessage(err, t('projects.failedToUpdateMilestone')));
     }
   };
 
@@ -298,14 +303,14 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
       }
       projectStore.applyMilestoneSyncAction('D', id, null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('projects.failedToDeleteMilestone'));
+      toast.error(getErrorMessage(err, t('projects.failedToDeleteMilestone')));
     }
   };
 
   return (
     <div className="mt-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {t('projects.milestonesCount', { count: milestones.length })}
         </h3>
         {!creating && !editingId && (

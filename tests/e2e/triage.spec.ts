@@ -254,14 +254,14 @@ test.describe('Triage', () => {
       canonicalIdentifier = candidate.identifier;
     }
 
-    // The Duplicate flow uses window.prompt() — auto-accept with the canonical
-    // identifier we discovered.
-    page.once('dialog', async dialog => {
-      expect(dialog.type()).toBe('prompt');
-      await dialog.accept(canonicalIdentifier);
-    });
-
+    // The Duplicate flow opens a searchable issue picker — search by
+    // identifier and pick the matching result.
     await freshRow.getByRole('button', { name: 'Duplicate' }).click();
+    await freshRow.getByRole('combobox').fill(canonicalIdentifier);
+    await page
+      .getByRole('option', { name: new RegExp(canonicalIdentifier) })
+      .first()
+      .click();
 
     await expect(freshRow).not.toBeVisible({ timeout: 10_000 });
   });

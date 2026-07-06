@@ -24,12 +24,8 @@ export default function GlobalError({
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
-      <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-        {t('errors.somethingWentWrong')}
-      </h1>
-      <p className="max-w-md text-sm text-zinc-600 dark:text-zinc-400">
-        {t('errors.unexpectedErrorDetail')}
-      </p>
+      <h1 className="text-xl font-semibold text-foreground">{t('errors.somethingWentWrong')}</h1>
+      <p className="max-w-md text-sm text-muted-foreground">{t('errors.unexpectedErrorDetail')}</p>
       {error.digest ? (
         <p className="font-mono text-xs text-zinc-500">
           {t('errors.errorRef')} {error.digest}

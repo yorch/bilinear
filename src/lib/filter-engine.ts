@@ -181,7 +181,9 @@ export function applyFilters<T extends FilterableIssue>(
   filterSet: FilterSet,
   customFieldResolver?: CustomFieldValueResolver,
 ): T[] {
-  if (filterSet.conditions.length === 0) {
+  // Defensive: persisted CustomView.filters is unvalidated JSON, so a stored
+  // `{}` (the server default) must not crash the engine.
+  if (!filterSet?.conditions?.length) {
     return issues;
   }
 
@@ -244,4 +246,16 @@ export function applySorting<T extends FilterableIssue>(
 
 export function createEmptyFilterSet(): FilterSet {
   return { composition: 'and', conditions: [] };
+}
+
+/**
+ * Normalize an untyped stored value (CustomView.filters is persisted as bare
+ * JSON with no server-side shape validation) into a safe FilterSet.
+ */
+export function coerceFilterSet(value: unknown): FilterSet {
+  const v = value as Partial<FilterSet> | null | undefined;
+  if (v && Array.isArray(v.conditions)) {
+    return { composition: v.composition === 'or' ? 'or' : 'and', conditions: v.conditions };
+  }
+  return createEmptyFilterSet();
 }

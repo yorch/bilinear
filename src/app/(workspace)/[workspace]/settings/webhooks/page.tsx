@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -78,6 +79,10 @@ export default function WebhooksSettingsPage() {
   const [url, setUrl] = useState('');
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
   const [revealedSecrets, setRevealedSecrets] = useState<Set<string>>(new Set());
+  const [pendingAction, setPendingAction] = useState<{
+    hook: Webhook;
+    type: 'delete' | 'rotate';
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -155,9 +160,6 @@ export default function WebhooksSettingsPage() {
   };
 
   const handleDelete = async (hook: Webhook) => {
-    if (!confirm(t('settings.webhooks.deleteConfirm', { name: hook.name }))) {
-      return;
-    }
     const res = await gql(WEBHOOK_DELETE_MUTATION, { id: hook.id });
     if (!res.errors?.length) {
       setWebhooks(w => w.filter(h => h.id !== hook.id));
@@ -165,9 +167,6 @@ export default function WebhooksSettingsPage() {
   };
 
   const handleRotate = async (hook: Webhook) => {
-    if (!confirm(t('settings.webhooks.rotateConfirm'))) {
-      return;
-    }
     const res = await gql(WEBHOOK_ROTATE_SECRET_MUTATION, { id: hook.id });
     if (!res.errors?.length) {
       const updated = (res.data as { webhookRotateSecret?: { webhook?: Webhook } } | undefined)
@@ -194,15 +193,11 @@ export default function WebhooksSettingsPage() {
     <div className="mx-auto w-full max-w-3xl px-6 py-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-            {t('settings.webhooks.title')}
-          </h1>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            {t('settings.webhooks.description')}
-          </p>
+          <h1 className="text-lg font-semibold text-foreground">{t('settings.webhooks.title')}</h1>
+          <p className="mt-1 text-xs text-muted-foreground">{t('settings.webhooks.description')}</p>
         </div>
         <button
-          className="rounded bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-700"
+          className="rounded bg-primary px-3 py-1.5 text-xs text-white hover:bg-primary/90"
           onClick={() => setCreating(c => !c)}
           type="button"
         >
@@ -264,7 +259,7 @@ export default function WebhooksSettingsPage() {
             </div>
           </div>
           <button
-            className="rounded bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-700"
+            className="rounded bg-primary px-3 py-1.5 text-xs text-white hover:bg-primary/90"
             onClick={handleCreate}
             type="button"
           >
@@ -284,9 +279,7 @@ export default function WebhooksSettingsPage() {
               <div className="flex items-start justify-between">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm text-zinc-900 dark:text-zinc-100">
-                      {hook.name}
-                    </span>
+                    <span className="font-medium text-sm text-foreground">{hook.name}</span>
                     <span
                       className={`rounded px-1.5 py-0.5 text-xs ${
                         hook.enabled
@@ -306,7 +299,7 @@ export default function WebhooksSettingsPage() {
                       </span>
                     ) : null}
                   </div>
-                  <div className="mt-1 truncate font-mono text-xs text-zinc-500 dark:text-zinc-400">
+                  <div className="mt-1 truncate font-mono text-xs text-muted-foreground">
                     {hook.url}
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1">
@@ -320,7 +313,7 @@ export default function WebhooksSettingsPage() {
                     ))}
                   </div>
                   <div className="mt-2 flex items-center gap-2 text-xs">
-                    <span className="text-zinc-500 dark:text-zinc-400">
+                    <span className="text-muted-foreground">
                       {t('settings.webhooks.signingSecret')}
                     </span>
                     {revealedSecrets.has(hook.id) ? (
@@ -354,14 +347,14 @@ export default function WebhooksSettingsPage() {
                   </button>
                   <button
                     className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
-                    onClick={() => handleRotate(hook)}
+                    onClick={() => setPendingAction({ hook, type: 'rotate' })}
                     type="button"
                   >
                     {t('settings.webhooks.rotate')}
                   </button>
                   <button
                     className="rounded border border-zinc-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-zinc-700 dark:hover:bg-red-950/30"
-                    onClick={() => handleDelete(hook)}
+                    onClick={() => setPendingAction({ hook, type: 'delete' })}
                     type="button"
                   >
                     {t('common.delete')}
@@ -372,6 +365,29 @@ export default function WebhooksSettingsPage() {
           ))}
         </div>
       )}
+      <ConfirmDialog
+        confirmLabel={
+          pendingAction?.type === 'rotate' ? t('settings.webhooks.rotate') : t('common.delete')
+        }
+        message={
+          pendingAction?.type === 'rotate'
+            ? t('settings.webhooks.rotateConfirm')
+            : t('settings.webhooks.deleteConfirm', { name: pendingAction?.hook.name ?? '' })
+        }
+        onCancel={() => setPendingAction(null)}
+        onConfirm={() => {
+          if (pendingAction?.type === 'rotate') {
+            void handleRotate(pendingAction.hook);
+          } else if (pendingAction?.type === 'delete') {
+            void handleDelete(pendingAction.hook);
+          }
+          setPendingAction(null);
+        }}
+        open={pendingAction !== null}
+        title={
+          pendingAction?.type === 'rotate' ? t('settings.webhooks.rotate') : t('common.delete')
+        }
+      />
     </div>
   );
 }

@@ -1,8 +1,7 @@
 'use client';
 
 import { Settings2 } from 'lucide-react';
-import { useRef, useState } from 'react';
-import { useOutsideClick } from '@/hooks/use-outside-click';
+import { SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
 import type { BuiltInColumn, ColumnKey } from '@/hooks/use-visible-columns';
 import type { DBCustomFieldDefinition } from '@/lib/db';
@@ -17,8 +16,6 @@ export function ColumnPicker({
   customFields?: DBCustomFieldDefinition[];
 }) {
   const t = useTranslations();
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
 
   const BUILT_IN_LABELS: { key: BuiltInColumn; label: string }[] = [
     { key: 'labels', label: t('issues.labels') },
@@ -28,23 +25,21 @@ export function ColumnPicker({
     { key: 'estimate', label: t('issues.estimate') },
   ];
 
-  useOutsideClick(ref, () => setOpen(false), open, true);
-
   return (
-    <div className="relative" ref={ref}>
-      <button
-        aria-expanded={open}
-        aria-label={t('issues.columnPicker')}
-        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
-        onClick={() => setOpen(v => !v)}
-        type="button"
-      >
-        <Settings2 className="h-3.5 w-3.5" />
-        {t('issues.columns')}
-      </button>
-
-      {open && (
-        <div className="absolute right-0 z-20 mt-1 w-56 rounded-lg border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+    <SelectPopover
+      align="right"
+      panelClassName="w-56 p-1"
+      triggerChildren={
+        <>
+          <Settings2 className="h-3.5 w-3.5" />
+          {t('issues.columns')}
+        </>
+      }
+      triggerClassName="gap-1 px-2 py-1 text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300"
+      triggerTitle={t('issues.columnPicker')}
+    >
+      {() => (
+        <>
           <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
             {t('issues.builtIn')}
           </p>
@@ -74,9 +69,9 @@ export function ColumnPicker({
               })}
             </>
           )}
-        </div>
+        </>
       )}
-    </div>
+    </SelectPopover>
   );
 }
 

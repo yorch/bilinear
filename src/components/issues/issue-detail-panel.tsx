@@ -1,12 +1,13 @@
 'use client';
 
-import { Bell, BellOff } from 'lucide-react';
+import { ArrowLeft, Bell, BellOff } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { priorityLabelKey } from '@/components/properties/priority-icon';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useTranslations } from '@/hooks/use-translations';
+import { getCycleDisplayName } from '@/lib/cycle-utils';
 import { gql } from '@/lib/graphql';
 import {
   ISSUE_SUBSCRIBE_MUTATION,
@@ -21,6 +22,7 @@ import type { IssueDetail, IssueLabel, IssueUser, WorkflowState } from '@/types/
 import { CustomFieldsEditor } from '../custom-fields/custom-fields-editor';
 import { TipTapEditor } from '../editor/tiptap-editor.lazy';
 import { AssigneeSelect } from '../properties/assignee-select';
+import { CycleSelect } from '../properties/cycle-select';
 import { DueDatePicker } from '../properties/due-date-picker';
 import { EstimatePicker } from '../properties/estimate-picker';
 import { LabelDot, LabelSelect } from '../properties/label-select';
@@ -37,6 +39,7 @@ import { RelationsSection } from './relations-section';
 import { SubIssueList } from './sub-issue-list';
 
 interface IssueDetailPanelProps {
+  breadcrumb?: { label: string; onNavigate: () => void } | null;
   issue: IssueDetail | null;
   labels: IssueLabel[];
   onClose: () => void;
@@ -46,6 +49,7 @@ interface IssueDetailPanelProps {
 }
 
 export const IssueDetailPanel = observer(function IssueDetailPanel({
+  breadcrumb,
   issue,
   states,
   users,
@@ -55,7 +59,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
 }: IssueDetailPanelProps) {
   const t = useTranslations();
   const { formatDueDate } = useFormatters();
-  const { userStore, teamStore, issueStore } = useStore();
+  const { userStore, teamStore, issueStore, cycleStore } = useStore();
   const currentUserId = userStore.currentUser?.id;
   const currentUserName = userStore.currentUser?.displayName ?? t('issueDetail.defaultUserName');
   const mentionUsers = useMemo(() => users.map(u => ({ id: u.id, label: u.displayName })), [users]);
@@ -135,7 +139,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !e.defaultPrevented) {
         onClose();
       }
     };
@@ -150,6 +154,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
   const _state = states.find(s => s.id === issue.stateId);
   const assignee = users.find(u => u.id === issue.assigneeId);
   const dueDateColor = getDueDateColor(issue.dueDate);
+  const currentCycle = issue.cycleId ? cycleStore.findById(issue.cycleId) : null;
 
   const saveTitle = () => {
     if (titleDraft.trim() && titleDraft.trim() !== issue.title) {
@@ -177,7 +182,22 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
-          <span className="font-mono text-xs text-zinc-400">{issue.identifier}</span>
+          <div className="flex min-w-0 items-center gap-1.5">
+            {breadcrumb && (
+              <>
+                <button
+                  className="flex items-center gap-1 truncate text-xs text-muted-foreground hover:text-foreground"
+                  onClick={breadcrumb.onNavigate}
+                  type="button"
+                >
+                  <ArrowLeft className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{breadcrumb.label}</span>
+                </button>
+                <span className="text-muted-foreground">/</span>
+              </>
+            )}
+            <span className="font-mono text-xs text-zinc-400">{issue.identifier}</span>
+          </div>
           <div className="flex items-center gap-1">
             {subscribed !== null && (
               <button
@@ -186,7 +206,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
                     ? t('issueDetail.unsubscribeShortcut')
                     : t('issueDetail.subscribeShortcut')
                 }
-                className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                className="rounded p-1 text-zinc-400 hover:bg-accent"
                 onClick={handleToggleSubscription}
                 title={
                   subscribed
@@ -200,7 +220,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
             )}
             <button
               aria-label={t('common.close')}
-              className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="rounded p-1 text-zinc-400 hover:bg-accent"
               onClick={onClose}
               type="button"
             >
@@ -232,7 +252,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
             />
           ) : (
             <button
-              className="cursor-text text-left text-xl font-semibold text-zinc-900 dark:text-zinc-100"
+              className="cursor-text text-left text-xl font-semibold text-foreground"
               onClick={() => {
                 setEditingTitle(true);
                 setTimeout(() => titleRef.current?.focus(), 20);
@@ -299,6 +319,19 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
               value={issue.projectId ?? null}
             />
 
+            {/* Cycle */}
+            <span className="text-zinc-500">{t('issueDetail.properties.cycle')}</span>
+            <div className="flex items-center gap-1.5">
+              <CycleSelect
+                onChange={cycleId => handleUpdate(issue.id, { cycleId })}
+                teamId={issue.teamId}
+                value={issue.cycleId ?? null}
+              />
+              {currentCycle && (
+                <span className="text-xs text-zinc-600">{getCycleDisplayName(currentCycle)}</span>
+              )}
+            </div>
+
             {/* Due date */}
             <span className="text-zinc-500">{t('issueDetail.properties.dueDate')}</span>
             <div className="flex items-center gap-1.5">
@@ -349,7 +382,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
               </div>
             ) : (
               <button
-                className="w-full cursor-text rounded-md p-2 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                className="w-full cursor-text rounded-md p-2 text-left transition-colors hover:bg-accent/50"
                 onClick={() => setEditingDesc(true)}
                 type="button"
               >

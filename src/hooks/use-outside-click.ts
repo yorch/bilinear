@@ -22,17 +22,26 @@ export function useOutsideClick(
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        // Claim the keypress: preventDefault stops a surrounding native
+        // <dialog> from also cancelling, and stopPropagation keeps
+        // window-level Escape handlers (issue detail panel, modals) from
+        // closing the parent surface on the same keypress.
+        e.preventDefault();
+        e.stopPropagation();
         handler();
       }
     };
     document.addEventListener('mousedown', onMouseDown);
     if (closeOnEscape) {
-      document.addEventListener('keydown', onKeyDown);
+      // Capture phase so this runs before bubble-phase handlers on enclosing
+      // surfaces (native <dialog> onKeyDown, window listeners) — an open
+      // popover always wins the Escape and dismisses only itself.
+      document.addEventListener('keydown', onKeyDown, true);
     }
     return () => {
       document.removeEventListener('mousedown', onMouseDown);
       if (closeOnEscape) {
-        document.removeEventListener('keydown', onKeyDown);
+        document.removeEventListener('keydown', onKeyDown, true);
       }
     };
   }, [ref, handler, enabled, closeOnEscape]);

@@ -4,6 +4,7 @@ import { ExternalLink, Eye, EyeOff } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -174,15 +175,13 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <div className="flex items-center border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
-        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          {t('roadmap.settings.title')}
-        </h1>
+        <h1 className="text-sm font-semibold text-foreground">{t('roadmap.settings.title')}</h1>
       </div>
 
       <div className="mx-auto w-full max-w-2xl px-6 py-8 flex flex-col gap-8">
         {/* Settings form */}
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('roadmap.settings.sectionHeading')}
           </h2>
           <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
@@ -194,32 +193,17 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
             ) : (
               <form className="flex flex-col gap-5" onSubmit={handleSave}>
                 {/* Enabled toggle */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                      {t('roadmap.settings.publicRoadmap')}
-                    </p>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      {t('roadmap.settings.publicRoadmapDescription')}
-                    </p>
-                  </div>
-                  <button
-                    aria-checked={enabled}
-                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 dark:focus:ring-offset-zinc-900 ${enabled ? 'bg-indigo-600' : 'bg-zinc-300 dark:bg-zinc-600'}`}
-                    onClick={() => setEnabled(v => !v)}
-                    role="switch"
-                    type="button"
-                  >
-                    <span
-                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-4' : 'translate-x-0.5'}`}
-                    />
-                  </button>
-                </div>
+                <SettingToggleRow
+                  checked={enabled}
+                  description={t('roadmap.settings.publicRoadmapDescription')}
+                  label={t('roadmap.settings.publicRoadmap')}
+                  onCheckedChange={setEnabled}
+                />
 
                 {/* Title */}
                 <div className="flex flex-col gap-1">
                   <label
-                    className="text-xs font-medium text-zinc-600 dark:text-zinc-400"
+                    className="text-xs font-medium text-muted-foreground"
                     htmlFor="roadmap-title"
                   >
                     {t('roadmap.settings.titleLabel')}
@@ -238,7 +222,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                 {/* Description */}
                 <div className="flex flex-col gap-1">
                   <label
-                    className="text-xs font-medium text-zinc-600 dark:text-zinc-400"
+                    className="text-xs font-medium text-muted-foreground"
                     htmlFor="roadmap-description"
                   >
                     {t('roadmap.settings.descriptionLabel')}
@@ -256,15 +240,13 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                 {/* Slug */}
                 <div className="flex flex-col gap-1">
                   <label
-                    className="text-xs font-medium text-zinc-600 dark:text-zinc-400"
+                    className="text-xs font-medium text-muted-foreground"
                     htmlFor="roadmap-slug"
                   >
                     {t('roadmap.settings.slugLabel')}
                   </label>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-400 dark:text-zinc-500 shrink-0">
-                      /roadmap/
-                    </span>
+                    <span className="text-xs text-muted-foreground shrink-0">/roadmap/</span>
                     <input
                       className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-mono text-zinc-900 placeholder-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-indigo-500 dark:focus:ring-indigo-800/40"
                       id="roadmap-slug"
@@ -291,12 +273,12 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
 
                 {/* Password */}
                 <div className="flex flex-col gap-2">
-                  <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                  <p className="text-xs font-medium text-muted-foreground">
                     {t('roadmap.settings.passwordProtection')}
                   </p>
                   {roadmap?.hasPassword && !clearPassword ? (
                     <div className="flex items-center gap-3">
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                      <span className="text-xs text-muted-foreground">
                         {t('roadmap.settings.passwordIsSet')}
                       </span>
                       <button
@@ -345,7 +327,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
 
                 <div className="flex justify-end">
                   <button
-                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-zinc-900"
+                    className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-zinc-900"
                     disabled={saving}
                     type="submit"
                   >
@@ -359,10 +341,10 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
 
         {/* Projects */}
         <section>
-          <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('roadmap.settings.projectsHeading')}
           </h2>
-          <p className="mb-4 text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="mb-4 text-xs text-muted-foreground">
             {t('roadmap.settings.projectsDescription')}
           </p>
           <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 overflow-hidden">
@@ -371,7 +353,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                 {t('roadmap.settings.noActiveProjects')}
               </p>
             ) : (
-              <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              <ul className="divide-y divide-border">
                 {projects.map(project => {
                   const isToggling = togglingProjectId === project.id;
                   return (
@@ -381,10 +363,10 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                         style={{ backgroundColor: project.color }}
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        <p className="truncate text-sm font-medium text-foreground">
                           {project.name}
                         </p>
-                        <p className="truncate text-xs text-zinc-400 dark:text-zinc-500 capitalize">
+                        <p className="truncate text-xs text-muted-foreground capitalize">
                           {project.statusType.replace(/([A-Z])/g, ' $1').trim()}
                         </p>
                       </div>
@@ -414,7 +396,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                         ) : (
                           <>
                             <EyeOff className="h-3.5 w-3.5 text-zinc-400" />
-                            <span className="text-zinc-500 dark:text-zinc-400">
+                            <span className="text-muted-foreground">
                               {t('roadmap.settings.hidden')}
                             </span>
                           </>

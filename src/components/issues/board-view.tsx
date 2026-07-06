@@ -5,19 +5,27 @@ import {
   type DragEndEvent,
   DragOverlay,
   type DragStartEvent,
+  KeyboardSensor,
   MouseSensor,
   TouchSensor,
   useDroppable,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBWorkflowState } from '@/lib/db';
+import { getDueDateColor } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser } from '@/types/issues';
 import { UserAvatar } from '../ui/user-avatar';
@@ -69,6 +77,7 @@ function BoardCardInner({
   onOpen,
   isDragging,
 }: BoardCardProps) {
+  const { formatDueDate } = useFormatters();
   const assignee = issue.assigneeId ? users.find(u => u.id === issue.assigneeId) : null;
 
   return (
@@ -79,7 +88,7 @@ function BoardCardInner({
           ? 'border-indigo-500 ring-1 ring-indigo-500'
           : multiSelected
             ? 'border-blue-500 ring-2 ring-blue-500'
-            : 'border-zinc-200 dark:border-zinc-700',
+            : 'border-border',
         isDragging && 'rotate-2 shadow-lg',
       )}
       onClick={onSelect}
@@ -89,13 +98,11 @@ function BoardCardInner({
       {/* Issue identifier & priority */}
       <div className="mb-1.5 flex items-center gap-1.5">
         <PriorityIcon className="h-3.5 w-3.5" priority={issue.priority} />
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">{issue.identifier}</span>
+        <span className="text-xs text-muted-foreground">{issue.identifier}</span>
       </div>
 
       {/* Title */}
-      <p className="mb-2 line-clamp-2 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-        {issue.title}
-      </p>
+      <p className="mb-2 line-clamp-2 text-sm font-medium text-foreground">{issue.title}</p>
 
       {/* Footer: labels + assignee */}
       <div className="flex items-center justify-between">
@@ -115,7 +122,9 @@ function BoardCardInner({
 
       {/* Due date */}
       {issue.dueDate && (
-        <div className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-500">{issue.dueDate}</div>
+        <div className={cn('mt-1.5 text-xs', getDueDateColor(issue.dueDate))}>
+          {formatDueDate(issue.dueDate)}
+        </div>
       )}
     </button>
   );
@@ -159,7 +168,16 @@ function SortableCard({
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    // biome-ignore lint/a11y/useSemanticElements: dnd-kit's attributes spread supplies role="button"/tabIndex for the keyboard drag handle
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      aria-label={t('issues.moveIssue', { identifier: issue.identifier })}
+      role="button"
+      tabIndex={0}
+    >
       <BoardCardInner
         isDragging={isDragging}
         issue={issue}
@@ -215,7 +233,7 @@ function BoardColumn({
           />
         )}
         <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{column.label}</span>
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">{column.issues.length}</span>
+        <span className="text-xs text-muted-foreground">{column.issues.length}</span>
       </div>
 
       {/* Cards — column is a droppable area so empty columns accept drops */}
@@ -241,7 +259,7 @@ function BoardColumn({
         </SortableContext>
 
         {column.issues.length === 0 && (
-          <div className="flex items-center justify-center py-8 text-xs text-zinc-400 dark:text-zinc-500">
+          <div className="flex items-center justify-center py-8 text-xs text-muted-foreground">
             {t('issues.noIssues')}
           </div>
         )}
@@ -287,7 +305,7 @@ function BoardSwimlane({
     <div className="mb-4">
       {/* Swimlane header */}
       <button
-        className="mb-2 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
+        className="mb-2 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-accent"
         onClick={() => setCollapsed(c => !c)}
         type="button"
       >
@@ -297,7 +315,7 @@ function BoardSwimlane({
           <ChevronDown className="h-4 w-4 text-zinc-400" />
         )}
         <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{label}</span>
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">({issues.length})</span>
+        <span className="text-xs text-muted-foreground">({issues.length})</span>
       </button>
 
       {!collapsed && (
@@ -415,7 +433,10 @@ export function BoardView({
   const touchSensor = useSensor(TouchSensor, {
     activationConstraint: { delay: 200, tolerance: 5 },
   });
-  const sensors = useSensors(mouseSensor, touchSensor);
+  const keyboardSensor = useSensor(KeyboardSensor, {
+    coordinateGetter: sortableKeyboardCoordinates,
+  });
+  const sensors = useSensors(mouseSensor, touchSensor, keyboardSensor);
 
   // Build column definitions
   const colDefs = buildColumnDefs(groupBy, states, users, t('issues.unassigned'), p =>
@@ -594,7 +615,7 @@ export function BoardView({
 
   if (issues.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center py-20 text-sm text-zinc-400 dark:text-zinc-500">
+      <div className="flex flex-1 items-center justify-center py-20 text-sm text-muted-foreground">
         {t('issues.noIssues')}
       </div>
     );
