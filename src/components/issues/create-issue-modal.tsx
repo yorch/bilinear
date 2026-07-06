@@ -1,5 +1,6 @@
 'use client';
 
+import { Users } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { useTranslations } from '@/hooks/use-translations';
@@ -17,8 +18,16 @@ import { ProjectSelect } from '../properties/project-select';
 import { StatusSelect } from '../properties/status-select';
 import { Button } from '../ui/button';
 import { ModalDialog } from '../ui/modal-dialog';
+import { SelectPopover } from '../ui/select-popover';
 import { Switch } from '../ui/switch';
 import { TemplateSelector } from './template-selector';
+
+export interface CreateIssueTeamOption {
+  icon?: string | null;
+  id: string;
+  key: string;
+  name: string;
+}
 
 const CREATE_MORE_STORAGE_KEY = 'bilinear:create-issue:create-more';
 
@@ -69,9 +78,13 @@ interface CreateIssueModalProps {
   labels: IssueLabel[];
   onClose: () => void;
   onSubmit: (input: CreateIssueInput) => Promise<void>;
+  /** Called when the user switches teams via the in-modal picker (only rendered when `teams` has 2+ entries). */
+  onTeamChange?: (teamId: string) => void;
   open: boolean;
   states: WorkflowState[];
   teamId?: string;
+  /** All teams the picker can switch between. Omit (or a single-team list) to hide the picker. */
+  teams?: CreateIssueTeamOption[];
   users: IssueUser[];
 }
 
@@ -84,6 +97,8 @@ export function CreateIssueModal({
   labels,
   defaultStateId,
   teamId,
+  teams,
+  onTeamChange,
 }: CreateIssueModalProps) {
   const t = useTranslations();
   const titleRef = useRef<HTMLInputElement>(null);
@@ -175,6 +190,20 @@ export function CreateIssueModal({
         });
     }
   }, [open]);
+
+  // Switching teams via the in-modal picker changes `states` out from under
+  // the form; the previously-selected stateId almost certainly doesn't
+  // belong to the new team, so snap it back to that team's default. Skipped
+  // on the initial open (the effect above already seeds the right default)
+  // by tracking the last-seen teamId rather than depending on `open`.
+  const lastTeamIdRef = useRef(teamId);
+  useEffect(() => {
+    if (!open || lastTeamIdRef.current === teamId) {
+      return;
+    }
+    lastTeamIdRef.current = teamId;
+    patchForm({ stateId: defaultStateId ?? states[0]?.id ?? '' });
+  }, [teamId, defaultStateId, states, open, patchForm]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -324,6 +353,45 @@ export function CreateIssueModal({
 
         {/* Properties toolbar */}
         <div className="flex flex-wrap items-center gap-1 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
+          {teams && teams.length > 1 && onTeamChange && (
+            <SelectPopover
+              panelClassName="w-56 py-1"
+              triggerChildren={
+                <>
+                  <Users className="h-3.5 w-3.5" />
+                  {teams.find(team => team.id === teamId)?.key ?? teams[0]?.key}
+                </>
+              }
+              triggerClassName="gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
+              triggerTitle={t('issueDetail.createModal.team')}
+            >
+              {close => (
+                <>
+                  {teams.map(team => (
+                    <button
+                      className={cn(
+                        'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent',
+                        team.id === teamId && 'font-medium text-primary',
+                      )}
+                      key={team.id}
+                      onClick={() => {
+                        onTeamChange(team.id);
+                        close();
+                      }}
+                      type="button"
+                    >
+                      {team.icon ? (
+                        <span className="text-xs">{team.icon}</span>
+                      ) : (
+                        <Users className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      )}
+                      <span className="truncate">{team.name}</span>
+                    </button>
+                  ))}
+                </>
+              )}
+            </SelectPopover>
+          )}
           <StatusSelect
             onChange={v => patchForm({ stateId: v })}
             states={states}

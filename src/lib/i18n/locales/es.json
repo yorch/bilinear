@@ -669,6 +669,7 @@
       "issueCreated": "Tarea creada",
       "suggest": "Sugerir",
       "suggestTitleFromDescription": "Sugerir un título a partir de la descripción",
+      "team": "Equipo",
       "titlePlaceholder": "Título de la tarea"
     },
     "defaultUserName": "Usuario",

@@ -669,6 +669,7 @@
       "issueCreated": "Issue created",
       "suggest": "Suggest",
       "suggestTitleFromDescription": "Suggest a title from the description",
+      "team": "Team",
       "titlePlaceholder": "Issue title"
     },
     "defaultUserName": "User",
