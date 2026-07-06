@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -78,6 +79,10 @@ export default function WebhooksSettingsPage() {
   const [url, setUrl] = useState('');
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
   const [revealedSecrets, setRevealedSecrets] = useState<Set<string>>(new Set());
+  const [pendingAction, setPendingAction] = useState<{
+    hook: Webhook;
+    type: 'delete' | 'rotate';
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -155,9 +160,6 @@ export default function WebhooksSettingsPage() {
   };
 
   const handleDelete = async (hook: Webhook) => {
-    if (!confirm(t('settings.webhooks.deleteConfirm', { name: hook.name }))) {
-      return;
-    }
     const res = await gql(WEBHOOK_DELETE_MUTATION, { id: hook.id });
     if (!res.errors?.length) {
       setWebhooks(w => w.filter(h => h.id !== hook.id));
@@ -165,9 +167,6 @@ export default function WebhooksSettingsPage() {
   };
 
   const handleRotate = async (hook: Webhook) => {
-    if (!confirm(t('settings.webhooks.rotateConfirm'))) {
-      return;
-    }
     const res = await gql(WEBHOOK_ROTATE_SECRET_MUTATION, { id: hook.id });
     if (!res.errors?.length) {
       const updated = (res.data as { webhookRotateSecret?: { webhook?: Webhook } } | undefined)
@@ -348,14 +347,14 @@ export default function WebhooksSettingsPage() {
                   </button>
                   <button
                     className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
-                    onClick={() => handleRotate(hook)}
+                    onClick={() => setPendingAction({ hook, type: 'rotate' })}
                     type="button"
                   >
                     {t('settings.webhooks.rotate')}
                   </button>
                   <button
                     className="rounded border border-zinc-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-zinc-700 dark:hover:bg-red-950/30"
-                    onClick={() => handleDelete(hook)}
+                    onClick={() => setPendingAction({ hook, type: 'delete' })}
                     type="button"
                   >
                     {t('common.delete')}
@@ -366,6 +365,29 @@ export default function WebhooksSettingsPage() {
           ))}
         </div>
       )}
+      <ConfirmDialog
+        confirmLabel={
+          pendingAction?.type === 'rotate' ? t('settings.webhooks.rotate') : t('common.delete')
+        }
+        message={
+          pendingAction?.type === 'rotate'
+            ? t('settings.webhooks.rotateConfirm')
+            : t('settings.webhooks.deleteConfirm', { name: pendingAction?.hook.name ?? '' })
+        }
+        onCancel={() => setPendingAction(null)}
+        onConfirm={() => {
+          if (pendingAction?.type === 'rotate') {
+            void handleRotate(pendingAction.hook);
+          } else if (pendingAction?.type === 'delete') {
+            void handleDelete(pendingAction.hook);
+          }
+          setPendingAction(null);
+        }}
+        open={pendingAction !== null}
+        title={
+          pendingAction?.type === 'rotate' ? t('settings.webhooks.rotate') : t('common.delete')
+        }
+      />
     </div>
   );
 }

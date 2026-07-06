@@ -105,14 +105,12 @@ test.describe('Webhooks Settings', () => {
       .getByText(name, { exact: true })
       .locator('xpath=ancestor::div[contains(@class,"rounded") and contains(@class,"p-4")][1]');
 
-    // Delete uses window.confirm() — auto-accept it. Await accept() so the
-    // dialog is fully dismissed before the click handler resolves; otherwise
-    // the close races the navigation/state update under load.
-    page.once('dialog', async dialog => {
-      expect(dialog.type()).toBe('confirm');
-      await dialog.accept();
-    });
+    // Delete opens a ConfirmDialog — confirm it in the dialog itself.
     await card.getByRole('button', { name: /^delete$/i }).click();
+    await page
+      .getByRole('button', { name: /^delete$/i })
+      .last()
+      .click();
 
     await expect(page.getByText(name)).not.toBeVisible();
   });

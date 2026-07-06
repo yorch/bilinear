@@ -6,6 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
@@ -175,6 +176,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const [creatingToken, setCreatingToken] = useState(false);
   const [newPlaintext, setNewPlaintext] = useState<string | null>(null);
   const [revokingTokenId, setRevokingTokenId] = useState<string | null>(null);
+  const [confirmingRevokeToken, setConfirmingRevokeToken] = useState<ApiToken | null>(null);
   const [savingAi, setSavingAi] = useState(false);
 
   async function toggleAi(enabled: boolean) {
@@ -816,15 +818,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                     <button
                       className="shrink-0 text-zinc-400 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40"
                       disabled={revokingTokenId === token.id}
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            t('settings.workspace.revokeTokenConfirm', { label: token.label }),
-                          )
-                        ) {
-                          void revokeApiToken(token.id);
-                        }
-                      }}
+                      onClick={() => setConfirmingRevokeToken(token)}
                       title={t('settings.workspace.revokeToken')}
                       type="button"
                     >
@@ -835,6 +829,21 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
               </ul>
             )}
           </div>
+          <ConfirmDialog
+            confirmLabel={t('settings.workspace.revokeToken')}
+            message={t('settings.workspace.revokeTokenConfirm', {
+              label: confirmingRevokeToken?.label ?? '',
+            })}
+            onCancel={() => setConfirmingRevokeToken(null)}
+            onConfirm={() => {
+              if (confirmingRevokeToken) {
+                void revokeApiToken(confirmingRevokeToken.id);
+              }
+              setConfirmingRevokeToken(null);
+            }}
+            open={confirmingRevokeToken !== null}
+            title={t('settings.workspace.revokeToken')}
+          />
         </section>
 
         {/* AI assistant */}

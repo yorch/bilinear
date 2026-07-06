@@ -303,6 +303,7 @@
     "addOption": "+ Add option",
     "addSuccess": "Custom field added",
     "archive": "Archive",
+    "archiveConfirm": "Archive the \"{name}\" field? It will be hidden from issues, but existing values are kept.",
     "archiveFailed": "Failed to archive custom field",
     "archiveSuccess": "Custom field archived",
     "createFailed": "Failed to create custom field",

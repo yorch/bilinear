@@ -303,6 +303,7 @@
     "addOption": "+ Agregar opción",
     "addSuccess": "Campo personalizado agregado",
     "archive": "Archivar",
+    "archiveConfirm": "¿Archivar el campo \"{name}\"? Se ocultará de las tareas, pero los valores existentes se conservan.",
     "archiveFailed": "Error al archivar el campo personalizado",
     "archiveSuccess": "Campo personalizado archivado",
     "createFailed": "Error al crear el campo personalizado",

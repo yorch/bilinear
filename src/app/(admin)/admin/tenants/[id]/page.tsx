@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import {
@@ -53,6 +54,7 @@ export default function AdminTenantDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -118,9 +120,7 @@ export default function AdminTenantDetailPage() {
     if (!tenant) {
       return;
     }
-    if (!window.confirm(t('admin.tenants.deleteConfirmDetail', { name: tenant.name }))) {
-      return;
-    }
+    setConfirmingDelete(false);
     await withBusy(async () => {
       await deleteTenant(tenant.id);
       toast.success(t('admin.tenants.archivedToast', { name: tenant.name }));
@@ -212,7 +212,7 @@ export default function AdminTenantDetailPage() {
           <button
             className="rounded border border-red-300 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
             disabled={busy}
-            onClick={handleDelete}
+            onClick={() => setConfirmingDelete(true)}
             type="button"
           >
             {t('common.delete')}
@@ -265,6 +265,13 @@ export default function AdminTenantDetailPage() {
           </div>
         )}
       </section>
+      <ConfirmDialog
+        message={t('admin.tenants.deleteConfirmDetail', { name: tenant.name })}
+        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={handleDelete}
+        open={confirmingDelete}
+        title={t('common.delete')}
+      />
     </div>
   );
 }

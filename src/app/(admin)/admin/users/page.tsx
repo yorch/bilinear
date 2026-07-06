@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { useTranslations } from '@/hooks/use-translations';
 import {
   fetchUsers,
@@ -44,6 +45,7 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [confirmingRevoke, setConfirmingRevoke] = useState<PlatformUser | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -85,12 +87,6 @@ export default function AdminUsersPage() {
   }
 
   async function handleToggleAdmin(u: PlatformUser) {
-    if (
-      u.isPlatformAdmin &&
-      !window.confirm(t('admin.users.revokeAdminConfirm', { name: u.displayName }))
-    ) {
-      return;
-    }
     await withBusy(u.id, async () => {
       replaceRow(await setUserAdmin(u.id, !u.isPlatformAdmin));
       toast.success(
@@ -223,7 +219,9 @@ export default function AdminUsersPage() {
                       <button
                         className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
                         disabled={busyId === u.id}
-                        onClick={() => handleToggleAdmin(u)}
+                        onClick={() =>
+                          u.isPlatformAdmin ? setConfirmingRevoke(u) : void handleToggleAdmin(u)
+                        }
                         type="button"
                       >
                         {u.isPlatformAdmin
@@ -251,6 +249,21 @@ export default function AdminUsersPage() {
           </table>
         </div>
       )}
+      <ConfirmDialog
+        confirmLabel={t('admin.users.revokeAdmin')}
+        message={t('admin.users.revokeAdminConfirm', {
+          name: confirmingRevoke?.displayName ?? '',
+        })}
+        onCancel={() => setConfirmingRevoke(null)}
+        onConfirm={() => {
+          if (confirmingRevoke) {
+            void handleToggleAdmin(confirmingRevoke);
+          }
+          setConfirmingRevoke(null);
+        }}
+        open={confirmingRevoke !== null}
+        title={t('admin.users.revokeAdmin')}
+      />
     </div>
   );
 }

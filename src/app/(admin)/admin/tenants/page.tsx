@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import {
@@ -44,6 +45,7 @@ function TenantsInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState<PlatformTenant | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -92,9 +94,6 @@ function TenantsInner() {
   }
 
   async function handleDelete(tenant: PlatformTenant) {
-    if (!window.confirm(t('admin.tenants.deleteConfirm', { name: tenant.name }))) {
-      return;
-    }
     await withBusy(tenant.id, async () => {
       const updated = await deleteTenant(tenant.id);
       if (includeArchived) {
@@ -228,7 +227,7 @@ function TenantsInner() {
                           <button
                             className="rounded border border-red-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
                             disabled={busyId === tenant.id}
-                            onClick={() => handleDelete(tenant)}
+                            onClick={() => setConfirmingDelete(tenant)}
                             type="button"
                           >
                             {t('common.delete')}
@@ -243,6 +242,18 @@ function TenantsInner() {
           </table>
         </div>
       )}
+      <ConfirmDialog
+        message={t('admin.tenants.deleteConfirm', { name: confirmingDelete?.name ?? '' })}
+        onCancel={() => setConfirmingDelete(null)}
+        onConfirm={() => {
+          if (confirmingDelete) {
+            void handleDelete(confirmingDelete);
+          }
+          setConfirmingDelete(null);
+        }}
+        open={confirmingDelete !== null}
+        title={t('common.delete')}
+      />
     </div>
   );
 }

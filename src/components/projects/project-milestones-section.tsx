@@ -3,6 +3,7 @@
 import { Check, Pencil, Plus, Target, Trash2, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBProjectMilestone } from '@/lib/db';
@@ -139,11 +140,10 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
   const t = useTranslations();
   const { formatDate } = useFormatters();
   const [deleting, setDeleting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const handleDelete = async () => {
-    if (!window.confirm(t('projects.deleteMilestoneConfirm', { name: milestone.name }))) {
-      return;
-    }
+    setConfirmingDelete(false);
     setDeleting(true);
     try {
       await onDelete(milestone.id);
@@ -180,13 +180,20 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
         <button
           className="rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950 dark:hover:text-red-400"
           disabled={deleting}
-          onClick={handleDelete}
+          onClick={() => setConfirmingDelete(true)}
           title={t('projects.deleteMilestone')}
           type="button"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
+      <ConfirmDialog
+        message={t('projects.deleteMilestoneConfirm', { name: milestone.name })}
+        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={handleDelete}
+        open={confirmingDelete}
+        title={t('projects.deleteMilestone')}
+      />
     </div>
   );
 }

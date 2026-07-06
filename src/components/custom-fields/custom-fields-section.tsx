@@ -3,6 +3,7 @@
 import { Plus, Trash2, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SimpleSelect } from '@/components/ui/select';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
@@ -70,6 +71,9 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
   const { customFieldStore } = useStore();
   const definitions = customFieldStore.findDefinitionsByTeamId(teamId);
   const [isAdding, setIsAdding] = useState(false);
+  const [confirmingArchive, setConfirmingArchive] = useState<{ id: string; name: string } | null>(
+    null,
+  );
 
   const handleCreate = async (input: {
     name: string;
@@ -97,6 +101,7 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
   };
 
   const handleArchive = async (id: string) => {
+    setConfirmingArchive(null);
     try {
       await gql(ARCHIVE_MUTATION, { id });
       toast.success(t('customFields.archiveSuccess'));
@@ -163,7 +168,7 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
               <button
                 aria-label={t('customFields.archive')}
                 className="rounded p-1 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
-                onClick={() => handleArchive(def.id)}
+                onClick={() => setConfirmingArchive({ id: def.id, name: def.name })}
                 type="button"
               >
                 <Trash2 className="h-4 w-4" />
@@ -172,6 +177,18 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
           ))}
         </ul>
       </div>
+      <ConfirmDialog
+        confirmLabel={t('customFields.archive')}
+        message={t('customFields.archiveConfirm', { name: confirmingArchive?.name ?? '' })}
+        onCancel={() => setConfirmingArchive(null)}
+        onConfirm={() => {
+          if (confirmingArchive) {
+            void handleArchive(confirmingArchive.id);
+          }
+        }}
+        open={confirmingArchive !== null}
+        title={t('customFields.archive')}
+      />
     </section>
   );
 });
