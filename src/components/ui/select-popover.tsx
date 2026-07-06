@@ -10,6 +10,7 @@ interface SelectPopoverProps {
   align?: 'left' | 'right';
   children: (close: () => void) => ReactNode;
   className?: string;
+  disabled?: boolean;
   forceOpen?: boolean;
   onClose?: () => void;
   panelClassName?: string;
@@ -26,6 +27,7 @@ export function SelectPopover({
   align = 'left',
   children,
   className,
+  disabled,
   forceOpen,
   onClose,
   panelClassName,
@@ -89,7 +91,12 @@ export function SelectPopover({
         aria-controls={open ? panelId : undefined}
         aria-expanded={open}
         aria-haspopup="true"
-        className={cn('flex items-center rounded hover:bg-accent', triggerClassName)}
+        className={cn(
+          'flex items-center rounded hover:bg-accent',
+          'disabled:cursor-not-allowed disabled:opacity-50',
+          triggerClassName,
+        )}
+        disabled={disabled}
         onClick={e => {
           e.stopPropagation();
           setOpen(o => !o);

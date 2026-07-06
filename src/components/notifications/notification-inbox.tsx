@@ -2,9 +2,9 @@
 
 import { Bell, Check, CheckCheck, Clock, MessageSquare, RefreshCw, User } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { SelectPopover } from '@/components/ui/select-popover';
 import { useFormatters } from '@/hooks/use-formatters';
-import { useOutsideClick } from '@/hooks/use-outside-click';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBNotification } from '@/lib/db';
 import { gql } from '@/lib/graphql';
@@ -115,11 +115,6 @@ function NotificationItem({
   const { type, read, createdAt, id } = notification;
   const isMarkingThis = markingId === id;
   const isSnoozingThis = snoozingId === id;
-  const [snoozeOpen, setSnoozeOpen] = useState(false);
-  const snoozeRef = useRef<HTMLDivElement>(null);
-
-  useOutsideClick(snoozeRef, () => setSnoozeOpen(false), snoozeOpen);
-
   return (
     <div
       className={cn(
@@ -156,25 +151,22 @@ function NotificationItem({
       {!read && (
         <div className="flex shrink-0 items-center gap-1">
           {/* Snooze button with dropdown */}
-          <div className="relative" ref={snoozeRef}>
-            <button
-              className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300 disabled:opacity-50"
-              disabled={isSnoozingThis}
-              onClick={() => setSnoozeOpen(o => !o)}
-              title={t('notifications.snooze.buttonTitle')}
-              type="button"
-            >
-              <Clock className="h-3.5 w-3.5" />
-            </button>
-
-            {snoozeOpen && (
-              <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+          <SelectPopover
+            align="right"
+            disabled={isSnoozingThis}
+            panelClassName="w-44 py-1 shadow-xl"
+            triggerChildren={<Clock className="h-3.5 w-3.5" />}
+            triggerClassName="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+            triggerTitle={t('notifications.snooze.buttonTitle')}
+          >
+            {close => (
+              <>
                 {SNOOZE_PRESETS.map(preset => (
                   <button
                     className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
                     key={preset.labelKey}
                     onClick={() => {
-                      setSnoozeOpen(false);
+                      close();
                       onSnooze(id, preset.getUntil());
                     }}
                     type="button"
@@ -182,9 +174,9 @@ function NotificationItem({
                     {t(preset.labelKey)}
                   </button>
                 ))}
-              </div>
+              </>
             )}
-          </div>
+          </SelectPopover>
 
           {/* Mark read button */}
           <button

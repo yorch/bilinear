@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { usePopover } from '@/hooks/use-popover';
+import { SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 
@@ -89,34 +89,27 @@ export function EstimatePicker({
   onChange,
 }: EstimatePickerProps) {
   const t = useTranslations();
-  const { open, setOpen, ref: containerRef } = usePopover({ forceOpen, onClose });
-
   const scale = SCALE_OPTIONS[estimationType];
 
-  const handleSelect = (v: number | null) => {
-    onChange(v);
-    setOpen(false);
-    onClose?.();
-  };
-
   return (
-    <div className="relative inline-block" ref={containerRef}>
-      <button
-        aria-label={t('properties.estimate.setEstimate')}
-        className="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-accent"
-        onClick={() => setOpen(v => !v)}
-        type="button"
-      >
-        <EstimateBadge estimationType={estimationType} value={value} />
-      </button>
-
-      {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 min-w-[120px] rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+    <SelectPopover
+      forceOpen={forceOpen}
+      onClose={onClose}
+      panelClassName="min-w-[120px] py-1"
+      triggerChildren={<EstimateBadge estimationType={estimationType} value={value} />}
+      triggerClassName="gap-1 px-1 py-0.5"
+      triggerTitle={t('properties.estimate.setEstimate')}
+    >
+      {close => (
+        <>
           {/* Clear estimate */}
           {value != null && (
             <button
-              className="w-full px-3 py-1.5 text-left text-xs text-zinc-400 hover:bg-accent"
-              onClick={() => handleSelect(null)}
+              className="w-full px-3 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent"
+              onClick={() => {
+                onChange(null);
+                close();
+              }}
               type="button"
             >
               {t('properties.estimate.noEstimate')}
@@ -133,7 +126,10 @@ export function EstimatePicker({
                     : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800',
                 )}
                 key={opt.value}
-                onClick={() => handleSelect(opt.value)}
+                onClick={() => {
+                  onChange(opt.value);
+                  close();
+                }}
                 type="button"
               >
                 {opt.label}
@@ -141,11 +137,17 @@ export function EstimatePicker({
             ))
           ) : (
             /* estimationType === 'notUsed' or unknown — free-form number */
-            <NumericInput onSubmit={v => handleSelect(v)} value={value ?? undefined} />
+            <NumericInput
+              onSubmit={v => {
+                onChange(v);
+                close();
+              }}
+              value={value ?? undefined}
+            />
           )}
-        </div>
+        </>
       )}
-    </div>
+    </SelectPopover>
   );
 }
 
