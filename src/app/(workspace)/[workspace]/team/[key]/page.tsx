@@ -19,17 +19,14 @@ import { type SaveViewInput, SaveViewModal } from '@/components/views/save-view-
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
+import { useIssuesBulkUpdate } from '@/hooks/use-issues-bulk-update';
 import { useRecentItems } from '@/hooks/use-recent-items';
 import { useTranslations } from '@/hooks/use-translations';
 import { useVisibleColumns } from '@/hooks/use-visible-columns';
-import type { DBIssue, DBIssueLabel } from '@/lib/db';
+import type { DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
 import { gql } from '@/lib/graphql';
-import {
-  ISSUE_ARCHIVE_MUTATION,
-  ISSUE_UNARCHIVE_MUTATION,
-  ISSUES_BULK_UPDATE_MUTATION,
-} from '@/lib/graphql-queries';
+import { ISSUE_ARCHIVE_MUTATION, ISSUE_UNARCHIVE_MUTATION } from '@/lib/graphql-queries';
 import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { buildIssueHref } from '@/lib/issue-nav';
 import { toast } from '@/lib/toast';
@@ -184,38 +181,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   // ── Mutations ─────────────────────────────────────────────────────────────
 
   const handleUpdate = useIssueUpdate();
-
-  const handleBulkUpdate = useCallback(
-    (ids: string[], patch: Record<string, unknown>) => {
-      const snapshots = ids.map(id => ({ id, snapshot: issueStore.findById(id) }));
-      for (const id of ids) {
-        issueStore.optimisticUpdate(id, patch as Partial<DBIssue>);
-      }
-      txQueue.enqueue(
-        ISSUES_BULK_UPDATE_MUTATION,
-        { ids, input: patch },
-        {
-          onError: err => {
-            toast.error(err instanceof Error ? err.message : t('issues.bulkUpdateFailed'));
-            for (const { id, snapshot } of snapshots) {
-              if (snapshot) {
-                issueStore.optimisticUpdate(id, snapshot);
-              }
-            }
-          },
-          onSuccess: data => {
-            const updated =
-              (data as { issuesBulkUpdate?: { issues?: DBIssue[] } })?.issuesBulkUpdate?.issues ??
-              [];
-            for (const issue of updated) {
-              issueStore.applySyncAction('U', issue.id, issue);
-            }
-          },
-        },
-      );
-    },
-    [issueStore, txQueue, t],
-  );
+  const handleBulkUpdate = useIssuesBulkUpdate();
 
   const handleUnarchive = useCallback(
     (id: string) => {
