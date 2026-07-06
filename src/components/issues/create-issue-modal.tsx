@@ -15,6 +15,7 @@ import { LabelSelect } from '../properties/label-select';
 import { PrioritySelect } from '../properties/priority-select';
 import { ProjectSelect } from '../properties/project-select';
 import { StatusSelect } from '../properties/status-select';
+import { Button } from '../ui/button';
 import { ModalDialog } from '../ui/modal-dialog';
 import { Switch } from '../ui/switch';
 import { TemplateSelector } from './template-selector';
@@ -362,25 +363,14 @@ export function CreateIssueModal({
             {t('issueDetail.createModal.createMore')}
           </span>
           <div className="flex items-center gap-2">
-            <button
-              className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-              onClick={requestClose}
-              type="button"
-            >
+            <Button onClick={requestClose} size="sm" type="button" variant="ghost">
               {t('common.cancel')}
-            </button>
-            <button
-              className={cn(
-                'rounded-md px-4 py-1.5 text-sm font-medium text-white transition-colors',
-                'bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed',
-              )}
-              disabled={!form.title.trim() || submitting}
-              type="submit"
-            >
+            </Button>
+            <Button disabled={!form.title.trim() || submitting} size="sm" type="submit">
               {submitting
                 ? t('issueDetail.createModal.creating')
                 : t('issueDetail.createModal.createIssue')}
-            </button>
+            </Button>
           </div>
         </div>
       </form>

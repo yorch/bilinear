@@ -3,6 +3,7 @@
 import { Crown, UserMinus, UserPlus, X } from 'lucide-react';
 import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { useTranslations } from '@/hooks/use-translations';
 import { toast } from '@/lib/toast';
 import { cn, getErrorMessage } from '@/lib/utils';
@@ -336,13 +337,9 @@ export function TeamMemberManagement({
             )}
           </ul>
           <div className="mt-2 flex justify-end">
-            <button
-              className="rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-              onClick={() => setAddOpen(false)}
-              type="button"
-            >
+            <Button onClick={() => setAddOpen(false)} size="sm" type="button" variant="ghost">
               {t('common.cancel')}
-            </button>
+            </Button>
           </div>
         </div>
       ) : (

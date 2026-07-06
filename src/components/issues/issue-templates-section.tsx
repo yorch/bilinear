@@ -3,6 +3,7 @@
 import { Edit2, Plus, Star, Trash2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -564,24 +565,12 @@ function TemplateForm({
 
       {/* Actions */}
       <div className="flex items-center justify-end gap-2">
-        <button
-          className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-accent"
-          onClick={onCancel}
-          type="button"
-        >
+        <Button onClick={onCancel} size="sm" type="button" variant="ghost">
           {t('common.cancel')}
-        </button>
-        <button
-          className={cn(
-            'rounded px-3 py-1.5 text-xs font-medium text-white transition-colors',
-            'bg-primary hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50',
-          )}
-          disabled={!canSubmit || submitting}
-          onClick={handleSubmit}
-          type="button"
-        >
+        </Button>
+        <Button disabled={!canSubmit || submitting} onClick={handleSubmit} size="sm" type="button">
           {submitting ? t('common.saving') : submitLabel}
-        </button>
+        </Button>
       </div>
     </div>
   );

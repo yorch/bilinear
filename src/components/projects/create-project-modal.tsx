@@ -2,6 +2,7 @@
 
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ModalDialog } from '@/components/ui/modal-dialog';
 import { SimpleSelect } from '@/components/ui/select';
@@ -215,23 +216,12 @@ export const CreateProjectModal = observer(function CreateProjectModal({
 
         <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
           {submitError && <p className="flex-1 text-xs text-red-500">{submitError}</p>}
-          <button
-            className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-            onClick={onClose}
-            type="button"
-          >
+          <Button onClick={onClose} size="sm" type="button" variant="ghost">
             {t('common.cancel')}
-          </button>
-          <button
-            className={cn(
-              'rounded-md px-4 py-1.5 text-sm font-medium text-white transition-colors',
-              'bg-primary hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50',
-            )}
-            disabled={!canSubmit}
-            type="submit"
-          >
+          </Button>
+          <Button disabled={!canSubmit} size="sm" type="submit">
             {submitting ? t('projects.creating') : t('projects.createProject')}
-          </button>
+          </Button>
         </div>
       </form>
     </ModalDialog>
