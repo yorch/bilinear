@@ -2,6 +2,7 @@
 
 import { Smile } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
@@ -29,14 +30,16 @@ interface IssueReactionBarProps {
 export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarProps) {
   const t = useTranslations();
   const [reactions, setReactions] = useState<Reaction[]>([]);
+  const [loadError, setLoadError] = useState(false);
 
   const fetchReactions = useCallback(async () => {
     try {
       const res = await gql(ISSUE_REACTIONS_QUERY, { id: issueId });
       const data = res.data as { issue?: { reactions: Reaction[] } } | undefined;
       setReactions(data?.issue?.reactions ?? []);
+      setLoadError(false);
     } catch {
-      // Non-fatal — bar just stays empty
+      setLoadError(true);
     }
   }, [issueId]);
 
@@ -70,6 +73,16 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
   };
 
   const hasAny = Object.keys(counts).length > 0;
+
+  if (loadError && !hasAny) {
+    return (
+      <InlineRetry
+        className="py-0"
+        message={t('issueDetail.reactions.failedToLoad')}
+        onRetry={fetchReactions}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-1">

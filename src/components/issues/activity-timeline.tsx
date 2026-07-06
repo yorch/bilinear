@@ -2,6 +2,7 @@
 
 import { Activity, Clock } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
@@ -76,18 +77,22 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
   const { formatRelativeTime } = useFormatters();
   const [activities, setActivities] = useState<IssueActivity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
 
   useEffect(() => {
     if (!issueId) {
       return;
     }
     void refetchKey; // must be referenced here; Biome strips unused effect deps
+    void retryNonce;
 
     let cancelled = false;
 
     const fetchActivities = async () => {
       setLoading(true);
+      setError(false);
       try {
         const res = await gql(ISSUE_ACTIVITIES_QUERY, {
           issueId,
@@ -102,7 +107,9 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
           setActivities(sorted);
         }
       } catch {
-        // Silently fail — activity is supplementary information
+        if (!cancelled) {
+          setError(true);
+        }
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -114,7 +121,7 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
     return () => {
       cancelled = true;
     };
-  }, [issueId, refetchKey]);
+  }, [issueId, refetchKey, retryNonce]);
 
   if (loading) {
     return (
@@ -122,6 +129,15 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
         <Clock className="h-3.5 w-3.5 animate-pulse" />
         <span>{t('issueDetail.activity.loading')}</span>
       </div>
+    );
+  }
+
+  if (error && activities.length === 0) {
+    return (
+      <InlineRetry
+        message={t('issueDetail.activity.failedToLoad')}
+        onRetry={() => setRetryNonce(n => n + 1)}
+      />
     );
   }
 

@@ -289,6 +289,7 @@
       "weeksAgo": "hace {count}sem",
       "yesterday": "ayer"
     },
+    "retry": "Reintentar",
     "save": "Guardar",
     "saving": "Guardando…",
     "search": "Buscar",
@@ -590,6 +591,7 @@
       "changed": "{actor} cambió {field} de {oldValue} a {newValue}",
       "cleared": "{actor} eliminó {field}",
       "empty": "Aún no hay actividad registrada.",
+      "failedToLoad": "No se pudo cargar la actividad",
       "fields": {
         "assignee": "responsable",
         "cycle": "ciclo",
@@ -624,6 +626,7 @@
       "attachFile": "Adjuntar archivo",
       "empty": "Sin archivos adjuntos",
       "failedToDelete": "No se pudo eliminar el archivo",
+      "failedToLoad": "No se pudieron cargar los archivos adjuntos",
       "removeAttachment": "Quitar archivo adjunto",
       "title": "Archivos adjuntos",
       "uploadFailed": "Error al subir el archivo",
@@ -638,6 +641,7 @@
       "edited": "editado",
       "failedToConvert": "No se pudo convertir el comentario en subtarea",
       "failedToDelete": "No se pudo eliminar el comentario",
+      "failedToLoad": "No se pudieron cargar los comentarios",
       "failedToPost": "No se pudo publicar el comentario",
       "failedToUpdate": "No se pudo actualizar el comentario",
       "failedToUpdateReaction": "No se pudo actualizar la reacción",
@@ -695,6 +699,7 @@
     },
     "reactions": {
       "addReaction": "Agregar reacción",
+      "failedToLoad": "No se pudieron cargar las reacciones",
       "failedToUpdate": "No se pudo actualizar la reacción",
       "react": "Reaccionar"
     },

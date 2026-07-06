@@ -1,7 +1,8 @@
 'use client';
 
 import { FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { toast } from '@/lib/toast';
@@ -55,14 +56,22 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
   const t = useTranslations();
   const { formatFileSize } = useFormatters();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [loadError, setLoadError] = useState(false);
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  const loadAttachments = useCallback(() => {
     fetchIssueFiles(issueId)
-      .then(setAttachments)
-      .catch(() => {});
+      .then(files => {
+        setAttachments(files);
+        setLoadError(false);
+      })
+      .catch(() => setLoadError(true));
   }, [issueId]);
+
+  useEffect(() => {
+    loadAttachments();
+  }, [loadAttachments]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -161,6 +170,12 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
             </li>
           ))}
         </ul>
+      ) : loadError ? (
+        <InlineRetry
+          className="py-2"
+          message={t('issueDetail.attachments.failedToLoad')}
+          onRetry={loadAttachments}
+        />
       ) : (
         <p className="text-xs italic text-zinc-400">{t('issueDetail.attachments.empty')}</p>
       )}

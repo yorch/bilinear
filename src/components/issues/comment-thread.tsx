@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import {
@@ -51,6 +52,7 @@ export function CommentThread({
   const t = useTranslations();
   const [comments, setComments] = useState<CommentItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showReplyTo, setShowReplyTo] = useState<string | null>(null);
@@ -60,8 +62,9 @@ export function CommentThread({
       const res = await gql(GET_COMMENTS_QUERY, { issueId });
       const data = res.data as { comments?: CommentItem[] } | undefined;
       setComments(data?.comments ?? []);
+      setLoadError(false);
     } catch {
-      // Non-fatal — activity section degrades gracefully
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -159,6 +162,10 @@ export function CommentThread({
 
   return (
     <div className="space-y-1">
+      {loadError && comments.length === 0 && (
+        <InlineRetry message={t('issueDetail.comments.failedToLoad')} onRetry={fetchComments} />
+      )}
+
       {/* Comment list */}
       {comments.map(comment => (
         <CommentCard
