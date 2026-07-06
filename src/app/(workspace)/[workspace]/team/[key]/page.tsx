@@ -3,21 +3,21 @@
 import { Bookmark, Settings } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import { type BoardGroupBy, type BoardSwimlaneBy, BoardView } from '@/components/issues/board-view';
 import { ColumnPicker } from '@/components/issues/column-picker';
 import { CsvExportButton } from '@/components/issues/csv-export-button';
 import { FilterBuilder } from '@/components/issues/filter-builder';
 import { IssueListView } from '@/components/issues/issue-list-view';
-import type { OpenProperty } from '@/components/issues/issue-row';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
-import { type ViewMode, ViewToggle } from '@/components/issues/view-toggle';
+import { ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { type SaveViewInput, SaveViewModal } from '@/components/views/save-view-modal';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useHotkeys } from '@/hooks/use-hotkeys';
+import { useIssueListPage } from '@/hooks/use-issue-list-page';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useIssuesBulkUpdate } from '@/hooks/use-issues-bulk-update';
 import { useRecentItems } from '@/hooks/use-recent-items';
@@ -67,7 +67,6 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     workspace: string;
     key: string;
   }>();
-  const router = useRouter();
   const t = useTranslations();
   const {
     issueStore,
@@ -86,15 +85,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   const txQueue = useMemo(() => new TransactionQueue(), []);
 
   // UI state (local to this page)
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detailIssueId, setDetailIssueId] = useState<string | null>(null);
   const [saveViewOpen, setSaveViewOpen] = useState(false);
-  // Which property popover to force-open on the selected row (keyboard shortcut)
-  const [openProperty, setOpenProperty] = useState<OpenProperty>(null);
-  // View mode (list vs board), board group-by, and swimlane
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [boardGroupBy, setBoardGroupBy] = useState<BoardGroupBy>('status');
-  const [swimlaneBy, setSwimlaneBy] = useState<BoardSwimlaneBy>('none');
   // Filters
   const [filterSet, setFilterSet] = useState<FilterSet>(createEmptyFilterSet());
 
@@ -164,20 +155,44 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
   const hasError = syncStore.status === 'error';
 
-  const detailIssue: IssueDetail | null = (() => {
-    if (!detailIssueId) {
-      return null;
-    }
-    const raw = issueStore.findById(detailIssueId);
-    if (!raw) {
-      return null;
-    }
-    const issueLabels = (raw.labelIds ?? [])
-      .map(id => labelStore.findById(id))
-      .filter((l): l is DBIssueLabel => l !== null)
-      .map(l => ({ color: l.color, id: l.id, name: l.name }));
-    return { ...raw, dueDate: raw.dueDate ?? null, labels: issueLabels };
-  })();
+  // ── Selection, detail panel, view mode, keyboard shortcuts ──────────────────
+
+  const {
+    boardGroupBy,
+    closeDetail,
+    detailIssue,
+    handleOpen,
+    hasSelection,
+    openProperty,
+    selectedId,
+    setBoardGroupBy,
+    setOpenProperty,
+    setSelectedId,
+    setSwimlaneBy,
+    setViewMode,
+    swimlaneBy,
+    viewMode,
+  } = useIssueListPage({
+    basePath: `/${workspace}/team/${teamKey}`,
+    buildHref: id =>
+      buildIssueHref(workspace, id, {
+        label: team?.name ?? teamKey,
+        path: `/${workspace}/team/${teamKey}`,
+      }),
+    issues,
+    onOpen: id => {
+      const issue = issueStore.findById(id);
+      const issueTeam = issue ? teamStore.findById(issue.teamId) : null;
+      if (issue && issueTeam) {
+        addRecent({
+          id: issue.id,
+          identifier: issue.identifier,
+          teamKey: issueTeam.key,
+          title: issue.title,
+        });
+      }
+    },
+  });
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
@@ -227,7 +242,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         setSelectedId(null);
       }
     },
-    [issueStore, txQueue, selectedId, t, handleUnarchive],
+    [issueStore, txQueue, selectedId, t, handleUnarchive, setSelectedId],
   );
 
   const handleDelete = useCallback(
@@ -251,7 +266,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         setSelectedId(null);
       }
     },
-    [issueStore, txQueue, selectedId, t],
+    [issueStore, txQueue, selectedId, t, setSelectedId],
   );
 
   // Delete is irreversible (no restore mutation), so it goes through a
@@ -267,60 +282,12 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     [issueStore],
   );
 
-  // ── Keyboard shortcuts ────────────────────────────────────────────────────
-
-  const selectedIndex = issues.findIndex(i => i.id === selectedId);
-  const hasSelection = selectedId !== null;
+  // ── Team-specific keyboard shortcuts ─────────────────────────────────────
+  // (j/k/enter/escape, common property pickers, and view-mode switches are
+  // registered by useIssueListPage above)
 
   // C (create issue) is registered globally in WorkspaceClient and opens the
   // shared GlobalCreateIssueModal; the New-issue button below uses it too.
-
-  // J / K — navigate list
-  useHotkeys(
-    'j',
-    () => {
-      const next = Math.min(selectedIndex + 1, issues.length - 1);
-      setSelectedId(issues[next]?.id ?? null);
-    },
-    {},
-    [selectedIndex, issues],
-  );
-  useHotkeys(
-    'k',
-    () => {
-      const prev = Math.max(selectedIndex - 1, 0);
-      setSelectedId(issues[prev]?.id ?? null);
-    },
-    {},
-    [selectedIndex, issues],
-  );
-
-  // Enter — open detail
-  useHotkeys(
-    'enter',
-    () => {
-      if (selectedId) {
-        setDetailIssueId(selectedId);
-      }
-    },
-    {},
-    [selectedId],
-  );
-
-  // Escape — clear selection / close detail
-  useHotkeys(
-    'escape',
-    () => {
-      if (detailIssueId) {
-        setDetailIssueId(null);
-        router.replace(`/${workspace}/team/${teamKey}`, { scroll: false });
-      } else {
-        setSelectedId(null);
-      }
-    },
-    {},
-    [detailIssueId, workspace, teamKey],
-  );
 
   // X — toggle selection checkbox
   useHotkeys(
@@ -334,19 +301,11 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     [selectedId],
   );
 
-  // Issue context shortcuts — only active when an issue is selected
-  useHotkeys('s', () => setOpenProperty('status'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('a', () => setOpenProperty('assignee'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('p', () => setOpenProperty('priority'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('l', () => setOpenProperty('label'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('d', () => setOpenProperty('dueDate'), { enabled: hasSelection }, [hasSelection]);
+  // Project / cycle pickers — team issues only (my-issues spans teams)
   useHotkeys('shift+p', () => setOpenProperty('project'), { enabled: hasSelection }, [
     hasSelection,
   ]);
   useHotkeys('q', () => setOpenProperty('cycle'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('shift+e', () => setOpenProperty('estimate'), { enabled: hasSelection }, [
-    hasSelection,
-  ]);
 
   // Backspace / Delete — archive selected issue
   useHotkeys(
@@ -370,36 +329,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     [selectedId, handleArchive, hasSelection],
   );
 
-  // Alt+1 — list view, Alt+2 — board view, Alt+3 — timeline view
-  useHotkeys('alt+1', () => setViewMode('list'), {}, []);
-  useHotkeys('alt+2', () => setViewMode('board'), {}, []);
-  useHotkeys('alt+3', () => setViewMode('timeline'), {}, []);
-
   // G→I / G→N navigation chords are registered globally in WorkspaceClient.
-
-  // ── Open issue and track as recent ────────────────────────────────────────
-
-  const handleOpen = useCallback(
-    (id: string) => {
-      setDetailIssueId(id);
-      const href = buildIssueHref(workspace, id, {
-        label: team?.name ?? teamKey,
-        path: `/${workspace}/team/${teamKey}`,
-      });
-      router.replace(href, { scroll: false });
-      const issue = issueStore.findById(id);
-      const issueTeam = issue ? teamStore.findById(issue.teamId) : null;
-      if (issue && issueTeam) {
-        addRecent({
-          id: issue.id,
-          identifier: issue.identifier,
-          teamKey: issueTeam.key,
-          title: issue.title,
-        });
-      }
-    },
-    [workspace, teamKey, team?.name, issueStore, teamStore, addRecent, router],
-  );
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -586,10 +516,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
       <LazyIssueDetailPanel
         issue={detailIssue}
         labels={labels}
-        onClose={() => {
-          setDetailIssueId(null);
-          router.replace(`/${workspace}/team/${teamKey}`, { scroll: false });
-        }}
+        onClose={closeDetail}
         onUpdate={handleUpdate}
         states={states}
         users={users}

@@ -1,17 +1,16 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
-import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { useMemo, useState } from 'react';
 import { type BoardGroupBy, type BoardSwimlaneBy, BoardView } from '@/components/issues/board-view';
 import { FilterBuilder } from '@/components/issues/filter-builder';
 import { IssueListView } from '@/components/issues/issue-list-view';
-import type { OpenProperty } from '@/components/issues/issue-row';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
-import { type ViewMode, ViewToggle } from '@/components/issues/view-toggle';
+import { ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { useDocumentTitle } from '@/hooks/use-document-title';
-import { useHotkeys } from '@/hooks/use-hotkeys';
+import { useIssueListPage } from '@/hooks/use-issue-list-page';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useIssuesBulkUpdate } from '@/hooks/use-issues-bulk-update';
 import { useTranslations } from '@/hooks/use-translations';
@@ -28,19 +27,12 @@ import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
 
 const MyIssuesPage = observer(function MyIssuesPage() {
   const { workspace } = useParams<{ workspace: string }>();
-  const router = useRouter();
   const t = useTranslations();
   const { issueStore, userStore, workflowStateStore, labelStore, syncStore } = useStore();
 
   useDocumentTitle(t('nav.myIssues'));
 
   // UI state
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detailIssueId, setDetailIssueId] = useState<string | null>(null);
-  const [openProperty, setOpenProperty] = useState<OpenProperty>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [boardGroupBy, setBoardGroupBy] = useState<BoardGroupBy>('status');
-  const [swimlaneBy, setSwimlaneBy] = useState<BoardSwimlaneBy>('none');
   const [filterSet, setFilterSet] = useState<FilterSet>(createEmptyFilterSet());
 
   // ── Store-derived values ─────────────────────────────────────────────────
@@ -83,102 +75,33 @@ const MyIssuesPage = observer(function MyIssuesPage() {
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
   const hasError = syncStore.status === 'error';
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the MobX reactive trigger
-  const detailIssue: IssueDetail | null = useMemo(() => {
-    if (!detailIssueId) {
-      return null;
-    }
-    const raw = issueStore.findById(detailIssueId);
-    if (!raw) {
-      return null;
-    }
-    const issueLabels = (raw.labelIds ?? [])
-      .map(id => labelStore.findById(id))
-      .filter((l): l is DBIssueLabel => l !== null)
-      .map(l => ({ color: l.color, id: l.id, name: l.name }));
-    return { ...raw, dueDate: raw.dueDate ?? null, labels: issueLabels };
-  }, [detailIssueId, issueStore.pool.size, issueStore, labelStore]);
-
   // ── Mutations ─────────────────────────────────────────────────────────────
 
   const handleUpdate = useIssueUpdate();
   const handleBulkUpdate = useIssuesBulkUpdate();
 
-  // ── Keyboard shortcuts ────────────────────────────────────────────────────
+  // ── Selection, detail panel, view mode, keyboard shortcuts ──────────────────
 
-  const selectedIndex = issues.findIndex(i => i.id === selectedId);
-  const hasSelection = selectedId !== null;
-
-  useHotkeys(
-    'j',
-    () => {
-      const next = Math.min(selectedIndex + 1, issues.length - 1);
-      setSelectedId(issues[next]?.id ?? null);
-    },
-    {},
-    [selectedIndex, issues],
-  );
-  useHotkeys(
-    'k',
-    () => {
-      const prev = Math.max(selectedIndex - 1, 0);
-      setSelectedId(issues[prev]?.id ?? null);
-    },
-    {},
-    [selectedIndex, issues],
-  );
-
-  useHotkeys(
-    'enter',
-    () => {
-      if (selectedId) {
-        setDetailIssueId(selectedId);
-      }
-    },
-    {},
-    [selectedId],
-  );
-
-  useHotkeys(
-    'escape',
-    () => {
-      if (detailIssueId) {
-        setDetailIssueId(null);
-        router.replace(`/${workspace}/my-issues`, { scroll: false });
-      } else {
-        setSelectedId(null);
-      }
-    },
-    {},
-    [detailIssueId, workspace],
-  );
-
-  useHotkeys('s', () => setOpenProperty('status'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('a', () => setOpenProperty('assignee'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('p', () => setOpenProperty('priority'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('l', () => setOpenProperty('label'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('d', () => setOpenProperty('dueDate'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('shift+e', () => setOpenProperty('estimate'), { enabled: hasSelection }, [
-    hasSelection,
-  ]);
-
-  useHotkeys('alt+1', () => setViewMode('list'), {}, []);
-  useHotkeys('alt+2', () => setViewMode('board'), {}, []);
-  useHotkeys('alt+3', () => setViewMode('timeline'), {}, []);
-
-  // ── Open issue ────────────────────────────────────────────────────────────
-
-  const handleOpen = useCallback(
-    (id: string) => {
-      setDetailIssueId(id);
-      const href = buildIssueHref(workspace, id, {
-        label: t('nav.myIssues'),
-        path: `/${workspace}/my-issues`,
-      });
-      router.replace(href, { scroll: false });
-    },
-    [workspace, router, t],
-  );
+  const {
+    boardGroupBy,
+    closeDetail,
+    detailIssue,
+    handleOpen,
+    openProperty,
+    selectedId,
+    setBoardGroupBy,
+    setOpenProperty,
+    setSelectedId,
+    setSwimlaneBy,
+    setViewMode,
+    swimlaneBy,
+    viewMode,
+  } = useIssueListPage({
+    basePath: `/${workspace}/my-issues`,
+    buildHref: id =>
+      buildIssueHref(workspace, id, { label: t('nav.myIssues'), path: `/${workspace}/my-issues` }),
+    issues,
+  });
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -298,10 +221,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
       <LazyIssueDetailPanel
         issue={detailIssue}
         labels={labels}
-        onClose={() => {
-          setDetailIssueId(null);
-          router.replace(`/${workspace}/my-issues`, { scroll: false });
-        }}
+        onClose={closeDetail}
         onUpdate={handleUpdate}
         states={states}
         users={users}
