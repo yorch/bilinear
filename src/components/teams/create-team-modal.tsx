@@ -1,9 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ModalDialog } from '@/components/ui/modal-dialog';
+import { ModalDialog, ModalFooter, ModalHeader } from '@/components/ui/modal-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { useTranslations } from '@/hooks/use-translations';
 import { cn, getErrorMessage } from '@/lib/utils';
@@ -122,9 +121,7 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
   return (
     <ModalDialog aria-label={t('teams.createTeam')} onClose={onClose} open={open}>
       <form className="flex flex-col" onSubmit={handleSubmit}>
-        <div className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
-          <h2 className="text-sm font-semibold text-foreground">{t('teams.createTeam')}</h2>
-        </div>
+        <ModalHeader title={t('teams.createTeam')} />
 
         <div className="flex flex-col gap-4 px-5 py-4">
           <div className="flex flex-col gap-1">
@@ -194,15 +191,13 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
           </label>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
-          {submitError && <p className="flex-1 text-xs text-red-500">{submitError}</p>}
-          <Button onClick={onClose} size="sm" type="button" variant="ghost">
-            {t('common.cancel')}
-          </Button>
-          <Button disabled={!canSubmit} size="sm" type="submit">
-            {submitting ? t('teams.creating') : t('teams.createTeam')}
-          </Button>
-        </div>
+        <ModalFooter
+          cancelLabel={t('common.cancel')}
+          onCancel={onClose}
+          submitDisabled={!canSubmit}
+          submitError={submitError}
+          submitLabel={submitting ? t('teams.creating') : t('teams.createTeam')}
+        />
       </form>
     </ModalDialog>
   );

@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
+import { Button } from './button';
 
 interface ModalDialogProps {
   'aria-label': string;
@@ -74,5 +75,48 @@ function ModalDialogInner({
         {children}
       </div>
     </dialog>
+  );
+}
+
+/** Title bar for a form-shaped ModalDialog — border-b + h2. */
+export function ModalHeader({ title }: { title: string }) {
+  return (
+    <div className="border-b border-border px-5 py-4">
+      <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+    </div>
+  );
+}
+
+interface ModalFooterProps {
+  cancelLabel: string;
+  onCancel: () => void;
+  submitDisabled?: boolean;
+  submitError?: string;
+  submitLabel: string;
+}
+
+/**
+ * Cancel/submit action bar for a form-shaped ModalDialog — border-t +
+ * inline error + ghost/default Button pair. Shared by the create-project,
+ * create-team, and save-view modals; create-issue-modal's footer carries
+ * an extra control so it composes its own Buttons instead of this.
+ */
+export function ModalFooter({
+  cancelLabel,
+  onCancel,
+  submitDisabled,
+  submitError,
+  submitLabel,
+}: ModalFooterProps) {
+  return (
+    <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
+      {submitError && <p className="flex-1 text-xs text-destructive">{submitError}</p>}
+      <Button onClick={onCancel} size="sm" type="button" variant="ghost">
+        {cancelLabel}
+      </Button>
+      <Button disabled={submitDisabled} size="sm" type="submit">
+        {submitLabel}
+      </Button>
+    </div>
   );
 }

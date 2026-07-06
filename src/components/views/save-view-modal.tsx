@@ -1,9 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ModalDialog } from '@/components/ui/modal-dialog';
+import { ModalDialog, ModalFooter, ModalHeader } from '@/components/ui/modal-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { useTranslations } from '@/hooks/use-translations';
 import { getErrorMessage } from '@/lib/utils';
@@ -94,11 +93,7 @@ export function SaveViewModal({
   return (
     <ModalDialog aria-label={t('properties.saveView.title')} onClose={onClose} open={open}>
       <form className="flex flex-col" onSubmit={handleSubmit}>
-        <div className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
-          <h2 className="text-sm font-semibold text-foreground">
-            {t('properties.saveView.title')}
-          </h2>
-        </div>
+        <ModalHeader title={t('properties.saveView.title')} />
 
         <div className="flex flex-col gap-4 px-5 py-4">
           <div className="flex flex-col gap-1">
@@ -148,15 +143,13 @@ export function SaveViewModal({
           </label>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
-          {submitError && <p className="flex-1 text-xs text-red-500">{submitError}</p>}
-          <Button onClick={onClose} size="sm" type="button" variant="ghost">
-            {t('common.cancel')}
-          </Button>
-          <Button disabled={!canSubmit} size="sm" type="submit">
-            {submitting ? t('common.saving') : t('properties.saveView.saveView')}
-          </Button>
-        </div>
+        <ModalFooter
+          cancelLabel={t('common.cancel')}
+          onCancel={onClose}
+          submitDisabled={!canSubmit}
+          submitError={submitError}
+          submitLabel={submitting ? t('common.saving') : t('properties.saveView.saveView')}
+        />
       </form>
     </ModalDialog>
   );
