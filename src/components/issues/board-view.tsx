@@ -240,7 +240,7 @@ function BoardColumn({
   const columnIssueIds = column.issues.map(i => i.id);
 
   return (
-    <div className="flex w-72 flex-shrink-0 flex-col">
+    <div className="flex w-[85vw] max-w-72 flex-shrink-0 flex-col sm:w-72">
       {/* Column header */}
       <div className="mb-2 flex items-center gap-2 px-1">
         {column.color && (

@@ -34,7 +34,7 @@ export function BulkActionBar({
 }: BulkActionBarProps) {
   const t = useTranslations();
   return (
-    <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+    <div className="fixed bottom-6 left-1/2 z-50 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center gap-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
       <span className="mr-2 whitespace-nowrap text-sm font-medium text-zinc-700 dark:text-zinc-300">
         {t('issues.selectedCount', { count })}
       </span>

@@ -357,11 +357,11 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Page header */}
-      <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
         <h1 className="text-sm font-semibold text-foreground">
           {t('issues.teamIssuesTitle', { team: team.displayName ?? team.name })}
         </h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {viewMode === 'board' && (
             <>
               <select
@@ -403,7 +403,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
       </div>
 
       {/* Filter bar */}
-      <div className="flex items-center justify-between gap-2 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
         <FilterBuilder
           customFields={customFieldDefs}
           filterSet={filterSet}

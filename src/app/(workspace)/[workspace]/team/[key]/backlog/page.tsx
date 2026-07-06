@@ -370,7 +370,7 @@ const BacklogPage = observer(function BacklogPage() {
 
       {/* Bulk actions toolbar */}
       {selectedIds.size > 0 && (
-        <div className="flex items-center gap-2 border-b border-indigo-200 bg-indigo-50 px-4 py-2 dark:border-indigo-800 dark:bg-indigo-950/30">
+        <div className="flex flex-wrap items-center gap-2 border-b border-indigo-200 bg-indigo-50 px-4 py-2 dark:border-indigo-800 dark:bg-indigo-950/30">
           <span className="text-xs font-medium text-indigo-700 dark:text-indigo-300">
             {t('issues.selectedCount', { count: selectedIds.size })}
           </span>
