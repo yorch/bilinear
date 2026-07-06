@@ -9,6 +9,7 @@ import { IssueListView } from '@/components/issues/issue-list-view';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
 import { ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
+import { SyncErrorState } from '@/components/shared/sync-error-state';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useIssueListPage } from '@/hooks/use-issue-list-page';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
@@ -114,11 +115,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
   }
 
   if (hasError) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-red-500">
-        {t('issues.failedToLoad')}
-      </div>
-    );
+    return <SyncErrorState message={t('issues.failedToLoad')} />;
   }
 
   return (

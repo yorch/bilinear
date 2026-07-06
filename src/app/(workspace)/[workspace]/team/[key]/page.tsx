@@ -14,6 +14,7 @@ import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-pane
 import { ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { SyncErrorState } from '@/components/shared/sync-error-state';
 import { type SaveViewInput, SaveViewModal } from '@/components/views/save-view-modal';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useHotkeys } from '@/hooks/use-hotkeys';
@@ -342,11 +343,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   }
 
   if (hasError) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-red-500">
-        {t('issues.failedToLoad')}
-      </div>
-    );
+    return <SyncErrorState message={t('issues.failedToLoad')} />;
   }
 
   if (!team) {

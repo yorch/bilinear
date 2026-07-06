@@ -3,6 +3,7 @@
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { CycleListView } from '@/components/cycles/cycle-list-view';
+import { SyncErrorState } from '@/components/shared/sync-error-state';
 import { useTranslations } from '@/hooks/use-translations';
 import { useStore } from '@/providers/store-provider';
 
@@ -28,11 +29,7 @@ const TeamCyclesPage = observer(function TeamCyclesPage() {
   }
 
   if (hasError) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-red-500">
-        {t('cycles.failedToLoad')}
-      </div>
-    );
+    return <SyncErrorState message={t('cycles.failedToLoad')} />;
   }
 
   if (!team) {

@@ -3,6 +3,7 @@
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { DocumentList } from '@/components/documents/document-list';
+import { SyncErrorState } from '@/components/shared/sync-error-state';
 import { useTranslations } from '@/hooks/use-translations';
 import { useStore } from '@/providers/store-provider';
 
@@ -25,11 +26,7 @@ const TeamDocsPage = observer(function TeamDocsPage() {
   }
 
   if (hasError) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-red-500">
-        {t('documents.loadFailed')}
-      </div>
-    );
+    return <SyncErrorState message={t('documents.loadFailed')} />;
   }
 
   if (!team) {
