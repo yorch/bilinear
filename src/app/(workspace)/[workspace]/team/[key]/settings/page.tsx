@@ -7,13 +7,13 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CustomFieldsSection } from '@/components/custom-fields/custom-fields-section';
 import { IssueTemplatesSection } from '@/components/issues/issue-templates-section';
+import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import {
   type TeamMember,
   TeamMemberManagement,
   type TeamRole,
 } from '@/components/teams/team-member-management';
 import { SimpleSelect } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -486,36 +486,20 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
           </h2>
           <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900 flex flex-col gap-5">
             {/* Private team toggle */}
-            <label
-              className="flex cursor-pointer items-center justify-between gap-4"
-              htmlFor="team-private-toggle"
-            >
-              <div>
-                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  {t('settings.team.privateTeam')}
-                </p>
-                <p className="text-xs text-zinc-400">{t('settings.team.privateTeamDescription')}</p>
-              </div>
-              <Switch checked={isPrivate} id="team-private-toggle" onCheckedChange={setIsPrivate} />
-            </label>
+            <SettingToggleRow
+              checked={isPrivate}
+              description={t('settings.team.privateTeamDescription')}
+              label={t('settings.team.privateTeam')}
+              onCheckedChange={setIsPrivate}
+            />
 
             {/* Triage toggle */}
-            <label
-              className="flex cursor-pointer items-center justify-between gap-4"
-              htmlFor="team-triage-toggle"
-            >
-              <div>
-                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  {t('settings.team.triage')}
-                </p>
-                <p className="text-xs text-zinc-400">{t('settings.team.triageDescription')}</p>
-              </div>
-              <Switch
-                checked={triageEnabled}
-                id="team-triage-toggle"
-                onCheckedChange={setTriageEnabled}
-              />
-            </label>
+            <SettingToggleRow
+              checked={triageEnabled}
+              description={t('settings.team.triageDescription')}
+              label={t('settings.team.triage')}
+              onCheckedChange={setTriageEnabled}
+            />
           </div>
         </section>
 

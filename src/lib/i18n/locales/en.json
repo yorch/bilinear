@@ -1498,7 +1498,6 @@
       "dataRegion": "Data region",
       "emailNotifications": "Email notifications",
       "emailNotificationsDescription": "Receive emails for assignments, mentions, and status changes",
-      "enableAiAssistant": "Enable AI assistant",
       "expires": "Expires",
       "expiresIn": "Expires in",
       "generate": "Generate",

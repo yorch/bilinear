@@ -6,7 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { Switch } from '@/components/ui/switch';
+import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
@@ -588,18 +588,11 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
           </h2>
           <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 divide-y divide-border">
             {/* Email notifications toggle */}
-            <div className="flex items-center justify-between px-5 py-3">
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  {t('settings.workspace.emailNotifications')}
-                </p>
-                <p className="text-xs text-zinc-400">
-                  {t('settings.workspace.emailNotificationsDescription')}
-                </p>
-              </div>
-              <Switch
-                aria-label={t('settings.workspace.emailNotifications')}
+            <div className="px-5 py-3">
+              <SettingToggleRow
                 checked={emailNotificationsEnabled}
+                description={t('settings.workspace.emailNotificationsDescription')}
+                label={t('settings.workspace.emailNotifications')}
                 onCheckedChange={checked => toggleEmailNotifications(checked)}
               />
             </div>
@@ -850,22 +843,13 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
             {t('settings.workspace.ai')}
           </h2>
           <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 px-5 py-4">
-            <div className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground">
-                  {t('settings.workspace.aiAssistant')}
-                </p>
-                <p className="mt-0.5 text-xs text-zinc-400">
-                  {t('settings.workspace.aiAssistantDescription')}
-                </p>
-              </div>
-              <Switch
-                aria-label={t('settings.workspace.enableAiAssistant')}
-                checked={org?.aiEnabled ?? false}
-                disabled={savingAi || !org}
-                onCheckedChange={checked => void toggleAi(checked)}
-              />
-            </div>
+            <SettingToggleRow
+              checked={org?.aiEnabled ?? false}
+              description={t('settings.workspace.aiAssistantDescription')}
+              disabled={savingAi || !org}
+              label={t('settings.workspace.aiAssistant')}
+              onCheckedChange={checked => void toggleAi(checked)}
+            />
           </div>
         </section>
 

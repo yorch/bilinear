@@ -4,7 +4,7 @@ import { ExternalLink, Eye, EyeOff } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Switch } from '@/components/ui/switch';
+import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -193,21 +193,12 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
             ) : (
               <form className="flex flex-col gap-5" onSubmit={handleSave}>
                 {/* Enabled toggle */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {t('roadmap.settings.publicRoadmap')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {t('roadmap.settings.publicRoadmapDescription')}
-                    </p>
-                  </div>
-                  <Switch
-                    aria-label={t('roadmap.settings.publicRoadmap')}
-                    checked={enabled}
-                    onCheckedChange={setEnabled}
-                  />
-                </div>
+                <SettingToggleRow
+                  checked={enabled}
+                  description={t('roadmap.settings.publicRoadmapDescription')}
+                  label={t('roadmap.settings.publicRoadmap')}
+                  onCheckedChange={setEnabled}
+                />
 
                 {/* Title */}
                 <div className="flex flex-col gap-1">
