@@ -43,7 +43,7 @@ export function DueDatePicker({
       {close => (
         <>
           <input
-            className="rounded border border-zinc-200 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+            className="rounded border border-border px-2 py-1 text-sm dark:bg-zinc-800"
             onChange={e => {
               onChange(e.target.value || null);
               close();
@@ -53,7 +53,7 @@ export function DueDatePicker({
           />
           {value && (
             <button
-              className="mt-1 block w-full rounded px-2 py-1 text-center text-xs text-zinc-500 hover:bg-accent"
+              className="mt-1 block w-full rounded px-2 py-1 text-center text-xs text-muted-foreground hover:bg-accent"
               onClick={() => {
                 onChange(null);
                 close();

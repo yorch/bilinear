@@ -162,15 +162,15 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
       <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {t('issueDetail.templates.sectionTitle')}
       </h2>
-      <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
+      <div className="rounded-lg border border-border bg-card">
         {/* Header row */}
-        <div className="flex items-center justify-between border-b border-zinc-100 p-4 dark:border-zinc-800">
+        <div className="flex items-center justify-between border-b border-border p-4">
           <p className="text-xs text-muted-foreground">
             {t('issueDetail.templates.count', { count: templates.length })}
           </p>
           {!isAdding && (
             <button
-              className="flex items-center gap-1.5 rounded-md border border-zinc-200 px-2.5 py-1 text-xs transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800"
               onClick={() => setIsAdding(true)}
               type="button"
             >
@@ -182,7 +182,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
 
         {/* Inline "Add" form */}
         {isAdding && (
-          <div className="border-b border-zinc-100 p-4 dark:border-zinc-800">
+          <div className="border-b border-border p-4">
             <TemplateForm
               labels={labels}
               onCancel={() => setIsAdding(false)}
@@ -197,7 +197,9 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
         {/* Template list */}
         <ul className="divide-y divide-border">
           {templates.length === 0 && !isAdding && (
-            <li className="p-4 text-sm text-zinc-400">{t('issueDetail.templates.emptyState')}</li>
+            <li className="p-4 text-sm text-muted-foreground">
+              {t('issueDetail.templates.emptyState')}
+            </li>
           )}
           {templates.map(tmpl => {
             const isEditing = editingId === tmpl.id;
@@ -260,24 +262,24 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                       {(stateName ?? priority ?? assigneeName ?? labelCount) && (
                         <div className="mt-1.5 flex flex-wrap gap-1.5">
                           {stateName && (
-                            <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                               {t('issueDetail.templates.statePrefix', { state: stateName })}
                             </span>
                           )}
                           {priority && (
-                            <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                               {t('issueDetail.templates.priorityPrefix', { priority })}
                             </span>
                           )}
                           {assigneeName && (
-                            <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                               {t('issueDetail.templates.assigneePrefix', {
                                 assignee: assigneeName,
                               })}
                             </span>
                           )}
                           {labelCount && (
-                            <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                               {t('issueDetail.templates.labelCount', { count: labelCount })}
                             </span>
                           )}
@@ -287,7 +289,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                     <div className="flex shrink-0 items-center gap-1">
                       <button
                         aria-label={t('issueDetail.templates.editTemplate')}
-                        className="rounded p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+                        className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-zinc-700 dark:hover:text-zinc-300"
                         onClick={() => setEditingId(tmpl.id)}
                         type="button"
                       >
@@ -296,7 +298,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                       <button
                         aria-label={t('issueDetail.templates.deleteTemplate')}
                         className={cn(
-                          'rounded p-1 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20',
+                          'rounded p-1 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20',
                           isDeleting && 'cursor-not-allowed opacity-50',
                         )}
                         disabled={isDeleting}
@@ -537,7 +539,7 @@ function TemplateForm({
                       'rounded-full border px-2 py-0.5 text-xs transition-colors',
                       selected
                         ? 'border-indigo-400 bg-indigo-50 text-indigo-700 dark:border-indigo-600 dark:bg-indigo-950 dark:text-indigo-300'
-                        : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800',
+                        : 'border-border bg-card text-muted-foreground hover:bg-zinc-50 dark:hover:bg-zinc-800',
                     )}
                     key={l.id}
                     onClick={() => toggleLabel(l.id)}

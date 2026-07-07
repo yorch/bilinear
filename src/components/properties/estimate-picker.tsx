@@ -169,7 +169,7 @@ function NumericInput({
   return (
     <div className="px-3 py-2 flex items-center gap-2">
       <input
-        className="w-20 rounded border border-zinc-200 bg-transparent px-2 py-1 text-sm text-zinc-900 outline-none focus:border-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+        className="w-20 rounded border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none focus:border-indigo-500"
         min={0}
         onChange={e => setDraft(e.target.value)}
         onKeyDown={e => {

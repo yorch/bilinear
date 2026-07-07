@@ -58,7 +58,7 @@ export function CustomFieldValueInput({
     case 'date':
       return (
         <input
-          className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+          className="rounded-md border border-border bg-card px-2 py-1 text-xs"
           onChange={e => onSave(e.target.value || null)}
           type="date"
           value={typeof value === 'string' ? value : ''}
@@ -112,7 +112,7 @@ function TextInput({
 
   return (
     <input
-      className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+      className="rounded-md border border-border bg-card px-2 py-1 text-xs"
       onBlur={() => {
         if (draft !== value) {
           onSave(draft);

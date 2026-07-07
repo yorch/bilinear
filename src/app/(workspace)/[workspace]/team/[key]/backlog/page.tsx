@@ -77,7 +77,7 @@ function BacklogRow({ issue, selected, onSelect, onUpdate }: BacklogRowProps) {
     // biome-ignore lint/a11y/useKeyWithClickEvents: keyboard nav handled at page level
     <div
       className={cn(
-        'flex items-center gap-3 border-b border-zinc-100 px-4 py-2 transition-colors dark:border-zinc-800',
+        'flex items-center gap-3 border-b border-border px-4 py-2 transition-colors',
         selected ? 'bg-indigo-50 dark:bg-indigo-950/30' : 'hover:bg-accent/50',
       )}
       onClick={onSelect}
@@ -104,7 +104,7 @@ function BacklogRow({ issue, selected, onSelect, onUpdate }: BacklogRowProps) {
 
       {/* Estimate — inline editable */}
       <button
-        className="w-8 flex-shrink-0 text-center text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+        className="w-8 flex-shrink-0 text-center text-xs text-muted-foreground hover:text-zinc-600 dark:hover:text-zinc-300"
         onClick={e => {
           e.stopPropagation();
           const val = prompt(t('issues.estimatePrompt'), String(issue.estimate ?? ''));
@@ -160,7 +160,7 @@ function PriorityGroup({
   return (
     <div>
       <button
-        className="flex w-full items-center gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-1.5 text-left dark:border-zinc-800 dark:bg-zinc-900"
+        className="flex w-full items-center gap-2 border-b border-border bg-card px-4 py-1.5 text-left"
         onClick={() => setCollapsed(!collapsed)}
         type="button"
       >
@@ -330,7 +330,7 @@ const BacklogPage = observer(function BacklogPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('common.loading')}
       </div>
     );
@@ -338,7 +338,7 @@ const BacklogPage = observer(function BacklogPage() {
 
   if (!team) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('issues.teamNotFound')}
       </div>
     );
@@ -347,7 +347,7 @@ const BacklogPage = observer(function BacklogPage() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
+      <div className="flex items-center justify-between border-b border-border px-6 py-3">
         <h1 className="text-sm font-semibold text-foreground">
           {t('issues.teamBacklogTitle', { team: team.displayName ?? team.name })}
         </h1>
@@ -357,7 +357,7 @@ const BacklogPage = observer(function BacklogPage() {
       </div>
 
       {/* Filter bar */}
-      <div className="border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
+      <div className="border-b border-border px-4 py-2">
         <FilterBuilder
           customFields={customFieldDefs}
           filterSet={filterSet}
@@ -377,7 +377,7 @@ const BacklogPage = observer(function BacklogPage() {
           <div className="flex items-center gap-1">
             {[1, 2, 3, 4].map(p => (
               <button
-                className="rounded px-1.5 py-0.5 text-xs text-zinc-600 hover:bg-indigo-100 dark:text-zinc-400 dark:hover:bg-indigo-900"
+                className="rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-indigo-100 dark:hover:bg-indigo-900"
                 key={p}
                 onClick={() => handleBulkSetPriority(p)}
                 title={t('issues.setPriorityN', {
@@ -390,7 +390,7 @@ const BacklogPage = observer(function BacklogPage() {
             ))}
           </div>
           <button
-            className="rounded px-2 py-0.5 text-xs text-zinc-600 hover:bg-indigo-100 dark:text-zinc-400 dark:hover:bg-indigo-900"
+            className="rounded px-2 py-0.5 text-xs text-muted-foreground hover:bg-indigo-100 dark:hover:bg-indigo-900"
             onClick={() => {
               const val = prompt(t('issues.setEstimateForSelectedPrompt'));
               if (val !== null) {
@@ -410,7 +410,7 @@ const BacklogPage = observer(function BacklogPage() {
             {t('issues.archive')}
           </button>
           <button
-            className="ml-auto text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+            className="ml-auto text-xs text-muted-foreground hover:text-zinc-600 dark:hover:text-zinc-300"
             onClick={() => setSelectedIds(new Set())}
             type="button"
           >

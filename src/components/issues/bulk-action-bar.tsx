@@ -34,7 +34,7 @@ export function BulkActionBar({
 }: BulkActionBarProps) {
   const t = useTranslations();
   return (
-    <div className="fixed bottom-6 left-1/2 z-50 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center gap-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+    <div className="fixed bottom-6 left-1/2 z-50 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center gap-1 rounded-lg border border-border bg-card px-3 py-2 shadow-xl">
       <span className="mr-2 whitespace-nowrap text-sm font-medium text-zinc-700 dark:text-zinc-300">
         {t('issues.selectedCount', { count })}
       </span>
@@ -129,7 +129,7 @@ export function BulkActionBar({
               }}
               type="button"
             >
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-xs text-zinc-500 dark:bg-zinc-700">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground">
                 —
               </span>
               <span>{t('issues.unassigned')}</span>
@@ -189,7 +189,7 @@ export function BulkActionBar({
 
       <button
         aria-label={t('issues.clearSelection')}
-        className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-zinc-600 dark:hover:text-zinc-300"
         onClick={onClear}
         title={t('issues.clearSelection')}
         type="button"

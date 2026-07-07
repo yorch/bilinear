@@ -40,7 +40,7 @@ export function ColumnPicker({
     >
       {() => (
         <>
-          <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+          <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {t('issues.builtIn')}
           </p>
           {BUILT_IN_LABELS.map(({ key, label }) => (
@@ -53,7 +53,7 @@ export function ColumnPicker({
           ))}
           {customFields && customFields.length > 0 && (
             <>
-              <p className="mt-1 border-t border-zinc-100 px-2 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:border-zinc-800">
+              <p className="mt-1 border-t border-border px-2 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 {t('issues.customFields')}
               </p>
               {customFields.map(def => {

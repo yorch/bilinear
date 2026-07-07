@@ -187,7 +187,7 @@ export function CommentThread({
       ))}
 
       {/* New comment composer */}
-      <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+      <div className="mt-4 border-t border-border pt-4">
         <CommentComposer
           issueId={issueId}
           mentionIssues={mentionIssues}

@@ -75,7 +75,7 @@ function Histogram({ buckets, color }: { buckets: HistogramBucket[]; color: stri
   const max = Math.max(...buckets.map(b => b.count), 1);
   if (buckets.every(b => b.count === 0)) {
     return (
-      <p className="py-4 text-center text-xs text-zinc-400">
+      <p className="py-4 text-center text-xs text-muted-foreground">
         {t('analytics.insights.noCompletedIssuesInRange')}
       </p>
     );
@@ -100,7 +100,7 @@ function Histogram({ buckets, color }: { buckets: HistogramBucket[]; color: stri
                 minHeight: b.count > 0 ? '4px' : '0',
               }}
             />
-            <span className="truncate text-[10px] text-zinc-400">{fmtBucketLabel(b)}</span>
+            <span className="truncate text-[10px] text-muted-foreground">{fmtBucketLabel(b)}</span>
           </div>
         );
       })}
@@ -112,7 +112,7 @@ function ThroughputChart({ points }: { points: ThroughputPoint[] }) {
   const t = useTranslations();
   if (points.length === 0) {
     return (
-      <p className="py-4 text-center text-xs text-zinc-400">
+      <p className="py-4 text-center text-xs text-muted-foreground">
         {t('analytics.insights.noThroughputDataInRange')}
       </p>
     );
@@ -156,7 +156,7 @@ function TimeInStateChart({
     .sort((a, b) => b.avgHours - a.avgHours);
   if (visible.length === 0) {
     return (
-      <p className="py-4 text-center text-xs text-zinc-400">
+      <p className="py-4 text-center text-xs text-muted-foreground">
         {t('analytics.insights.noStateTransitionData')}
       </p>
     );
@@ -172,7 +172,10 @@ function TimeInStateChart({
         const pct = (row.avgHours / max) * 100;
         return (
           <div className="flex items-center gap-2" key={row.stateId}>
-            <span className="w-24 shrink-0 truncate text-xs text-zinc-500" title={state.name}>
+            <span
+              className="w-24 shrink-0 truncate text-xs text-muted-foreground"
+              title={state.name}
+            >
               {state.name}
             </span>
             <div className="flex-1 rounded bg-muted">
@@ -248,7 +251,7 @@ export function InsightsSection({
         <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
           {t('analytics.insights.title')}
         </h2>
-        <div className="flex rounded-md border border-zinc-200 p-0.5 dark:border-zinc-800">
+        <div className="flex rounded-md border border-border p-0.5">
           {PRESETS.map(p => (
             <button
               className={
@@ -267,44 +270,44 @@ export function InsightsSection({
       </div>
 
       {loading ? (
-        <p className="text-xs text-zinc-400">{t('analytics.insights.loading')}</p>
+        <p className="text-xs text-muted-foreground">{t('analytics.insights.loading')}</p>
       ) : (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-          <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="rounded-lg border border-border bg-card p-5">
             <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">
               {t('analytics.insights.leadTime')}
             </h3>
-            <p className="mb-3 text-[11px] text-zinc-400">
+            <p className="mb-3 text-[11px] text-muted-foreground">
               {t('analytics.insights.leadTimeSubtitle')}
             </p>
             <Histogram buckets={data?.lead ?? []} color="var(--chart-ideal)" />
           </div>
 
-          <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="rounded-lg border border-border bg-card p-5">
             <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">
               {t('analytics.insights.cycleTime')}
             </h3>
-            <p className="mb-3 text-[11px] text-zinc-400">
+            <p className="mb-3 text-[11px] text-muted-foreground">
               {t('analytics.insights.cycleTimeSubtitle')}
             </p>
             <Histogram buckets={data?.cycle ?? []} color="#10b981" />
           </div>
 
-          <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="rounded-lg border border-border bg-card p-5">
             <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">
               {t('analytics.insights.throughputTrend')}
             </h3>
-            <p className="mb-3 text-[11px] text-zinc-400">
+            <p className="mb-3 text-[11px] text-muted-foreground">
               {t('analytics.insights.throughputTrendSubtitle')}
             </p>
             <ThroughputChart points={data?.throughput ?? []} />
           </div>
 
-          <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="rounded-lg border border-border bg-card p-5">
             <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">
               {t('analytics.insights.avgTimeInState')}
             </h3>
-            <p className="mb-3 text-[11px] text-zinc-400">
+            <p className="mb-3 text-[11px] text-muted-foreground">
               {t('analytics.insights.avgTimeInStateSubtitle')}
             </p>
             <TimeInStateChart rows={data?.timeInState ?? []} states={states} />

@@ -49,7 +49,7 @@ export const CycleSelect = observer(function CycleSelect({
       open={open}
       renderItem={cycle => (
         <>
-          <RefreshCw className="h-3 w-3 shrink-0 text-zinc-400" />
+          <RefreshCw className="h-3 w-3 shrink-0 text-muted-foreground" />
           <span className="min-w-0 flex-1 truncate text-left">{getCycleDisplayName(cycle)}</span>
           {isActiveCycle(cycle) && (
             <Badge className="shrink-0 bg-emerald-100 px-1.5 text-[10px] text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
@@ -65,7 +65,7 @@ export const CycleSelect = observer(function CycleSelect({
           {current ? (
             <span className="max-w-[100px] truncate">{getCycleDisplayName(current)}</span>
           ) : (
-            <span className="text-zinc-400">{t('properties.cycle.cycle')}</span>
+            <span className="text-muted-foreground">{t('properties.cycle.cycle')}</span>
           )}
         </>
       }

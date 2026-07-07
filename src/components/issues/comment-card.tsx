@@ -175,9 +175,11 @@ export function CommentCard({
             <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
               {comment.author.displayName}
             </span>
-            <span className="text-xs text-zinc-400">{formatRelativeTime(comment.createdAt)}</span>
+            <span className="text-xs text-muted-foreground">
+              {formatRelativeTime(comment.createdAt)}
+            </span>
             {comment.editedAt && (
-              <span className="text-xs italic text-zinc-400">
+              <span className="text-xs italic text-muted-foreground">
                 ({t('issueDetail.comments.edited')})
               </span>
             )}
@@ -228,7 +230,7 @@ export function CommentCard({
             {depth === 0 && (
               <button
                 aria-label={t('issueDetail.comments.quoteReply')}
-                className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
+                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-zinc-600"
                 onClick={handleQuoteReply}
                 title={t('issueDetail.comments.quoteReply')}
                 type="button"
@@ -246,7 +248,7 @@ export function CommentCard({
                 'rounded p-1 transition-colors',
                 isResolved
                   ? 'text-green-600 hover:bg-green-100 dark:hover:bg-green-900/20'
-                  : 'text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700',
+                  : 'text-muted-foreground hover:bg-muted hover:text-zinc-600',
               )}
               onClick={() => onToggleResolve(comment)}
               title={
@@ -329,7 +331,7 @@ export function CommentCard({
                 {t('common.save')}
               </button>
               <button
-                className="rounded-md px-3 py-1 text-xs text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                className="rounded-md px-3 py-1 text-xs text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-700"
                 onClick={() => setEditing(false)}
                 type="button"
               >
@@ -354,7 +356,7 @@ export function CommentCard({
                   'flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors',
                   reacted
                     ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700',
+                    : 'bg-muted text-muted-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700',
                 )}
                 key={emoji}
                 onClick={() => onToggleReaction(comment.id, emoji, reacted)}
@@ -370,7 +372,7 @@ export function CommentCard({
 
       {/* Nested replies */}
       {comment.replies.length > 0 && (
-        <div className="ml-4 mt-1 space-y-1 border-l-2 border-zinc-200 pl-4 dark:border-zinc-700">
+        <div className="ml-4 mt-1 space-y-1 border-l-2 border-border pl-4">
           {comment.replies.map(reply => (
             <CommentCard
               comment={reply}
@@ -396,7 +398,7 @@ export function CommentCard({
 
       {/* Inline reply composer */}
       {showReplyTo === comment.id && (
-        <div className="ml-4 mt-2 border-l-2 border-zinc-200 pl-4 dark:border-zinc-700">
+        <div className="ml-4 mt-2 border-l-2 border-border pl-4">
           <CommentComposer
             compact
             issueId={issueId}

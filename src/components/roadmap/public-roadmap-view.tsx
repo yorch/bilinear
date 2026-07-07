@@ -82,7 +82,7 @@ function PasswordForm({ slug }: { slug: string }) {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+      <div className="w-full max-w-sm rounded-xl border border-border bg-card p-8 shadow-sm">
         <h2 className="mb-1 text-lg font-semibold text-foreground">
           {t('roadmap.public.passwordRequired')}
         </h2>
@@ -91,7 +91,7 @@ function PasswordForm({ slug }: { slug: string }) {
         </p>
         <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
           <input
-            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-indigo-500 dark:focus:ring-indigo-800/40"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:border-indigo-500 dark:focus:ring-indigo-800/40"
             placeholder={t('roadmap.public.enterPassword')}
             ref={inputRef}
             required
@@ -133,8 +133,8 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
 
         {/* Project grid */}
         {projects.length === 0 ? (
-          <div className="rounded-xl border border-zinc-200 bg-white p-10 text-center dark:border-zinc-700 dark:bg-zinc-900">
-            <p className="text-sm text-zinc-400">{t('roadmap.public.noProjects')}</p>
+          <div className="rounded-xl border border-border bg-card p-10 text-center">
+            <p className="text-sm text-muted-foreground">{t('roadmap.public.noProjects')}</p>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
@@ -148,7 +148,7 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
 
               return (
                 <div
-                  className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-5 shadow-xs dark:border-zinc-700 dark:bg-zinc-900"
+                  className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-xs"
                   key={project.id}
                 >
                   {/* Title row */}

@@ -113,7 +113,7 @@ export function SaveViewModal({
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-muted-foreground" htmlFor="view-description">
               {t('properties.saveView.description')}
-              <span className="ml-1 font-normal text-zinc-400">
+              <span className="ml-1 font-normal text-muted-foreground">
                 ({t('properties.saveView.optional')})
               </span>
             </label>
@@ -130,7 +130,7 @@ export function SaveViewModal({
           <label className="flex cursor-pointer items-center gap-3">
             <input
               checked={shared}
-              className="h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 dark:border-zinc-600"
+              className="h-4 w-4 rounded border-border text-indigo-600 focus:ring-indigo-500"
               onChange={e => setShared(e.target.checked)}
               type="checkbox"
             />
@@ -138,7 +138,9 @@ export function SaveViewModal({
               <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 {t('properties.saveView.shareWithTeam')}
               </p>
-              <p className="text-xs text-zinc-400">{t('properties.saveView.shareDescription')}</p>
+              <p className="text-xs text-muted-foreground">
+                {t('properties.saveView.shareDescription')}
+              </p>
             </div>
           </label>
         </div>

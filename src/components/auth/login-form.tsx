@@ -47,7 +47,7 @@ export function LoginForm() {
           {t('auth.emailAddress')}
         </label>
         <input
-          className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:focus:ring-zinc-100"
+          className="rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100"
           id="email"
           onChange={e => setEmail(e.target.value)}
           placeholder={t('auth.emailPlaceholder')}
@@ -67,8 +67,8 @@ export function LoginForm() {
         <div className="absolute inset-0 flex items-center">
           <div className="w-full border-t border-border" />
         </div>
-        <div className="relative flex justify-center text-xs text-zinc-500">
-          <span className="bg-zinc-50 px-2 dark:bg-zinc-950">{t('common.or')}</span>
+        <div className="relative flex justify-center text-xs text-muted-foreground">
+          <span className="bg-background px-2">{t('common.or')}</span>
         </div>
       </div>
 

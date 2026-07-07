@@ -68,7 +68,7 @@ function BarChart({ data, maxValue, unit = '', emptyMessage }: BarChartProps) {
 
   if (data.length === 0 || data.every(d => d.value === 0)) {
     return (
-      <p className="py-8 text-center text-sm text-zinc-400">
+      <p className="py-8 text-center text-sm text-muted-foreground">
         {emptyMessage ?? t('analytics.team.noData')}
       </p>
     );
@@ -91,7 +91,10 @@ function BarChart({ data, maxValue, unit = '', emptyMessage }: BarChartProps) {
                 minHeight: item.value > 0 ? '4px' : '0',
               }}
             />
-            <span className="max-w-full truncate text-[10px] text-zinc-400" title={item.label}>
+            <span
+              className="max-w-full truncate text-[10px] text-muted-foreground"
+              title={item.label}
+            >
               {item.label}
             </span>
           </div>
@@ -122,7 +125,7 @@ function HBarChart({ data, maxValue, emptyMessage }: HBarChartProps) {
 
   if (data.length === 0) {
     return (
-      <p className="py-8 text-center text-sm text-zinc-400">
+      <p className="py-8 text-center text-sm text-muted-foreground">
         {emptyMessage ?? t('analytics.team.noData')}
       </p>
     );
@@ -134,7 +137,10 @@ function HBarChart({ data, maxValue, emptyMessage }: HBarChartProps) {
         const pct = max > 0 ? (item.value / max) * 100 : 0;
         return (
           <div className="flex items-center gap-2" key={item.label}>
-            <span className="w-28 shrink-0 truncate text-xs text-zinc-500" title={item.label}>
+            <span
+              className="w-28 shrink-0 truncate text-xs text-muted-foreground"
+              title={item.label}
+            >
               {item.label}
             </span>
             <div className="flex-1 rounded bg-muted">
@@ -168,10 +174,10 @@ interface StatCardProps {
 
 function StatCard({ label, value, sub }: StatCardProps) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">{label}</p>
+    <div className="rounded-lg border border-border bg-card p-4">
+      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-zinc-400">{sub}</p>}
+      {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
     </div>
   );
 }
@@ -182,7 +188,7 @@ function StatCard({ label, value, sub }: StatCardProps) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="rounded-lg border border-border bg-card p-5">
       <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">{title}</h3>
       {children}
     </div>
@@ -430,7 +436,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('analytics.team.loading')}
       </div>
     );
@@ -438,7 +444,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
 
   if (!team) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('analytics.team.teamNotFound')}
       </div>
     );
@@ -447,25 +453,25 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       {/* Page header */}
-      <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
+      <div className="border-b border-border px-6 py-4">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-base font-semibold text-foreground">{t('analytics.team.title')}</h1>
-            <p className="mt-0.5 text-xs text-zinc-400">
+            <p className="mt-0.5 text-xs text-muted-foreground">
               {team.displayName || team.name}
               {preset !== 'all'
                 ? ` · ${t('analytics.team.lastPreset', { preset })}`
                 : ` · ${t('analytics.team.allTime')}`}
             </p>
           </div>
-          <div className="flex shrink-0 rounded-md border border-zinc-200 p-0.5 dark:border-zinc-800">
+          <div className="flex shrink-0 rounded-md border border-border p-0.5">
             {(['30d', '90d', '180d', 'all'] as const).map(p => (
               <button
                 className={cn(
                   'rounded px-2.5 py-1 text-xs',
                   preset === p
-                    ? 'bg-zinc-100 font-medium text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
-                    : 'text-zinc-500 hover:text-foreground',
+                    ? 'bg-muted font-medium text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
                 key={p}
                 onClick={() => setPreset(p)}
@@ -530,11 +536,8 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
               value: canceledCount,
             },
           ].map(item => (
-            <div
-              className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
-              key={item.label}
-            >
-              <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
+            <div className="rounded-lg border border-border bg-card p-4" key={item.label}>
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 {item.label}
               </p>
               <p className={cn('mt-1 text-2xl font-semibold', item.color)}>{item.value}</p>
@@ -562,7 +565,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
           <Section title={t('analytics.team.issueBreakdown')}>
             <div className="space-y-3">
               {byStateData.length === 0 ? (
-                <p className="text-sm text-zinc-400">{t('analytics.team.noIssuesYet')}</p>
+                <p className="text-sm text-muted-foreground">{t('analytics.team.noIssuesYet')}</p>
               ) : (
                 byStateData.map(item => {
                   const pct =
@@ -579,7 +582,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
                           />
                           {item.label}
                         </span>
-                        <span className="font-medium text-zinc-500">
+                        <span className="font-medium text-muted-foreground">
                           {item.value} ({pct}%)
                         </span>
                       </div>
@@ -616,8 +619,8 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
               {t('analytics.team.teamHealth')}
             </h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-              <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-                <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
+              <div className="rounded-lg border border-border bg-card p-4">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   {t('analytics.team.openIssues')}
                 </p>
                 <p className="mt-1 text-2xl font-semibold text-foreground">
@@ -632,33 +635,35 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
                   {teamHealth.overdueCount}
                 </p>
               </div>
-              <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-                <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
+              <div className="rounded-lg border border-border bg-card p-4">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   {t('analytics.team.unestimated')}
                 </p>
                 <p className="mt-1 text-2xl font-semibold text-foreground">
                   {teamHealth.unestimatedCount}
                 </p>
-                <p className="mt-0.5 text-xs text-zinc-400">
+                <p className="mt-0.5 text-xs text-muted-foreground">
                   {t('analytics.team.pctOfOpen', { pct: teamHealth.unestimatedPct.toFixed(0) })}
                 </p>
               </div>
-              <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-                <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
+              <div className="rounded-lg border border-border bg-card p-4">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   {t('analytics.team.oldestOpen')}
                 </p>
                 <p className="mt-1 text-2xl font-semibold text-foreground">
                   {teamHealth.oldestOpenAgeDays.toFixed(0)}d
                 </p>
               </div>
-              <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-                <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
+              <div className="rounded-lg border border-border bg-card p-4">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   {t('analytics.team.p75Age')}
                 </p>
                 <p className="mt-1 text-2xl font-semibold text-foreground">
                   {teamHealth.p75AgeDays.toFixed(0)}d
                 </p>
-                <p className="mt-0.5 text-xs text-zinc-400">{t('analytics.team.percentile75')}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {t('analytics.team.percentile75')}
+                </p>
               </div>
             </div>
           </div>

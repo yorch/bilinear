@@ -783,7 +783,7 @@ export function TipTapEditor({
   return (
     <div className={cn('tiptap-wrapper relative', className)}>
       {showToolbar && !readOnly && (
-        <div className="mb-2 flex flex-wrap items-center gap-0.5 rounded-md border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-700 dark:bg-zinc-800/50">
+        <div className="mb-2 flex flex-wrap items-center gap-0.5 rounded-md border border-border bg-zinc-50 p-1 dark:bg-zinc-800/50">
           <ToolbarButton
             active={editor.isActive('bold')}
             onClick={() => editor.chain().focus().toggleBold().run()}
@@ -943,7 +943,7 @@ function ToolbarButton({
         'rounded px-1.5 py-0.5 text-xs font-medium transition-colors',
         active
           ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
-          : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-700',
+          : 'text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-700',
       )}
       onClick={onClick}
       title={title}

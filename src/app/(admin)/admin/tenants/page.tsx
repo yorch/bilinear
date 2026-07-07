@@ -120,7 +120,7 @@ function TenantsInner() {
         }}
       >
         <input
-          className="rounded border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
+          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
           onChange={e => setQuery(e.target.value)}
           placeholder={t('admin.tenants.searchPlaceholder')}
           value={query}
@@ -142,18 +142,18 @@ function TenantsInner() {
       </form>
 
       {loading ? (
-        <p className="text-sm text-zinc-400">{t('common.loading')}</p>
+        <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
       ) : error ? (
         <p className="text-sm text-red-500">{error}</p>
       ) : tenants.length === 0 ? (
-        <p className="rounded border border-dashed border-zinc-300 px-4 py-8 text-center text-sm text-zinc-400 dark:border-zinc-700">
+        <p className="rounded border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
           {t('admin.tenants.empty')}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+              <tr className="border-b border-border bg-muted text-left text-xs font-medium text-muted-foreground">
                 <th className="px-4 py-2">{t('admin.tenants.colOrganization')}</th>
                 <th className="px-4 py-2">{t('admin.tenants.colStatus')}</th>
                 <th className="px-4 py-2 text-right">{t('admin.tenants.colMembers')}</th>
@@ -174,7 +174,7 @@ function TenantsInner() {
                       >
                         {tenant.name}
                       </Link>
-                      <p className="font-mono text-xs text-zinc-400">
+                      <p className="font-mono text-xs text-muted-foreground">
                         {tenant.urlKey} · {tenant.dataRegion}
                       </p>
                       {tenant.suspendedReason ? (
@@ -206,7 +206,7 @@ function TenantsInner() {
                       <div className="flex justify-end gap-1.5">
                         {status === 'suspended' ? (
                           <button
-                            className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                            className="rounded border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
                             disabled={busyId === tenant.id}
                             onClick={() => handleRestore(tenant)}
                             type="button"
@@ -261,7 +261,7 @@ function TenantsInner() {
 export default function AdminTenantsPage() {
   const t = useTranslations();
   return (
-    <Suspense fallback={<p className="text-sm text-zinc-400">{t('common.loading')}</p>}>
+    <Suspense fallback={<p className="text-sm text-muted-foreground">{t('common.loading')}</p>}>
       <TenantsInner />
     </Suspense>
   );

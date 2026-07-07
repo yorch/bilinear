@@ -100,7 +100,7 @@ export function AiInsights({ issueId }: AiInsightsProps) {
 
   return (
     <div className="mt-6">
-      <p className="mb-1 text-xs font-medium text-zinc-500">{t('issueDetail.ai.title')}</p>
+      <p className="mb-1 text-xs font-medium text-muted-foreground">{t('issueDetail.ai.title')}</p>
       <div className="flex items-center gap-2">
         <button
           className={buttonClass}
@@ -130,7 +130,9 @@ export function AiInsights({ issueId }: AiInsightsProps) {
 
       {duplicates !== null &&
         (duplicates.length === 0 ? (
-          <p className="mt-2 text-sm text-zinc-500">{t('issueDetail.ai.noDuplicatesFound')}</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {t('issueDetail.ai.noDuplicatesFound')}
+          </p>
         ) : (
           <ul className="mt-2 space-y-1">
             {duplicates.map(dup => (
@@ -138,7 +140,7 @@ export function AiInsights({ issueId }: AiInsightsProps) {
                 className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300"
                 key={dup.id}
               >
-                <span className="font-mono text-xs text-zinc-400">{dup.identifier}</span>
+                <span className="font-mono text-xs text-muted-foreground">{dup.identifier}</span>
                 <span>— {dup.title}</span>
               </li>
             ))}

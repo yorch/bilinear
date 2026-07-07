@@ -97,7 +97,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
       >
         {children.length > 0 && (
           <span
-            className={`text-zinc-400 text-xs shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`}
+            className={`text-muted-foreground text-xs shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`}
           >
             ▶
           </span>
@@ -116,7 +116,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
             </span>
           ) : null}
         </span>
-        <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+        <span className="rounded bg-muted px-2 py-0.5 text-xs text-zinc-700 dark:text-zinc-300">
           {STATUS_LABELS[initiative.status] ?? initiative.status}
         </span>
         <span className="text-xs text-muted-foreground">
@@ -131,7 +131,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
               {t('initiatives.row.projects', { count: projects.length })}
             </span>
             <button
-              className="rounded border border-zinc-300 px-2 py-0.5 text-xs hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="rounded border border-border px-2 py-0.5 text-xs hover:bg-muted"
               onClick={() => setAdding(a => !a)}
               type="button"
             >
@@ -141,7 +141,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
           {adding ? (
             <div className="mb-2 max-h-40 overflow-y-auto rounded border border-border">
               {allProjects.length === 0 ? (
-                <div className="px-3 py-2 text-xs text-zinc-400">
+                <div className="px-3 py-2 text-xs text-muted-foreground">
                   {t('initiatives.row.noProjectsToAdd')}
                 </div>
               ) : (
@@ -170,7 +170,9 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
             </div>
           ) : null}
           {projects.length === 0 ? (
-            <div className="text-xs text-zinc-400">{t('initiatives.row.noProjectsYet')}</div>
+            <div className="text-xs text-muted-foreground">
+              {t('initiatives.row.noProjectsYet')}
+            </div>
           ) : (
             <div className="space-y-1">
               {projects.map(p => (
@@ -183,9 +185,9 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
                     style={{ backgroundColor: p.color }}
                   />
                   <span className="flex-1">{p.name}</span>
-                  <span className="text-zinc-400">{Math.round(p.progress * 100)}%</span>
+                  <span className="text-muted-foreground">{Math.round(p.progress * 100)}%</span>
                   <button
-                    className="text-zinc-400 hover:text-red-500"
+                    className="text-muted-foreground hover:text-red-500"
                     onClick={async () => {
                       const res = await gql(INITIATIVE_REMOVE_PROJECT_MUTATION, {
                         initiativeId: initiative.id,
@@ -277,7 +279,7 @@ const InitiativesPage = observer(function InitiativesPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('common.loading')}
       </div>
     );
@@ -285,7 +287,7 @@ const InitiativesPage = observer(function InitiativesPage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
+      <div className="flex items-center justify-between border-b border-border px-6 py-3">
         <h1 className="text-sm font-semibold text-foreground">{t('initiatives.page.title')}</h1>
         <button
           className="rounded bg-primary px-2.5 py-1 text-xs text-white hover:bg-primary/90"
@@ -297,9 +299,9 @@ const InitiativesPage = observer(function InitiativesPage() {
       </div>
 
       {creating ? (
-        <div className="flex items-center gap-2 border-b border-zinc-200 px-6 py-2 dark:border-zinc-800">
+        <div className="flex items-center gap-2 border-b border-border px-6 py-2">
           <input
-            className="flex-1 rounded border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
+            className="flex-1 rounded border border-border bg-transparent px-2 py-1 text-sm"
             onChange={e => setName(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter') {
@@ -331,7 +333,7 @@ const InitiativesPage = observer(function InitiativesPage() {
         ) : (
           grouped.map(({ status, items }) => (
             <div key={status}>
-              <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-1.5 dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="border-b border-border bg-card px-4 py-1.5">
                 <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
                   {STATUS_LABELS[status]}
                 </span>

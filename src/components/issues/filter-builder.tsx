@@ -104,13 +104,13 @@ function FilterPill({ condition, states, users, labels, customFields, onRemove }
   }
 
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-0.5 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs text-zinc-700 dark:text-zinc-300">
       <span className="font-medium">{fieldLabel}</span>
       <span className="text-muted-foreground">{opLabel}</span>
       {valueLabel && <span>{valueLabel}</span>}
       <button
         aria-label={t('issues.removeFilter')}
-        className="ml-0.5 text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+        className="ml-0.5 text-muted-foreground hover:text-zinc-600 dark:hover:text-zinc-300"
         onClick={onRemove}
         title={t('issues.removeFilter')}
         type="button"
@@ -207,7 +207,7 @@ function AddFilterForm({
   const needsValue = operator !== 'is_set' && operator !== 'is_not_set';
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white p-2 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+    <div className="flex items-center gap-2 rounded-lg border border-border bg-card p-2 shadow-lg">
       <SelectPopover
         triggerChildren={
           <>
@@ -297,7 +297,7 @@ function AddFilterForm({
           />
         ) : (
           <input
-            className="w-28 rounded border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+            className="w-28 rounded border border-border px-2 py-1 text-xs dark:bg-zinc-800 text-muted-foreground"
             onChange={e => setValue(e.target.value)}
             placeholder={t('issues.valueEllipsis')}
             type="text"
@@ -329,7 +329,7 @@ function AddFilterForm({
         {t('issues.add')}
       </button>
       <button
-        className="px-1 text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+        className="px-1 text-xs text-muted-foreground hover:text-zinc-600 dark:hover:text-zinc-300"
         onClick={onCancel}
         type="button"
       >
@@ -382,7 +382,7 @@ export function FilterBuilder({
   if (filterSet.conditions.length === 0 && !showAddForm) {
     return (
       <button
-        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-zinc-700 dark:hover:text-zinc-300"
         onClick={() => setShowAddForm(true)}
         type="button"
       >
@@ -432,7 +432,7 @@ export function FilterBuilder({
         />
       ) : (
         <button
-          className="flex items-center gap-0.5 text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+          className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-zinc-600 dark:hover:text-zinc-300"
           onClick={() => setShowAddForm(true)}
           type="button"
         >
@@ -442,7 +442,7 @@ export function FilterBuilder({
 
       {filterSet.conditions.length > 0 && (
         <button
-          className="text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+          className="text-xs text-muted-foreground hover:text-zinc-600 dark:hover:text-zinc-300"
           onClick={() => onChange({ composition: 'and', conditions: [] })}
           type="button"
         >

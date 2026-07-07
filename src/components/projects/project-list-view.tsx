@@ -45,11 +45,13 @@ export const ProjectListView = observer(function ProjectListView({
         {projects.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-              <Target className="h-6 w-6 text-zinc-400" />
+              <Target className="h-6 w-6 text-muted-foreground" />
             </div>
             <div>
               <p className="text-sm font-medium text-foreground">{t('projects.noProjectsYet')}</p>
-              <p className="mt-1 text-xs text-zinc-500">{t('projects.createProjectPrompt')}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('projects.createProjectPrompt')}
+              </p>
             </div>
             <button
               className="mt-2 flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
@@ -131,7 +133,7 @@ const ProjectGroup = observer(function ProjectGroup({
   return (
     <div>
       <button
-        className="flex items-center gap-2 px-1 py-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+        className="flex items-center gap-2 px-1 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-zinc-600 dark:hover:text-zinc-300"
         onClick={() => setCollapsed(!collapsed)}
         type="button"
       >
@@ -148,7 +150,7 @@ const ProjectGroup = observer(function ProjectGroup({
           />
         </svg>
         {title}
-        <span className="font-normal text-zinc-400">{projects.length}</span>
+        <span className="font-normal text-muted-foreground">{projects.length}</span>
       </button>
       {!collapsed && (
         <div className="mt-1 flex flex-col gap-1">
@@ -165,7 +167,7 @@ const ProjectGroup = observer(function ProjectGroup({
 
             return (
               <Link
-                className="group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 transition-colors hover:border-zinc-200 hover:bg-zinc-50 dark:hover:border-zinc-700 dark:hover:bg-zinc-900"
+                className="group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 transition-colors hover:border-border hover:bg-zinc-50 dark:hover:bg-zinc-900"
                 href={`/${workspaceKey}/project/${project.slugId}`}
                 key={project.id}
               >
@@ -191,7 +193,7 @@ const ProjectGroup = observer(function ProjectGroup({
                       )}
                     </span>
                     {health && (
-                      <span className="flex items-center gap-1 text-xs text-zinc-500">
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
                         <span className={cn('h-1.5 w-1.5 rounded-full', health.color)} />
                         {t(PROJECT_HEALTH_LABEL_KEYS[project.health ?? ''])}
                       </span>
@@ -207,12 +209,12 @@ const ProjectGroup = observer(function ProjectGroup({
                         style={{ width: `${progress}%` }}
                       />
                     </div>
-                    <span className="text-xs tabular-nums text-zinc-400">{progress}%</span>
+                    <span className="text-xs tabular-nums text-muted-foreground">{progress}%</span>
                   </div>
                 )}
 
                 {project.targetDate && (
-                  <span className="hidden items-center gap-1 text-xs text-zinc-400 sm:flex">
+                  <span className="hidden items-center gap-1 text-xs text-muted-foreground sm:flex">
                     <Calendar className="h-3 w-3" />
                     {project.targetDate}
                   </span>

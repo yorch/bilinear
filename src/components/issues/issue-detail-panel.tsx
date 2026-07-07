@@ -178,11 +178,11 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
       {/* Panel — full-screen sheet below md (no room for a side panel on a
           phone-width viewport); the fixed 480px side panel returns at md+. */}
       <div
-        className="fixed inset-0 z-40 flex h-full w-full flex-col border-l border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900 md:inset-y-0 md:right-0 md:left-auto md:w-[480px]"
+        className="fixed inset-0 z-40 flex h-full w-full flex-col border-l border-border bg-card shadow-xl md:inset-y-0 md:right-0 md:left-auto md:w-[480px]"
         data-testid="issue-detail-panel"
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex min-w-0 items-center gap-1.5">
             {breadcrumb && (
               <>
@@ -197,7 +197,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
                 <span className="text-muted-foreground">/</span>
               </>
             )}
-            <span className="font-mono text-xs text-zinc-400">{issue.identifier}</span>
+            <span className="font-mono text-xs text-muted-foreground">{issue.identifier}</span>
           </div>
           <div className="flex items-center gap-1">
             {subscribed !== null && (
@@ -207,7 +207,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
                     ? t('issueDetail.unsubscribeShortcut')
                     : t('issueDetail.subscribeShortcut')
                 }
-                className="rounded p-1 text-zinc-400 hover:bg-accent"
+                className="rounded p-1 text-muted-foreground hover:bg-accent"
                 onClick={handleToggleSubscription}
                 title={
                   subscribed
@@ -221,7 +221,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
             )}
             <button
               aria-label={t('common.close')}
-              className="rounded p-1 text-zinc-400 hover:bg-accent"
+              className="rounded p-1 text-muted-foreground hover:bg-accent"
               onClick={onClose}
               type="button"
             >
@@ -267,7 +267,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
           {/* Properties grid */}
           <div className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
             {/* Status */}
-            <span className="text-zinc-500">{t('issueDetail.properties.status')}</span>
+            <span className="text-muted-foreground">{t('issueDetail.properties.status')}</span>
             <StatusSelect
               onChange={stateId => handleUpdate(issue.id, { stateId })}
               states={states}
@@ -275,30 +275,32 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
             />
 
             {/* Priority */}
-            <span className="text-zinc-500">{t('issueDetail.properties.priority')}</span>
+            <span className="text-muted-foreground">{t('issueDetail.properties.priority')}</span>
             <div className="flex items-center gap-1.5">
               <PrioritySelect
                 onChange={priority => handleUpdate(issue.id, { priority })}
                 value={issue.priority}
               />
-              <span className="text-xs text-zinc-600">{t(priorityLabelKey(issue.priority))}</span>
+              <span className="text-xs text-muted-foreground">
+                {t(priorityLabelKey(issue.priority))}
+              </span>
             </div>
 
             {/* Assignee */}
-            <span className="text-zinc-500">{t('issueDetail.properties.assignee')}</span>
+            <span className="text-muted-foreground">{t('issueDetail.properties.assignee')}</span>
             <div className="flex items-center gap-1.5">
               <AssigneeSelect
                 onChange={assigneeId => handleUpdate(issue.id, { assigneeId })}
                 users={users}
                 value={issue.assigneeId}
               />
-              <span className="text-xs text-zinc-600">
+              <span className="text-xs text-muted-foreground">
                 {assignee?.displayName ?? t('issueDetail.properties.noAssignee')}
               </span>
             </div>
 
             {/* Labels */}
-            <span className="text-zinc-500">{t('issueDetail.properties.labels')}</span>
+            <span className="text-muted-foreground">{t('issueDetail.properties.labels')}</span>
             <div className="flex items-center gap-1 flex-wrap">
               <LabelSelect
                 labels={labels}
@@ -306,7 +308,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
                 value={issue.labels.map(l => l.id)}
               />
               {issue.labels.map(l => (
-                <span className="flex items-center gap-1 text-xs text-zinc-600" key={l.id}>
+                <span className="flex items-center gap-1 text-xs text-muted-foreground" key={l.id}>
                   <LabelDot color={l.color} />
                   {l.name}
                 </span>
@@ -314,14 +316,14 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
             </div>
 
             {/* Project */}
-            <span className="text-zinc-500">{t('issueDetail.properties.project')}</span>
+            <span className="text-muted-foreground">{t('issueDetail.properties.project')}</span>
             <ProjectSelect
               onChange={projectId => handleUpdate(issue.id, { projectId })}
               value={issue.projectId ?? null}
             />
 
             {/* Cycle */}
-            <span className="text-zinc-500">{t('issueDetail.properties.cycle')}</span>
+            <span className="text-muted-foreground">{t('issueDetail.properties.cycle')}</span>
             <div className="flex items-center gap-1.5">
               <CycleSelect
                 onChange={cycleId => handleUpdate(issue.id, { cycleId })}
@@ -329,12 +331,14 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
                 value={issue.cycleId ?? null}
               />
               {currentCycle && (
-                <span className="text-xs text-zinc-600">{getCycleDisplayName(currentCycle)}</span>
+                <span className="text-xs text-muted-foreground">
+                  {getCycleDisplayName(currentCycle)}
+                </span>
               )}
             </div>
 
             {/* Due date */}
-            <span className="text-zinc-500">{t('issueDetail.properties.dueDate')}</span>
+            <span className="text-muted-foreground">{t('issueDetail.properties.dueDate')}</span>
             <div className="flex items-center gap-1.5">
               <DueDatePicker
                 onChange={dueDate => handleUpdate(issue.id, { dueDate })}
@@ -348,7 +352,9 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
             {/* Estimate — only shown when the team uses estimation */}
             {estimationType !== 'notUsed' && (
               <>
-                <span className="text-zinc-500">{t('issueDetail.properties.estimate')}</span>
+                <span className="text-muted-foreground">
+                  {t('issueDetail.properties.estimate')}
+                </span>
                 <EstimatePicker
                   estimationType={estimationType}
                   onChange={estimate => handleUpdate(issue.id, { estimate: estimate ?? undefined })}
@@ -363,7 +369,9 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
 
           {/* Description */}
           <div className="mt-6">
-            <p className="mb-1 text-xs font-medium text-zinc-500">{t('issueDetail.description')}</p>
+            <p className="mb-1 text-xs font-medium text-muted-foreground">
+              {t('issueDetail.description')}
+            </p>
             {editingDesc ? (
               <div className="rounded-md border border-indigo-400 bg-transparent p-2 transition-colors">
                 <TipTapEditor
@@ -422,7 +430,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
 
           {/* Comments */}
           <div className="mt-6">
-            <p className="mb-3 text-xs font-medium text-zinc-500">
+            <p className="mb-3 text-xs font-medium text-muted-foreground">
               {t('issueDetail.comments.title')}
             </p>
             <CommentThread
@@ -436,7 +444,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
 
           {/* Activity */}
           <div className="mt-6">
-            <p className="mb-3 text-xs font-medium text-zinc-500">
+            <p className="mb-3 text-xs font-medium text-muted-foreground">
               {t('issueDetail.activity.title')}
             </p>
             <ActivityTimeline issueId={issue.id} refetchKey={activityKey} />

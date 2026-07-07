@@ -98,13 +98,13 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
       {close => (
         <>
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-zinc-100 px-3 py-2 dark:border-zinc-800">
+          <div className="flex items-center justify-between border-b border-border px-3 py-2">
             <span className="text-xs font-semibold text-muted-foreground">
               {t('issueDetail.templates.title')}
             </span>
             <button
               aria-label={t('common.close')}
-              className="rounded p-0.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+              className="rounded p-0.5 text-muted-foreground hover:text-zinc-600 dark:hover:text-zinc-300"
               onClick={close}
               type="button"
             >
@@ -113,11 +113,11 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
           </div>
 
           {loading ? (
-            <p className="px-3 py-4 text-center text-xs text-zinc-400">
+            <p className="px-3 py-4 text-center text-xs text-muted-foreground">
               {t('issueDetail.templates.loading')}
             </p>
           ) : sorted.length === 0 ? (
-            <p className="px-3 py-4 text-center text-xs text-zinc-400 italic">
+            <p className="px-3 py-4 text-center text-xs text-muted-foreground italic">
               {t('issueDetail.templates.noneForTeam')}
             </p>
           ) : (
@@ -141,7 +141,7 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
                       )}
                     </div>
                     {template.description && (
-                      <p className="mt-0.5 truncate text-xs text-zinc-400">
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
                         {template.description}
                       </p>
                     )}

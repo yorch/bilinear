@@ -77,9 +77,9 @@ export const ProjectRoadmapView = observer(function ProjectRoadmapView({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+      <div className="border-b border-border px-4 py-3">
         <h2 className="text-sm font-semibold text-foreground">{t('projects.roadmap')}</h2>
-        <p className="text-xs text-zinc-500">{t('projects.roadmapHint')}</p>
+        <p className="text-xs text-muted-foreground">{t('projects.roadmapHint')}</p>
       </div>
       <div className="flex-1 overflow-y-auto">
         <GanttView
@@ -91,7 +91,7 @@ export const ProjectRoadmapView = observer(function ProjectRoadmapView({
           <div className="flex flex-wrap gap-2">
             {projects.map(p => (
               <button
-                className="flex items-center gap-1.5 rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900"
                 key={p.id}
                 onClick={() => router.push(`/${workspaceKey}/project/${p.slugId}`)}
                 type="button"

@@ -55,7 +55,7 @@ export function LabelSelect({
         selected.length > 0 ? (
           selected.slice(0, 3).map(l => <LabelDot color={l.color} key={l.id} />)
         ) : (
-          <span className="text-xs text-zinc-400">{t('properties.label.labels')}</span>
+          <span className="text-xs text-muted-foreground">{t('properties.label.labels')}</span>
         )
       }
       triggerClassName="gap-0.5 px-1.5 py-1"
@@ -66,7 +66,9 @@ export function LabelSelect({
       {_close => (
         <>
           {labels.length === 0 && (
-            <p className="px-3 py-2 text-sm text-zinc-400">{t('properties.label.noLabels')}</p>
+            <p className="px-3 py-2 text-sm text-muted-foreground">
+              {t('properties.label.noLabels')}
+            </p>
           )}
           {labels.map(label => (
             <button
@@ -83,7 +85,7 @@ export function LabelSelect({
             >
               <LabelDot color={label.color} />
               {label.name}
-              {value.includes(label.id) && <span className="ml-auto text-zinc-400">✓</span>}
+              {value.includes(label.id) && <span className="ml-auto text-muted-foreground">✓</span>}
             </button>
           ))}
         </>

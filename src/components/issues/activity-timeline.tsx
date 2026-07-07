@@ -98,7 +98,7 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 py-4 text-xs text-zinc-400">
+      <div className="flex items-center gap-2 py-4 text-xs text-muted-foreground">
         <Clock className="h-3.5 w-3.5 animate-pulse" />
         <span>{t('issueDetail.activity.loading')}</span>
       </div>
@@ -113,7 +113,7 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
 
   if (activities.length === 0) {
     return (
-      <div className="flex items-center gap-2 py-4 text-xs text-zinc-400">
+      <div className="flex items-center gap-2 py-4 text-xs text-muted-foreground">
         <Activity className="h-3.5 w-3.5" />
         <span>{t('issueDetail.activity.empty')}</span>
       </div>

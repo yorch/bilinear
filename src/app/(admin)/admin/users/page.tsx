@@ -126,7 +126,7 @@ export default function AdminUsersPage() {
         }}
       >
         <input
-          className="rounded border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
+          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
           onChange={e => setQuery(e.target.value)}
           placeholder={t('admin.users.searchPlaceholder')}
           value={query}
@@ -140,18 +140,18 @@ export default function AdminUsersPage() {
       </form>
 
       {loading ? (
-        <p className="text-sm text-zinc-400">{t('common.loading')}</p>
+        <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
       ) : error ? (
         <p className="text-sm text-red-500">{error}</p>
       ) : users.length === 0 ? (
-        <p className="rounded border border-dashed border-zinc-300 px-4 py-8 text-center text-sm text-zinc-400 dark:border-zinc-700">
+        <p className="rounded border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
           {t('admin.users.empty')}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+              <tr className="border-b border-border bg-muted text-left text-xs font-medium text-muted-foreground">
                 <th className="px-4 py-2">{t('admin.users.colUser')}</th>
                 <th className="px-4 py-2">{t('admin.users.colOrganizations')}</th>
                 <th className="px-4 py-2">{t('admin.users.colStatus')}</th>
@@ -170,16 +170,16 @@ export default function AdminUsersPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-zinc-400">{u.email}</p>
+                    <p className="text-xs text-muted-foreground">{u.email}</p>
                   </td>
                   <td className="px-4 py-2">
                     {u.organizations.length === 0 ? (
-                      <span className="text-xs text-zinc-400">—</span>
+                      <span className="text-xs text-muted-foreground">—</span>
                     ) : (
                       <div className="flex flex-wrap gap-1">
                         {u.organizations.map(o => (
                           <span
-                            className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                            className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
                             key={o.id}
                             title={`${o.role} · ${o.urlKey}`}
                           >
@@ -204,7 +204,7 @@ export default function AdminUsersPage() {
                   <td className="px-4 py-2">
                     <div className="flex flex-wrap justify-end gap-1.5">
                       <button
-                        className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                        className="rounded border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
                         disabled={busyId === u.id || u.organizations.length === 0 || !u.active}
                         onClick={() => handleImpersonate(u)}
                         title={
@@ -217,7 +217,7 @@ export default function AdminUsersPage() {
                         {t('admin.users.impersonate')}
                       </button>
                       <button
-                        className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                        className="rounded border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
                         disabled={busyId === u.id}
                         onClick={() =>
                           u.isPlatformAdmin ? setConfirmingRevoke(u) : void handleToggleAdmin(u)

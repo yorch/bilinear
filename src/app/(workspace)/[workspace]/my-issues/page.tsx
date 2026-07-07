@@ -108,7 +108,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('common.loading')}
       </div>
     );
@@ -121,10 +121,10 @@ const MyIssuesPage = observer(function MyIssuesPage() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Page header */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-6 py-3">
         <div className="flex items-center gap-2">
           <h1 className="text-sm font-semibold text-foreground">{t('issues.myIssues')}</h1>
-          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
             {issues.length}
           </span>
         </div>
@@ -132,7 +132,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
           {viewMode === 'board' && (
             <>
               <select
-                className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                className="rounded-md border border-border bg-card px-2 py-1 text-xs text-zinc-700 dark:text-zinc-300"
                 onChange={e => setBoardGroupBy(e.target.value as BoardGroupBy)}
                 value={boardGroupBy}
               >
@@ -141,7 +141,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
                 <option value="priority">{t('issues.groupByPriority')}</option>
               </select>
               <select
-                className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                className="rounded-md border border-border bg-card px-2 py-1 text-xs text-zinc-700 dark:text-zinc-300"
                 onChange={e => setSwimlaneBy(e.target.value as BoardSwimlaneBy)}
                 value={swimlaneBy}
               >
@@ -156,7 +156,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
       </div>
 
       {/* Filter bar */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
         <FilterBuilder
           filterSet={filterSet}
           labels={labels}

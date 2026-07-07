@@ -117,14 +117,14 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
       <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {t('customFields.title')}
       </h2>
-      <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
-        <div className="flex items-center justify-between border-b border-zinc-100 p-4 dark:border-zinc-800">
+      <div className="rounded-lg border border-border bg-card">
+        <div className="flex items-center justify-between border-b border-border p-4">
           <p className="text-xs text-muted-foreground">
             {t('customFields.fieldCount', { count: definitions.length, max: MAX_FIELDS })}
           </p>
           {!isAdding && (
             <button
-              className="flex items-center gap-1.5 rounded-md border border-zinc-200 px-2.5 py-1 text-xs transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-zinc-800"
               disabled={atLimit}
               onClick={() => setIsAdding(true)}
               type="button"
@@ -136,14 +136,14 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
         </div>
 
         {isAdding && (
-          <div className="border-b border-zinc-100 p-4 dark:border-zinc-800">
+          <div className="border-b border-border p-4">
             <CustomFieldForm onCancel={() => setIsAdding(false)} onSubmit={handleCreate} />
           </div>
         )}
 
         <ul className="divide-y divide-border">
           {definitions.length === 0 && !isAdding && (
-            <li className="p-4 text-sm text-zinc-400">{t('customFields.emptyState')}</li>
+            <li className="p-4 text-sm text-muted-foreground">{t('customFields.emptyState')}</li>
           )}
           {definitions.map(def => (
             <li className="flex items-center justify-between gap-3 p-4" key={def.id}>
@@ -152,7 +152,7 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
                   <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
                     {def.name}
                   </span>
-                  <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                     {def.type.replace('_', ' ')}
                   </span>
                   {def.required && (
@@ -167,7 +167,7 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
               </div>
               <button
                 aria-label={t('customFields.archive')}
-                className="rounded p-1 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                className="rounded p-1 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
                 onClick={() => setConfirmingArchive({ id: def.id, name: def.name })}
                 type="button"
               >
@@ -256,11 +256,11 @@ function CustomFieldForm({
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-zinc-500" htmlFor="cf-name">
+          <label className="text-xs font-medium text-muted-foreground" htmlFor="cf-name">
             {t('customFields.name')}
           </label>
           <input
-            className="rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            className="rounded-md border border-border bg-card px-2.5 py-1.5 text-sm"
             id="cf-name"
             onChange={e => setName(e.target.value)}
             placeholder={t('customFields.namePlaceholder')}
@@ -268,7 +268,7 @@ function CustomFieldForm({
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-zinc-500" htmlFor="cf-type">
+          <label className="text-xs font-medium text-muted-foreground" htmlFor="cf-type">
             {t('customFields.type')}
           </label>
           <SimpleSelect
@@ -280,11 +280,11 @@ function CustomFieldForm({
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium text-zinc-500" htmlFor="cf-desc">
+        <label className="text-xs font-medium text-muted-foreground" htmlFor="cf-desc">
           {t('customFields.descriptionOptional')}
         </label>
         <input
-          className="rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+          className="rounded-md border border-border bg-card px-2.5 py-1.5 text-sm"
           id="cf-desc"
           onChange={e => setDescription(e.target.value)}
           value={description}
@@ -293,24 +293,24 @@ function CustomFieldForm({
 
       {needsOptions && (
         <div className="flex flex-col gap-2 rounded-md bg-zinc-50 p-3 dark:bg-zinc-800/50">
-          <p className="text-xs font-medium text-zinc-500">{t('customFields.options')}</p>
+          <p className="text-xs font-medium text-muted-foreground">{t('customFields.options')}</p>
           {options.map(opt => (
             <div className="flex items-center gap-2" key={opt.key}>
               <input
-                className="w-24 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+                className="w-24 rounded-md border border-border bg-card px-2 py-1 text-xs"
                 onChange={e => updateOption(opt.key, { value: e.target.value })}
                 placeholder={t('customFields.optionValue')}
                 value={opt.value}
               />
               <input
-                className="flex-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+                className="flex-1 rounded-md border border-border bg-card px-2 py-1 text-xs"
                 onChange={e => updateOption(opt.key, { label: e.target.value })}
                 placeholder={t('customFields.optionLabel')}
                 value={opt.label}
               />
               <button
                 aria-label={t('customFields.removeOption')}
-                className="rounded p-1 text-zinc-400 hover:text-red-600"
+                className="rounded p-1 text-muted-foreground hover:text-red-600"
                 onClick={() => removeOption(opt.key)}
                 type="button"
               >
@@ -319,7 +319,7 @@ function CustomFieldForm({
             </div>
           ))}
           <button
-            className="self-start rounded border border-dashed border-zinc-300 px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            className="self-start rounded border border-dashed border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
             onClick={addOption}
             type="button"
           >
@@ -335,7 +335,7 @@ function CustomFieldForm({
 
       <div className="flex items-center justify-end gap-2">
         <button
-          className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-accent"
+          className="rounded px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent"
           onClick={onCancel}
           type="button"
         >

@@ -27,7 +27,7 @@ export default function GlobalError({
       <h1 className="text-xl font-semibold text-foreground">{t('errors.somethingWentWrong')}</h1>
       <p className="max-w-md text-sm text-muted-foreground">{t('errors.unexpectedErrorDetail')}</p>
       {error.digest ? (
-        <p className="font-mono text-xs text-zinc-500">
+        <p className="font-mono text-xs text-muted-foreground">
           {t('errors.errorRef')} {error.digest}
         </p>
       ) : null}

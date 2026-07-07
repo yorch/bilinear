@@ -95,7 +95,7 @@ export function VerifyCodeForm() {
           {t('auth.verificationCode')}
         </label>
         <input
-          className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-center text-2xl font-mono tracking-[0.5em] text-zinc-900 placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-700 dark:focus:ring-zinc-100"
+          className="rounded-md border border-border bg-card px-3 py-2 text-center text-2xl font-mono tracking-[0.5em] text-foreground placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:placeholder:text-zinc-700 dark:focus:ring-zinc-100"
           id="code"
           inputMode="numeric"
           maxLength={6}
@@ -119,7 +119,7 @@ export function VerifyCodeForm() {
       </Button>
 
       <button
-        className="text-sm text-zinc-500 hover:text-foreground"
+        className="text-sm text-muted-foreground hover:text-foreground"
         onClick={() => router.push(`/login`)}
         type="button"
       >

@@ -16,7 +16,9 @@ export function BurnupChart({ data }: BurnupChartProps) {
   const { formatDate } = useFormatters();
 
   if (data.length === 0) {
-    return <p className="py-6 text-center text-xs text-zinc-400">{t('cycles.burnup.empty')}</p>;
+    return (
+      <p className="py-6 text-center text-xs text-muted-foreground">{t('cycles.burnup.empty')}</p>
+    );
   }
 
   const width = 600;

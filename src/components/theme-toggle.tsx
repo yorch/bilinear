@@ -42,7 +42,7 @@ export function ThemeToggle({ className, compact = false }: ThemeToggleProps) {
       <button
         aria-label={t('theme.currentTheme', { theme: label })}
         className={cn(
-          'flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
+          'flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
           className,
         )}
         onClick={() => setTheme(CYCLE[theme])}
@@ -56,10 +56,7 @@ export function ThemeToggle({ className, compact = false }: ThemeToggleProps) {
 
   return (
     <fieldset
-      className={cn(
-        'flex items-center gap-0.5 rounded-md bg-zinc-100 p-0.5 dark:bg-zinc-800 border-0 m-0',
-        className,
-      )}
+      className={cn('flex items-center gap-0.5 rounded-md bg-muted p-0.5 border-0 m-0', className)}
     >
       <legend className="sr-only">{t('theme.colorTheme')}</legend>
       {OPTIONS.map(({ icon: Icon, key, value }) => (
@@ -68,8 +65,8 @@ export function ThemeToggle({ className, compact = false }: ThemeToggleProps) {
           className={cn(
             'flex h-6 w-6 items-center justify-center rounded transition-colors',
             mounted && theme === value
-              ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-50'
-              : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200',
+              ? 'bg-white text-foreground shadow-sm dark:bg-zinc-700'
+              : 'text-muted-foreground hover:text-zinc-700 dark:hover:text-zinc-200',
           )}
           key={value}
           onClick={() => setTheme(value)}

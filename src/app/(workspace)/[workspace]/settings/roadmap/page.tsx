@@ -174,7 +174,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <div className="flex items-center border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
+      <div className="flex items-center border-b border-border px-6 py-3">
         <h1 className="text-sm font-semibold text-foreground">{t('roadmap.settings.title')}</h1>
       </div>
 
@@ -184,7 +184,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('roadmap.settings.sectionHeading')}
           </h2>
-          <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
+          <div className="rounded-lg border border-border bg-card p-5">
             {loading ? (
               <div className="flex flex-col gap-4 animate-pulse">
                 <div className="h-4 w-48 rounded bg-muted" />
@@ -209,7 +209,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                     {t('roadmap.settings.titleLabel')}
                   </label>
                   <input
-                    className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-indigo-500 dark:focus:ring-indigo-800/40"
+                    className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:border-indigo-500 dark:focus:ring-indigo-800/40"
                     id="roadmap-title"
                     onChange={e => setTitle(e.target.value)}
                     placeholder={t('roadmap.settings.titlePlaceholder')}
@@ -228,7 +228,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                     {t('roadmap.settings.descriptionLabel')}
                   </label>
                   <textarea
-                    className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-indigo-500 dark:focus:ring-indigo-800/40 resize-none"
+                    className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:border-indigo-500 dark:focus:ring-indigo-800/40 resize-none"
                     id="roadmap-description"
                     onChange={e => setDescription(e.target.value)}
                     placeholder={t('roadmap.settings.descriptionPlaceholder')}
@@ -248,7 +248,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground shrink-0">/roadmap/</span>
                     <input
-                      className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-mono text-zinc-900 placeholder-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-indigo-500 dark:focus:ring-indigo-800/40"
+                      className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-sm font-mono text-foreground placeholder-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:border-indigo-500 dark:focus:ring-indigo-800/40"
                       id="roadmap-slug"
                       onChange={e => setSlug(e.target.value)}
                       pattern="[a-z0-9-]+"
@@ -312,7 +312,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                             {t('roadmap.settings.newPassword')}
                           </label>
                           <input
-                            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-indigo-500 dark:focus:ring-indigo-800/40"
+                            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:border-indigo-500 dark:focus:ring-indigo-800/40"
                             id="roadmap-password"
                             onChange={e => setNewPassword(e.target.value)}
                             placeholder={t('roadmap.settings.newPasswordPlaceholder')}
@@ -347,9 +347,9 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
           <p className="mb-4 text-xs text-muted-foreground">
             {t('roadmap.settings.projectsDescription')}
           </p>
-          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 overflow-hidden">
+          <div className="rounded-lg border border-border bg-card overflow-hidden">
             {projects.length === 0 ? (
-              <p className="px-5 py-4 text-sm text-zinc-400">
+              <p className="px-5 py-4 text-sm text-muted-foreground">
                 {t('roadmap.settings.noActiveProjects')}
               </p>
             ) : (
@@ -395,7 +395,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                           </>
                         ) : (
                           <>
-                            <EyeOff className="h-3.5 w-3.5 text-zinc-400" />
+                            <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
                             <span className="text-muted-foreground">
                               {t('roadmap.settings.hidden')}
                             </span>

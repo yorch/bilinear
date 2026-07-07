@@ -143,21 +143,21 @@ export default function AutomationsSettingsPage() {
   };
 
   if (loading) {
-    return <div className="p-6 text-sm text-zinc-500">{t('common.loading')}</div>;
+    return <div className="p-6 text-sm text-muted-foreground">{t('common.loading')}</div>;
   }
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-6">
       <h1 className="text-lg font-semibold text-foreground">{t('settings.automations.title')}</h1>
-      <p className="mt-1 text-sm text-zinc-500">{t('settings.automations.description')}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{t('settings.automations.description')}</p>
 
-      <section className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+      <section className="mt-6 rounded-lg border border-border p-4">
         <h2 className="text-sm font-semibold text-foreground">
           {t('settings.automations.createRule')}
         </h2>
         <form className="mt-3 flex flex-col gap-3" onSubmit={handleCreate}>
           <input
-            className="rounded-md border border-zinc-200 px-2 py-1.5 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+            className="rounded-md border border-border px-2 py-1.5 text-sm dark:bg-zinc-950"
             onChange={e => setName(e.target.value)}
             placeholder={t('settings.automations.ruleNamePlaceholder')}
             required
@@ -165,7 +165,7 @@ export default function AutomationsSettingsPage() {
           />
           <div className="flex gap-2">
             <select
-              className="flex-1 rounded-md border border-zinc-200 px-2 py-1.5 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+              className="flex-1 rounded-md border border-border px-2 py-1.5 text-sm dark:bg-zinc-950"
               onChange={e => setTriggerType(e.target.value)}
               value={triggerType}
             >
@@ -175,11 +175,11 @@ export default function AutomationsSettingsPage() {
                 </option>
               ))}
             </select>
-            <span className="self-center text-xs text-zinc-500">
+            <span className="self-center text-xs text-muted-foreground">
               {t('settings.automations.then')}
             </span>
             <select
-              className="flex-1 rounded-md border border-zinc-200 px-2 py-1.5 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+              className="flex-1 rounded-md border border-border px-2 py-1.5 text-sm dark:bg-zinc-950"
               onChange={e => setActionType(e.target.value)}
               value={actionType}
             >
@@ -191,7 +191,7 @@ export default function AutomationsSettingsPage() {
             </select>
           </div>
           <textarea
-            className="rounded-md border border-zinc-200 px-2 py-1.5 font-mono text-xs dark:border-zinc-800 dark:bg-zinc-950"
+            className="rounded-md border border-border px-2 py-1.5 font-mono text-xs dark:bg-zinc-950"
             onChange={e => setActionConfigText(e.target.value)}
             placeholder={t('settings.automations.actionConfigPlaceholder')}
             rows={3}
@@ -214,12 +214,12 @@ export default function AutomationsSettingsPage() {
           {t('settings.automations.rulesCount', { count: data?.automationRules.length ?? 0 })}
         </h2>
         {data?.automationRules.length === 0 ? (
-          <p className="text-sm text-zinc-500">{t('settings.automations.noRulesYet')}</p>
+          <p className="text-sm text-muted-foreground">{t('settings.automations.noRulesYet')}</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {data?.automationRules.map(rule => (
               <li
-                className="flex items-center gap-3 rounded-md border border-zinc-200 px-3 py-2.5 dark:border-zinc-800"
+                className="flex items-center gap-3 rounded-md border border-border px-3 py-2.5"
                 key={rule.id}
               >
                 <button
@@ -236,7 +236,7 @@ export default function AutomationsSettingsPage() {
                 </button>
                 <div className="flex-1">
                   <div className="text-sm font-medium text-foreground">{rule.name}</div>
-                  <div className="text-xs text-zinc-500">
+                  <div className="text-xs text-muted-foreground">
                     {t('settings.automations.when')}{' '}
                     <code className="font-mono">{rule.triggerType}</code> →{' '}
                     {rule.actions.map(a => (

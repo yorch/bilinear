@@ -74,8 +74,8 @@ function KbdGroup({ keys }: { keys: string[] }) {
       {keys.map((k, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: static shortcut key arrays never reorder
         <span className="flex items-center gap-0.5" key={`${k}-${i}`}>
-          {i > 0 && <span className="text-xs text-zinc-400">+</span>}
-          <kbd className="rounded border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 text-xs font-mono dark:border-zinc-600 dark:bg-zinc-800">
+          {i > 0 && <span className="text-xs text-muted-foreground">+</span>}
+          <kbd className="rounded border border-zinc-200 bg-muted px-1.5 py-0.5 text-xs font-mono dark:border-zinc-600">
             {k}
           </kbd>
         </span>
@@ -131,15 +131,15 @@ export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
       role="dialog"
     >
       {/* Card */}
-      <div className="w-full max-w-xl overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+      <div className="w-full max-w-xl overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <h2 className="text-sm font-semibold text-foreground">
             {t('layout.shortcutHelp.title')}
           </h2>
           <button
             aria-label={t('layout.shortcutHelp.closeAriaLabel')}
-            className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-zinc-600 dark:hover:text-zinc-300"
             onClick={onClose}
             type="button"
           >
@@ -165,7 +165,7 @@ export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
           <div className="grid grid-cols-2 gap-x-8 gap-y-6">
             {SECTIONS.map(section => (
               <div key={section.titleKey}>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   {t(section.titleKey)}
                 </p>
                 <div className="space-y-1.5">
@@ -187,10 +187,10 @@ export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end border-t border-zinc-100 px-6 py-3 dark:border-zinc-800">
-          <span className="text-xs text-zinc-400">
+        <div className="flex items-center justify-end border-t border-border px-6 py-3">
+          <span className="text-xs text-muted-foreground">
             {t('layout.shortcutHelp.pressPrefix')}{' '}
-            <kbd className="rounded border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 text-xs font-mono dark:border-zinc-600 dark:bg-zinc-800">
+            <kbd className="rounded border border-zinc-200 bg-muted px-1.5 py-0.5 text-xs font-mono dark:border-zinc-600">
               Esc
             </kbd>{' '}
             {t('layout.shortcutHelp.pressSuffix')}

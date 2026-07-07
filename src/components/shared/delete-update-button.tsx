@@ -32,7 +32,9 @@ export function DeleteUpdateButton({ updateId, mutation, onDeleted }: DeleteUpda
   if (confirming) {
     return (
       <div className="flex items-center gap-1">
-        <span className="text-xs text-zinc-500">{t('properties.updateForm.deleteConfirm')}</span>
+        <span className="text-xs text-muted-foreground">
+          {t('properties.updateForm.deleteConfirm')}
+        </span>
         <button
           className="rounded px-1.5 py-0.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
           disabled={deleting}
@@ -42,7 +44,7 @@ export function DeleteUpdateButton({ updateId, mutation, onDeleted }: DeleteUpda
           {deleting ? '...' : t('properties.updateForm.yes')}
         </button>
         <button
-          className="rounded px-1.5 py-0.5 text-xs text-zinc-500 hover:bg-accent"
+          className="rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-accent"
           onClick={() => setConfirming(false)}
           type="button"
         >
@@ -54,7 +56,7 @@ export function DeleteUpdateButton({ updateId, mutation, onDeleted }: DeleteUpda
 
   return (
     <button
-      className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-red-500 dark:hover:bg-zinc-800"
+      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-red-500"
       onClick={() => setConfirming(true)}
       title={t('common.delete')}
       type="button"

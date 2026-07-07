@@ -191,7 +191,7 @@ export function TeamMemberManagement({
                   <span className="text-sm font-medium text-foreground truncate">
                     {member.displayName}
                     {isSelf && (
-                      <span className="ml-1 text-xs text-zinc-400">({t('teams.you')})</span>
+                      <span className="ml-1 text-xs text-muted-foreground">({t('teams.you')})</span>
                     )}
                   </span>
                   {member.isOwner && (
@@ -201,7 +201,7 @@ export function TeamMemberManagement({
                     </span>
                   )}
                 </div>
-                <span className="text-xs text-zinc-400 truncate">{member.email}</span>
+                <span className="text-xs text-muted-foreground truncate">{member.email}</span>
               </div>
               {/* Role badge / selector */}
               {member.role && (
@@ -254,7 +254,7 @@ export function TeamMemberManagement({
                       {isLoading ? '…' : t('teams.yes')}
                     </button>
                     <button
-                      className="rounded px-2 py-0.5 text-xs text-zinc-500 hover:bg-accent"
+                      className="rounded px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent"
                       onClick={() => setPendingRemoveId(null)}
                       type="button"
                     >
@@ -269,7 +269,7 @@ export function TeamMemberManagement({
                           'flex h-7 w-7 items-center justify-center rounded text-xs transition-colors disabled:opacity-50',
                           member.isOwner
                             ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
-                            : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300',
+                            : 'text-muted-foreground hover:bg-muted hover:text-zinc-700 dark:hover:text-zinc-300',
                         )}
                         disabled={isLoading}
                         onClick={() => handleToggleOwner(member.membershipId, member.isOwner)}
@@ -281,7 +281,7 @@ export function TeamMemberManagement({
                     )}
                     {(canManageMembers || isSelf) && (
                       <button
-                        className="flex h-7 w-7 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                        className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                         disabled={isLoading}
                         onClick={() => setPendingRemoveId(member.membershipId)}
                         title={isSelf ? t('teams.leaveTeam') : t('teams.removeMember')}
@@ -303,9 +303,9 @@ export function TeamMemberManagement({
       </ul>
 
       {addOpen ? (
-        <div className="rounded-md border border-zinc-200 bg-zinc-50 p-2 dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="rounded-md border border-border bg-card p-2">
           <input
-            className="w-full bg-transparent px-2 py-1 text-sm text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
+            className="w-full bg-transparent px-2 py-1 text-sm text-foreground placeholder-zinc-400 outline-none"
             onChange={e => setSearch(e.target.value)}
             placeholder={t('teams.searchMembersToAdd')}
             ref={searchRef}
@@ -314,14 +314,14 @@ export function TeamMemberManagement({
           />
           <ul className="mt-1 max-h-48 overflow-y-auto">
             {availableUsers.length === 0 ? (
-              <li className="px-2 py-1.5 text-sm text-zinc-400">
+              <li className="px-2 py-1.5 text-sm text-muted-foreground">
                 {search ? t('teams.noMatches') : t('teams.allMembersAlreadyInTeam')}
               </li>
             ) : (
               availableUsers.map(user => (
                 <li key={user.id}>
                   <button
-                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted disabled:opacity-50"
                     disabled={adding}
                     onClick={() => handleAdd(user.id)}
                     type="button"
@@ -329,7 +329,7 @@ export function TeamMemberManagement({
                     <Avatar size="sm" user={user} />
                     <div className="min-w-0">
                       <p className="truncate font-medium text-foreground">{user.displayName}</p>
-                      <p className="truncate text-xs text-zinc-400">{user.email}</p>
+                      <p className="truncate text-xs text-muted-foreground">{user.email}</p>
                     </div>
                   </button>
                 </li>
@@ -344,7 +344,7 @@ export function TeamMemberManagement({
         </div>
       ) : (
         <button
-          className="flex items-center gap-1.5 self-start rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+          className="flex items-center gap-1.5 self-start rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
           onClick={() => setAddOpen(true)}
           type="button"
         >

@@ -73,7 +73,9 @@ function VelocityBarChart({ cycles }: VelocityBarChartProps) {
 
   if (cycles.length === 0) {
     return (
-      <p className="py-4 text-center text-xs text-zinc-400">{t('cycles.detail.velocity.empty')}</p>
+      <p className="py-4 text-center text-xs text-muted-foreground">
+        {t('cycles.detail.velocity.empty')}
+      </p>
     );
   }
 
@@ -94,7 +96,7 @@ function VelocityBarChart({ cycles }: VelocityBarChartProps) {
               }}
             />
             <span
-              className="max-w-full truncate text-[9px] text-zinc-400"
+              className="max-w-full truncate text-[9px] text-muted-foreground"
               title={t('cycles.defaultName', { number: c.cycleNumber })}
             >
               #{c.cycleNumber}
@@ -250,7 +252,7 @@ export const CycleDetailView = observer(function CycleDetailView({
 
   if (!cycle) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('cycles.detail.notFound')}
       </div>
     );
@@ -308,17 +310,17 @@ export const CycleDetailView = observer(function CycleDetailView({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex h-12 items-center gap-3 border-b border-zinc-200 px-4 dark:border-zinc-800">
+      <div className="flex h-12 items-center gap-3 border-b border-border px-4">
         <Link
-          className="flex h-6 w-6 items-center justify-center rounded text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-zinc-600 dark:hover:text-zinc-300"
           href={`/${workspaceKey}/team/${teamKey}/cycles`}
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <RefreshCw className="h-4 w-4 text-zinc-400" />
+        <RefreshCw className="h-4 w-4 text-muted-foreground" />
         {editingName ? (
           <input
-            className="flex-1 rounded border border-indigo-500 bg-transparent px-1 text-sm font-semibold text-zinc-900 outline-none dark:text-zinc-100"
+            className="flex-1 rounded border border-indigo-500 bg-transparent px-1 text-sm font-semibold text-foreground outline-none"
             onBlur={handleSaveName}
             onChange={e => setNameValue(e.target.value)}
             onKeyDown={e => {
@@ -335,7 +337,7 @@ export const CycleDetailView = observer(function CycleDetailView({
           />
         ) : (
           <button
-            className="text-sm font-semibold text-zinc-900 hover:text-indigo-600 dark:text-zinc-100 dark:hover:text-indigo-400"
+            className="text-sm font-semibold text-foreground hover:text-indigo-600 dark:hover:text-indigo-400"
             onClick={() => {
               setNameValue(cycle.name ?? '');
               setEditingName(true);
@@ -350,7 +352,7 @@ export const CycleDetailView = observer(function CycleDetailView({
         {/* Roll over button — only for active / past cycles */}
         {showRollover && (
           <button
-            className="ml-auto flex items-center gap-1.5 rounded border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800"
+            className="ml-auto flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-50 dark:hover:border-zinc-600 dark:hover:bg-zinc-800"
             disabled={rollingOver}
             onClick={handleRollover}
             type="button"
@@ -369,8 +371,8 @@ export const CycleDetailView = observer(function CycleDetailView({
               {statusLabel}
             </span>
             <div className="flex items-center gap-1.5">
-              <Calendar className="h-3.5 w-3.5 text-zinc-400" />
-              <span className="text-xs text-zinc-500">
+              <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">
                 {formatDate(cycle.startsAt, { day: 'numeric', month: 'short', year: 'numeric' })}{' '}
                 &rarr;{' '}
                 {formatDate(cycle.endsAt, { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -383,12 +385,12 @@ export const CycleDetailView = observer(function CycleDetailView({
           )}
 
           {/* Progress */}
-          <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+          <div className="mt-6 rounded-lg border border-border p-4">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-muted-foreground">
                 {t('cycles.detail.progress')}
               </span>
-              <span className="text-xs tabular-nums text-zinc-500">
+              <span className="text-xs tabular-nums text-muted-foreground">
                 {t('cycles.detail.progressCount', {
                   completed: completedIssues.length,
                   progress,
@@ -408,48 +410,48 @@ export const CycleDetailView = observer(function CycleDetailView({
           {scopeMetrics &&
             (scopeMetrics.scopeCreepCount > 0 || scopeMetrics.carryoverCount > 0) && (
               <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
+                <div className="rounded-lg border border-border bg-card p-3">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                     {t('cycles.detail.scope.planned')}
                   </p>
                   <p className="mt-1 text-xl font-semibold text-foreground">
                     {scopeMetrics.plannedCount}
                   </p>
                 </div>
-                <div className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
+                <div className="rounded-lg border border-border bg-card p-3">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                     {t('cycles.detail.scope.creep')}
                   </p>
                   <p className="mt-1 text-xl font-semibold text-orange-500">
                     {scopeMetrics.scopeCreepCount}
                   </p>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-muted-foreground">
                     {t('cycles.detail.scope.pctOfTotal', {
                       pct: Math.round(scopeMetrics.scopeCreepPct),
                     })}
                   </p>
                 </div>
-                <div className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
+                <div className="rounded-lg border border-border bg-card p-3">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                     {t('cycles.detail.scope.carriedOver')}
                   </p>
                   <p className="mt-1 text-xl font-semibold text-blue-500">
                     {scopeMetrics.carryoverCount}
                   </p>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-muted-foreground">
                     {t('cycles.detail.scope.pctOfTotal', {
                       pct: Math.round(scopeMetrics.carryoverPct),
                     })}
                   </p>
                 </div>
-                <div className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
+                <div className="rounded-lg border border-border bg-card p-3">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                     {t('cycles.detail.scope.completed')}
                   </p>
                   <p className="mt-1 text-xl font-semibold text-green-500">
                     {scopeMetrics.completedCount}
                   </p>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-muted-foreground">
                     {t('cycles.detail.scope.ofTotal', { total: scopeMetrics.totalCount })}
                   </p>
                 </div>
@@ -458,19 +460,19 @@ export const CycleDetailView = observer(function CycleDetailView({
 
           {/* Burndown / burnup chart — active or completed cycles */}
           {(isActive || isCompleted) && (
-            <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+            <div className="mt-6 rounded-lg border border-border p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   {chartView === 'burndown' ? t('cycles.burndown.title') : t('cycles.burnup.title')}
                 </h3>
-                <div className="flex rounded-md border border-zinc-200 text-xs dark:border-zinc-700">
+                <div className="flex rounded-md border border-border text-xs">
                   {(['burndown', 'burnup'] as const).map(v => (
                     <button
                       className={cn(
                         'px-2.5 py-1 first:rounded-l last:rounded-r',
                         chartView === v
-                          ? 'bg-zinc-100 font-medium text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
-                          : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200',
+                          ? 'bg-muted font-medium text-foreground'
+                          : 'text-muted-foreground hover:text-zinc-700 dark:hover:text-zinc-200',
                       )}
                       key={v}
                       onClick={() => setChartView(v)}
@@ -493,7 +495,7 @@ export const CycleDetailView = observer(function CycleDetailView({
 
           {/* Velocity / capacity section */}
           {velocity && (
-            <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+            <div className="mt-6 rounded-lg border border-border p-4">
               <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {t('cycles.detail.velocity.title')}
               </h3>
@@ -526,7 +528,7 @@ export const CycleDetailView = observer(function CycleDetailView({
             </div>
             <div className="mt-2 flex flex-col gap-0.5">
               {cycleIssues.length === 0 ? (
-                <p className="py-8 text-center text-xs text-zinc-400">
+                <p className="py-8 text-center text-xs text-muted-foreground">
                   {t('cycles.detail.noIssuesBefore')}{' '}
                   <kbd className="mx-0.5 rounded border px-1 font-mono text-[10px]">Q</kbd>{' '}
                   {t('cycles.detail.noIssuesAfter')}
@@ -546,17 +548,17 @@ export const CycleDetailView = observer(function CycleDetailView({
                           style={{ borderColor: state.color }}
                         />
                       )}
-                      <span className="shrink-0 font-mono text-xs text-zinc-400">
+                      <span className="shrink-0 font-mono text-xs text-muted-foreground">
                         {issue.identifier}
                       </span>
                       <Link
-                        className="min-w-0 flex-1 truncate text-zinc-900 hover:text-indigo-600 dark:text-zinc-100 dark:hover:text-indigo-400"
+                        className="min-w-0 flex-1 truncate text-foreground hover:text-indigo-600 dark:hover:text-indigo-400"
                         href={`/${workspaceKey}/team/${team?.key ?? teamKey}`}
                       >
                         {issue.title}
                       </Link>
                       <button
-                        className="hidden rounded px-1.5 py-0.5 text-[10px] text-zinc-400 transition-colors hover:bg-zinc-200 hover:text-zinc-600 group-hover:block dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
+                        className="hidden rounded px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-zinc-600 group-hover:block dark:hover:text-zinc-300"
                         onClick={() => handleRemoveIssue(issue.id)}
                         title={t('cycles.detail.removeFromCycle')}
                         type="button"

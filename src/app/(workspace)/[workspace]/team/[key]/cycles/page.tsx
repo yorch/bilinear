@@ -22,7 +22,7 @@ const TeamCyclesPage = observer(function TeamCyclesPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('common.loading')}
       </div>
     );
@@ -34,7 +34,7 @@ const TeamCyclesPage = observer(function TeamCyclesPage() {
 
   if (!team) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('cycles.teamNotFound')}
       </div>
     );

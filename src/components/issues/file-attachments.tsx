@@ -112,9 +112,11 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
   return (
     <div className="mt-4">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-medium text-zinc-500">{t('issueDetail.attachments.title')}</p>
+        <p className="text-xs font-medium text-muted-foreground">
+          {t('issueDetail.attachments.title')}
+        </p>
         <button
-          className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700 disabled:opacity-50 dark:hover:text-zinc-300"
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-zinc-700 disabled:opacity-50 dark:hover:text-zinc-300"
           disabled={uploading}
           onClick={() => inputRef.current?.click()}
           type="button"
@@ -139,10 +141,10 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
         <ul className="space-y-1">
           {attachments.map(att => (
             <li
-              className="flex items-center gap-2 rounded-md border border-zinc-200 p-2 text-xs dark:border-zinc-700"
+              className="flex items-center gap-2 rounded-md border border-border p-2 text-xs"
               key={att.id}
             >
-              <FileText className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+              <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               <a
                 className="flex-1 truncate text-zinc-700 hover:text-indigo-600 dark:text-zinc-300"
                 href={att.url}
@@ -151,10 +153,10 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
               >
                 {att.name}
               </a>
-              <span className="shrink-0 text-zinc-400">{formatFileSize(att.size)}</span>
+              <span className="shrink-0 text-muted-foreground">{formatFileSize(att.size)}</span>
               <button
                 aria-label={t('issueDetail.attachments.removeAttachment')}
-                className="text-zinc-400 hover:text-red-500"
+                className="text-muted-foreground hover:text-red-500"
                 onClick={() => handleDelete(att)}
                 type="button"
               >
@@ -170,7 +172,7 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
           onRetry={loadAttachments}
         />
       ) : (
-        <p className="text-xs italic text-zinc-400">{t('issueDetail.attachments.empty')}</p>
+        <p className="text-xs italic text-muted-foreground">{t('issueDetail.attachments.empty')}</p>
       )}
     </div>
   );

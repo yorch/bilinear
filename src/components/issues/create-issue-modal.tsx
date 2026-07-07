@@ -323,7 +323,7 @@ export function CreateIssueModal({
         {/* Title */}
         <div className="flex items-center gap-2 px-5 pt-5">
           <input
-            className="w-full bg-transparent text-lg font-medium text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
+            className="w-full bg-transparent text-lg font-medium text-foreground placeholder-zinc-400 outline-none"
             onChange={e => patchForm({ title: e.target.value })}
             placeholder={t('issueDetail.createModal.titlePlaceholder')}
             ref={titleRef}
@@ -334,9 +334,9 @@ export function CreateIssueModal({
           {aiAvailable && (
             <button
               className={cn(
-                'shrink-0 rounded-md border border-zinc-200 px-2 py-1 text-xs font-medium',
+                'shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium',
                 'text-indigo-600 hover:bg-indigo-50 disabled:opacity-50',
-                'dark:border-zinc-700 dark:text-indigo-400 dark:hover:bg-indigo-950/30',
+                'border-border dark:text-indigo-400 dark:hover:bg-indigo-950/30',
               )}
               disabled={suggestingTitle}
               onClick={handleSuggestTitle}
@@ -359,7 +359,7 @@ export function CreateIssueModal({
         </div>
 
         {/* Properties toolbar */}
-        <div className="flex flex-wrap items-center gap-1 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
+        <div className="flex flex-wrap items-center gap-1 border-t border-border px-4 py-3">
           {teams && teams.length > 1 && onTeamChange && (
             <SelectPopover
               panelClassName="w-56 py-1"
@@ -428,7 +428,7 @@ export function CreateIssueModal({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-between gap-2 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
+        <div className="flex items-center justify-between gap-2 border-t border-border px-4 py-3">
           <span className="flex items-center gap-2 text-sm text-muted-foreground">
             <Switch
               aria-label={t('issueDetail.createModal.createMore')}

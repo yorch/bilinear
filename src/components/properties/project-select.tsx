@@ -62,7 +62,7 @@ export const ProjectSelect = observer(function ProjectSelect({
           {current ? (
             <span className="max-w-[100px] truncate">{current.name}</span>
           ) : (
-            <span className="text-zinc-400">{t('properties.project.project')}</span>
+            <span className="text-muted-foreground">{t('properties.project.project')}</span>
           )}
         </>
       }

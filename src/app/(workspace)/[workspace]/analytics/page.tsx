@@ -55,10 +55,10 @@ const WORKSPACE_OVERVIEW_QUERY = `
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">{label}</p>
+    <div className="rounded-lg border border-border bg-card p-4">
+      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-zinc-400">{sub}</p>}
+      {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
     </div>
   );
 }
@@ -104,15 +104,17 @@ export default function WorkspaceAnalyticsPage() {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       {/* Header */}
-      <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
+      <div className="border-b border-border px-6 py-4">
         <h1 className="text-base font-semibold text-foreground">
           {t('analytics.workspace.title')}
         </h1>
-        <p className="mt-0.5 text-xs text-zinc-400">{t('analytics.workspace.subtitle')}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{t('analytics.workspace.subtitle')}</p>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-5">
-        {loading && <p className="text-sm text-zinc-400">{t('analytics.workspace.loading')}</p>}
+        {loading && (
+          <p className="text-sm text-muted-foreground">{t('analytics.workspace.loading')}</p>
+        )}
 
         {error && <p className="text-sm text-red-500">{error}</p>}
 
@@ -136,21 +138,21 @@ export default function WorkspaceAnalyticsPage() {
             </div>
 
             {/* Per-team table */}
-            <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
+            <div className="rounded-lg border border-border bg-card">
+              <div className="border-b border-border px-5 py-3">
                 <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
                   {t('analytics.workspace.teams')}
                 </h2>
               </div>
 
               {data.teams.length === 0 ? (
-                <p className="px-5 py-8 text-center text-sm text-zinc-400">
+                <p className="px-5 py-8 text-center text-sm text-muted-foreground">
                   {t('analytics.workspace.noTeamsFound')}
                 </p>
               ) : (
                 <div className="divide-y divide-border">
                   {/* Table header */}
-                  <div className="grid grid-cols-12 gap-2 px-5 py-2 text-[11px] font-medium uppercase tracking-wider text-zinc-400">
+                  <div className="grid grid-cols-12 gap-2 px-5 py-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                     <span className="col-span-3">{t('analytics.workspace.team')}</span>
                     <span className="col-span-2 text-right">{t('analytics.workspace.total')}</span>
                     <span className="col-span-2 text-right">{t('analytics.workspace.open')}</span>
@@ -174,10 +176,10 @@ export default function WorkspaceAnalyticsPage() {
                       >
                         {team.teamName}
                       </span>
-                      <span className="col-span-2 text-right text-sm text-zinc-500">
+                      <span className="col-span-2 text-right text-sm text-muted-foreground">
                         {team.totalCount}
                       </span>
-                      <span className="col-span-2 text-right text-sm text-zinc-500">
+                      <span className="col-span-2 text-right text-sm text-muted-foreground">
                         {team.openCount}
                       </span>
                       <span
@@ -187,15 +189,15 @@ export default function WorkspaceAnalyticsPage() {
                             ? 'text-green-600 dark:text-green-400'
                             : team.completionRate >= 40
                               ? 'text-yellow-600 dark:text-yellow-400'
-                              : 'text-zinc-500',
+                              : 'text-muted-foreground',
                         )}
                       >
                         {team.completedCount}
-                        <span className="ml-1 text-xs font-normal text-zinc-400">
+                        <span className="ml-1 text-xs font-normal text-muted-foreground">
                           ({Math.round(team.completionRate)}%)
                         </span>
                       </span>
-                      <span className="col-span-2 text-right text-sm text-zinc-500">
+                      <span className="col-span-2 text-right text-sm text-muted-foreground">
                         {team.avgCycleTimeDays > 0 ? `${team.avgCycleTimeDays.toFixed(1)}d` : '—'}
                       </span>
                       <div className="col-span-1" />
@@ -221,7 +223,7 @@ export default function WorkspaceAnalyticsPage() {
 
             {/* Velocity comparison bar chart */}
             {data.teams.length > 0 && (
-              <div className="mt-5 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="mt-5 rounded-lg border border-border bg-card p-5">
                 <h2 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">
                   {t('analytics.workspace.issuesCompletedByTeam')}
                 </h2>
@@ -231,7 +233,7 @@ export default function WorkspaceAnalyticsPage() {
                     return (
                       <div className="flex items-center gap-2" key={team.teamId}>
                         <span
-                          className="w-32 shrink-0 truncate text-xs text-zinc-500"
+                          className="w-32 shrink-0 truncate text-xs text-muted-foreground"
                           title={team.teamName}
                         >
                           {team.teamName}

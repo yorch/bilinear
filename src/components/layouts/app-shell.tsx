@@ -28,7 +28,7 @@ export const AppShell = observer(function AppShell({ children }: AppShellProps) 
   }, [pathname]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-white dark:bg-zinc-900">
+    <div className="flex h-screen overflow-hidden bg-card">
       <a
         className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[100] focus:rounded-md focus:bg-indigo-600 focus:px-3 focus:py-1.5 focus:text-sm focus:text-white"
         href="#main-content"

@@ -86,7 +86,7 @@ function BoardCardInner({
   return (
     <button
       className={cn(
-        'w-full cursor-pointer rounded-lg border bg-white p-3 text-left shadow-sm transition-shadow hover:shadow-md dark:bg-zinc-900',
+        'w-full cursor-pointer rounded-lg border bg-card p-3 text-left shadow-sm transition-shadow hover:shadow-md',
         selected
           ? 'border-indigo-500 ring-1 ring-indigo-500'
           : multiSelected
@@ -321,9 +321,9 @@ function BoardSwimlane({
         type="button"
       >
         {collapsed ? (
-          <ChevronRight className="h-4 w-4 text-zinc-400" />
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
         ) : (
-          <ChevronDown className="h-4 w-4 text-zinc-400" />
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
         )}
         <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{label}</span>
         <span className="text-xs text-muted-foreground">({issues.length})</span>
@@ -672,7 +672,7 @@ export function BoardView({
       <DragOverlay>
         {activeIssue &&
           (isDraggingMultiple ? (
-            <div className="flex items-center gap-2 rounded-lg border border-blue-500 bg-white px-4 py-3 shadow-lg dark:bg-zinc-900">
+            <div className="flex items-center gap-2 rounded-lg border border-blue-500 bg-card px-4 py-3 shadow-lg">
               <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
                 {t('issues.draggingCount', { count: selectedIds.size })}
               </span>

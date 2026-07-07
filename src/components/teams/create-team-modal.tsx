@@ -141,14 +141,16 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-muted-foreground" htmlFor="team-key">
               {t('teams.identifier')}
-              <span className="ml-1 font-normal text-zinc-400">{t('teams.identifierHint')}</span>
+              <span className="ml-1 font-normal text-muted-foreground">
+                {t('teams.identifierHint')}
+              </span>
             </label>
             <input
               className={cn(
-                'rounded-md border bg-transparent px-3 py-1.5 font-mono text-sm text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100',
+                'rounded-md border bg-transparent px-3 py-1.5 font-mono text-sm text-foreground placeholder-zinc-400 outline-none',
                 keyError
                   ? 'border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-500'
-                  : 'border-zinc-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700',
+                  : 'border-border focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500',
               )}
               id="team-key"
               onChange={e => handleKeyChange(e.target.value)}
@@ -163,7 +165,9 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-muted-foreground" htmlFor="team-description">
               {t('teams.description')}
-              <span className="ml-1 font-normal text-zinc-400">({t('teams.optional')})</span>
+              <span className="ml-1 font-normal text-muted-foreground">
+                ({t('teams.optional')})
+              </span>
             </label>
             <Textarea
               className="resize-none"
@@ -178,7 +182,7 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
           <label className="flex cursor-pointer items-center gap-3">
             <input
               checked={isPrivate}
-              className="h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 dark:border-zinc-600"
+              className="h-4 w-4 rounded border-border text-indigo-600 focus:ring-indigo-500"
               onChange={e => setIsPrivate(e.target.checked)}
               type="checkbox"
             />
@@ -186,7 +190,7 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
               <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 {t('teams.privateTeam')}
               </p>
-              <p className="text-xs text-zinc-400">{t('teams.privateTeamHint')}</p>
+              <p className="text-xs text-muted-foreground">{t('teams.privateTeamHint')}</p>
             </div>
           </label>
         </div>

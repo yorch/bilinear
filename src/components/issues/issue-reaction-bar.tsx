@@ -88,7 +88,7 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
             'flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors',
             reacted
               ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-              : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700',
+              : 'bg-muted text-muted-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700',
           )}
           key={emoji}
           onClick={() => toggle(emoji, reacted)}

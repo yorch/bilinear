@@ -37,8 +37,10 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
   if (editing || !embedUrl) {
     return (
       <NodeViewWrapper>
-        <div className="embed-editor my-2 rounded-md border border-zinc-300 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-900">
-          <p className="mb-2 text-xs font-medium text-zinc-500">{t('editor.embed.urlLabel')}</p>
+        <div className="embed-editor my-2 rounded-md border border-border bg-card p-3">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">
+            {t('editor.embed.urlLabel')}
+          </p>
           <form
             className="flex gap-2"
             onSubmit={e => {
@@ -48,7 +50,7 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
             }}
           >
             <input
-              className="flex-1 rounded border border-zinc-200 bg-white px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+              className="flex-1 rounded border border-border bg-card px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-zinc-200"
               defaultValue={url}
               placeholder="https://youtube.com/watch?v=..."
               type="url"

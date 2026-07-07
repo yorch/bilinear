@@ -53,7 +53,7 @@ export function AssigneeSelect({
       {close => (
         <>
           <button
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-zinc-500 hover:bg-accent"
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent"
             onClick={e => {
               e.stopPropagation();
               onChange(null);

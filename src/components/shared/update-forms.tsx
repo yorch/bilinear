@@ -49,15 +49,15 @@ export function CreateUpdateForm({
   };
 
   return (
-    <div className="mt-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <div className="mt-3 rounded-lg border border-border p-4">
       <div className="flex items-center gap-2 pb-2">
-        <MessageSquare className="h-4 w-4 text-zinc-400" />
+        <MessageSquare className="h-4 w-4 text-muted-foreground" />
         <span className="text-xs font-medium text-muted-foreground">
           {t('properties.updateForm.newUpdate')}
         </span>
         <button
           aria-label={t('common.close')}
-          className="ml-auto rounded p-0.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+          className="ml-auto rounded p-0.5 text-muted-foreground hover:text-zinc-600 dark:hover:text-zinc-300"
           onClick={onClose}
           title={t('common.close')}
           type="button"
@@ -75,7 +75,7 @@ export function CreateUpdateForm({
       />
       <div className="mt-2 flex justify-end gap-2">
         <button
-          className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-accent"
+          className="rounded px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent"
           onClick={onClose}
           type="button"
         >
@@ -147,7 +147,7 @@ export function EditUpdateForm({
       />
       <div className="mt-2 flex justify-end gap-2">
         <button
-          className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-accent"
+          className="rounded px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent"
           onClick={onClose}
           type="button"
         >

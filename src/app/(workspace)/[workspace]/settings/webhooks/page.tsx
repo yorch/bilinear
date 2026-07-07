@@ -183,7 +183,7 @@ export default function WebhooksSettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('common.loading')}
       </div>
     );
@@ -206,14 +206,14 @@ export default function WebhooksSettingsPage() {
       </div>
 
       {creating ? (
-        <div className="mb-6 rounded border border-zinc-200 p-4 dark:border-zinc-800">
+        <div className="mb-6 rounded border border-border p-4">
           <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="text-xs">
               <span className="mb-1 block text-zinc-700 dark:text-zinc-300">
                 {t('settings.webhooks.name')}
               </span>
               <input
-                className="w-full rounded border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
+                className="w-full rounded border border-border bg-transparent px-2 py-1 text-sm"
                 onChange={e => setName(e.target.value)}
                 placeholder={t('settings.webhooks.namePlaceholder')}
                 value={name}
@@ -224,7 +224,7 @@ export default function WebhooksSettingsPage() {
                 {t('settings.webhooks.url')}
               </span>
               <input
-                className="w-full rounded border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
+                className="w-full rounded border border-border bg-transparent px-2 py-1 text-sm"
                 onChange={e => setUrl(e.target.value)}
                 placeholder="https://example.com/hook"
                 value={url}
@@ -269,13 +269,13 @@ export default function WebhooksSettingsPage() {
       ) : null}
 
       {webhooks.length === 0 ? (
-        <div className="rounded border border-dashed border-zinc-300 px-4 py-8 text-center text-sm text-zinc-400 dark:border-zinc-700">
+        <div className="rounded border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
           {t('settings.webhooks.noWebhooksYet')}
         </div>
       ) : (
         <div className="space-y-3">
           {webhooks.map(hook => (
-            <div className="rounded border border-zinc-200 p-4 dark:border-zinc-800" key={hook.id}>
+            <div className="rounded border border-border p-4" key={hook.id}>
               <div className="flex items-start justify-between">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -284,7 +284,7 @@ export default function WebhooksSettingsPage() {
                       className={`rounded px-1.5 py-0.5 text-xs ${
                         hook.enabled
                           ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300'
-                          : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
+                          : 'bg-zinc-100 text-muted-foreground dark:bg-zinc-800 dark:text-zinc-400'
                       }`}
                     >
                       {hook.enabled
@@ -305,7 +305,7 @@ export default function WebhooksSettingsPage() {
                   <div className="mt-2 flex flex-wrap gap-1">
                     {hook.events.map(e => (
                       <span
-                        className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[10px] text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                        className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-zinc-700 dark:text-zinc-300"
                         key={e}
                       >
                         {e}
@@ -317,7 +317,7 @@ export default function WebhooksSettingsPage() {
                       {t('settings.webhooks.signingSecret')}
                     </span>
                     {revealedSecrets.has(hook.id) ? (
-                      <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs dark:bg-zinc-800">
+                      <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
                         {hook.signingSecret ?? t('settings.webhooks.hiddenNonAdmin')}
                       </code>
                     ) : (
@@ -339,21 +339,21 @@ export default function WebhooksSettingsPage() {
                 </div>
                 <div className="flex flex-shrink-0 gap-1">
                   <button
-                    className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                    className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
                     onClick={() => handleToggle(hook)}
                     type="button"
                   >
                     {hook.enabled ? t('settings.webhooks.disable') : t('settings.webhooks.enable')}
                   </button>
                   <button
-                    className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                    className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
                     onClick={() => setPendingAction({ hook, type: 'rotate' })}
                     type="button"
                   >
                     {t('settings.webhooks.rotate')}
                   </button>
                   <button
-                    className="rounded border border-zinc-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-zinc-700 dark:hover:bg-red-950/30"
+                    className="rounded border border-border px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
                     onClick={() => setPendingAction({ hook, type: 'delete' })}
                     type="button"
                   >

@@ -56,7 +56,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
 
   if (!project) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('projects.projectNotFound')}
       </div>
     );
@@ -93,9 +93,9 @@ export const ProjectDetailView = observer(function ProjectDetailView({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex h-12 items-center gap-3 border-b border-zinc-200 px-4 dark:border-zinc-800">
+      <div className="flex h-12 items-center gap-3 border-b border-border px-4">
         <Link
-          className="flex h-6 w-6 items-center justify-center rounded text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-zinc-600 dark:hover:text-zinc-300"
           href={`/${workspaceKey}/projects`}
         >
           <ArrowLeft className="h-4 w-4" />
@@ -128,7 +128,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
               />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-zinc-400">{t('projects.healthLabel')}</span>
+              <span className="text-xs text-muted-foreground">{t('projects.healthLabel')}</span>
               <div className="flex gap-1">
                 {PROJECT_HEALTH_OPTIONS.map(h => (
                   <button
@@ -136,7 +136,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
                       'rounded px-2 py-0.5 text-xs font-medium transition-colors',
                       project.health === h.value
                         ? `${h.color} text-white`
-                        : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700',
+                        : 'bg-muted text-muted-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700',
                     )}
                     key={h.value}
                     onClick={() => handleHealthChange(h.value)}
@@ -149,14 +149,14 @@ export const ProjectDetailView = observer(function ProjectDetailView({
             </div>
             {lead && (
               <div className="flex items-center gap-1.5">
-                <User className="h-3.5 w-3.5 text-zinc-400" />
+                <User className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="text-xs text-muted-foreground">{lead.displayName}</span>
               </div>
             )}
             {(project.startDate || project.targetDate) && (
               <div className="flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5 text-zinc-400" />
-                <span className="text-xs text-zinc-500">
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">
                   {project.startDate ?? '?'} &rarr; {project.targetDate ?? '?'}
                 </span>
               </div>
@@ -165,12 +165,12 @@ export const ProjectDetailView = observer(function ProjectDetailView({
           {project.description && (
             <p className="mt-4 text-sm text-muted-foreground">{project.description}</p>
           )}
-          <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+          <div className="mt-6 rounded-lg border border-border p-4">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-muted-foreground">
                 {t('projects.progress')}
               </span>
-              <span className="text-xs tabular-nums text-zinc-500">
+              <span className="text-xs tabular-nums text-muted-foreground">
                 {t('projects.issuesCountRatio', {
                   completed: completedIssues.length,
                   progress,
@@ -185,7 +185,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
               />
             </div>
             <div className="mt-3 flex items-center justify-between">
-              <span className="text-xs text-zinc-400">{t('projects.trend')}</span>
+              <span className="text-xs text-muted-foreground">{t('projects.trend')}</span>
               <ProgressSparkline projectId={project.id} />
             </div>
           </div>
@@ -198,7 +198,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
             </div>
             <div className="mt-2 flex flex-col gap-0.5">
               {projectIssues.length === 0 ? (
-                <p className="py-8 text-center text-xs text-zinc-400">
+                <p className="py-8 text-center text-xs text-muted-foreground">
                   {t('projects.noIssuesAssigned')}
                 </p>
               ) : (
@@ -219,7 +219,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
                           style={{ borderColor: state.color }}
                         />
                       )}
-                      <span className="shrink-0 text-xs font-mono text-zinc-400">
+                      <span className="shrink-0 text-xs font-mono text-muted-foreground">
                         {issue.identifier}
                       </span>
                       <span className="min-w-0 flex-1 truncate text-foreground">{issue.title}</span>
