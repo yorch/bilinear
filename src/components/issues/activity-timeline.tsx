@@ -145,7 +145,7 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
               >
                 {actor?.initials ?? 'S'}
               </span>
-              {!isLast && <div className="my-1 w-px flex-1 bg-zinc-200 dark:bg-zinc-700" />}
+              {!isLast && <div className="my-1 w-px flex-1 bg-muted" />}
             </div>
 
             {/* Content */}

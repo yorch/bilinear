@@ -58,6 +58,23 @@ REPLACEMENTS = [
     # value in this token set, so bg-muted is a safe, non-visual-changing pick)
     ("bg-zinc-100 dark:bg-zinc-800", "bg-muted"),
     ("bg-zinc-200 dark:bg-zinc-800", "bg-muted"),
+    # Same subtle-surface role (progress-bar tracks, dividers, skeleton
+    # loaders — verified by inspecting every call site), just a shade
+    # lighter/darker than the pair above.
+    #
+    # NOTE: "bg-zinc-300 dark:bg-zinc-600" is deliberately NOT a blanket rule
+    # here — of its 5 call sites, 4 are the same divider role (fixed by hand)
+    # but the 5th is `public-roadmap-view.tsx`'s HEALTH_DOTS "no update"
+    # status-dot swatch, sharing a palette with `bg-yellow-400`/`bg-red-500`/
+    # `bg-green-500`; `bg-muted` is calibrated for pale backgrounds (oklch
+    # 0.97 light / 0.269 dark), not a same-weight solid dot, and would read
+    # as nearly invisible next to the other three. Same literal string, two
+    # different roles — not safe to codemod without per-site judgment.
+    ("bg-zinc-200 dark:bg-zinc-700", "bg-muted"),
+    # Whole-page background wrapper (auth layout, admin shell, public
+    # roadmap) — `<body>` already renders `--background`, so this is these
+    # wrappers catching up to the value they're redundantly re-painting.
+    ("bg-zinc-50 dark:bg-zinc-950", "bg-background"),
     # Hand-rolled primary buttons — --primary IS indigo-600 now, so this is a
     # pure token substitution, not a color change. Only the fill; `text-white`
     # is left alone (still visually correct against --primary either way) and

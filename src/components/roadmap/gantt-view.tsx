@@ -408,7 +408,7 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
                 .map(dm => (
                   <div
                     aria-hidden="true"
-                    className="absolute top-0 w-px bg-zinc-200 dark:bg-zinc-700"
+                    className="absolute top-0 w-px bg-muted"
                     key={dm.x}
                     style={{ height: items.length * rowHeight, left: dm.x }}
                   />

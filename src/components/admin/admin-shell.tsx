@@ -35,7 +35,7 @@ export function AdminShell({
   const t = useTranslations();
 
   return (
-    <div className="min-h-full bg-zinc-50 dark:bg-zinc-950">
+    <div className="min-h-full bg-background">
       <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-6 px-6">
           <div className="flex items-center gap-2">

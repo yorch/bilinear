@@ -178,7 +178,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
                 })}
               </span>
             </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
               <div
                 className="h-full rounded-full bg-indigo-500 transition-all"
                 style={{ width: `${progress}%` }}

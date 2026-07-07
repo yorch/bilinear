@@ -187,8 +187,8 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
           <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
             {loading ? (
               <div className="flex flex-col gap-4 animate-pulse">
-                <div className="h-4 w-48 rounded bg-zinc-200 dark:bg-zinc-700" />
-                <div className="h-4 w-64 rounded bg-zinc-200 dark:bg-zinc-700" />
+                <div className="h-4 w-48 rounded bg-muted" />
+                <div className="h-4 w-64 rounded bg-muted" />
               </div>
             ) : (
               <form className="flex flex-col gap-5" onSubmit={handleSave}>

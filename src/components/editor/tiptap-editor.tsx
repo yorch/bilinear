@@ -819,7 +819,7 @@ export function TipTapEditor({
           >
             <Link2 className="h-3 w-3" />
           </ToolbarButton>
-          <div className="mx-1 h-4 w-px bg-zinc-300 dark:bg-zinc-600" />
+          <div className="mx-1 h-4 w-px bg-muted" />
           <ToolbarButton
             active={editor.isActive('heading', { level: 1 })}
             onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
@@ -841,7 +841,7 @@ export function TipTapEditor({
           >
             H3
           </ToolbarButton>
-          <div className="mx-1 h-4 w-px bg-zinc-300 dark:bg-zinc-600" />
+          <div className="mx-1 h-4 w-px bg-muted" />
           <ToolbarButton
             active={editor.isActive('bulletList')}
             onClick={() => editor.chain().focus().toggleBulletList().run()}
@@ -863,7 +863,7 @@ export function TipTapEditor({
           >
             ☐
           </ToolbarButton>
-          <div className="mx-1 h-4 w-px bg-zinc-300 dark:bg-zinc-600" />
+          <div className="mx-1 h-4 w-px bg-muted" />
           <ToolbarButton
             active={editor.isActive('codeBlock')}
             onClick={() => editor.chain().focus().toggleCodeBlock().run()}
@@ -894,7 +894,7 @@ export function TipTapEditor({
           >
             —
           </ToolbarButton>
-          <div className="mx-1 h-4 w-px bg-zinc-300 dark:bg-zinc-600" />
+          <div className="mx-1 h-4 w-px bg-muted" />
           {/* Image upload */}
           <ToolbarButton
             active={false}

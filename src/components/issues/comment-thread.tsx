@@ -146,9 +146,9 @@ export function CommentThread({
       <div className="space-y-3 py-2">
         {[1, 2].map(i => (
           <div className="flex gap-3" key={i}>
-            <div className="h-7 w-7 shrink-0 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-700" />
+            <div className="h-7 w-7 shrink-0 animate-pulse rounded-full bg-muted" />
             <div className="flex-1 space-y-2">
-              <div className="h-3 w-32 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" />
+              <div className="h-3 w-32 animate-pulse rounded bg-muted" />
               <div className="h-12 animate-pulse rounded bg-muted" />
             </div>
           </div>

@@ -192,7 +192,7 @@ const CycleGroup = observer(function CycleGroup({
 
                 {cycleIssues.length > 0 && (
                   <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-16 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                    <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
                       <div
                         className="h-full rounded-full bg-indigo-500 transition-all"
                         style={{ width: `${progress}%` }}
