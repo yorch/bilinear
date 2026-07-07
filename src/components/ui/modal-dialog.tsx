@@ -70,11 +70,10 @@ function ModalDialogInner({
        * card — thumb-reachable and edge-to-edge on a phone. `max-h-[90vh]
        * overflow-y-auto` caps height so tall content (e.g. create-issue's
        * description editor) scrolls internally instead of pushing the
-       * footer off-screen — the previous unconstrained height could already
-       * make the submit button unreachable on a short viewport, which is a
-       * worse failure than the tradeoff this introduces: a property
-       * popover anchored very close to the modal's bottom edge can now get
-       * clipped by this container's own overflow instead of rendering past it.
+       * footer off-screen. This clips an absolutely-positioned popover that
+       * would otherwise render past this container's edge (e.g. a property
+       * picker anchored near the bottom), so SelectPopover/SearchableSelectPopover
+       * flip to open upward when there isn't room below (see usePopoverFlip).
        */}
       <div
         className={cn(

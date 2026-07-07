@@ -2,7 +2,7 @@
 
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { CreateIssueModal } from '@/components/issues/create-issue-modal';
 import { useIssueCreate } from '@/hooks/use-issue-create';
 import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
@@ -33,7 +33,11 @@ const GlobalCreateIssueModalInner = observer(function GlobalCreateIssueModalInne
 
   const routeTeam = params.key ? teamStore.findByKey(params.key) : null;
   // Deterministic fallback off team routes: alphabetical, not pool order.
-  const sortedTeams = [...teamStore.all].sort((a, b) => a.name.localeCompare(b.name));
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on pool.size per convention (see AGENTS.md), not the array identity
+  const sortedTeams = useMemo(
+    () => [...teamStore.all].sort((a, b) => a.name.localeCompare(b.name)),
+    [teamStore.pool.size],
+  );
   const defaultTeam = routeTeam ?? sortedTeams[0] ?? null;
 
   // Mirrors GlobalCreateIssueModal's remount-per-open gating (§above), so a

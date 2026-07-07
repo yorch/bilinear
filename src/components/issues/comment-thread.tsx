@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import {
@@ -50,29 +51,25 @@ export function CommentThread({
   mentionUsers,
 }: CommentThreadProps) {
   const t = useTranslations();
-  const [comments, setComments] = useState<CommentItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showReplyTo, setShowReplyTo] = useState<string | null>(null);
 
-  const fetchComments = useCallback(async () => {
-    try {
+  const {
+    data: comments,
+    setData: setComments,
+    loading,
+    error: loadError,
+    refetch: fetchComments,
+  } = useRetryableFetch<CommentItem[]>(
+    async () => {
       const res = await gql(GET_COMMENTS_QUERY, { issueId });
       const data = res.data as { comments?: CommentItem[] } | undefined;
-      setComments(data?.comments ?? []);
-      setLoadError(false);
-    } catch {
-      setLoadError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [issueId]);
-
-  useEffect(() => {
-    fetchComments();
-  }, [fetchComments]);
+      return data?.comments ?? [];
+    },
+    [issueId],
+    [],
+  );
 
   const submitComment = async (body: string, parentId?: string) => {
     if (!body.trim() || body === '<p></p>') {
@@ -85,7 +82,7 @@ export function CommentThread({
       });
       setNewComment('');
       setShowReplyTo(null);
-      await fetchComments();
+      await fetchComments({ silent: true });
     } catch {
       toast.error(t('issueDetail.comments.failedToPost'));
     } finally {
@@ -138,7 +135,7 @@ export function CommentThread({
       } else {
         await gql(COMMENT_REACTION_ADD_MUTATION, { commentId, emoji });
       }
-      await fetchComments();
+      await fetchComments({ silent: true });
     } catch {
       toast.error(t('issueDetail.comments.failedToUpdateReaction'));
     }

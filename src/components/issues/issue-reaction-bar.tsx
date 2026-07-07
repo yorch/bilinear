@@ -1,9 +1,9 @@
 'use client';
 
 import { Smile } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { SelectPopover } from '@/components/ui/select-popover';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import {
@@ -29,23 +29,19 @@ interface IssueReactionBarProps {
 
 export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarProps) {
   const t = useTranslations();
-  const [reactions, setReactions] = useState<Reaction[]>([]);
-  const [loadError, setLoadError] = useState(false);
-
-  const fetchReactions = useCallback(async () => {
-    try {
+  const {
+    data: reactions,
+    error: loadError,
+    refetch: fetchReactions,
+  } = useRetryableFetch<Reaction[]>(
+    async () => {
       const res = await gql(ISSUE_REACTIONS_QUERY, { id: issueId });
       const data = res.data as { issue?: { reactions: Reaction[] } } | undefined;
-      setReactions(data?.issue?.reactions ?? []);
-      setLoadError(false);
-    } catch {
-      setLoadError(true);
-    }
-  }, [issueId]);
-
-  useEffect(() => {
-    fetchReactions();
-  }, [fetchReactions]);
+      return data?.issue?.reactions ?? [];
+    },
+    [issueId],
+    [],
+  );
 
   const counts = reactions.reduce<Record<string, { count: number; reacted: boolean }>>((acc, r) => {
     if (!acc[r.emoji]) {
@@ -66,7 +62,7 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
       if (res.errors?.length) {
         throw new Error(t('common.somethingWentWrong'));
       }
-      await fetchReactions();
+      await fetchReactions({ silent: true });
     } catch {
       toast.error(t('issueDetail.reactions.failedToUpdate'));
     }

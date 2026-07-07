@@ -1,9 +1,10 @@
 'use client';
 
 import { Activity, Clock } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { ISSUE_ACTIVITIES_QUERY } from '@/lib/graphql-queries';
@@ -75,53 +76,25 @@ const COLLAPSE_THRESHOLD = 5;
 export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps) {
   const t = useTranslations();
   const { formatRelativeTime } = useFormatters();
-  const [activities, setActivities] = useState<IssueActivity[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [retryNonce, setRetryNonce] = useState(0);
 
-  useEffect(() => {
-    if (!issueId) {
-      return;
-    }
-    void refetchKey; // must be referenced here; Biome strips unused effect deps
-    void retryNonce;
-
-    let cancelled = false;
-
-    const fetchActivities = async () => {
-      setLoading(true);
-      setError(false);
-      try {
-        const res = await gql(ISSUE_ACTIVITIES_QUERY, {
-          issueId,
-          limit: 50,
-        });
-        if (!cancelled) {
-          const data = res.data as { issueActivities?: IssueActivity[] } | undefined;
-          // Newest first
-          const sorted = [...(data?.issueActivities ?? [])].sort(
-            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-          );
-          setActivities(sorted);
-        }
-      } catch {
-        if (!cancelled) {
-          setError(true);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchActivities();
-    return () => {
-      cancelled = true;
-    };
-  }, [issueId, refetchKey, retryNonce]);
+  const {
+    data: activities,
+    loading,
+    error,
+    refetch,
+  } = useRetryableFetch<IssueActivity[]>(
+    async () => {
+      const res = await gql(ISSUE_ACTIVITIES_QUERY, { issueId, limit: 50 });
+      const data = res.data as { issueActivities?: IssueActivity[] } | undefined;
+      // Newest first
+      return [...(data?.issueActivities ?? [])].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+    },
+    [issueId, refetchKey],
+    [],
+  );
 
   if (loading) {
     return (
@@ -134,10 +107,7 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
 
   if (error && activities.length === 0) {
     return (
-      <InlineRetry
-        message={t('issueDetail.activity.failedToLoad')}
-        onRetry={() => setRetryNonce(n => n + 1)}
-      />
+      <InlineRetry message={t('issueDetail.activity.failedToLoad')} onRetry={() => refetch()} />
     );
   }
 

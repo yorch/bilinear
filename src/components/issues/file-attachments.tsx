@@ -1,9 +1,10 @@
 'use client';
 
 import { FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { toast } from '@/lib/toast';
 import { getErrorMessage } from '@/lib/utils';
@@ -55,23 +56,15 @@ async function deleteFile(fileId: string): Promise<void> {
 export function FileAttachments({ issueId }: FileAttachmentsProps) {
   const t = useTranslations();
   const { formatFileSize } = useFormatters();
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [loadError, setLoadError] = useState(false);
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const loadAttachments = useCallback(() => {
-    fetchIssueFiles(issueId)
-      .then(files => {
-        setAttachments(files);
-        setLoadError(false);
-      })
-      .catch(() => setLoadError(true));
-  }, [issueId]);
-
-  useEffect(() => {
-    loadAttachments();
-  }, [loadAttachments]);
+  const {
+    data: attachments,
+    setData: setAttachments,
+    error: loadError,
+    refetch: loadAttachments,
+  } = useRetryableFetch<Attachment[]>(() => fetchIssueFiles(issueId), [issueId], []);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);

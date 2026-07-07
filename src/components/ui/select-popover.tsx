@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useId, useRef } from 'react';
 import { usePopover } from '@/hooks/use-popover';
+import { usePopoverFlip } from '@/hooks/use-popover-flip';
 import { useRestoreFocus } from '@/hooks/use-restore-focus';
 import { cn } from '@/lib/utils';
 
@@ -41,6 +42,7 @@ export function SelectPopover({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   useRestoreFocus(open, triggerRef);
+  const openUpward = usePopoverFlip(open, triggerRef);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -117,7 +119,8 @@ export function SelectPopover({
         // biome-ignore lint/a11y/noStaticElementInteractions: keydown implements roving focus for the option buttons inside; the buttons themselves are the interactive elements
         <div
           className={cn(
-            'absolute top-full z-50 mt-1 rounded-md border border-border bg-popover shadow-lg',
+            'absolute z-50 rounded-md border border-border bg-popover shadow-lg',
+            openUpward ? 'bottom-full mb-1' : 'top-full mt-1',
             align === 'right' ? 'right-0' : 'left-0',
             panelClassName,
           )}

@@ -1,6 +1,7 @@
 'use client';
 
-import { useTranslations } from '@/hooks/use-translations';
+import { observer } from 'mobx-react-lite';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { useStore } from '@/providers/store-provider';
 
 interface SyncErrorStateProps {
@@ -11,20 +12,14 @@ interface SyncErrorStateProps {
  * Full-page fallback for `syncStore.status === 'error'` (bootstrap failed).
  * Retry re-runs SyncProvider's init effect via `syncStore.retryBootstrap()`.
  */
-export function SyncErrorState({ message }: SyncErrorStateProps) {
-  const t = useTranslations();
+export const SyncErrorState = observer(function SyncErrorState({ message }: SyncErrorStateProps) {
   const { syncStore } = useStore();
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-2 text-sm text-destructive">
-      <span>{message}</span>
-      <button
-        className="font-medium text-primary hover:underline"
-        onClick={() => syncStore.retryBootstrap()}
-        type="button"
-      >
-        {t('common.retry')}
-      </button>
-    </div>
+    <InlineRetry
+      className="flex-1 flex-col items-center justify-center"
+      message={message}
+      onRetry={() => syncStore.retryBootstrap()}
+    />
   );
-}
+});

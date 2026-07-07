@@ -697,6 +697,7 @@ export function BoardView({
               multiSelected={false}
               onOpen={() => {}}
               onSelect={() => {}}
+              pending={pendingIds.has(activeIssue.id)}
               selected={false}
               users={users}
             />

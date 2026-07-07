@@ -114,6 +114,12 @@ export function CreateIssueModal({
   // under Firefox + Playwright) can dispatch two handleSubmit runs before
   // setSubmitting(true) ever lands and create the issue twice.
   const submittingRef = useRef(false);
+  // Tracks the previous (open, teamId) pair so the reset effect below can
+  // tell "just opened" apart from "team switched while already open".
+  const prevOpenTeamRef = useRef<{ open: boolean; teamId: string | undefined }>({
+    open: false,
+    teamId,
+  });
 
   const patchForm = useCallback(
     (patch: Partial<FormState>) => setForm(prev => ({ ...prev, ...patch })),
@@ -147,63 +153,64 @@ export function CreateIssueModal({
     [patchForm],
   );
 
-  // Reset form state only when the modal transitions from closed to open.
-  // Including the MobX-derived props (states, defaultStateId, teamId) in the
-  // dep array re-runs this effect every render — `setTitle('')` mid-typing
-  // wipes user input and `disabled={!title.trim()}` keeps the submit button
-  // disabled, producing flaky e2e behaviour under Firefox + Playwright.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: only re-run on open transitions
+  // Reset form state when the modal opens, and reset just stateId when the
+  // team changes via the in-modal picker while already open (the previously-
+  // selected stateId almost certainly doesn't belong to the new team's
+  // states). Keyed on (open, teamId) rather than the MobX-derived
+  // states/defaultStateId props directly — those get fresh array/value
+  // identities on every unrelated re-render, and including them in the dep
+  // array would wipe in-progress typing (`disabled={!title.trim()}` then
+  // stays true), producing flaky e2e behaviour under Firefox + Playwright.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only re-run on open/team transitions
   useEffect(() => {
+    const prev = prevOpenTeamRef.current;
+    prevOpenTeamRef.current = { open, teamId };
     if (!open) {
       return;
     }
-    setForm(initialForm(defaultStateId, states[0]?.id));
-    setTemplateOpen(false);
-    setTimeout(() => titleRef.current?.focus(), 50);
 
-    // Probe AI availability once per open so the "Suggest" affordance only
-    // shows when the workspace has AI enabled and a key is configured.
-    gql('query AiAvailable { aiAvailable }')
-      .then(res => setAiAvailable(Boolean((res.data as { aiAvailable?: boolean })?.aiAvailable)))
-      .catch(() => setAiAvailable(false));
+    if (!prev.open) {
+      // Freshly opened — full reset.
+      setForm(initialForm(defaultStateId, states[0]?.id));
+      setTemplateOpen(false);
+      setTimeout(() => titleRef.current?.focus(), 50);
 
-    if (teamId) {
-      gql(ISSUE_TEMPLATES_QUERY, { teamId })
-        .then(res => {
-          const templates = (
-            res.data as {
-              issueTemplates?: Array<{
-                id: string;
-                name: string;
-                templateData: object;
-                isDefault: boolean;
-              }>;
+      // Probe AI availability once per open so the "Suggest" affordance only
+      // shows when the workspace has AI enabled and a key is configured.
+      gql('query AiAvailable { aiAvailable }')
+        .then(res => setAiAvailable(Boolean((res.data as { aiAvailable?: boolean })?.aiAvailable)))
+        .catch(() => setAiAvailable(false));
+
+      if (teamId) {
+        gql(ISSUE_TEMPLATES_QUERY, { teamId })
+          .then(res => {
+            const templates = (
+              res.data as {
+                issueTemplates?: Array<{
+                  id: string;
+                  name: string;
+                  templateData: object;
+                  isDefault: boolean;
+                }>;
+              }
+            )?.issueTemplates;
+            const defaultTemplate = templates?.find(t => t.isDefault);
+            if (defaultTemplate) {
+              applyTemplate(defaultTemplate.templateData);
             }
-          )?.issueTemplates;
-          const defaultTemplate = templates?.find(t => t.isDefault);
-          if (defaultTemplate) {
-            applyTemplate(defaultTemplate.templateData);
-          }
-        })
-        .catch(() => {
-          // Silently fail — template auto-apply is best-effort
-        });
-    }
-  }, [open]);
-
-  // Switching teams via the in-modal picker changes `states` out from under
-  // the form; the previously-selected stateId almost certainly doesn't
-  // belong to the new team, so snap it back to that team's default. Skipped
-  // on the initial open (the effect above already seeds the right default)
-  // by tracking the last-seen teamId rather than depending on `open`.
-  const lastTeamIdRef = useRef(teamId);
-  useEffect(() => {
-    if (!open || lastTeamIdRef.current === teamId) {
+          })
+          .catch(() => {
+            // Silently fail — template auto-apply is best-effort
+          });
+      }
       return;
     }
-    lastTeamIdRef.current = teamId;
-    patchForm({ stateId: defaultStateId ?? states[0]?.id ?? '' });
-  }, [teamId, defaultStateId, states, open, patchForm]);
+
+    if (prev.teamId !== teamId) {
+      // Already open, team switched via the picker — just the stateId needs resetting.
+      patchForm({ stateId: defaultStateId ?? states[0]?.id ?? '' });
+    }
+  }, [open, teamId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
