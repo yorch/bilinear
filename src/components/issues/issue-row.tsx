@@ -1,5 +1,6 @@
 'use client';
 
+import { usePending } from '@/hooks/use-pending-ids';
 import { useTranslations } from '@/hooks/use-translations';
 import type { ColumnKey } from '@/hooks/use-visible-columns';
 import type { DBCustomFieldDefinition } from '@/lib/db';
@@ -62,8 +63,6 @@ interface IssueRowProps {
   onUpdate: (id: string, patch: Record<string, unknown>) => void;
   /** Open a specific property popover immediately (keyboard shortcut support). */
   openProperty?: OpenProperty;
-  /** Whether this row has an unconfirmed optimistic write in flight. */
-  pending?: boolean;
   selected: boolean;
   states: WorkflowState[];
   style?: React.CSSProperties;
@@ -115,10 +114,10 @@ export function IssueRow({
   isColumnVisible,
   customFields,
   getCustomFieldValue,
-  pending,
   style,
 }: IssueRowProps) {
   const t = useTranslations();
+  const pending = usePending(issue.id);
   const isBulkMode = onCheck !== undefined;
   // If no visibility function is provided, every built-in column renders
   // (callers that haven't adopted the column picker keep their current UX).

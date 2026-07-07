@@ -53,7 +53,7 @@ let processing = false;
 let hydrated = false;
 let activeSession: ActiveSession | null = null;
 // Notified whenever the queue's contents change (enqueue, drain, drop) so
-// `usePendingIds()` can re-render rows with an in-flight write indicator.
+// `usePending()` can re-render rows with an in-flight write indicator.
 const queueListeners = new Set<() => void>();
 // Cached so getPendingIds() returns a stable reference between changes —
 // useSyncExternalStore requires this to avoid re-rendering every commit.

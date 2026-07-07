@@ -23,7 +23,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
 import { useFormatters } from '@/hooks/use-formatters';
-import { usePendingIds } from '@/hooks/use-pending-ids';
+import { usePending } from '@/hooks/use-pending-ids';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBWorkflowState } from '@/lib/db';
 import { getDueDateColor } from '@/lib/issue-utils';
@@ -65,8 +65,6 @@ interface BoardCardProps {
   multiSelected: boolean;
   onOpen: () => void;
   onSelect: () => void;
-  /** Whether this card has an unconfirmed optimistic write in flight. */
-  pending?: boolean;
   selected: boolean;
   users: IssueUser[];
 }
@@ -79,10 +77,10 @@ function BoardCardInner({
   onSelect,
   onOpen,
   isDragging,
-  pending,
 }: BoardCardProps) {
   const t = useTranslations();
   const { formatDueDate } = useFormatters();
+  const pending = usePending(issue.id);
   const assignee = issue.assigneeId ? users.find(u => u.id === issue.assigneeId) : null;
 
   return (
@@ -159,7 +157,6 @@ function SortableCard({
   onOpen,
   onMultiSelect,
   columnIssueIds,
-  pending,
 }: SortableCardProps) {
   const t = useTranslations();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -198,7 +195,6 @@ function SortableCard({
         multiSelected={multiSelected}
         onOpen={onOpen}
         onSelect={() => {}} // handled via wrapper click
-        pending={pending}
         selected={selected}
         users={users}
       />
@@ -224,7 +220,6 @@ function BoardColumn({
   onSelect,
   onOpen,
   onMultiSelect,
-  pendingIds,
 }: {
   column: Column;
   users: IssueUser[];
@@ -233,7 +228,6 @@ function BoardColumn({
   onSelect: (id: string) => void;
   onOpen: (id: string) => void;
   onMultiSelect: (e: React.MouseEvent, issueId: string, columnIssueIds: string[]) => void;
-  pendingIds: ReadonlySet<string>;
 }) {
   const t = useTranslations();
   const { setNodeRef } = useDroppable({ id: column.id });
@@ -268,7 +262,6 @@ function BoardColumn({
                 onMultiSelect={onMultiSelect}
                 onOpen={() => onOpen(issue.id)}
                 onSelect={() => onSelect(issue.id)}
-                pending={pendingIds.has(issue.id)}
                 selected={issue.id === selectedId}
                 users={users}
               />
@@ -296,7 +289,6 @@ interface BoardSwimlaneProps {
   onMultiSelect: (e: React.MouseEvent, issueId: string, columnIssueIds: string[]) => void;
   onOpen: (id: string) => void;
   onSelect: (id: string) => void;
-  pendingIds: ReadonlySet<string>;
   selectedId: string | null;
   selectedIds: Set<string>;
   users: IssueUser[];
@@ -313,7 +305,6 @@ function BoardSwimlane({
   onSelect,
   onOpen,
   onMultiSelect,
-  pendingIds,
 }: BoardSwimlaneProps) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -347,7 +338,6 @@ function BoardSwimlane({
               onMultiSelect={onMultiSelect}
               onOpen={onOpen}
               onSelect={onSelect}
-              pendingIds={pendingIds}
               selectedId={selectedId}
               selectedIds={selectedIds}
               users={users}
@@ -442,7 +432,6 @@ export function BoardView({
   onUpdate,
 }: BoardViewProps) {
   const t = useTranslations();
-  const pendingIds = usePendingIds();
   const [activeId, setActiveId] = useState<string | null>(null);
   // Multi-select state (internal to the board, separate from parent selectedId)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -657,7 +646,6 @@ export function BoardView({
               onMultiSelect={handleMultiSelect}
               onOpen={onOpen}
               onSelect={onSelect}
-              pendingIds={pendingIds}
               selectedId={selectedId}
               selectedIds={selectedIds}
               users={users}
@@ -673,7 +661,6 @@ export function BoardView({
               onMultiSelect={handleMultiSelect}
               onOpen={onOpen}
               onSelect={onSelect}
-              pendingIds={pendingIds}
               selectedId={selectedId}
               selectedIds={selectedIds}
               users={users}
@@ -697,7 +684,6 @@ export function BoardView({
               multiSelected={false}
               onOpen={() => {}}
               onSelect={() => {}}
-              pending={pendingIds.has(activeIssue.id)}
               selected={false}
               users={users}
             />
