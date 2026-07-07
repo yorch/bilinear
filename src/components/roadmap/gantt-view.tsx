@@ -317,7 +317,7 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
                 'rounded px-2.5 py-0.5 text-xs font-medium transition-colors',
                 zoom === z
                   ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
-                  : 'text-muted-foreground hover:text-zinc-800 dark:hover:text-zinc-200',
+                  : 'text-muted-foreground hover:text-foreground',
               )}
               key={z}
               onClick={() => setZoom(z)}

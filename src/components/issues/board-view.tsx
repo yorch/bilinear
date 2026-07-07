@@ -249,7 +249,7 @@ function BoardColumn({
 
       {/* Cards — column is a droppable area so empty columns accept drops */}
       <div
-        className="flex flex-1 flex-col gap-2 overflow-y-auto rounded-lg bg-zinc-50 p-2 dark:bg-zinc-900/50"
+        className="flex flex-1 flex-col gap-2 overflow-y-auto rounded-lg bg-muted p-2"
         ref={setNodeRef}
       >
         <SortableContext items={columnIssueIds} strategy={verticalListSortingStrategy}>

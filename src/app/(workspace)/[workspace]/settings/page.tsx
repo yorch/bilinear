@@ -139,11 +139,11 @@ const ROLE_BADGES: Record<OrgRole, { labelKey: string; cls: string }> = {
     labelKey: 'settings.roles.admin',
   },
   guest: {
-    cls: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400',
+    cls: 'bg-muted text-muted-foreground',
     labelKey: 'settings.roles.guest',
   },
   member: {
-    cls: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
+    cls: 'bg-muted text-muted-foreground',
     labelKey: 'settings.roles.member',
   },
   owner: {

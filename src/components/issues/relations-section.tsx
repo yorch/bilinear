@@ -295,7 +295,7 @@ function AddRelationForm({ onSubmit, onClose, issueId }: AddRelationFormProps) {
       {/* Type selector */}
       <div className="relative" ref={typeDropdownRef}>
         <button
-          className="flex items-center gap-1 rounded border border-border bg-card px-2 py-1 text-xs text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-700"
+          className="flex items-center gap-1 rounded border border-border bg-card px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
           onClick={() => setTypeOpen(o => !o)}
           type="button"
         >
@@ -337,7 +337,7 @@ function AddRelationForm({ onSubmit, onClose, issueId }: AddRelationFormProps) {
         triggerChildren={
           submitting ? t('issueDetail.relations.adding') : t('issueDetail.relations.pickIssue')
         }
-        triggerClassName="flex-1 justify-start rounded border border-zinc-200 bg-transparent px-2 py-1 text-xs text-zinc-400 hover:bg-transparent dark:border-zinc-700"
+        triggerClassName="flex-1 justify-start rounded border border-border bg-transparent px-2 py-1 text-xs text-muted-foreground hover:bg-transparent"
       />
 
       <button

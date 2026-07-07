@@ -107,7 +107,7 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
           </>
         }
         triggerClassName={cn(
-          'rounded-full p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700',
+          'rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-zinc-600',
           hasAny ? '' : 'flex items-center gap-1 px-2 text-xs',
         )}
         triggerTitle={t('issueDetail.reactions.addReaction')}

@@ -265,7 +265,7 @@ const ResultsList = observer(function ResultsList({
               >
                 <span className="flex-1 truncate text-foreground">{item.label}</span>
                 {item.shortcut && (
-                  <kbd className="flex-shrink-0 rounded border border-zinc-200 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground dark:border-zinc-600">
+                  <kbd className="flex-shrink-0 rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
                     {item.shortcut}
                   </kbd>
                 )}
@@ -420,21 +420,21 @@ const CommandPaletteFooter = memo(function CommandPaletteFooter({
   return (
     <div className="flex items-center gap-4 border-t border-border px-4 py-2">
       <span className="text-[10px] text-muted-foreground">
-        <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">↑↓</kbd>{' '}
+        <kbd className="rounded border border-border px-1">↑↓</kbd>{' '}
         {t('commandPalette.footer.navigate')}
       </span>
       <span className="text-[10px] text-muted-foreground">
-        <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">↵</kbd>{' '}
+        <kbd className="rounded border border-border px-1">↵</kbd>{' '}
         {t('commandPalette.footer.select')}
       </span>
       {!inSubMenu && (
         <span className="text-[10px] text-muted-foreground">
-          <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">Tab</kbd>{' '}
+          <kbd className="rounded border border-border px-1">Tab</kbd>{' '}
           {t('commandPalette.footer.issueActions')}
         </span>
       )}
       <span className="text-[10px] text-muted-foreground">
-        <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">Esc</kbd>{' '}
+        <kbd className="rounded border border-border px-1">Esc</kbd>{' '}
         {inSubMenu ? t('commandPalette.footer.back') : t('commandPalette.footer.close')}
       </span>
     </div>

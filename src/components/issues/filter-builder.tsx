@@ -217,7 +217,7 @@ function AddFilterForm({
             <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
           </>
         }
-        triggerClassName="gap-1 border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700"
+        triggerClassName="gap-1 border border-border px-2 py-1 text-xs"
       >
         {close => (
           <div className="max-h-64 w-40 overflow-y-auto py-1">
@@ -249,7 +249,7 @@ function AddFilterForm({
             <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
           </>
         }
-        triggerClassName="gap-1 border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700"
+        triggerClassName="gap-1 border border-border px-2 py-1 text-xs"
       >
         {close => (
           <div className="max-h-64 w-44 overflow-y-auto py-1">
@@ -293,7 +293,7 @@ function AddFilterForm({
                 <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
               </>
             }
-            triggerClassName="gap-1 border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700"
+            triggerClassName="gap-1 border border-border px-2 py-1 text-xs"
           />
         ) : (
           <input
@@ -382,7 +382,7 @@ export function FilterBuilder({
   if (filterSet.conditions.length === 0 && !showAddForm) {
     return (
       <button
-        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-zinc-700 dark:hover:text-zinc-300"
+        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         onClick={() => setShowAddForm(true)}
         type="button"
       >

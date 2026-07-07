@@ -68,9 +68,9 @@ function MilestoneForm({
       <div className="flex flex-col gap-2">
         <input
           className={cn(
-            'w-full rounded border border-border bg-white px-2 py-1.5 text-sm text-foreground outline-none',
+            'w-full rounded border border-border bg-card px-2 py-1.5 text-sm text-foreground outline-none',
             'placeholder:text-muted-foreground focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400',
-            'border-border dark:bg-zinc-900 text-foreground placeholder:text-muted-foreground dark:focus:border-indigo-500',
+            'border-border text-foreground placeholder:text-muted-foreground dark:focus:border-indigo-500',
           )}
           onChange={e => setValues(v => ({ ...v, name: e.target.value }))}
           placeholder={t('projects.milestoneName')}
@@ -81,9 +81,9 @@ function MilestoneForm({
         />
         <textarea
           className={cn(
-            'w-full resize-none rounded border border-border bg-white px-2 py-1.5 text-sm text-foreground outline-none',
+            'w-full resize-none rounded border border-border bg-card px-2 py-1.5 text-sm text-foreground outline-none',
             'placeholder:text-muted-foreground focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400',
-            'border-border dark:bg-zinc-900 text-foreground placeholder:text-muted-foreground dark:focus:border-indigo-500',
+            'border-border text-foreground placeholder:text-muted-foreground dark:focus:border-indigo-500',
           )}
           onChange={e => setValues(v => ({ ...v, description: e.target.value }))}
           placeholder={t('projects.descriptionOptionalPlaceholder')}
@@ -92,9 +92,9 @@ function MilestoneForm({
         />
         <input
           className={cn(
-            'w-full rounded border border-border bg-white px-2 py-1.5 text-sm text-foreground outline-none',
+            'w-full rounded border border-border bg-card px-2 py-1.5 text-sm text-foreground outline-none',
             'focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400',
-            'border-border dark:bg-zinc-900 text-foreground dark:focus:border-indigo-500',
+            'border-border text-foreground dark:focus:border-indigo-500',
           )}
           onChange={e => setValues(v => ({ ...v, targetDate: e.target.value }))}
           type="date"

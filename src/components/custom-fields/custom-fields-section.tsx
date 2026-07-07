@@ -124,7 +124,7 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
           </p>
           {!isAdding && (
             <button
-              className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-zinc-800"
+              className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
               disabled={atLimit}
               onClick={() => setIsAdding(true)}
               type="button"
@@ -149,9 +149,7 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
             <li className="flex items-center justify-between gap-3 p-4" key={def.id}>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                    {def.name}
-                  </span>
+                  <span className="text-sm font-medium text-foreground">{def.name}</span>
                   <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                     {def.type.replace('_', ' ')}
                   </span>
@@ -292,7 +290,7 @@ function CustomFieldForm({
       </div>
 
       {needsOptions && (
-        <div className="flex flex-col gap-2 rounded-md bg-zinc-50 p-3 dark:bg-zinc-800/50">
+        <div className="flex flex-col gap-2 rounded-md bg-muted p-3">
           <p className="text-xs font-medium text-muted-foreground">{t('customFields.options')}</p>
           {options.map(opt => (
             <div className="flex items-center gap-2" key={opt.key}>

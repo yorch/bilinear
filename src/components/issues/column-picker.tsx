@@ -35,7 +35,7 @@ export function ColumnPicker({
           {t('issues.columns')}
         </>
       }
-      triggerClassName="gap-1 px-2 py-1 text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300"
+      triggerClassName="gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-zinc-700 dark:hover:text-zinc-300"
       triggerTitle={t('issues.columnPicker')}
     >
       {() => (
@@ -85,7 +85,7 @@ function CheckRow({
   onToggle: () => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800">
+    <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs text-zinc-700 hover:bg-muted dark:text-zinc-300">
       <input checked={checked} onChange={onToggle} type="checkbox" />
       {label}
     </label>

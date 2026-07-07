@@ -66,7 +66,7 @@ export function ThemeToggle({ className, compact = false }: ThemeToggleProps) {
             'flex h-6 w-6 items-center justify-center rounded transition-colors',
             mounted && theme === value
               ? 'bg-white text-foreground shadow-sm dark:bg-zinc-700'
-              : 'text-muted-foreground hover:text-zinc-700 dark:hover:text-zinc-200',
+              : 'text-muted-foreground hover:text-foreground',
           )}
           key={value}
           onClick={() => setTheme(value)}

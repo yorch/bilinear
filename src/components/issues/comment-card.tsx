@@ -164,8 +164,8 @@ export function CommentCard({
         className={cn(
           'rounded-lg p-3 transition-colors',
           isResolved
-            ? 'bg-zinc-50 opacity-70 dark:bg-zinc-800/30'
-            : 'bg-zinc-50/50 hover:bg-zinc-50 dark:bg-zinc-800/20 dark:hover:bg-zinc-800/40',
+            ? 'bg-muted opacity-70 dark:bg-muted/30'
+            : 'bg-muted/50 hover:bg-muted dark:bg-muted/20 dark:hover:bg-muted/40',
         )}
       >
         {/* Header */}
@@ -198,7 +198,7 @@ export function CommentCard({
               align="right"
               panelClassName="flex gap-1 p-1.5"
               triggerChildren={<Smile className="h-3.5 w-3.5" />}
-              triggerClassName="p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
+              triggerClassName="p-1 text-muted-foreground hover:bg-muted hover:text-zinc-600"
               triggerTitle={t('issueDetail.comments.react')}
             >
               {close => (
@@ -264,13 +264,13 @@ export function CommentCard({
               align="right"
               panelClassName="min-w-[160px] py-1"
               triggerChildren={<MoreHorizontal className="h-3.5 w-3.5" />}
-              triggerClassName="p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
+              triggerClassName="p-1 text-muted-foreground hover:bg-muted hover:text-zinc-600"
             >
               {close => (
                 <>
                   {isOwn && (
                     <button
-                      className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                      className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-muted dark:text-zinc-300"
                       onClick={() => {
                         setEditing(true);
                         close();
@@ -283,7 +283,7 @@ export function CommentCard({
                   {/* Convert to sub-issue — only on top-level comments */}
                   {depth === 0 && (
                     <button
-                      className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                      className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-muted dark:text-zinc-300"
                       onClick={() => {
                         handleConvertToSubIssue();
                         close();
@@ -331,7 +331,7 @@ export function CommentCard({
                 {t('common.save')}
               </button>
               <button
-                className="rounded-md px-3 py-1 text-xs text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                className="rounded-md px-3 py-1 text-xs text-muted-foreground hover:bg-muted"
                 onClick={() => setEditing(false)}
                 type="button"
               >

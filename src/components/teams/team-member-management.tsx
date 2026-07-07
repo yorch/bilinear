@@ -43,8 +43,8 @@ interface TeamMemberManagementProps {
 
 const ROLE_COLORS: Record<TeamRole, string> = {
   admin: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  guest: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400',
-  member: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
+  guest: 'bg-muted text-muted-foreground',
+  member: 'bg-muted text-muted-foreground',
 };
 
 function Avatar({

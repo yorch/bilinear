@@ -156,7 +156,7 @@ function NotificationItem({
             disabled={isSnoozingThis}
             panelClassName="w-44 py-1 shadow-xl"
             triggerChildren={<Clock className="h-3.5 w-3.5" />}
-            triggerClassName="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+            triggerClassName="p-1 text-muted-foreground hover:text-zinc-600 dark:hover:text-zinc-300"
             triggerTitle={t('notifications.snooze.buttonTitle')}
           >
             {close => (

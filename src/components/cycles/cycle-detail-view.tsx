@@ -282,7 +282,7 @@ export const CycleDetailView = observer(function CycleDetailView({
     ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
     : isUpcoming
       ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400'
-      : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400';
+      : 'bg-muted text-muted-foreground';
 
   const displayName = cycle.name || t('cycles.defaultName', { number: cycle.number });
 
@@ -472,7 +472,7 @@ export const CycleDetailView = observer(function CycleDetailView({
                         'px-2.5 py-1 first:rounded-l last:rounded-r',
                         chartView === v
                           ? 'bg-muted font-medium text-foreground'
-                          : 'text-muted-foreground hover:text-zinc-700 dark:hover:text-zinc-200',
+                          : 'text-muted-foreground hover:text-foreground',
                       )}
                       key={v}
                       onClick={() => setChartView(v)}
@@ -501,7 +501,7 @@ export const CycleDetailView = observer(function CycleDetailView({
               </h3>
               <p className="text-xs text-muted-foreground">
                 {t('cycles.detail.velocity.avgLabel')}{' '}
-                <span className="font-medium text-zinc-700 dark:text-zinc-200">
+                <span className="font-medium text-foreground">
                   {t('cycles.detail.velocity.issuesPerCycle', { count: velocity.averageIssues })}
                 </span>
                 {velocity.cycles.length > 0 &&
@@ -510,7 +510,7 @@ export const CycleDetailView = observer(function CycleDetailView({
               {isUpcoming && (
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {t('cycles.detail.velocity.capacityLabel')}{' '}
-                  <span className="font-medium text-zinc-700 dark:text-zinc-200">
+                  <span className="font-medium text-foreground">
                     {t('cycles.detail.velocity.approxIssues', { count: velocity.averageIssues })}
                   </span>
                 </p>

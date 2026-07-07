@@ -31,7 +31,7 @@ function getCycleStatusBadge(status: CycleStatus, t: ReturnType<typeof useTransl
       };
     case 'completed':
       return {
-        className: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400',
+        className: 'bg-muted text-muted-foreground',
         label: t('cycles.status.completed'),
       };
     case 'upcoming':
@@ -171,7 +171,7 @@ const CycleGroup = observer(function CycleGroup({
 
             return (
               <Link
-                className="group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 transition-colors hover:border-border hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                className="group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 transition-colors hover:border-border hover:bg-accent"
                 href={`/${workspaceKey}/team/${teamKey}/cycles/${cycle.id}`}
                 key={cycle.id}
               >

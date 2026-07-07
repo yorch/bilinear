@@ -248,16 +248,14 @@ export function InsightsSection({
   return (
     <div className="mt-5">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
-          {t('analytics.insights.title')}
-        </h2>
+        <h2 className="text-sm font-semibold text-foreground">{t('analytics.insights.title')}</h2>
         <div className="flex rounded-md border border-border p-0.5">
           {PRESETS.map(p => (
             <button
               className={
                 preset === p.value
-                  ? 'rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
-                  : 'px-2 py-0.5 text-xs text-zinc-500 hover:text-foreground'
+                  ? 'rounded bg-muted px-2 py-0.5 text-xs text-foreground'
+                  : 'px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground'
               }
               key={p.value}
               onClick={() => setPreset(p.value)}
@@ -274,7 +272,7 @@ export function InsightsSection({
       ) : (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           <div className="rounded-lg border border-border bg-card p-5">
-            <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">
+            <h3 className="mb-3 text-sm font-medium text-foreground">
               {t('analytics.insights.leadTime')}
             </h3>
             <p className="mb-3 text-[11px] text-muted-foreground">
@@ -284,7 +282,7 @@ export function InsightsSection({
           </div>
 
           <div className="rounded-lg border border-border bg-card p-5">
-            <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">
+            <h3 className="mb-3 text-sm font-medium text-foreground">
               {t('analytics.insights.cycleTime')}
             </h3>
             <p className="mb-3 text-[11px] text-muted-foreground">
@@ -294,7 +292,7 @@ export function InsightsSection({
           </div>
 
           <div className="rounded-lg border border-border bg-card p-5">
-            <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">
+            <h3 className="mb-3 text-sm font-medium text-foreground">
               {t('analytics.insights.throughputTrend')}
             </h3>
             <p className="mb-3 text-[11px] text-muted-foreground">
@@ -304,7 +302,7 @@ export function InsightsSection({
           </div>
 
           <div className="rounded-lg border border-border bg-card p-5">
-            <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">
+            <h3 className="mb-3 text-sm font-medium text-foreground">
               {t('analytics.insights.avgTimeInState')}
             </h3>
             <p className="mb-3 text-[11px] text-muted-foreground">

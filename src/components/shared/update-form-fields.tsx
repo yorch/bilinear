@@ -33,7 +33,7 @@ export function UpdateFormFields({
             className={cn(
               'rounded px-2 py-0.5 text-xs font-medium transition-colors',
               health === ''
-                ? 'bg-zinc-300 text-zinc-700 dark:bg-zinc-600 dark:text-zinc-100'
+                ? 'bg-zinc-300 text-foreground dark:bg-zinc-600'
                 : 'bg-muted text-muted-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700',
             )}
             onClick={() => onHealthChange('')}

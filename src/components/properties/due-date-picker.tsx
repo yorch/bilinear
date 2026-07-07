@@ -33,7 +33,7 @@ export function DueDatePicker({
       onClose={onClose}
       panelClassName="p-2"
       triggerChildren={value ? formatDueDate(value) : t('properties.dueDate.dueDate')}
-      triggerClassName={cn('px-1.5 py-1 text-xs', value ? colorClass : 'text-zinc-400')}
+      triggerClassName={cn('px-1.5 py-1 text-xs', value ? colorClass : 'text-muted-foreground')}
       triggerTitle={
         value
           ? t('properties.dueDate.dueOn', { date: formatDueDate(value) })

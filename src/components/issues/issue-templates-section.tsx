@@ -170,7 +170,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
           </p>
           {!isAdding && (
             <button
-              className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs transition-colors hover:bg-accent"
               onClick={() => setIsAdding(true)}
               type="button"
             >
@@ -246,9 +246,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                   <div className="flex items-start justify-between gap-3 p-4">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                          {tmpl.name}
-                        </span>
+                        <span className="text-sm font-medium text-foreground">{tmpl.name}</span>
                         {tmpl.isDefault && (
                           <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />
                         )}
@@ -422,10 +420,10 @@ function TemplateForm({
   };
 
   const inputCls =
-    'rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100';
+    'rounded-md border border-border bg-card px-2.5 py-1.5 text-sm dark:text-zinc-100';
 
   const selectCls =
-    'rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100';
+    'rounded-md border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:text-zinc-100';
 
   return (
     <div className="flex flex-col gap-4">
@@ -459,7 +457,7 @@ function TemplateForm({
       </div>
 
       {/* Template defaults */}
-      <div className="rounded-md bg-zinc-50 p-3 dark:bg-zinc-800/50">
+      <div className="rounded-md bg-muted p-3">
         <p className="mb-2.5 text-xs font-medium text-muted-foreground">
           {t('issueDetail.templates.form.templateDefaults')}
         </p>
@@ -539,7 +537,7 @@ function TemplateForm({
                       'rounded-full border px-2 py-0.5 text-xs transition-colors',
                       selected
                         ? 'border-indigo-400 bg-indigo-50 text-indigo-700 dark:border-indigo-600 dark:bg-indigo-950 dark:text-indigo-300'
-                        : 'border-border bg-card text-muted-foreground hover:bg-zinc-50 dark:hover:bg-zinc-800',
+                        : 'border-border bg-card text-muted-foreground hover:bg-accent',
                     )}
                     key={l.id}
                     onClick={() => toggleLabel(l.id)}

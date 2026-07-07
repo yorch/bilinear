@@ -32,7 +32,7 @@ function statusOf(t: { archivedAt: string | null; suspendedAt: string | null }):
 
 const STATUS_STYLES: Record<TenantStatus, string> = {
   active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
-  archived: 'bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
+  archived: 'bg-muted text-muted-foreground',
   suspended: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400',
 };
 

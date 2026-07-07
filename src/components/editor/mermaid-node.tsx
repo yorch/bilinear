@@ -59,7 +59,7 @@ function MermaidView({ node, updateAttributes, selected }: NodeViewProps) {
             {t('editor.mermaid.label')}
           </p>
           <textarea
-            className="w-full rounded border border-border bg-card p-2 font-mono text-xs text-zinc-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-zinc-200"
+            className="w-full rounded border border-border bg-card p-2 font-mono text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-indigo-500"
             defaultValue={code}
             onBlur={e => {
               updateAttributes({ code: e.target.value });

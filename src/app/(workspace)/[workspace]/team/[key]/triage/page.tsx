@@ -475,7 +475,7 @@ const TriagePage = observer(function TriagePage() {
                     onClose={() => setDuplicatePickerFor(null)}
                     onSelect={canonical => submitMarkDuplicate(issue.id, canonical)}
                     triggerChildren={t('settings.triage.duplicate')}
-                    triggerClassName="rounded border border-zinc-300 px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    triggerClassName="rounded border border-border px-2.5 py-1 text-xs text-zinc-700 hover:bg-muted dark:text-zinc-300"
                     triggerTitle={t('settings.triage.markDuplicateTitle')}
                   />
                   <SnoozeButton disabled={busy} onSelect={hours => handleSnooze(issue.id, hours)} />

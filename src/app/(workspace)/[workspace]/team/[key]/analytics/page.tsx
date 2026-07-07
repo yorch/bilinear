@@ -189,7 +189,7 @@ function StatCard({ label, value, sub }: StatCardProps) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-border bg-card p-5">
-      <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">{title}</h3>
+      <h3 className="mb-4 text-sm font-semibold text-foreground">{title}</h3>
       {children}
     </div>
   );
@@ -519,7 +519,11 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
         {/* Issue status breakdown */}
         <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            { color: 'text-zinc-400', label: t('analytics.team.statusOpen'), value: openCount },
+            {
+              color: 'text-muted-foreground',
+              label: t('analytics.team.statusOpen'),
+              value: openCount,
+            },
             {
               color: 'text-blue-500',
               label: t('analytics.team.statusInProgress'),
@@ -531,7 +535,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
               value: completedCount,
             },
             {
-              color: 'text-zinc-400',
+              color: 'text-muted-foreground',
               label: t('analytics.team.statusCanceled'),
               value: canceledCount,
             },
@@ -615,7 +619,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
         {/* Team Health */}
         {teamHealth && (
           <div className="mt-5">
-            <h2 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+            <h2 className="mb-3 text-sm font-semibold text-foreground">
               {t('analytics.team.teamHealth')}
             </h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">

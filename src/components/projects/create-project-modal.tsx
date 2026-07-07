@@ -167,7 +167,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
                     'rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
                     selectedTeamIds.includes(team.id)
                       ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
-                      : 'border-border text-muted-foreground hover:bg-zinc-50 dark:hover:bg-zinc-800',
+                      : 'border-border text-muted-foreground hover:bg-muted',
                   )}
                   key={team.id}
                   onClick={() => toggleTeam(team.id)}

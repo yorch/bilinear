@@ -140,7 +140,7 @@ export default function WorkspaceAnalyticsPage() {
             {/* Per-team table */}
             <div className="rounded-lg border border-border bg-card">
               <div className="border-b border-border px-5 py-3">
-                <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+                <h2 className="text-sm font-semibold text-foreground">
                   {t('analytics.workspace.teams')}
                 </h2>
               </div>
@@ -224,7 +224,7 @@ export default function WorkspaceAnalyticsPage() {
             {/* Velocity comparison bar chart */}
             {data.teams.length > 0 && (
               <div className="mt-5 rounded-lg border border-border bg-card p-5">
-                <h2 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+                <h2 className="mb-4 text-sm font-semibold text-foreground">
                   {t('analytics.workspace.issuesCompletedByTeam')}
                 </h2>
                 <div className="flex flex-col gap-2">

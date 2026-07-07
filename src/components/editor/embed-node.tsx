@@ -50,7 +50,7 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
             }}
           >
             <input
-              className="flex-1 rounded border border-border bg-card px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-zinc-200"
+              className="flex-1 rounded border border-border bg-card px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-indigo-500"
               defaultValue={url}
               placeholder="https://youtube.com/watch?v=..."
               type="url"

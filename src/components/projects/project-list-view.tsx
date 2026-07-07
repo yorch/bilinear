@@ -167,7 +167,7 @@ const ProjectGroup = observer(function ProjectGroup({
 
             return (
               <Link
-                className="group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 transition-colors hover:border-border hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                className="group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 transition-colors hover:border-border hover:bg-accent"
                 href={`/${workspaceKey}/project/${project.slugId}`}
                 key={project.id}
               >

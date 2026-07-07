@@ -75,7 +75,7 @@ function KbdGroup({ keys }: { keys: string[] }) {
         // biome-ignore lint/suspicious/noArrayIndexKey: static shortcut key arrays never reorder
         <span className="flex items-center gap-0.5" key={`${k}-${i}`}>
           {i > 0 && <span className="text-xs text-muted-foreground">+</span>}
-          <kbd className="rounded border border-zinc-200 bg-muted px-1.5 py-0.5 text-xs font-mono dark:border-zinc-600">
+          <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 text-xs font-mono">
             {k}
           </kbd>
         </span>
@@ -190,7 +190,7 @@ export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
         <div className="flex items-center justify-end border-t border-border px-6 py-3">
           <span className="text-xs text-muted-foreground">
             {t('layout.shortcutHelp.pressPrefix')}{' '}
-            <kbd className="rounded border border-zinc-200 bg-muted px-1.5 py-0.5 text-xs font-mono dark:border-zinc-600">
+            <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 text-xs font-mono">
               Esc
             </kbd>{' '}
             {t('layout.shortcutHelp.pressSuffix')}

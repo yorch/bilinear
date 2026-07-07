@@ -93,7 +93,7 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
           {t('issueDetail.templates.applyTemplate')}
         </>
       }
-      triggerClassName="gap-1.5 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+      triggerClassName="gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
     >
       {close => (
         <>
@@ -133,7 +133,7 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
                     type="button"
                   >
                     <div className="flex items-center gap-2">
-                      <span className="flex-1 truncate text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                      <span className="flex-1 truncate text-sm font-medium text-foreground">
                         {template.name}
                       </span>
                       {template.isDefault && (

@@ -323,7 +323,7 @@ export function CreateIssueModal({
         {/* Title */}
         <div className="flex items-center gap-2 px-5 pt-5">
           <input
-            className="w-full bg-transparent text-lg font-medium text-foreground placeholder-zinc-400 outline-none"
+            className="w-full bg-transparent text-lg font-medium text-foreground placeholder:text-muted-foreground outline-none"
             onChange={e => patchForm({ title: e.target.value })}
             placeholder={t('issueDetail.createModal.titlePlaceholder')}
             ref={titleRef}

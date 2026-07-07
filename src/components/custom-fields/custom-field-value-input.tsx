@@ -158,7 +158,7 @@ function MultiSelect({
             className={
               selected
                 ? 'rounded-full bg-indigo-100 px-2 py-0.5 text-xs text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
-                : 'rounded-full border border-zinc-200 px-2 py-0.5 text-xs text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800'
+                : 'rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent'
             }
             key={o.value}
             onClick={() => toggle(o.value)}

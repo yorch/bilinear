@@ -87,7 +87,7 @@ export function OnboardingForm() {
           {t('auth.organizationName')}
         </label>
         <input
-          className="rounded-md border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100"
+          className="rounded-md border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           id="org-name"
           onChange={e => handleNameChange(e.target.value)}
           placeholder={t('auth.organizationNamePlaceholder')}
@@ -100,7 +100,7 @@ export function OnboardingForm() {
         <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="url-key">
           {t('auth.workspaceUrl')}
         </label>
-        <div className="flex items-center rounded-md border border-border bg-card focus-within:ring-2 focus-within:ring-zinc-900 dark:focus-within:ring-zinc-100">
+        <div className="flex items-center rounded-md border border-border bg-card focus-within:ring-2 focus-within:ring-ring">
           <span className="pl-3 text-sm text-muted-foreground select-none">issuetracker.app/</span>
           <input
             className="flex-1 bg-transparent px-1 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none"

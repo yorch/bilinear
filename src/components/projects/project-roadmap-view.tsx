@@ -91,7 +91,7 @@ export const ProjectRoadmapView = observer(function ProjectRoadmapView({
           <div className="flex flex-wrap gap-2">
             {projects.map(p => (
               <button
-                className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs text-zinc-700 hover:bg-accent dark:text-zinc-300"
                 key={p.id}
                 onClick={() => router.push(`/${workspaceKey}/project/${p.slugId}`)}
                 type="button"

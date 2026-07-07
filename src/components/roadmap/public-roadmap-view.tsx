@@ -34,7 +34,7 @@ interface Props {
 
 const STATUS_BADGES: Record<string, { cls: string; labelKey: string }> = {
   backlog: {
-    cls: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400',
+    cls: 'bg-muted text-muted-foreground',
     labelKey: 'roadmap.public.status.backlog',
   },
   cancelled: {

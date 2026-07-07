@@ -60,7 +60,7 @@ export function LanguageToggle({ className, compact = false }: LanguageTogglePro
             'flex h-6 items-center justify-center rounded px-1.5 text-[11px] font-medium transition-colors',
             mounted && locale === l
               ? 'bg-white text-foreground shadow-sm dark:bg-zinc-700'
-              : 'text-muted-foreground hover:text-zinc-700 dark:hover:text-zinc-200',
+              : 'text-muted-foreground hover:text-foreground',
           )}
           key={l}
           onClick={() => setLocale(l)}
