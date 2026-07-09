@@ -184,7 +184,7 @@ export const RelationsSection = observer(function RelationsSection({
         </h3>
         {!showAddForm && (
           <button
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-zinc-700 dark:hover:text-zinc-300"
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
             onClick={() => setShowAddForm(true)}
             type="button"
           >
@@ -228,7 +228,7 @@ export const RelationsSection = observer(function RelationsSection({
                         <span className="shrink-0 font-mono text-xs text-muted-foreground">
                           {other?.identifier ?? '—'}
                         </span>
-                        <span className="flex-1 truncate text-zinc-700 dark:text-zinc-300">
+                        <span className="flex-1 truncate text-foreground-secondary">
                           {other?.title ?? t('issueDetail.relations.unknownIssue')}
                         </span>
                         <button
@@ -308,9 +308,7 @@ function AddRelationForm({ onSubmit, onClose, issueId }: AddRelationFormProps) {
               <button
                 className={cn(
                   'w-full px-3 py-1.5 text-left text-xs hover:bg-accent',
-                  t === type
-                    ? 'text-indigo-600 dark:text-indigo-400'
-                    : 'text-zinc-700 dark:text-zinc-300',
+                  t === type ? 'text-indigo-600 dark:text-indigo-400' : 'text-foreground-secondary',
                 )}
                 key={t}
                 onClick={() => {
@@ -342,7 +340,7 @@ function AddRelationForm({ onSubmit, onClose, issueId }: AddRelationFormProps) {
 
       <button
         aria-label={t('common.cancel')}
-        className="rounded p-1 text-muted-foreground hover:text-zinc-600 dark:hover:text-zinc-300"
+        className="rounded p-1 text-muted-foreground hover:text-foreground-secondary"
         onClick={onClose}
         type="button"
       >

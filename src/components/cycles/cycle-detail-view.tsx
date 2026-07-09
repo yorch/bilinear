@@ -312,7 +312,7 @@ export const CycleDetailView = observer(function CycleDetailView({
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex h-12 items-center gap-3 border-b border-border px-4">
         <Link
-          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-zinc-600 dark:hover:text-zinc-300"
+          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
           href={`/${workspaceKey}/team/${teamKey}/cycles`}
         >
           <ArrowLeft className="h-4 w-4" />
@@ -352,7 +352,7 @@ export const CycleDetailView = observer(function CycleDetailView({
         {/* Roll over button — only for active / past cycles */}
         {showRollover && (
           <button
-            className="ml-auto flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-50 dark:hover:border-zinc-600 dark:hover:bg-zinc-800"
+            className="ml-auto flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-border hover:bg-accent disabled:opacity-50"
             disabled={rollingOver}
             onClick={handleRollover}
             type="button"
@@ -558,7 +558,7 @@ export const CycleDetailView = observer(function CycleDetailView({
                         {issue.title}
                       </Link>
                       <button
-                        className="hidden rounded px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-zinc-600 group-hover:block dark:hover:text-zinc-300"
+                        className="hidden rounded px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground-secondary group-hover:block"
                         onClick={() => handleRemoveIssue(issue.id)}
                         title={t('cycles.detail.removeFromCycle')}
                         type="button"

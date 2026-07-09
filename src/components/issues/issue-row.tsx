@@ -127,7 +127,7 @@ export function IssueRow({
     // biome-ignore lint/a11y/noStaticElementInteractions: presentational row container; interactive children (checkbox, button, selects) provide all a11y. onContextMenu is the only handler.
     <div
       className={cn(
-        'group flex items-center gap-2 border-b border-border px-4 py-0 h-9 select-none hover:bg-zinc-50 dark:hover:bg-zinc-900',
+        'group flex items-center gap-2 border-b border-border px-4 py-0 h-9 select-none hover:bg-accent',
         selected && 'bg-muted',
       )}
       data-selected={selected ? 'true' : undefined}

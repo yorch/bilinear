@@ -235,7 +235,7 @@ export default function AdminTenantDetailPage() {
             <table className="w-full text-sm">
               <tbody className="divide-y divide-border">
                 {tenant.owners.map(o => (
-                  <tr className="bg-white dark:bg-zinc-950" key={o.id}>
+                  <tr className="bg-background" key={o.id}>
                     <td className="px-4 py-2">
                       <p className="font-medium text-foreground">{o.displayName}</p>
                       <p className="text-xs text-muted-foreground">{o.email}</p>

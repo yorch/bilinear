@@ -160,7 +160,7 @@ export default function AdminUsersPage() {
             </thead>
             <tbody className="divide-y divide-border">
               {users.map(u => (
-                <tr className="bg-white dark:bg-zinc-950" key={u.id}>
+                <tr className="bg-background" key={u.id}>
                   <td className="px-4 py-2">
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-foreground">{u.displayName}</p>

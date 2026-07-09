@@ -43,7 +43,7 @@ export function LoginForm() {
   return (
     <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="email">
+        <label className="text-sm font-medium text-foreground-secondary" htmlFor="email">
           {t('auth.emailAddress')}
         </label>
         <input

@@ -139,7 +139,7 @@ export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
           </h2>
           <button
             aria-label={t('layout.shortcutHelp.closeAriaLabel')}
-            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-zinc-600 dark:hover:text-zinc-300"
+            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
             onClick={onClose}
             type="button"
           >
@@ -174,7 +174,7 @@ export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
                       className="flex items-center justify-between gap-4"
                       key={shortcut.descriptionKey}
                     >
-                      <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                      <span className="text-sm text-foreground-secondary">
                         {t(shortcut.descriptionKey)}
                       </span>
                       <KbdGroup keys={shortcut.keys} />

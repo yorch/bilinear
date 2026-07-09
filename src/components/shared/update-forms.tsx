@@ -57,7 +57,7 @@ export function CreateUpdateForm({
         </span>
         <button
           aria-label={t('common.close')}
-          className="ml-auto rounded p-0.5 text-muted-foreground hover:text-zinc-600 dark:hover:text-zinc-300"
+          className="ml-auto rounded p-0.5 text-muted-foreground hover:text-foreground-secondary"
           onClick={onClose}
           title={t('common.close')}
           type="button"

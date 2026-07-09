@@ -114,6 +114,7 @@ PAIR_RULES = {
     ("text", ("zinc", "900"), ("zinc", "100")): "foreground",
     ("text", ("zinc", "900"), ("zinc", "50")): "foreground",
     ("text", ("zinc", "800"), ("zinc", "100")): "foreground",
+    ("text", ("zinc", "700"), ("zinc", "300")): "foreground-secondary",
     ("bg", ("white", None), ("zinc", "900")): "card",
     ("bg", ("white", None), ("zinc", "800")): "card",
     ("bg", ("zinc", "50"), ("zinc", "900")): "card",
@@ -149,6 +150,19 @@ SOLO_RULES = {
     ("border", "700"): "border",
     ("border", "800"): "border",
     ("border", "600"): "border",
+}
+
+# Overrides PAIR_RULES specifically for hover:/focus: (non-empty variants)
+# groups. A hover state re-using its base's exact PAIR_RULES target (e.g.
+# both landing on muted-foreground) would collapse into the resting color —
+# already guarded against in the collision-resolution phase — but these two
+# shade pairs, when they appear as a hover/focus color, are a distinct
+# "brighten toward the more emphasized end" intent from the same pair used
+# as a resting color, so they get their own target instead of just being
+# dropped as a collision.
+HOVER_PAIR_RULES = {
+    ("text", ("zinc", "600"), ("zinc", "300")): "foreground-secondary",
+    ("text", ("zinc", "700"), ("zinc", "300")): "foreground-secondary",
 }
 
 
@@ -190,7 +204,9 @@ def rewrite_class_string(s):
             li, di = light_idxs[0], dark_idxs[0]
             lp, dp = parsed[li], parsed[di]
             key = (prop, (lp["hue"], lp["shade"]), (dp["hue"], dp["shade"]))
-            name = PAIR_RULES.get(key)
+            name = HOVER_PAIR_RULES.get(key) if variants != () else None
+            if name is None:
+                name = PAIR_RULES.get(key)
             if name is None:
                 continue
             # "card" represents an element's own resting surface — applying

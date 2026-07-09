@@ -172,7 +172,7 @@ export function CommentCard({
         <div className="mb-2 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <UserAvatar size="md" user={comment.author} />
-            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            <span className="text-xs font-medium text-foreground-secondary">
               {comment.author.displayName}
             </span>
             <span className="text-xs text-muted-foreground">
@@ -198,7 +198,7 @@ export function CommentCard({
               align="right"
               panelClassName="flex gap-1 p-1.5"
               triggerChildren={<Smile className="h-3.5 w-3.5" />}
-              triggerClassName="p-1 text-muted-foreground hover:bg-muted hover:text-zinc-600"
+              triggerClassName="p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
               triggerTitle={t('issueDetail.comments.react')}
             >
               {close => (
@@ -230,7 +230,7 @@ export function CommentCard({
             {depth === 0 && (
               <button
                 aria-label={t('issueDetail.comments.quoteReply')}
-                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-zinc-600"
+                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                 onClick={handleQuoteReply}
                 title={t('issueDetail.comments.quoteReply')}
                 type="button"
@@ -248,7 +248,7 @@ export function CommentCard({
                 'rounded p-1 transition-colors',
                 isResolved
                   ? 'text-green-600 hover:bg-green-100 dark:hover:bg-green-900/20'
-                  : 'text-muted-foreground hover:bg-muted hover:text-zinc-600',
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
               onClick={() => onToggleResolve(comment)}
               title={
@@ -264,13 +264,13 @@ export function CommentCard({
               align="right"
               panelClassName="min-w-[160px] py-1"
               triggerChildren={<MoreHorizontal className="h-3.5 w-3.5" />}
-              triggerClassName="p-1 text-muted-foreground hover:bg-muted hover:text-zinc-600"
+              triggerClassName="p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
             >
               {close => (
                 <>
                   {isOwn && (
                     <button
-                      className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-muted dark:text-zinc-300"
+                      className="w-full px-3 py-1.5 text-left text-xs text-foreground-secondary hover:bg-muted"
                       onClick={() => {
                         setEditing(true);
                         close();
@@ -283,7 +283,7 @@ export function CommentCard({
                   {/* Convert to sub-issue — only on top-level comments */}
                   {depth === 0 && (
                     <button
-                      className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-muted dark:text-zinc-300"
+                      className="w-full px-3 py-1.5 text-left text-xs text-foreground-secondary hover:bg-muted"
                       onClick={() => {
                         handleConvertToSubIssue();
                         close();
@@ -341,7 +341,7 @@ export function CommentCard({
           </div>
         ) : (
           <TipTapEditor
-            className="prose prose-sm dark:prose-invert max-w-none text-zinc-700 dark:text-zinc-300"
+            className="prose prose-sm dark:prose-invert max-w-none text-foreground-secondary"
             content={comment.body}
             readOnly
           />
@@ -356,7 +356,7 @@ export function CommentCard({
                   'flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors',
                   reacted
                     ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-                    : 'bg-muted text-muted-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700',
+                    : 'bg-muted text-muted-foreground hover:bg-accent',
                 )}
                 key={emoji}
                 onClick={() => onToggleReaction(comment.id, emoji, reacted)}

@@ -156,14 +156,14 @@ function NotificationItem({
             disabled={isSnoozingThis}
             panelClassName="w-44 py-1 shadow-xl"
             triggerChildren={<Clock className="h-3.5 w-3.5" />}
-            triggerClassName="p-1 text-muted-foreground hover:text-zinc-600 dark:hover:text-zinc-300"
+            triggerClassName="p-1 text-muted-foreground hover:text-foreground-secondary"
             triggerTitle={t('notifications.snooze.buttonTitle')}
           >
             {close => (
               <>
                 {SNOOZE_PRESETS.map(preset => (
                   <button
-                    className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    className="w-full px-3 py-1.5 text-left text-xs text-foreground-secondary hover:bg-accent"
                     key={preset.labelKey}
                     onClick={() => {
                       close();

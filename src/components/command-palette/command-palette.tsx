@@ -631,7 +631,7 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
           {inSubMenu && (
             <button
               aria-label={t('commandPalette.footer.back')}
-              className="flex-shrink-0 text-xs text-muted-foreground hover:text-zinc-600 dark:hover:text-zinc-300"
+              className="flex-shrink-0 text-xs text-muted-foreground hover:text-foreground-secondary"
               onClick={() => {
                 setSubMenu({ type: 'none' });
                 setActiveIndex(0);
@@ -666,7 +666,7 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
                 : t('commandPalette.searchAriaLabel')
             }
             autoComplete="off"
-            className="flex-1 bg-transparent text-sm text-foreground placeholder-zinc-400 outline-none"
+            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
             onChange={e => setQuery(e.target.value)}
             placeholder={
               inSubMenu

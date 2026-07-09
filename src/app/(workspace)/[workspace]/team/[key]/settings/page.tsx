@@ -431,7 +431,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                 {t('settings.team.description')}
               </label>
               <textarea
-                className="resize-none rounded-md border border-border bg-transparent px-3 py-1.5 text-sm text-muted-foreground placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                className="resize-none rounded-md border border-border bg-transparent px-3 py-1.5 text-sm text-muted-foreground placeholder:text-muted-foreground outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                 id="settings-description"
                 onChange={e => setDescription(e.target.value)}
                 placeholder={t('settings.team.descriptionPlaceholder')}
@@ -445,7 +445,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                 {t('settings.team.identifier')}
               </p>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-sm text-zinc-700 dark:text-zinc-300 rounded-md border border-border px-3 py-1.5 bg-card">
+                <span className="font-mono text-sm text-foreground-secondary rounded-md border border-border px-3 py-1.5 bg-card">
                   {team.key}
                 </span>
                 <span className="text-xs text-muted-foreground">
@@ -463,7 +463,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                 {t('settings.team.parentTeam')}
               </label>
               <select
-                className="rounded-md border border-border bg-transparent px-3 py-1.5 text-sm text-foreground outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:bg-zinc-900"
+                className="rounded-md border border-border bg-transparent px-3 py-1.5 text-sm text-foreground outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:bg-card"
                 id="settings-parent"
                 onChange={e => setParentId(e.target.value)}
                 value={parentId}
@@ -553,7 +553,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <p className="text-sm font-medium text-foreground-secondary">
                     {t('settings.team.deleteTeam')}
                   </p>
                   <p className="text-xs text-muted-foreground">
@@ -588,7 +588,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                       value="DELETE"
                     />
                     <div>
-                      <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                      <p className="text-sm text-foreground-secondary">
                         {t('settings.team.deleteAllIssues')}
                       </p>
                       <p className="text-xs text-muted-foreground">
@@ -613,7 +613,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                       value="MOVE"
                     />
                     <div className="flex-1">
-                      <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                      <p className="text-sm text-foreground-secondary">
                         {t('settings.team.moveIssuesToAnotherTeam')}
                       </p>
                       <p className="text-xs text-muted-foreground">

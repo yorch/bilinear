@@ -243,7 +243,7 @@ function BoardColumn({
             style={{ backgroundColor: column.color }}
           />
         )}
-        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{column.label}</span>
+        <span className="text-sm font-medium text-foreground-secondary">{column.label}</span>
         <span className="text-xs text-muted-foreground">{column.issues.length}</span>
       </div>
 
@@ -325,7 +325,7 @@ function BoardSwimlane({
         ) : (
           <ChevronDown className="h-4 w-4 text-muted-foreground" />
         )}
-        <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{label}</span>
+        <span className="text-sm font-semibold text-foreground-secondary">{label}</span>
         <span className="text-xs text-muted-foreground">({issues.length})</span>
       </button>
 

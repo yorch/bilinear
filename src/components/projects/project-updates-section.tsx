@@ -48,7 +48,7 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
         </h3>
         {!creating && !editingId && (
           <button
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-zinc-700 dark:hover:text-zinc-300"
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
             onClick={openCreate}
             type="button"
           >
@@ -125,7 +125,7 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
                         }}
                       />
                     )}
-                    <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    <span className="text-xs font-medium text-foreground-secondary">
                       {author?.displayName ?? t('projects.unknownAuthor')}
                     </span>
                     {health && (
@@ -141,7 +141,7 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
                   {isOwner && (
                     <div className="flex shrink-0 items-center gap-1">
                       <button
-                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-zinc-600 dark:hover:text-zinc-300"
+                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
                         onClick={() => openEdit(update.id)}
                         title={t('common.edit')}
                         type="button"
@@ -155,7 +155,7 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
                     </div>
                   )}
                 </div>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
+                <p className="mt-2 whitespace-pre-wrap text-sm text-foreground-secondary">
                   {update.body}
                 </p>
               </div>

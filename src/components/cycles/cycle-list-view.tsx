@@ -139,7 +139,7 @@ const CycleGroup = observer(function CycleGroup({
   return (
     <div>
       <button
-        className="flex items-center gap-2 px-1 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-zinc-600 dark:hover:text-zinc-300"
+        className="flex items-center gap-2 px-1 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground-secondary"
         onClick={() => setCollapsed(!collapsed)}
         type="button"
       >

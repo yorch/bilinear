@@ -333,7 +333,7 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
       <div className="overflow-x-auto" ref={containerRef}>
         <div style={{ minWidth: totalWidth }}>
           {/* Header */}
-          <div className="sticky top-0 z-10 border-b border-border bg-white dark:bg-zinc-950">
+          <div className="sticky top-0 z-10 border-b border-border bg-background">
             {/* Month row */}
             <div className={cn('flex border-b border-border', hasSubRow ? 'h-6' : 'h-8')}>
               {monthMarkers.map((m, i) => {

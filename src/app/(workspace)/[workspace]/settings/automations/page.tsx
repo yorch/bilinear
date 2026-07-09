@@ -157,7 +157,7 @@ export default function AutomationsSettingsPage() {
         </h2>
         <form className="mt-3 flex flex-col gap-3" onSubmit={handleCreate}>
           <input
-            className="rounded-md border border-border px-2 py-1.5 text-sm dark:bg-zinc-950"
+            className="rounded-md border border-border px-2 py-1.5 text-sm dark:bg-background"
             onChange={e => setName(e.target.value)}
             placeholder={t('settings.automations.ruleNamePlaceholder')}
             required
@@ -165,7 +165,7 @@ export default function AutomationsSettingsPage() {
           />
           <div className="flex gap-2">
             <select
-              className="flex-1 rounded-md border border-border px-2 py-1.5 text-sm dark:bg-zinc-950"
+              className="flex-1 rounded-md border border-border px-2 py-1.5 text-sm dark:bg-background"
               onChange={e => setTriggerType(e.target.value)}
               value={triggerType}
             >
@@ -179,7 +179,7 @@ export default function AutomationsSettingsPage() {
               {t('settings.automations.then')}
             </span>
             <select
-              className="flex-1 rounded-md border border-border px-2 py-1.5 text-sm dark:bg-zinc-950"
+              className="flex-1 rounded-md border border-border px-2 py-1.5 text-sm dark:bg-background"
               onChange={e => setActionType(e.target.value)}
               value={actionType}
             >
@@ -191,7 +191,7 @@ export default function AutomationsSettingsPage() {
             </select>
           </div>
           <textarea
-            className="rounded-md border border-border px-2 py-1.5 font-mono text-xs dark:bg-zinc-950"
+            className="rounded-md border border-border px-2 py-1.5 font-mono text-xs dark:bg-background"
             onChange={e => setActionConfigText(e.target.value)}
             placeholder={t('settings.automations.actionConfigPlaceholder')}
             rows={3}

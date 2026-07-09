@@ -147,7 +147,7 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
             </label>
             <input
               className={cn(
-                'rounded-md border bg-transparent px-3 py-1.5 font-mono text-sm text-foreground placeholder-zinc-400 outline-none',
+                'rounded-md border bg-transparent px-3 py-1.5 font-mono text-sm text-foreground placeholder:text-muted-foreground outline-none',
                 keyError
                   ? 'border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-500'
                   : 'border-border focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500',
@@ -187,7 +187,7 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
               type="checkbox"
             />
             <div>
-              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <p className="text-sm font-medium text-foreground-secondary">
                 {t('teams.privateTeam')}
               </p>
               <p className="text-xs text-muted-foreground">{t('teams.privateTeamHint')}</p>

@@ -209,7 +209,7 @@ export default function WebhooksSettingsPage() {
         <div className="mb-6 rounded border border-border p-4">
           <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="text-xs">
-              <span className="mb-1 block text-zinc-700 dark:text-zinc-300">
+              <span className="mb-1 block text-foreground-secondary">
                 {t('settings.webhooks.name')}
               </span>
               <input
@@ -220,7 +220,7 @@ export default function WebhooksSettingsPage() {
               />
             </label>
             <label className="text-xs">
-              <span className="mb-1 block text-zinc-700 dark:text-zinc-300">
+              <span className="mb-1 block text-foreground-secondary">
                 {t('settings.webhooks.url')}
               </span>
               <input
@@ -232,7 +232,7 @@ export default function WebhooksSettingsPage() {
             </label>
           </div>
           <div className="mb-3">
-            <span className="mb-1 block text-xs text-zinc-700 dark:text-zinc-300">
+            <span className="mb-1 block text-xs text-foreground-secondary">
               {t('settings.webhooks.events')}
             </span>
             <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
@@ -305,7 +305,7 @@ export default function WebhooksSettingsPage() {
                   <div className="mt-2 flex flex-wrap gap-1">
                     {hook.events.map(e => (
                       <span
-                        className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-zinc-700 dark:text-zinc-300"
+                        className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground-secondary"
                         key={e}
                       >
                         {e}

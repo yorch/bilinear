@@ -115,7 +115,7 @@ export function GroupSection({
           ▾
         </span>
         <StatusDot color={color} />
-        <span className="text-zinc-700 dark:text-zinc-300">{name}</span>
+        <span className="text-foreground-secondary">{name}</span>
         <span className="text-muted-foreground">{count}</span>
       </button>
 

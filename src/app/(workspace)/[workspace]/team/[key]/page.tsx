@@ -365,7 +365,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
           {viewMode === 'board' && (
             <>
               <select
-                className="rounded-md border border-border bg-card px-2 py-1 text-xs text-zinc-700 dark:text-zinc-300"
+                className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground-secondary"
                 onChange={e => setBoardGroupBy(e.target.value as BoardGroupBy)}
                 value={boardGroupBy}
               >
@@ -374,7 +374,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
                 <option value="priority">{t('issues.groupByPriority')}</option>
               </select>
               <select
-                className="rounded-md border border-border bg-card px-2 py-1 text-xs text-zinc-700 dark:text-zinc-300"
+                className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground-secondary"
                 onChange={e => setSwimlaneBy(e.target.value as BoardSwimlaneBy)}
                 value={swimlaneBy}
               >
@@ -386,7 +386,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
           )}
           <ViewToggle mode={viewMode} onChange={setViewMode} />
           <Link
-            className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-zinc-700 dark:hover:text-zinc-300"
+            className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
             href={`/${workspace}/team/${teamKey}/settings`}
             title={t('issues.teamSettings')}
           >
@@ -442,7 +442,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
             />
             <button
               aria-label={t('issues.saveView')}
-              className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-zinc-700 dark:hover:text-zinc-300"
+              className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
               onClick={() => setSaveViewOpen(true)}
               title={t('issues.saveCurrentFiltersAsView')}
               type="button"

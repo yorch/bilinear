@@ -88,7 +88,7 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
             'flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors',
             reacted
               ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-              : 'bg-muted text-muted-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700',
+              : 'bg-muted text-muted-foreground hover:bg-accent',
           )}
           key={emoji}
           onClick={() => toggle(emoji, reacted)}
@@ -107,7 +107,7 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
           </>
         }
         triggerClassName={cn(
-          'rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-zinc-600',
+          'rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
           hasAny ? '' : 'flex items-center gap-1 px-2 text-xs',
         )}
         triggerTitle={t('issueDetail.reactions.addReaction')}

@@ -287,7 +287,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                     <div className="flex shrink-0 items-center gap-1">
                       <button
                         aria-label={t('issueDetail.templates.editTemplate')}
-                        className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-zinc-700 dark:hover:text-zinc-300"
+                        className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground-secondary"
                         onClick={() => setEditingId(tmpl.id)}
                         type="button"
                       >
@@ -420,10 +420,10 @@ function TemplateForm({
   };
 
   const inputCls =
-    'rounded-md border border-border bg-card px-2.5 py-1.5 text-sm dark:text-zinc-100';
+    'rounded-md border border-border bg-card px-2.5 py-1.5 text-sm dark:text-foreground';
 
   const selectCls =
-    'rounded-md border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:text-zinc-100';
+    'rounded-md border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:text-foreground';
 
   return (
     <div className="flex flex-col gap-4">
@@ -553,7 +553,7 @@ function TemplateForm({
       </div>
 
       {/* Default template toggle */}
-      <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+      <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground-secondary">
         <input
           checked={isDefault}
           className="accent-indigo-600"

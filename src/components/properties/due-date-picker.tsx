@@ -43,7 +43,7 @@ export function DueDatePicker({
       {close => (
         <>
           <input
-            className="rounded border border-border px-2 py-1 text-sm dark:bg-zinc-800"
+            className="rounded border border-border px-2 py-1 text-sm dark:bg-muted"
             onChange={e => {
               onChange(e.target.value || null);
               close();

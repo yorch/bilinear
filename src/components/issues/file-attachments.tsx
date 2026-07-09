@@ -116,7 +116,7 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
           {t('issueDetail.attachments.title')}
         </p>
         <button
-          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-zinc-700 disabled:opacity-50 dark:hover:text-zinc-300"
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground-secondary disabled:opacity-50"
           disabled={uploading}
           onClick={() => inputRef.current?.click()}
           type="button"
@@ -146,7 +146,7 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
             >
               <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               <a
-                className="flex-1 truncate text-zinc-700 hover:text-indigo-600 dark:text-zinc-300"
+                className="flex-1 truncate text-foreground-secondary hover:text-indigo-600"
                 href={att.url}
                 rel="noopener noreferrer"
                 target="_blank"

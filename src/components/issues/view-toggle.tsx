@@ -20,7 +20,7 @@ export function ViewToggle({ mode, onChange }: ViewToggleProps) {
           'flex items-center justify-center rounded-l-md px-2 py-1 transition-colors',
           mode === 'list'
             ? 'bg-muted text-foreground'
-            : 'text-muted-foreground hover:text-zinc-600 dark:hover:text-zinc-300',
+            : 'text-muted-foreground hover:text-foreground-secondary',
         )}
         onClick={() => onChange('list')}
         title={t('issues.listViewShortcut')}
@@ -33,7 +33,7 @@ export function ViewToggle({ mode, onChange }: ViewToggleProps) {
           'flex items-center justify-center px-2 py-1 transition-colors',
           mode === 'board'
             ? 'bg-muted text-foreground'
-            : 'text-muted-foreground hover:text-zinc-600 dark:hover:text-zinc-300',
+            : 'text-muted-foreground hover:text-foreground-secondary',
         )}
         onClick={() => onChange('board')}
         title={t('issues.boardViewShortcut')}
@@ -46,7 +46,7 @@ export function ViewToggle({ mode, onChange }: ViewToggleProps) {
           'flex items-center justify-center rounded-r-md px-2 py-1 transition-colors',
           mode === 'timeline'
             ? 'bg-muted text-foreground'
-            : 'text-muted-foreground hover:text-zinc-600 dark:hover:text-zinc-300',
+            : 'text-muted-foreground hover:text-foreground-secondary',
         )}
         onClick={() => onChange('timeline')}
         title={t('issues.timelineViewShortcut')}

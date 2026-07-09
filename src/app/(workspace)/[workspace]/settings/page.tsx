@@ -394,7 +394,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   <dt className="text-xs font-medium text-muted-foreground pt-0.5">
                     {t('settings.workspace.urlKey')}
                   </dt>
-                  <dd className="col-span-2 font-mono text-sm text-zinc-700 dark:text-zinc-300">
+                  <dd className="col-span-2 font-mono text-sm text-foreground-secondary">
                     {org.urlKey}
                   </dd>
                 </div>
@@ -402,7 +402,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   <dt className="text-xs font-medium text-muted-foreground pt-0.5">
                     {t('settings.workspace.dataRegion')}
                   </dt>
-                  <dd className="col-span-2 text-sm text-zinc-700 dark:text-zinc-300 capitalize">
+                  <dd className="col-span-2 text-sm text-foreground-secondary capitalize">
                     {org.dataRegion}
                   </dd>
                 </div>
@@ -637,7 +637,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                         {calendarFeedUrl}
                       </code>
                       <button
-                        className="shrink-0 text-muted-foreground hover:text-zinc-600 dark:hover:text-zinc-200"
+                        className="shrink-0 text-muted-foreground hover:text-foreground"
                         onClick={() => {
                           void navigator.clipboard.writeText(calendarFeedUrl);
                           toast.success(t('settings.workspace.copiedToClipboard'));
@@ -653,7 +653,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                 <button
                   className={cn(
                     'shrink-0 flex items-center gap-1.5 rounded-md border border-border',
-                    'px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300',
+                    'px-3 py-1.5 text-xs font-medium text-foreground-secondary',
                     'hover:bg-accent disabled:opacity-50',
                   )}
                   disabled={rotatingToken}
@@ -683,7 +683,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   {t('settings.workspace.copyTokenNowWarning')}
                 </p>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 truncate text-xs bg-card border border-amber-200 dark:border-amber-700 px-2 py-1 rounded text-zinc-700 dark:text-zinc-300 font-mono">
+                  <code className="flex-1 truncate text-xs bg-card border border-amber-200 dark:border-amber-700 px-2 py-1 rounded text-foreground-secondary font-mono">
                     {newPlaintext}
                   </code>
                   <button
@@ -718,7 +718,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                 <input
                   className={cn(
                     'flex-1 rounded-md border border-border bg-transparent',
-                    'px-3 py-1.5 text-sm text-foreground placeholder-zinc-400',
+                    'px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground',
                     'focus:outline-none focus:ring-1 focus:ring-indigo-500',
                   )}
                   disabled={creatingToken}
@@ -735,7 +735,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                 <button
                   className={cn(
                     'shrink-0 rounded-md border border-border',
-                    'px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300',
+                    'px-3 py-1.5 text-xs font-medium text-foreground-secondary',
                     'hover:bg-accent disabled:opacity-50',
                   )}
                   disabled={creatingToken || !newTokenLabel.trim()}
@@ -762,7 +762,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   <select
                     className={cn(
                       'rounded-md border border-border bg-transparent',
-                      'px-1.5 py-0.5 text-xs text-zinc-700 dark:text-zinc-300',
+                      'px-1.5 py-0.5 text-xs text-foreground-secondary',
                       'focus:outline-none focus:ring-1 focus:ring-indigo-500',
                     )}
                     disabled={creatingToken}

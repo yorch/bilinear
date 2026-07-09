@@ -123,7 +123,7 @@ export function EstimatePicker({
                   'w-full px-3 py-1.5 text-left text-sm transition-colors',
                   value === opt.value
                     ? 'bg-indigo-50 font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-                    : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800',
+                    : 'text-foreground-secondary hover:bg-accent',
                 )}
                 key={opt.value}
                 onClick={() => {

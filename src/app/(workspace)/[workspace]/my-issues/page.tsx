@@ -132,7 +132,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
           {viewMode === 'board' && (
             <>
               <select
-                className="rounded-md border border-border bg-card px-2 py-1 text-xs text-zinc-700 dark:text-zinc-300"
+                className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground-secondary"
                 onChange={e => setBoardGroupBy(e.target.value as BoardGroupBy)}
                 value={boardGroupBy}
               >
@@ -141,7 +141,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
                 <option value="priority">{t('issues.groupByPriority')}</option>
               </select>
               <select
-                className="rounded-md border border-border bg-card px-2 py-1 text-xs text-zinc-700 dark:text-zinc-300"
+                className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground-secondary"
                 onChange={e => setSwimlaneBy(e.target.value as BoardSwimlaneBy)}
                 value={swimlaneBy}
               >

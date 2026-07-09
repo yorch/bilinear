@@ -106,7 +106,7 @@ function SnoozeButton({
       <button
         aria-expanded={open}
         aria-haspopup="menu"
-        className="rounded border border-border px-2.5 py-1 text-xs text-zinc-700 hover:bg-muted disabled:opacity-50 dark:text-zinc-300"
+        className="rounded border border-border px-2.5 py-1 text-xs text-foreground-secondary hover:bg-muted disabled:opacity-50"
         disabled={disabled}
         onClick={() => setOpen(o => !o)}
         type="button"
@@ -120,7 +120,7 @@ function SnoozeButton({
         >
           {SNOOZE_PRESETS.map(p => (
             <button
-              className="block w-full px-3 py-1 text-left text-zinc-700 hover:bg-muted dark:text-zinc-300"
+              className="block w-full px-3 py-1 text-left text-foreground-secondary hover:bg-muted"
               key={p.hours}
               onClick={() => {
                 setOpen(false);
@@ -461,7 +461,7 @@ const TriagePage = observer(function TriagePage() {
                     {t('settings.triage.accept')}
                   </button>
                   <button
-                    className="rounded border border-border px-2.5 py-1 text-xs text-zinc-700 hover:bg-muted disabled:opacity-50 dark:text-zinc-300"
+                    className="rounded border border-border px-2.5 py-1 text-xs text-foreground-secondary hover:bg-muted disabled:opacity-50"
                     disabled={busy}
                     onClick={() => handleDecline(issue.id)}
                     type="button"
@@ -475,7 +475,7 @@ const TriagePage = observer(function TriagePage() {
                     onClose={() => setDuplicatePickerFor(null)}
                     onSelect={canonical => submitMarkDuplicate(issue.id, canonical)}
                     triggerChildren={t('settings.triage.duplicate')}
-                    triggerClassName="rounded border border-border px-2.5 py-1 text-xs text-zinc-700 hover:bg-muted dark:text-zinc-300"
+                    triggerClassName="rounded border border-border px-2.5 py-1 text-xs text-foreground-secondary hover:bg-muted"
                     triggerTitle={t('settings.triage.markDuplicateTitle')}
                   />
                   <SnoozeButton disabled={busy} onSelect={hours => handleSnooze(issue.id, hours)} />

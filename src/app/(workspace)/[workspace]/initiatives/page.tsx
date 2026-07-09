@@ -116,7 +116,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
             </span>
           ) : null}
         </span>
-        <span className="rounded bg-muted px-2 py-0.5 text-xs text-zinc-700 dark:text-zinc-300">
+        <span className="rounded bg-muted px-2 py-0.5 text-xs text-foreground-secondary">
           {STATUS_LABELS[initiative.status] ?? initiative.status}
         </span>
         <span className="text-xs text-muted-foreground">
@@ -127,7 +127,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
       {expanded ? (
         <div className="px-12 pb-3">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            <span className="text-xs font-medium text-foreground-secondary">
               {t('initiatives.row.projects', { count: projects.length })}
             </span>
             <button
@@ -177,7 +177,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
             <div className="space-y-1">
               {projects.map(p => (
                 <div
-                  className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300"
+                  className="flex items-center gap-2 text-xs text-foreground-secondary"
                   key={p.id}
                 >
                   <span
@@ -334,7 +334,7 @@ const InitiativesPage = observer(function InitiativesPage() {
           grouped.map(({ status, items }) => (
             <div key={status}>
               <div className="border-b border-border bg-card px-4 py-1.5">
-                <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                <span className="text-xs font-medium text-foreground-secondary">
                   {STATUS_LABELS[status]}
                 </span>
                 <span className="ml-2 text-xs text-muted-foreground">{items.length}</span>

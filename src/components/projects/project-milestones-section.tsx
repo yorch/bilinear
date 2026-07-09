@@ -103,7 +103,7 @@ function MilestoneForm({
       </div>
       <div className="mt-2 flex items-center justify-end gap-2">
         <button
-          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-zinc-700 dark:hover:text-zinc-300"
+          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
           disabled={saving}
           onClick={onCancel}
           type="button"
@@ -167,7 +167,7 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
       )}
       <div className="flex shrink-0 items-center gap-0.5">
         <button
-          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-zinc-600 dark:hover:text-zinc-300"
+          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
           onClick={() => onEdit(milestone.id)}
           title={t('projects.editMilestone')}
           type="button"
@@ -312,7 +312,7 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
         </h3>
         {!creating && !editingId && (
           <button
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-zinc-700 dark:hover:text-zinc-300"
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
             onClick={openCreate}
             type="button"
           >

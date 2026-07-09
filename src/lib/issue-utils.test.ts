@@ -53,8 +53,8 @@ describe('getDueDateColor', () => {
   });
 
   it('returns the neutral color when there is no due date', () => {
-    expect(getDueDateColor(null)).toBe('text-zinc-500');
-    expect(getDueDateColor(undefined)).toBe('text-zinc-500');
+    expect(getDueDateColor(null)).toBe('text-muted-foreground');
+    expect(getDueDateColor(undefined)).toBe('text-muted-foreground');
   });
 
   it('returns red for an overdue date', () => {
@@ -70,7 +70,7 @@ describe('getDueDateColor', () => {
   });
 
   it('returns neutral when due more than three days out', () => {
-    expect(getDueDateColor('2026-06-25T12:00:00')).toBe('text-zinc-500');
+    expect(getDueDateColor('2026-06-25T12:00:00')).toBe('text-muted-foreground');
   });
 });
 

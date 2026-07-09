@@ -266,7 +266,7 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
             </span>
             <button
               aria-label={t('nav.newTeam')}
-              className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-zinc-700 dark:hover:text-zinc-300"
+              className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground-secondary"
               onClick={() => uiStore.openCreateTeamModal()}
               title={t('nav.newTeam')}
               type="button"
@@ -278,7 +278,7 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
             {teams.length === 0 ? (
               <li>
                 <button
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-zinc-700 dark:hover:text-zinc-300"
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
                   onClick={() => uiStore.openCreateTeamModal()}
                   type="button"
                 >

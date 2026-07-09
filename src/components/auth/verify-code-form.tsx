@@ -91,7 +91,7 @@ export function VerifyCodeForm() {
       )}
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="code">
+        <label className="text-sm font-medium text-foreground-secondary" htmlFor="code">
           {t('auth.verificationCode')}
         </label>
         <input

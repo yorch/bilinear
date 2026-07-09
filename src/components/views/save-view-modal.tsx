@@ -135,7 +135,7 @@ export function SaveViewModal({
               type="checkbox"
             />
             <div>
-              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <p className="text-sm font-medium text-foreground-secondary">
                 {t('properties.saveView.shareWithTeam')}
               </p>
               <p className="text-xs text-muted-foreground">

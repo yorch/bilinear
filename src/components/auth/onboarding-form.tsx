@@ -83,7 +83,7 @@ export function OnboardingForm() {
   return (
     <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="org-name">
+        <label className="text-sm font-medium text-foreground-secondary" htmlFor="org-name">
           {t('auth.organizationName')}
         </label>
         <input
@@ -97,7 +97,7 @@ export function OnboardingForm() {
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="url-key">
+        <label className="text-sm font-medium text-foreground-secondary" htmlFor="url-key">
           {t('auth.workspaceUrl')}
         </label>
         <div className="flex items-center rounded-md border border-border bg-card focus-within:ring-2 focus-within:ring-ring">

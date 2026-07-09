@@ -86,9 +86,9 @@ export default function AdminAuditPage() {
             </thead>
             <tbody className="divide-y divide-border">
               {entries.map(entry => (
-                <tr className="bg-white dark:bg-zinc-950" key={entry.id}>
+                <tr className="bg-background" key={entry.id}>
                   <td className="px-4 py-2">
-                    <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                    <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground-secondary">
                       {entry.action}
                     </span>
                   </td>

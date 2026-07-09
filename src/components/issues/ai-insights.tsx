@@ -123,7 +123,7 @@ export function AiInsights({ issueId }: AiInsightsProps) {
       </div>
 
       {summary !== null && (
-        <div className="mt-2 rounded-md bg-muted p-3 text-sm text-zinc-700 dark:text-zinc-300">
+        <div className="mt-2 rounded-md bg-muted p-3 text-sm text-foreground-secondary">
           {summary}
         </div>
       )}
@@ -137,7 +137,7 @@ export function AiInsights({ issueId }: AiInsightsProps) {
           <ul className="mt-2 space-y-1">
             {duplicates.map(dup => (
               <li
-                className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300"
+                className="flex items-center gap-2 text-sm text-foreground-secondary"
                 key={dup.id}
               >
                 <span className="font-mono text-xs text-muted-foreground">{dup.identifier}</span>

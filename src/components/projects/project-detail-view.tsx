@@ -95,7 +95,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex h-12 items-center gap-3 border-b border-border px-4">
         <Link
-          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-zinc-600 dark:hover:text-zinc-300"
+          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
           href={`/${workspaceKey}/projects`}
         >
           <ArrowLeft className="h-4 w-4" />
@@ -136,7 +136,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
                       'rounded px-2 py-0.5 text-xs font-medium transition-colors',
                       project.health === h.value
                         ? `${h.color} text-white`
-                        : 'bg-muted text-muted-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700',
+                        : 'bg-muted text-muted-foreground hover:bg-accent',
                     )}
                     key={h.value}
                     onClick={() => handleHealthChange(h.value)}

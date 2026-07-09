@@ -32,7 +32,7 @@ export function getPriorityConfig(priority: number) {
 /** Returns a CSS color class for the due date indicator. */
 export function getDueDateColor(dueDate: string | null | undefined): string {
   if (!dueDate) {
-    return 'text-zinc-500';
+    return 'text-muted-foreground';
   }
 
   const date = new Date(dueDate);
@@ -47,7 +47,7 @@ export function getDueDateColor(dueDate: string | null | undefined): string {
   if (daysUntil <= 3) {
     return 'text-yellow-500';
   }
-  return 'text-zinc-500';
+  return 'text-muted-foreground';
 }
 
 export function formatDueDate(

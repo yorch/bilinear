@@ -34,7 +34,7 @@ export function UpdateFormFields({
               'rounded px-2 py-0.5 text-xs font-medium transition-colors',
               health === ''
                 ? 'bg-zinc-300 text-foreground dark:bg-zinc-600'
-                : 'bg-muted text-muted-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700',
+                : 'bg-muted text-muted-foreground hover:bg-accent',
             )}
             onClick={() => onHealthChange('')}
             type="button"
@@ -48,7 +48,7 @@ export function UpdateFormFields({
               'rounded px-2 py-0.5 text-xs font-medium transition-colors',
               health === h.value
                 ? `${h.color} text-white`
-                : 'bg-muted text-muted-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700',
+                : 'bg-muted text-muted-foreground hover:bg-accent',
             )}
             key={h.value}
             onClick={() => onHealthChange(h.value)}
@@ -59,7 +59,7 @@ export function UpdateFormFields({
         ))}
       </div>
       <textarea
-        className="w-full resize-none rounded border border-border bg-transparent px-3 py-2 text-sm text-foreground placeholder-zinc-400 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 dark:focus:border-indigo-500 dark:focus:ring-indigo-500"
+        className="w-full resize-none rounded border border-border bg-transparent px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 dark:focus:border-indigo-500 dark:focus:ring-indigo-500"
         onChange={e => onBodyChange(e.target.value)}
         placeholder={placeholder}
         rows={4}

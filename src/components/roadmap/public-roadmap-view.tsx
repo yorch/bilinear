@@ -91,14 +91,14 @@ function PasswordForm({ slug }: { slug: string }) {
         </p>
         <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
           <input
-            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:border-indigo-500 dark:focus:ring-indigo-800/40"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:border-indigo-500 dark:focus:ring-indigo-800/40"
             placeholder={t('roadmap.public.enterPassword')}
             ref={inputRef}
             required
             type="password"
           />
           <button
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 dark:focus:ring-offset-zinc-900"
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 dark:focus:ring-offset-background"
             type="submit"
           >
             {t('roadmap.public.continue')}

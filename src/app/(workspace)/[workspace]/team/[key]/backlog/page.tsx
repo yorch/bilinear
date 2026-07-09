@@ -104,7 +104,7 @@ function BacklogRow({ issue, selected, onSelect, onUpdate }: BacklogRowProps) {
 
       {/* Estimate — inline editable */}
       <button
-        className="w-8 flex-shrink-0 text-center text-xs text-muted-foreground hover:text-zinc-600 dark:hover:text-zinc-300"
+        className="w-8 flex-shrink-0 text-center text-xs text-muted-foreground hover:text-foreground-secondary"
         onClick={e => {
           e.stopPropagation();
           const val = prompt(t('issues.estimatePrompt'), String(issue.estimate ?? ''));
@@ -164,7 +164,7 @@ function PriorityGroup({
         onClick={() => setCollapsed(!collapsed)}
         type="button"
       >
-        <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+        <span className="text-xs font-medium text-foreground-secondary">
           {t(priorityLabelKey(priority))}
         </span>
         <span className="text-xs text-muted-foreground">{issues.length}</span>
@@ -410,7 +410,7 @@ const BacklogPage = observer(function BacklogPage() {
             {t('issues.archive')}
           </button>
           <button
-            className="ml-auto text-xs text-muted-foreground hover:text-zinc-600 dark:hover:text-zinc-300"
+            className="ml-auto text-xs text-muted-foreground hover:text-foreground-secondary"
             onClick={() => setSelectedIds(new Set())}
             type="button"
           >

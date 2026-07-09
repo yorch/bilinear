@@ -87,7 +87,7 @@ export const DocumentList = observer(function DocumentList({
           {documents.map(doc => (
             <li key={doc.id}>
               <Link
-                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-zinc-700 hover:bg-muted dark:text-zinc-300"
+                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground-secondary hover:bg-muted"
                 href={`/${workspace}/docs/${doc.id}`}
               >
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center">

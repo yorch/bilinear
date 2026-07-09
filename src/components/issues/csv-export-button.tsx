@@ -117,7 +117,7 @@ export function CsvExportButton({
   return (
     <button
       aria-label={t('issues.exportCsv')}
-      className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-zinc-700 dark:hover:text-zinc-300"
+      className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground-secondary"
       onClick={handleExport}
       type="button"
     >

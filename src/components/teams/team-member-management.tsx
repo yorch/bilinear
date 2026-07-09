@@ -269,7 +269,7 @@ export function TeamMemberManagement({
                           'flex h-7 w-7 items-center justify-center rounded text-xs transition-colors disabled:opacity-50',
                           member.isOwner
                             ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
-                            : 'text-muted-foreground hover:bg-muted hover:text-zinc-700 dark:hover:text-zinc-300',
+                            : 'text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
                         )}
                         disabled={isLoading}
                         onClick={() => handleToggleOwner(member.membershipId, member.isOwner)}
@@ -305,7 +305,7 @@ export function TeamMemberManagement({
       {addOpen ? (
         <div className="rounded-md border border-border bg-card p-2">
           <input
-            className="w-full bg-transparent px-2 py-1 text-sm text-foreground placeholder-zinc-400 outline-none"
+            className="w-full bg-transparent px-2 py-1 text-sm text-foreground placeholder:text-muted-foreground outline-none"
             onChange={e => setSearch(e.target.value)}
             placeholder={t('teams.searchMembersToAdd')}
             ref={searchRef}
