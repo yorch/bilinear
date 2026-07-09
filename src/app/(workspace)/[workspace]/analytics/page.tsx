@@ -209,7 +209,7 @@ export default function WorkspaceAnalyticsPage() {
                             team.completionRate >= 70
                               ? 'var(--chart-actual)'
                               : team.completionRate >= 40
-                                ? '#eab308'
+                                ? 'var(--chart-warning)'
                                 : 'var(--chart-grid)'
                           }
                           pct={team.completionRate}

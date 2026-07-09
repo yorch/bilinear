@@ -316,7 +316,7 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
               className={cn(
                 'rounded px-2.5 py-0.5 text-xs font-medium transition-colors',
                 zoom === z
-                  ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+                  ? 'bg-invert text-invert-foreground dark:bg-invert dark:text-invert-foreground'
                   : 'text-muted-foreground hover:text-foreground',
               )}
               key={z}
@@ -432,7 +432,7 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
                 }
               }
 
-              const color = item.color ?? '#6366f1';
+              const color = item.color ?? 'var(--brand)';
               const isDragging = drag?.id === item.id;
 
               return (

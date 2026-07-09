@@ -107,7 +107,7 @@ export const DocumentEditor = observer(function DocumentEditor({
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="border-b border-border px-8 py-4">
         <input
-          className="w-full bg-transparent text-2xl font-bold text-foreground placeholder-zinc-300 outline-none dark:placeholder-zinc-600"
+          className="w-full bg-transparent text-2xl font-bold text-foreground placeholder-foreground-faint outline-none dark:placeholder-foreground-faint"
           onChange={handleTitleChange}
           placeholder={t('documents.untitled')}
           type="text"

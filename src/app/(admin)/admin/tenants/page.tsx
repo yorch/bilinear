@@ -169,7 +169,7 @@ function TenantsInner() {
                   <tr className="bg-background" key={tenant.id}>
                     <td className="px-4 py-2">
                       <Link
-                        className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                        className="font-medium text-brand hover:underline dark:text-brand"
                         href={`/admin/tenants/${tenant.id}`}
                       >
                         {tenant.name}

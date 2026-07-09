@@ -88,7 +88,7 @@ function BoardCardInner({
       className={cn(
         'w-full cursor-pointer rounded-lg border bg-card p-3 text-left shadow-sm transition-shadow hover:shadow-md',
         selected
-          ? 'border-indigo-500 ring-1 ring-indigo-500'
+          ? 'border-brand ring-1 ring-brand'
           : multiSelected
             ? 'border-blue-500 ring-2 ring-blue-500'
             : 'border-border',

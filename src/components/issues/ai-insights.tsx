@@ -18,8 +18,8 @@ interface DuplicateIssue {
 
 const buttonClass = cn(
   'shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium',
-  'text-indigo-600 hover:bg-indigo-50 disabled:opacity-50',
-  'dark:text-indigo-400 dark:hover:bg-indigo-950/30',
+  'text-brand hover:bg-brand-subtle disabled:opacity-50',
+  'dark:text-brand dark:hover:bg-brand-subtle',
 );
 
 export function AiInsights({ issueId }: AiInsightsProps) {

@@ -147,7 +147,7 @@ const ROLE_BADGES: Record<OrgRole, { labelKey: string; cls: string }> = {
     labelKey: 'settings.roles.member',
   },
   owner: {
-    cls: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
+    cls: 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground',
     labelKey: 'settings.roles.owner',
   },
 };
@@ -433,18 +433,18 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
               {t('settings.workspace.platform')}
             </h2>
             <Link
-              className="flex items-center justify-between rounded-lg border border-indigo-200 bg-indigo-50 px-5 py-4 transition-colors hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/30 dark:hover:bg-indigo-950/50"
+              className="flex items-center justify-between rounded-lg border border-brand-border bg-brand-subtle px-5 py-4 transition-colors hover:bg-brand/15 dark:border-brand-border dark:bg-brand-subtle dark:hover:bg-brand/15"
               href="/admin"
             >
               <div>
-                <p className="text-sm font-medium text-indigo-900 dark:text-indigo-200">
+                <p className="text-sm font-medium text-brand-subtle-foreground dark:text-brand-subtle-foreground">
                   {t('settings.workspace.platformAdminConsole')}
                 </p>
-                <p className="text-xs text-indigo-700/70 dark:text-indigo-300/70">
+                <p className="text-xs text-brand-subtle-foreground/70 dark:text-brand-subtle-foreground/70">
                   {t('settings.workspace.platformAdminConsoleDescription')}
                 </p>
               </div>
-              <ChevronRight className="h-4 w-4 shrink-0 text-indigo-400" />
+              <ChevronRight className="h-4 w-4 shrink-0 text-brand" />
             </Link>
           </section>
         )}
@@ -452,7 +452,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.workspace.teams')}
-            <span className="ml-2 font-normal normal-case text-zinc-300 dark:text-zinc-600">
+            <span className="ml-2 font-normal normal-case text-foreground-faint dark:text-foreground-faint">
               {teams.length}
             </span>
           </h2>
@@ -468,7 +468,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   return (
                     <li
                       className={cn(
-                        isChild && 'border-l-2 border-indigo-200 dark:border-indigo-800 ml-4',
+                        isChild && 'border-l-2 border-brand-border dark:border-brand-border ml-4',
                       )}
                       key={team.id}
                     >
@@ -517,7 +517,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.workspace.members')}
-            <span className="ml-2 font-normal normal-case text-zinc-300 dark:text-zinc-600">
+            <span className="ml-2 font-normal normal-case text-foreground-faint dark:text-foreground-faint">
               {members.length}
             </span>
           </h2>
@@ -567,7 +567,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                         <select
                           className={cn(
                             'appearance-none rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer',
-                            'border border-transparent focus:outline-none focus:ring-1 focus:ring-indigo-400',
+                            'border border-transparent focus:outline-none focus:ring-1 focus:ring-brand',
                             'disabled:opacity-50 disabled:cursor-not-allowed',
                             roleBadge.cls,
                           )}
@@ -719,7 +719,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   className={cn(
                     'flex-1 rounded-md border border-border bg-transparent',
                     'px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground',
-                    'focus:outline-none focus:ring-1 focus:ring-indigo-500',
+                    'focus:outline-none focus:ring-1 focus:ring-brand',
                   )}
                   disabled={creatingToken}
                   onChange={e => setNewTokenLabel(e.target.value)}
@@ -750,7 +750,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                 <label className="flex items-center gap-1.5">
                   <input
                     checked={newTokenWritable}
-                    className="h-3.5 w-3.5 rounded border-border text-indigo-600 focus:ring-indigo-500"
+                    className="h-3.5 w-3.5 rounded border-border text-brand focus:ring-brand"
                     disabled={creatingToken}
                     onChange={e => setNewTokenWritable(e.target.checked)}
                     type="checkbox"
@@ -763,7 +763,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                     className={cn(
                       'rounded-md border border-border bg-transparent',
                       'px-1.5 py-0.5 text-xs text-foreground-secondary',
-                      'focus:outline-none focus:ring-1 focus:ring-indigo-500',
+                      'focus:outline-none focus:ring-1 focus:ring-brand',
                     )}
                     disabled={creatingToken}
                     onChange={e => setNewTokenExpiryDays(Number(e.target.value))}
@@ -801,7 +801,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                           className={cn(
                             'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
                             token.scopes.length === 0 || token.scopes.includes('write')
-                              ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
+                              ? 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground'
                               : 'bg-muted text-muted-foreground',
                           )}
                         >

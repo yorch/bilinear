@@ -74,7 +74,7 @@ export const DocumentList = observer(function DocumentList({
           <FileText className="h-8 w-8" />
           <p className="text-sm">{t('documents.emptyState')}</p>
           <button
-            className="text-xs text-indigo-500 hover:text-indigo-600 disabled:opacity-50"
+            className="text-xs text-brand hover:text-brand-hover disabled:opacity-50"
             disabled={creating}
             onClick={handleNewDocument}
             type="button"

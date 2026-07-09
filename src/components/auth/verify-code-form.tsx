@@ -95,7 +95,7 @@ export function VerifyCodeForm() {
           {t('auth.verificationCode')}
         </label>
         <input
-          className="rounded-md border border-border bg-card px-3 py-2 text-center text-2xl font-mono tracking-[0.5em] text-foreground placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:placeholder:text-zinc-700 dark:focus:ring-zinc-100"
+          className="rounded-md border border-border bg-card px-3 py-2 text-center text-2xl font-mono tracking-[0.5em] text-foreground placeholder:text-foreground-faint focus:outline-none focus:ring-2 focus:ring-ring-strong dark:placeholder:text-foreground-faint dark:focus:ring-ring-strong"
           id="code"
           inputMode="numeric"
           maxLength={6}

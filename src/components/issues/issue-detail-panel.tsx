@@ -373,7 +373,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
               {t('issueDetail.description')}
             </p>
             {editingDesc ? (
-              <div className="rounded-md border border-indigo-400 bg-transparent p-2 transition-colors">
+              <div className="rounded-md border border-brand bg-transparent p-2 transition-colors">
                 <TipTapEditor
                   className="text-sm"
                   collabDocId={`issue:${issue.id}`}

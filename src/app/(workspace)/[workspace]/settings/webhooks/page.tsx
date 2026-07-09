@@ -322,7 +322,7 @@ export default function WebhooksSettingsPage() {
                       </code>
                     ) : (
                       <button
-                        className="text-indigo-600 hover:underline"
+                        className="text-brand hover:underline"
                         onClick={() =>
                           setRevealedSecrets(s => {
                             const next = new Set(s);

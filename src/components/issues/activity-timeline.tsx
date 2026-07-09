@@ -138,7 +138,7 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
               <span
                 className={cn(
                   'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white',
-                  actor?.avatarBgColor ? '' : 'bg-zinc-400 dark:bg-zinc-600',
+                  actor?.avatarBgColor ? '' : 'bg-avatar-fallback dark:bg-avatar-fallback',
                 )}
                 style={actor?.avatarBgColor ? { backgroundColor: actor.avatarBgColor } : undefined}
                 title={actor?.displayName ?? t('issueDetail.activity.system')}
@@ -163,7 +163,7 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
 
       {shouldCollapse && (
         <button
-          className="mt-1 text-xs text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+          className="mt-1 text-xs text-brand hover:text-brand-hover dark:text-brand dark:hover:text-brand-hover"
           onClick={() => setExpanded(e => !e)}
           type="button"
         >

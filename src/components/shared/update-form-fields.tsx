@@ -33,7 +33,7 @@ export function UpdateFormFields({
             className={cn(
               'rounded px-2 py-0.5 text-xs font-medium transition-colors',
               health === ''
-                ? 'bg-zinc-300 text-foreground dark:bg-zinc-600'
+                ? 'bg-foreground-faint text-foreground dark:bg-foreground-faint'
                 : 'bg-muted text-muted-foreground hover:bg-accent',
             )}
             onClick={() => onHealthChange('')}
@@ -59,7 +59,7 @@ export function UpdateFormFields({
         ))}
       </div>
       <textarea
-        className="w-full resize-none rounded border border-border bg-transparent px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 dark:focus:border-indigo-500 dark:focus:ring-indigo-500"
+        className="w-full resize-none rounded border border-border bg-transparent px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-brand focus:ring-1 focus:ring-brand dark:focus:border-brand dark:focus:ring-brand"
         onChange={e => onBodyChange(e.target.value)}
         placeholder={placeholder}
         rows={4}

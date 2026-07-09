@@ -14,6 +14,17 @@
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-foreground-secondary: var(--foreground-secondary);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-subtle: var(--brand-subtle);
+  --color-brand-subtle-foreground: var(--brand-subtle-foreground);
+  --color-brand-border: var(--brand-border);
+  --color-foreground-faint: var(--foreground-faint);
+  --color-ring-strong: var(--ring-strong);
+  --color-invert: var(--invert);
+  --color-invert-foreground: var(--invert-foreground);
+  --color-avatar-fallback: var(--avatar-fallback);
+  --color-surface-raised: var(--surface-raised);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
@@ -26,6 +37,7 @@
   --color-chart-actual: var(--chart-actual);
   --color-chart-primary: var(--chart-primary);
   --color-chart-muted: var(--chart-muted);
+  --color-chart-warning: var(--chart-warning);
   --color-state-default: var(--state-default);
   --font-sans: ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, monospace;
@@ -54,6 +66,31 @@
      token match. Calibrated to zinc-700/zinc-300's own lightness so this
      is a pure token substitution, not a color change. */
   --foreground-secondary: oklch(0.37 0 0);
+  /* Second accent hue (indigo), used throughout for focus rings, selected
+     states, links, and badges — separate from the neutral --primary/--ring
+     used by ui/ primitives. Consolidates ~15 ad hoc indigo-NNN shade pairs
+     that had accumulated across the app into 5 roles, calibrated to
+     Tailwind v4's own indigo-{100,200,500,700,900} oklch values (see
+     node_modules/tailwindcss/theme.css) so this is a like-for-like swap of
+     the dominant shades already in use, not a new color choice. */
+  --brand: oklch(0.585 0.233 277.117); /* indigo-500 */
+  --brand-hover: oklch(0.457 0.24 277.023); /* indigo-700 */
+  --brand-subtle: oklch(0.93 0.034 272.788); /* indigo-100 */
+  --brand-subtle-foreground: oklch(0.457 0.24 277.023); /* indigo-700 */
+  --brand-border: oklch(0.87 0.065 274.039); /* indigo-200 */
+  /* Remaining zinc roles with no fit in the neutral scale above: extra-faint
+     dash/count text (zinc-300/zinc-600), a bold auth-form focus ring
+     (zinc-900/zinc-100), an inverted-contrast solid button (zinc-900+white /
+     zinc-100+zinc-900), an avatar-fallback swatch (zinc-400/zinc-600), and a
+     segmented-control selected pill that must sit above --muted
+     (white/zinc-700). Each is a like-for-like swap of the exact shade
+     already in use, not a new color choice. */
+  --foreground-faint: oklch(0.871 0.006 286.286); /* zinc-300 */
+  --ring-strong: oklch(0.21 0.006 285.885); /* zinc-900 */
+  --invert: oklch(0.21 0.006 285.885); /* zinc-900 */
+  --invert-foreground: oklch(1 0 0); /* white */
+  --avatar-fallback: oklch(0.705 0.015 286.067); /* zinc-400 */
+  --surface-raised: oklch(1 0 0); /* white */
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
@@ -70,6 +107,7 @@
   /* Analytics page generic accents — indigo-500 / zinc-400. */
   --chart-primary: oklch(0.585 0.233 277);
   --chart-muted: oklch(0.708 0.012 286);
+  --chart-warning: oklch(0.795 0.184 86.047); /* yellow-500 */
   --state-default: oklch(0.585 0.012 286);
 }
 
@@ -87,6 +125,17 @@
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
   --foreground-secondary: oklch(0.871 0 0);
+  --brand: oklch(0.673 0.182 276.935); /* indigo-400 */
+  --brand-hover: oklch(0.785 0.115 274.713); /* indigo-300 */
+  --brand-subtle: oklch(0.359 0.144 278.697 / 30%); /* indigo-900 @ 30% */
+  --brand-subtle-foreground: oklch(0.785 0.115 274.713); /* indigo-300 */
+  --brand-border: oklch(0.398 0.195 277.366); /* indigo-800 */
+  --foreground-faint: oklch(0.442 0.017 285.786); /* zinc-600 */
+  --ring-strong: oklch(0.967 0.001 286.375); /* zinc-100 */
+  --invert: oklch(0.967 0.001 286.375); /* zinc-100 */
+  --invert-foreground: oklch(0.21 0.006 285.885); /* zinc-900 */
+  --avatar-fallback: oklch(0.442 0.017 285.786); /* zinc-600 */
+  --surface-raised: oklch(0.37 0.013 285.805); /* zinc-700 */
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.396 0.141 25.723);
@@ -102,6 +151,7 @@
   --chart-ideal: oklch(0.685 0.193 273);
   --chart-primary: oklch(0.685 0.193 273);
   --chart-muted: oklch(0.585 0.012 286);
+  --chart-warning: oklch(0.852 0.199 91.936); /* yellow-400 */
   --state-default: oklch(0.708 0.012 286);
 }
 

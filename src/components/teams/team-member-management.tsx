@@ -209,7 +209,7 @@ export function TeamMemberManagement({
                   {canManageMembers && onUpdateRole ? (
                     <select
                       className={cn(
-                        'appearance-none rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer border border-transparent focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:opacity-50',
+                        'appearance-none rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer border border-transparent focus:outline-none focus:ring-1 focus:ring-brand disabled:opacity-50',
                         ROLE_COLORS[member.role],
                       )}
                       disabled={isLoading}

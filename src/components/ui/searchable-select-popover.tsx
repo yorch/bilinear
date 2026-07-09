@@ -202,7 +202,7 @@ export function SearchableSelectPopover<T>({
                   className={cn(
                     'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-accent',
                     isSelected?.(item)
-                      ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
+                      ? 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground'
                       : 'text-foreground',
                     i === activeIndex && 'bg-muted',
                   )}

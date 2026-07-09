@@ -50,7 +50,7 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
             }}
           >
             <input
-              className="flex-1 rounded border border-border bg-card px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="flex-1 rounded border border-border bg-card px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-brand"
               defaultValue={url}
               placeholder="https://youtube.com/watch?v=..."
               type="url"
@@ -75,7 +75,7 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
       <div
         className={cn(
           'embed-block group relative my-2 overflow-hidden rounded-md border',
-          selected ? 'border-indigo-400' : 'border-border',
+          selected ? 'border-brand' : 'border-border',
         )}
         style={{ paddingBottom: '56.25%' }}
       >

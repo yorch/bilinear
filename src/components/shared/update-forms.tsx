@@ -137,7 +137,7 @@ export function EditUpdateForm({
   };
 
   return (
-    <div className="rounded-lg border border-indigo-300 p-4 dark:border-indigo-700">
+    <div className="rounded-lg border border-brand-border p-4 dark:border-brand-border">
       <UpdateFormFields
         body={body}
         health={health}

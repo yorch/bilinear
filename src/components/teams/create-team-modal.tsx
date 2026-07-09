@@ -150,7 +150,7 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
                 'rounded-md border bg-transparent px-3 py-1.5 font-mono text-sm text-foreground placeholder:text-muted-foreground outline-none',
                 keyError
                   ? 'border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-500'
-                  : 'border-border focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500',
+                  : 'border-border focus:border-brand focus:ring-1 focus:ring-brand',
               )}
               id="team-key"
               onChange={e => handleKeyChange(e.target.value)}
@@ -182,7 +182,7 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
           <label className="flex cursor-pointer items-center gap-3">
             <input
               checked={isPrivate}
-              className="h-4 w-4 rounded border-border text-indigo-600 focus:ring-indigo-500"
+              className="h-4 w-4 rounded border-border text-brand focus:ring-brand"
               onChange={e => setIsPrivate(e.target.checked)}
               type="checkbox"
             />

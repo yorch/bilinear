@@ -98,7 +98,7 @@ export const ProjectRoadmapView = observer(function ProjectRoadmapView({
               >
                 <span
                   className="h-2 w-2 rounded-full"
-                  style={{ backgroundColor: p.color ?? '#6366f1' }}
+                  style={{ backgroundColor: p.color ?? 'var(--brand)' }}
                 />
                 {p.icon ? `${p.icon} ` : ''}
                 {p.name}

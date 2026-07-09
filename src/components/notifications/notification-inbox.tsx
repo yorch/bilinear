@@ -121,7 +121,7 @@ function NotificationItem({
         'flex items-start gap-3 rounded-lg border px-4 py-3 transition-colors',
         read
           ? 'border-border'
-          : 'border-indigo-100 bg-indigo-50/40 dark:border-indigo-900/40 dark:bg-indigo-950/20',
+          : 'border-brand-border bg-brand-subtle/40 dark:border-brand-border dark:bg-brand-subtle',
       )}
     >
       {/* Type icon */}
@@ -130,7 +130,7 @@ function NotificationItem({
           'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
           read
             ? 'bg-muted text-muted-foreground'
-            : 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-400',
+            : 'bg-brand-subtle text-brand dark:bg-brand-subtle dark:text-brand',
         )}
       >
         {getNotificationIcon(type)}
@@ -180,7 +180,7 @@ function NotificationItem({
 
           {/* Mark read button */}
           <button
-            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-indigo-600 dark:hover:text-indigo-400 disabled:opacity-50"
+            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-brand dark:hover:text-brand disabled:opacity-50"
             disabled={isMarkingThis}
             onClick={() => onMarkRead(id)}
             title={t('notifications.markAsRead')}
@@ -338,7 +338,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
       {/* Loading state */}
       {loading && (
         <div className="flex items-center justify-center py-16">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-indigo-500" />
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-brand" />
         </div>
       )}
 

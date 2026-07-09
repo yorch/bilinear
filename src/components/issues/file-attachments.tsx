@@ -146,7 +146,7 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
             >
               <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               <a
-                className="flex-1 truncate text-foreground-secondary hover:text-indigo-600"
+                className="flex-1 truncate text-foreground-secondary hover:text-brand"
                 href={att.url}
                 rel="noopener noreferrer"
                 target="_blank"

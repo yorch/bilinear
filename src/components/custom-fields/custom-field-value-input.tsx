@@ -157,7 +157,7 @@ function MultiSelect({
           <button
             className={
               selected
-                ? 'rounded-full bg-indigo-100 px-2 py-0.5 text-xs text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
+                ? 'rounded-full bg-brand-subtle px-2 py-0.5 text-xs text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground'
                 : 'rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent'
             }
             key={o.value}

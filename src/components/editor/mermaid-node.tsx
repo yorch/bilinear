@@ -59,7 +59,7 @@ function MermaidView({ node, updateAttributes, selected }: NodeViewProps) {
             {t('editor.mermaid.label')}
           </p>
           <textarea
-            className="w-full rounded border border-border bg-card p-2 font-mono text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="w-full rounded border border-border bg-card p-2 font-mono text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-brand"
             defaultValue={code}
             onBlur={e => {
               updateAttributes({ code: e.target.value });
@@ -81,7 +81,7 @@ function MermaidView({ node, updateAttributes, selected }: NodeViewProps) {
         className={cn(
           'mermaid-block relative my-2 w-full cursor-pointer rounded-md border p-3 text-left',
           selected
-            ? 'border-indigo-400 bg-indigo-50/30 dark:bg-indigo-950/20'
+            ? 'border-brand bg-brand-subtle/30 dark:bg-brand-subtle'
             : 'border-border bg-card',
         )}
         onDoubleClick={() => setEditing(true)}

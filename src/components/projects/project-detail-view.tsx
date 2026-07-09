@@ -180,7 +180,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full rounded-full bg-indigo-500 transition-all"
+                className="h-full rounded-full bg-brand transition-all"
                 style={{ width: `${progress}%` }}
               />
             </div>

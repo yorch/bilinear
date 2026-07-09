@@ -398,7 +398,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
           <ArrowLeft className="h-4 w-4" />
           {t('settings.team.back')}
         </Link>
-        <span className="text-zinc-300 dark:text-zinc-700">/</span>
+        <span className="text-foreground-faint dark:text-foreground-faint">/</span>
         <h1 className="text-sm font-semibold text-foreground">
           {t('settings.team.settingsHeading', { name: team.displayName || team.name })}
         </h1>
@@ -415,7 +415,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                 {t('settings.team.teamName')}
               </label>
               <input
-                className="rounded-md border border-border bg-transparent px-3 py-1.5 text-sm text-foreground outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                className="rounded-md border border-border bg-transparent px-3 py-1.5 text-sm text-foreground outline-none focus:border-brand focus:ring-1 focus:ring-brand"
                 id="settings-name"
                 onChange={e => setName(e.target.value)}
                 type="text"
@@ -431,7 +431,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                 {t('settings.team.description')}
               </label>
               <textarea
-                className="resize-none rounded-md border border-border bg-transparent px-3 py-1.5 text-sm text-muted-foreground placeholder:text-muted-foreground outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                className="resize-none rounded-md border border-border bg-transparent px-3 py-1.5 text-sm text-muted-foreground placeholder:text-muted-foreground outline-none focus:border-brand focus:ring-1 focus:ring-brand"
                 id="settings-description"
                 onChange={e => setDescription(e.target.value)}
                 placeholder={t('settings.team.descriptionPlaceholder')}
@@ -463,7 +463,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                 {t('settings.team.parentTeam')}
               </label>
               <select
-                className="rounded-md border border-border bg-transparent px-3 py-1.5 text-sm text-foreground outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:bg-card"
+                className="rounded-md border border-border bg-transparent px-3 py-1.5 text-sm text-foreground outline-none focus:border-brand focus:ring-1 focus:ring-brand dark:bg-card"
                 id="settings-parent"
                 onChange={e => setParentId(e.target.value)}
                 value={parentId}

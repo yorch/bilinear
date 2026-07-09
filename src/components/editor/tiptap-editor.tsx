@@ -942,7 +942,7 @@ function ToolbarButton({
       className={cn(
         'rounded px-1.5 py-0.5 text-xs font-medium transition-colors',
         active
-          ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
+          ? 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground'
           : 'text-muted-foreground hover:bg-muted',
       )}
       onClick={onClick}

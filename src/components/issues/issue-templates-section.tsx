@@ -423,7 +423,7 @@ function TemplateForm({
     'rounded-md border border-border bg-card px-2.5 py-1.5 text-sm dark:text-foreground';
 
   const selectCls =
-    'rounded-md border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:text-foreground';
+    'rounded-md border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand dark:text-foreground';
 
   return (
     <div className="flex flex-col gap-4">
@@ -536,7 +536,7 @@ function TemplateForm({
                     className={cn(
                       'rounded-full border px-2 py-0.5 text-xs transition-colors',
                       selected
-                        ? 'border-indigo-400 bg-indigo-50 text-indigo-700 dark:border-indigo-600 dark:bg-indigo-950 dark:text-indigo-300'
+                        ? 'border-brand bg-brand-subtle text-brand-subtle-foreground dark:border-brand-border dark:bg-brand-subtle dark:text-brand-subtle-foreground'
                         : 'border-border bg-card text-muted-foreground hover:bg-accent',
                     )}
                     key={l.id}
@@ -556,7 +556,7 @@ function TemplateForm({
       <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground-secondary">
         <input
           checked={isDefault}
-          className="accent-indigo-600"
+          className="accent-brand"
           onChange={e => setIsDefault(e.target.checked)}
           type="checkbox"
         />

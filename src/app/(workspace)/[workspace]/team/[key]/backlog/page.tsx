@@ -78,7 +78,7 @@ function BacklogRow({ issue, selected, onSelect, onUpdate }: BacklogRowProps) {
     <div
       className={cn(
         'flex items-center gap-3 border-b border-border px-4 py-2 transition-colors',
-        selected ? 'bg-indigo-50 dark:bg-indigo-950/30' : 'hover:bg-accent/50',
+        selected ? 'bg-brand-subtle dark:bg-brand-subtle' : 'hover:bg-accent/50',
       )}
       onClick={onSelect}
     >
@@ -370,14 +370,14 @@ const BacklogPage = observer(function BacklogPage() {
 
       {/* Bulk actions toolbar */}
       {selectedIds.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2 border-b border-indigo-200 bg-indigo-50 px-4 py-2 dark:border-indigo-800 dark:bg-indigo-950/30">
-          <span className="text-xs font-medium text-indigo-700 dark:text-indigo-300">
+        <div className="flex flex-wrap items-center gap-2 border-b border-brand-border bg-brand-subtle px-4 py-2 dark:border-brand-border dark:bg-brand-subtle">
+          <span className="text-xs font-medium text-brand-subtle-foreground dark:text-brand-subtle-foreground">
             {t('issues.selectedCount', { count: selectedIds.size })}
           </span>
           <div className="flex items-center gap-1">
             {[1, 2, 3, 4].map(p => (
               <button
-                className="rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-indigo-100 dark:hover:bg-indigo-900"
+                className="rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-brand-subtle dark:hover:bg-brand-subtle"
                 key={p}
                 onClick={() => handleBulkSetPriority(p)}
                 title={t('issues.setPriorityN', {
@@ -390,7 +390,7 @@ const BacklogPage = observer(function BacklogPage() {
             ))}
           </div>
           <button
-            className="rounded px-2 py-0.5 text-xs text-muted-foreground hover:bg-indigo-100 dark:hover:bg-indigo-900"
+            className="rounded px-2 py-0.5 text-xs text-muted-foreground hover:bg-brand-subtle dark:hover:bg-brand-subtle"
             onClick={() => {
               const val = prompt(t('issues.setEstimateForSelectedPrompt'));
               if (val !== null) {

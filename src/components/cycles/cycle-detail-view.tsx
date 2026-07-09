@@ -89,7 +89,7 @@ function VelocityBarChart({ cycles }: VelocityBarChartProps) {
               {c.completedIssues > 0 ? c.completedIssues : ''}
             </span>
             <div
-              className="w-full rounded-t bg-indigo-500"
+              className="w-full rounded-t bg-brand"
               style={{
                 height: `${Math.max(pct, c.completedIssues > 0 ? 4 : 0)}%`,
                 minHeight: c.completedIssues > 0 ? '4px' : '0',
@@ -320,7 +320,7 @@ export const CycleDetailView = observer(function CycleDetailView({
         <RefreshCw className="h-4 w-4 text-muted-foreground" />
         {editingName ? (
           <input
-            className="flex-1 rounded border border-indigo-500 bg-transparent px-1 text-sm font-semibold text-foreground outline-none"
+            className="flex-1 rounded border border-brand bg-transparent px-1 text-sm font-semibold text-foreground outline-none"
             onBlur={handleSaveName}
             onChange={e => setNameValue(e.target.value)}
             onKeyDown={e => {
@@ -337,7 +337,7 @@ export const CycleDetailView = observer(function CycleDetailView({
           />
         ) : (
           <button
-            className="text-sm font-semibold text-foreground hover:text-indigo-600 dark:hover:text-indigo-400"
+            className="text-sm font-semibold text-foreground hover:text-brand dark:hover:text-brand"
             onClick={() => {
               setNameValue(cycle.name ?? '');
               setEditingName(true);
@@ -400,7 +400,7 @@ export const CycleDetailView = observer(function CycleDetailView({
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full rounded-full bg-indigo-500 transition-all"
+                className="h-full rounded-full bg-brand transition-all"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -552,7 +552,7 @@ export const CycleDetailView = observer(function CycleDetailView({
                         {issue.identifier}
                       </span>
                       <Link
-                        className="min-w-0 flex-1 truncate text-foreground hover:text-indigo-600 dark:hover:text-indigo-400"
+                        className="min-w-0 flex-1 truncate text-foreground hover:text-brand dark:hover:text-brand"
                         href={`/${workspaceKey}/team/${team?.key ?? teamKey}`}
                       >
                         {issue.title}

@@ -64,7 +64,7 @@ export function ProgressSparkline({ projectId, width = 160, height = 28 }: Progr
   return (
     <svg
       aria-label={t('projects.progressOverTime')}
-      className="text-indigo-500"
+      className="text-brand"
       height={height}
       role="img"
       viewBox={`0 0 ${width} ${height}`}

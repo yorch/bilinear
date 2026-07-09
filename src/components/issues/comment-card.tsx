@@ -209,7 +209,7 @@ export function CommentCard({
                       <button
                         className={cn(
                           'rounded px-1 py-0.5 text-sm hover:bg-accent',
-                          info?.reacted && 'bg-indigo-100 dark:bg-indigo-900/30',
+                          info?.reacted && 'bg-brand-subtle dark:bg-brand-subtle',
                         )}
                         key={emoji}
                         onClick={() => {
@@ -316,7 +316,7 @@ export function CommentCard({
           <div className="space-y-2">
             <TipTapEditor
               autofocus
-              className="rounded border border-indigo-400 p-1 text-sm"
+              className="rounded border border-brand p-1 text-sm"
               content={editBody}
               onChange={setEditBody}
               showToolbar
@@ -355,7 +355,7 @@ export function CommentCard({
                 className={cn(
                   'flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors',
                   reacted
-                    ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
+                    ? 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground'
                     : 'bg-muted text-muted-foreground hover:bg-accent',
                 )}
                 key={emoji}

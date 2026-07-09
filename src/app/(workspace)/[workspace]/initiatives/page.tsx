@@ -214,7 +214,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
           <div className="mt-3 flex gap-1">
             {STATUS_ORDER.map(s => (
               <button
-                className={`rounded border px-2 py-0.5 text-xs ${initiative.status === s ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300' : 'border-border'}`}
+                className={`rounded border px-2 py-0.5 text-xs ${initiative.status === s ? 'border-brand bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground' : 'border-border'}`}
                 key={s}
                 onClick={async () => {
                   await gql(INITIATIVE_UPDATE_MUTATION, {

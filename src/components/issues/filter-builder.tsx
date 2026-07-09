@@ -399,7 +399,7 @@ export function FilterBuilder({
           className={cn(
             'rounded-full px-2 py-0.5 text-xs font-medium transition-colors',
             filterSet.composition === 'and'
-              ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
+              ? 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground'
               : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
           )}
           onClick={toggleComposition}

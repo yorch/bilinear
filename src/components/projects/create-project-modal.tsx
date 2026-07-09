@@ -166,7 +166,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
                   className={cn(
                     'rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
                     selectedTeamIds.includes(team.id)
-                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
+                      ? 'border-brand bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground'
                       : 'border-border text-muted-foreground hover:bg-muted',
                   )}
                   key={team.id}

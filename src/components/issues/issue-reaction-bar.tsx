@@ -87,7 +87,7 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
           className={cn(
             'flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors',
             reacted
-              ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
+              ? 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground'
               : 'bg-muted text-muted-foreground hover:bg-accent',
           )}
           key={emoji}
@@ -120,7 +120,7 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
                 <button
                   className={cn(
                     'rounded px-1 py-0.5 text-sm hover:bg-accent',
-                    info?.reacted && 'bg-indigo-100 dark:bg-indigo-900/30',
+                    info?.reacted && 'bg-brand-subtle dark:bg-brand-subtle',
                   )}
                   key={emoji}
                   onClick={() => {

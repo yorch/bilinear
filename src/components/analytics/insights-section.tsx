@@ -125,7 +125,7 @@ function ThroughputChart({ points }: { points: ThroughputPoint[] }) {
         return (
           <div className="flex flex-1 flex-col items-center gap-1" key={p.weekStart}>
             <div
-              className="w-full rounded-t bg-indigo-500 transition-all"
+              className="w-full rounded-t bg-brand transition-all"
               style={{
                 height: `${Math.max(pct, 4)}%`,
                 minHeight: '4px',
@@ -288,7 +288,7 @@ export function InsightsSection({
             <p className="mb-3 text-[11px] text-muted-foreground">
               {t('analytics.insights.cycleTimeSubtitle')}
             </p>
-            <Histogram buckets={data?.cycle ?? []} color="#10b981" />
+            <Histogram buckets={data?.cycle ?? []} color="var(--chart-actual)" />
           </div>
 
           <div className="rounded-lg border border-border bg-card p-5">

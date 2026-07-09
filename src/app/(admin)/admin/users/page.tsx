@@ -165,7 +165,7 @@ export default function AdminUsersPage() {
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-foreground">{u.displayName}</p>
                       {u.isPlatformAdmin && (
-                        <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400">
+                        <span className="rounded bg-brand-subtle px-1.5 py-0.5 text-[10px] font-semibold uppercase text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand">
                           {t('admin.users.adminBadge')}
                         </span>
                       )}

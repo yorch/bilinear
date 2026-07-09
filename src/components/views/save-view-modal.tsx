@@ -130,7 +130,7 @@ export function SaveViewModal({
           <label className="flex cursor-pointer items-center gap-3">
             <input
               checked={shared}
-              className="h-4 w-4 rounded border-border text-indigo-600 focus:ring-indigo-500"
+              className="h-4 w-4 rounded border-border text-brand focus:ring-brand"
               onChange={e => setShared(e.target.checked)}
               type="checkbox"
             />

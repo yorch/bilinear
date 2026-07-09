@@ -46,7 +46,7 @@ const STATUS_BADGES: Record<string, { cls: string; labelKey: string }> = {
     labelKey: 'roadmap.public.status.completed',
   },
   inProgress: {
-    cls: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
+    cls: 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand',
     labelKey: 'roadmap.public.status.inProgress',
   },
   paused: {
@@ -61,7 +61,7 @@ const STATUS_BADGES: Record<string, { cls: string; labelKey: string }> = {
 
 const HEALTH_DOTS: Record<string, string> = {
   atRisk: 'bg-yellow-400',
-  noUpdate: 'bg-zinc-300 dark:bg-zinc-600',
+  noUpdate: 'bg-foreground-faint dark:bg-foreground-faint',
   offTrack: 'bg-red-500',
   onTrack: 'bg-green-500',
 };
@@ -91,14 +91,14 @@ function PasswordForm({ slug }: { slug: string }) {
         </p>
         <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
           <input
-            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:border-indigo-500 dark:focus:ring-indigo-800/40"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 dark:focus:border-brand dark:focus:ring-brand/30"
             placeholder={t('roadmap.public.enterPassword')}
             ref={inputRef}
             required
             type="password"
           />
           <button
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 dark:focus:ring-offset-background"
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 dark:focus:ring-offset-background"
             type="submit"
           >
             {t('roadmap.public.continue')}
@@ -201,7 +201,7 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
                     </div>
                     <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                       <div
-                        className="h-full rounded-full bg-indigo-500 transition-all"
+                        className="h-full rounded-full bg-brand transition-all"
                         style={{ width: `${progressPct}%` }}
                       />
                     </div>
