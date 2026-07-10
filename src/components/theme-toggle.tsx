@@ -65,7 +65,7 @@ export function ThemeToggle({ className, compact = false }: ThemeToggleProps) {
           className={cn(
             'flex h-6 w-6 items-center justify-center rounded transition-colors max-md:h-11 max-md:w-11',
             mounted && theme === value
-              ? 'bg-surface-raised text-foreground shadow-sm dark:bg-surface-raised'
+              ? 'bg-surface-raised text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground',
           )}
           key={value}

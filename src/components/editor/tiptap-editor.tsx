@@ -819,7 +819,7 @@ export function TipTapEditor({
           >
             <Link2 className="h-3 w-3" />
           </ToolbarButton>
-          <div className="mx-1 h-4 w-px bg-muted" />
+          <div className="mx-1 h-4 w-px bg-border" />
           <ToolbarButton
             active={editor.isActive('heading', { level: 1 })}
             onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
@@ -841,7 +841,7 @@ export function TipTapEditor({
           >
             H3
           </ToolbarButton>
-          <div className="mx-1 h-4 w-px bg-muted" />
+          <div className="mx-1 h-4 w-px bg-border" />
           <ToolbarButton
             active={editor.isActive('bulletList')}
             onClick={() => editor.chain().focus().toggleBulletList().run()}
@@ -863,7 +863,7 @@ export function TipTapEditor({
           >
             ☐
           </ToolbarButton>
-          <div className="mx-1 h-4 w-px bg-muted" />
+          <div className="mx-1 h-4 w-px bg-border" />
           <ToolbarButton
             active={editor.isActive('codeBlock')}
             onClick={() => editor.chain().focus().toggleCodeBlock().run()}
@@ -894,7 +894,7 @@ export function TipTapEditor({
           >
             —
           </ToolbarButton>
-          <div className="mx-1 h-4 w-px bg-muted" />
+          <div className="mx-1 h-4 w-px bg-border" />
           {/* Image upload */}
           <ToolbarButton
             active={false}
@@ -942,8 +942,8 @@ function ToolbarButton({
       className={cn(
         'rounded px-1.5 py-0.5 text-xs font-medium transition-colors max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center',
         active
-          ? 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground'
-          : 'text-muted-foreground hover:bg-muted',
+          ? 'bg-brand-subtle text-brand-subtle-foreground'
+          : 'text-muted-foreground hover:bg-foreground/10',
       )}
       onClick={onClick}
       title={title}

@@ -398,7 +398,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
           <ArrowLeft className="h-4 w-4" />
           {t('settings.team.back')}
         </Link>
-        <span className="text-foreground-faint dark:text-foreground-faint">/</span>
+        <span className="text-foreground-faint">/</span>
         <h1 className="text-sm font-semibold text-foreground">
           {t('settings.team.settingsHeading', { name: team.displayName || team.name })}
         </h1>

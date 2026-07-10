@@ -119,18 +119,14 @@ function NotificationItem({
     <div
       className={cn(
         'flex items-start gap-3 rounded-lg border px-4 py-3 transition-colors',
-        read
-          ? 'border-border'
-          : 'border-brand-border bg-brand-subtle/40 dark:border-brand-border dark:bg-brand-subtle',
+        read ? 'border-border' : 'border-brand-border bg-brand-subtle/40 dark:bg-brand-subtle',
       )}
     >
       {/* Type icon */}
       <div
         className={cn(
           'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
-          read
-            ? 'bg-muted text-muted-foreground'
-            : 'bg-brand-subtle text-brand dark:bg-brand-subtle dark:text-brand',
+          read ? 'bg-muted text-muted-foreground' : 'bg-brand-subtle text-brand',
         )}
       >
         {getNotificationIcon(type)}
@@ -180,7 +176,7 @@ function NotificationItem({
 
           {/* Mark read button */}
           <button
-            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-brand dark:hover:text-brand disabled:opacity-50 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-brand disabled:opacity-50 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
             disabled={isMarkingThis}
             onClick={() => onMarkRead(id)}
             title={t('notifications.markAsRead')}

@@ -208,7 +208,7 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
               </Link>
               <button
                 aria-label={t('nav.removeNamedFromFavorites', { name: label })}
-                className="mr-1 hidden shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground group-hover:flex"
+                className="mr-1 hidden shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground group-hover:flex max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                 onClick={() => void removeFavorite(fav.id)}
                 title={t('nav.removeFromFavorites')}
                 type="button"

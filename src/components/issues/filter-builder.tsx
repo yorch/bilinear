@@ -297,7 +297,7 @@ function AddFilterForm({
           />
         ) : (
           <input
-            className="w-28 rounded border border-border px-2 py-1 text-xs dark:bg-muted text-muted-foreground"
+            className="w-28 rounded border border-border px-2 py-1 text-xs dark:bg-muted text-foreground"
             onChange={e => setValue(e.target.value)}
             placeholder={t('issues.valueEllipsis')}
             type="text"
@@ -399,7 +399,7 @@ export function FilterBuilder({
           className={cn(
             'rounded-full px-2 py-0.5 text-xs font-medium transition-colors',
             filterSet.composition === 'and'
-              ? 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground'
+              ? 'bg-brand-subtle text-brand-subtle-foreground'
               : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
           )}
           onClick={toggleComposition}

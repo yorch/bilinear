@@ -8,6 +8,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import type { DBInitiative } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
+import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 /**
@@ -97,7 +98,10 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
       >
         {children.length > 0 && (
           <span
-            className={`text-muted-foreground text-xs shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`}
+            className={cn(
+              'text-muted-foreground text-xs shrink-0 transition-transform',
+              expanded && 'rotate-90',
+            )}
           >
             ▶
           </span>
@@ -214,7 +218,12 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
           <div className="mt-3 flex gap-1">
             {STATUS_ORDER.map(s => (
               <button
-                className={`rounded border px-2 py-0.5 text-xs ${initiative.status === s ? 'border-brand bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground' : 'border-border'}`}
+                className={cn(
+                  'rounded border px-2 py-0.5 text-xs',
+                  initiative.status === s
+                    ? 'border-brand bg-brand-subtle text-brand-subtle-foreground'
+                    : 'border-border',
+                )}
                 key={s}
                 onClick={async () => {
                   await gql(INITIATIVE_UPDATE_MUTATION, {

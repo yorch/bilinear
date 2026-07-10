@@ -279,7 +279,7 @@ export default function AuditLogPage() {
                         {entry.userId}
                       </span>
                     ) : (
-                      <span className="text-xs text-foreground-faint dark:text-foreground-faint">
+                      <span className="text-xs text-foreground-faint">
                         {t('settings.auditLog.system')}
                       </span>
                     )}
@@ -295,9 +295,7 @@ export default function AuditLogPage() {
                         ) : null}
                       </span>
                     ) : (
-                      <span className="text-xs text-foreground-faint dark:text-foreground-faint">
-                        —
-                      </span>
+                      <span className="text-xs text-foreground-faint">—</span>
                     )}
                   </td>
                   <td className="px-4 py-2">
@@ -306,9 +304,7 @@ export default function AuditLogPage() {
                         {entry.ipAddress}
                       </span>
                     ) : (
-                      <span className="text-xs text-foreground-faint dark:text-foreground-faint">
-                        —
-                      </span>
+                      <span className="text-xs text-foreground-faint">—</span>
                     )}
                   </td>
                   <td className="px-4 py-2">

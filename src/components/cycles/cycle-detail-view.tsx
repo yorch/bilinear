@@ -337,7 +337,7 @@ export const CycleDetailView = observer(function CycleDetailView({
           />
         ) : (
           <button
-            className="text-sm font-semibold text-foreground hover:text-brand dark:hover:text-brand"
+            className="text-sm font-semibold text-foreground hover:text-brand"
             onClick={() => {
               setNameValue(cycle.name ?? '');
               setEditingName(true);
@@ -552,7 +552,7 @@ export const CycleDetailView = observer(function CycleDetailView({
                         {issue.identifier}
                       </span>
                       <Link
-                        className="min-w-0 flex-1 truncate text-foreground hover:text-brand dark:hover:text-brand"
+                        className="min-w-0 flex-1 truncate text-foreground hover:text-brand"
                         href={`/${workspaceKey}/team/${team?.key ?? teamKey}`}
                       >
                         {issue.title}

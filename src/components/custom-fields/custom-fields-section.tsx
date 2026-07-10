@@ -340,7 +340,7 @@ function CustomFieldForm({
           {t('common.cancel')}
         </button>
         <button
-          className="rounded bg-invert px-3 py-1.5 text-xs font-medium text-invert-foreground hover:bg-invert/90 disabled:opacity-50 dark:bg-invert dark:text-invert-foreground dark:hover:bg-invert/90"
+          className="rounded bg-invert px-3 py-1.5 text-xs font-medium text-invert-foreground hover:bg-invert/90 disabled:opacity-50"
           disabled={!canSubmit || submitting}
           onClick={handleSubmit}
           type="button"

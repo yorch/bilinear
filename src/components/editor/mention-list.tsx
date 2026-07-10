@@ -89,7 +89,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
             className={cn(
               'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors',
               index === selectedIndex
-                ? 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground'
+                ? 'bg-brand-subtle text-brand-subtle-foreground'
                 : 'text-foreground-secondary hover:bg-accent',
             )}
             onMouseDown={e => {

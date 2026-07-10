@@ -64,17 +64,11 @@ export function EstimateBadge({
   if (estimationType === 'tShirt') {
     const opt = SCALE_OPTIONS.tShirt.find(o => o.value === value);
     return (
-      <Badge className="bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground">
-        {opt?.label ?? value}
-      </Badge>
+      <Badge className="bg-brand-subtle text-brand-subtle-foreground">{opt?.label ?? value}</Badge>
     );
   }
 
-  return (
-    <Badge className="bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground">
-      {value}
-    </Badge>
-  );
+  return <Badge className="bg-brand-subtle text-brand-subtle-foreground">{value}</Badge>;
 }
 
 /**
@@ -122,7 +116,7 @@ export function EstimatePicker({
                 className={cn(
                   'w-full px-3 py-1.5 text-left text-sm transition-colors',
                   value === opt.value
-                    ? 'bg-brand-subtle font-medium text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground'
+                    ? 'bg-brand-subtle font-medium text-brand-subtle-foreground'
                     : 'text-foreground-secondary hover:bg-accent',
                 )}
                 key={opt.value}

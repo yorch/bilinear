@@ -59,7 +59,7 @@ export function LanguageToggle({ className, compact = false }: LanguageTogglePro
           className={cn(
             'flex h-6 items-center justify-center rounded px-1.5 text-[11px] font-medium transition-colors',
             mounted && locale === l
-              ? 'bg-surface-raised text-foreground shadow-sm dark:bg-surface-raised'
+              ? 'bg-surface-raised text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground',
           )}
           key={l}

@@ -145,7 +145,7 @@ export default function AdminTenantDetailPage() {
     return (
       <div className="flex flex-col gap-4">
         <p className="text-sm text-red-500">{error ?? t('admin.tenants.notFound')}</p>
-        <Link className="text-sm text-brand hover:underline dark:text-brand" href="/admin/tenants">
+        <Link className="text-sm text-brand hover:underline" href="/admin/tenants">
           {t('admin.tenants.backToTenants')}
         </Link>
       </div>

@@ -209,7 +209,7 @@ export function CommentCard({
                       <button
                         className={cn(
                           'rounded px-1 py-0.5 text-sm hover:bg-accent',
-                          info?.reacted && 'bg-brand-subtle dark:bg-brand-subtle',
+                          info?.reacted && 'bg-brand-subtle',
                         )}
                         key={emoji}
                         onClick={() => {
@@ -355,7 +355,7 @@ export function CommentCard({
                 className={cn(
                   'flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors',
                   reacted
-                    ? 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground'
+                    ? 'bg-brand-subtle text-brand-subtle-foreground'
                     : 'bg-muted text-muted-foreground hover:bg-accent',
                 )}
                 key={emoji}

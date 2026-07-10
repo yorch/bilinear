@@ -316,7 +316,7 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
               className={cn(
                 'rounded px-2.5 py-0.5 text-xs font-medium transition-colors',
                 zoom === z
-                  ? 'bg-invert text-invert-foreground dark:bg-invert dark:text-invert-foreground'
+                  ? 'bg-invert text-invert-foreground'
                   : 'text-muted-foreground hover:text-foreground',
               )}
               key={z}

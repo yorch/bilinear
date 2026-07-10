@@ -47,7 +47,7 @@ export function LoginForm() {
           {t('auth.emailAddress')}
         </label>
         <input
-          className="rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring-strong dark:focus:ring-ring-strong"
+          className="rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-invert"
           id="email"
           onChange={e => setEmail(e.target.value)}
           placeholder={t('auth.emailPlaceholder')}

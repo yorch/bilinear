@@ -433,14 +433,14 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
               {t('settings.workspace.platform')}
             </h2>
             <Link
-              className="flex items-center justify-between rounded-lg border border-brand-border bg-brand-subtle px-5 py-4 transition-colors hover:bg-brand/15 dark:border-brand-border dark:bg-brand-subtle dark:hover:bg-brand/15"
+              className="flex items-center justify-between rounded-lg border border-brand-border bg-brand-subtle px-5 py-4 transition-colors hover:bg-brand/15"
               href="/admin"
             >
               <div>
-                <p className="text-sm font-medium text-brand-subtle-foreground dark:text-brand-subtle-foreground">
+                <p className="text-sm font-medium text-brand-subtle-foreground">
                   {t('settings.workspace.platformAdminConsole')}
                 </p>
-                <p className="text-xs text-brand-subtle-foreground/70 dark:text-brand-subtle-foreground/70">
+                <p className="text-xs text-brand-subtle-foreground/70">
                   {t('settings.workspace.platformAdminConsoleDescription')}
                 </p>
               </div>
@@ -452,7 +452,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.workspace.teams')}
-            <span className="ml-2 font-normal normal-case text-foreground-faint dark:text-foreground-faint">
+            <span className="ml-2 font-normal normal-case text-foreground-faint">
               {teams.length}
             </span>
           </h2>
@@ -467,9 +467,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   const isChild = !!team.parentId;
                   return (
                     <li
-                      className={cn(
-                        isChild && 'border-l-2 border-brand-border dark:border-brand-border ml-4',
-                      )}
+                      className={cn(isChild && 'border-l-2 border-brand-border ml-4')}
                       key={team.id}
                     >
                       <Link
@@ -517,7 +515,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.workspace.members')}
-            <span className="ml-2 font-normal normal-case text-foreground-faint dark:text-foreground-faint">
+            <span className="ml-2 font-normal normal-case text-foreground-faint">
               {members.length}
             </span>
           </h2>

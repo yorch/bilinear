@@ -308,7 +308,7 @@ function AddRelationForm({ onSubmit, onClose, issueId }: AddRelationFormProps) {
               <button
                 className={cn(
                   'w-full px-3 py-1.5 text-left text-xs hover:bg-accent',
-                  t === type ? 'text-brand dark:text-brand' : 'text-foreground-secondary',
+                  t === type ? 'text-brand' : 'text-foreground-secondary',
                 )}
                 key={t}
                 onClick={() => {
