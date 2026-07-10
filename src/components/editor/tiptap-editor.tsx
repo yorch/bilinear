@@ -60,18 +60,21 @@ async function fetchWsTicket(): Promise<string> {
 }
 
 // Deterministic-but-varied cursor color per session. Not persisted —
-// changes on reload, which is acceptable for ephemeral presence.
+// changes on reload, which is acceptable for ephemeral presence. Values
+// live in globals.css (--cursor-1..10) — safe as var() references since
+// this color string is synced to peers via the Yjs awareness protocol and
+// every client loads the identical stylesheet.
 const CURSOR_COLORS = [
-  '#6366f1',
-  '#8b5cf6',
-  '#ec4899',
-  '#f43f5e',
-  '#f97316',
-  '#eab308',
-  '#22c55e',
-  '#14b8a6',
-  '#3b82f6',
-  '#06b6d4',
+  'var(--cursor-1)',
+  'var(--cursor-2)',
+  'var(--cursor-3)',
+  'var(--cursor-4)',
+  'var(--cursor-5)',
+  'var(--cursor-6)',
+  'var(--cursor-7)',
+  'var(--cursor-8)',
+  'var(--cursor-9)',
+  'var(--cursor-10)',
 ];
 function sessionColor(): string {
   return CURSOR_COLORS[Math.floor(Math.random() * CURSOR_COLORS.length)];
@@ -783,7 +786,7 @@ export function TipTapEditor({
   return (
     <div className={cn('tiptap-wrapper relative', className)}>
       {showToolbar && !readOnly && (
-        <div className="mb-2 flex flex-wrap items-center gap-0.5 rounded-md border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-700 dark:bg-zinc-800/50">
+        <div className="mb-2 flex flex-wrap items-center gap-0.5 rounded-md border border-border bg-muted p-1 dark:bg-muted/50">
           <ToolbarButton
             active={editor.isActive('bold')}
             onClick={() => editor.chain().focus().toggleBold().run()}
@@ -819,7 +822,7 @@ export function TipTapEditor({
           >
             <Link2 className="h-3 w-3" />
           </ToolbarButton>
-          <div className="mx-1 h-4 w-px bg-zinc-300 dark:bg-zinc-600" />
+          <div className="mx-1 h-4 w-px bg-border" />
           <ToolbarButton
             active={editor.isActive('heading', { level: 1 })}
             onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
@@ -841,7 +844,7 @@ export function TipTapEditor({
           >
             H3
           </ToolbarButton>
-          <div className="mx-1 h-4 w-px bg-zinc-300 dark:bg-zinc-600" />
+          <div className="mx-1 h-4 w-px bg-border" />
           <ToolbarButton
             active={editor.isActive('bulletList')}
             onClick={() => editor.chain().focus().toggleBulletList().run()}
@@ -863,7 +866,7 @@ export function TipTapEditor({
           >
             ☐
           </ToolbarButton>
-          <div className="mx-1 h-4 w-px bg-zinc-300 dark:bg-zinc-600" />
+          <div className="mx-1 h-4 w-px bg-border" />
           <ToolbarButton
             active={editor.isActive('codeBlock')}
             onClick={() => editor.chain().focus().toggleCodeBlock().run()}
@@ -894,7 +897,7 @@ export function TipTapEditor({
           >
             —
           </ToolbarButton>
-          <div className="mx-1 h-4 w-px bg-zinc-300 dark:bg-zinc-600" />
+          <div className="mx-1 h-4 w-px bg-border" />
           {/* Image upload */}
           <ToolbarButton
             active={false}
@@ -938,11 +941,12 @@ function ToolbarButton({
 }) {
   return (
     <button
+      aria-label={title}
       className={cn(
-        'rounded px-1.5 py-0.5 text-xs font-medium transition-colors',
+        'rounded px-1.5 py-0.5 text-xs font-medium transition-colors max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center',
         active
-          ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
-          : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-700',
+          ? 'bg-brand-subtle text-brand-subtle-foreground'
+          : 'text-muted-foreground hover:bg-foreground/10',
       )}
       onClick={onClick}
       title={title}

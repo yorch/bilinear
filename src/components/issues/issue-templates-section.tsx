@@ -162,15 +162,15 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
       <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {t('issueDetail.templates.sectionTitle')}
       </h2>
-      <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
+      <div className="rounded-lg border border-border bg-card">
         {/* Header row */}
-        <div className="flex items-center justify-between border-b border-zinc-100 p-4 dark:border-zinc-800">
+        <div className="flex items-center justify-between border-b border-border p-4">
           <p className="text-xs text-muted-foreground">
             {t('issueDetail.templates.count', { count: templates.length })}
           </p>
           {!isAdding && (
             <button
-              className="flex items-center gap-1.5 rounded-md border border-zinc-200 px-2.5 py-1 text-xs transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs transition-colors hover:bg-accent"
               onClick={() => setIsAdding(true)}
               type="button"
             >
@@ -182,7 +182,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
 
         {/* Inline "Add" form */}
         {isAdding && (
-          <div className="border-b border-zinc-100 p-4 dark:border-zinc-800">
+          <div className="border-b border-border p-4">
             <TemplateForm
               labels={labels}
               onCancel={() => setIsAdding(false)}
@@ -197,7 +197,9 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
         {/* Template list */}
         <ul className="divide-y divide-border">
           {templates.length === 0 && !isAdding && (
-            <li className="p-4 text-sm text-zinc-400">{t('issueDetail.templates.emptyState')}</li>
+            <li className="p-4 text-sm text-muted-foreground">
+              {t('issueDetail.templates.emptyState')}
+            </li>
           )}
           {templates.map(tmpl => {
             const isEditing = editingId === tmpl.id;
@@ -244,9 +246,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                   <div className="flex items-start justify-between gap-3 p-4">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                          {tmpl.name}
-                        </span>
+                        <span className="text-sm font-medium text-foreground">{tmpl.name}</span>
                         {tmpl.isDefault && (
                           <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />
                         )}
@@ -260,24 +260,24 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                       {(stateName ?? priority ?? assigneeName ?? labelCount) && (
                         <div className="mt-1.5 flex flex-wrap gap-1.5">
                           {stateName && (
-                            <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                               {t('issueDetail.templates.statePrefix', { state: stateName })}
                             </span>
                           )}
                           {priority && (
-                            <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                               {t('issueDetail.templates.priorityPrefix', { priority })}
                             </span>
                           )}
                           {assigneeName && (
-                            <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                               {t('issueDetail.templates.assigneePrefix', {
                                 assignee: assigneeName,
                               })}
                             </span>
                           )}
                           {labelCount && (
-                            <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                               {t('issueDetail.templates.labelCount', { count: labelCount })}
                             </span>
                           )}
@@ -287,7 +287,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                     <div className="flex shrink-0 items-center gap-1">
                       <button
                         aria-label={t('issueDetail.templates.editTemplate')}
-                        className="rounded p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+                        className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                         onClick={() => setEditingId(tmpl.id)}
                         type="button"
                       >
@@ -296,7 +296,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                       <button
                         aria-label={t('issueDetail.templates.deleteTemplate')}
                         className={cn(
-                          'rounded p-1 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20',
+                          'rounded p-1 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center',
                           isDeleting && 'cursor-not-allowed opacity-50',
                         )}
                         disabled={isDeleting}
@@ -420,10 +420,10 @@ function TemplateForm({
   };
 
   const inputCls =
-    'rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100';
+    'rounded-md border border-border bg-card px-2.5 py-1.5 text-sm dark:text-foreground';
 
   const selectCls =
-    'rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100';
+    'rounded-md border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand dark:text-foreground';
 
   return (
     <div className="flex flex-col gap-4">
@@ -457,7 +457,7 @@ function TemplateForm({
       </div>
 
       {/* Template defaults */}
-      <div className="rounded-md bg-zinc-50 p-3 dark:bg-zinc-800/50">
+      <div className="rounded-md bg-muted p-3">
         <p className="mb-2.5 text-xs font-medium text-muted-foreground">
           {t('issueDetail.templates.form.templateDefaults')}
         </p>
@@ -536,8 +536,8 @@ function TemplateForm({
                     className={cn(
                       'rounded-full border px-2 py-0.5 text-xs transition-colors',
                       selected
-                        ? 'border-indigo-400 bg-indigo-50 text-indigo-700 dark:border-indigo-600 dark:bg-indigo-950 dark:text-indigo-300'
-                        : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800',
+                        ? 'border-brand bg-brand-subtle text-brand-subtle-foreground dark:border-brand-border'
+                        : 'border-border bg-card text-muted-foreground hover:bg-accent',
                     )}
                     key={l.id}
                     onClick={() => toggleLabel(l.id)}
@@ -553,10 +553,10 @@ function TemplateForm({
       </div>
 
       {/* Default template toggle */}
-      <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+      <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground-secondary">
         <input
           checked={isDefault}
-          className="accent-indigo-600"
+          className="accent-brand"
           onChange={e => setIsDefault(e.target.checked)}
           type="checkbox"
         />

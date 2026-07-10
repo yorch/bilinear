@@ -44,7 +44,7 @@ export function ProgressSparkline({ projectId, width = 160, height = 28 }: Progr
     return <div className="h-7 w-40 animate-pulse rounded bg-muted" />;
   }
   if (points.length < 2) {
-    return <span className="text-xs text-zinc-400">{t('projects.notEnoughHistory')}</span>;
+    return <span className="text-xs text-muted-foreground">{t('projects.notEnoughHistory')}</span>;
   }
 
   // Normalize: y = completedIssueCount / issueCount (0-1), or 0 if scope=0.
@@ -64,7 +64,7 @@ export function ProgressSparkline({ projectId, width = 160, height = 28 }: Progr
   return (
     <svg
       aria-label={t('projects.progressOverTime')}
-      className="text-indigo-500"
+      className="text-brand"
       height={height}
       role="img"
       viewBox={`0 0 ${width} ${height}`}

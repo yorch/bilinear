@@ -9,8 +9,8 @@ export type ProjectStatusType =
 export type ProjectHealth = 'onTrack' | 'atRisk' | 'offTrack';
 
 export const PROJECT_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  backlog: { color: 'text-zinc-400', label: 'Backlog' },
-  canceled: { color: 'text-zinc-400', label: 'Canceled' },
+  backlog: { color: 'text-muted-foreground', label: 'Backlog' },
+  canceled: { color: 'text-muted-foreground', label: 'Canceled' },
   completed: { color: 'text-green-500', label: 'Completed' },
   inProgress: { color: 'text-yellow-500', label: 'In Progress' },
   paused: { color: 'text-orange-500', label: 'Paused' },

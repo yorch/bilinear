@@ -97,7 +97,7 @@ export const DocumentEditor = observer(function DocumentEditor({
 
   if (!doc) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('documents.documentNotFound')}
       </div>
     );
@@ -105,9 +105,9 @@ export const DocumentEditor = observer(function DocumentEditor({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="border-b border-zinc-200 px-8 py-4 dark:border-zinc-800">
+      <div className="border-b border-border px-8 py-4">
         <input
-          className="w-full bg-transparent text-2xl font-bold text-zinc-900 placeholder-zinc-300 outline-none dark:text-zinc-100 dark:placeholder-zinc-600"
+          className="w-full bg-transparent text-2xl font-bold text-foreground placeholder-foreground-faint outline-none"
           onChange={handleTitleChange}
           placeholder={t('documents.untitled')}
           type="text"

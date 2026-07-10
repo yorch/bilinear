@@ -27,7 +27,7 @@ export default function WorkspaceError({
       <h2 className="text-lg font-semibold text-foreground">{t('layout.workspaceError.title')}</h2>
       <p className="max-w-md text-sm text-muted-foreground">{t('layout.workspaceError.detail')}</p>
       {error.digest ? (
-        <p className="font-mono text-xs text-zinc-500">
+        <p className="font-mono text-xs text-muted-foreground">
           {t('errors.errorRef')} {error.digest}
         </p>
       ) : null}

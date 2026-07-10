@@ -17,9 +17,9 @@ interface DuplicateIssue {
 }
 
 const buttonClass = cn(
-  'shrink-0 rounded-md border border-zinc-200 px-2 py-1 text-xs font-medium',
-  'text-indigo-600 hover:bg-indigo-50 disabled:opacity-50',
-  'dark:border-zinc-700 dark:text-indigo-400 dark:hover:bg-indigo-950/30',
+  'shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium',
+  'text-brand hover:bg-brand-subtle disabled:opacity-50',
+  'dark:text-brand dark:hover:bg-brand-subtle',
 );
 
 export function AiInsights({ issueId }: AiInsightsProps) {
@@ -100,7 +100,7 @@ export function AiInsights({ issueId }: AiInsightsProps) {
 
   return (
     <div className="mt-6">
-      <p className="mb-1 text-xs font-medium text-zinc-500">{t('issueDetail.ai.title')}</p>
+      <p className="mb-1 text-xs font-medium text-muted-foreground">{t('issueDetail.ai.title')}</p>
       <div className="flex items-center gap-2">
         <button
           className={buttonClass}
@@ -123,22 +123,24 @@ export function AiInsights({ issueId }: AiInsightsProps) {
       </div>
 
       {summary !== null && (
-        <div className="mt-2 rounded-md bg-zinc-50 p-3 text-sm text-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-300">
+        <div className="mt-2 rounded-md bg-muted p-3 text-sm text-foreground-secondary">
           {summary}
         </div>
       )}
 
       {duplicates !== null &&
         (duplicates.length === 0 ? (
-          <p className="mt-2 text-sm text-zinc-500">{t('issueDetail.ai.noDuplicatesFound')}</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {t('issueDetail.ai.noDuplicatesFound')}
+          </p>
         ) : (
           <ul className="mt-2 space-y-1">
             {duplicates.map(dup => (
               <li
-                className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300"
+                className="flex items-center gap-2 text-sm text-foreground-secondary"
                 key={dup.id}
               >
-                <span className="font-mono text-xs text-zinc-400">{dup.identifier}</span>
+                <span className="font-mono text-xs text-muted-foreground">{dup.identifier}</span>
                 <span>— {dup.title}</span>
               </li>
             ))}

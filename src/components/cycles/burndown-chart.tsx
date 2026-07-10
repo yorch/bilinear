@@ -17,7 +17,9 @@ export function BurndownChart({ data }: BurndownChartProps) {
   const { formatDate } = useFormatters();
 
   if (data.length === 0) {
-    return <p className="py-6 text-center text-xs text-zinc-400">{t('cycles.burndown.empty')}</p>;
+    return (
+      <p className="py-6 text-center text-xs text-muted-foreground">{t('cycles.burndown.empty')}</p>
+    );
   }
 
   const width = 600;

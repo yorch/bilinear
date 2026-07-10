@@ -170,7 +170,7 @@ export function IssueContextMenu({
   return (
     <div
       aria-label={t('issues.actionsFor', { title })}
-      className="min-w-[200px] overflow-hidden rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+      className="min-w-[200px] overflow-hidden rounded-lg border border-border bg-card py-1 shadow-lg"
       ref={menuRef}
       role="menu"
       style={{

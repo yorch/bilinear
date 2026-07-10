@@ -68,7 +68,7 @@ function VelocityBarChart({ data }: VelocityBarChartProps) {
 
   if (data.length === 0 || data.every(d => d.value === 0)) {
     return (
-      <p className="py-8 text-center text-sm text-zinc-400">
+      <p className="py-8 text-center text-sm text-muted-foreground">
         {t('analytics.velocity.noCompletedCycles')}
       </p>
     );
@@ -91,7 +91,10 @@ function VelocityBarChart({ data }: VelocityBarChartProps) {
                 minHeight: item.value > 0 ? '4px' : '0',
               }}
             />
-            <span className="max-w-full truncate text-[10px] text-zinc-400" title={item.label}>
+            <span
+              className="max-w-full truncate text-[10px] text-muted-foreground"
+              title={item.label}
+            >
               {item.label}
             </span>
           </div>
@@ -112,8 +115,8 @@ interface RollingCardProps {
 
 function RollingCard({ label, value }: RollingCardProps) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">{label}</p>
+    <div className="rounded-lg border border-border bg-card p-4">
+      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-foreground">
         {value === 0 ? '—' : value.toFixed(1)}
       </p>
@@ -177,16 +180,14 @@ export function CycleVelocitySection({ teamId }: CycleVelocitySectionProps) {
   return (
     <div className="mt-5">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
-          {t('analytics.velocity.title')}
-        </h2>
-        <div className="flex rounded-md border border-zinc-200 p-0.5 dark:border-zinc-800">
+        <h2 className="text-sm font-semibold text-foreground">{t('analytics.velocity.title')}</h2>
+        <div className="flex rounded-md border border-border p-0.5">
           {(['issues', 'points'] as MetricMode[]).map(m => (
             <button
               className={
                 mode === m
-                  ? 'rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
-                  : 'px-2 py-0.5 text-xs text-zinc-500 hover:text-foreground'
+                  ? 'rounded bg-muted px-2 py-0.5 text-xs text-foreground'
+                  : 'px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground'
               }
               key={m}
               onClick={() => setMode(m)}
@@ -199,16 +200,18 @@ export function CycleVelocitySection({ teamId }: CycleVelocitySectionProps) {
       </div>
 
       {loading ? (
-        <p className="text-xs text-zinc-400">{t('analytics.velocity.loading')}</p>
+        <p className="text-xs text-muted-foreground">{t('analytics.velocity.loading')}</p>
       ) : (
         <>
-          <div className="mb-3 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-            <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">
+          <div className="mb-3 rounded-lg border border-border bg-card p-5">
+            <h3 className="mb-3 text-sm font-medium text-foreground">
               {mode === 'issues'
                 ? t('analytics.velocity.completedIssuesPerCycle')
                 : t('analytics.velocity.completedPointsPerCycle')}
             </h3>
-            <p className="mb-3 text-[11px] text-zinc-400">{t('analytics.velocity.last8Cycles')}</p>
+            <p className="mb-3 text-[11px] text-muted-foreground">
+              {t('analytics.velocity.last8Cycles')}
+            </p>
             <VelocityBarChart data={chartData} />
           </div>
 

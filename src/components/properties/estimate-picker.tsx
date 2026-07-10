@@ -64,17 +64,11 @@ export function EstimateBadge({
   if (estimationType === 'tShirt') {
     const opt = SCALE_OPTIONS.tShirt.find(o => o.value === value);
     return (
-      <Badge className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
-        {opt?.label ?? value}
-      </Badge>
+      <Badge className="bg-brand-subtle text-brand-subtle-foreground">{opt?.label ?? value}</Badge>
     );
   }
 
-  return (
-    <Badge className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
-      {value}
-    </Badge>
-  );
+  return <Badge className="bg-brand-subtle text-brand-subtle-foreground">{value}</Badge>;
 }
 
 /**
@@ -122,8 +116,8 @@ export function EstimatePicker({
                 className={cn(
                   'w-full px-3 py-1.5 text-left text-sm transition-colors',
                   value === opt.value
-                    ? 'bg-indigo-50 font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-                    : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800',
+                    ? 'bg-brand-subtle font-medium text-brand-subtle-foreground'
+                    : 'text-foreground-secondary hover:bg-accent',
                 )}
                 key={opt.value}
                 onClick={() => {
@@ -169,7 +163,7 @@ function NumericInput({
   return (
     <div className="px-3 py-2 flex items-center gap-2">
       <input
-        className="w-20 rounded border border-zinc-200 bg-transparent px-2 py-1 text-sm text-zinc-900 outline-none focus:border-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+        className="w-20 rounded border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none focus:border-brand"
         min={0}
         onChange={e => setDraft(e.target.value)}
         onKeyDown={e => {

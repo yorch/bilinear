@@ -1,5 +1,6 @@
 'use client';
 
+import { observer } from 'mobx-react-lite';
 import { useEffect, useRef } from 'react';
 import { useTranslations } from '@/hooks/use-translations';
 import { createClientLogger } from '@/lib/logger';
@@ -20,10 +21,17 @@ const log = createClientLogger('SyncProvider');
  * scoped to the WebSocket endpoint plus the resolved `{ userId, orgId }`.
  * The long-lived access token never leaves the cookie jar.
  */
-export function SyncProvider({ children }: { children: React.ReactNode }) {
+export const SyncProvider = observer(function SyncProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const store = useStore();
   const syncManagerRef = useRef<SyncManager | null>(null);
   const t = useTranslations();
+  // Read here (not inside the effect) so retryBootstrap() — which bumps
+  // this counter — is what makes the effect below re-run.
+  const { retryNonce } = store.syncStore;
 
   // Fallback surface for permanent mutation failures whose enqueue site has
   // no onError (including transactions rehydrated after a reload, whose
@@ -38,6 +46,11 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   }, [t]);
 
   useEffect(() => {
+    // retryNonce isn't read below — bumping it via retryBootstrap() is what
+    // re-runs this effect from scratch (must be referenced here; Biome
+    // strips unused effect deps).
+    void retryNonce;
+
     let cancelled = false;
     // Keep a local ref so cleanup can stop the manager even if the ref
     // assignment races with StrictMode's unmount/remount cycle.
@@ -98,7 +111,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       (localManager ?? syncManagerRef.current)?.stop();
       localManager = null;
     };
-  }, [store]);
+  }, [store, retryNonce]);
 
   return <>{children}</>;
-}
+});

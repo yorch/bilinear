@@ -1,6 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
+import { InlineRetry } from '@/components/shared/inline-retry';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import {
@@ -49,27 +51,25 @@ export function CommentThread({
   mentionUsers,
 }: CommentThreadProps) {
   const t = useTranslations();
-  const [comments, setComments] = useState<CommentItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showReplyTo, setShowReplyTo] = useState<string | null>(null);
 
-  const fetchComments = useCallback(async () => {
-    try {
+  const {
+    data: comments,
+    setData: setComments,
+    loading,
+    error: loadError,
+    refetch: fetchComments,
+  } = useRetryableFetch<CommentItem[]>(
+    async () => {
       const res = await gql(GET_COMMENTS_QUERY, { issueId });
       const data = res.data as { comments?: CommentItem[] } | undefined;
-      setComments(data?.comments ?? []);
-    } catch {
-      // Non-fatal — activity section degrades gracefully
-    } finally {
-      setLoading(false);
-    }
-  }, [issueId]);
-
-  useEffect(() => {
-    fetchComments();
-  }, [fetchComments]);
+      return data?.comments ?? [];
+    },
+    [issueId],
+    [],
+  );
 
   const submitComment = async (body: string, parentId?: string) => {
     if (!body.trim() || body === '<p></p>') {
@@ -82,7 +82,7 @@ export function CommentThread({
       });
       setNewComment('');
       setShowReplyTo(null);
-      await fetchComments();
+      await fetchComments({ silent: true });
     } catch {
       toast.error(t('issueDetail.comments.failedToPost'));
     } finally {
@@ -135,7 +135,7 @@ export function CommentThread({
       } else {
         await gql(COMMENT_REACTION_ADD_MUTATION, { commentId, emoji });
       }
-      await fetchComments();
+      await fetchComments({ silent: true });
     } catch {
       toast.error(t('issueDetail.comments.failedToUpdateReaction'));
     }
@@ -146,9 +146,9 @@ export function CommentThread({
       <div className="space-y-3 py-2">
         {[1, 2].map(i => (
           <div className="flex gap-3" key={i}>
-            <div className="h-7 w-7 shrink-0 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-700" />
+            <div className="h-7 w-7 shrink-0 animate-pulse rounded-full bg-muted" />
             <div className="flex-1 space-y-2">
-              <div className="h-3 w-32 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" />
+              <div className="h-3 w-32 animate-pulse rounded bg-muted" />
               <div className="h-12 animate-pulse rounded bg-muted" />
             </div>
           </div>
@@ -159,6 +159,10 @@ export function CommentThread({
 
   return (
     <div className="space-y-1">
+      {loadError && comments.length === 0 && (
+        <InlineRetry message={t('issueDetail.comments.failedToLoad')} onRetry={fetchComments} />
+      )}
+
       {/* Comment list */}
       {comments.map(comment => (
         <CommentCard
@@ -183,7 +187,7 @@ export function CommentThread({
       ))}
 
       {/* New comment composer */}
-      <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+      <div className="mt-4 border-t border-border pt-4">
         <CommentComposer
           issueId={issueId}
           mentionIssues={mentionIssues}

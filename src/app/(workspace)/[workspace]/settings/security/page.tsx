@@ -386,7 +386,8 @@ export default function SecuritySettingsPage() {
                       {scimNewPlaintext}
                     </code>
                     <button
-                      className="shrink-0 text-muted-foreground hover:text-foreground"
+                      aria-label={t('settings.security.copyToken')}
+                      className="shrink-0 text-muted-foreground hover:text-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                       onClick={() =>
                         copyToClipboard(scimNewPlaintext, t('settings.security.scimTokenLabel'))
                       }
@@ -641,7 +642,8 @@ function ReadOnlyField({
           {value}
         </code>
         <button
-          className="shrink-0 text-muted-foreground hover:text-foreground"
+          aria-label={t('settings.security.copy')}
+          className="shrink-0 text-muted-foreground hover:text-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
           onClick={onCopy}
           title={t('settings.security.copy')}
           type="button"

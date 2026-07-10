@@ -1,5 +1,6 @@
 'use client';
 
+import { Users } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { useTranslations } from '@/hooks/use-translations';
@@ -17,8 +18,16 @@ import { ProjectSelect } from '../properties/project-select';
 import { StatusSelect } from '../properties/status-select';
 import { Button } from '../ui/button';
 import { ModalDialog } from '../ui/modal-dialog';
+import { SelectPopover } from '../ui/select-popover';
 import { Switch } from '../ui/switch';
 import { TemplateSelector } from './template-selector';
+
+export interface CreateIssueTeamOption {
+  icon?: string | null;
+  id: string;
+  key: string;
+  name: string;
+}
 
 const CREATE_MORE_STORAGE_KEY = 'bilinear:create-issue:create-more';
 
@@ -69,9 +78,13 @@ interface CreateIssueModalProps {
   labels: IssueLabel[];
   onClose: () => void;
   onSubmit: (input: CreateIssueInput) => Promise<void>;
+  /** Called when the user switches teams via the in-modal picker (only rendered when `teams` has 2+ entries). */
+  onTeamChange?: (teamId: string) => void;
   open: boolean;
   states: WorkflowState[];
   teamId?: string;
+  /** All teams the picker can switch between. Omit (or a single-team list) to hide the picker. */
+  teams?: CreateIssueTeamOption[];
   users: IssueUser[];
 }
 
@@ -84,6 +97,8 @@ export function CreateIssueModal({
   labels,
   defaultStateId,
   teamId,
+  teams,
+  onTeamChange,
 }: CreateIssueModalProps) {
   const t = useTranslations();
   const titleRef = useRef<HTMLInputElement>(null);
@@ -99,6 +114,12 @@ export function CreateIssueModal({
   // under Firefox + Playwright) can dispatch two handleSubmit runs before
   // setSubmitting(true) ever lands and create the issue twice.
   const submittingRef = useRef(false);
+  // Tracks the previous (open, teamId) pair so the reset effect below can
+  // tell "just opened" apart from "team switched while already open".
+  const prevOpenTeamRef = useRef<{ open: boolean; teamId: string | undefined }>({
+    open: false,
+    teamId,
+  });
 
   const patchForm = useCallback(
     (patch: Partial<FormState>) => setForm(prev => ({ ...prev, ...patch })),
@@ -132,49 +153,64 @@ export function CreateIssueModal({
     [patchForm],
   );
 
-  // Reset form state only when the modal transitions from closed to open.
-  // Including the MobX-derived props (states, defaultStateId, teamId) in the
-  // dep array re-runs this effect every render — `setTitle('')` mid-typing
-  // wipes user input and `disabled={!title.trim()}` keeps the submit button
-  // disabled, producing flaky e2e behaviour under Firefox + Playwright.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: only re-run on open transitions
+  // Reset form state when the modal opens, and reset just stateId when the
+  // team changes via the in-modal picker while already open (the previously-
+  // selected stateId almost certainly doesn't belong to the new team's
+  // states). Keyed on (open, teamId) rather than the MobX-derived
+  // states/defaultStateId props directly — those get fresh array/value
+  // identities on every unrelated re-render, and including them in the dep
+  // array would wipe in-progress typing (`disabled={!title.trim()}` then
+  // stays true), producing flaky e2e behaviour under Firefox + Playwright.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only re-run on open/team transitions
   useEffect(() => {
+    const prev = prevOpenTeamRef.current;
+    prevOpenTeamRef.current = { open, teamId };
     if (!open) {
       return;
     }
-    setForm(initialForm(defaultStateId, states[0]?.id));
-    setTemplateOpen(false);
-    setTimeout(() => titleRef.current?.focus(), 50);
 
-    // Probe AI availability once per open so the "Suggest" affordance only
-    // shows when the workspace has AI enabled and a key is configured.
-    gql('query AiAvailable { aiAvailable }')
-      .then(res => setAiAvailable(Boolean((res.data as { aiAvailable?: boolean })?.aiAvailable)))
-      .catch(() => setAiAvailable(false));
+    if (!prev.open) {
+      // Freshly opened — full reset.
+      setForm(initialForm(defaultStateId, states[0]?.id));
+      setTemplateOpen(false);
+      setTimeout(() => titleRef.current?.focus(), 50);
 
-    if (teamId) {
-      gql(ISSUE_TEMPLATES_QUERY, { teamId })
-        .then(res => {
-          const templates = (
-            res.data as {
-              issueTemplates?: Array<{
-                id: string;
-                name: string;
-                templateData: object;
-                isDefault: boolean;
-              }>;
+      // Probe AI availability once per open so the "Suggest" affordance only
+      // shows when the workspace has AI enabled and a key is configured.
+      gql('query AiAvailable { aiAvailable }')
+        .then(res => setAiAvailable(Boolean((res.data as { aiAvailable?: boolean })?.aiAvailable)))
+        .catch(() => setAiAvailable(false));
+
+      if (teamId) {
+        gql(ISSUE_TEMPLATES_QUERY, { teamId })
+          .then(res => {
+            const templates = (
+              res.data as {
+                issueTemplates?: Array<{
+                  id: string;
+                  name: string;
+                  templateData: object;
+                  isDefault: boolean;
+                }>;
+              }
+            )?.issueTemplates;
+            const defaultTemplate = templates?.find(t => t.isDefault);
+            if (defaultTemplate) {
+              applyTemplate(defaultTemplate.templateData);
             }
-          )?.issueTemplates;
-          const defaultTemplate = templates?.find(t => t.isDefault);
-          if (defaultTemplate) {
-            applyTemplate(defaultTemplate.templateData);
-          }
-        })
-        .catch(() => {
-          // Silently fail — template auto-apply is best-effort
-        });
+          })
+          .catch(() => {
+            // Silently fail — template auto-apply is best-effort
+          });
+      }
+      return;
     }
-  }, [open]);
+
+    if (prev.teamId !== teamId) {
+      // Already open, team switched via the picker — just the stateId needs resetting.
+      patchForm({ stateId: defaultStateId ?? states[0]?.id ?? '' });
+    }
+  }, [open, teamId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -287,7 +323,7 @@ export function CreateIssueModal({
         {/* Title */}
         <div className="flex items-center gap-2 px-5 pt-5">
           <input
-            className="w-full bg-transparent text-lg font-medium text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
+            className="w-full bg-transparent text-lg font-medium text-foreground placeholder:text-muted-foreground outline-none"
             onChange={e => patchForm({ title: e.target.value })}
             placeholder={t('issueDetail.createModal.titlePlaceholder')}
             ref={titleRef}
@@ -298,9 +334,9 @@ export function CreateIssueModal({
           {aiAvailable && (
             <button
               className={cn(
-                'shrink-0 rounded-md border border-zinc-200 px-2 py-1 text-xs font-medium',
-                'text-indigo-600 hover:bg-indigo-50 disabled:opacity-50',
-                'dark:border-zinc-700 dark:text-indigo-400 dark:hover:bg-indigo-950/30',
+                'shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium',
+                'text-brand hover:bg-brand-subtle disabled:opacity-50',
+                'border-border dark:text-brand dark:hover:bg-brand-subtle',
               )}
               disabled={suggestingTitle}
               onClick={handleSuggestTitle}
@@ -323,7 +359,46 @@ export function CreateIssueModal({
         </div>
 
         {/* Properties toolbar */}
-        <div className="flex flex-wrap items-center gap-1 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
+        <div className="flex flex-wrap items-center gap-1 border-t border-border px-4 py-3">
+          {teams && teams.length > 1 && onTeamChange && (
+            <SelectPopover
+              panelClassName="w-56 py-1"
+              triggerChildren={
+                <>
+                  <Users className="h-3.5 w-3.5" />
+                  {teams.find(team => team.id === teamId)?.key ?? teams[0]?.key}
+                </>
+              }
+              triggerClassName="gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
+              triggerTitle={t('issueDetail.createModal.team')}
+            >
+              {close => (
+                <>
+                  {teams.map(team => (
+                    <button
+                      className={cn(
+                        'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent',
+                        team.id === teamId && 'font-medium text-primary',
+                      )}
+                      key={team.id}
+                      onClick={() => {
+                        onTeamChange(team.id);
+                        close();
+                      }}
+                      type="button"
+                    >
+                      {team.icon ? (
+                        <span className="text-xs">{team.icon}</span>
+                      ) : (
+                        <Users className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      )}
+                      <span className="truncate">{team.name}</span>
+                    </button>
+                  ))}
+                </>
+              )}
+            </SelectPopover>
+          )}
           <StatusSelect
             onChange={v => patchForm({ stateId: v })}
             states={states}
@@ -353,7 +428,7 @@ export function CreateIssueModal({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-between gap-2 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
+        <div className="flex items-center justify-between gap-2 border-t border-border px-4 py-3">
           <span className="flex items-center gap-2 text-sm text-muted-foreground">
             <Switch
               aria-label={t('issueDetail.createModal.createMore')}

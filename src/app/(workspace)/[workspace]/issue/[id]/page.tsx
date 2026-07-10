@@ -155,7 +155,7 @@ const IssueDetailPage = observer(function IssueDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('common.loading')}
       </div>
     );
@@ -163,7 +163,7 @@ const IssueDetailPage = observer(function IssueDetailPage() {
 
   if (!issue) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('issueDetail.issueNotFound')}
       </div>
     );

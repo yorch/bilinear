@@ -34,7 +34,7 @@ export function ConfirmDialog({
         <h2 className="text-sm font-semibold text-foreground">{title}</h2>
         <p className="mt-2 text-sm text-muted-foreground">{message}</p>
       </div>
-      <div className="flex justify-end gap-2 border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
+      <div className="flex justify-end gap-2 border-t border-border px-5 py-3">
         <Button onClick={onCancel} size="sm" type="button" variant="ghost">
           {t('common.cancel')}
         </Button>

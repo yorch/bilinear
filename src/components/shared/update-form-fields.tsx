@@ -33,8 +33,8 @@ export function UpdateFormFields({
             className={cn(
               'rounded px-2 py-0.5 text-xs font-medium transition-colors',
               health === ''
-                ? 'bg-zinc-300 text-zinc-700 dark:bg-zinc-600 dark:text-zinc-100'
-                : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700',
+                ? 'bg-foreground-faint text-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-accent',
             )}
             onClick={() => onHealthChange('')}
             type="button"
@@ -48,7 +48,7 @@ export function UpdateFormFields({
               'rounded px-2 py-0.5 text-xs font-medium transition-colors',
               health === h.value
                 ? `${h.color} text-white`
-                : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700',
+                : 'bg-muted text-muted-foreground hover:bg-accent',
             )}
             key={h.value}
             onClick={() => onHealthChange(h.value)}
@@ -59,7 +59,7 @@ export function UpdateFormFields({
         ))}
       </div>
       <textarea
-        className="w-full resize-none rounded border border-zinc-200 bg-transparent px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 dark:border-zinc-700 dark:text-zinc-100 dark:focus:border-indigo-500 dark:focus:ring-indigo-500"
+        className="w-full resize-none rounded border border-border bg-transparent px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-brand focus:ring-1 focus:ring-brand"
         onChange={e => onBodyChange(e.target.value)}
         placeholder={placeholder}
         rows={4}

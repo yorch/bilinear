@@ -198,14 +198,14 @@ const ResultsList = observer(function ResultsList({
   return (
     <>
       {allItems.length === 0 && (
-        <p className="px-4 py-3 text-sm text-zinc-400">
+        <p className="px-4 py-3 text-sm text-muted-foreground">
           {t('commandPalette.noResultsFor', { query })}
         </p>
       )}
 
       {issueItems.length > 0 && (
         <>
-          <p className="px-4 py-1.5 text-xs font-medium uppercase tracking-wide text-zinc-400">
+          <p className="px-4 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {query ? t('commandPalette.sections.issues') : t('commandPalette.sections.recent')}
           </p>
           {issueItems.map((item, i) => (
@@ -229,12 +229,12 @@ const ResultsList = observer(function ResultsList({
                   style={{ backgroundColor: item.stateColor }}
                 />
               )}
-              <span className="w-16 flex-shrink-0 font-mono text-xs text-zinc-400">
+              <span className="w-16 flex-shrink-0 font-mono text-xs text-muted-foreground">
                 {item.issue.identifier}
               </span>
               <span className="flex-1 truncate text-foreground">{item.issue.title}</span>
               {item.teamKey && (
-                <span className="flex-shrink-0 text-xs text-zinc-400">{item.teamKey}</span>
+                <span className="flex-shrink-0 text-xs text-muted-foreground">{item.teamKey}</span>
               )}
             </button>
           ))}
@@ -243,7 +243,7 @@ const ResultsList = observer(function ResultsList({
 
       {actionItems.length > 0 && (
         <>
-          <p className="px-4 py-1.5 text-xs font-medium uppercase tracking-wide text-zinc-400">
+          <p className="px-4 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {t('commandPalette.sections.actions')}
           </p>
           {actionItems.map((item, i) => {
@@ -265,7 +265,7 @@ const ResultsList = observer(function ResultsList({
               >
                 <span className="flex-1 truncate text-foreground">{item.label}</span>
                 {item.shortcut && (
-                  <kbd className="flex-shrink-0 rounded border border-zinc-200 px-1.5 py-0.5 font-mono text-[10px] text-zinc-400 dark:border-zinc-600">
+                  <kbd className="flex-shrink-0 rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
                     {item.shortcut}
                   </kbd>
                 )}
@@ -383,7 +383,9 @@ const SubMenuList = observer(function SubMenuList({
   return (
     <>
       {subItems.length === 0 && (
-        <p className="px-4 py-3 text-sm text-zinc-400">{t('commandPalette.submenu.noOptions')}</p>
+        <p className="px-4 py-3 text-sm text-muted-foreground">
+          {t('commandPalette.submenu.noOptions')}
+        </p>
       )}
       {subItems.map((item, i) => (
         <button
@@ -416,23 +418,23 @@ const CommandPaletteFooter = memo(function CommandPaletteFooter({
 }) {
   const t = useTranslations();
   return (
-    <div className="flex items-center gap-4 border-t border-zinc-100 px-4 py-2 dark:border-zinc-800">
-      <span className="text-[10px] text-zinc-400">
-        <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">↑↓</kbd>{' '}
+    <div className="flex items-center gap-4 border-t border-border px-4 py-2">
+      <span className="text-[10px] text-muted-foreground">
+        <kbd className="rounded border border-border px-1">↑↓</kbd>{' '}
         {t('commandPalette.footer.navigate')}
       </span>
-      <span className="text-[10px] text-zinc-400">
-        <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">↵</kbd>{' '}
+      <span className="text-[10px] text-muted-foreground">
+        <kbd className="rounded border border-border px-1">↵</kbd>{' '}
         {t('commandPalette.footer.select')}
       </span>
       {!inSubMenu && (
-        <span className="text-[10px] text-zinc-400">
-          <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">Tab</kbd>{' '}
+        <span className="text-[10px] text-muted-foreground">
+          <kbd className="rounded border border-border px-1">Tab</kbd>{' '}
           {t('commandPalette.footer.issueActions')}
         </span>
       )}
-      <span className="text-[10px] text-zinc-400">
-        <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">Esc</kbd>{' '}
+      <span className="text-[10px] text-muted-foreground">
+        <kbd className="rounded border border-border px-1">Esc</kbd>{' '}
         {inSubMenu ? t('commandPalette.footer.back') : t('commandPalette.footer.close')}
       </span>
     </div>
@@ -620,16 +622,16 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
       <div
         aria-label={t('commandPalette.dialogAriaLabel')}
         aria-modal="true"
-        className="fixed left-1/2 top-[20%] z-50 w-full max-w-xl -translate-x-1/2 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900"
+        className="fixed left-1/2 top-[20%] z-50 w-full max-w-xl -translate-x-1/2 overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
         data-testid="command-palette"
         role="dialog"
       >
         {/* Search input */}
-        <div className="flex items-center gap-2 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
           {inSubMenu && (
             <button
               aria-label={t('commandPalette.footer.back')}
-              className="flex-shrink-0 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+              className="flex-shrink-0 text-xs text-muted-foreground hover:text-foreground-secondary"
               onClick={() => {
                 setSubMenu({ type: 'none' });
                 setActiveIndex(0);
@@ -641,7 +643,7 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
           )}
           <svg
             aria-hidden="true"
-            className="h-4 w-4 flex-shrink-0 text-zinc-400"
+            className="h-4 w-4 flex-shrink-0 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -664,7 +666,7 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
                 : t('commandPalette.searchAriaLabel')
             }
             autoComplete="off"
-            className="flex-1 bg-transparent text-sm text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
+            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
             onChange={e => setQuery(e.target.value)}
             placeholder={
               inSubMenu

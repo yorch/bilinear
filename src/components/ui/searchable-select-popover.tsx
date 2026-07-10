@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { usePopover } from '@/hooks/use-popover';
+import { usePopoverFlip } from '@/hooks/use-popover-flip';
 import { useRestoreFocus } from '@/hooks/use-restore-focus';
 import { cn } from '@/lib/utils';
 
@@ -75,6 +76,7 @@ export function SearchableSelectPopover<T>({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listboxId = useId();
   useRestoreFocus(isOpen, triggerRef);
+  const openUpward = usePopoverFlip(isOpen, triggerRef);
 
   const filtered = onSearch
     ? search.trim()
@@ -150,7 +152,8 @@ export function SearchableSelectPopover<T>({
       {isOpen && (
         <div
           className={cn(
-            'absolute left-0 top-full z-50 mt-1 w-56 rounded-lg border border-border bg-popover p-1 shadow-lg',
+            'absolute left-0 z-50 w-56 rounded-lg border border-border bg-popover p-1 shadow-lg',
+            openUpward ? 'bottom-full mb-1' : 'top-full mt-1',
             panelClassName,
           )}
         >
@@ -199,7 +202,7 @@ export function SearchableSelectPopover<T>({
                   className={cn(
                     'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-accent',
                     isSelected?.(item)
-                      ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
+                      ? 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground'
                       : 'text-foreground',
                     i === activeIndex && 'bg-muted',
                   )}

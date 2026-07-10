@@ -58,7 +58,7 @@ export function CustomFieldValueInput({
     case 'date':
       return (
         <input
-          className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+          className="rounded-md border border-border bg-card px-2 py-1 text-xs"
           onChange={e => onSave(e.target.value || null)}
           type="date"
           value={typeof value === 'string' ? value : ''}
@@ -112,7 +112,7 @@ function TextInput({
 
   return (
     <input
-      className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+      className="rounded-md border border-border bg-card px-2 py-1 text-xs"
       onBlur={() => {
         if (draft !== value) {
           onSave(draft);
@@ -157,8 +157,8 @@ function MultiSelect({
           <button
             className={
               selected
-                ? 'rounded-full bg-indigo-100 px-2 py-0.5 text-xs text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
-                : 'rounded-full border border-zinc-200 px-2 py-0.5 text-xs text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800'
+                ? 'rounded-full bg-brand-subtle px-2 py-0.5 text-xs text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground'
+                : 'rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent'
             }
             key={o.value}
             onClick={() => toggle(o.value)}

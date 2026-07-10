@@ -64,16 +64,13 @@ function MilestoneForm({
   };
 
   return (
-    <form
-      className="mt-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
-      onSubmit={handleSubmit}
-    >
+    <form className="mt-2 rounded-lg border border-border p-3" onSubmit={handleSubmit}>
       <div className="flex flex-col gap-2">
         <input
           className={cn(
-            'w-full rounded border border-zinc-200 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none',
-            'placeholder:text-zinc-400 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400',
-            'dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-indigo-500',
+            'w-full rounded border border-border bg-card px-2 py-1.5 text-sm text-foreground outline-none',
+            'placeholder:text-muted-foreground focus:border-brand focus:ring-1 focus:ring-brand',
+            'border-border text-foreground placeholder:text-muted-foreground dark:focus:border-brand',
           )}
           onChange={e => setValues(v => ({ ...v, name: e.target.value }))}
           placeholder={t('projects.milestoneName')}
@@ -84,9 +81,9 @@ function MilestoneForm({
         />
         <textarea
           className={cn(
-            'w-full resize-none rounded border border-zinc-200 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none',
-            'placeholder:text-zinc-400 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400',
-            'dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-indigo-500',
+            'w-full resize-none rounded border border-border bg-card px-2 py-1.5 text-sm text-foreground outline-none',
+            'placeholder:text-muted-foreground focus:border-brand focus:ring-1 focus:ring-brand',
+            'border-border text-foreground placeholder:text-muted-foreground dark:focus:border-brand',
           )}
           onChange={e => setValues(v => ({ ...v, description: e.target.value }))}
           placeholder={t('projects.descriptionOptionalPlaceholder')}
@@ -95,9 +92,9 @@ function MilestoneForm({
         />
         <input
           className={cn(
-            'w-full rounded border border-zinc-200 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none',
-            'focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400',
-            'dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-indigo-500',
+            'w-full rounded border border-border bg-card px-2 py-1.5 text-sm text-foreground outline-none',
+            'focus:border-brand focus:ring-1 focus:ring-brand',
+            'border-border text-foreground dark:focus:border-brand',
           )}
           onChange={e => setValues(v => ({ ...v, targetDate: e.target.value }))}
           type="date"
@@ -106,7 +103,7 @@ function MilestoneForm({
       </div>
       <div className="mt-2 flex items-center justify-end gap-2">
         <button
-          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
           disabled={saving}
           onClick={onCancel}
           type="button"
@@ -153,8 +150,8 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
   };
 
   return (
-    <div className="flex items-start gap-3 rounded-md border border-zinc-200 px-3 py-2.5 dark:border-zinc-800">
-      <Target className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
+    <div className="flex items-start gap-3 rounded-md border border-border px-3 py-2.5">
+      <Target className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
         <span className="block text-sm font-medium text-foreground">{milestone.name}</span>
         {milestone.description && (
@@ -164,13 +161,13 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
         )}
       </div>
       {milestone.targetDate && (
-        <span className="shrink-0 text-xs text-zinc-400">
+        <span className="shrink-0 text-xs text-muted-foreground">
           {formatDate(milestone.targetDate, { day: 'numeric', month: 'short', year: 'numeric' })}
         </span>
       )}
       <div className="flex shrink-0 items-center gap-0.5">
         <button
-          className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
           onClick={() => onEdit(milestone.id)}
           title={t('projects.editMilestone')}
           type="button"
@@ -178,7 +175,7 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
           <Pencil className="h-3.5 w-3.5" />
         </button>
         <button
-          className="rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950 dark:hover:text-red-400"
+          className="rounded p-1 text-muted-foreground hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950 dark:hover:text-red-400 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
           disabled={deleting}
           onClick={() => setConfirmingDelete(true)}
           title={t('projects.deleteMilestone')}
@@ -315,7 +312,7 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
         </h3>
         {!creating && !editingId && (
           <button
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
             onClick={openCreate}
             type="button"
           >
@@ -334,7 +331,9 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
       )}
 
       {milestones.length === 0 && !creating ? (
-        <p className="py-6 text-center text-xs text-zinc-400">{t('projects.noMilestonesYet')}</p>
+        <p className="py-6 text-center text-xs text-muted-foreground">
+          {t('projects.noMilestonesYet')}
+        </p>
       ) : (
         <div className="mt-2 flex flex-col gap-2">
           {milestones.map(milestone => {

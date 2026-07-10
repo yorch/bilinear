@@ -289,6 +289,7 @@
       "weeksAgo": "{count}w ago",
       "yesterday": "yesterday"
     },
+    "retry": "Retry",
     "save": "Save",
     "saving": "Saving…",
     "search": "Search",
@@ -590,6 +591,7 @@
       "changed": "{actor} changed {field} from {oldValue} to {newValue}",
       "cleared": "{actor} cleared {field}",
       "empty": "No activity recorded yet.",
+      "failedToLoad": "Couldn't load activity",
       "fields": {
         "assignee": "assignee",
         "cycle": "cycle",
@@ -624,6 +626,7 @@
       "attachFile": "Attach file",
       "empty": "No attachments",
       "failedToDelete": "Failed to delete file",
+      "failedToLoad": "Couldn't load attachments",
       "removeAttachment": "Remove attachment",
       "title": "Attachments",
       "uploadFailed": "Upload failed",
@@ -638,6 +641,7 @@
       "edited": "edited",
       "failedToConvert": "Failed to convert comment to sub-issue",
       "failedToDelete": "Failed to delete comment",
+      "failedToLoad": "Couldn't load comments",
       "failedToPost": "Failed to post comment",
       "failedToUpdate": "Failed to update comment",
       "failedToUpdateReaction": "Failed to update reaction",
@@ -665,6 +669,7 @@
       "issueCreated": "Issue created",
       "suggest": "Suggest",
       "suggestTitleFromDescription": "Suggest a title from the description",
+      "team": "Team",
       "titlePlaceholder": "Issue title"
     },
     "defaultUserName": "User",
@@ -695,6 +700,7 @@
     },
     "reactions": {
       "addReaction": "Add reaction",
+      "failedToLoad": "Couldn't load reactions",
       "failedToUpdate": "Failed to update reaction",
       "react": "React"
     },
@@ -855,6 +861,7 @@
     "priority": "Priority",
     "priorityN": "Priority {priority}",
     "project": "Project",
+    "removeFilter": "Remove filter",
     "restoreFailed": "Failed to restore issue",
     "saveCurrentFiltersAsView": "Save current filters as a view",
     "saveView": "Save view",
@@ -867,6 +874,7 @@
     "status": "Status",
     "swimlaneByAssignee": "Swimlane by assignee",
     "swimlaneByPriority": "Swimlane by priority",
+    "syncingRow": "Saving changes…",
     "teamBacklogTitle": "{team} — Backlog",
     "teamIssuesTitle": "{team} — Issues",
     "teamNotFound": "Team not found.",
@@ -941,6 +949,7 @@
   "nav": {
     "analytics": "Analytics",
     "backlog": "Backlog",
+    "closeMenu": "Close menu",
     "collapseSidebar": "Collapse sidebar (⌘B)",
     "createTeam": "Create a team",
     "cycles": "Cycles",
@@ -951,6 +960,7 @@
     "inbox": "Inbox",
     "myIssues": "My Issues",
     "newTeam": "New team",
+    "openMenu": "Open menu",
     "projects": "Projects",
     "removeFromFavorites": "Remove from favorites",
     "removeNamedFromFavorites": "Remove {name} from favorites",
@@ -1508,6 +1518,7 @@
       "inactive": "Inactive",
       "integrations": "Integrations",
       "integrationsDescription": "Connect GitHub and other services",
+      "languageDescription": "Choose your display language",
       "lastUsedOn": "Last used {date}",
       "memberRoleUpdated": "Member role updated",
       "memberRoleUpdateError": "Failed to update member role",

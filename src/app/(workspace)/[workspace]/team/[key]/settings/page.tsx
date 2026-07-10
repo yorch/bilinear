@@ -382,7 +382,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
 
   if (!team) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('settings.team.notFound')}
       </div>
     );
@@ -390,15 +390,15 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <div className="flex items-center gap-3 border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
+      <div className="flex items-center gap-3 border-b border-border px-6 py-3">
         <Link
-          className="flex items-center gap-1 text-sm text-zinc-500 hover:text-foreground"
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           href={`/${workspace}/team/${teamKey}`}
         >
           <ArrowLeft className="h-4 w-4" />
           {t('settings.team.back')}
         </Link>
-        <span className="text-zinc-300 dark:text-zinc-700">/</span>
+        <span className="text-foreground-faint">/</span>
         <h1 className="text-sm font-semibold text-foreground">
           {t('settings.team.settingsHeading', { name: team.displayName || team.name })}
         </h1>
@@ -409,13 +409,13 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.team.general')}
           </h2>
-          <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900 flex flex-col gap-4">
+          <div className="rounded-lg border border-border bg-card p-5 flex flex-col gap-4">
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-muted-foreground" htmlFor="settings-name">
                 {t('settings.team.teamName')}
               </label>
               <input
-                className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+                className="rounded-md border border-border bg-transparent px-3 py-1.5 text-sm text-foreground outline-none focus:border-brand focus:ring-1 focus:ring-brand"
                 id="settings-name"
                 onChange={e => setName(e.target.value)}
                 type="text"
@@ -431,7 +431,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                 {t('settings.team.description')}
               </label>
               <textarea
-                className="resize-none rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-600 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-400"
+                className="resize-none rounded-md border border-border bg-transparent px-3 py-1.5 text-sm text-muted-foreground placeholder:text-muted-foreground outline-none focus:border-brand focus:ring-1 focus:ring-brand"
                 id="settings-description"
                 onChange={e => setDescription(e.target.value)}
                 placeholder={t('settings.team.descriptionPlaceholder')}
@@ -445,10 +445,10 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                 {t('settings.team.identifier')}
               </p>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-sm text-zinc-700 dark:text-zinc-300 rounded-md border border-zinc-200 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 dark:border-zinc-700">
+                <span className="font-mono text-sm text-foreground-secondary rounded-md border border-border px-3 py-1.5 bg-card">
                   {team.key}
                 </span>
-                <span className="text-xs text-zinc-400">
+                <span className="text-xs text-muted-foreground">
                   {t('settings.team.identifierHint', { key: team.key })}
                 </span>
               </div>
@@ -463,7 +463,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                 {t('settings.team.parentTeam')}
               </label>
               <select
-                className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100 dark:bg-zinc-900"
+                className="rounded-md border border-border bg-transparent px-3 py-1.5 text-sm text-foreground outline-none focus:border-brand focus:ring-1 focus:ring-brand dark:bg-card"
                 id="settings-parent"
                 onChange={e => setParentId(e.target.value)}
                 value={parentId}
@@ -475,7 +475,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-zinc-400">{t('settings.team.parentTeamHint')}</p>
+              <p className="text-xs text-muted-foreground">{t('settings.team.parentTeamHint')}</p>
             </div>
           </div>
         </section>
@@ -484,7 +484,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.team.workflow')}
           </h2>
-          <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900 flex flex-col gap-5">
+          <div className="rounded-lg border border-border bg-card p-5 flex flex-col gap-5">
             {/* Private team toggle */}
             <SettingToggleRow
               checked={isPrivate}
@@ -522,9 +522,9 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.team.members')}
           </h2>
-          <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
+          <div className="rounded-lg border border-border bg-card p-5">
             {loadingMembers ? (
-              <div className="flex items-center justify-center py-6 text-sm text-zinc-400">
+              <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
                 {t('settings.team.loadingMembers')}
               </div>
             ) : (
@@ -549,14 +549,14 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-red-400">
             {t('settings.team.dangerZone')}
           </h2>
-          <div className="rounded-lg border border-red-200 bg-white p-5 dark:border-red-900/50 dark:bg-zinc-900">
+          <div className="rounded-lg border border-red-200 bg-card p-5 dark:border-red-900/50">
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <p className="text-sm font-medium text-foreground-secondary">
                     {t('settings.team.deleteTeam')}
                   </p>
-                  <p className="text-xs text-zinc-400">
+                  <p className="text-xs text-muted-foreground">
                     {t('settings.team.deleteTeamHint', { count: team.issueCount })}
                   </p>
                 </div>
@@ -588,10 +588,10 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                       value="DELETE"
                     />
                     <div>
-                      <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                      <p className="text-sm text-foreground-secondary">
                         {t('settings.team.deleteAllIssues')}
                       </p>
-                      <p className="text-xs text-zinc-400">
+                      <p className="text-xs text-muted-foreground">
                         {t('settings.team.deleteAllIssuesHint')}
                       </p>
                     </div>
@@ -613,10 +613,12 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                       value="MOVE"
                     />
                     <div className="flex-1">
-                      <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                      <p className="text-sm text-foreground-secondary">
                         {t('settings.team.moveIssuesToAnotherTeam')}
                       </p>
-                      <p className="text-xs text-zinc-400">{t('settings.team.moveIssuesHint')}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {t('settings.team.moveIssuesHint')}
+                      </p>
                     </div>
                   </label>
 
@@ -636,7 +638,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
 
                   <div className="flex items-center gap-2 pt-1">
                     <button
-                      className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-accent"
+                      className="rounded px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent"
                       onClick={() => {
                         setDeleteConfirm(false);
                         setIssueAction('DELETE');

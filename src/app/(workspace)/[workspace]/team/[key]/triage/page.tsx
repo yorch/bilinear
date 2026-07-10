@@ -106,7 +106,7 @@ function SnoozeButton({
       <button
         aria-expanded={open}
         aria-haspopup="menu"
-        className="rounded border border-zinc-300 px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+        className="rounded border border-border px-2.5 py-1 text-xs text-foreground-secondary hover:bg-muted disabled:opacity-50"
         disabled={disabled}
         onClick={() => setOpen(o => !o)}
         type="button"
@@ -115,12 +115,12 @@ function SnoozeButton({
       </button>
       {open ? (
         <div
-          className="absolute right-0 z-10 mt-1 min-w-[120px] rounded border border-zinc-200 bg-white py-1 text-xs shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+          className="absolute right-0 z-10 mt-1 min-w-[120px] rounded border border-border bg-card py-1 text-xs shadow-lg"
           role="menu"
         >
           {SNOOZE_PRESETS.map(p => (
             <button
-              className="block w-full px-3 py-1 text-left text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              className="block w-full px-3 py-1 text-left text-foreground-secondary hover:bg-muted"
               key={p.hours}
               onClick={() => {
                 setOpen(false);
@@ -385,7 +385,7 @@ const TriagePage = observer(function TriagePage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('common.loading')}
       </div>
     );
@@ -393,7 +393,7 @@ const TriagePage = observer(function TriagePage() {
 
   if (!team) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('settings.triage.teamNotFound')}
       </div>
     );
@@ -401,7 +401,7 @@ const TriagePage = observer(function TriagePage() {
 
   if (!triageStateId) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-2 text-sm text-zinc-400">
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
         <p>{t('settings.triage.triageNotEnabled')}</p>
         <p className="text-xs">{t('settings.triage.triageNotEnabledHint')}</p>
       </div>
@@ -410,7 +410,7 @@ const TriagePage = observer(function TriagePage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
+      <div className="flex items-center justify-between border-b border-border px-6 py-3">
         <h1 className="text-sm font-semibold text-foreground">
           {t('settings.triage.pageTitle', { name: team.displayName ?? team.name })}
         </h1>
@@ -432,7 +432,7 @@ const TriagePage = observer(function TriagePage() {
             return (
               <div
                 className={cn(
-                  'flex items-center gap-3 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800',
+                  'flex items-center gap-3 border-b border-border px-4 py-3',
                   focused && 'bg-accent/50',
                 )}
                 key={issue.id}
@@ -461,7 +461,7 @@ const TriagePage = observer(function TriagePage() {
                     {t('settings.triage.accept')}
                   </button>
                   <button
-                    className="rounded border border-zinc-300 px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    className="rounded border border-border px-2.5 py-1 text-xs text-foreground-secondary hover:bg-muted disabled:opacity-50"
                     disabled={busy}
                     onClick={() => handleDecline(issue.id)}
                     type="button"
@@ -475,7 +475,7 @@ const TriagePage = observer(function TriagePage() {
                     onClose={() => setDuplicatePickerFor(null)}
                     onSelect={canonical => submitMarkDuplicate(issue.id, canonical)}
                     triggerChildren={t('settings.triage.duplicate')}
-                    triggerClassName="rounded border border-zinc-300 px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    triggerClassName="rounded border border-border px-2.5 py-1 text-xs text-foreground-secondary hover:bg-muted"
                     triggerTitle={t('settings.triage.markDuplicateTitle')}
                   />
                   <SnoozeButton disabled={busy} onSelect={hours => handleSnooze(issue.id, hours)} />

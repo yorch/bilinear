@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const BASELINE_PATH = path.join(__dirname, 'design-tokens-baseline.json');
-const ROOTS = ['src/components', 'src/app'];
+const ROOTS = ['src/components', 'src/app', 'src/lib', 'src/hooks'];
 
 // zinc-*/indigo-* utility classes with any (or no) property prefix
 // (bg-, text-, border-, hover:text-, dark:bg-, etc.), plus 3/6-digit hex
@@ -37,7 +37,10 @@ function countViolations(text) {
 function scan() {
   const counts = {};
   for (const root of ROOTS) {
-    for (const file of globSync(`${root}/**/*.tsx`, { cwd: ROOT })) {
+    for (const file of globSync(`${root}/**/*.{ts,tsx}`, {
+      cwd: ROOT,
+      ignore: `${root}/**/*.test.{ts,tsx}`,
+    })) {
       const text = readFileSync(path.join(ROOT, file), 'utf8');
       const count = countViolations(text);
       if (count > 0) {

@@ -33,7 +33,7 @@ export function DueDatePicker({
       onClose={onClose}
       panelClassName="p-2"
       triggerChildren={value ? formatDueDate(value) : t('properties.dueDate.dueDate')}
-      triggerClassName={cn('px-1.5 py-1 text-xs', value ? colorClass : 'text-zinc-400')}
+      triggerClassName={cn('px-1.5 py-1 text-xs', value ? colorClass : 'text-muted-foreground')}
       triggerTitle={
         value
           ? t('properties.dueDate.dueOn', { date: formatDueDate(value) })
@@ -43,7 +43,7 @@ export function DueDatePicker({
       {close => (
         <>
           <input
-            className="rounded border border-zinc-200 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+            className="rounded border border-border px-2 py-1 text-sm dark:bg-muted"
             onChange={e => {
               onChange(e.target.value || null);
               close();
@@ -53,7 +53,7 @@ export function DueDatePicker({
           />
           {value && (
             <button
-              className="mt-1 block w-full rounded px-2 py-1 text-center text-xs text-zinc-500 hover:bg-accent"
+              className="mt-1 block w-full rounded px-2 py-1 text-center text-xs text-muted-foreground hover:bg-accent"
               onClick={() => {
                 onChange(null);
                 close();

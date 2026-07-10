@@ -1,8 +1,9 @@
 'use client';
 
 import { Smile } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { SelectPopover } from '@/components/ui/select-popover';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import {
@@ -28,21 +29,19 @@ interface IssueReactionBarProps {
 
 export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarProps) {
   const t = useTranslations();
-  const [reactions, setReactions] = useState<Reaction[]>([]);
-
-  const fetchReactions = useCallback(async () => {
-    try {
+  const {
+    data: reactions,
+    error: loadError,
+    refetch: fetchReactions,
+  } = useRetryableFetch<Reaction[]>(
+    async () => {
       const res = await gql(ISSUE_REACTIONS_QUERY, { id: issueId });
       const data = res.data as { issue?: { reactions: Reaction[] } } | undefined;
-      setReactions(data?.issue?.reactions ?? []);
-    } catch {
-      // Non-fatal — bar just stays empty
-    }
-  }, [issueId]);
-
-  useEffect(() => {
-    fetchReactions();
-  }, [fetchReactions]);
+      return data?.issue?.reactions ?? [];
+    },
+    [issueId],
+    [],
+  );
 
   const counts = reactions.reduce<Record<string, { count: number; reacted: boolean }>>((acc, r) => {
     if (!acc[r.emoji]) {
@@ -63,13 +62,23 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
       if (res.errors?.length) {
         throw new Error(t('common.somethingWentWrong'));
       }
-      await fetchReactions();
+      await fetchReactions({ silent: true });
     } catch {
       toast.error(t('issueDetail.reactions.failedToUpdate'));
     }
   };
 
   const hasAny = Object.keys(counts).length > 0;
+
+  if (loadError && !hasAny) {
+    return (
+      <InlineRetry
+        className="py-0"
+        message={t('issueDetail.reactions.failedToLoad')}
+        onRetry={fetchReactions}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-1">
@@ -78,8 +87,8 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
           className={cn(
             'flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors',
             reacted
-              ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-              : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700',
+              ? 'bg-brand-subtle text-brand-subtle-foreground'
+              : 'bg-muted text-muted-foreground hover:bg-foreground/10',
           )}
           key={emoji}
           onClick={() => toggle(emoji, reacted)}
@@ -98,7 +107,7 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
           </>
         }
         triggerClassName={cn(
-          'rounded-full p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700',
+          'rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center',
           hasAny ? '' : 'flex items-center gap-1 px-2 text-xs',
         )}
         triggerTitle={t('issueDetail.reactions.addReaction')}
@@ -111,7 +120,7 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
                 <button
                   className={cn(
                     'rounded px-1 py-0.5 text-sm hover:bg-accent',
-                    info?.reacted && 'bg-indigo-100 dark:bg-indigo-900/30',
+                    info?.reacted && 'bg-brand-subtle',
                   )}
                   key={emoji}
                   onClick={() => {

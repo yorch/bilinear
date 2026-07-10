@@ -93,18 +93,18 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
           {t('issueDetail.templates.applyTemplate')}
         </>
       }
-      triggerClassName="gap-1.5 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+      triggerClassName="gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
     >
       {close => (
         <>
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-zinc-100 px-3 py-2 dark:border-zinc-800">
+          <div className="flex items-center justify-between border-b border-border px-3 py-2">
             <span className="text-xs font-semibold text-muted-foreground">
               {t('issueDetail.templates.title')}
             </span>
             <button
               aria-label={t('common.close')}
-              className="rounded p-0.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+              className="rounded p-0.5 text-muted-foreground hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
               onClick={close}
               type="button"
             >
@@ -113,11 +113,11 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
           </div>
 
           {loading ? (
-            <p className="px-3 py-4 text-center text-xs text-zinc-400">
+            <p className="px-3 py-4 text-center text-xs text-muted-foreground">
               {t('issueDetail.templates.loading')}
             </p>
           ) : sorted.length === 0 ? (
-            <p className="px-3 py-4 text-center text-xs text-zinc-400 italic">
+            <p className="px-3 py-4 text-center text-xs text-muted-foreground italic">
               {t('issueDetail.templates.noneForTeam')}
             </p>
           ) : (
@@ -133,7 +133,7 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
                     type="button"
                   >
                     <div className="flex items-center gap-2">
-                      <span className="flex-1 truncate text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                      <span className="flex-1 truncate text-sm font-medium text-foreground">
                         {template.name}
                       </span>
                       {template.isDefault && (
@@ -141,7 +141,7 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
                       )}
                     </div>
                     {template.description && (
-                      <p className="mt-0.5 truncate text-xs text-zinc-400">
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
                         {template.description}
                       </p>
                     )}

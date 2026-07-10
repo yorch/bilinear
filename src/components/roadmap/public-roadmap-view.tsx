@@ -34,7 +34,7 @@ interface Props {
 
 const STATUS_BADGES: Record<string, { cls: string; labelKey: string }> = {
   backlog: {
-    cls: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400',
+    cls: 'bg-muted text-muted-foreground',
     labelKey: 'roadmap.public.status.backlog',
   },
   cancelled: {
@@ -46,7 +46,7 @@ const STATUS_BADGES: Record<string, { cls: string; labelKey: string }> = {
     labelKey: 'roadmap.public.status.completed',
   },
   inProgress: {
-    cls: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
+    cls: 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand',
     labelKey: 'roadmap.public.status.inProgress',
   },
   paused: {
@@ -61,7 +61,7 @@ const STATUS_BADGES: Record<string, { cls: string; labelKey: string }> = {
 
 const HEALTH_DOTS: Record<string, string> = {
   atRisk: 'bg-yellow-400',
-  noUpdate: 'bg-zinc-300 dark:bg-zinc-600',
+  noUpdate: 'bg-foreground-faint dark:bg-foreground-faint',
   offTrack: 'bg-red-500',
   onTrack: 'bg-green-500',
 };
@@ -81,8 +81,8 @@ function PasswordForm({ slug }: { slug: string }) {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950 px-4">
-      <div className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="w-full max-w-sm rounded-xl border border-border bg-card p-8 shadow-sm">
         <h2 className="mb-1 text-lg font-semibold text-foreground">
           {t('roadmap.public.passwordRequired')}
         </h2>
@@ -91,14 +91,14 @@ function PasswordForm({ slug }: { slug: string }) {
         </p>
         <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
           <input
-            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-indigo-500 dark:focus:ring-indigo-800/40"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             placeholder={t('roadmap.public.enterPassword')}
             ref={inputRef}
             required
             type="password"
           />
           <button
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 dark:focus:ring-offset-zinc-900"
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 dark:focus:ring-offset-background"
             type="submit"
           >
             {t('roadmap.public.continue')}
@@ -121,7 +121,7 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-4xl px-6 py-12">
         {/* Header */}
         <div className="mb-10">
@@ -133,8 +133,8 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
 
         {/* Project grid */}
         {projects.length === 0 ? (
-          <div className="rounded-xl border border-zinc-200 bg-white p-10 text-center dark:border-zinc-700 dark:bg-zinc-900">
-            <p className="text-sm text-zinc-400">{t('roadmap.public.noProjects')}</p>
+          <div className="rounded-xl border border-border bg-card p-10 text-center">
+            <p className="text-sm text-muted-foreground">{t('roadmap.public.noProjects')}</p>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
@@ -148,7 +148,7 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
 
               return (
                 <div
-                  className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-5 shadow-xs dark:border-zinc-700 dark:bg-zinc-900"
+                  className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-xs"
                   key={project.id}
                 >
                   {/* Title row */}
@@ -201,7 +201,7 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
                     </div>
                     <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                       <div
-                        className="h-full rounded-full bg-indigo-500 transition-all"
+                        className="h-full rounded-full bg-brand transition-all"
                         style={{ width: `${progressPct}%` }}
                       />
                     </div>

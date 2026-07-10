@@ -43,7 +43,7 @@ export const CustomFieldsEditor = observer(
 
     return (
       <div className="mt-6">
-        <p className="mb-2 text-xs font-medium text-zinc-500">{t('customFields.title')}</p>
+        <p className="mb-2 text-xs font-medium text-muted-foreground">{t('customFields.title')}</p>
         <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
           {definitions.map(def => {
             const current = customFieldStore.findValue(issueId, def.id);
@@ -94,7 +94,7 @@ const ValueRow = observer(
     void type;
     return (
       <>
-        <span className="text-zinc-500">
+        <span className="text-muted-foreground">
           {label}
           {required && <span className="ml-0.5 text-amber-500">*</span>}
         </span>

@@ -7,8 +7,8 @@ import { fetchMetrics, type PlatformMetrics } from '@/lib/admin-api';
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">{label}</p>
+    <div className="rounded-lg border border-border bg-card p-4">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
       {sub ? <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p> : null}
     </div>
@@ -45,7 +45,7 @@ export default function AdminDashboardPage() {
   }, []);
 
   if (loading) {
-    return <p className="text-sm text-zinc-400">{t('admin.dashboard.loading')}</p>;
+    return <p className="text-sm text-muted-foreground">{t('admin.dashboard.loading')}</p>;
   }
   if (error || !metrics) {
     return <p className="text-sm text-red-500">{error ?? t('admin.dashboard.loadError')}</p>;
@@ -59,7 +59,7 @@ export default function AdminDashboardPage() {
       </div>
 
       <section>
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {t('admin.dashboard.organizations')}
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -75,7 +75,7 @@ export default function AdminDashboardPage() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {t('admin.dashboard.users')}
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -95,16 +95,16 @@ export default function AdminDashboardPage() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {t('admin.dashboard.mostActiveOrgs')}
         </h2>
         {metrics.topOrgs.length === 0 ? (
-          <p className="text-sm text-zinc-400">{t('admin.dashboard.noOrgs')}</p>
+          <p className="text-sm text-muted-foreground">{t('admin.dashboard.noOrgs')}</p>
         ) : (
           <div className="overflow-hidden rounded-lg border border-border">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+                <tr className="border-b border-border bg-muted text-left text-xs font-medium text-muted-foreground">
                   <th className="px-4 py-2">{t('admin.dashboard.colOrganization')}</th>
                   <th className="px-4 py-2 text-right">{t('admin.dashboard.colMembers')}</th>
                   <th className="px-4 py-2 text-right">{t('admin.dashboard.colIssues')}</th>
@@ -112,15 +112,17 @@ export default function AdminDashboardPage() {
               </thead>
               <tbody className="divide-y divide-border">
                 {metrics.topOrgs.map(o => (
-                  <tr className="bg-white dark:bg-zinc-950" key={o.id}>
+                  <tr className="bg-background" key={o.id}>
                     <td className="px-4 py-2">
                       <Link
-                        className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                        className="font-medium text-brand hover:underline"
                         href={`/admin/tenants?q=${encodeURIComponent(o.urlKey)}`}
                       >
                         {o.name}
                       </Link>
-                      <span className="ml-2 font-mono text-xs text-zinc-400">{o.urlKey}</span>
+                      <span className="ml-2 font-mono text-xs text-muted-foreground">
+                        {o.urlKey}
+                      </span>
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
                       {o.memberCount}

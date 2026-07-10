@@ -134,7 +134,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
               htmlFor="project-description"
             >
               {t('projects.description')}{' '}
-              <span className="font-normal text-zinc-400">({t('projects.optional')})</span>
+              <span className="font-normal text-muted-foreground">({t('projects.optional')})</span>
             </label>
             <Textarea
               className="resize-none"
@@ -166,8 +166,8 @@ export const CreateProjectModal = observer(function CreateProjectModal({
                   className={cn(
                     'rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
                     selectedTeamIds.includes(team.id)
-                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
-                      : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800',
+                      ? 'border-brand bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground'
+                      : 'border-border text-muted-foreground hover:bg-muted',
                   )}
                   key={team.id}
                   onClick={() => toggleTeam(team.id)}
@@ -179,7 +179,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
               ))}
             </div>
             {teams.length === 0 && (
-              <p className="text-xs text-zinc-400">{t('projects.noTeamsAvailable')}</p>
+              <p className="text-xs text-muted-foreground">{t('projects.noTeamsAvailable')}</p>
             )}
           </div>
 
@@ -187,7 +187,9 @@ export const CreateProjectModal = observer(function CreateProjectModal({
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-muted-foreground" htmlFor="project-start">
                 {t('projects.startDate')}{' '}
-                <span className="font-normal text-zinc-400">({t('projects.optional')})</span>
+                <span className="font-normal text-muted-foreground">
+                  ({t('projects.optional')})
+                </span>
               </label>
               <Input
                 id="project-start"
@@ -199,7 +201,9 @@ export const CreateProjectModal = observer(function CreateProjectModal({
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-muted-foreground" htmlFor="project-target">
                 {t('projects.targetDate')}{' '}
-                <span className="font-normal text-zinc-400">({t('projects.optional')})</span>
+                <span className="font-normal text-muted-foreground">
+                  ({t('projects.optional')})
+                </span>
               </label>
               <Input
                 id="project-target"

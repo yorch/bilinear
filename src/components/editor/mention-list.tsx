@@ -72,7 +72,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
 
   if (items.length === 0) {
     return (
-      <div className="mention-popup rounded-md border border-zinc-200 bg-white p-2 text-xs text-zinc-400 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+      <div className="mention-popup rounded-md border border-border bg-card p-2 text-xs text-muted-foreground shadow-lg">
         {t('editor.noResults')}
       </div>
     );
@@ -80,7 +80,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
 
   return (
     <ul
-      className="mention-popup max-h-48 w-48 overflow-y-auto rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+      className="mention-popup max-h-48 w-48 overflow-y-auto rounded-md border border-border bg-card py-1 shadow-lg"
       ref={listRef}
     >
       {items.map((item, index) => (
@@ -89,8 +89,8 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
             className={cn(
               'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors',
               index === selectedIndex
-                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-                : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800',
+                ? 'bg-brand-subtle text-brand-subtle-foreground'
+                : 'text-foreground-secondary hover:bg-accent',
             )}
             onMouseDown={e => {
               e.preventDefault();
@@ -100,7 +100,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
           >
             <span className="flex-1 truncate">{item.label}</span>
             {item.sub && (
-              <span className="shrink-0 font-mono text-xs text-zinc-400">{item.sub}</span>
+              <span className="shrink-0 font-mono text-xs text-muted-foreground">{item.sub}</span>
             )}
           </button>
         </li>

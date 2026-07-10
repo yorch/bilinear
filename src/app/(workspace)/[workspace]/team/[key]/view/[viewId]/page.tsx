@@ -92,7 +92,7 @@ const CustomViewPage = observer(function CustomViewPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-zinc-400">
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
         {t('common.loading')}
       </div>
     );
@@ -100,7 +100,7 @@ const CustomViewPage = observer(function CustomViewPage() {
 
   if (!view || !team) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-zinc-400">
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
         {t('customViews.notFound')}
       </div>
     );
@@ -109,14 +109,14 @@ const CustomViewPage = observer(function CustomViewPage() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <header className="flex items-center gap-2 border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
-        <Eye className="h-4 w-4 text-zinc-400" />
+      <header className="flex items-center gap-2 border-b border-border px-6 py-3">
+        <Eye className="h-4 w-4 text-muted-foreground" />
         <h1 className="text-sm font-semibold text-foreground">{view.name}</h1>
-        <span className="text-xs text-zinc-400">
+        <span className="text-xs text-muted-foreground">
           {t('issues.issuesCount', { count: issues.length })}
         </span>
         {view.description && (
-          <span className="truncate text-xs text-zinc-400">{view.description}</span>
+          <span className="truncate text-xs text-muted-foreground">{view.description}</span>
         )}
       </header>
 

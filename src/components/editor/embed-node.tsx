@@ -37,8 +37,10 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
   if (editing || !embedUrl) {
     return (
       <NodeViewWrapper>
-        <div className="embed-editor my-2 rounded-md border border-zinc-300 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-900">
-          <p className="mb-2 text-xs font-medium text-zinc-500">{t('editor.embed.urlLabel')}</p>
+        <div className="embed-editor my-2 rounded-md border border-border bg-card p-3">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">
+            {t('editor.embed.urlLabel')}
+          </p>
           <form
             className="flex gap-2"
             onSubmit={e => {
@@ -48,7 +50,7 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
             }}
           >
             <input
-              className="flex-1 rounded border border-zinc-200 bg-white px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+              className="flex-1 rounded border border-border bg-card px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-brand"
               defaultValue={url}
               placeholder="https://youtube.com/watch?v=..."
               type="url"
@@ -73,7 +75,7 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
       <div
         className={cn(
           'embed-block group relative my-2 overflow-hidden rounded-md border',
-          selected ? 'border-indigo-400' : 'border-border',
+          selected ? 'border-brand' : 'border-border',
         )}
         style={{ paddingBottom: '56.25%' }}
       >
@@ -86,7 +88,7 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
         />
         <button
           aria-label={t('editor.embed.editAriaLabel')}
-          className="absolute right-2 top-2 z-10 rounded bg-black/50 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100"
+          className="absolute right-2 top-2 z-10 flex rounded bg-black/50 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100 max-md:h-11 max-md:w-11 max-md:items-center max-md:justify-center max-md:opacity-100"
           onClick={() => setEditing(true)}
           title={t('editor.embed.editAriaLabel')}
           type="button"

@@ -3,6 +3,7 @@
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { DocumentList } from '@/components/documents/document-list';
+import { SyncErrorState } from '@/components/shared/sync-error-state';
 import { useTranslations } from '@/hooks/use-translations';
 import { useStore } from '@/providers/store-provider';
 
@@ -18,23 +19,19 @@ const TeamDocsPage = observer(function TeamDocsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('common.loading')}
       </div>
     );
   }
 
   if (hasError) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-red-500">
-        {t('documents.loadFailed')}
-      </div>
-    );
+    return <SyncErrorState message={t('documents.loadFailed')} />;
   }
 
   if (!team) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('documents.teamNotFound')}
       </div>
     );
@@ -42,7 +39,7 @@ const TeamDocsPage = observer(function TeamDocsPage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex items-center border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
+      <div className="flex items-center border-b border-border px-6 py-3">
         <h1 className="text-sm font-semibold text-foreground">
           {t('documents.teamDocsTitle', { teamName: team.displayName ?? team.name })}
         </h1>

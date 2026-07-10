@@ -291,7 +291,7 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
 
   if (items.length === 0) {
     return (
-      <div className="flex h-48 items-center justify-center px-6 py-12 text-center text-sm text-zinc-400">
+      <div className="flex h-48 items-center justify-center px-6 py-12 text-center text-sm text-muted-foreground">
         {resolvedEmptyMessage}
       </div>
     );
@@ -305,10 +305,10 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
   return (
     <div className="flex flex-col">
       {/* Zoom controls */}
-      <div className="flex items-center justify-end border-b border-zinc-200 px-3 py-1.5 dark:border-zinc-800">
+      <div className="flex items-center justify-end border-b border-border px-3 py-1.5">
         <fieldset
           aria-label={t('roadmap.gantt.zoomLevel')}
-          className="flex gap-0.5 rounded-md border border-zinc-200 p-0.5 dark:border-zinc-700"
+          className="flex gap-0.5 rounded-md border border-border p-0.5"
         >
           {(['month', 'week', 'day'] as GanttZoom[]).map(z => (
             <button
@@ -316,8 +316,8 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
               className={cn(
                 'rounded px-2.5 py-0.5 text-xs font-medium transition-colors',
                 zoom === z
-                  ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
-                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200',
+                  ? 'bg-invert text-invert-foreground'
+                  : 'text-muted-foreground hover:text-foreground',
               )}
               key={z}
               onClick={() => setZoom(z)}
@@ -333,14 +333,14 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
       <div className="overflow-x-auto" ref={containerRef}>
         <div style={{ minWidth: totalWidth }}>
           {/* Header */}
-          <div className="sticky top-0 z-10 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="sticky top-0 z-10 border-b border-border bg-background">
             {/* Month row */}
             <div className={cn('flex border-b border-border', hasSubRow ? 'h-6' : 'h-8')}>
               {monthMarkers.map((m, i) => {
                 const nextX = monthMarkers[i + 1]?.x ?? totalWidth;
                 return (
                   <div
-                    className="overflow-hidden border-r border-zinc-100 px-2 text-xs font-medium leading-6 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400"
+                    className="overflow-hidden border-r border-border px-2 text-xs font-medium leading-6 text-muted-foreground"
                     key={m.label}
                     style={{ width: nextX - m.x }}
                   >
@@ -356,7 +356,7 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
                 {zoom === 'week' &&
                   weekMarkers.map(wm => (
                     <div
-                      className="absolute top-0 border-l border-zinc-100 px-1 text-[10px] leading-5 text-zinc-400 dark:border-zinc-800 dark:text-zinc-500"
+                      className="absolute top-0 border-l border-border px-1 text-[10px] leading-5 text-muted-foreground"
                       key={wm.x}
                       style={{ left: wm.x }}
                     >
@@ -368,9 +368,7 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
                     <div
                       className={cn(
                         'absolute top-0 border-l px-0.5 text-[10px] leading-5 text-muted-foreground',
-                        dm.isMonthStart
-                          ? 'border-zinc-300 font-semibold dark:border-zinc-600'
-                          : 'border-border',
+                        dm.isMonthStart ? 'border-border font-semibold' : 'border-border',
                       )}
                       key={dm.x}
                       style={{ left: dm.x, width: pxPerDay }}
@@ -408,7 +406,7 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
                 .map(dm => (
                   <div
                     aria-hidden="true"
-                    className="absolute top-0 w-px bg-zinc-200 dark:bg-zinc-700"
+                    className="absolute top-0 w-px bg-muted"
                     key={dm.x}
                     style={{ height: items.length * rowHeight, left: dm.x }}
                   />
@@ -434,7 +432,7 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
                 }
               }
 
-              const color = item.color ?? '#6366f1';
+              const color = item.color ?? 'var(--brand)';
               const isDragging = drag?.id === item.id;
 
               return (

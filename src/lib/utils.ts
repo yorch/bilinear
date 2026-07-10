@@ -47,13 +47,28 @@ export function formatRelativeTime(dateStr: string, t: Translate, intlLocale = '
   return date.toLocaleDateString(intlLocale, { day: 'numeric', month: 'short' });
 }
 
-/** Format a byte count as a human-readable file size string. */
-export function formatFileSize(bytes: number): string {
+const fileSizeFormatters = new Map<string, Intl.NumberFormat>();
+
+function getFileSizeFormatter(intlLocale: string): Intl.NumberFormat {
+  let formatter = fileSizeFormatters.get(intlLocale);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(intlLocale, {
+      maximumFractionDigits: 1,
+      minimumFractionDigits: 1,
+    });
+    fileSizeFormatters.set(intlLocale, formatter);
+  }
+  return formatter;
+}
+
+/** Format a byte count as a human-readable, locale-aware file size string. */
+export function formatFileSize(bytes: number, intlLocale = 'en-US'): string {
   if (bytes < 1024) {
     return `${bytes} B`;
   }
+  const formatter = getFileSizeFormatter(intlLocale);
   if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${formatter.format(bytes / 1024)} KB`;
   }
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${formatter.format(bytes / (1024 * 1024))} MB`;
 }

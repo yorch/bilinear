@@ -1,8 +1,10 @@
 'use client';
 
 import { Activity, Clock } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { ISSUE_ACTIVITIES_QUERY } from '@/lib/graphql-queries';
@@ -74,60 +76,44 @@ const COLLAPSE_THRESHOLD = 5;
 export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps) {
   const t = useTranslations();
   const { formatRelativeTime } = useFormatters();
-  const [activities, setActivities] = useState<IssueActivity[]>([]);
-  const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
 
-  useEffect(() => {
-    if (!issueId) {
-      return;
-    }
-    void refetchKey; // must be referenced here; Biome strips unused effect deps
-
-    let cancelled = false;
-
-    const fetchActivities = async () => {
-      setLoading(true);
-      try {
-        const res = await gql(ISSUE_ACTIVITIES_QUERY, {
-          issueId,
-          limit: 50,
-        });
-        if (!cancelled) {
-          const data = res.data as { issueActivities?: IssueActivity[] } | undefined;
-          // Newest first
-          const sorted = [...(data?.issueActivities ?? [])].sort(
-            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-          );
-          setActivities(sorted);
-        }
-      } catch {
-        // Silently fail — activity is supplementary information
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchActivities();
-    return () => {
-      cancelled = true;
-    };
-  }, [issueId, refetchKey]);
+  const {
+    data: activities,
+    loading,
+    error,
+    refetch,
+  } = useRetryableFetch<IssueActivity[]>(
+    async () => {
+      const res = await gql(ISSUE_ACTIVITIES_QUERY, { issueId, limit: 50 });
+      const data = res.data as { issueActivities?: IssueActivity[] } | undefined;
+      // Newest first
+      return [...(data?.issueActivities ?? [])].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+    },
+    [issueId, refetchKey],
+    [],
+  );
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 py-4 text-xs text-zinc-400">
+      <div className="flex items-center gap-2 py-4 text-xs text-muted-foreground">
         <Clock className="h-3.5 w-3.5 animate-pulse" />
         <span>{t('issueDetail.activity.loading')}</span>
       </div>
     );
   }
 
+  if (error && activities.length === 0) {
+    return (
+      <InlineRetry message={t('issueDetail.activity.failedToLoad')} onRetry={() => refetch()} />
+    );
+  }
+
   if (activities.length === 0) {
     return (
-      <div className="flex items-center gap-2 py-4 text-xs text-zinc-400">
+      <div className="flex items-center gap-2 py-4 text-xs text-muted-foreground">
         <Activity className="h-3.5 w-3.5" />
         <span>{t('issueDetail.activity.empty')}</span>
       </div>
@@ -152,14 +138,14 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
               <span
                 className={cn(
                   'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white',
-                  actor?.avatarBgColor ? '' : 'bg-zinc-400 dark:bg-zinc-600',
+                  actor?.avatarBgColor ? '' : 'bg-avatar-fallback',
                 )}
                 style={actor?.avatarBgColor ? { backgroundColor: actor.avatarBgColor } : undefined}
                 title={actor?.displayName ?? t('issueDetail.activity.system')}
               >
                 {actor?.initials ?? 'S'}
               </span>
-              {!isLast && <div className="my-1 w-px flex-1 bg-zinc-200 dark:bg-zinc-700" />}
+              {!isLast && <div className="my-1 w-px flex-1 bg-muted" />}
             </div>
 
             {/* Content */}
@@ -177,7 +163,7 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
 
       {shouldCollapse && (
         <button
-          className="mt-1 text-xs text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+          className="mt-1 text-xs text-brand hover:text-brand-hover"
           onClick={() => setExpanded(e => !e)}
           type="button"
         >

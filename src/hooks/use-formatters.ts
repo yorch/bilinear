@@ -5,7 +5,10 @@ import { useTranslations } from '@/hooks/use-translations';
 import { DATE_FNS_LOCALES } from '@/lib/date-fns-locale';
 import { INTL_LOCALES } from '@/lib/i18n';
 import { formatDueDate as formatDueDateBase } from '@/lib/issue-utils';
-import { formatRelativeTime as formatRelativeTimeBase } from '@/lib/utils';
+import {
+  formatFileSize as formatFileSizeBase,
+  formatRelativeTime as formatRelativeTimeBase,
+} from '@/lib/utils';
 import { useLocale } from '@/providers/locale-provider';
 
 /**
@@ -16,6 +19,7 @@ import { useLocale } from '@/providers/locale-provider';
  *
  * - `formatRelativeTime(dateStr)` — "5m ago" / "hace 5m", already translated.
  * - `formatDueDate(dueDate)` — short due-date label via `date-fns`.
+ * - `formatFileSize(bytes)` — locale-bound "1.5 KB" / "1,5 KB" decimal separator.
  * - `formatDate(value, options?)` — locale-bound `toLocaleDateString`.
  * - `formatDateTime(value, options?)` — locale-bound `toLocaleString`.
  * - `intlLocale` / `dateFnsLocale` — escape hatches for direct `Intl` /
@@ -36,6 +40,7 @@ export function useFormatters() {
         new Date(value).toLocaleString(intlLocale, options),
       formatDueDate: (dueDate: string | null | undefined) =>
         formatDueDateBase(dueDate, dateFnsLocale),
+      formatFileSize: (bytes: number) => formatFileSizeBase(bytes, intlLocale),
       formatRelativeTime: (dateStr: string) => formatRelativeTimeBase(dateStr, t, intlLocale),
       intlLocale,
     };

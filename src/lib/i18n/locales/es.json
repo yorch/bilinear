@@ -289,6 +289,7 @@
       "weeksAgo": "hace {count}sem",
       "yesterday": "ayer"
     },
+    "retry": "Reintentar",
     "save": "Guardar",
     "saving": "Guardando…",
     "search": "Buscar",
@@ -590,6 +591,7 @@
       "changed": "{actor} cambió {field} de {oldValue} a {newValue}",
       "cleared": "{actor} eliminó {field}",
       "empty": "Aún no hay actividad registrada.",
+      "failedToLoad": "No se pudo cargar la actividad",
       "fields": {
         "assignee": "responsable",
         "cycle": "ciclo",
@@ -624,6 +626,7 @@
       "attachFile": "Adjuntar archivo",
       "empty": "Sin archivos adjuntos",
       "failedToDelete": "No se pudo eliminar el archivo",
+      "failedToLoad": "No se pudieron cargar los archivos adjuntos",
       "removeAttachment": "Quitar archivo adjunto",
       "title": "Archivos adjuntos",
       "uploadFailed": "Error al subir el archivo",
@@ -638,6 +641,7 @@
       "edited": "editado",
       "failedToConvert": "No se pudo convertir el comentario en subtarea",
       "failedToDelete": "No se pudo eliminar el comentario",
+      "failedToLoad": "No se pudieron cargar los comentarios",
       "failedToPost": "No se pudo publicar el comentario",
       "failedToUpdate": "No se pudo actualizar el comentario",
       "failedToUpdateReaction": "No se pudo actualizar la reacción",
@@ -665,6 +669,7 @@
       "issueCreated": "Tarea creada",
       "suggest": "Sugerir",
       "suggestTitleFromDescription": "Sugerir un título a partir de la descripción",
+      "team": "Equipo",
       "titlePlaceholder": "Título de la tarea"
     },
     "defaultUserName": "Usuario",
@@ -695,6 +700,7 @@
     },
     "reactions": {
       "addReaction": "Agregar reacción",
+      "failedToLoad": "No se pudieron cargar las reacciones",
       "failedToUpdate": "No se pudo actualizar la reacción",
       "react": "Reaccionar"
     },
@@ -855,6 +861,7 @@
     "priority": "Prioridad",
     "priorityN": "Prioridad {priority}",
     "project": "Proyecto",
+    "removeFilter": "Quitar filtro",
     "restoreFailed": "Error al restaurar la tarea",
     "saveCurrentFiltersAsView": "Guardar filtros actuales como vista",
     "saveView": "Guardar vista",
@@ -867,6 +874,7 @@
     "status": "Estado",
     "swimlaneByAssignee": "Carriles por responsable",
     "swimlaneByPriority": "Carriles por prioridad",
+    "syncingRow": "Guardando cambios…",
     "teamBacklogTitle": "{team} — Pendientes",
     "teamIssuesTitle": "{team} — Tareas",
     "teamNotFound": "Equipo no encontrado.",
@@ -941,6 +949,7 @@
   "nav": {
     "analytics": "Analítica",
     "backlog": "Pendientes",
+    "closeMenu": "Cerrar menú",
     "collapseSidebar": "Contraer barra lateral (⌘B)",
     "createTeam": "Crear un equipo",
     "cycles": "Ciclos",
@@ -951,6 +960,7 @@
     "inbox": "Bandeja de entrada",
     "myIssues": "Mis tareas",
     "newTeam": "Nuevo equipo",
+    "openMenu": "Abrir menú",
     "projects": "Proyectos",
     "removeFromFavorites": "Quitar de favoritos",
     "removeNamedFromFavorites": "Quitar {name} de favoritos",
@@ -1508,6 +1518,7 @@
       "inactive": "Inactivo",
       "integrations": "Integraciones",
       "integrationsDescription": "Conecta GitHub y otros servicios",
+      "languageDescription": "Elige tu idioma de visualización",
       "lastUsedOn": "Usado por última vez el {date}",
       "memberRoleUpdated": "Rol del miembro actualizado",
       "memberRoleUpdateError": "Error al actualizar el rol del miembro",

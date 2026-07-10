@@ -164,20 +164,22 @@ export function CommentCard({
         className={cn(
           'rounded-lg p-3 transition-colors',
           isResolved
-            ? 'bg-zinc-50 opacity-70 dark:bg-zinc-800/30'
-            : 'bg-zinc-50/50 hover:bg-zinc-50 dark:bg-zinc-800/20 dark:hover:bg-zinc-800/40',
+            ? 'bg-muted opacity-70 dark:bg-muted/30'
+            : 'bg-muted/50 hover:bg-muted dark:bg-muted/20 dark:hover:bg-muted/40',
         )}
       >
         {/* Header */}
         <div className="mb-2 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <UserAvatar size="md" user={comment.author} />
-            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            <span className="text-xs font-medium text-foreground-secondary">
               {comment.author.displayName}
             </span>
-            <span className="text-xs text-zinc-400">{formatRelativeTime(comment.createdAt)}</span>
+            <span className="text-xs text-muted-foreground">
+              {formatRelativeTime(comment.createdAt)}
+            </span>
             {comment.editedAt && (
-              <span className="text-xs italic text-zinc-400">
+              <span className="text-xs italic text-muted-foreground">
                 ({t('issueDetail.comments.edited')})
               </span>
             )}
@@ -190,13 +192,13 @@ export function CommentCard({
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100 transition-opacity">
             {/* Emoji reaction */}
             <SelectPopover
               align="right"
               panelClassName="flex gap-1 p-1.5"
               triggerChildren={<Smile className="h-3.5 w-3.5" />}
-              triggerClassName="p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
+              triggerClassName="p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
               triggerTitle={t('issueDetail.comments.react')}
             >
               {close => (
@@ -207,7 +209,7 @@ export function CommentCard({
                       <button
                         className={cn(
                           'rounded px-1 py-0.5 text-sm hover:bg-accent',
-                          info?.reacted && 'bg-indigo-100 dark:bg-indigo-900/30',
+                          info?.reacted && 'bg-brand-subtle',
                         )}
                         key={emoji}
                         onClick={() => {
@@ -227,7 +229,8 @@ export function CommentCard({
             {/* Quote reply */}
             {depth === 0 && (
               <button
-                className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
+                aria-label={t('issueDetail.comments.quoteReply')}
+                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                 onClick={handleQuoteReply}
                 title={t('issueDetail.comments.quoteReply')}
                 type="button"
@@ -238,11 +241,14 @@ export function CommentCard({
 
             {/* Resolve */}
             <button
+              aria-label={
+                isResolved ? t('issueDetail.comments.unresolve') : t('issueDetail.comments.resolve')
+              }
               className={cn(
-                'rounded p-1 transition-colors',
+                'rounded p-1 transition-colors max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center',
                 isResolved
                   ? 'text-green-600 hover:bg-green-100 dark:hover:bg-green-900/20'
-                  : 'text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700',
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
               onClick={() => onToggleResolve(comment)}
               title={
@@ -258,13 +264,13 @@ export function CommentCard({
               align="right"
               panelClassName="min-w-[160px] py-1"
               triggerChildren={<MoreHorizontal className="h-3.5 w-3.5" />}
-              triggerClassName="p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
+              triggerClassName="p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
             >
               {close => (
                 <>
                   {isOwn && (
                     <button
-                      className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                      className="w-full px-3 py-1.5 text-left text-xs text-foreground-secondary hover:bg-muted"
                       onClick={() => {
                         setEditing(true);
                         close();
@@ -277,7 +283,7 @@ export function CommentCard({
                   {/* Convert to sub-issue — only on top-level comments */}
                   {depth === 0 && (
                     <button
-                      className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                      className="w-full px-3 py-1.5 text-left text-xs text-foreground-secondary hover:bg-muted"
                       onClick={() => {
                         handleConvertToSubIssue();
                         close();
@@ -310,7 +316,7 @@ export function CommentCard({
           <div className="space-y-2">
             <TipTapEditor
               autofocus
-              className="rounded border border-indigo-400 p-1 text-sm"
+              className="rounded border border-brand p-1 text-sm"
               content={editBody}
               onChange={setEditBody}
               showToolbar
@@ -325,7 +331,7 @@ export function CommentCard({
                 {t('common.save')}
               </button>
               <button
-                className="rounded-md px-3 py-1 text-xs text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                className="rounded-md px-3 py-1 text-xs text-muted-foreground hover:bg-muted"
                 onClick={() => setEditing(false)}
                 type="button"
               >
@@ -335,7 +341,7 @@ export function CommentCard({
           </div>
         ) : (
           <TipTapEditor
-            className="prose prose-sm dark:prose-invert max-w-none text-zinc-700 dark:text-zinc-300"
+            className="prose prose-sm dark:prose-invert max-w-none text-foreground-secondary"
             content={comment.body}
             readOnly
           />
@@ -349,8 +355,8 @@ export function CommentCard({
                 className={cn(
                   'flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors',
                   reacted
-                    ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700',
+                    ? 'bg-brand-subtle text-brand-subtle-foreground'
+                    : 'bg-muted text-muted-foreground hover:bg-accent',
                 )}
                 key={emoji}
                 onClick={() => onToggleReaction(comment.id, emoji, reacted)}
@@ -366,7 +372,7 @@ export function CommentCard({
 
       {/* Nested replies */}
       {comment.replies.length > 0 && (
-        <div className="ml-4 mt-1 space-y-1 border-l-2 border-zinc-200 pl-4 dark:border-zinc-700">
+        <div className="ml-4 mt-1 space-y-1 border-l-2 border-border pl-4">
           {comment.replies.map(reply => (
             <CommentCard
               comment={reply}
@@ -392,7 +398,7 @@ export function CommentCard({
 
       {/* Inline reply composer */}
       {showReplyTo === comment.id && (
-        <div className="ml-4 mt-2 border-l-2 border-zinc-200 pl-4 dark:border-zinc-700">
+        <div className="ml-4 mt-2 border-l-2 border-border pl-4">
           <CommentComposer
             compact
             issueId={issueId}

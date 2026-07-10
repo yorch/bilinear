@@ -75,16 +75,16 @@ export default observer(function ProjectsPage() {
 
   return (
     <>
-      <div className="flex h-12 items-center gap-2 border-b border-zinc-200 px-4 dark:border-zinc-800">
+      <div className="flex h-12 items-center gap-2 border-b border-border px-4">
         <h1 className="flex-1 text-sm font-semibold text-foreground">{t('projects.title')}</h1>
-        <div className="flex rounded-md border border-zinc-200 p-0.5 dark:border-zinc-800">
+        <div className="flex rounded-md border border-border p-0.5">
           <button
             aria-label={t('projects.listView')}
             className={cn(
               'flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors',
               layout === 'list'
-                ? 'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
-                : 'text-zinc-500 hover:text-foreground',
+                ? 'bg-muted text-foreground'
+                : 'text-muted-foreground hover:text-foreground',
             )}
             onClick={() => setLayoutPersisted('list')}
             type="button"
@@ -97,8 +97,8 @@ export default observer(function ProjectsPage() {
             className={cn(
               'flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors',
               layout === 'roadmap'
-                ? 'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
-                : 'text-zinc-500 hover:text-foreground',
+                ? 'bg-muted text-foreground'
+                : 'text-muted-foreground hover:text-foreground',
             )}
             onClick={() => setLayoutPersisted('roadmap')}
             type="button"

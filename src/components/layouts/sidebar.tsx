@@ -132,10 +132,12 @@ function favoriteHref(
 const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
   base,
   collapsed,
+  onNavigate,
   pathname,
 }: {
   base: string;
   collapsed: boolean;
+  onNavigate?: () => void;
   pathname: string;
 }) {
   const { favoriteStore, teamStore } = useStore();
@@ -192,18 +194,21 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
                 className={cn(
                   'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
                   isActive
-                    ? 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
-                    : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
+                    ? 'bg-muted text-foreground'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                 )}
                 href={href}
+                onClick={onNavigate}
                 title={label}
               >
-                <span className="shrink-0 text-zinc-400">{favoriteIcon(fav.entityType)}</span>
+                <span className="shrink-0 text-muted-foreground">
+                  {favoriteIcon(fav.entityType)}
+                </span>
                 <span className="truncate text-xs">{label}</span>
               </Link>
               <button
                 aria-label={t('nav.removeNamedFromFavorites', { name: label })}
-                className="mr-1 hidden shrink-0 rounded p-0.5 text-zinc-400 hover:text-zinc-700 group-hover:flex dark:hover:text-zinc-200"
+                className="mr-1 hidden shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground group-hover:flex max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                 onClick={() => void removeFavorite(fav.id)}
                 title={t('nav.removeFromFavorites')}
                 type="button"
@@ -223,10 +228,12 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
 const SidebarTeamsSection = observer(function SidebarTeamsSection({
   base,
   collapsed,
+  onNavigate,
   pathname,
 }: {
   base: string;
   collapsed: boolean;
+  onNavigate?: () => void;
   pathname: string;
 }) {
   const { customViewStore, teamStore, uiStore } = useStore();
@@ -259,7 +266,7 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
             </span>
             <button
               aria-label={t('nav.newTeam')}
-              className="flex h-5 w-5 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-zinc-200 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+              className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground-secondary"
               onClick={() => uiStore.openCreateTeamModal()}
               title={t('nav.newTeam')}
               type="button"
@@ -271,7 +278,7 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
             {teams.length === 0 ? (
               <li>
                 <button
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
                   onClick={() => uiStore.openCreateTeamModal()}
                   type="button"
                 >
@@ -306,10 +313,11 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                       className={cn(
                         'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
                         isActive
-                          ? 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
-                          : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
+                          ? 'bg-muted text-foreground'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                       )}
                       href={href}
+                      onClick={onNavigate}
                       title={team.displayName || team.name}
                     >
                       <span className="flex h-4 w-4 shrink-0 items-center justify-center">
@@ -327,10 +335,11 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                       className={cn(
                         'flex items-center gap-2 rounded-md py-1 pl-8 pr-2 text-xs transition-colors',
                         isBacklogActive
-                          ? 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
-                          : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
+                          ? 'bg-muted text-foreground'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                       )}
                       href={backlogHref}
+                      onClick={onNavigate}
                       title={t('nav.backlog')}
                     >
                       <Archive className="h-3 w-3" />
@@ -340,10 +349,11 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                       className={cn(
                         'flex items-center gap-2 rounded-md py-1 pl-8 pr-2 text-xs transition-colors',
                         isCyclesActive
-                          ? 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
-                          : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
+                          ? 'bg-muted text-foreground'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                       )}
                       href={cyclesHref}
+                      onClick={onNavigate}
                       title={t('nav.cycles')}
                     >
                       <RefreshCw className="h-3 w-3" />
@@ -353,10 +363,11 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                       className={cn(
                         'flex items-center gap-2 rounded-md py-1 pl-8 pr-2 text-xs transition-colors',
                         isAnalyticsActive
-                          ? 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
-                          : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
+                          ? 'bg-muted text-foreground'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                       )}
                       href={analyticsHref}
+                      onClick={onNavigate}
                       title={t('nav.analytics')}
                     >
                       <BarChart2 className="h-3 w-3" />
@@ -366,10 +377,11 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                       className={cn(
                         'flex items-center gap-2 rounded-md py-1 pl-8 pr-2 text-xs transition-colors',
                         isDocsActive
-                          ? 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
-                          : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
+                          ? 'bg-muted text-foreground'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                       )}
                       href={docsHref}
+                      onClick={onNavigate}
                       title={t('nav.docs')}
                     >
                       <FileText className="h-3 w-3" />
@@ -383,11 +395,12 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                           className={cn(
                             'flex items-center gap-2 rounded-md py-1 pl-8 pr-2 text-xs transition-colors',
                             isViewActive
-                              ? 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
-                              : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
+                              ? 'bg-muted text-foreground'
+                              : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                           )}
                           href={viewHref}
                           key={view.id}
+                          onClick={onNavigate}
                           title={view.name}
                         >
                           <Eye className="h-3 w-3" />
@@ -415,10 +428,11 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                   className={cn(
                     'flex items-center justify-center rounded-md py-1.5 text-sm transition-colors',
                     isActive
-                      ? 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
-                      : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
+                      ? 'bg-muted text-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                   )}
                   href={href}
+                  onClick={onNavigate}
                   title={team.displayName || team.name}
                 >
                   {team.icon ? (
@@ -440,6 +454,10 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
 
 interface SidebarProps {
   collapsed?: boolean;
+  /** Whether the off-canvas mobile drawer is open (ignored at md+, which is always visible). */
+  mobileOpen?: boolean;
+  /** Close the mobile drawer (X button, backdrop click, or navigating). */
+  onMobileClose?: () => void;
   onToggle?: () => void;
   workspaceKey?: string;
 }
@@ -447,12 +465,17 @@ interface SidebarProps {
 export const Sidebar = observer(function Sidebar({
   collapsed = false,
   onToggle,
+  mobileOpen = false,
+  onMobileClose,
   workspaceKey,
 }: SidebarProps) {
   const { syncStore } = useStore();
   const pathname = usePathname();
   const t = useTranslations();
   const base = workspaceKey ? `/${workspaceKey}` : '';
+  // The mobile drawer always shows full content — the desktop collapse
+  // preference (a persistent-rail concept) doesn't apply to a transient overlay.
+  const effectiveCollapsed = collapsed && !mobileOpen;
 
   const globalNavItems = [
     {
@@ -480,27 +503,39 @@ export const Sidebar = observer(function Sidebar({
   return (
     <aside
       className={cn(
-        'flex h-full flex-shrink-0 flex-col border-r border-zinc-200 bg-zinc-50 transition-[width] duration-200 dark:border-zinc-800 dark:bg-zinc-950',
-        collapsed ? 'w-12' : 'w-56',
+        'fixed inset-y-0 left-0 z-40 flex h-full w-64 flex-shrink-0 flex-col border-r border-border bg-background transition-transform duration-200',
+        mobileOpen ? 'translate-x-0' : '-translate-x-full',
+        'md:relative md:z-auto md:translate-x-0 md:transition-[width]',
+        collapsed ? 'md:w-12' : 'md:w-60',
       )}
       data-collapsed={collapsed ? 'true' : 'false'}
+      data-mobile-open={mobileOpen ? 'true' : 'false'}
     >
       {/* Workspace header */}
-      <div className="flex h-12 items-center gap-2 border-b border-zinc-200 px-2 dark:border-zinc-800">
+      <div className="flex h-12 items-center gap-2 border-b border-border px-2">
         <button
           aria-label={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
+          className="hidden h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:flex"
           onClick={onToggle}
           title={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
           type="button"
         >
           <PanelLeft className="h-4 w-4" />
         </button>
-        {!collapsed && (
+        {!effectiveCollapsed && (
           <span className="truncate text-sm font-semibold text-foreground">
             {syncStore.organizationName ?? workspaceKey ?? APP_NAME}
           </span>
         )}
+        <button
+          aria-label={t('nav.closeMenu')}
+          className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground md:hidden"
+          onClick={onMobileClose}
+          title={t('nav.closeMenu')}
+          type="button"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
 
       {/* Navigation */}
@@ -511,28 +546,44 @@ export const Sidebar = observer(function Sidebar({
             <li key={item.href}>
               <Link
                 className={cn(
-                  'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
-                  collapsed && 'justify-center px-0',
+                  'flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+                  effectiveCollapsed && 'justify-center px-0',
                   pathname === item.href
-                    ? 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
-                    : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
+                    ? 'bg-muted text-foreground'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                 )}
                 href={item.href}
+                onClick={onMobileClose}
                 title={item.label}
               >
                 {item.icon}
-                {!collapsed && item.label}
+                {!effectiveCollapsed && <span className="truncate">{item.label}</span>}
               </Link>
             </li>
           ))}
         </ul>
 
-        <SidebarFavoritesSection base={base} collapsed={collapsed} pathname={pathname} />
-        <SidebarTeamsSection base={base} collapsed={collapsed} pathname={pathname} />
+        <SidebarFavoritesSection
+          base={base}
+          collapsed={effectiveCollapsed}
+          onNavigate={onMobileClose}
+          pathname={pathname}
+        />
+        <SidebarTeamsSection
+          base={base}
+          collapsed={effectiveCollapsed}
+          onNavigate={onMobileClose}
+          pathname={pathname}
+        />
       </nav>
 
       {/* Footer */}
-      <SidebarFooter base={base} collapsed={collapsed} pathname={pathname} />
+      <SidebarFooter
+        base={base}
+        collapsed={effectiveCollapsed}
+        onNavigate={onMobileClose}
+        pathname={pathname}
+      />
     </aside>
   );
 });
@@ -542,26 +593,28 @@ export const Sidebar = observer(function Sidebar({
 function SidebarFooter({
   base,
   collapsed,
+  onNavigate,
   pathname,
 }: {
   base: string;
   collapsed: boolean;
+  onNavigate?: () => void;
   pathname: string;
 }) {
   const { logout, user } = useAuth();
   const t = useTranslations();
   return (
-    <div className="border-t border-zinc-200 p-1.5 dark:border-zinc-800">
+    <div className="border-t border-border p-1.5">
       {collapsed ? (
         <div className="flex flex-col items-center gap-1">
           <ConnectionStatus compact />
           <Link
             className={cn(
-              'flex items-center justify-center rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
-              pathname.startsWith(`${base}/settings`) &&
-                'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50',
+              'flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+              pathname.startsWith(`${base}/settings`) && 'bg-muted text-foreground',
             )}
             href={`${base}/settings`}
+            onClick={onNavigate}
             title={t('common.settings')}
           >
             <Settings className="h-4 w-4" />
@@ -570,7 +623,7 @@ function SidebarFooter({
           <LanguageToggle compact />
           <button
             aria-label={t('common.signOut')}
-            className="flex items-center justify-center rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
+            className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             onClick={() => void logout()}
             title={t('common.signOut')}
             type="button"
@@ -581,38 +634,38 @@ function SidebarFooter({
       ) : (
         <div className="flex flex-col gap-1">
           <ConnectionStatus />
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-1">
             <Link
               className={cn(
-                'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
-                pathname.startsWith(`${base}/settings`) &&
-                  'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50',
+                'flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+                pathname.startsWith(`${base}/settings`) && 'bg-muted text-foreground',
               )}
               href={`${base}/settings`}
+              onClick={onNavigate}
               title={t('nav.workspaceSettings')}
             >
-              <Settings className="h-4 w-4" />
-              {t('common.settings')}
+              <Settings className="h-4 w-4 shrink-0" />
+              <span className="truncate">{t('common.settings')}</span>
             </Link>
-            <div className="flex items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1">
               <LanguageToggle />
               <ThemeToggle />
             </div>
           </div>
           {user && (
-            <div className="flex items-center justify-between gap-2 px-2 py-1 text-xs text-zinc-500">
-              <span className="truncate" title={user.email}>
+            <div className="flex items-center justify-between gap-2 px-2 py-1 text-xs text-muted-foreground">
+              <span className="min-w-0 flex-1 truncate" title={user.email}>
                 {user.displayName}
               </span>
               <button
                 aria-label={t('common.signOut')}
-                className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
+                className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 onClick={() => void logout()}
                 title={t('common.signOut')}
                 type="button"
               >
                 <LogOut className="h-3 w-3" />
-                {t('common.signOut')}
+                <span className="truncate">{t('common.signOut')}</span>
               </button>
             </div>
           )}

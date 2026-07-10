@@ -42,7 +42,7 @@ function ModalDialogInner({
   return (
     <dialog
       aria-label={ariaLabel}
-      className="fixed inset-0 z-50 flex h-screen w-screen items-center justify-center bg-black/40 p-0 m-0 border-none max-w-none max-h-none"
+      className="fixed inset-0 z-50 flex h-screen w-screen items-end justify-center bg-black/40 p-0 m-0 border-none max-w-none max-h-none sm:items-center"
       onCancel={e => {
         // Escape fires `cancel`; let React state drive the unmount instead
         // of the native close so `open` stays the single source of truth.
@@ -64,12 +64,21 @@ function ModalDialogInner({
       }}
       ref={dialogRef}
     >
-      {/* No overflow clipping here: property dropdowns inside modals render
-          position:absolute panels that must overflow the dialog box. */}
+      {/*
+       * Below `sm` this renders as a bottom sheet (flush with the screen
+       * edge, only top corners rounded, full width) instead of a centered
+       * card — thumb-reachable and edge-to-edge on a phone. `max-h-[90vh]
+       * overflow-y-auto` caps height so tall content (e.g. create-issue's
+       * description editor) scrolls internally instead of pushing the
+       * footer off-screen. This clips an absolutely-positioned popover that
+       * would otherwise render past this container's edge (e.g. a property
+       * picker anchored near the bottom), so SelectPopover/SearchableSelectPopover
+       * flip to open upward when there isn't room below (see usePopoverFlip).
+       */}
       <div
         className={cn(
-          'w-full rounded-xl border border-border bg-card shadow-2xl',
-          maxWidth === 'lg' ? 'max-w-lg' : 'max-w-md',
+          'max-h-[90vh] w-full overflow-y-auto rounded-t-xl border border-border bg-card shadow-2xl sm:rounded-xl',
+          maxWidth === 'lg' ? 'sm:max-w-lg' : 'sm:max-w-md',
         )}
       >
         {children}

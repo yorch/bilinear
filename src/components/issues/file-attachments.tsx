@@ -1,10 +1,13 @@
 'use client';
 
 import { FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
+import { InlineRetry } from '@/components/shared/inline-retry';
+import { useFormatters } from '@/hooks/use-formatters';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { toast } from '@/lib/toast';
-import { formatFileSize, getErrorMessage } from '@/lib/utils';
+import { getErrorMessage } from '@/lib/utils';
 
 interface Attachment {
   id: string;
@@ -52,15 +55,16 @@ async function deleteFile(fileId: string): Promise<void> {
 
 export function FileAttachments({ issueId }: FileAttachmentsProps) {
   const t = useTranslations();
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const { formatFileSize } = useFormatters();
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    fetchIssueFiles(issueId)
-      .then(setAttachments)
-      .catch(() => {});
-  }, [issueId]);
+  const {
+    data: attachments,
+    setData: setAttachments,
+    error: loadError,
+    refetch: loadAttachments,
+  } = useRetryableFetch<Attachment[]>(() => fetchIssueFiles(issueId), [issueId], []);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -108,9 +112,11 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
   return (
     <div className="mt-4">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-medium text-zinc-500">{t('issueDetail.attachments.title')}</p>
+        <p className="text-xs font-medium text-muted-foreground">
+          {t('issueDetail.attachments.title')}
+        </p>
         <button
-          className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700 disabled:opacity-50 dark:hover:text-zinc-300"
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground-secondary disabled:opacity-50"
           disabled={uploading}
           onClick={() => inputRef.current?.click()}
           type="button"
@@ -135,22 +141,22 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
         <ul className="space-y-1">
           {attachments.map(att => (
             <li
-              className="flex items-center gap-2 rounded-md border border-zinc-200 p-2 text-xs dark:border-zinc-700"
+              className="flex items-center gap-2 rounded-md border border-border p-2 text-xs"
               key={att.id}
             >
-              <FileText className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+              <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               <a
-                className="flex-1 truncate text-zinc-700 hover:text-indigo-600 dark:text-zinc-300"
+                className="flex-1 truncate text-foreground-secondary hover:text-brand"
                 href={att.url}
                 rel="noopener noreferrer"
                 target="_blank"
               >
                 {att.name}
               </a>
-              <span className="shrink-0 text-zinc-400">{formatFileSize(att.size)}</span>
+              <span className="shrink-0 text-muted-foreground">{formatFileSize(att.size)}</span>
               <button
                 aria-label={t('issueDetail.attachments.removeAttachment')}
-                className="text-zinc-400 hover:text-red-500"
+                className="text-muted-foreground hover:text-red-500 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                 onClick={() => handleDelete(att)}
                 type="button"
               >
@@ -159,8 +165,14 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
             </li>
           ))}
         </ul>
+      ) : loadError ? (
+        <InlineRetry
+          className="py-2"
+          message={t('issueDetail.attachments.failedToLoad')}
+          onRetry={loadAttachments}
+        />
       ) : (
-        <p className="text-xs italic text-zinc-400">{t('issueDetail.attachments.empty')}</p>
+        <p className="text-xs italic text-muted-foreground">{t('issueDetail.attachments.empty')}</p>
       )}
     </div>
   );

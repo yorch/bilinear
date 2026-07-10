@@ -65,7 +65,9 @@ export function InitiativeUpdatesSection({
   };
 
   if (loading) {
-    return <div className="mt-3 text-xs text-zinc-400">{t('initiatives.updates.loading')}</div>;
+    return (
+      <div className="mt-3 text-xs text-muted-foreground">{t('initiatives.updates.loading')}</div>
+    );
   }
 
   return (
@@ -76,7 +78,7 @@ export function InitiativeUpdatesSection({
         </h4>
         {!creating && !editingId && (
           <button
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
             onClick={openCreate}
             type="button"
           >
@@ -103,7 +105,9 @@ export function InitiativeUpdatesSection({
       )}
 
       {updates.length === 0 && !creating ? (
-        <p className="py-4 text-center text-xs text-zinc-400">{t('initiatives.updates.empty')}</p>
+        <p className="py-4 text-center text-xs text-muted-foreground">
+          {t('initiatives.updates.empty')}
+        </p>
       ) : (
         <div className="mt-3 flex flex-col gap-3">
           {updates.map(update => {
@@ -133,13 +137,10 @@ export function InitiativeUpdatesSection({
             }
 
             return (
-              <div
-                className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800"
-                key={update.id}
-              >
+              <div className="rounded-lg border border-border p-4" key={update.id}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    <span className="text-xs font-medium text-foreground-secondary">
                       {update.user.displayName}
                     </span>
                     {health && (
@@ -147,7 +148,7 @@ export function InitiativeUpdatesSection({
                         {t(PROJECT_HEALTH_LABEL_KEYS[update.health ?? ''])}
                       </Badge>
                     )}
-                    <span className="text-xs text-zinc-400">
+                    <span className="text-xs text-muted-foreground">
                       {formatRelativeTime(update.createdAt)}
                       {update.editedAt && ` (${t('initiatives.updates.edited')})`}
                     </span>
@@ -155,7 +156,7 @@ export function InitiativeUpdatesSection({
                   {isOwner && (
                     <div className="flex shrink-0 items-center gap-1">
                       <button
-                        className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                         onClick={() => openEdit(update.id)}
                         title={t('common.edit')}
                         type="button"
@@ -170,7 +171,7 @@ export function InitiativeUpdatesSection({
                     </div>
                   )}
                 </div>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
+                <p className="mt-2 whitespace-pre-wrap text-sm text-foreground-secondary">
                   {update.body}
                 </p>
               </div>

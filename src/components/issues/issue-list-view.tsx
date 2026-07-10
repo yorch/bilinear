@@ -142,7 +142,7 @@ export function IssueListView({
   if (issues.length === 0) {
     return (
       <div
-        className="flex flex-1 items-center justify-center py-20 text-sm text-zinc-400"
+        className="flex flex-1 items-center justify-center py-20 text-sm text-muted-foreground"
         data-testid="empty-state"
       >
         {t('issues.noIssuesFoundPrefix')}{' '}

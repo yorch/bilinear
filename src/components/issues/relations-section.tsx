@@ -184,7 +184,7 @@ export const RelationsSection = observer(function RelationsSection({
         </h3>
         {!showAddForm && (
           <button
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
             onClick={() => setShowAddForm(true)}
             type="button"
           >
@@ -194,10 +194,14 @@ export const RelationsSection = observer(function RelationsSection({
         )}
       </div>
 
-      {loading && <p className="mt-2 text-xs text-zinc-400 italic">{t('common.loading')}</p>}
+      {loading && (
+        <p className="mt-2 text-xs text-muted-foreground italic">{t('common.loading')}</p>
+      )}
 
       {!loading && relations.length === 0 && !showAddForm && (
-        <p className="mt-2 text-xs text-zinc-400 italic">{t('issueDetail.relations.empty')}</p>
+        <p className="mt-2 text-xs text-muted-foreground italic">
+          {t('issueDetail.relations.empty')}
+        </p>
       )}
 
       {!loading && (
@@ -221,15 +225,15 @@ export const RelationsSection = observer(function RelationsSection({
                         className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
                         key={rel.id}
                       >
-                        <span className="shrink-0 font-mono text-xs text-zinc-400">
+                        <span className="shrink-0 font-mono text-xs text-muted-foreground">
                           {other?.identifier ?? '—'}
                         </span>
-                        <span className="flex-1 truncate text-zinc-700 dark:text-zinc-300">
+                        <span className="flex-1 truncate text-foreground-secondary">
                           {other?.title ?? t('issueDetail.relations.unknownIssue')}
                         </span>
                         <button
                           aria-label={t('issueDetail.relations.removeRelation')}
-                          className="hidden items-center rounded p-0.5 text-zinc-400 hover:text-red-500 group-hover:flex"
+                          className="hidden items-center rounded p-0.5 text-muted-foreground hover:text-red-500 group-hover:flex max-md:flex max-md:h-11 max-md:min-w-11 max-md:justify-center"
                           onClick={() => handleDelete(rel.id)}
                           type="button"
                         >
@@ -287,11 +291,11 @@ function AddRelationForm({ onSubmit, onClose, issueId }: AddRelationFormProps) {
   };
 
   return (
-    <div className="mt-2 flex items-center gap-2 rounded-md border border-zinc-200 p-3 dark:border-zinc-700">
+    <div className="mt-2 flex items-center gap-2 rounded-md border border-border p-3">
       {/* Type selector */}
       <div className="relative" ref={typeDropdownRef}>
         <button
-          className="flex items-center gap-1 rounded border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+          className="flex items-center gap-1 rounded border border-border bg-card px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
           onClick={() => setTypeOpen(o => !o)}
           type="button"
         >
@@ -299,14 +303,12 @@ function AddRelationForm({ onSubmit, onClose, issueId }: AddRelationFormProps) {
           <ChevronDown className="h-3 w-3" />
         </button>
         {typeOpen && (
-          <div className="absolute left-0 top-full z-10 mt-1 w-36 rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+          <div className="absolute left-0 top-full z-10 mt-1 w-36 rounded-md border border-border bg-card py-1 shadow-lg">
             {RELATION_TYPES.map(t => (
               <button
                 className={cn(
                   'w-full px-3 py-1.5 text-left text-xs hover:bg-accent',
-                  t === type
-                    ? 'text-indigo-600 dark:text-indigo-400'
-                    : 'text-zinc-700 dark:text-zinc-300',
+                  t === type ? 'text-brand' : 'text-foreground-secondary',
                 )}
                 key={t}
                 onClick={() => {
@@ -333,12 +335,12 @@ function AddRelationForm({ onSubmit, onClose, issueId }: AddRelationFormProps) {
         triggerChildren={
           submitting ? t('issueDetail.relations.adding') : t('issueDetail.relations.pickIssue')
         }
-        triggerClassName="flex-1 justify-start rounded border border-zinc-200 bg-transparent px-2 py-1 text-xs text-zinc-400 hover:bg-transparent dark:border-zinc-700"
+        triggerClassName="flex-1 justify-start rounded border border-border bg-transparent px-2 py-1 text-xs text-muted-foreground hover:bg-transparent"
       />
 
       <button
         aria-label={t('common.cancel')}
-        className="rounded p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+        className="rounded p-1 text-muted-foreground hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
         onClick={onClose}
         type="button"
       >

@@ -83,7 +83,7 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
     <div className="mt-6">
       <div className="flex items-center justify-between">
         <button
-          className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+          className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground-secondary"
           onClick={() => setCollapsed(c => !c)}
           type="button"
         >
@@ -109,7 +109,7 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
         )}
         {!showCreateForm && (
           <button
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
             onClick={() => setShowCreateForm(true)}
             type="button"
           >
@@ -170,15 +170,15 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
                           title={state?.name}
                         />
                         {/* Identifier */}
-                        <span className="font-mono text-xs text-zinc-400 shrink-0">
+                        <span className="font-mono text-xs text-muted-foreground shrink-0">
                           {issue.identifier}
                         </span>
                         {/* Title */}
                         <span
                           className={cn(
-                            'flex-1 truncate text-zinc-700 dark:text-zinc-300',
+                            'flex-1 truncate text-foreground-secondary',
                             (state?.type === 'completed' || state?.type === 'cancelled') &&
-                              'line-through text-zinc-400',
+                              'line-through text-muted-foreground',
                           )}
                         >
                           {issue.title}
@@ -192,7 +192,7 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
           })}
 
           {subIssues.length === 0 && !showCreateForm && (
-            <p className="py-2 text-center text-xs text-zinc-400 italic">
+            <p className="py-2 text-center text-xs text-muted-foreground italic">
               {t('issueDetail.subIssues.empty')}
             </p>
           )}
@@ -261,11 +261,11 @@ function CreateSubIssueForm({
 
   return (
     <form
-      className="mt-2 flex items-center gap-2 rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-700"
+      className="mt-2 flex items-center gap-2 rounded-md border border-border px-3 py-2"
       onSubmit={handleSubmit}
     >
       <input
-        className="flex-1 bg-transparent text-sm text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
+        className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
         onChange={e => setTitle(e.target.value)}
         onKeyDown={e => {
           if (e.key === 'Escape') {
@@ -282,7 +282,7 @@ function CreateSubIssueForm({
         value={title}
       />
       <button
-        className="rounded px-2 py-1 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+        className="rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground-secondary"
         onClick={onClose}
         type="button"
       >

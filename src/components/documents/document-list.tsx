@@ -70,11 +70,11 @@ export const DocumentList = observer(function DocumentList({
       </div>
 
       {documents.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 py-12 text-zinc-400">
+        <div className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
           <FileText className="h-8 w-8" />
           <p className="text-sm">{t('documents.emptyState')}</p>
           <button
-            className="text-xs text-indigo-500 hover:text-indigo-600 disabled:opacity-50"
+            className="text-xs text-brand hover:text-brand-hover disabled:opacity-50"
             disabled={creating}
             onClick={handleNewDocument}
             type="button"
@@ -87,21 +87,21 @@ export const DocumentList = observer(function DocumentList({
           {documents.map(doc => (
             <li key={doc.id}>
               <Link
-                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground-secondary hover:bg-muted"
                 href={`/${workspace}/docs/${doc.id}`}
               >
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center">
                   {doc.icon ? (
                     <span className="text-sm">{doc.icon}</span>
                   ) : (
-                    <FileText className="h-4 w-4 text-zinc-400" />
+                    <FileText className="h-4 w-4 text-muted-foreground" />
                   )}
                 </span>
                 <span className="truncate">{doc.title || t('documents.untitled')}</span>
               </Link>
               {documentStore.getChildren(doc.id).map(child => (
                 <Link
-                  className="flex items-center gap-2 rounded-md py-1.5 pl-10 pr-3 text-xs text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                  className="flex items-center gap-2 rounded-md py-1.5 pl-10 pr-3 text-xs text-muted-foreground hover:bg-muted"
                   href={`/${workspace}/docs/${child.id}`}
                   key={child.id}
                 >
@@ -109,7 +109,7 @@ export const DocumentList = observer(function DocumentList({
                     {child.icon ? (
                       <span className="text-xs">{child.icon}</span>
                     ) : (
-                      <FileText className="h-3 w-3 text-zinc-400" />
+                      <FileText className="h-3 w-3 text-muted-foreground" />
                     )}
                   </span>
                   <span className="truncate">{child.title || t('documents.untitled')}</span>

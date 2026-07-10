@@ -22,7 +22,7 @@ const CycleDetailPage = observer(function CycleDetailPage() {
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('common.loading')}
       </div>
     );
@@ -31,7 +31,7 @@ const CycleDetailPage = observer(function CycleDetailPage() {
   const team = teamStore.findByKey(teamKey);
   if (!team) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('cycles.teamNotFound')}
       </div>
     );
@@ -40,7 +40,7 @@ const CycleDetailPage = observer(function CycleDetailPage() {
   const cycle = cycleStore.findById(cycleId);
   if (!cycle || cycle.teamId !== team.id) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('cycles.cycleNotFound')}
       </div>
     );

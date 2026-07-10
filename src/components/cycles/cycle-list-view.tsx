@@ -31,7 +31,7 @@ function getCycleStatusBadge(status: CycleStatus, t: ReturnType<typeof useTransl
       };
     case 'completed':
       return {
-        className: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400',
+        className: 'bg-muted text-muted-foreground',
         label: t('cycles.status.completed'),
       };
     case 'upcoming':
@@ -60,7 +60,7 @@ export const CycleListView = observer(function CycleListView({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex h-12 items-center justify-between border-b border-zinc-200 px-4 dark:border-zinc-800">
+      <div className="flex h-12 items-center justify-between border-b border-border px-4">
         <h1 className="text-sm font-semibold text-foreground">{t('cycles.list.title')}</h1>
       </div>
 
@@ -68,11 +68,13 @@ export const CycleListView = observer(function CycleListView({
         {hasNoCycles ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-              <RefreshCw className="h-6 w-6 text-zinc-400" />
+              <RefreshCw className="h-6 w-6 text-muted-foreground" />
             </div>
             <div>
               <p className="text-sm font-medium text-foreground">{t('cycles.list.emptyTitle')}</p>
-              <p className="mt-1 text-xs text-zinc-500">{t('cycles.list.emptyDescription')}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('cycles.list.emptyDescription')}
+              </p>
             </div>
           </div>
         ) : (
@@ -137,7 +139,7 @@ const CycleGroup = observer(function CycleGroup({
   return (
     <div>
       <button
-        className="flex items-center gap-2 px-1 py-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+        className="flex items-center gap-2 px-1 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground-secondary"
         onClick={() => setCollapsed(!collapsed)}
         type="button"
       >
@@ -154,7 +156,7 @@ const CycleGroup = observer(function CycleGroup({
           />
         </svg>
         {title}
-        <span className="font-normal text-zinc-400">{cycles.length}</span>
+        <span className="font-normal text-muted-foreground">{cycles.length}</span>
       </button>
       {!collapsed && (
         <div className="mt-1 flex flex-col gap-1">
@@ -169,11 +171,11 @@ const CycleGroup = observer(function CycleGroup({
 
             return (
               <Link
-                className="group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 transition-colors hover:border-zinc-200 hover:bg-zinc-50 dark:hover:border-zinc-700 dark:hover:bg-zinc-900"
+                className="group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 transition-colors hover:border-border hover:bg-accent"
                 href={`/${workspaceKey}/team/${teamKey}/cycles/${cycle.id}`}
                 key={cycle.id}
               >
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
                   <RefreshCw className="h-3.5 w-3.5" />
                 </span>
 
@@ -182,7 +184,7 @@ const CycleGroup = observer(function CycleGroup({
                     {getCycleDisplayName(cycle, t)}
                   </span>
                   <div className="mt-0.5 flex items-center gap-2">
-                    <span className="flex items-center gap-1 text-xs text-zinc-500">
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
                       <Calendar className="h-3 w-3" />
                       {formatDate(cycle.startsAt, { day: 'numeric', month: 'short' })} &ndash;{' '}
                       {formatDate(cycle.endsAt, { day: 'numeric', month: 'short' })}
@@ -192,13 +194,13 @@ const CycleGroup = observer(function CycleGroup({
 
                 {cycleIssues.length > 0 && (
                   <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-16 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                    <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
                       <div
-                        className="h-full rounded-full bg-indigo-500 transition-all"
+                        className="h-full rounded-full bg-brand transition-all"
                         style={{ width: `${progress}%` }}
                       />
                     </div>
-                    <span className="text-xs tabular-nums text-zinc-400">
+                    <span className="text-xs tabular-nums text-muted-foreground">
                       {completedIssues.length}/{cycleIssues.length}
                     </span>
                   </div>

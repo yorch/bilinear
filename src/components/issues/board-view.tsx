@@ -23,6 +23,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
 import { useFormatters } from '@/hooks/use-formatters';
+import { usePending } from '@/hooks/use-pending-ids';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBWorkflowState } from '@/lib/db';
 import { getDueDateColor } from '@/lib/issue-utils';
@@ -77,15 +78,17 @@ function BoardCardInner({
   onOpen,
   isDragging,
 }: BoardCardProps) {
+  const t = useTranslations();
   const { formatDueDate } = useFormatters();
+  const pending = usePending(issue.id);
   const assignee = issue.assigneeId ? users.find(u => u.id === issue.assigneeId) : null;
 
   return (
     <button
       className={cn(
-        'w-full cursor-pointer rounded-lg border bg-white p-3 text-left shadow-sm transition-shadow hover:shadow-md dark:bg-zinc-900',
+        'w-full cursor-pointer rounded-lg border bg-card p-3 text-left shadow-sm transition-shadow hover:shadow-md',
         selected
-          ? 'border-indigo-500 ring-1 ring-indigo-500'
+          ? 'border-brand ring-1 ring-brand'
           : multiSelected
             ? 'border-blue-500 ring-2 ring-blue-500'
             : 'border-border',
@@ -99,6 +102,14 @@ function BoardCardInner({
       <div className="mb-1.5 flex items-center gap-1.5">
         <PriorityIcon className="h-3.5 w-3.5" priority={issue.priority} />
         <span className="text-xs text-muted-foreground">{issue.identifier}</span>
+        {pending && (
+          <span
+            aria-label={t('issues.syncingRow')}
+            className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary"
+            role="status"
+            title={t('issues.syncingRow')}
+          />
+        )}
       </div>
 
       {/* Title */}
@@ -223,7 +234,7 @@ function BoardColumn({
   const columnIssueIds = column.issues.map(i => i.id);
 
   return (
-    <div className="flex w-72 flex-shrink-0 flex-col">
+    <div className="flex w-[85vw] max-w-72 flex-shrink-0 flex-col sm:w-72">
       {/* Column header */}
       <div className="mb-2 flex items-center gap-2 px-1">
         {column.color && (
@@ -232,13 +243,13 @@ function BoardColumn({
             style={{ backgroundColor: column.color }}
           />
         )}
-        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{column.label}</span>
+        <span className="text-sm font-medium text-foreground-secondary">{column.label}</span>
         <span className="text-xs text-muted-foreground">{column.issues.length}</span>
       </div>
 
       {/* Cards — column is a droppable area so empty columns accept drops */}
       <div
-        className="flex flex-1 flex-col gap-2 overflow-y-auto rounded-lg bg-zinc-50 p-2 dark:bg-zinc-900/50"
+        className="flex flex-1 flex-col gap-2 overflow-y-auto rounded-lg bg-muted p-2"
         ref={setNodeRef}
       >
         <SortableContext items={columnIssueIds} strategy={verticalListSortingStrategy}>
@@ -310,11 +321,11 @@ function BoardSwimlane({
         type="button"
       >
         {collapsed ? (
-          <ChevronRight className="h-4 w-4 text-zinc-400" />
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
         ) : (
-          <ChevronDown className="h-4 w-4 text-zinc-400" />
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
         )}
-        <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{label}</span>
+        <span className="text-sm font-semibold text-foreground-secondary">{label}</span>
         <span className="text-xs text-muted-foreground">({issues.length})</span>
       </button>
 
@@ -661,7 +672,7 @@ export function BoardView({
       <DragOverlay>
         {activeIssue &&
           (isDraggingMultiple ? (
-            <div className="flex items-center gap-2 rounded-lg border border-blue-500 bg-white px-4 py-3 shadow-lg dark:bg-zinc-900">
+            <div className="flex items-center gap-2 rounded-lg border border-blue-500 bg-card px-4 py-3 shadow-lg">
               <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
                 {t('issues.draggingCount', { count: selectedIds.size })}
               </span>

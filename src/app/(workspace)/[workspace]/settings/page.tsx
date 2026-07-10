@@ -6,6 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { LanguageToggle } from '@/components/language-toggle';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { useFormatters } from '@/hooks/use-formatters';
@@ -138,15 +139,15 @@ const ROLE_BADGES: Record<OrgRole, { labelKey: string; cls: string }> = {
     labelKey: 'settings.roles.admin',
   },
   guest: {
-    cls: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400',
+    cls: 'bg-muted text-muted-foreground',
     labelKey: 'settings.roles.guest',
   },
   member: {
-    cls: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
+    cls: 'bg-muted text-muted-foreground',
     labelKey: 'settings.roles.member',
   },
   owner: {
-    cls: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
+    cls: 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground',
     labelKey: 'settings.roles.owner',
   },
 };
@@ -366,7 +367,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <div className="flex items-center border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
+      <div className="flex items-center border-b border-border px-6 py-3">
         <h1 className="text-sm font-semibold text-foreground">{t('settings.workspace.title')}</h1>
       </div>
 
@@ -375,11 +376,11 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.workspace.organization')}
           </h2>
-          <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
+          <div className="rounded-lg border border-border bg-card p-5">
             {loading ? (
               <div className="flex flex-col gap-4 animate-pulse">
-                <div className="h-4 w-48 rounded bg-zinc-200 dark:bg-zinc-700" />
-                <div className="h-4 w-32 rounded bg-zinc-200 dark:bg-zinc-700" />
+                <div className="h-4 w-48 rounded bg-muted" />
+                <div className="h-4 w-32 rounded bg-muted" />
               </div>
             ) : org ? (
               <dl className="flex flex-col gap-4">
@@ -393,7 +394,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   <dt className="text-xs font-medium text-muted-foreground pt-0.5">
                     {t('settings.workspace.urlKey')}
                   </dt>
-                  <dd className="col-span-2 font-mono text-sm text-zinc-700 dark:text-zinc-300">
+                  <dd className="col-span-2 font-mono text-sm text-foreground-secondary">
                     {org.urlKey}
                   </dd>
                 </div>
@@ -401,7 +402,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   <dt className="text-xs font-medium text-muted-foreground pt-0.5">
                     {t('settings.workspace.dataRegion')}
                   </dt>
-                  <dd className="col-span-2 text-sm text-zinc-700 dark:text-zinc-300 capitalize">
+                  <dd className="col-span-2 text-sm text-foreground-secondary capitalize">
                     {org.dataRegion}
                   </dd>
                 </div>
@@ -419,7 +420,9 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                 </div>
               </dl>
             ) : (
-              <p className="text-sm text-zinc-400">{t('settings.workspace.orgLoadError')}</p>
+              <p className="text-sm text-muted-foreground">
+                {t('settings.workspace.orgLoadError')}
+              </p>
             )}
           </div>
         </section>
@@ -430,18 +433,18 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
               {t('settings.workspace.platform')}
             </h2>
             <Link
-              className="flex items-center justify-between rounded-lg border border-indigo-200 bg-indigo-50 px-5 py-4 transition-colors hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/30 dark:hover:bg-indigo-950/50"
+              className="flex items-center justify-between rounded-lg border border-brand-border bg-brand-subtle px-5 py-4 transition-colors hover:bg-brand/15"
               href="/admin"
             >
               <div>
-                <p className="text-sm font-medium text-indigo-900 dark:text-indigo-200">
+                <p className="text-sm font-medium text-brand-subtle-foreground">
                   {t('settings.workspace.platformAdminConsole')}
                 </p>
-                <p className="text-xs text-indigo-700/70 dark:text-indigo-300/70">
+                <p className="text-xs text-brand-subtle-foreground/70">
                   {t('settings.workspace.platformAdminConsoleDescription')}
                 </p>
               </div>
-              <ChevronRight className="h-4 w-4 shrink-0 text-indigo-400" />
+              <ChevronRight className="h-4 w-4 shrink-0 text-brand" />
             </Link>
           </section>
         )}
@@ -449,13 +452,13 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.workspace.teams')}
-            <span className="ml-2 font-normal normal-case text-zinc-300 dark:text-zinc-600">
+            <span className="ml-2 font-normal normal-case text-foreground-faint">
               {teams.length}
             </span>
           </h2>
-          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 overflow-hidden">
+          <div className="rounded-lg border border-border bg-card overflow-hidden">
             {teams.length === 0 ? (
-              <p className="px-5 py-4 text-sm text-zinc-400">
+              <p className="px-5 py-4 text-sm text-muted-foreground">
                 {t('settings.workspace.noTeamsYet')}
               </p>
             ) : (
@@ -464,21 +467,21 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   const isChild = !!team.parentId;
                   return (
                     <li
-                      className={cn(
-                        isChild && 'border-l-2 border-indigo-200 dark:border-indigo-800 ml-4',
-                      )}
+                      className={cn(isChild && 'border-l-2 border-brand-border ml-4')}
                       key={team.id}
                     >
                       <Link
                         className="flex items-center gap-3 px-5 py-3 hover:bg-accent/50 transition-colors"
                         href={`/${workspace}/team/${team.key}/settings`}
                       >
-                        {isChild && <ChevronRight className="h-3 w-3 shrink-0 text-zinc-400" />}
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-sm dark:bg-zinc-800">
+                        {isChild && (
+                          <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                        )}
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-sm">
                           {team.icon ? (
                             <span>{team.icon}</span>
                           ) : (
-                            <Users className="h-4 w-4 text-zinc-400" />
+                            <Users className="h-4 w-4 text-muted-foreground" />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -486,14 +489,16 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                             {team.displayName || team.name}
                           </p>
                           {team.description && (
-                            <p className="text-xs text-zinc-400 truncate">{team.description}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {team.description}
+                            </p>
                           )}
                         </div>
                         <span className="shrink-0 font-mono text-xs text-muted-foreground">
                           {team.key}
                         </span>
                         {team.private && (
-                          <span className="flex items-center gap-1 shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                          <span className="flex items-center gap-1 shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                             <Lock className="h-2.5 w-2.5" />
                             {t('settings.workspace.private')}
                           </span>
@@ -510,13 +515,13 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.workspace.members')}
-            <span className="ml-2 font-normal normal-case text-zinc-300 dark:text-zinc-600">
+            <span className="ml-2 font-normal normal-case text-foreground-faint">
               {members.length}
             </span>
           </h2>
-          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 overflow-hidden">
+          <div className="rounded-lg border border-border bg-card overflow-hidden">
             {members.length === 0 ? (
-              <p className="px-5 py-4 text-sm text-zinc-400">
+              <p className="px-5 py-4 text-sm text-muted-foreground">
                 {t('settings.workspace.noMembersFound')}
               </p>
             ) : (
@@ -548,10 +553,10 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                         <p className="text-sm font-medium text-foreground truncate">
                           {user.displayName}
                         </p>
-                        <p className="text-xs text-zinc-400 truncate">{user.email}</p>
+                        <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                       </div>
                       {!user.active && (
-                        <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-400 dark:bg-zinc-800">
+                        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                           {t('settings.workspace.inactive')}
                         </span>
                       )}
@@ -560,7 +565,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                         <select
                           className={cn(
                             'appearance-none rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer',
-                            'border border-transparent focus:outline-none focus:ring-1 focus:ring-indigo-400',
+                            'border border-transparent focus:outline-none focus:ring-1 focus:ring-brand',
                             'disabled:opacity-50 disabled:cursor-not-allowed',
                             roleBadge.cls,
                           )}
@@ -588,7 +593,21 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.workspace.myPreferences')}
           </h2>
-          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 divide-y divide-border">
+          <div className="rounded-lg border border-border bg-card divide-y divide-border">
+            {/* Language — also available in the sidebar footer, surfaced here too
+                since the sidebar collapses to a drawer on small screens. */}
+            <div className="px-5 py-3">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">{t('language.language')}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('settings.workspace.languageDescription')}
+                  </p>
+                </div>
+                <LanguageToggle />
+              </div>
+            </div>
+
             {/* Email notifications toggle */}
             <div className="px-5 py-3">
               <SettingToggleRow
@@ -604,10 +623,10 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
-                    <Calendar className="h-3.5 w-3.5 text-zinc-400" />
+                    <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
                     {t('settings.workspace.cycleCalendarFeed')}
                   </p>
-                  <p className="text-xs text-zinc-400 mt-0.5">
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     {t('settings.workspace.cycleCalendarFeedDescription')}
                   </p>
                   {calendarFeedUrl && (
@@ -616,7 +635,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                         {calendarFeedUrl}
                       </code>
                       <button
-                        className="shrink-0 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                        className="shrink-0 text-muted-foreground hover:text-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                         onClick={() => {
                           void navigator.clipboard.writeText(calendarFeedUrl);
                           toast.success(t('settings.workspace.copiedToClipboard'));
@@ -632,7 +651,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                 <button
                   className={cn(
                     'shrink-0 flex items-center gap-1.5 rounded-md border border-border',
-                    'px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300',
+                    'px-3 py-1.5 text-xs font-medium text-foreground-secondary',
                     'hover:bg-accent disabled:opacity-50',
                   )}
                   disabled={rotatingToken}
@@ -654,7 +673,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.workspace.apiTokens')}
           </h2>
-          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 divide-y divide-border">
+          <div className="rounded-lg border border-border bg-card divide-y divide-border">
             {/* New plaintext banner — shown only once after creation */}
             {newPlaintext && (
               <div className="px-5 py-3 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800">
@@ -662,11 +681,11 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   {t('settings.workspace.copyTokenNowWarning')}
                 </p>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 truncate text-xs bg-white dark:bg-zinc-900 border border-amber-200 dark:border-amber-700 px-2 py-1 rounded text-zinc-700 dark:text-zinc-300 font-mono">
+                  <code className="flex-1 truncate text-xs bg-card border border-amber-200 dark:border-amber-700 px-2 py-1 rounded text-foreground-secondary font-mono">
                     {newPlaintext}
                   </code>
                   <button
-                    className="shrink-0 text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-200"
+                    className="shrink-0 text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-200 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                     onClick={() => {
                       void navigator.clipboard.writeText(newPlaintext);
                       toast.success(t('settings.workspace.copiedToClipboard'));
@@ -690,15 +709,15 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
             {/* Create new token */}
             <div className="px-5 py-3">
               <p className="text-sm font-medium text-foreground flex items-center gap-1.5 mb-2">
-                <Key className="h-3.5 w-3.5 text-zinc-400" />
+                <Key className="h-3.5 w-3.5 text-muted-foreground" />
                 {t('settings.workspace.createToken')}
               </p>
               <div className="flex items-center gap-2">
                 <input
                   className={cn(
                     'flex-1 rounded-md border border-border bg-transparent',
-                    'px-3 py-1.5 text-sm text-foreground placeholder-zinc-400',
-                    'focus:outline-none focus:ring-1 focus:ring-indigo-500',
+                    'px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground',
+                    'focus:outline-none focus:ring-1 focus:ring-brand',
                   )}
                   disabled={creatingToken}
                   onChange={e => setNewTokenLabel(e.target.value)}
@@ -714,7 +733,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                 <button
                   className={cn(
                     'shrink-0 rounded-md border border-border',
-                    'px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300',
+                    'px-3 py-1.5 text-xs font-medium text-foreground-secondary',
                     'hover:bg-accent disabled:opacity-50',
                   )}
                   disabled={creatingToken || !newTokenLabel.trim()}
@@ -729,7 +748,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                 <label className="flex items-center gap-1.5">
                   <input
                     checked={newTokenWritable}
-                    className="h-3.5 w-3.5 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
+                    className="h-3.5 w-3.5 rounded border-border text-brand focus:ring-brand"
                     disabled={creatingToken}
                     onChange={e => setNewTokenWritable(e.target.checked)}
                     type="checkbox"
@@ -741,8 +760,8 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   <select
                     className={cn(
                       'rounded-md border border-border bg-transparent',
-                      'px-1.5 py-0.5 text-xs text-zinc-700 dark:text-zinc-300',
-                      'focus:outline-none focus:ring-1 focus:ring-indigo-500',
+                      'px-1.5 py-0.5 text-xs text-foreground-secondary',
+                      'focus:outline-none focus:ring-1 focus:ring-brand',
                     )}
                     disabled={creatingToken}
                     onChange={e => setNewTokenExpiryDays(Number(e.target.value))}
@@ -765,14 +784,14 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
 
             {/* Token list */}
             {apiTokens.length === 0 ? (
-              <p className="px-5 py-4 text-sm text-zinc-400">
+              <p className="px-5 py-4 text-sm text-muted-foreground">
                 {t('settings.workspace.noApiTokensYet')}
               </p>
             ) : (
               <ul className="divide-y divide-border">
                 {apiTokens.map(token => (
                   <li className="flex items-start gap-3 px-5 py-3" key={token.id}>
-                    <Key className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
+                    <Key className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground truncate flex items-center gap-2">
                         {token.label}
@@ -780,8 +799,8 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                           className={cn(
                             'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
                             token.scopes.length === 0 || token.scopes.includes('write')
-                              ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-                              : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300',
+                              ? 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground'
+                              : 'bg-muted text-muted-foreground',
                           )}
                         >
                           {token.scopes.length === 0 || token.scopes.includes('write')
@@ -789,7 +808,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                             : t('settings.workspace.readOnly')}
                         </span>
                       </p>
-                      <p className="text-xs text-zinc-400 mt-0.5">
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         {t('settings.workspace.created')}{' '}
                         {formatDate(token.createdAt, {
                           day: 'numeric',
@@ -816,7 +835,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                       </p>
                     </div>
                     <button
-                      className="shrink-0 text-zinc-400 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40"
+                      className="shrink-0 text-muted-foreground hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                       disabled={revokingTokenId === token.id}
                       onClick={() => setConfirmingRevokeToken(token)}
                       title={t('settings.workspace.revokeToken')}
@@ -851,7 +870,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.workspace.ai')}
           </h2>
-          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 px-5 py-4">
+          <div className="rounded-lg border border-border bg-card px-5 py-4">
             <SettingToggleRow
               checked={org?.aiEnabled ?? false}
               description={t('settings.workspace.aiAssistantDescription')}
@@ -867,7 +886,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.workspace.configuration')}
           </h2>
-          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 overflow-hidden">
+          <div className="rounded-lg border border-border bg-card overflow-hidden">
             <ul className="divide-y divide-border">
               {[
                 {
@@ -913,9 +932,9 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   >
                     <div>
                       <p className="text-sm font-medium text-foreground">{item.label}</p>
-                      <p className="text-xs text-zinc-400">{item.description}</p>
+                      <p className="text-xs text-muted-foreground">{item.description}</p>
                     </div>
-                    <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                   </Link>
                 </li>
               ))}

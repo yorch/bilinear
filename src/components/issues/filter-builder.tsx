@@ -104,13 +104,15 @@ function FilterPill({ condition, states, users, labels, customFields, onRemove }
   }
 
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-0.5 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs text-foreground-secondary">
       <span className="font-medium">{fieldLabel}</span>
       <span className="text-muted-foreground">{opLabel}</span>
       {valueLabel && <span>{valueLabel}</span>}
       <button
-        className="ml-0.5 text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+        aria-label={t('issues.removeFilter')}
+        className="ml-0.5 text-muted-foreground hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
         onClick={onRemove}
+        title={t('issues.removeFilter')}
         type="button"
       >
         <X className="h-3 w-3" />
@@ -205,7 +207,7 @@ function AddFilterForm({
   const needsValue = operator !== 'is_set' && operator !== 'is_not_set';
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white p-2 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+    <div className="flex items-center gap-2 rounded-lg border border-border bg-card p-2 shadow-lg">
       <SelectPopover
         triggerChildren={
           <>
@@ -215,7 +217,7 @@ function AddFilterForm({
             <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
           </>
         }
-        triggerClassName="gap-1 border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700"
+        triggerClassName="gap-1 border border-border px-2 py-1 text-xs"
       >
         {close => (
           <div className="max-h-64 w-40 overflow-y-auto py-1">
@@ -247,7 +249,7 @@ function AddFilterForm({
             <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
           </>
         }
-        triggerClassName="gap-1 border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700"
+        triggerClassName="gap-1 border border-border px-2 py-1 text-xs"
       >
         {close => (
           <div className="max-h-64 w-44 overflow-y-auto py-1">
@@ -291,11 +293,11 @@ function AddFilterForm({
                 <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
               </>
             }
-            triggerClassName="gap-1 border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700"
+            triggerClassName="gap-1 border border-border px-2 py-1 text-xs"
           />
         ) : (
           <input
-            className="w-28 rounded border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+            className="w-28 rounded border border-border px-2 py-1 text-xs dark:bg-muted text-foreground"
             onChange={e => setValue(e.target.value)}
             placeholder={t('issues.valueEllipsis')}
             type="text"
@@ -327,7 +329,7 @@ function AddFilterForm({
         {t('issues.add')}
       </button>
       <button
-        className="px-1 text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+        className="px-1 text-xs text-muted-foreground hover:text-foreground-secondary"
         onClick={onCancel}
         type="button"
       >
@@ -380,7 +382,7 @@ export function FilterBuilder({
   if (filterSet.conditions.length === 0 && !showAddForm) {
     return (
       <button
-        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         onClick={() => setShowAddForm(true)}
         type="button"
       >
@@ -397,7 +399,7 @@ export function FilterBuilder({
           className={cn(
             'rounded-full px-2 py-0.5 text-xs font-medium transition-colors',
             filterSet.composition === 'and'
-              ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
+              ? 'bg-brand-subtle text-brand-subtle-foreground'
               : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
           )}
           onClick={toggleComposition}
@@ -430,7 +432,7 @@ export function FilterBuilder({
         />
       ) : (
         <button
-          className="flex items-center gap-0.5 text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+          className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground-secondary max-md:h-11 max-md:min-w-11 max-md:justify-center"
           onClick={() => setShowAddForm(true)}
           type="button"
         >
@@ -440,7 +442,7 @@ export function FilterBuilder({
 
       {filterSet.conditions.length > 0 && (
         <button
-          className="text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+          className="text-xs text-muted-foreground hover:text-foreground-secondary"
           onClick={() => onChange({ composition: 'and', conditions: [] })}
           type="button"
         >

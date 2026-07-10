@@ -155,7 +155,7 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
   const inputCls = cn(
     'rounded-md border border-border bg-transparent',
     'px-2 py-1 text-sm text-foreground',
-    'focus:outline-none focus:ring-1 focus:ring-indigo-500',
+    'focus:outline-none focus:ring-1 focus:ring-brand',
   );
 
   return (

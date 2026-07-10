@@ -32,14 +32,14 @@ function statusOf(t: { archivedAt: string | null; suspendedAt: string | null }):
 
 const STATUS_STYLES: Record<TenantStatus, string> = {
   active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
-  archived: 'bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
+  archived: 'bg-muted text-muted-foreground',
   suspended: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400',
 };
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">{label}</p>
+    <div className="rounded-lg border border-border bg-card p-4">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{value}</p>
     </div>
   );
@@ -139,16 +139,13 @@ export default function AdminTenantDetailPage() {
   }
 
   if (loading) {
-    return <p className="text-sm text-zinc-400">{t('admin.tenants.loadingDetail')}</p>;
+    return <p className="text-sm text-muted-foreground">{t('admin.tenants.loadingDetail')}</p>;
   }
   if (error || !tenant) {
     return (
       <div className="flex flex-col gap-4">
         <p className="text-sm text-red-500">{error ?? t('admin.tenants.notFound')}</p>
-        <Link
-          className="text-sm text-indigo-600 hover:underline dark:text-indigo-400"
-          href="/admin/tenants"
-        >
+        <Link className="text-sm text-brand hover:underline" href="/admin/tenants">
           {t('admin.tenants.backToTenants')}
         </Link>
       </div>
@@ -160,10 +157,7 @@ export default function AdminTenantDetailPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <Link
-          className="text-xs text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-          href="/admin/tenants"
-        >
+        <Link className="text-xs text-muted-foreground hover:text-foreground" href="/admin/tenants">
           {t('admin.tenants.backBreadcrumb')}
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -176,7 +170,7 @@ export default function AdminTenantDetailPage() {
           >
             {t(`admin.tenants.status.${status}`)}
           </span>
-          <span className="font-mono text-xs text-zinc-400">
+          <span className="font-mono text-xs text-muted-foreground">
             {tenant.urlKey} · {tenant.dataRegion} · {t('admin.tenants.createdPrefix')}{' '}
             {formatDate(tenant.createdAt)}
           </span>
@@ -191,7 +185,7 @@ export default function AdminTenantDetailPage() {
       <div className="flex flex-wrap gap-1.5">
         {status === 'suspended' ? (
           <button
-            className="rounded border border-zinc-300 px-3 py-1.5 text-xs hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            className="rounded border border-border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
             disabled={busy}
             onClick={handleRestore}
             type="button"
@@ -228,24 +222,24 @@ export default function AdminTenantDetailPage() {
       </div>
 
       <section>
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {t('admin.tenants.owners')}
         </h2>
         {tenant.owners.length === 0 ? (
-          <p className="text-sm text-zinc-400">{t('admin.tenants.noOwners')}</p>
+          <p className="text-sm text-muted-foreground">{t('admin.tenants.noOwners')}</p>
         ) : (
           <div className="overflow-hidden rounded-lg border border-border">
             <table className="w-full text-sm">
               <tbody className="divide-y divide-border">
                 {tenant.owners.map(o => (
-                  <tr className="bg-white dark:bg-zinc-950" key={o.id}>
+                  <tr className="bg-background" key={o.id}>
                     <td className="px-4 py-2">
                       <p className="font-medium text-foreground">{o.displayName}</p>
-                      <p className="text-xs text-zinc-400">{o.email}</p>
+                      <p className="text-xs text-muted-foreground">{o.email}</p>
                     </td>
                     <td className="px-4 py-2 text-right">
                       <button
-                        className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                        className="rounded border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
                         disabled={busy || status !== 'active'}
                         onClick={() => handleImpersonateOwner(o.id)}
                         title={

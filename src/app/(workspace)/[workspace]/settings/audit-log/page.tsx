@@ -193,7 +193,7 @@ export default function AuditLogPage() {
       {/* Filters */}
       <div className="mb-4 flex flex-wrap gap-2">
         <select
-          className="rounded border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
+          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
           onChange={e => setActionFilter(e.target.value)}
           value={actionFilter}
         >
@@ -205,7 +205,7 @@ export default function AuditLogPage() {
           ))}
         </select>
         <input
-          className="rounded border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
+          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
           onChange={e => setUserIdFilter(e.target.value)}
           placeholder={t('settings.auditLog.filterByUserId')}
           value={userIdFilter}
@@ -219,7 +219,7 @@ export default function AuditLogPage() {
         </button>
         {(appliedAction || appliedUserId) && (
           <button
-            className="rounded border border-zinc-300 px-3 py-1 text-xs hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            className="rounded border border-border px-3 py-1 text-xs hover:bg-muted"
             onClick={handleClearFilters}
             type="button"
           >
@@ -229,18 +229,18 @@ export default function AuditLogPage() {
       </div>
 
       {loading ? (
-        <div className="flex flex-1 items-center justify-center py-16 text-sm text-zinc-400">
+        <div className="flex flex-1 items-center justify-center py-16 text-sm text-muted-foreground">
           {t('common.loading')}
         </div>
       ) : entries.length === 0 ? (
-        <div className="rounded border border-dashed border-zinc-300 px-4 py-8 text-center text-sm text-zinc-400 dark:border-zinc-700">
+        <div className="rounded border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
           {t('settings.auditLog.noEntriesFound')}
         </div>
       ) : (
         <div className="overflow-hidden rounded border border-border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
+              <tr className="border-b border-border bg-muted">
                 <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
                   {t('settings.auditLog.columnAction')}
                 </th>
@@ -260,12 +260,9 @@ export default function AuditLogPage() {
             </thead>
             <tbody className="divide-y divide-border">
               {entries.map(entry => (
-                <tr
-                  className="bg-white hover:bg-zinc-50 dark:bg-zinc-950 dark:hover:bg-zinc-900"
-                  key={entry.id}
-                >
+                <tr className="bg-background hover:bg-muted" key={entry.id}>
                   <td className="px-4 py-2">
-                    <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground-secondary">
                       {entry.action}
                     </span>
                   </td>
@@ -275,12 +272,14 @@ export default function AuditLogPage() {
                         <p className="text-xs font-medium text-foreground">
                           {entry.user.displayName}
                         </p>
-                        <p className="text-[10px] text-zinc-400">{entry.user.email}</p>
+                        <p className="text-[10px] text-muted-foreground">{entry.user.email}</p>
                       </div>
                     ) : entry.userId ? (
-                      <span className="font-mono text-xs text-zinc-400">{entry.userId}</span>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {entry.userId}
+                      </span>
                     ) : (
-                      <span className="text-xs text-zinc-300 dark:text-zinc-600">
+                      <span className="text-xs text-foreground-faint">
                         {t('settings.auditLog.system')}
                       </span>
                     )}
@@ -290,13 +289,13 @@ export default function AuditLogPage() {
                       <span className="text-xs text-muted-foreground">
                         {entry.resourceType}
                         {entry.resourceId ? (
-                          <span className="ml-1 font-mono text-zinc-400">
+                          <span className="ml-1 font-mono text-muted-foreground">
                             {entry.resourceId.slice(0, 8)}
                           </span>
                         ) : null}
                       </span>
                     ) : (
-                      <span className="text-xs text-zinc-300 dark:text-zinc-600">—</span>
+                      <span className="text-xs text-foreground-faint">—</span>
                     )}
                   </td>
                   <td className="px-4 py-2">
@@ -305,7 +304,7 @@ export default function AuditLogPage() {
                         {entry.ipAddress}
                       </span>
                     ) : (
-                      <span className="text-xs text-zinc-300 dark:text-zinc-600">—</span>
+                      <span className="text-xs text-foreground-faint">—</span>
                     )}
                   </td>
                   <td className="px-4 py-2">
@@ -329,7 +328,7 @@ export default function AuditLogPage() {
       {hasMore && (
         <div className="mt-4 flex justify-center">
           <button
-            className="rounded border border-zinc-300 px-4 py-1.5 text-xs hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            className="rounded border border-border px-4 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
             disabled={loadingMore}
             onClick={handleLoadMore}
             type="button"

@@ -119,18 +119,14 @@ function NotificationItem({
     <div
       className={cn(
         'flex items-start gap-3 rounded-lg border px-4 py-3 transition-colors',
-        read
-          ? 'border-border'
-          : 'border-indigo-100 bg-indigo-50/40 dark:border-indigo-900/40 dark:bg-indigo-950/20',
+        read ? 'border-border' : 'border-brand-border bg-brand-subtle/40 dark:bg-brand-subtle',
       )}
     >
       {/* Type icon */}
       <div
         className={cn(
           'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
-          read
-            ? 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500'
-            : 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-400',
+          read ? 'bg-muted text-muted-foreground' : 'bg-brand-subtle text-brand',
         )}
       >
         {getNotificationIcon(type)}
@@ -156,14 +152,14 @@ function NotificationItem({
             disabled={isSnoozingThis}
             panelClassName="w-44 py-1 shadow-xl"
             triggerChildren={<Clock className="h-3.5 w-3.5" />}
-            triggerClassName="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+            triggerClassName="p-1 text-muted-foreground hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
             triggerTitle={t('notifications.snooze.buttonTitle')}
           >
             {close => (
               <>
                 {SNOOZE_PRESETS.map(preset => (
                   <button
-                    className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    className="w-full px-3 py-1.5 text-left text-xs text-foreground-secondary hover:bg-accent"
                     key={preset.labelKey}
                     onClick={() => {
                       close();
@@ -180,7 +176,7 @@ function NotificationItem({
 
           {/* Mark read button */}
           <button
-            className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-indigo-600 dark:hover:bg-zinc-800 dark:hover:text-indigo-400 disabled:opacity-50"
+            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-brand disabled:opacity-50 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
             disabled={isMarkingThis}
             onClick={() => onMarkRead(id)}
             title={t('notifications.markAsRead')}
@@ -313,7 +309,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Bell className="h-5 w-5 text-zinc-500" />
+          <Bell className="h-5 w-5 text-muted-foreground" />
           <h1 className="text-lg font-semibold text-foreground">{t('notifications.title')}</h1>
           {hasUnread && (
             <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-white">
@@ -324,7 +320,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
 
         {hasUnread && (
           <button
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
             disabled={markingAll}
             onClick={handleMarkAllRead}
             type="button"
@@ -338,7 +334,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
       {/* Loading state */}
       {loading && (
         <div className="flex items-center justify-center py-16">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-200 border-t-indigo-500" />
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-brand" />
         </div>
       )}
 
@@ -346,7 +342,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
       {!loading && notifications.length === 0 && (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-            <Bell className="h-6 w-6 text-zinc-400" />
+            <Bell className="h-6 w-6 text-muted-foreground" />
           </div>
           <p className="text-sm font-medium text-muted-foreground">
             {t('notifications.emptyState.title')}
