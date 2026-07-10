@@ -2,8 +2,10 @@
 
 import { Bell, Check, CheckCheck, Clock, MessageSquare, RefreshCw, User } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useEffect, useRef, useState } from 'react';
-import { useOutsideClick } from '@/hooks/use-outside-click';
+import { useEffect, useState } from 'react';
+import { SelectPopover } from '@/components/ui/select-popover';
+import { useFormatters } from '@/hooks/use-formatters';
+import { useTranslations } from '@/hooks/use-translations';
 import type { DBNotification } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import {
@@ -13,24 +15,24 @@ import {
   NOTIFICATION_SNOOZE_MUTATION,
 } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
-import { cn, formatRelativeTime } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 // ─── Snooze helpers ───────────────────────────────────────────────────────────
 
 interface SnoozePreset {
   getUntil: () => Date;
-  label: string;
+  labelKey: string;
 }
 
 const SNOOZE_PRESETS: SnoozePreset[] = [
   {
     getUntil: () => new Date(Date.now() + 60 * 60 * 1000),
-    label: '1 hour',
+    labelKey: 'notifications.snooze.oneHour',
   },
   {
     getUntil: () => new Date(Date.now() + 4 * 60 * 60 * 1000),
-    label: '4 hours',
+    labelKey: 'notifications.snooze.fourHours',
   },
   {
     getUntil: () => {
@@ -39,7 +41,7 @@ const SNOOZE_PRESETS: SnoozePreset[] = [
       d.setHours(9, 0, 0, 0);
       return d;
     },
-    label: 'Tomorrow 9am',
+    labelKey: 'notifications.snooze.tomorrow9am',
   },
   {
     getUntil: () => {
@@ -51,7 +53,7 @@ const SNOOZE_PRESETS: SnoozePreset[] = [
       d.setHours(9, 0, 0, 0);
       return d;
     },
-    label: 'Next week',
+    labelKey: 'notifications.snooze.nextWeek',
   },
 ];
 
@@ -76,18 +78,18 @@ function getNotificationIcon(type: string) {
   }
 }
 
-function getNotificationLabel(type: string): string {
+function getNotificationLabelKey(type: string): string {
   switch (type) {
     case 'ISSUE_ASSIGNED':
-      return 'assigned you to an issue';
+      return 'notifications.labels.issueAssigned';
     case 'ISSUE_MENTIONED':
-      return 'mentioned you in an issue';
+      return 'notifications.labels.issueMentioned';
     case 'ISSUE_COMMENTED':
-      return 'commented on an issue';
+      return 'notifications.labels.issueCommented';
     case 'ISSUE_STATUS_CHANGED':
-      return 'changed the status of an issue';
+      return 'notifications.labels.issueStatusChanged';
     default:
-      return 'sent a notification';
+      return 'notifications.labels.default';
   }
 }
 
@@ -108,30 +110,23 @@ function NotificationItem({
   markingId,
   snoozingId,
 }: NotificationItemProps) {
+  const t = useTranslations();
+  const { formatRelativeTime } = useFormatters();
   const { type, read, createdAt, id } = notification;
   const isMarkingThis = markingId === id;
   const isSnoozingThis = snoozingId === id;
-  const [snoozeOpen, setSnoozeOpen] = useState(false);
-  const snoozeRef = useRef<HTMLDivElement>(null);
-
-  useOutsideClick(snoozeRef, () => setSnoozeOpen(false), snoozeOpen);
-
   return (
     <div
       className={cn(
         'flex items-start gap-3 rounded-lg border px-4 py-3 transition-colors',
-        read
-          ? 'border-zinc-100 dark:border-zinc-800'
-          : 'border-indigo-100 bg-indigo-50/40 dark:border-indigo-900/40 dark:bg-indigo-950/20',
+        read ? 'border-border' : 'border-brand-border bg-brand-subtle/40 dark:bg-brand-subtle',
       )}
     >
       {/* Type icon */}
       <div
         className={cn(
           'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
-          read
-            ? 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500'
-            : 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-400',
+          read ? 'bg-muted text-muted-foreground' : 'bg-brand-subtle text-brand',
         )}
       >
         {getNotificationIcon(type)}
@@ -140,61 +135,51 @@ function NotificationItem({
       {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-1 text-sm">
-          <span
-            className={cn(
-              'font-medium',
-              read ? 'text-zinc-600 dark:text-zinc-400' : 'text-zinc-900 dark:text-zinc-100',
-            )}
-          >
-            {getNotificationLabel(type)}
+          <span className={cn('font-medium', read ? 'text-muted-foreground' : 'text-foreground')}>
+            {t(getNotificationLabelKey(type))}
           </span>
         </div>
 
-        <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
-          {formatRelativeTime(createdAt)}
-        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{formatRelativeTime(createdAt)}</p>
       </div>
 
       {/* Action buttons (unread only) */}
       {!read && (
         <div className="flex shrink-0 items-center gap-1">
           {/* Snooze button with dropdown */}
-          <div className="relative" ref={snoozeRef}>
-            <button
-              className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300 disabled:opacity-50"
-              disabled={isSnoozingThis}
-              onClick={() => setSnoozeOpen(o => !o)}
-              title="Snooze"
-              type="button"
-            >
-              <Clock className="h-3.5 w-3.5" />
-            </button>
-
-            {snoozeOpen && (
-              <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+          <SelectPopover
+            align="right"
+            disabled={isSnoozingThis}
+            panelClassName="w-44 py-1 shadow-xl"
+            triggerChildren={<Clock className="h-3.5 w-3.5" />}
+            triggerClassName="p-1 text-muted-foreground hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+            triggerTitle={t('notifications.snooze.buttonTitle')}
+          >
+            {close => (
+              <>
                 {SNOOZE_PRESETS.map(preset => (
                   <button
-                    className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                    key={preset.label}
+                    className="w-full px-3 py-1.5 text-left text-xs text-foreground-secondary hover:bg-accent"
+                    key={preset.labelKey}
                     onClick={() => {
-                      setSnoozeOpen(false);
+                      close();
                       onSnooze(id, preset.getUntil());
                     }}
                     type="button"
                   >
-                    {preset.label}
+                    {t(preset.labelKey)}
                   </button>
                 ))}
-              </div>
+              </>
             )}
-          </div>
+          </SelectPopover>
 
           {/* Mark read button */}
           <button
-            className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-indigo-600 dark:hover:bg-zinc-800 dark:hover:text-indigo-400 disabled:opacity-50"
+            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-brand disabled:opacity-50 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
             disabled={isMarkingThis}
             onClick={() => onMarkRead(id)}
-            title="Mark as read"
+            title={t('notifications.markAsRead')}
             type="button"
           >
             <Check className="h-3.5 w-3.5" />
@@ -210,6 +195,7 @@ function NotificationItem({
 export const NotificationInbox = observer(function NotificationInbox() {
   const store = useStore();
   const { notificationStore } = store;
+  const t = useTranslations();
 
   const [loading, setLoading] = useState(true);
   const [markingId, setMarkingId] = useState<string | null>(null);
@@ -233,7 +219,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
       })
       .catch(() => {
         if (!cancelled) {
-          toast.error('Failed to load notifications');
+          toast.error(t('notifications.toasts.loadFailed'));
           setLoading(false);
         }
       });
@@ -241,7 +227,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
     return () => {
       cancelled = true;
     };
-  }, [notificationStore]);
+  }, [notificationStore, t]);
 
   // Reactive — re-renders when the store is updated (e.g. via WS sync actions)
   const notifications = notificationStore.all;
@@ -259,14 +245,14 @@ export const NotificationInbox = observer(function NotificationInbox() {
     try {
       const res = await gql(NOTIFICATION_MARK_READ_MUTATION, { id });
       if (res.errors?.length) {
-        throw new Error('Failed to mark notification as read');
+        throw new Error(t('notifications.toasts.markReadFailed'));
       }
     } catch {
       notificationStore.optimisticUpdate(id, {
         read: prevRead,
         readAt: prevReadAt,
       });
-      toast.error('Failed to mark notification as read');
+      toast.error(t('notifications.toasts.markReadFailed'));
     } finally {
       setMarkingId(null);
     }
@@ -288,12 +274,12 @@ export const NotificationInbox = observer(function NotificationInbox() {
         until: until.toISOString(),
       });
       if (res.errors?.length) {
-        throw new Error('Failed to snooze notification');
+        throw new Error(t('notifications.toasts.snoozeFailed'));
       }
-      toast.success('Notification snoozed');
+      toast.success(t('notifications.toasts.snoozed'));
     } catch {
       notificationStore.optimisticUpdate(id, { snoozedUntilAt: prevSnoozedUntilAt });
-      toast.error('Failed to snooze notification');
+      toast.error(t('notifications.toasts.snoozeFailed'));
     } finally {
       setSnoozingId(null);
     }
@@ -304,11 +290,11 @@ export const NotificationInbox = observer(function NotificationInbox() {
     try {
       const res = await gql(NOTIFICATION_MARK_ALL_READ_MUTATION, {});
       if (res.errors?.length) {
-        throw new Error('Failed to mark all notifications as read');
+        throw new Error(t('notifications.toasts.markAllReadFailed'));
       }
       notificationStore.markAllRead();
     } catch {
-      toast.error('Failed to mark all notifications as read');
+      toast.error(t('notifications.toasts.markAllReadFailed'));
     } finally {
       setMarkingAll(false);
     }
@@ -323,10 +309,10 @@ export const NotificationInbox = observer(function NotificationInbox() {
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Bell className="h-5 w-5 text-zinc-500" />
-          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Inbox</h1>
+          <Bell className="h-5 w-5 text-muted-foreground" />
+          <h1 className="text-lg font-semibold text-foreground">{t('notifications.title')}</h1>
           {hasUnread && (
-            <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-xs font-medium text-white">
+            <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-white">
               {unread.length}
             </span>
           )}
@@ -334,13 +320,13 @@ export const NotificationInbox = observer(function NotificationInbox() {
 
         {hasUnread && (
           <button
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
             disabled={markingAll}
             onClick={handleMarkAllRead}
             type="button"
           >
             <CheckCheck className="h-3.5 w-3.5" />
-            {markingAll ? 'Marking…' : 'Mark all read'}
+            {markingAll ? t('notifications.marking') : t('notifications.markAllRead')}
           </button>
         )}
       </div>
@@ -348,28 +334,28 @@ export const NotificationInbox = observer(function NotificationInbox() {
       {/* Loading state */}
       {loading && (
         <div className="flex items-center justify-center py-16">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-200 border-t-indigo-500" />
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-brand" />
         </div>
       )}
 
       {/* Empty state */}
       {!loading && notifications.length === 0 && (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
-            <Bell className="h-6 w-6 text-zinc-400" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+            <Bell className="h-6 w-6 text-muted-foreground" />
           </div>
-          <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">All caught up</p>
-          <p className="text-xs text-zinc-400 dark:text-zinc-500">
-            No notifications yet. You'll be notified when something needs your attention.
+          <p className="text-sm font-medium text-muted-foreground">
+            {t('notifications.emptyState.title')}
           </p>
+          <p className="text-xs text-muted-foreground">{t('notifications.emptyState.detail')}</p>
         </div>
       )}
 
       {/* Unread section */}
       {!loading && unread.length > 0 && (
         <section className="mb-6">
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            Unread ({unread.length})
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('notifications.unreadCount', { count: unread.length })}
           </h2>
           <div className="flex flex-col gap-2">
             {unread.map(notification => (
@@ -389,8 +375,8 @@ export const NotificationInbox = observer(function NotificationInbox() {
       {/* Read section */}
       {!loading && read.length > 0 && (
         <section>
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            {hasUnread ? 'Read' : 'All notifications'}
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {hasUnread ? t('notifications.read') : t('notifications.allNotifications')}
           </h2>
           <div className="flex flex-col gap-2">
             {read.map(notification => (

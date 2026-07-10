@@ -3,9 +3,11 @@
 import { Edit2, Plus, Star, Trash2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { cn, gqlError } from '@/lib/utils';
+import { cn, getErrorMessage, gqlError } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 // ---------------------------------------------------------------------------
@@ -61,13 +63,15 @@ interface TemplateFormData {
   };
 }
 
-const PRIORITY_OPTIONS = [
-  { label: 'No priority', value: '' },
-  { label: 'Urgent', value: '1' },
-  { label: 'High', value: '2' },
-  { label: 'Medium', value: '3' },
-  { label: 'Low', value: '4' },
-];
+function getPriorityOptions(t: ReturnType<typeof useTranslations>) {
+  return [
+    { label: t('issueDetail.templates.priorities.none'), value: '' },
+    { label: t('issueDetail.templates.priorities.urgent'), value: '1' },
+    { label: t('issueDetail.templates.priorities.high'), value: '2' },
+    { label: t('issueDetail.templates.priorities.medium'), value: '3' },
+    { label: t('issueDetail.templates.priorities.low'), value: '4' },
+  ];
+}
 
 const emptyForm = (): TemplateFormData => ({
   description: '',
@@ -81,6 +85,8 @@ const emptyForm = (): TemplateFormData => ({
 // ---------------------------------------------------------------------------
 
 export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) => {
+  const t = useTranslations();
+  const PRIORITY_OPTIONS = getPriorityOptions(t);
   const { issueTemplateStore, workflowStateStore, labelStore, userStore } = useStore();
 
   const templates = issueTemplateStore.findByTeamId(teamId);
@@ -103,14 +109,14 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
       },
     });
     if (result.errors?.length) {
-      throw new Error(gqlError(result, 'Failed to create template'));
+      throw new Error(gqlError(result, t('issueDetail.templates.failedToCreate')));
     }
     const raw = (result.data?.issueTemplateCreate as { issueTemplate?: Record<string, unknown> })
       ?.issueTemplate;
     if (raw) {
       issueTemplateStore.applySyncAction('I', raw.id as string, raw as never);
     }
-    toast.success('Template created');
+    toast.success(t('issueDetail.templates.created'));
     setIsAdding(false);
   };
 
@@ -125,14 +131,14 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
       },
     });
     if (result.errors?.length) {
-      throw new Error(gqlError(result, 'Failed to update template'));
+      throw new Error(gqlError(result, t('issueDetail.templates.failedToUpdate')));
     }
     const raw = (result.data?.issueTemplateUpdate as { issueTemplate?: Record<string, unknown> })
       ?.issueTemplate;
     if (raw) {
       issueTemplateStore.applySyncAction('U', id, raw as never);
     }
-    toast.success('Template updated');
+    toast.success(t('issueDetail.templates.updated'));
     setEditingId(null);
   };
 
@@ -141,11 +147,11 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
     try {
       const result = await gql(DELETE_MUTATION, { id });
       if (result.errors?.length) {
-        toast.error(gqlError(result, 'Failed to delete template'));
+        toast.error(gqlError(result, t('issueDetail.templates.failedToDelete')));
         return;
       }
       issueTemplateStore.applySyncAction('D', id, null);
-      toast.success('Template deleted');
+      toast.success(t('issueDetail.templates.deleted'));
     } finally {
       setDeletingId(null);
     }
@@ -153,46 +159,46 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
 
   return (
     <section>
-      <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-        Issue Templates
+      <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {t('issueDetail.templates.sectionTitle')}
       </h2>
-      <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
+      <div className="rounded-lg border border-border bg-card">
         {/* Header row */}
-        <div className="flex items-center justify-between border-b border-zinc-100 p-4 dark:border-zinc-800">
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            {templates.length} template{templates.length !== 1 ? 's' : ''}
+        <div className="flex items-center justify-between border-b border-border p-4">
+          <p className="text-xs text-muted-foreground">
+            {t('issueDetail.templates.count', { count: templates.length })}
           </p>
           {!isAdding && (
             <button
-              className="flex items-center gap-1.5 rounded-md border border-zinc-200 px-2.5 py-1 text-xs transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs transition-colors hover:bg-accent"
               onClick={() => setIsAdding(true)}
               type="button"
             >
               <Plus className="h-3.5 w-3.5" />
-              Add template
+              {t('issueDetail.templates.addTemplate')}
             </button>
           )}
         </div>
 
         {/* Inline "Add" form */}
         {isAdding && (
-          <div className="border-b border-zinc-100 p-4 dark:border-zinc-800">
+          <div className="border-b border-border p-4">
             <TemplateForm
               labels={labels}
               onCancel={() => setIsAdding(false)}
               onSubmit={handleCreate}
               states={states}
-              submitLabel="Create template"
+              submitLabel={t('issueDetail.templates.createTemplate')}
               users={users}
             />
           </div>
         )}
 
         {/* Template list */}
-        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+        <ul className="divide-y divide-border">
           {templates.length === 0 && !isAdding && (
-            <li className="p-4 text-sm text-zinc-400">
-              No templates yet. Add one to give teammates a head-start when creating issues.
+            <li className="p-4 text-sm text-muted-foreground">
+              {t('issueDetail.templates.emptyState')}
             </li>
           )}
           {templates.map(tmpl => {
@@ -232,7 +238,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                       onCancel={() => setEditingId(null)}
                       onSubmit={form => handleUpdate(tmpl.id, form)}
                       states={states}
-                      submitLabel="Save changes"
+                      submitLabel={t('issueDetail.templates.saveChanges')}
                       users={users}
                     />
                   </div>
@@ -240,15 +246,13 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                   <div className="flex items-start justify-between gap-3 p-4">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                          {tmpl.name}
-                        </span>
+                        <span className="text-sm font-medium text-foreground">{tmpl.name}</span>
                         {tmpl.isDefault && (
                           <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />
                         )}
                       </div>
                       {tmpl.description && (
-                        <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
                           {tmpl.description}
                         </p>
                       )}
@@ -256,23 +260,25 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                       {(stateName ?? priority ?? assigneeName ?? labelCount) && (
                         <div className="mt-1.5 flex flex-wrap gap-1.5">
                           {stateName && (
-                            <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                              State: {stateName}
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                              {t('issueDetail.templates.statePrefix', { state: stateName })}
                             </span>
                           )}
                           {priority && (
-                            <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                              Priority: {priority}
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                              {t('issueDetail.templates.priorityPrefix', { priority })}
                             </span>
                           )}
                           {assigneeName && (
-                            <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                              Assignee: {assigneeName}
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                              {t('issueDetail.templates.assigneePrefix', {
+                                assignee: assigneeName,
+                              })}
                             </span>
                           )}
                           {labelCount && (
-                            <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                              {labelCount} label{labelCount !== 1 ? 's' : ''}
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                              {t('issueDetail.templates.labelCount', { count: labelCount })}
                             </span>
                           )}
                         </div>
@@ -280,17 +286,17 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
                       <button
-                        aria-label="Edit template"
-                        className="rounded p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+                        aria-label={t('issueDetail.templates.editTemplate')}
+                        className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                         onClick={() => setEditingId(tmpl.id)}
                         type="button"
                       >
                         <Edit2 className="h-4 w-4" />
                       </button>
                       <button
-                        aria-label="Delete template"
+                        aria-label={t('issueDetail.templates.deleteTemplate')}
                         className={cn(
-                          'rounded p-1 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20',
+                          'rounded p-1 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center',
                           isDeleting && 'cursor-not-allowed opacity-50',
                         )}
                         disabled={isDeleting}
@@ -369,6 +375,8 @@ function TemplateForm({
   submitLabel: string;
   users: DBUserLike[];
 }) {
+  const t = useTranslations();
+  const PRIORITY_OPTIONS = getPriorityOptions(t);
   const init = initialData ?? emptyForm();
   const [name, setName] = useState(init.name);
   const [description, setDescription] = useState(init.description);
@@ -405,50 +413,43 @@ function TemplateForm({
         },
       });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Something went wrong';
-      toast.error(msg);
+      toast.error(getErrorMessage(err, t('common.somethingWentWrong')));
     } finally {
       setSubmitting(false);
     }
   };
 
   const inputCls =
-    'rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100';
+    'rounded-md border border-border bg-card px-2.5 py-1.5 text-sm dark:text-foreground';
 
   const selectCls =
-    'rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100';
+    'rounded-md border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand dark:text-foreground';
 
   return (
     <div className="flex flex-col gap-4">
       {/* Name + Description */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1">
-          <label
-            className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-            htmlFor="tmpl-name"
-          >
-            Name <span className="text-red-500">*</span>
+          <label className="text-xs font-medium text-muted-foreground" htmlFor="tmpl-name">
+            {t('issueDetail.templates.form.name')} <span className="text-red-500">*</span>
           </label>
           <input
             className={inputCls}
             id="tmpl-name"
             onChange={e => setName(e.target.value)}
-            placeholder="e.g. Bug report"
+            placeholder={t('issueDetail.templates.form.namePlaceholder')}
             value={name}
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label
-            className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-            htmlFor="tmpl-desc"
-          >
-            Description
+          <label className="text-xs font-medium text-muted-foreground" htmlFor="tmpl-desc">
+            {t('issueDetail.templates.form.description')}
           </label>
           <textarea
             className={cn(inputCls, 'resize-none')}
             id="tmpl-desc"
             onChange={e => setDescription(e.target.value)}
-            placeholder="Short description of this template"
+            placeholder={t('issueDetail.templates.form.descriptionPlaceholder')}
             rows={1}
             value={description}
           />
@@ -456,18 +457,15 @@ function TemplateForm({
       </div>
 
       {/* Template defaults */}
-      <div className="rounded-md bg-zinc-50 p-3 dark:bg-zinc-800/50">
-        <p className="mb-2.5 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-          Template defaults
+      <div className="rounded-md bg-muted p-3">
+        <p className="mb-2.5 text-xs font-medium text-muted-foreground">
+          {t('issueDetail.templates.form.templateDefaults')}
         </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {/* Status */}
           <div className="flex flex-col gap-1">
-            <label
-              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-              htmlFor="tmpl-state"
-            >
-              Status
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="tmpl-state">
+              {t('issueDetail.templates.form.status')}
             </label>
             <select
               className={selectCls}
@@ -475,7 +473,7 @@ function TemplateForm({
               onChange={e => setStateId(e.target.value)}
               value={stateId}
             >
-              <option value="">None</option>
+              <option value="">{t('issueDetail.templates.form.none')}</option>
               {states.map(s => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -486,11 +484,8 @@ function TemplateForm({
 
           {/* Priority */}
           <div className="flex flex-col gap-1">
-            <label
-              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-              htmlFor="tmpl-priority"
-            >
-              Priority
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="tmpl-priority">
+              {t('issueDetail.templates.form.priority')}
             </label>
             <select
               className={selectCls}
@@ -508,11 +503,8 @@ function TemplateForm({
 
           {/* Assignee */}
           <div className="flex flex-col gap-1">
-            <label
-              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-              htmlFor="tmpl-assignee"
-            >
-              Assignee
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="tmpl-assignee">
+              {t('issueDetail.templates.form.assignee')}
             </label>
             <select
               className={selectCls}
@@ -520,7 +512,7 @@ function TemplateForm({
               onChange={e => setAssigneeId(e.target.value)}
               value={assigneeId}
             >
-              <option value="">Unassigned</option>
+              <option value="">{t('issueDetail.templates.form.unassigned')}</option>
               {users.map(u => (
                 <option key={u.id} value={u.id}>
                   {u.displayName}
@@ -533,7 +525,9 @@ function TemplateForm({
         {/* Labels multi-select */}
         {labels.length > 0 && (
           <div className="mt-3 flex flex-col gap-1">
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Labels</p>
+            <p className="text-xs font-medium text-muted-foreground">
+              {t('issueDetail.templates.form.labels')}
+            </p>
             <div className="flex flex-wrap gap-1.5">
               {labels.map(l => {
                 const selected = labelIds.includes(l.id);
@@ -542,8 +536,8 @@ function TemplateForm({
                     className={cn(
                       'rounded-full border px-2 py-0.5 text-xs transition-colors',
                       selected
-                        ? 'border-indigo-400 bg-indigo-50 text-indigo-700 dark:border-indigo-600 dark:bg-indigo-950 dark:text-indigo-300'
-                        : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800',
+                        ? 'border-brand bg-brand-subtle text-brand-subtle-foreground dark:border-brand-border'
+                        : 'border-border bg-card text-muted-foreground hover:bg-accent',
                     )}
                     key={l.id}
                     onClick={() => toggleLabel(l.id)}
@@ -559,36 +553,24 @@ function TemplateForm({
       </div>
 
       {/* Default template toggle */}
-      <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+      <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground-secondary">
         <input
           checked={isDefault}
-          className="accent-indigo-600"
+          className="accent-brand"
           onChange={e => setIsDefault(e.target.checked)}
           type="checkbox"
         />
-        Set as default template for this team
+        {t('issueDetail.templates.form.setAsDefault')}
       </label>
 
       {/* Actions */}
       <div className="flex items-center justify-end gap-2">
-        <button
-          className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          onClick={onCancel}
-          type="button"
-        >
-          Cancel
-        </button>
-        <button
-          className={cn(
-            'rounded px-3 py-1.5 text-xs font-medium text-white transition-colors',
-            'bg-indigo-600 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50',
-          )}
-          disabled={!canSubmit || submitting}
-          onClick={handleSubmit}
-          type="button"
-        >
-          {submitting ? 'Saving…' : submitLabel}
-        </button>
+        <Button onClick={onCancel} size="sm" type="button" variant="ghost">
+          {t('common.cancel')}
+        </Button>
+        <Button disabled={!canSubmit || submitting} onClick={handleSubmit} size="sm" type="button">
+          {submitting ? t('common.saving') : submitLabel}
+        </Button>
       </div>
     </div>
   );

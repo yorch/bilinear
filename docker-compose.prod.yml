@@ -11,5 +11,5 @@ services:
     environment:
       PORT: "3000"
       HOSTNAME: "0.0.0.0"
-      DATABASE_URL: ${DATABASE_URL_OVERRIDE:-postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/${POSTGRES_DB:-issue_tracker}}
+      DATABASE_URL: ${DATABASE_URL_OVERRIDE:-postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/${POSTGRES_DB:-bilinear}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}

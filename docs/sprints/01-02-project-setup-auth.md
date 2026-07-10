@@ -167,7 +167,7 @@ throw new GraphQLError('Rate limited', {
 
 ```
 # .env.example — established in this sprint, extended by later sprints
-DATABASE_URL=postgresql://user:pass@localhost:5432/issue_tracker
+DATABASE_URL=postgresql://user:pass@localhost:5432/bilinear
 REDIS_URL=redis://localhost:6379
 JWT_SECRET=<random-256-bit>
 JWT_REFRESH_SECRET=<random-256-bit>

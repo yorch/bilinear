@@ -15,43 +15,60 @@ export function getErrorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback;
 }
 
+type Translate = (key: string, params?: Record<string, string | number>) => string;
+
 /** Format a timestamp as a human-readable relative time string (e.g. "5m ago"). */
-export function formatRelativeTime(dateStr: string): string {
+export function formatRelativeTime(dateStr: string, t: Translate, intlLocale = 'en-US'): string {
   const date = new Date(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / (1000 * 60));
 
   if (diffMins < 1) {
-    return 'just now';
+    return t('common.relativeTime.justNow');
   }
   if (diffMins < 60) {
-    return `${diffMins}m ago`;
+    return t('common.relativeTime.minutesAgo', { count: diffMins });
   }
   const diffHours = Math.floor(diffMins / 60);
   if (diffHours < 24) {
-    return `${diffHours}h ago`;
+    return t('common.relativeTime.hoursAgo', { count: diffHours });
   }
   const diffDays = Math.floor(diffHours / 24);
   if (diffDays === 1) {
-    return 'yesterday';
+    return t('common.relativeTime.yesterday');
   }
   if (diffDays < 7) {
-    return `${diffDays}d ago`;
+    return t('common.relativeTime.daysAgo', { count: diffDays });
   }
   if (diffDays < 30) {
-    return `${Math.floor(diffDays / 7)}w ago`;
+    return t('common.relativeTime.weeksAgo', { count: Math.floor(diffDays / 7) });
   }
-  return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+  return date.toLocaleDateString(intlLocale, { day: 'numeric', month: 'short' });
 }
 
-/** Format a byte count as a human-readable file size string. */
-export function formatFileSize(bytes: number): string {
+const fileSizeFormatters = new Map<string, Intl.NumberFormat>();
+
+function getFileSizeFormatter(intlLocale: string): Intl.NumberFormat {
+  let formatter = fileSizeFormatters.get(intlLocale);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(intlLocale, {
+      maximumFractionDigits: 1,
+      minimumFractionDigits: 1,
+    });
+    fileSizeFormatters.set(intlLocale, formatter);
+  }
+  return formatter;
+}
+
+/** Format a byte count as a human-readable, locale-aware file size string. */
+export function formatFileSize(bytes: number, intlLocale = 'en-US'): string {
   if (bytes < 1024) {
     return `${bytes} B`;
   }
+  const formatter = getFileSizeFormatter(intlLocale);
   if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${formatter.format(bytes / 1024)} KB`;
   }
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${formatter.format(bytes / (1024 * 1024))} MB`;
 }

@@ -3,12 +3,14 @@
 import { CheckCircle, CornerDownRight, MoreHorizontal, Smile } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { usePopover } from '@/hooks/use-popover';
+import { SelectPopover } from '@/components/ui/select-popover';
+import { useFormatters } from '@/hooks/use-formatters';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { COMMENT_UPDATE_MUTATION, CONVERT_TO_SUB_ISSUE_MUTATION } from '@/lib/graphql-queries';
 import { QUICK_EMOJIS } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
-import { cn, formatRelativeTime } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import type { MentionItem } from '../editor/mention-list';
 import { TipTapEditor } from '../editor/tiptap-editor.lazy';
 import { UserAvatar } from '../ui/user-avatar';
@@ -78,12 +80,12 @@ export function CommentCard({
   onUpdate: (comment: CommentItem) => void;
   onConvertToSubIssue: (id: string) => void;
 }) {
+  const t = useTranslations();
+  const { formatRelativeTime } = useFormatters();
   const [editing, setEditing] = useState(false);
   const [editBody, setEditBody] = useState(comment.body);
   const [replyBody, setReplyBody] = useState('');
   const [replySubmitting, setReplySubmitting] = useState(false);
-  const { open: showMenu, setOpen: setShowMenu, ref: menuRef } = usePopover();
-  const { open: showEmojiPicker, setOpen: setShowEmojiPicker, ref: emojiRef } = usePopover();
 
   const isOwn = comment.author.id === currentUserId;
   const isResolved = !!comment.resolvedAt;
@@ -120,7 +122,7 @@ export function CommentCard({
       }
       setEditing(false);
     } catch {
-      toast.error('Failed to update comment');
+      toast.error(t('issueDetail.comments.failedToUpdate'));
     }
   };
 
@@ -134,13 +136,12 @@ export function CommentCard({
   };
 
   const handleConvertToSubIssue = async () => {
-    setShowMenu(false);
     if (!teamId) {
-      toast.error('Cannot convert — team not resolved');
+      toast.error(t('issueDetail.comments.cannotConvertTeamUnresolved'));
       return;
     }
     const text = new DOMParser().parseFromString(comment.body, 'text/html').body.textContent ?? '';
-    const title = text.trim().slice(0, 255) || 'Sub-issue from comment';
+    const title = text.trim().slice(0, 255) || t('issueDetail.comments.subIssueFromComment');
     try {
       await gql(CONVERT_TO_SUB_ISSUE_MUTATION, {
         input: {
@@ -150,10 +151,10 @@ export function CommentCard({
           title,
         },
       });
-      toast.success('Converted to sub-issue');
+      toast.success(t('issueDetail.comments.convertedToSubIssue'));
       onConvertToSubIssue(comment.id);
     } catch {
-      toast.error('Failed to convert comment to sub-issue');
+      toast.error(t('issueDetail.comments.failedToConvert'));
     }
   };
 
@@ -163,53 +164,57 @@ export function CommentCard({
         className={cn(
           'rounded-lg p-3 transition-colors',
           isResolved
-            ? 'bg-zinc-50 opacity-70 dark:bg-zinc-800/30'
-            : 'bg-zinc-50/50 hover:bg-zinc-50 dark:bg-zinc-800/20 dark:hover:bg-zinc-800/40',
+            ? 'bg-muted opacity-70 dark:bg-muted/30'
+            : 'bg-muted/50 hover:bg-muted dark:bg-muted/20 dark:hover:bg-muted/40',
         )}
       >
         {/* Header */}
         <div className="mb-2 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <UserAvatar size="md" user={comment.author} />
-            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            <span className="text-xs font-medium text-foreground-secondary">
               {comment.author.displayName}
             </span>
-            <span className="text-xs text-zinc-400">{formatRelativeTime(comment.createdAt)}</span>
-            {comment.editedAt && <span className="text-xs italic text-zinc-400">(edited)</span>}
+            <span className="text-xs text-muted-foreground">
+              {formatRelativeTime(comment.createdAt)}
+            </span>
+            {comment.editedAt && (
+              <span className="text-xs italic text-muted-foreground">
+                ({t('issueDetail.comments.edited')})
+              </span>
+            )}
             {isResolved && (
               <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                 <CheckCircle className="h-3 w-3" />
-                Resolved
+                {t('issueDetail.comments.resolved')}
               </Badge>
             )}
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100 transition-opacity">
             {/* Emoji reaction */}
-            <div className="relative" ref={emojiRef}>
-              <button
-                className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
-                onClick={() => setShowEmojiPicker(v => !v)}
-                title="React"
-                type="button"
-              >
-                <Smile className="h-3.5 w-3.5" />
-              </button>
-              {showEmojiPicker && (
-                <div className="absolute right-0 top-6 z-50 flex gap-1 rounded-lg border border-zinc-200 bg-white p-1.5 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+            <SelectPopover
+              align="right"
+              panelClassName="flex gap-1 p-1.5"
+              triggerChildren={<Smile className="h-3.5 w-3.5" />}
+              triggerClassName="p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+              triggerTitle={t('issueDetail.comments.react')}
+            >
+              {close => (
+                <>
                   {QUICK_EMOJIS.map(emoji => {
                     const info = reactionCounts[emoji];
                     return (
                       <button
                         className={cn(
-                          'rounded px-1 py-0.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700',
-                          info?.reacted && 'bg-indigo-100 dark:bg-indigo-900/30',
+                          'rounded px-1 py-0.5 text-sm hover:bg-accent',
+                          info?.reacted && 'bg-brand-subtle',
                         )}
                         key={emoji}
                         onClick={() => {
                           onToggleReaction(comment.id, emoji, info?.reacted ?? false);
-                          setShowEmojiPicker(false);
+                          close();
                         }}
                         type="button"
                       >
@@ -217,16 +222,17 @@ export function CommentCard({
                       </button>
                     );
                   })}
-                </div>
+                </>
               )}
-            </div>
+            </SelectPopover>
 
             {/* Quote reply */}
             {depth === 0 && (
               <button
-                className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
+                aria-label={t('issueDetail.comments.quoteReply')}
+                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                 onClick={handleQuoteReply}
-                title="Quote reply"
+                title={t('issueDetail.comments.quoteReply')}
                 type="button"
               >
                 <CornerDownRight className="h-3.5 w-3.5" />
@@ -235,50 +241,56 @@ export function CommentCard({
 
             {/* Resolve */}
             <button
+              aria-label={
+                isResolved ? t('issueDetail.comments.unresolve') : t('issueDetail.comments.resolve')
+              }
               className={cn(
-                'rounded p-1 transition-colors',
+                'rounded p-1 transition-colors max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center',
                 isResolved
                   ? 'text-green-600 hover:bg-green-100 dark:hover:bg-green-900/20'
-                  : 'text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700',
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
               onClick={() => onToggleResolve(comment)}
-              title={isResolved ? 'Unresolve' : 'Resolve'}
+              title={
+                isResolved ? t('issueDetail.comments.unresolve') : t('issueDetail.comments.resolve')
+              }
               type="button"
             >
               <CheckCircle className="h-3.5 w-3.5" />
             </button>
 
             {/* More menu (edit/delete/convert) */}
-            <div className="relative" ref={menuRef}>
-              <button
-                className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
-                onClick={() => setShowMenu(v => !v)}
-                type="button"
-              >
-                <MoreHorizontal className="h-3.5 w-3.5" />
-              </button>
-              {showMenu && (
-                <div className="absolute right-0 top-6 z-50 min-w-[160px] rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+            <SelectPopover
+              align="right"
+              panelClassName="min-w-[160px] py-1"
+              triggerChildren={<MoreHorizontal className="h-3.5 w-3.5" />}
+              triggerClassName="p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+            >
+              {close => (
+                <>
                   {isOwn && (
                     <button
-                      className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                      className="w-full px-3 py-1.5 text-left text-xs text-foreground-secondary hover:bg-muted"
                       onClick={() => {
                         setEditing(true);
-                        setShowMenu(false);
+                        close();
                       }}
                       type="button"
                     >
-                      Edit
+                      {t('common.edit')}
                     </button>
                   )}
                   {/* Convert to sub-issue — only on top-level comments */}
                   {depth === 0 && (
                     <button
-                      className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
-                      onClick={handleConvertToSubIssue}
+                      className="w-full px-3 py-1.5 text-left text-xs text-foreground-secondary hover:bg-muted"
+                      onClick={() => {
+                        handleConvertToSubIssue();
+                        close();
+                      }}
                       type="button"
                     >
-                      Convert to sub-issue
+                      {t('issueDetail.comments.convertToSubIssue')}
                     </button>
                   )}
                   {isOwn && (
@@ -286,16 +298,16 @@ export function CommentCard({
                       className="w-full px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
                       onClick={() => {
                         onDelete(comment.id);
-                        setShowMenu(false);
+                        close();
                       }}
                       type="button"
                     >
-                      Delete
+                      {t('common.delete')}
                     </button>
                   )}
-                </div>
+                </>
               )}
-            </div>
+            </SelectPopover>
           </div>
         </div>
 
@@ -304,7 +316,7 @@ export function CommentCard({
           <div className="space-y-2">
             <TipTapEditor
               autofocus
-              className="rounded border border-indigo-400 p-1 text-sm"
+              className="rounded border border-brand p-1 text-sm"
               content={editBody}
               onChange={setEditBody}
               showToolbar
@@ -312,24 +324,24 @@ export function CommentCard({
             />
             <div className="flex gap-2">
               <button
-                className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700"
+                className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-white hover:bg-primary/90"
                 onClick={saveEdit}
                 type="button"
               >
-                Save
+                {t('common.save')}
               </button>
               <button
-                className="rounded-md px-3 py-1 text-xs text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                className="rounded-md px-3 py-1 text-xs text-muted-foreground hover:bg-muted"
                 onClick={() => setEditing(false)}
                 type="button"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           </div>
         ) : (
           <TipTapEditor
-            className="prose prose-sm dark:prose-invert max-w-none text-zinc-700 dark:text-zinc-300"
+            className="prose prose-sm dark:prose-invert max-w-none text-foreground-secondary"
             content={comment.body}
             readOnly
           />
@@ -343,8 +355,8 @@ export function CommentCard({
                 className={cn(
                   'flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors',
                   reacted
-                    ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700',
+                    ? 'bg-brand-subtle text-brand-subtle-foreground'
+                    : 'bg-muted text-muted-foreground hover:bg-accent',
                 )}
                 key={emoji}
                 onClick={() => onToggleReaction(comment.id, emoji, reacted)}
@@ -360,7 +372,7 @@ export function CommentCard({
 
       {/* Nested replies */}
       {comment.replies.length > 0 && (
-        <div className="ml-4 mt-1 space-y-1 border-l-2 border-zinc-200 pl-4 dark:border-zinc-700">
+        <div className="ml-4 mt-1 space-y-1 border-l-2 border-border pl-4">
           {comment.replies.map(reply => (
             <CommentCard
               comment={reply}
@@ -386,7 +398,7 @@ export function CommentCard({
 
       {/* Inline reply composer */}
       {showReplyTo === comment.id && (
-        <div className="ml-4 mt-2 border-l-2 border-zinc-200 pl-4 dark:border-zinc-700">
+        <div className="ml-4 mt-2 border-l-2 border-border pl-4">
           <CommentComposer
             compact
             issueId={issueId}
@@ -402,7 +414,7 @@ export function CommentCard({
                 setReplyBody('');
               }
             }}
-            placeholder="Reply…"
+            placeholder={t('issueDetail.comments.replyPlaceholder')}
             submitting={replySubmitting}
             value={replyBody}
           />

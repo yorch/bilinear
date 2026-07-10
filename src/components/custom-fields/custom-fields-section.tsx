@@ -3,7 +3,9 @@
 import { Plus, Trash2, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SimpleSelect } from '@/components/ui/select';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { getErrorMessage } from '@/lib/utils';
@@ -48,22 +50,30 @@ const ARCHIVE_MUTATION = `
   }
 `;
 
-const TYPE_OPTIONS: { value: CustomFieldType; label: string }[] = [
-  { label: 'Text', value: 'text' },
-  { label: 'Number', value: 'number' },
-  { label: 'Date', value: 'date' },
-  { label: 'URL', value: 'url' },
-  { label: 'Checkbox', value: 'checkbox' },
-  { label: 'Select (single)', value: 'select' },
-  { label: 'Select (multiple)', value: 'multi_select' },
-];
+function getTypeOptions(
+  t: ReturnType<typeof useTranslations>,
+): { value: CustomFieldType; label: string }[] {
+  return [
+    { label: t('customFields.fieldType.text'), value: 'text' },
+    { label: t('customFields.fieldType.number'), value: 'number' },
+    { label: t('customFields.fieldType.date'), value: 'date' },
+    { label: t('customFields.fieldType.url'), value: 'url' },
+    { label: t('customFields.fieldType.checkbox'), value: 'checkbox' },
+    { label: t('customFields.fieldType.selectSingle'), value: 'select' },
+    { label: t('customFields.fieldType.selectMultiple'), value: 'multi_select' },
+  ];
+}
 
 const MAX_FIELDS = 20;
 
 export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => {
+  const t = useTranslations();
   const { customFieldStore } = useStore();
   const definitions = customFieldStore.findDefinitionsByTeamId(teamId);
   const [isAdding, setIsAdding] = useState(false);
+  const [confirmingArchive, setConfirmingArchive] = useState<{ id: string; name: string } | null>(
+    null,
+  );
 
   const handleCreate = async (input: {
     name: string;
@@ -83,19 +93,20 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
           type: input.type,
         },
       });
-      toast.success('Custom field added');
+      toast.success(t('customFields.addSuccess'));
       setIsAdding(false);
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to create custom field'));
+      toast.error(getErrorMessage(err, t('customFields.createFailed')));
     }
   };
 
   const handleArchive = async (id: string) => {
+    setConfirmingArchive(null);
     try {
       await gql(ARCHIVE_MUTATION, { id });
-      toast.success('Custom field archived');
+      toast.success(t('customFields.archiveSuccess'));
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to archive custom field'));
+      toast.error(getErrorMessage(err, t('customFields.archiveFailed')));
     }
   };
 
@@ -103,63 +114,59 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
 
   return (
     <section>
-      <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-        Custom fields
+      <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {t('customFields.title')}
       </h2>
-      <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
-        <div className="flex items-center justify-between border-b border-zinc-100 p-4 dark:border-zinc-800">
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            {definitions.length} of {MAX_FIELDS} fields
+      <div className="rounded-lg border border-border bg-card">
+        <div className="flex items-center justify-between border-b border-border p-4">
+          <p className="text-xs text-muted-foreground">
+            {t('customFields.fieldCount', { count: definitions.length, max: MAX_FIELDS })}
           </p>
           {!isAdding && (
             <button
-              className="flex items-center gap-1.5 rounded-md border border-zinc-200 px-2.5 py-1 text-xs transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
               disabled={atLimit}
               onClick={() => setIsAdding(true)}
               type="button"
             >
               <Plus className="h-3.5 w-3.5" />
-              Add field
+              {t('customFields.addField')}
             </button>
           )}
         </div>
 
         {isAdding && (
-          <div className="border-b border-zinc-100 p-4 dark:border-zinc-800">
+          <div className="border-b border-border p-4">
             <CustomFieldForm onCancel={() => setIsAdding(false)} onSubmit={handleCreate} />
           </div>
         )}
 
-        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+        <ul className="divide-y divide-border">
           {definitions.length === 0 && !isAdding && (
-            <li className="p-4 text-sm text-zinc-400">
-              No custom fields yet. Add one to capture extra metadata on issues.
-            </li>
+            <li className="p-4 text-sm text-muted-foreground">{t('customFields.emptyState')}</li>
           )}
           {definitions.map(def => (
             <li className="flex items-center justify-between gap-3 p-4" key={def.id}>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                    {def.name}
-                  </span>
-                  <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                  <span className="text-sm font-medium text-foreground">{def.name}</span>
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                     {def.type.replace('_', ' ')}
                   </span>
                   {def.required && (
-                    <span className="text-xs text-amber-600 dark:text-amber-400">required</span>
+                    <span className="text-xs text-amber-600 dark:text-amber-400">
+                      {t('customFields.required')}
+                    </span>
                   )}
                 </div>
                 {def.description && (
-                  <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                    {def.description}
-                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{def.description}</p>
                 )}
               </div>
               <button
-                aria-label="Archive"
-                className="rounded p-1 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
-                onClick={() => handleArchive(def.id)}
+                aria-label={t('customFields.archive')}
+                className="rounded p-1 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+                onClick={() => setConfirmingArchive({ id: def.id, name: def.name })}
                 type="button"
               >
                 <Trash2 className="h-4 w-4" />
@@ -168,6 +175,18 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
           ))}
         </ul>
       </div>
+      <ConfirmDialog
+        confirmLabel={t('customFields.archive')}
+        message={t('customFields.archiveConfirm', { name: confirmingArchive?.name ?? '' })}
+        onCancel={() => setConfirmingArchive(null)}
+        onConfirm={() => {
+          if (confirmingArchive) {
+            void handleArchive(confirmingArchive.id);
+          }
+        }}
+        open={confirmingArchive !== null}
+        title={t('customFields.archive')}
+      />
     </section>
   );
 });
@@ -189,6 +208,7 @@ function CustomFieldForm({
     options: Option[];
   }) => Promise<void>;
 }) {
+  const t = useTranslations();
   const [name, setName] = useState('');
   const [type, setType] = useState<CustomFieldType>('text');
   const [description, setDescription] = useState('');
@@ -234,35 +254,35 @@ function CustomFieldForm({
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-zinc-500" htmlFor="cf-name">
-            Name
+          <label className="text-xs font-medium text-muted-foreground" htmlFor="cf-name">
+            {t('customFields.name')}
           </label>
           <input
-            className="rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            className="rounded-md border border-border bg-card px-2.5 py-1.5 text-sm"
             id="cf-name"
             onChange={e => setName(e.target.value)}
-            placeholder="e.g. Severity"
+            placeholder={t('customFields.namePlaceholder')}
             value={name}
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-zinc-500" htmlFor="cf-type">
-            Type
+          <label className="text-xs font-medium text-muted-foreground" htmlFor="cf-type">
+            {t('customFields.type')}
           </label>
           <SimpleSelect
             onChange={v => setType(v as CustomFieldType)}
-            options={TYPE_OPTIONS}
+            options={getTypeOptions(t)}
             value={type}
           />
         </div>
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium text-zinc-500" htmlFor="cf-desc">
-          Description (optional)
+        <label className="text-xs font-medium text-muted-foreground" htmlFor="cf-desc">
+          {t('customFields.descriptionOptional')}
         </label>
         <input
-          className="rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+          className="rounded-md border border-border bg-card px-2.5 py-1.5 text-sm"
           id="cf-desc"
           onChange={e => setDescription(e.target.value)}
           value={description}
@@ -270,25 +290,25 @@ function CustomFieldForm({
       </div>
 
       {needsOptions && (
-        <div className="flex flex-col gap-2 rounded-md bg-zinc-50 p-3 dark:bg-zinc-800/50">
-          <p className="text-xs font-medium text-zinc-500">Options</p>
+        <div className="flex flex-col gap-2 rounded-md bg-muted p-3">
+          <p className="text-xs font-medium text-muted-foreground">{t('customFields.options')}</p>
           {options.map(opt => (
             <div className="flex items-center gap-2" key={opt.key}>
               <input
-                className="w-24 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+                className="w-24 rounded-md border border-border bg-card px-2 py-1 text-xs"
                 onChange={e => updateOption(opt.key, { value: e.target.value })}
-                placeholder="Value"
+                placeholder={t('customFields.optionValue')}
                 value={opt.value}
               />
               <input
-                className="flex-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+                className="flex-1 rounded-md border border-border bg-card px-2 py-1 text-xs"
                 onChange={e => updateOption(opt.key, { label: e.target.value })}
-                placeholder="Label"
+                placeholder={t('customFields.optionLabel')}
                 value={opt.label}
               />
               <button
-                aria-label="Remove option"
-                className="rounded p-1 text-zinc-400 hover:text-red-600"
+                aria-label={t('customFields.removeOption')}
+                className="rounded p-1 text-muted-foreground hover:text-red-600 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                 onClick={() => removeOption(opt.key)}
                 type="button"
               >
@@ -297,35 +317,35 @@ function CustomFieldForm({
             </div>
           ))}
           <button
-            className="self-start rounded border border-dashed border-zinc-300 px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            className="self-start rounded border border-dashed border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
             onClick={addOption}
             type="button"
           >
-            + Add option
+            {t('customFields.addOption')}
           </button>
         </div>
       )}
 
-      <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+      <label className="flex items-center gap-2 text-xs text-muted-foreground">
         <input checked={required} onChange={e => setRequired(e.target.checked)} type="checkbox" />
-        Required on issue creation
+        {t('customFields.requiredOnCreate')}
       </label>
 
       <div className="flex items-center justify-end gap-2">
         <button
-          className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          className="rounded px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent"
           onClick={onCancel}
           type="button"
         >
-          Cancel
+          {t('common.cancel')}
         </button>
         <button
-          className="rounded bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+          className="rounded bg-invert px-3 py-1.5 text-xs font-medium text-invert-foreground hover:bg-invert/90 disabled:opacity-50"
           disabled={!canSubmit || submitting}
           onClick={handleSubmit}
           type="button"
         >
-          {submitting ? 'Adding…' : 'Add field'}
+          {submitting ? t('customFields.adding') : t('customFields.addField')}
         </button>
       </div>
     </div>

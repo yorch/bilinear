@@ -3,9 +3,11 @@
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { CycleDetailView } from '@/components/cycles/cycle-detail-view';
+import { useTranslations } from '@/hooks/use-translations';
 import { useStore } from '@/providers/store-provider';
 
 const CycleDetailPage = observer(function CycleDetailPage() {
+  const t = useTranslations();
   const {
     workspace,
     key: teamKey,
@@ -20,8 +22,8 @@ const CycleDetailPage = observer(function CycleDetailPage() {
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Loading...
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        {t('common.loading')}
       </div>
     );
   }
@@ -29,8 +31,8 @@ const CycleDetailPage = observer(function CycleDetailPage() {
   const team = teamStore.findByKey(teamKey);
   if (!team) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Team not found.
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        {t('cycles.teamNotFound')}
       </div>
     );
   }
@@ -38,8 +40,8 @@ const CycleDetailPage = observer(function CycleDetailPage() {
   const cycle = cycleStore.findById(cycleId);
   if (!cycle || cycle.teamId !== team.id) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Cycle not found.
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        {t('cycles.cycleNotFound')}
       </div>
     );
   }

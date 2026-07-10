@@ -1,9 +1,9 @@
 'use client';
 
 import { SelectPopover } from '@/components/ui/select-popover';
-import { getPriorityConfig } from '@/lib/issue-utils';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
-import { PriorityIcon } from './priority-icon';
+import { PriorityIcon, priorityLabelKey } from './priority-icon';
 
 interface PrioritySelectProps {
   className?: string;
@@ -22,6 +22,7 @@ export function PrioritySelect({
   forceOpen,
   onClose,
 }: PrioritySelectProps) {
+  const t = useTranslations();
   return (
     <SelectPopover
       className={className}
@@ -30,16 +31,16 @@ export function PrioritySelect({
       panelClassName="min-w-[160px] py-1"
       panelDataTestId="priority-select-popover"
       triggerChildren={<PriorityIcon priority={value} />}
-      triggerClassName="px-1.5 py-1"
-      triggerTitle={getPriorityConfig(value).label}
+      triggerClassName="px-1.5 py-1 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+      triggerTitle={t(priorityLabelKey(value))}
     >
       {close =>
         PRIORITIES.map(p => {
-          const config = getPriorityConfig(p);
+          const label = t(priorityLabelKey(p));
           return (
             <button
               className={cn(
-                'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800',
+                'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent',
                 p === value && 'font-medium',
               )}
               key={p}
@@ -51,7 +52,7 @@ export function PrioritySelect({
               type="button"
             >
               <PriorityIcon priority={p} />
-              <span>{config.label}</span>
+              <span>{label}</span>
             </button>
           );
         })

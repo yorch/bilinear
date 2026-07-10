@@ -4,12 +4,7 @@ import { cn } from '@/lib/utils';
  * Base shimmer element. Compose into entity-specific skeletons below.
  */
 function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div
-      className={cn('animate-pulse rounded-md bg-zinc-200 dark:bg-zinc-800', className)}
-      {...props}
-    />
-  );
+  return <div className={cn('animate-pulse rounded-md bg-muted', className)} {...props} />;
 }
 
 /**
@@ -35,7 +30,7 @@ function IssueListSkeleton({ count = 8 }: { count?: number }) {
   return (
     <div className="flex flex-col">
       {/* Group header shimmer */}
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-100 dark:border-zinc-800">
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border">
         <Skeleton className="h-3 w-3 rounded-full" />
         <Skeleton className="h-3.5 w-24" />
         <Skeleton className="h-4 w-6 rounded-full ml-1" />

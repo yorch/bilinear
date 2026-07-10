@@ -1,11 +1,12 @@
+import type { Locale as DateFnsLocale } from 'date-fns';
 import { differenceInCalendarDays, format, isToday } from 'date-fns';
 
 export const PRIORITY_CONFIG = {
-  0: { color: '#8b8c91', icon: '-', label: 'No priority' },
-  1: { color: '#ef4444', icon: '!!!', label: 'Urgent' },
-  2: { color: '#f97316', icon: '!!', label: 'High' },
-  3: { color: '#eab308', icon: '!', label: 'Medium' },
-  4: { color: '#6b7280', icon: '·', label: 'Low' },
+  0: { color: 'var(--priority-none)', icon: '-', label: 'No priority' },
+  1: { color: 'var(--priority-urgent)', icon: '!!!', label: 'Urgent' },
+  2: { color: 'var(--priority-high)', icon: '!!', label: 'High' },
+  3: { color: 'var(--priority-medium)', icon: '!', label: 'Medium' },
+  4: { color: 'var(--priority-low)', icon: '·', label: 'Low' },
 } as const;
 
 export type Priority = keyof typeof PRIORITY_CONFIG;
@@ -31,7 +32,7 @@ export function getPriorityConfig(priority: number) {
 /** Returns a CSS color class for the due date indicator. */
 export function getDueDateColor(dueDate: string | null | undefined): string {
   if (!dueDate) {
-    return 'text-zinc-500';
+    return 'text-muted-foreground';
   }
 
   const date = new Date(dueDate);
@@ -46,12 +47,30 @@ export function getDueDateColor(dueDate: string | null | undefined): string {
   if (daysUntil <= 3) {
     return 'text-yellow-500';
   }
-  return 'text-zinc-500';
+  return 'text-muted-foreground';
 }
 
-export function formatDueDate(dueDate: string | null | undefined): string {
+export function formatDueDate(
+  dueDate: string | null | undefined,
+  dateFnsLocale?: DateFnsLocale,
+): string {
   if (!dueDate) {
     return '';
   }
-  return format(new Date(dueDate), 'MMM d');
+  return format(new Date(dueDate), 'MMM d', dateFnsLocale ? { locale: dateFnsLocale } : undefined);
+}
+
+/**
+ * Derives a git-friendly branch name from an issue, e.g. `eng-123-fix-login-bug`.
+ * Mirrors Linear's "Copy git branch name" — purely a client-side slug, not
+ * backed by the (currently unused) `branchName` DB column.
+ */
+export function getBranchName(identifier: string, title: string): string {
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 50)
+    .replace(/-+$/g, '');
+  return slug ? `${identifier.toLowerCase()}-${slug}` : identifier.toLowerCase();
 }

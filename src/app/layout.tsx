@@ -1,20 +1,28 @@
 import type { Metadata } from 'next';
 import { ThemeProvider } from 'next-themes';
+import { APP_NAME } from '@/lib/app-config';
+import { getServerTranslations } from '@/lib/i18n/server';
 import { Toaster } from '@/lib/toast';
+import { LocaleProvider } from '@/providers/locale-provider';
 import './globals.css';
 
-export const metadata: Metadata = {
-  description: 'A Linear-style issue tracker built with Next.js',
-  title: 'Issue Tracker',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getServerTranslations();
+  return {
+    description: t('meta.description'),
+    title: APP_NAME,
+  };
+}
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const { locale: initialLocale } = await getServerTranslations();
+
   return (
-    <html className="h-full antialiased" lang="en" suppressHydrationWarning>
+    <html className="h-full antialiased" lang={initialLocale} suppressHydrationWarning>
       <body className="h-full">
         <ThemeProvider
           attribute="class"
@@ -22,8 +30,10 @@ export default function RootLayout({
           disableTransitionOnChange
           enableSystem
         >
-          {children}
-          <Toaster closeButton position="bottom-right" richColors />
+          <LocaleProvider initialLocale={initialLocale}>
+            {children}
+            <Toaster closeButton position="bottom-right" richColors />
+          </LocaleProvider>
         </ThemeProvider>
       </body>
     </html>

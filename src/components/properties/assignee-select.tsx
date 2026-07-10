@@ -1,6 +1,7 @@
 'use client';
 
 import { SelectPopover } from '@/components/ui/select-popover';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 import { UserAvatar } from '../ui/user-avatar';
 
@@ -29,6 +30,7 @@ export function AssigneeSelect({
   forceOpen,
   onClose,
 }: AssigneeSelectProps) {
+  const t = useTranslations();
   const current = users.find(u => u.id === value);
 
   return (
@@ -42,16 +44,16 @@ export function AssigneeSelect({
         current ? (
           <UserAvatar size="xs" user={current} />
         ) : (
-          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border-2 border-dashed border-zinc-300 dark:border-zinc-600" />
+          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border-2 border-dashed border-border" />
         )
       }
-      triggerClassName="px-1 py-1"
-      triggerTitle={current?.displayName ?? 'No assignee'}
+      triggerClassName="px-1 py-1 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+      triggerTitle={current?.displayName ?? t('properties.assignee.noAssignee')}
     >
       {close => (
         <>
           <button
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent"
             onClick={e => {
               e.stopPropagation();
               onChange(null);
@@ -59,12 +61,12 @@ export function AssigneeSelect({
             }}
             type="button"
           >
-            No assignee
+            {t('properties.assignee.noAssignee')}
           </button>
           {users.map(user => (
             <button
               className={cn(
-                'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800',
+                'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent',
                 user.id === value && 'font-medium',
               )}
               key={user.id}

@@ -3,6 +3,7 @@
 import { Target, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { SearchableSelectPopover } from '@/components/ui/searchable-select-popover';
+import { useTranslations } from '@/hooks/use-translations';
 import { useStore } from '@/providers/store-provider';
 
 interface ProjectSelectProps {
@@ -18,6 +19,7 @@ export const ProjectSelect = observer(function ProjectSelect({
   open,
   onClose,
 }: ProjectSelectProps) {
+  const t = useTranslations();
   const { projectStore } = useStore();
   const projects = projectStore.all;
   const current = value ? projectStore.findById(value) : null;
@@ -27,10 +29,10 @@ export const ProjectSelect = observer(function ProjectSelect({
       clearLabel={
         <>
           <X className="h-3 w-3" />
-          Remove from project
+          {t('properties.project.removeFromProject')}
         </>
       }
-      emptyText="No projects found"
+      emptyText={t('properties.project.noProjectsFound')}
       getKey={project => project.id}
       isSelected={project => project.id === value}
       items={projects}
@@ -53,18 +55,18 @@ export const ProjectSelect = observer(function ProjectSelect({
           <span className="truncate">{project.name}</span>
         </>
       )}
-      searchPlaceholder="Search projects..."
+      searchPlaceholder={t('properties.project.searchPlaceholder')}
       triggerChildren={
         <>
           <Target className="h-3 w-3" />
           {current ? (
             <span className="max-w-[100px] truncate">{current.name}</span>
           ) : (
-            <span className="text-zinc-400">Project</span>
+            <span className="text-muted-foreground">{t('properties.project.project')}</span>
           )}
         </>
       }
-      triggerTitle="Set project (Shift+P)"
+      triggerTitle={t('properties.project.setProject')}
     />
   );
 });

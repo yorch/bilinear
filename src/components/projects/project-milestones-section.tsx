@@ -1,13 +1,15 @@
 'use client';
 
-import { format, parseISO } from 'date-fns';
 import { Check, Pencil, Plus, Target, Trash2, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { useFormatters } from '@/hooks/use-formatters';
+import { useTranslations } from '@/hooks/use-translations';
 import type { DBProjectMilestone } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 const MILESTONE_FIELDS =
@@ -25,14 +27,6 @@ interface MilestoneFormState {
 
 const EMPTY_FORM: MilestoneFormState = { description: '', name: '', targetDate: '' };
 
-function formatTargetDate(dateStr: string): string {
-  try {
-    return format(parseISO(dateStr), 'MMM d, yyyy');
-  } catch {
-    return dateStr;
-  }
-}
-
 interface MilestoneFormProps {
   initialValues?: MilestoneFormState;
   onCancel: () => void;
@@ -46,6 +40,7 @@ function MilestoneForm({
   onSubmit,
   submitLabel,
 }: MilestoneFormProps) {
+  const t = useTranslations();
   const [values, setValues] = useState<MilestoneFormState>(initialValues);
   const [saving, setSaving] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -69,19 +64,16 @@ function MilestoneForm({
   };
 
   return (
-    <form
-      className="mt-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
-      onSubmit={handleSubmit}
-    >
+    <form className="mt-2 rounded-lg border border-border p-3" onSubmit={handleSubmit}>
       <div className="flex flex-col gap-2">
         <input
           className={cn(
-            'w-full rounded border border-zinc-200 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none',
-            'placeholder:text-zinc-400 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400',
-            'dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-indigo-500',
+            'w-full rounded border border-border bg-card px-2 py-1.5 text-sm text-foreground outline-none',
+            'placeholder:text-muted-foreground focus:border-brand focus:ring-1 focus:ring-brand',
+            'border-border text-foreground placeholder:text-muted-foreground dark:focus:border-brand',
           )}
           onChange={e => setValues(v => ({ ...v, name: e.target.value }))}
-          placeholder="Milestone name"
+          placeholder={t('projects.milestoneName')}
           ref={nameRef}
           required
           type="text"
@@ -89,20 +81,20 @@ function MilestoneForm({
         />
         <textarea
           className={cn(
-            'w-full resize-none rounded border border-zinc-200 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none',
-            'placeholder:text-zinc-400 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400',
-            'dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-indigo-500',
+            'w-full resize-none rounded border border-border bg-card px-2 py-1.5 text-sm text-foreground outline-none',
+            'placeholder:text-muted-foreground focus:border-brand focus:ring-1 focus:ring-brand',
+            'border-border text-foreground placeholder:text-muted-foreground dark:focus:border-brand',
           )}
           onChange={e => setValues(v => ({ ...v, description: e.target.value }))}
-          placeholder="Description (optional)"
+          placeholder={t('projects.descriptionOptionalPlaceholder')}
           rows={2}
           value={values.description}
         />
         <input
           className={cn(
-            'w-full rounded border border-zinc-200 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none',
-            'focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400',
-            'dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-indigo-500',
+            'w-full rounded border border-border bg-card px-2 py-1.5 text-sm text-foreground outline-none',
+            'focus:border-brand focus:ring-1 focus:ring-brand',
+            'border-border text-foreground dark:focus:border-brand',
           )}
           onChange={e => setValues(v => ({ ...v, targetDate: e.target.value }))}
           type="date"
@@ -111,24 +103,24 @@ function MilestoneForm({
       </div>
       <div className="mt-2 flex items-center justify-end gap-2">
         <button
-          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
           disabled={saving}
           onClick={onCancel}
           type="button"
         >
           <X className="h-3.5 w-3.5" />
-          Cancel
+          {t('common.cancel')}
         </button>
         <button
           className={cn(
             'flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-white transition-colors',
-            'bg-indigo-600 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50',
+            'bg-primary hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50',
           )}
           disabled={saving || !values.name.trim()}
           type="submit"
         >
           <Check className="h-3.5 w-3.5" />
-          {saving ? 'Saving…' : submitLabel}
+          {saving ? t('common.saving') : submitLabel}
         </button>
       </div>
     </form>
@@ -142,12 +134,13 @@ interface MilestoneRowProps {
 }
 
 function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
+  const t = useTranslations();
+  const { formatDate } = useFormatters();
   const [deleting, setDeleting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const handleDelete = async () => {
-    if (!window.confirm(`Delete milestone "${milestone.name}"?`)) {
-      return;
-    }
+    setConfirmingDelete(false);
     setDeleting(true);
     try {
       await onDelete(milestone.id);
@@ -157,42 +150,47 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
   };
 
   return (
-    <div className="flex items-start gap-3 rounded-md border border-zinc-200 px-3 py-2.5 dark:border-zinc-800">
-      <Target className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
+    <div className="flex items-start gap-3 rounded-md border border-border px-3 py-2.5">
+      <Target className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
-        <span className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          {milestone.name}
-        </span>
+        <span className="block text-sm font-medium text-foreground">{milestone.name}</span>
         {milestone.description && (
-          <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
+          <span className="mt-0.5 block text-xs text-muted-foreground">
             {milestone.description}
           </span>
         )}
       </div>
       {milestone.targetDate && (
-        <span className="shrink-0 text-xs text-zinc-400">
-          {formatTargetDate(milestone.targetDate)}
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {formatDate(milestone.targetDate, { day: 'numeric', month: 'short', year: 'numeric' })}
         </span>
       )}
       <div className="flex shrink-0 items-center gap-0.5">
         <button
-          className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
           onClick={() => onEdit(milestone.id)}
-          title="Edit milestone"
+          title={t('projects.editMilestone')}
           type="button"
         >
           <Pencil className="h-3.5 w-3.5" />
         </button>
         <button
-          className="rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950 dark:hover:text-red-400"
+          className="rounded p-1 text-muted-foreground hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950 dark:hover:text-red-400 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
           disabled={deleting}
-          onClick={handleDelete}
-          title="Delete milestone"
+          onClick={() => setConfirmingDelete(true)}
+          title={t('projects.deleteMilestone')}
           type="button"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
+      <ConfirmDialog
+        message={t('projects.deleteMilestoneConfirm', { name: milestone.name })}
+        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={handleDelete}
+        open={confirmingDelete}
+        title={t('projects.deleteMilestone')}
+      />
     </div>
   );
 }
@@ -200,6 +198,7 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
 export const ProjectMilestonesSection = observer(function ProjectMilestonesSection({
   projectId,
 }: ProjectMilestonesSectionProps) {
+  const t = useTranslations();
   const { projectStore } = useStore();
   const milestones = projectStore.getMilestones(projectId);
 
@@ -235,7 +234,9 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
         },
       );
       if (res.errors?.length) {
-        throw new Error((res.errors[0] as { message: string }).message ?? 'mutation failed');
+        throw new Error(
+          (res.errors[0] as { message: string }).message ?? t('common.somethingWentWrong'),
+        );
       }
       const milestone = (
         res.data as { projectMilestoneCreate?: { projectMilestone?: DBProjectMilestone } }
@@ -245,7 +246,7 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
       }
       setCreating(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create milestone');
+      toast.error(getErrorMessage(err, t('projects.failedToCreateMilestone')));
     }
   };
 
@@ -268,7 +269,9 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
         },
       );
       if (res.errors?.length) {
-        throw new Error((res.errors[0] as { message: string }).message ?? 'mutation failed');
+        throw new Error(
+          (res.errors[0] as { message: string }).message ?? t('common.somethingWentWrong'),
+        );
       }
       const milestone = (
         res.data as { projectMilestoneUpdate?: { projectMilestone?: DBProjectMilestone } }
@@ -278,7 +281,7 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
       }
       setEditingId(null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update milestone');
+      toast.error(getErrorMessage(err, t('projects.failedToUpdateMilestone')));
     }
   };
 
@@ -291,28 +294,30 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
         { id },
       );
       if (res.errors?.length) {
-        throw new Error((res.errors[0] as { message: string }).message ?? 'mutation failed');
+        throw new Error(
+          (res.errors[0] as { message: string }).message ?? t('common.somethingWentWrong'),
+        );
       }
       projectStore.applyMilestoneSyncAction('D', id, null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete milestone');
+      toast.error(getErrorMessage(err, t('projects.failedToDeleteMilestone')));
     }
   };
 
   return (
     <div className="mt-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-          Milestones ({milestones.length})
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {t('projects.milestonesCount', { count: milestones.length })}
         </h3>
         {!creating && !editingId && (
           <button
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
             onClick={openCreate}
             type="button"
           >
             <Plus className="h-3.5 w-3.5" />
-            Add milestone
+            {t('projects.addMilestone')}
           </button>
         )}
       </div>
@@ -321,13 +326,13 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
         <MilestoneForm
           onCancel={() => setCreating(false)}
           onSubmit={handleCreate}
-          submitLabel="Create"
+          submitLabel={t('common.create')}
         />
       )}
 
       {milestones.length === 0 && !creating ? (
-        <p className="py-6 text-center text-xs text-zinc-400">
-          No milestones yet. Add one to track key checkpoints.
+        <p className="py-6 text-center text-xs text-muted-foreground">
+          {t('projects.noMilestonesYet')}
         </p>
       ) : (
         <div className="mt-2 flex flex-col gap-2">
@@ -343,7 +348,7 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
                   key={milestone.id}
                   onCancel={() => setEditingId(null)}
                   onSubmit={values => handleUpdate(milestone.id, values)}
-                  submitLabel="Save"
+                  submitLabel={t('common.save')}
                 />
               );
             }

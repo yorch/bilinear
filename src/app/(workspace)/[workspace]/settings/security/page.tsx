@@ -2,6 +2,8 @@
 
 import { Copy, ExternalLink } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useFormatters } from '@/hooks/use-formatters';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 
@@ -131,6 +133,8 @@ const DEFAULT_FORM: FormState = {
 // ---------------------------------------------------------------------------
 
 export default function SecuritySettingsPage() {
+  const t = useTranslations();
+  const { formatDate } = useFormatters();
   const [config, setConfig] = useState<SamlConfig | null>(null);
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
   const [loading, setLoading] = useState(true);
@@ -193,7 +197,7 @@ export default function SecuritySettingsPage() {
 
   async function handleScimCreate() {
     if (!scimNewLabel.trim()) {
-      toast.error('Label is required');
+      toast.error(t('settings.security.labelRequired'));
       return;
     }
     setScimCreating(true);
@@ -204,28 +208,28 @@ export default function SecuritySettingsPage() {
       };
       const created = data.scimTokenCreate;
       if (created?.token) {
-        setScimTokens(t => [created.token as ScimTokenRow, ...t]);
+        setScimTokens(prev => [created.token as ScimTokenRow, ...prev]);
         setScimNewPlaintext(created.plaintext ?? null);
         setScimNewLabel('');
-        toast.success('SCIM token created');
+        toast.success(t('settings.security.scimTokenCreated'));
       }
     } catch {
-      toast.error('Failed to create SCIM token');
+      toast.error(t('settings.security.scimTokenCreateError'));
     } finally {
       setScimCreating(false);
     }
   }
 
   async function handleScimRevoke(tokenId: string) {
-    if (!confirm('Revoke this SCIM token? Existing provisioning integrations will stop working.')) {
+    if (!confirm(t('settings.security.revokeScimTokenConfirm'))) {
       return;
     }
     try {
       await gql(SCIM_TOKEN_REVOKE_MUTATION, { id: tokenId });
-      setScimTokens(t => t.filter(tok => tok.id !== tokenId));
-      toast.success('Token revoked');
+      setScimTokens(prev => prev.filter(tok => tok.id !== tokenId));
+      toast.success(t('settings.security.tokenRevoked'));
     } catch {
-      toast.error('Failed to revoke token');
+      toast.error(t('settings.security.tokenRevokeError'));
     }
   }
 
@@ -236,15 +240,15 @@ export default function SecuritySettingsPage() {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!form.idpSsoUrl.trim()) {
-      toast.error('IDP SSO URL is required');
+      toast.error(t('settings.security.idpSsoUrlRequired'));
       return;
     }
     if (!form.idpEntityId.trim()) {
-      toast.error('IDP Entity ID is required');
+      toast.error(t('settings.security.idpEntityIdRequired'));
       return;
     }
     if (!form.idpCert.trim() && !config) {
-      toast.error('IDP Certificate is required');
+      toast.error(t('settings.security.idpCertRequired'));
       return;
     }
     setSaving(true);
@@ -268,17 +272,17 @@ export default function SecuritySettingsPage() {
       if (data.samlConfigurationSave?.configuration) {
         setConfig(data.samlConfigurationSave.configuration);
         setField('idpCert', '');
-        toast.success('SAML configuration saved');
+        toast.success(t('settings.security.samlConfigSaved'));
       }
     } catch {
-      toast.error('Failed to save SAML configuration');
+      toast.error(t('settings.security.samlConfigSaveError'));
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDelete() {
-    if (!confirm('Remove SAML configuration? SSO will be disabled immediately.')) {
+    if (!confirm(t('settings.security.removeSamlConfirm'))) {
       return;
     }
     setDeleting(true);
@@ -286,9 +290,9 @@ export default function SecuritySettingsPage() {
       await gql(SAML_DELETE_MUTATION);
       setConfig(null);
       setForm(DEFAULT_FORM);
-      toast.success('SAML configuration removed');
+      toast.success(t('settings.security.samlConfigRemoved'));
     } catch {
-      toast.error('Failed to remove SAML configuration');
+      toast.error(t('settings.security.samlConfigRemoveError'));
     } finally {
       setDeleting(false);
     }
@@ -296,49 +300,51 @@ export default function SecuritySettingsPage() {
 
   function copyToClipboard(value: string, label: string) {
     void navigator.clipboard.writeText(value);
-    toast.success(`${label} copied to clipboard`);
+    toast.success(t('settings.security.copiedToClipboard', { label }));
   }
 
   return (
     <div className="mx-auto max-w-2xl space-y-8 p-8">
       <div>
-        <h1 className="text-xl font-semibold">Security</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Configure single sign-on and authentication settings.
-        </p>
+        <h1 className="text-xl font-semibold">{t('settings.security.title')}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t('settings.security.description')}</p>
       </div>
 
       {/* SCIM Provisioning Section */}
       <section className="rounded-lg border p-6 space-y-6">
         <div>
-          <h2 className="font-medium">SCIM 2.0 Provisioning</h2>
+          <h2 className="font-medium">{t('settings.security.scimHeading')}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Automate user and group provisioning from your Identity Provider.
+            {t('settings.security.scimDescription')}
           </p>
         </div>
 
         {/* Base URL */}
         <div className="rounded-md bg-muted/50 p-4 space-y-3">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            SCIM Base URL
+            {t('settings.security.scimBaseUrl')}
           </p>
           <ReadOnlyField
-            label="Use this URL in your IdP's SCIM configuration"
-            onCopy={() => copyToClipboard(`${appUrl}/api/scim/v2`, 'SCIM Base URL')}
+            label={t('settings.security.scimBaseUrlHint')}
+            onCopy={() =>
+              copyToClipboard(`${appUrl}/api/scim/v2`, t('settings.security.scimBaseUrl'))
+            }
             value={`${appUrl}/api/scim/v2`}
           />
         </div>
 
         {/* Tokens */}
         <div className="space-y-3">
-          <p className="text-sm font-medium">Bearer Tokens</p>
+          <p className="text-sm font-medium">{t('settings.security.bearerTokens')}</p>
 
           {scimLoading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
+            <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
           ) : (
             <>
               {scimTokens.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No active tokens.</p>
+                <p className="text-sm text-muted-foreground">
+                  {t('settings.security.noActiveTokens')}
+                </p>
               ) : (
                 <div className="space-y-2">
                   {scimTokens.map(tok => (
@@ -349,10 +355,12 @@ export default function SecuritySettingsPage() {
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{tok.label}</p>
                         <p className="text-xs text-muted-foreground">
-                          Created {new Date(tok.createdAt).toLocaleDateString()}
+                          {t('settings.security.createdOn', {
+                            date: formatDate(tok.createdAt),
+                          })}
                           {tok.lastUsedAt
-                            ? ` · Last used ${new Date(tok.lastUsedAt).toLocaleDateString()}`
-                            : ' · Never used'}
+                            ? ` · ${t('settings.security.lastUsedOn', { date: formatDate(tok.lastUsedAt) })}`
+                            : ` · ${t('settings.security.neverUsed')}`}
                         </p>
                       </div>
                       <button
@@ -360,7 +368,7 @@ export default function SecuritySettingsPage() {
                         onClick={() => handleScimRevoke(tok.id)}
                         type="button"
                       >
-                        Revoke
+                        {t('settings.security.revoke')}
                       </button>
                     </div>
                   ))}
@@ -371,16 +379,19 @@ export default function SecuritySettingsPage() {
               {scimNewPlaintext ? (
                 <div className="rounded-md border border-amber-300 bg-amber-50 p-3 space-y-2 dark:border-amber-700 dark:bg-amber-950/30">
                   <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
-                    Copy this token now — it will not be shown again.
+                    {t('settings.security.copyTokenNowWarning')}
                   </p>
                   <div className="flex items-center gap-2">
                     <code className="flex-1 truncate rounded bg-white/70 px-2 py-1 font-mono text-xs dark:bg-black/30">
                       {scimNewPlaintext}
                     </code>
                     <button
-                      className="shrink-0 text-muted-foreground hover:text-foreground"
-                      onClick={() => copyToClipboard(scimNewPlaintext, 'SCIM token')}
-                      title="Copy token"
+                      aria-label={t('settings.security.copyToken')}
+                      className="shrink-0 text-muted-foreground hover:text-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+                      onClick={() =>
+                        copyToClipboard(scimNewPlaintext, t('settings.security.scimTokenLabel'))
+                      }
+                      title={t('settings.security.copyToken')}
                       type="button"
                     >
                       <Copy className="h-3.5 w-3.5" />
@@ -391,7 +402,7 @@ export default function SecuritySettingsPage() {
                     onClick={() => setScimNewPlaintext(null)}
                     type="button"
                   >
-                    I have copied it
+                    {t('settings.security.iHaveCopiedIt')}
                   </button>
                 </div>
               ) : (
@@ -399,7 +410,7 @@ export default function SecuritySettingsPage() {
                   <input
                     className="flex-1 rounded-md border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     onChange={e => setScimNewLabel(e.target.value)}
-                    placeholder="Token label (e.g. Okta)"
+                    placeholder={t('settings.security.tokenLabelPlaceholder')}
                     type="text"
                     value={scimNewLabel}
                   />
@@ -409,7 +420,9 @@ export default function SecuritySettingsPage() {
                     onClick={handleScimCreate}
                     type="button"
                   >
-                    {scimCreating ? 'Creating…' : 'Create token'}
+                    {scimCreating
+                      ? t('settings.security.creatingEllipsis')
+                      : t('settings.security.createToken')}
                   </button>
                 </div>
               )}
@@ -421,35 +434,37 @@ export default function SecuritySettingsPage() {
       {/* SAML SSO Section */}
       <section className="rounded-lg border p-6 space-y-6">
         <div>
-          <h2 className="font-medium">SAML 2.0 Single Sign-On</h2>
+          <h2 className="font-medium">{t('settings.security.samlHeading')}</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Connect an Identity Provider (IdP) to enable SSO for your workspace.
+            {t('settings.security.samlDescription')}
           </p>
           {config && (
             <span className="inline-block mt-2 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
-              Configured
+              {t('settings.security.configured')}
             </span>
           )}
         </div>
 
         {loading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
         ) : (
           <>
             {/* SP (Service Provider) read-only info */}
             <div className="rounded-md bg-muted/50 p-4 space-y-3">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Service Provider Details
+                {t('settings.security.serviceProviderDetails')}
               </p>
               <div className="space-y-2">
                 <ReadOnlyField
-                  label="SP Entity ID / Metadata URL"
-                  onCopy={() => copyToClipboard(spEntityId, 'Metadata URL')}
+                  label={t('settings.security.spEntityIdLabel')}
+                  onCopy={() =>
+                    copyToClipboard(spEntityId, t('settings.security.metadataUrlLabel'))
+                  }
                   value={metadataUrl}
                 />
                 <ReadOnlyField
-                  label="Assertion Consumer Service (ACS) URL"
-                  onCopy={() => copyToClipboard(acsUrl, 'ACS URL')}
+                  label={t('settings.security.acsUrlLabel')}
+                  onCopy={() => copyToClipboard(acsUrl, t('settings.security.acsUrlShortLabel'))}
                   value={acsUrl}
                 />
               </div>
@@ -459,7 +474,7 @@ export default function SecuritySettingsPage() {
             <form className="space-y-4" onSubmit={handleSave}>
               <div>
                 <label className="block text-sm font-medium mb-1" htmlFor="idpSsoUrl">
-                  IDP SSO URL <span className="text-destructive">*</span>
+                  {t('settings.security.idpSsoUrl')} <span className="text-destructive">*</span>
                 </label>
                 <input
                   className="w-full rounded-md border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -473,7 +488,7 @@ export default function SecuritySettingsPage() {
 
               <div>
                 <label className="block text-sm font-medium mb-1" htmlFor="idpEntityId">
-                  IDP Entity ID <span className="text-destructive">*</span>
+                  {t('settings.security.idpEntityId')} <span className="text-destructive">*</span>
                 </label>
                 <input
                   className="w-full rounded-md border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -487,7 +502,8 @@ export default function SecuritySettingsPage() {
 
               <div>
                 <label className="block text-sm font-medium mb-1" htmlFor="idpCert">
-                  IDP Certificate (PEM){config ? ' — leave blank to keep existing' : ' *'}
+                  {t('settings.security.idpCertificate')}
+                  {config ? ` — ${t('settings.security.leaveBlankToKeepExisting')}` : ' *'}
                 </label>
                 <textarea
                   className="w-full rounded-md border bg-background px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
@@ -501,7 +517,7 @@ export default function SecuritySettingsPage() {
 
               <div>
                 <label className="block text-sm font-medium mb-1" htmlFor="idpMetadataUrl">
-                  IDP Metadata URL (optional)
+                  {t('settings.security.idpMetadataUrlOptional')}
                 </label>
                 <input
                   className="w-full rounded-md border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -516,7 +532,7 @@ export default function SecuritySettingsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1" htmlFor="emailAttribute">
-                    Email attribute
+                    {t('settings.security.emailAttribute')}
                   </label>
                   <input
                     className="w-full rounded-md border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -528,7 +544,7 @@ export default function SecuritySettingsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1" htmlFor="nameAttribute">
-                    Name attribute
+                    {t('settings.security.nameAttribute')}
                   </label>
                   <input
                     className="w-full rounded-md border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -544,20 +560,20 @@ export default function SecuritySettingsPage() {
               <div className="space-y-3 pt-1">
                 <Toggle
                   checked={form.enabled}
-                  description="Allow members to authenticate via SSO"
-                  label="Enable SAML SSO"
+                  description={t('settings.security.enableSamlSsoDescription')}
+                  label={t('settings.security.enableSamlSso')}
                   onChange={v => setField('enabled', v)}
                 />
                 <Toggle
                   checked={form.jitProvisioning}
-                  description="Automatically create accounts for new SSO users"
-                  label="Just-in-time provisioning"
+                  description={t('settings.security.jitProvisioningDescription')}
+                  label={t('settings.security.jitProvisioning')}
                   onChange={v => setField('jitProvisioning', v)}
                 />
                 <Toggle
                   checked={form.ssoEnforced}
-                  description="Require all members to sign in via SSO"
-                  label="Enforce SSO"
+                  description={t('settings.security.enforceSsoDescription')}
+                  label={t('settings.security.enforceSso')}
                   onChange={v => setField('ssoEnforced', v)}
                 />
               </div>
@@ -568,7 +584,7 @@ export default function SecuritySettingsPage() {
                   disabled={saving}
                   type="submit"
                 >
-                  {saving ? 'Saving…' : 'Save configuration'}
+                  {saving ? t('common.saving') : t('settings.security.saveConfiguration')}
                 </button>
 
                 {config && (
@@ -580,7 +596,7 @@ export default function SecuritySettingsPage() {
                       target="_blank"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
-                      Test SSO
+                      {t('settings.security.testSso')}
                     </a>
 
                     <button
@@ -589,7 +605,9 @@ export default function SecuritySettingsPage() {
                       onClick={handleDelete}
                       type="button"
                     >
-                      {deleting ? 'Removing…' : 'Remove'}
+                      {deleting
+                        ? t('settings.security.removingEllipsis')
+                        : t('settings.security.remove')}
                     </button>
                   </>
                 )}
@@ -615,6 +633,7 @@ function ReadOnlyField({
   onCopy: () => void;
   value: string;
 }) {
+  const t = useTranslations();
   return (
     <div>
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
@@ -623,9 +642,10 @@ function ReadOnlyField({
           {value}
         </code>
         <button
-          className="shrink-0 text-muted-foreground hover:text-foreground"
+          aria-label={t('settings.security.copy')}
+          className="shrink-0 text-muted-foreground hover:text-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
           onClick={onCopy}
-          title="Copy"
+          title={t('settings.security.copy')}
           type="button"
         >
           <Copy className="h-3.5 w-3.5" />

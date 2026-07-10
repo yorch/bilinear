@@ -1,6 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { Issue } from '../../../generated/prisma';
-import { logger } from '../../lib/logger';
+import { childLogger } from '../../lib/logger';
 import {
   isTeamGuest,
   requireAuth,
@@ -18,6 +18,8 @@ import {
 } from '../../services/issue.service';
 import type { IssueActivityCreateInput } from '../../services/issue-activity.service';
 import type { GraphQLContext } from '../context';
+
+const log = childLogger({ module: 'resolver/issue' });
 
 // Fields tracked in the activity timeline on every issue update
 const TRACKED_ACTIVITY_FIELDS = [
@@ -165,7 +167,7 @@ export const issueResolvers = {
       }
       void ctx.services.webhook
         .dispatchEvent(ctx.orgId, 'issue.archived', issue, issue.teamId)
-        .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.archived'));
+        .catch(err => log.error({ err }, 'webhook dispatch failed: issue.archived'));
       return { issue, lastSyncId: issueSync?.id.toString() ?? '0', success: true };
     },
     issueCreate: async (
@@ -207,22 +209,22 @@ export const issueResolvers = {
         // block the response on notification delivery)
         void ctx.services.notification
           .autoSubscribe(ctx.userId, issue.id)
-          .catch(err => logger.error({ err }, 'Failed to auto-subscribe issue creator'));
+          .catch(err => log.error({ err }, 'Failed to auto-subscribe issue creator'));
         if (input.assigneeId && input.assigneeId !== ctx.userId) {
           void ctx.services.notification
             .autoSubscribe(input.assigneeId, issue.id)
-            .catch(err => logger.error({ err }, 'Failed to auto-subscribe issue assignee'));
+            .catch(err => log.error({ err }, 'Failed to auto-subscribe issue assignee'));
           void ctx.services.notification
             .createForIssueAssignment(ctx.orgId, issue.id, input.assigneeId, ctx.userId)
-            .catch(err => logger.error({ err }, 'Failed to create issue assignment notification'));
+            .catch(err => log.error({ err }, 'Failed to create issue assignment notification'));
         }
 
         void ctx.services.webhook
           .dispatchEvent(ctx.orgId, 'issue.created', issue, issue.teamId)
-          .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.created'));
+          .catch(err => log.error({ err }, 'webhook dispatch failed: issue.created'));
         void ctx.services.automation
           .evaluateForIssue(ctx.orgId, { issue, type: 'issue_created' }, ctx.userId)
-          .catch(err => logger.error({ err }, 'automation evaluate failed: issue_created'));
+          .catch(err => log.error({ err }, 'automation evaluate failed: issue_created'));
         return { issue, lastSyncId: issueSync?.id.toString() ?? '0', success: true };
       } catch (err) {
         const error = err as Error;
@@ -256,7 +258,7 @@ export const issueResolvers = {
       }
       void ctx.services.webhook
         .dispatchEvent(ctx.orgId, 'issue.deleted', { id, teamId: existing.teamId }, existing.teamId)
-        .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.deleted'));
+        .catch(err => log.error({ err }, 'webhook dispatch failed: issue.deleted'));
       // Fire-and-forget audit log — errors are non-fatal
       ctx.services.auditLog
         .log({
@@ -267,7 +269,7 @@ export const issueResolvers = {
           resourceType: 'Issue',
           userId: ctx.userId,
         })
-        .catch(err => logger.warn({ err }, 'audit log failed'));
+        .catch(err => log.warn({ err }, 'audit log failed'));
       return { lastSyncId: issueSync?.id.toString() ?? '0', success: true };
     },
 
@@ -497,7 +499,7 @@ export const issueResolvers = {
       for (const issue of updated) {
         void ctx.services.webhook
           .dispatchEvent(ctx.orgId, 'issue.updated', issue, issue.teamId)
-          .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.updated (bulk)'));
+          .catch(err => log.error({ err }, 'webhook dispatch failed: issue.updated (bulk)'));
       }
 
       // Fire-and-forget audit log — errors are non-fatal
@@ -509,7 +511,7 @@ export const issueResolvers = {
           orgId: ctx.orgId,
           userId: ctx.userId,
         })
-        .catch(err => logger.warn({ err }, 'audit log failed'));
+        .catch(err => log.warn({ err }, 'audit log failed'));
 
       return { issues: updated, lastSyncId, success: true };
     },
@@ -681,10 +683,10 @@ export const issueResolvers = {
           // Auto-subscribe new assignee and notify them
           void ctx.services.notification
             .autoSubscribe(input.assigneeId, issue.id)
-            .catch(err => logger.error({ err }, 'Failed to auto-subscribe issue assignee'));
+            .catch(err => log.error({ err }, 'Failed to auto-subscribe issue assignee'));
           void ctx.services.notification
             .createForIssueAssignment(ctx.orgId, issue.id, input.assigneeId, ctx.userId)
-            .catch(err => logger.error({ err }, 'Failed to create issue assignment notification'));
+            .catch(err => log.error({ err }, 'Failed to create issue assignment notification'));
         }
       }
 
@@ -710,7 +712,7 @@ export const issueResolvers = {
       for (const row of cascaded) {
         void ctx.services.webhook
           .dispatchEvent(ctx.orgId, 'issue.updated', row, row.teamId)
-          .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.updated (cascade)'));
+          .catch(err => log.error({ err }, 'webhook dispatch failed: issue.updated (cascade)'));
         void ctx.services.automation
           .evaluateForIssue(
             ctx.orgId,
@@ -721,12 +723,12 @@ export const issueResolvers = {
             },
             ctx.userId,
           )
-          .catch(err => logger.error({ err }, 'automation evaluate failed (cascade)'));
+          .catch(err => log.error({ err }, 'automation evaluate failed (cascade)'));
       }
 
       void ctx.services.webhook
         .dispatchEvent(ctx.orgId, 'issue.updated', issue, issue.teamId)
-        .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.updated'));
+        .catch(err => log.error({ err }, 'webhook dispatch failed: issue.updated'));
 
       // Automation triggers — fire one per kind of change. The service
       // de-dupes by trigger_type so a single field change can only match
@@ -737,7 +739,7 @@ export const issueResolvers = {
       ) => {
         void ctx.services.automation
           .evaluateForIssue(ctx.orgId, { changes, issue, type }, ctx.userId)
-          .catch(err => logger.error({ err, type }, 'automation evaluate failed'));
+          .catch(err => log.error({ err, type }, 'automation evaluate failed'));
       };
       if (input.stateId && input.stateId !== existing.stateId) {
         fireAutomation('issue_state_changed', {

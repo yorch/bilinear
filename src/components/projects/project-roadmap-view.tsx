@@ -4,6 +4,7 @@ import { observer } from 'mobx-react-lite';
 import { useRouter } from 'next/navigation';
 import { useCallback, useMemo } from 'react';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
+import { useTranslations } from '@/hooks/use-translations';
 import { PROJECT_UPDATE_MUTATION } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
@@ -16,6 +17,7 @@ interface ProjectRoadmapViewProps {
 export const ProjectRoadmapView = observer(function ProjectRoadmapView({
   workspaceKey,
 }: ProjectRoadmapViewProps) {
+  const t = useTranslations();
   const { projectStore } = useStore();
   const router = useRouter();
   const tq = useMemo(() => new TransactionQueue(), []);
@@ -65,25 +67,23 @@ export const ProjectRoadmapView = observer(function ProjectRoadmapView({
             if (current) {
               projectStore.applySyncAction('U', id, { ...current, ...snapshot });
             }
-            toast.error('Failed to update project dates');
+            toast.error(t('projects.failedToUpdateDates'));
           },
         },
       );
     },
-    [projectStore, tq],
+    [projectStore, tq, t],
   );
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Roadmap</h2>
-        <p className="text-xs text-zinc-500">
-          Drag bars to reschedule. Drag edges to resize. Click a bar to open the project.
-        </p>
+      <div className="border-b border-border px-4 py-3">
+        <h2 className="text-sm font-semibold text-foreground">{t('projects.roadmap')}</h2>
+        <p className="text-xs text-muted-foreground">{t('projects.roadmapHint')}</p>
       </div>
       <div className="flex-1 overflow-y-auto">
         <GanttView
-          emptyMessage="No active projects with target dates. Create a project or add dates to populate the roadmap."
+          emptyMessage={t('projects.roadmapEmptyMessage')}
           items={items}
           onChange={handleChange}
         />
@@ -91,14 +91,14 @@ export const ProjectRoadmapView = observer(function ProjectRoadmapView({
           <div className="flex flex-wrap gap-2">
             {projects.map(p => (
               <button
-                className="flex items-center gap-1.5 rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs text-foreground-secondary hover:bg-accent"
                 key={p.id}
                 onClick={() => router.push(`/${workspaceKey}/project/${p.slugId}`)}
                 type="button"
               >
                 <span
                   className="h-2 w-2 rounded-full"
-                  style={{ backgroundColor: p.color ?? '#6366f1' }}
+                  style={{ backgroundColor: p.color ?? 'var(--brand)' }}
                 />
                 {p.icon ? `${p.icon} ` : ''}
                 {p.name}

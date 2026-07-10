@@ -1,8 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ModalDialog } from '@/components/ui/modal-dialog';
-import { cn, getErrorMessage } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
+import { ModalDialog, ModalFooter, ModalHeader } from '@/components/ui/modal-dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { useTranslations } from '@/hooks/use-translations';
+import { getErrorMessage } from '@/lib/utils';
 
 export interface SaveViewInput {
   color?: string;
@@ -38,6 +41,7 @@ export function SaveViewModal({
   initialGroupBy,
   initialLayout,
 }: SaveViewModalProps) {
+  const t = useTranslations();
   const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -78,7 +82,7 @@ export function SaveViewModal({
       });
       onClose();
     } catch (err) {
-      setSubmitError(getErrorMessage(err, 'Failed to save view'));
+      setSubmitError(getErrorMessage(err, t('properties.saveView.failedToSaveView')));
     } finally {
       setSubmitting(false);
     }
@@ -87,45 +91,37 @@ export function SaveViewModal({
   const canSubmit = name.trim().length > 0 && !submitting;
 
   return (
-    <ModalDialog aria-label="Save view" onClose={onClose} open={open}>
+    <ModalDialog aria-label={t('properties.saveView.title')} onClose={onClose} open={open}>
       <form className="flex flex-col" onSubmit={handleSubmit}>
-        <div className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Save view</h2>
-        </div>
+        <ModalHeader title={t('properties.saveView.title')} />
 
         <div className="flex flex-col gap-4 px-5 py-4">
           <div className="flex flex-col gap-1">
-            <label
-              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-              htmlFor="view-name"
-            >
-              Name
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="view-name">
+              {t('properties.saveView.name')}
             </label>
-            <input
-              className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+            <Input
               id="view-name"
               onChange={e => setName(e.target.value)}
-              placeholder="e.g. My Active Issues"
+              placeholder={t('properties.saveView.namePlaceholder')}
               ref={nameRef}
               required
-              type="text"
               value={name}
             />
           </div>
 
           <div className="flex flex-col gap-1">
-            <label
-              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-              htmlFor="view-description"
-            >
-              Description
-              <span className="ml-1 font-normal text-zinc-400">(optional)</span>
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="view-description">
+              {t('properties.saveView.description')}
+              <span className="ml-1 font-normal text-muted-foreground">
+                ({t('properties.saveView.optional')})
+              </span>
             </label>
-            <textarea
-              className="resize-none rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-600 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-400"
+            <Textarea
+              className="resize-none"
               id="view-description"
               onChange={e => setDescription(e.target.value)}
-              placeholder="Describe this view"
+              placeholder={t('properties.saveView.descriptionPlaceholder')}
               rows={2}
               value={description}
             />
@@ -134,39 +130,28 @@ export function SaveViewModal({
           <label className="flex cursor-pointer items-center gap-3">
             <input
               checked={shared}
-              className="h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 dark:border-zinc-600"
+              className="h-4 w-4 rounded border-border text-brand focus:ring-brand"
               onChange={e => setShared(e.target.checked)}
               type="checkbox"
             />
             <div>
-              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Share with team
+              <p className="text-sm font-medium text-foreground-secondary">
+                {t('properties.saveView.shareWithTeam')}
               </p>
-              <p className="text-xs text-zinc-400">Other members can see and use this view</p>
+              <p className="text-xs text-muted-foreground">
+                {t('properties.saveView.shareDescription')}
+              </p>
             </div>
           </label>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
-          {submitError && <p className="flex-1 text-xs text-red-500">{submitError}</p>}
-          <button
-            className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-            onClick={onClose}
-            type="button"
-          >
-            Cancel
-          </button>
-          <button
-            className={cn(
-              'rounded-md px-4 py-1.5 text-sm font-medium text-white transition-colors',
-              'bg-indigo-600 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50',
-            )}
-            disabled={!canSubmit}
-            type="submit"
-          >
-            {submitting ? 'Saving...' : 'Save view'}
-          </button>
-        </div>
+        <ModalFooter
+          cancelLabel={t('common.cancel')}
+          onCancel={onClose}
+          submitDisabled={!canSubmit}
+          submitError={submitError}
+          submitLabel={submitting ? t('common.saving') : t('properties.saveView.saveView')}
+        />
       </form>
     </ModalDialog>
   );

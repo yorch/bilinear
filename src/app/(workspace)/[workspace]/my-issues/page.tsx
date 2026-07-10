@@ -1,20 +1,24 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
-import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { useMemo, useState } from 'react';
 import { type BoardGroupBy, type BoardSwimlaneBy, BoardView } from '@/components/issues/board-view';
 import { FilterBuilder } from '@/components/issues/filter-builder';
 import { IssueListView } from '@/components/issues/issue-list-view';
-import type { OpenProperty } from '@/components/issues/issue-row';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
-import { type ViewMode, ViewToggle } from '@/components/issues/view-toggle';
+import { ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
-import { useHotkeys } from '@/hooks/use-hotkeys';
-import type { DBIssue, DBIssueLabel } from '@/lib/db';
+import { SyncErrorState } from '@/components/shared/sync-error-state';
+import { useDocumentTitle } from '@/hooks/use-document-title';
+import { useIssueListPage } from '@/hooks/use-issue-list-page';
+import { useIssueUpdate } from '@/hooks/use-issue-update';
+import { useIssuesBulkUpdate } from '@/hooks/use-issues-bulk-update';
+import { useTranslations } from '@/hooks/use-translations';
+import type { DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
-import { ISSUE_UPDATE_MUTATION, ISSUES_BULK_UPDATE_MUTATION } from '@/lib/graphql-queries';
-import { TransactionQueue } from '@/lib/transaction-queue';
+import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
+import { buildIssueHref } from '@/lib/issue-nav';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
 
@@ -24,18 +28,12 @@ import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
 
 const MyIssuesPage = observer(function MyIssuesPage() {
   const { workspace } = useParams<{ workspace: string }>();
-  const router = useRouter();
+  const t = useTranslations();
   const { issueStore, userStore, workflowStateStore, labelStore, syncStore } = useStore();
 
-  const txQueue = useMemo(() => new TransactionQueue(), []);
+  useDocumentTitle(t('nav.myIssues'));
 
   // UI state
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detailIssueId, setDetailIssueId] = useState<string | null>(null);
-  const [openProperty, setOpenProperty] = useState<OpenProperty>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [boardGroupBy, setBoardGroupBy] = useState<BoardGroupBy>('status');
-  const [swimlaneBy, setSwimlaneBy] = useState<BoardSwimlaneBy>('none');
   const [filterSet, setFilterSet] = useState<FilterSet>(createEmptyFilterSet());
 
   // ── Store-derived values ─────────────────────────────────────────────────
@@ -70,225 +68,86 @@ const MyIssuesPage = observer(function MyIssuesPage() {
   const issues = applyFilters(allMyIssues, filterSet);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the MobX reactive trigger
-  const users: IssueUser[] = useMemo(
-    () =>
-      userStore.all.map(u => ({
-        avatarBackgroundColor: u.avatarBgColor,
-        avatarUrl: u.avatarUrl ?? null,
-        displayName: u.displayName,
-        id: u.id,
-        initials: u.initials,
-      })),
-    [userStore.pool.size],
-  );
+  const users: IssueUser[] = useMemo(() => toIssueUsers(userStore.all), [userStore.pool.size]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the MobX reactive trigger
-  const labels: IssueLabel[] = useMemo(
-    () =>
-      labelStore.all.map(l => ({
-        color: l.color,
-        id: l.id,
-        name: l.name,
-      })),
-    [labelStore.pool.size],
-  );
+  const labels: IssueLabel[] = useMemo(() => toIssueLabels(labelStore.all), [labelStore.pool.size]);
 
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
   const hasError = syncStore.status === 'error';
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the MobX reactive trigger
-  const detailIssue: IssueDetail | null = useMemo(() => {
-    if (!detailIssueId) {
-      return null;
-    }
-    const raw = issueStore.findById(detailIssueId);
-    if (!raw) {
-      return null;
-    }
-    const issueLabels = (raw.labelIds ?? [])
-      .map(id => labelStore.findById(id))
-      .filter((l): l is DBIssueLabel => l !== null)
-      .map(l => ({ color: l.color, id: l.id, name: l.name }));
-    return { ...raw, dueDate: raw.dueDate ?? null, labels: issueLabels };
-  }, [detailIssueId, issueStore.pool.size, issueStore, labelStore]);
-
   // ── Mutations ─────────────────────────────────────────────────────────────
 
-  const handleUpdate = useCallback(
-    (id: string, patch: Record<string, unknown>) => {
-      const snapshot = issueStore.findById(id);
-      issueStore.optimisticUpdate(id, patch as Partial<DBIssue>);
+  const handleUpdate = useIssueUpdate();
+  const handleBulkUpdate = useIssuesBulkUpdate();
 
-      txQueue.enqueue(
-        ISSUE_UPDATE_MUTATION,
-        { id, input: patch },
-        {
-          onError: () => {
-            if (snapshot) {
-              issueStore.optimisticUpdate(id, snapshot);
-            }
-          },
-          onSuccess: data => {
-            const updated = (data as { issueUpdate?: { issue?: DBIssue } })?.issueUpdate?.issue;
-            if (updated) {
-              issueStore.applySyncAction('U', id, updated);
-            }
-          },
-        },
-      );
-    },
-    [issueStore, txQueue],
-  );
+  // ── Selection, detail panel, view mode, keyboard shortcuts ──────────────────
 
-  const handleBulkUpdate = useCallback(
-    (ids: string[], patch: Record<string, unknown>) => {
-      const snapshots = ids.map(id => ({ id, snapshot: issueStore.findById(id) }));
-      for (const id of ids) {
-        issueStore.optimisticUpdate(id, patch as Partial<DBIssue>);
-      }
-      txQueue.enqueue(
-        ISSUES_BULK_UPDATE_MUTATION,
-        { ids, input: patch },
-        {
-          onError: () => {
-            for (const { id, snapshot } of snapshots) {
-              if (snapshot) {
-                issueStore.optimisticUpdate(id, snapshot);
-              }
-            }
-          },
-          onSuccess: data => {
-            const updated =
-              (data as { issuesBulkUpdate?: { issues?: DBIssue[] } })?.issuesBulkUpdate?.issues ??
-              [];
-            for (const issue of updated) {
-              issueStore.applySyncAction('U', issue.id, issue);
-            }
-          },
-        },
-      );
-    },
-    [issueStore, txQueue],
-  );
-
-  // ── Keyboard shortcuts ────────────────────────────────────────────────────
-
-  const selectedIndex = issues.findIndex(i => i.id === selectedId);
-  const hasSelection = selectedId !== null;
-
-  useHotkeys(
-    'j',
-    () => {
-      const next = Math.min(selectedIndex + 1, issues.length - 1);
-      setSelectedId(issues[next]?.id ?? null);
-    },
-    {},
-    [selectedIndex, issues],
-  );
-  useHotkeys(
-    'k',
-    () => {
-      const prev = Math.max(selectedIndex - 1, 0);
-      setSelectedId(issues[prev]?.id ?? null);
-    },
-    {},
-    [selectedIndex, issues],
-  );
-
-  useHotkeys(
-    'enter',
-    () => {
-      if (selectedId) {
-        setDetailIssueId(selectedId);
-      }
-    },
-    {},
-    [selectedId],
-  );
-
-  useHotkeys(
-    'escape',
-    () => {
-      if (detailIssueId) {
-        setDetailIssueId(null);
-        router.replace(`/${workspace}/my-issues`, { scroll: false });
-      } else {
-        setSelectedId(null);
-      }
-    },
-    {},
-    [detailIssueId, workspace],
-  );
-
-  useHotkeys('s', () => setOpenProperty('status'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('a', () => setOpenProperty('assignee'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('p', () => setOpenProperty('priority'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('l', () => setOpenProperty('label'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('d', () => setOpenProperty('dueDate'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('shift+e', () => setOpenProperty('estimate'), { enabled: hasSelection }, [
-    hasSelection,
-  ]);
-
-  useHotkeys('alt+1', () => setViewMode('list'), {}, []);
-  useHotkeys('alt+2', () => setViewMode('board'), {}, []);
-  useHotkeys('alt+3', () => setViewMode('timeline'), {}, []);
-
-  // ── Open issue ────────────────────────────────────────────────────────────
-
-  const handleOpen = useCallback(
-    (id: string) => {
-      setDetailIssueId(id);
-      router.replace(`/${workspace}/issue/${id}`, { scroll: false });
-    },
-    [workspace, router],
-  );
+  const {
+    boardGroupBy,
+    closeDetail,
+    detailIssue,
+    handleOpen,
+    openProperty,
+    selectedId,
+    setBoardGroupBy,
+    setOpenProperty,
+    setSelectedId,
+    setSwimlaneBy,
+    setViewMode,
+    swimlaneBy,
+    viewMode,
+  } = useIssueListPage({
+    basePath: `/${workspace}/my-issues`,
+    buildHref: id =>
+      buildIssueHref(workspace, id, { label: t('nav.myIssues'), path: `/${workspace}/my-issues` }),
+    issues,
+  });
 
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">Loading…</div>
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        {t('common.loading')}
+      </div>
     );
   }
 
   if (hasError) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-red-500">
-        Failed to load data. Please refresh.
-      </div>
-    );
+    return <SyncErrorState message={t('issues.failedToLoad')} />;
   }
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Page header */}
-      <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-6 py-3">
         <div className="flex items-center gap-2">
-          <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">My Issues</h1>
-          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+          <h1 className="text-sm font-semibold text-foreground">{t('issues.myIssues')}</h1>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
             {issues.length}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {viewMode === 'board' && (
             <>
               <select
-                className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground-secondary"
                 onChange={e => setBoardGroupBy(e.target.value as BoardGroupBy)}
                 value={boardGroupBy}
               >
-                <option value="status">Group by status</option>
-                <option value="assignee">Group by assignee</option>
-                <option value="priority">Group by priority</option>
+                <option value="status">{t('issues.groupByStatus')}</option>
+                <option value="assignee">{t('issues.groupByAssignee')}</option>
+                <option value="priority">{t('issues.groupByPriority')}</option>
               </select>
               <select
-                className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground-secondary"
                 onChange={e => setSwimlaneBy(e.target.value as BoardSwimlaneBy)}
                 value={swimlaneBy}
               >
-                <option value="none">No swimlanes</option>
-                <option value="assignee">Swimlane by assignee</option>
-                <option value="priority">Swimlane by priority</option>
+                <option value="none">{t('issues.noSwimlanes')}</option>
+                <option value="assignee">{t('issues.swimlaneByAssignee')}</option>
+                <option value="priority">{t('issues.swimlaneByPriority')}</option>
               </select>
             </>
           )}
@@ -297,7 +156,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
       </div>
 
       {/* Filter bar */}
-      <div className="flex items-center gap-2 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
         <FilterBuilder
           filterSet={filterSet}
           labels={labels}
@@ -325,7 +184,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
           />
         ) : viewMode === 'timeline' ? (
           <GanttView
-            emptyMessage="No issues with start or due dates. Add dates to issues to populate the timeline."
+            emptyMessage={t('issues.ganttEmptyMessage')}
             items={issues
               .filter(i => i.startDate ?? i.dueDate)
               .map<GanttItem>(i => ({
@@ -359,10 +218,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
       <LazyIssueDetailPanel
         issue={detailIssue}
         labels={labels}
-        onClose={() => {
-          setDetailIssueId(null);
-          router.replace(`/${workspace}/my-issues`, { scroll: false });
-        }}
+        onClose={closeDetail}
         onUpdate={handleUpdate}
         states={states}
         users={users}

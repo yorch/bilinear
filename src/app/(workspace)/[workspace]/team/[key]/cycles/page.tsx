@@ -3,9 +3,12 @@
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { CycleListView } from '@/components/cycles/cycle-list-view';
+import { SyncErrorState } from '@/components/shared/sync-error-state';
+import { useTranslations } from '@/hooks/use-translations';
 import { useStore } from '@/providers/store-provider';
 
 const TeamCyclesPage = observer(function TeamCyclesPage() {
+  const t = useTranslations();
   const { workspace, key: teamKey } = useParams<{
     workspace: string;
     key: string;
@@ -19,24 +22,20 @@ const TeamCyclesPage = observer(function TeamCyclesPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Loading...
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        {t('common.loading')}
       </div>
     );
   }
 
   if (hasError) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-red-500">
-        Failed to load data. Please refresh.
-      </div>
-    );
+    return <SyncErrorState message={t('cycles.failedToLoad')} />;
   }
 
   if (!team) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Team not found.
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        {t('cycles.teamNotFound')}
       </div>
     );
   }

@@ -1,5 +1,8 @@
 import { type DBPendingTransaction, db } from './db';
 import { gql } from './graphql';
+import { createClientLogger } from './logger';
+
+const log = createClientLogger('TransactionQueue');
 
 export interface Transaction {
   createdAt: number;
@@ -49,6 +52,40 @@ const callbackMap = new Map<string, Callbacks>();
 let processing = false;
 let hydrated = false;
 let activeSession: ActiveSession | null = null;
+// Notified whenever the queue's contents change (enqueue, drain, drop) so
+// `usePending()` can re-render rows with an in-flight write indicator.
+const queueListeners = new Set<() => void>();
+// Cached so getPendingIds() returns a stable reference between changes —
+// useSyncExternalStore requires this to avoid re-rendering every commit.
+let cachedPendingIds: Set<string> | null = null;
+
+function notifyQueueChanged(): void {
+  cachedPendingIds = null;
+  for (const listener of queueListeners) {
+    listener();
+  }
+}
+
+/** Pull every string id referenced by a transaction's variables (`id` or `ids`). */
+function idsFromVariables(variables: Record<string, unknown>): string[] {
+  const ids: string[] = [];
+  if (typeof variables.id === 'string') {
+    ids.push(variables.id);
+  }
+  if (Array.isArray(variables.ids)) {
+    for (const v of variables.ids) {
+      if (typeof v === 'string') {
+        ids.push(v);
+      }
+    }
+  }
+  return ids;
+}
+// Fallback error surface for permanent failures with no per-call onError —
+// rehydrated transactions (callbacks don't survive reload) and enqueue sites
+// that omit callbacks would otherwise fail silently. Registered by
+// SyncProvider so the message can be localized.
+let defaultErrorHandler: ((err: Error) => void) | null = null;
 
 /**
  * Queues GraphQL mutations and processes them serially with IndexedDB
@@ -62,7 +99,7 @@ export class TransactionQueue {
       // every component's first enqueue (auth flow has a few async hops).
       // Stamp the row with empty IDs and let `hydrate()` skip it on the
       // next boot — better than crashing the page on a race.
-      console.warn('[TransactionQueue] enqueue before setActiveSession');
+      log.warn('enqueue before setActiveSession');
     }
     const tx: Transaction = {
       createdAt: Date.now(),
@@ -77,6 +114,7 @@ export class TransactionQueue {
     if (callbacks) {
       callbackMap.set(tx.id, callbacks);
     }
+    notifyQueueChanged();
     void persist(tx).then(() => {
       void processNext();
     });
@@ -85,6 +123,37 @@ export class TransactionQueue {
 
   static setActiveSession(session: ActiveSession): void {
     activeSession = session;
+  }
+
+  /**
+   * Ids (from `variables.id` or `variables.ids`) currently in the queue —
+   * i.e. rows with an unconfirmed optimistic write. Used to render a
+   * pending-write indicator; a false negative (mutation shapes that don't
+   * carry `id`/`ids`) just means no dot, never a stuck one.
+   */
+  static getPendingIds(): Set<string> {
+    if (!cachedPendingIds) {
+      cachedPendingIds = new Set<string>();
+      for (const tx of queue) {
+        for (const id of idsFromVariables(tx.variables)) {
+          cachedPendingIds.add(id);
+        }
+      }
+    }
+    return cachedPendingIds;
+  }
+
+  /** Subscribe to queue-content changes (enqueue, drain, drop). Returns an unsubscribe fn. */
+  static subscribe(listener: () => void): () => void {
+    queueListeners.add(listener);
+    return () => {
+      queueListeners.delete(listener);
+    };
+  }
+
+  /** Register the fallback surface for permanent failures without onError. */
+  static setDefaultErrorHandler(handler: ((err: Error) => void) | null): void {
+    defaultErrorHandler = handler;
   }
 
   /**
@@ -124,7 +193,7 @@ export class TransactionQueue {
           .toArray(),
       ]);
     } catch (err) {
-      console.warn('[TransactionQueue] Hydrate failed:', err);
+      log.warn('Hydrate failed', err);
       return;
     }
     hydrated = true;
@@ -143,10 +212,11 @@ export class TransactionQueue {
       try {
         await db.pendingTransactions.bulkDelete(foreign.map(r => r.id));
       } catch (err) {
-        console.warn('[TransactionQueue] Stale-row cleanup failed:', err);
+        log.warn('Stale-row cleanup failed', err);
       }
     }
     if (queue.length > 0) {
+      notifyQueueChanged();
       void processNext();
     }
   }
@@ -155,6 +225,8 @@ export class TransactionQueue {
   static __reset() {
     queue.length = 0;
     callbackMap.clear();
+    queueListeners.clear();
+    cachedPendingIds = null;
     processing = false;
     hydrated = false;
     activeSession = null;
@@ -168,7 +240,7 @@ async function persist(tx: Transaction): Promise<void> {
     // If IndexedDB is unavailable (private browsing quota, schema mismatch),
     // fall through and process from memory only. Reload-survival is lost but
     // the in-flight retry loop still works.
-    console.warn('[TransactionQueue] Persist failed:', err);
+    log.warn('Persist failed', err);
   }
 }
 
@@ -176,7 +248,7 @@ async function unpersist(id: string): Promise<void> {
   try {
     await db.pendingTransactions.delete(id);
   } catch (err) {
-    console.warn('[TransactionQueue] Unpersist failed:', err);
+    log.warn('Unpersist failed', err);
   }
 }
 
@@ -205,6 +277,7 @@ async function processNext(): Promise<void> {
       window.dispatchEvent(new CustomEvent('bilinear:transaction-drained'));
     }
     queue.shift();
+    notifyQueueChanged();
     await unpersist(tx.id);
     const cb = callbackMap.get(tx.id);
     callbackMap.delete(tx.id);
@@ -215,10 +288,15 @@ async function processNext(): Promise<void> {
 
     if (isPermanent) {
       queue.shift();
+      notifyQueueChanged();
       await unpersist(tx.id);
       const cb = callbackMap.get(tx.id);
       callbackMap.delete(tx.id);
-      cb?.onError?.(error);
+      if (cb?.onError) {
+        cb.onError(error);
+      } else {
+        defaultErrorHandler?.(error);
+      }
     } else {
       tx.retryCount++;
       // Persist the bumped count for same-session continuity. `hydrate()`

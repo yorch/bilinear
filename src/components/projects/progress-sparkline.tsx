@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { PROJECT_PROGRESS_HISTORY_QUERY } from '@/lib/graphql-queries';
 
@@ -19,6 +20,7 @@ interface ProgressSparklineProps {
 }
 
 export function ProgressSparkline({ projectId, width = 160, height = 28 }: ProgressSparklineProps) {
+  const t = useTranslations();
   const [points, setPoints] = useState<ProgressHistoryPoint[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -39,12 +41,10 @@ export function ProgressSparkline({ projectId, width = 160, height = 28 }: Progr
   }, [fetchHistory]);
 
   if (!loaded) {
-    return <div className="h-7 w-40 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />;
+    return <div className="h-7 w-40 animate-pulse rounded bg-muted" />;
   }
   if (points.length < 2) {
-    return (
-      <span className="text-xs text-zinc-400">Not enough history yet — check back tomorrow.</span>
-    );
+    return <span className="text-xs text-muted-foreground">{t('projects.notEnoughHistory')}</span>;
   }
 
   // Normalize: y = completedIssueCount / issueCount (0-1), or 0 if scope=0.
@@ -63,8 +63,8 @@ export function ProgressSparkline({ projectId, width = 160, height = 28 }: Progr
 
   return (
     <svg
-      aria-label="Project progress over time"
-      className="text-indigo-500"
+      aria-label={t('projects.progressOverTime')}
+      className="text-brand"
       height={height}
       role="img"
       viewBox={`0 0 ${width} ${height}`}

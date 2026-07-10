@@ -1,9 +1,11 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
+import { useDocumentTitle } from '@/hooks/use-document-title';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
@@ -20,7 +22,7 @@ interface IssueWithTeam extends IssueDetail {
 const ISSUE_QUERY = `
   query Issue($id: ID!) {
     issue(id: $id) {
-      id identifier title description priority estimate stateId teamId assigneeId projectId dueDate createdAt updatedAt
+      id identifier title description priority estimate stateId teamId assigneeId projectId cycleId dueDate createdAt updatedAt
       labels { id name color }
       team {
         id key
@@ -39,7 +41,7 @@ const ISSUE_UPDATE_MUTATION = `
     issueUpdate(id: $id, input: $input) {
       success
       issue {
-        id identifier title priority stateId assigneeId projectId dueDate description createdAt updatedAt
+        id identifier title priority stateId assigneeId projectId cycleId dueDate description createdAt updatedAt
         labels { id name color }
       }
     }
@@ -47,13 +49,25 @@ const ISSUE_UPDATE_MUTATION = `
 `;
 
 const IssueDetailPage = observer(function IssueDetailPage() {
+  const t = useTranslations();
   const { workspace, id } = useParams<{ workspace: string; id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { issueStore, teamStore, workflowStateStore, labelStore, userStore } = useStore();
+
+  // `from`/`fromLabel` are set by list pages (my-issues, project, custom
+  // views, etc.) when linking into this route, so close/breadcrumb can
+  // return to the actual referrer instead of always falling back to the
+  // issue's own team page. Validated to stay within this workspace.
+  const fromPath = searchParams.get('from');
+  const fromLabel = searchParams.get('fromLabel');
+  const returnTo = fromPath?.startsWith(`/${workspace}/`) && fromLabel ? fromPath : null;
 
   const [issue, setIssue] = useState<IssueWithTeam | null>(null);
   const [labels, setLabels] = useState<IssueLabel[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useDocumentTitle(issue ? `${issue.identifier} ${issue.title}` : null);
 
   useEffect(() => {
     // If the issue is only in the local store (e.g. optimistic or temp id),
@@ -130,7 +144,9 @@ const IssueDetailPage = observer(function IssueDetailPage() {
   };
 
   const handleClose = () => {
-    if (issue) {
+    if (returnTo) {
+      router.push(returnTo);
+    } else if (issue) {
       router.push(`/${workspace}/team/${issue.team.key}`);
     } else {
       router.push(`/${workspace}`);
@@ -139,14 +155,16 @@ const IssueDetailPage = observer(function IssueDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">Loading…</div>
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        {t('common.loading')}
+      </div>
     );
   }
 
   if (!issue) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Issue not found.
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        {t('issueDetail.issueNotFound')}
       </div>
     );
   }
@@ -154,6 +172,9 @@ const IssueDetailPage = observer(function IssueDetailPage() {
   return (
     <div className="flex flex-1">
       <LazyIssueDetailPanel
+        breadcrumb={
+          returnTo ? { label: fromLabel ?? '', onNavigate: () => router.push(returnTo) } : null
+        }
         issue={issue}
         labels={labels}
         onClose={handleClose}

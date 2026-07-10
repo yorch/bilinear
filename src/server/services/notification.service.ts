@@ -273,6 +273,7 @@ export class NotificationService {
     issueId: string,
   ): Promise<{
     recipientEmail: string;
+    recipientLocale: string | null;
     actorName: string;
     issueIdentifier: string;
     issueTitle: string;
@@ -280,7 +281,7 @@ export class NotificationService {
   } | null> {
     const [recipient, actor, issue] = await Promise.all([
       this.prisma.user.findUnique({
-        select: { email: true, emailNotificationsEnabled: true },
+        select: { email: true, emailNotificationsEnabled: true, locale: true },
         where: { id: recipientId },
       }),
       this.prisma.user.findUnique({ select: { displayName: true }, where: { id: actorId } }),
@@ -308,6 +309,7 @@ export class NotificationService {
       issueTitle: issue.title,
       issueUrl: `${appUrl}/${workspaceKey}/issue/${issue.identifier}`,
       recipientEmail: recipient.email,
+      recipientLocale: recipient.locale,
     };
   }
 
@@ -325,6 +327,7 @@ export class NotificationService {
       issueIdentifier: ctx.issueIdentifier,
       issueTitle: ctx.issueTitle,
       issueUrl: ctx.issueUrl,
+      locale: ctx.recipientLocale,
       to: ctx.recipientEmail,
     });
   }
@@ -345,6 +348,7 @@ export class NotificationService {
       issueIdentifier: ctx.issueIdentifier,
       issueTitle: ctx.issueTitle,
       issueUrl: ctx.issueUrl,
+      locale: ctx.recipientLocale,
       to: ctx.recipientEmail,
     });
   }
@@ -355,18 +359,20 @@ export class NotificationService {
     issueId: string,
     excerpt?: string,
   ): Promise<void> {
-    const actor = await this.prisma.user.findUnique({
-      select: { displayName: true },
-      where: { id: actorId },
-    });
-    const issue = await this.prisma.issue.findUnique({
-      select: {
-        identifier: true,
-        team: { select: { organization: { select: { urlKey: true } } } },
-        title: true,
-      },
-      where: { id: issueId },
-    });
+    const [actor, issue] = await Promise.all([
+      this.prisma.user.findUnique({
+        select: { displayName: true },
+        where: { id: actorId },
+      }),
+      this.prisma.issue.findUnique({
+        select: {
+          identifier: true,
+          team: { select: { organization: { select: { urlKey: true } } } },
+          title: true,
+        },
+        where: { id: issueId },
+      }),
+    ]);
     if (!actor || !issue) {
       return;
     }
@@ -375,7 +381,7 @@ export class NotificationService {
     const issueUrl = `${appUrl}/${issue.team.organization.urlKey}/issue/${issue.identifier}`;
 
     const recipients = await this.prisma.user.findMany({
-      select: { email: true, emailNotificationsEnabled: true, id: true },
+      select: { email: true, emailNotificationsEnabled: true, id: true, locale: true },
       where: { emailNotificationsEnabled: true, id: { in: recipientIds } },
     });
 
@@ -387,6 +393,7 @@ export class NotificationService {
           issueIdentifier: issue.identifier,
           issueTitle: issue.title,
           issueUrl,
+          locale: r.locale,
           to: r.email,
         }),
       ),
@@ -422,7 +429,7 @@ export class NotificationService {
     const issueUrl = `${appUrl}/${issue.team.organization.urlKey}/issue/${issue.identifier}`;
 
     const recipients = await this.prisma.user.findMany({
-      select: { email: true, emailNotificationsEnabled: true, id: true },
+      select: { email: true, emailNotificationsEnabled: true, id: true, locale: true },
       where: { emailNotificationsEnabled: true, id: { in: recipientIds } },
     });
 
@@ -433,6 +440,7 @@ export class NotificationService {
           issueIdentifier: issue.identifier,
           issueTitle: issue.title,
           issueUrl,
+          locale: r.locale,
           newStateName: newState.name,
           oldStateName: oldState.name,
           to: r.email,

@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
+import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
 import { IssueService } from '@/server/services/issue.service';
 import { SlackService } from '@/server/services/slack.service';
 
@@ -15,7 +16,7 @@ const log = childLogger({ module: 'slack-commands' });
  * owns the Slack workspace (team_id) to create an issue. Slash commands have
  * a fixed URL, so routing is by team_id rather than an org query param.
  */
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   const rawBody = await req.text();
   const ok = SlackService.verifySlashSignature(
     rawBody,
@@ -32,6 +33,7 @@ export async function POST(req: NextRequest) {
   if (!teamId) {
     return NextResponse.json({ error: 'Missing team_id' }, { status: 400 });
   }
+  bindRequestContext({ slackTeamId: teamId });
 
   try {
     const service = new SlackService(prisma, new IssueService(prisma));
@@ -50,3 +52,5 @@ export async function POST(req: NextRequest) {
     });
   }
 }
+
+export const POST = withRequestContext('integrations/slack/commands', handlePost);

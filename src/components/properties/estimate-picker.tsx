@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { usePopover } from '@/hooks/use-popover';
+import { SelectPopover } from '@/components/ui/select-popover';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 
 /** Estimation scale point values per estimation type. */
@@ -57,23 +58,17 @@ export function EstimateBadge({
   estimationType?: string;
 }) {
   if (!value) {
-    return <span className="text-xs text-zinc-400 dark:text-zinc-500">–</span>;
+    return <span className="text-xs text-muted-foreground">–</span>;
   }
 
   if (estimationType === 'tShirt') {
     const opt = SCALE_OPTIONS.tShirt.find(o => o.value === value);
     return (
-      <Badge className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
-        {opt?.label ?? value}
-      </Badge>
+      <Badge className="bg-brand-subtle text-brand-subtle-foreground">{opt?.label ?? value}</Badge>
     );
   }
 
-  return (
-    <Badge className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
-      {value}
-    </Badge>
-  );
+  return <Badge className="bg-brand-subtle text-brand-subtle-foreground">{value}</Badge>;
 }
 
 /**
@@ -87,37 +82,31 @@ export function EstimatePicker({
   onClose,
   onChange,
 }: EstimatePickerProps) {
-  const { open, setOpen, ref: containerRef } = usePopover({ forceOpen, onClose });
-
+  const t = useTranslations();
   const scale = SCALE_OPTIONS[estimationType];
 
-  const handleSelect = (v: number | null) => {
-    onChange(v);
-    setOpen(false);
-    onClose?.();
-  };
-
   return (
-    <div className="relative inline-block" ref={containerRef}>
-      <button
-        aria-label="Set estimate"
-        className="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-        onClick={() => setOpen(v => !v)}
-        type="button"
-      >
-        <EstimateBadge estimationType={estimationType} value={value} />
-      </button>
-
-      {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 min-w-[120px] rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+    <SelectPopover
+      forceOpen={forceOpen}
+      onClose={onClose}
+      panelClassName="min-w-[120px] py-1"
+      triggerChildren={<EstimateBadge estimationType={estimationType} value={value} />}
+      triggerClassName="gap-1 px-1 py-0.5"
+      triggerTitle={t('properties.estimate.setEstimate')}
+    >
+      {close => (
+        <>
           {/* Clear estimate */}
           {value != null && (
             <button
-              className="w-full px-3 py-1.5 text-left text-xs text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-              onClick={() => handleSelect(null)}
+              className="w-full px-3 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent"
+              onClick={() => {
+                onChange(null);
+                close();
+              }}
               type="button"
             >
-              No estimate
+              {t('properties.estimate.noEstimate')}
             </button>
           )}
 
@@ -127,11 +116,14 @@ export function EstimatePicker({
                 className={cn(
                   'w-full px-3 py-1.5 text-left text-sm transition-colors',
                   value === opt.value
-                    ? 'bg-indigo-50 font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-                    : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800',
+                    ? 'bg-brand-subtle font-medium text-brand-subtle-foreground'
+                    : 'text-foreground-secondary hover:bg-accent',
                 )}
                 key={opt.value}
-                onClick={() => handleSelect(opt.value)}
+                onClick={() => {
+                  onChange(opt.value);
+                  close();
+                }}
                 type="button"
               >
                 {opt.label}
@@ -139,11 +131,17 @@ export function EstimatePicker({
             ))
           ) : (
             /* estimationType === 'notUsed' or unknown — free-form number */
-            <NumericInput onSubmit={v => handleSelect(v)} value={value ?? undefined} />
+            <NumericInput
+              onSubmit={v => {
+                onChange(v);
+                close();
+              }}
+              value={value ?? undefined}
+            />
           )}
-        </div>
+        </>
       )}
-    </div>
+    </SelectPopover>
   );
 }
 
@@ -154,6 +152,7 @@ function NumericInput({
   value?: number;
   onSubmit: (v: number | null) => void;
 }) {
+  const t = useTranslations();
   const [draft, setDraft] = useState(value?.toString() ?? '');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -164,7 +163,7 @@ function NumericInput({
   return (
     <div className="px-3 py-2 flex items-center gap-2">
       <input
-        className="w-20 rounded border border-zinc-200 bg-transparent px-2 py-1 text-sm text-zinc-900 outline-none focus:border-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+        className="w-20 rounded border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none focus:border-brand"
         min={0}
         onChange={e => setDraft(e.target.value)}
         onKeyDown={e => {
@@ -183,14 +182,14 @@ function NumericInput({
         value={draft}
       />
       <button
-        className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700"
+        className="rounded bg-primary px-2 py-1 text-xs font-medium text-white hover:bg-primary/90"
         onClick={() => {
           const n = Number(draft);
           onSubmit(draft === '' ? null : Number.isFinite(n) ? n : null);
         }}
         type="button"
       >
-        Set
+        {t('properties.estimate.set')}
       </button>
     </div>
   );

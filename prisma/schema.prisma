@@ -27,6 +27,12 @@ model Organization {
 
   fiscalYearStartMonth Int @default(1) @map("fiscal_year_start_month")
 
+  // Platform-admin suspension. Distinct from `archivedAt` (soft-delete): a
+  // suspended org is locked (members can't authenticate into it) but not
+  // deleted, so it can be restored. Set/cleared only from the /admin console.
+  suspendedAt     DateTime? @map("suspended_at") @db.Timestamptz
+  suspendedReason String?   @map("suspended_reason")
+
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   archivedAt DateTime? @map("archived_at") @db.Timestamptz
@@ -76,8 +82,22 @@ model User {
 
   passwordHash String? @map("password_hash")
   googleId     String? @unique @map("google_id") @db.VarChar(255)
+  githubId     String? @unique @map("github_id") @db.VarChar(255)
 
   emailNotificationsEnabled Boolean @default(true) @map("email_notifications_enabled")
+
+  // Persisted UI/email language preference (app locale, e.g. "en" / "es").
+  // Written when the user switches language; null = never set -> fall back to the
+  // app default. Used server-side to localize transactional emails, which have
+  // no access to the browser's locale cookie.
+  locale String? @db.VarChar(10)
+
+  // Cross-tenant platform operator. Grants access to the /admin console
+  // (tenant + user management, impersonation, platform metrics). Independent
+  // of org/team roles — this is a global privilege, not org-scoped. The first
+  // user created in an empty deployment is bootstrapped to true; thereafter
+  // existing platform admins grant/revoke it via the console.
+  isPlatformAdmin Boolean @default(false) @map("is_platform_admin")
 
   calendarFeedToken String? @unique @map("calendar_feed_token") @db.VarChar(64)
 
@@ -117,6 +137,7 @@ model User {
   auditLogEntries           AuditLogEntry[]            @relation("AuditLogUser")
   createdSamlConfigurations SamlConfiguration[]        @relation("SamlConfigCreator")
   createdScimTokens         ScimToken[]                @relation("ScimTokenCreator")
+  platformAuditLogs         PlatformAuditLog[]         @relation("PlatformAuditActor")
 
   @@map("users")
 }
@@ -138,6 +159,29 @@ model OrganizationMember {
   @@index([organizationId])
   @@index([userId])
   @@map("organization_members")
+}
+
+/// Write-once audit trail for platform-admin (cross-tenant) actions. Kept
+/// separate from `AuditLogEntry` because platform actions are not scoped to a
+/// single organization — the actor operates above any one tenant. `actorId`
+/// is nullable + SetNull so deleting an admin never erases the trail; the
+/// `targetType`/`targetId` pair points at whatever was acted on (an org, a
+/// user, …).
+model PlatformAuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String   @db.VarChar(64)
+  targetType String?  @map("target_type") @db.VarChar(32)
+  targetId   String?  @map("target_id") @db.Uuid
+  metadata   Json?
+  ipAddress  String?  @map("ip_address") @db.VarChar(45)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  actor User? @relation("PlatformAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([actorId])
+  @@map("platform_audit_logs")
 }
 
 model AuthToken {

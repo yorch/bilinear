@@ -4,10 +4,12 @@ import { NextResponse } from 'next/server';
 import { ACCESS_TOKEN_EXPIRY_SECONDS, signAccessToken, signRefreshToken } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
+import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
+import { getClientIp, setSessionCookie } from '@/server/lib/request-security';
 import { AuditLogService } from '@/server/services/audit-log.service';
 import { SamlService } from '@/server/services/saml.service';
 
-const log = childLogger({ module: 'saml', route: 'callback' });
+const log = childLogger({ module: 'saml' });
 const samlService = new SamlService(prisma);
 const auditLogService = new AuditLogService(prisma);
 
@@ -23,7 +25,7 @@ const REFRESH_TOKEN_DAYS = 30;
  * issues JWT access + refresh tokens, and sets httpOnly cookies before
  * redirecting to the workspace.
  */
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   let samlResponse: string | null = null;
   let relayState: string | null = null;
 
@@ -70,6 +72,7 @@ export async function POST(req: NextRequest) {
   if (!org) {
     return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
   }
+  bindRequestContext({ orgId: org.id });
 
   const config = await samlService.getConfig(org.id);
   if (!config?.enabled) {
@@ -110,6 +113,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { userId } = await samlService.jitProvisionUser(prisma, org.id, claims);
+  bindRequestContext({ userId });
 
   // Issue JWT token pair (mirrors AuthService.issueTokenPair)
   const tokenId = crypto.randomUUID();
@@ -138,7 +142,7 @@ export async function POST(req: NextRequest) {
 
   void auditLogService.log({
     action: 'auth.login',
-    ipAddress: req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? undefined,
+    ipAddress: getClientIp(req) ?? undefined,
     metadata: { idpEntityId: config.idpEntityId, method: 'saml' },
     orgId: org.id,
     userAgent: req.headers.get('user-agent') ?? undefined,
@@ -153,24 +157,13 @@ export async function POST(req: NextRequest) {
 
   const res = NextResponse.redirect(destination, 302);
 
-  res.cookies.set('access_token', accessToken, {
-    httpOnly: true,
-    maxAge: ACCESS_TOKEN_MAX_AGE,
-    path: '/',
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-  });
-
-  res.cookies.set('refresh_token', refreshToken, {
-    httpOnly: true,
-    maxAge: REFRESH_TOKEN_MAX_AGE,
-    path: '/',
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-  });
+  setSessionCookie(res, 'access_token', accessToken, ACCESS_TOKEN_MAX_AGE);
+  setSessionCookie(res, 'refresh_token', refreshToken, REFRESH_TOKEN_MAX_AGE);
 
   // Clear the relay state cookie
   res.cookies.delete('saml_relay');
 
   return res;
 }
+
+export const POST = withRequestContext('auth/saml/callback', handlePost);

@@ -1,4 +1,16 @@
+import { isLocale } from '@/lib/i18n';
 import type { PrismaClient, User } from '../../generated/prisma';
+
+/**
+ * Whether the given (transaction or root) Prisma client sees an empty users
+ * table — i.e. the caller is about to create the very first account, which is
+ * bootstrapped as the platform admin. Shared across every user-creation path
+ * (magic-link/OAuth via `findOrCreate`, SAML JIT, SCIM) so a fresh deployment
+ * always gets exactly one operator regardless of how the first user signs in.
+ */
+export async function isFirstUser(client: Pick<PrismaClient, 'user'>): Promise<boolean> {
+  return (await client.user.count()) === 0;
+}
 
 export class UserService {
   constructor(private prisma: PrismaClient) {}
@@ -15,19 +27,33 @@ export class UserService {
     email: string;
     name: string;
     googleId?: string;
+    githubId?: string;
     avatarUrl?: string;
   }): Promise<User> {
-    const existing = await this.prisma.user.findUnique({
-      where: { email: params.email },
-    });
+    // Provider ids are stable while provider-side emails can change. Match by
+    // provider id first so a returning OAuth user whose email changed still
+    // lands on their existing account instead of falling through to a create
+    // that violates the unique provider-id constraint.
+    let existing: User | null = null;
+    if (params.githubId) {
+      existing = await this.prisma.user.findUnique({ where: { githubId: params.githubId } });
+    } else if (params.googleId) {
+      existing = await this.prisma.user.findUnique({ where: { googleId: params.googleId } });
+    }
+    existing ??= await this.prisma.user.findUnique({ where: { email: params.email } });
 
     if (existing) {
-      // Update googleId / avatar if linking OAuth
-      if (params.googleId && !existing.googleId) {
+      // Link the provider id on first OAuth sign-in to an existing account.
+      const linkGoogle = params.googleId && !existing.googleId;
+      const linkGithub = params.githubId && !existing.githubId;
+      if (linkGoogle || linkGithub) {
         return this.prisma.user.update({
           data: {
-            avatarUrl: params.avatarUrl ?? existing.avatarUrl,
-            googleId: params.googleId,
+            // Fill the avatar only when the account has none — linking a
+            // provider must not clobber an avatar the user already has.
+            avatarUrl: existing.avatarUrl ?? params.avatarUrl,
+            ...(linkGoogle ? { googleId: params.googleId } : {}),
+            ...(linkGithub ? { githubId: params.githubId } : {}),
           },
           where: { id: existing.id },
         });
@@ -37,15 +63,26 @@ export class UserService {
 
     const initials = deriveInitials(params.name);
 
-    return this.prisma.user.create({
-      data: {
-        avatarUrl: params.avatarUrl,
-        displayName: params.name,
-        email: params.email,
-        googleId: params.googleId,
-        initials,
-        name: params.name,
-      },
+    // Bootstrap: the very first account created in an empty deployment becomes
+    // the platform admin, so a fresh install has an operator without any
+    // seed/env step. Done inside a transaction so the count and the insert see
+    // a consistent view — on the (rare) concurrent-first-signup race the DB
+    // may briefly mint two admins, which is acceptable and easily corrected
+    // from the console.
+    return this.prisma.$transaction(async tx => {
+      const platformAdmin = await isFirstUser(tx);
+      return tx.user.create({
+        data: {
+          avatarUrl: params.avatarUrl,
+          displayName: params.name,
+          email: params.email,
+          githubId: params.githubId,
+          googleId: params.googleId,
+          initials,
+          isPlatformAdmin: platformAdmin,
+          name: params.name,
+        },
+      });
     });
   }
 
@@ -70,6 +107,24 @@ export class UserService {
       data: { lastSeen: new Date() },
       where: { id: userId },
     });
+  }
+
+  /**
+   * Persist the user's language preference so transactional emails (which have
+   * no browser locale cookie) can be localized. Ignores unsupported values.
+   */
+  async updateLocale(userId: string, locale: string): Promise<User> {
+    if (!isLocale(locale)) {
+      throw new InvalidLocaleError(locale);
+    }
+    return this.prisma.user.update({ data: { locale }, where: { id: userId } });
+  }
+}
+
+export class InvalidLocaleError extends Error {
+  constructor(locale: string) {
+    super(`Unsupported locale: ${locale}`);
+    this.name = 'InvalidLocaleError';
   }
 }
 

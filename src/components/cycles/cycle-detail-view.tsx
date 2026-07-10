@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BurndownChart } from '@/components/cycles/burndown-chart';
 import { BurnupChart } from '@/components/cycles/burnup-chart';
+import { useFormatters } from '@/hooks/use-formatters';
+import { useTranslations } from '@/hooks/use-translations';
 import { isActiveCycle } from '@/lib/cycle-utils';
 import { gql } from '@/lib/graphql';
 import {
@@ -23,15 +25,6 @@ interface CycleDetailViewProps {
   cycleId: string;
   teamKey: string;
   workspaceKey: string;
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString('en-US', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -75,10 +68,15 @@ interface VelocityBarChartProps {
 }
 
 function VelocityBarChart({ cycles }: VelocityBarChartProps) {
+  const t = useTranslations();
   const max = Math.max(...cycles.map(c => c.completedIssues), 1);
 
   if (cycles.length === 0) {
-    return <p className="py-4 text-center text-xs text-zinc-400">No velocity data yet.</p>;
+    return (
+      <p className="py-4 text-center text-xs text-muted-foreground">
+        {t('cycles.detail.velocity.empty')}
+      </p>
+    );
   }
 
   return (
@@ -87,19 +85,19 @@ function VelocityBarChart({ cycles }: VelocityBarChartProps) {
         const pct = max > 0 ? (c.completedIssues / max) * 100 : 0;
         return (
           <div className="flex flex-1 flex-col items-center gap-1" key={c.cycleId}>
-            <span className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400">
+            <span className="text-[10px] font-medium text-muted-foreground">
               {c.completedIssues > 0 ? c.completedIssues : ''}
             </span>
             <div
-              className="w-full rounded-t bg-indigo-500"
+              className="w-full rounded-t bg-brand"
               style={{
                 height: `${Math.max(pct, c.completedIssues > 0 ? 4 : 0)}%`,
                 minHeight: c.completedIssues > 0 ? '4px' : '0',
               }}
             />
             <span
-              className="max-w-full truncate text-[9px] text-zinc-400"
-              title={`Cycle ${c.cycleNumber}`}
+              className="max-w-full truncate text-[9px] text-muted-foreground"
+              title={t('cycles.defaultName', { number: c.cycleNumber })}
             >
               #{c.cycleNumber}
             </span>
@@ -120,6 +118,8 @@ export const CycleDetailView = observer(function CycleDetailView({
   teamKey,
 }: CycleDetailViewProps) {
   const { cycleStore, issueStore, teamStore, workflowStateStore } = useStore();
+  const t = useTranslations();
+  const { formatDate } = useFormatters();
 
   const txQueue = useMemo(() => new TransactionQueue(), []);
 
@@ -210,12 +210,12 @@ export const CycleDetailView = observer(function CycleDetailView({
             if (snapshot) {
               issueStore.optimisticUpdate(issueId, snapshot);
             }
-            toast.error('Failed to remove issue from cycle');
+            toast.error(t('cycles.detail.removeIssueError'));
           },
         },
       );
     },
-    [issueStore, txQueue],
+    [issueStore, txQueue, t],
   );
 
   const handleRollover = useCallback(async () => {
@@ -226,7 +226,7 @@ export const CycleDetailView = observer(function CycleDetailView({
     try {
       const res = await gql(CYCLE_ROLLOVER_MUTATION, { cycleId });
       if (res.errors?.length) {
-        toast.error('Failed to roll over cycle');
+        toast.error(t('cycles.detail.rolloverError'));
         return;
       }
       const payload = res.data?.cycleRollover as
@@ -238,26 +238,22 @@ export const CycleDetailView = observer(function CycleDetailView({
         | undefined;
       if (payload?.success) {
         if (payload.nextCycleId) {
-          toast.success(
-            `Rolled over. ${payload.movedCount} incomplete issue${payload.movedCount === 1 ? '' : 's'} moved to next cycle.`,
-          );
+          toast.success(t('cycles.detail.rolledOver', { count: payload.movedCount }));
         } else {
-          toast.success(
-            `${payload.movedCount} issue${payload.movedCount === 1 ? '' : 's'} unassigned.`,
-          );
+          toast.success(t('cycles.detail.unassigned', { count: payload.movedCount }));
         }
       }
     } catch {
-      toast.error('Failed to roll over cycle');
+      toast.error(t('cycles.detail.rolloverError'));
     } finally {
       setRollingOver(false);
     }
-  }, [cycleId, rollingOver]);
+  }, [cycleId, rollingOver, t]);
 
   if (!cycle) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Cycle not found.
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        {t('cycles.detail.notFound')}
       </div>
     );
   }
@@ -277,14 +273,18 @@ export const CycleDetailView = observer(function CycleDetailView({
   // Show rollover button for active cycles or cycles whose end date has passed
   const showRollover = isActive || endsAtMs <= now;
 
-  const statusLabel = isActive ? 'Active' : isUpcoming ? 'Upcoming' : 'Completed';
+  const statusLabel = isActive
+    ? t('cycles.status.active')
+    : isUpcoming
+      ? t('cycles.status.upcoming')
+      : t('cycles.status.completed');
   const statusColor = isActive
     ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
     : isUpcoming
       ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400'
-      : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400';
+      : 'bg-muted text-muted-foreground';
 
-  const displayName = cycle.name || `Cycle ${cycle.number}`;
+  const displayName = cycle.name || t('cycles.defaultName', { number: cycle.number });
 
   const handleSaveName = () => {
     const trimmed = nameValue.trim();
@@ -302,7 +302,7 @@ export const CycleDetailView = observer(function CycleDetailView({
       {
         onError: () => {
           cycleStore.optimisticUpdate(cycle.id, snapshot);
-          toast.error('Failed to update cycle name');
+          toast.error(t('cycles.detail.updateNameError'));
         },
       },
     );
@@ -310,17 +310,17 @@ export const CycleDetailView = observer(function CycleDetailView({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex h-12 items-center gap-3 border-b border-zinc-200 px-4 dark:border-zinc-800">
+      <div className="flex h-12 items-center gap-3 border-b border-border px-4">
         <Link
-          className="flex h-6 w-6 items-center justify-center rounded text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:h-11 max-md:w-11"
           href={`/${workspaceKey}/team/${teamKey}/cycles`}
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <RefreshCw className="h-4 w-4 text-zinc-400" />
+        <RefreshCw className="h-4 w-4 text-muted-foreground" />
         {editingName ? (
           <input
-            className="flex-1 rounded border border-indigo-500 bg-transparent px-1 text-sm font-semibold text-zinc-900 outline-none dark:text-zinc-100"
+            className="flex-1 rounded border border-brand bg-transparent px-1 text-sm font-semibold text-foreground outline-none"
             onBlur={handleSaveName}
             onChange={e => setNameValue(e.target.value)}
             onKeyDown={e => {
@@ -337,12 +337,12 @@ export const CycleDetailView = observer(function CycleDetailView({
           />
         ) : (
           <button
-            className="text-sm font-semibold text-zinc-900 hover:text-indigo-600 dark:text-zinc-100 dark:hover:text-indigo-400"
+            className="text-sm font-semibold text-foreground hover:text-brand"
             onClick={() => {
               setNameValue(cycle.name ?? '');
               setEditingName(true);
             }}
-            title="Click to edit name"
+            title={t('cycles.detail.clickToEditName')}
             type="button"
           >
             {displayName}
@@ -352,13 +352,13 @@ export const CycleDetailView = observer(function CycleDetailView({
         {/* Roll over button — only for active / past cycles */}
         {showRollover && (
           <button
-            className="ml-auto flex items-center gap-1.5 rounded border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800"
+            className="ml-auto flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-border hover:bg-accent disabled:opacity-50"
             disabled={rollingOver}
             onClick={handleRollover}
             type="button"
           >
             <RotateCcw className="h-3.5 w-3.5" />
-            {rollingOver ? 'Rolling over…' : 'Roll over'}
+            {rollingOver ? t('cycles.detail.rollingOver') : t('cycles.detail.rollOver')}
           </button>
         )}
       </div>
@@ -371,28 +371,36 @@ export const CycleDetailView = observer(function CycleDetailView({
               {statusLabel}
             </span>
             <div className="flex items-center gap-1.5">
-              <Calendar className="h-3.5 w-3.5 text-zinc-400" />
-              <span className="text-xs text-zinc-500">
-                {formatDate(cycle.startsAt)} &rarr; {formatDate(cycle.endsAt)}
+              <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">
+                {formatDate(cycle.startsAt, { day: 'numeric', month: 'short', year: 'numeric' })}{' '}
+                &rarr;{' '}
+                {formatDate(cycle.endsAt, { day: 'numeric', month: 'short', year: 'numeric' })}
               </span>
             </div>
           </div>
 
           {cycle.description && (
-            <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">{cycle.description}</p>
+            <p className="mt-4 text-sm text-muted-foreground">{cycle.description}</p>
           )}
 
           {/* Progress */}
-          <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+          <div className="mt-6 rounded-lg border border-border p-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Progress</span>
-              <span className="text-xs tabular-nums text-zinc-500">
-                {completedIssues.length} / {cycleIssues.length} issues ({progress}%)
+              <span className="text-xs font-medium text-muted-foreground">
+                {t('cycles.detail.progress')}
+              </span>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {t('cycles.detail.progressCount', {
+                  completed: completedIssues.length,
+                  progress,
+                  total: cycleIssues.length,
+                })}
               </span>
             </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full rounded-full bg-indigo-500 transition-all"
+                className="h-full rounded-full bg-brand transition-all"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -402,75 +410,81 @@ export const CycleDetailView = observer(function CycleDetailView({
           {scopeMetrics &&
             (scopeMetrics.scopeCreepCount > 0 || scopeMetrics.carryoverCount > 0) && (
               <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
-                    Planned
+                <div className="rounded-lg border border-border bg-card p-3">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    {t('cycles.detail.scope.planned')}
                   </p>
-                  <p className="mt-1 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+                  <p className="mt-1 text-xl font-semibold text-foreground">
                     {scopeMetrics.plannedCount}
                   </p>
                 </div>
-                <div className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
-                    Scope creep
+                <div className="rounded-lg border border-border bg-card p-3">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    {t('cycles.detail.scope.creep')}
                   </p>
                   <p className="mt-1 text-xl font-semibold text-orange-500">
                     {scopeMetrics.scopeCreepCount}
                   </p>
-                  <p className="text-[11px] text-zinc-400">
-                    {Math.round(scopeMetrics.scopeCreepPct)}% of total
+                  <p className="text-[11px] text-muted-foreground">
+                    {t('cycles.detail.scope.pctOfTotal', {
+                      pct: Math.round(scopeMetrics.scopeCreepPct),
+                    })}
                   </p>
                 </div>
-                <div className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
-                    Carried over
+                <div className="rounded-lg border border-border bg-card p-3">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    {t('cycles.detail.scope.carriedOver')}
                   </p>
                   <p className="mt-1 text-xl font-semibold text-blue-500">
                     {scopeMetrics.carryoverCount}
                   </p>
-                  <p className="text-[11px] text-zinc-400">
-                    {Math.round(scopeMetrics.carryoverPct)}% of total
+                  <p className="text-[11px] text-muted-foreground">
+                    {t('cycles.detail.scope.pctOfTotal', {
+                      pct: Math.round(scopeMetrics.carryoverPct),
+                    })}
                   </p>
                 </div>
-                <div className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
-                    Completed
+                <div className="rounded-lg border border-border bg-card p-3">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    {t('cycles.detail.scope.completed')}
                   </p>
                   <p className="mt-1 text-xl font-semibold text-green-500">
                     {scopeMetrics.completedCount}
                   </p>
-                  <p className="text-[11px] text-zinc-400">of {scopeMetrics.totalCount} total</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {t('cycles.detail.scope.ofTotal', { total: scopeMetrics.totalCount })}
+                  </p>
                 </div>
               </div>
             )}
 
           {/* Burndown / burnup chart — active or completed cycles */}
           {(isActive || isCompleted) && (
-            <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+            <div className="mt-6 rounded-lg border border-border p-4">
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                  {chartView === 'burndown' ? 'Burndown' : 'Burnup'}
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {chartView === 'burndown' ? t('cycles.burndown.title') : t('cycles.burnup.title')}
                 </h3>
-                <div className="flex rounded-md border border-zinc-200 text-xs dark:border-zinc-700">
+                <div className="flex rounded-md border border-border text-xs">
                   {(['burndown', 'burnup'] as const).map(v => (
                     <button
                       className={cn(
                         'px-2.5 py-1 first:rounded-l last:rounded-r',
                         chartView === v
-                          ? 'bg-zinc-100 font-medium text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
-                          : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200',
+                          ? 'bg-muted font-medium text-foreground'
+                          : 'text-muted-foreground hover:text-foreground',
                       )}
                       key={v}
                       onClick={() => setChartView(v)}
                       type="button"
                     >
-                      {v.charAt(0).toUpperCase() + v.slice(1)}
+                      {v === 'burndown' ? t('cycles.burndown.title') : t('cycles.burnup.title')}
                     </button>
                   ))}
                 </div>
               </div>
               {burndownLoading ? (
-                <div className="h-[300px] animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
+                <div className="h-[300px] animate-pulse rounded bg-muted" />
               ) : chartView === 'burndown' ? (
                 <BurndownChart data={burndown ?? []} />
               ) : (
@@ -481,23 +495,23 @@ export const CycleDetailView = observer(function CycleDetailView({
 
           {/* Velocity / capacity section */}
           {velocity && (
-            <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                Velocity
+            <div className="mt-6 rounded-lg border border-border p-4">
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {t('cycles.detail.velocity.title')}
               </h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Avg velocity:{' '}
-                <span className="font-medium text-zinc-700 dark:text-zinc-200">
-                  {velocity.averageIssues} issues/cycle
+              <p className="text-xs text-muted-foreground">
+                {t('cycles.detail.velocity.avgLabel')}{' '}
+                <span className="font-medium text-foreground">
+                  {t('cycles.detail.velocity.issuesPerCycle', { count: velocity.averageIssues })}
                 </span>
                 {velocity.cycles.length > 0 &&
-                  ` (based on last ${velocity.cycles.length} cycle${velocity.cycles.length === 1 ? '' : 's'})`}
+                  ` (${t('cycles.detail.velocity.basedOnLast', { count: velocity.cycles.length })})`}
               </p>
               {isUpcoming && (
-                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                  Capacity estimate:{' '}
-                  <span className="font-medium text-zinc-700 dark:text-zinc-200">
-                    ~{velocity.averageIssues} issues
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {t('cycles.detail.velocity.capacityLabel')}{' '}
+                  <span className="font-medium text-foreground">
+                    {t('cycles.detail.velocity.approxIssues', { count: velocity.averageIssues })}
                   </span>
                 </p>
               )}
@@ -508,16 +522,16 @@ export const CycleDetailView = observer(function CycleDetailView({
           {/* Issues */}
           <div className="mt-6">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                Issues ({cycleIssues.length})
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {t('cycles.detail.issuesHeading', { count: cycleIssues.length })}
               </h3>
             </div>
             <div className="mt-2 flex flex-col gap-0.5">
               {cycleIssues.length === 0 ? (
-                <p className="py-8 text-center text-xs text-zinc-400">
-                  No issues in this cycle yet. Use{' '}
-                  <kbd className="mx-0.5 rounded border px-1 font-mono text-[10px]">Q</kbd> on any
-                  issue to assign it to a cycle.
+                <p className="py-8 text-center text-xs text-muted-foreground">
+                  {t('cycles.detail.noIssuesBefore')}{' '}
+                  <kbd className="mx-0.5 rounded border px-1 font-mono text-[10px]">Q</kbd>{' '}
+                  {t('cycles.detail.noIssuesAfter')}
                 </p>
               ) : (
                 cycleIssues.map(issue => {
@@ -525,7 +539,7 @@ export const CycleDetailView = observer(function CycleDetailView({
                   const team = teamStore.findById(issue.teamId);
                   return (
                     <div
-                      className="group flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                      className="group flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent"
                       key={issue.id}
                     >
                       {state && (
@@ -534,22 +548,22 @@ export const CycleDetailView = observer(function CycleDetailView({
                           style={{ borderColor: state.color }}
                         />
                       )}
-                      <span className="shrink-0 font-mono text-xs text-zinc-400">
+                      <span className="shrink-0 font-mono text-xs text-muted-foreground">
                         {issue.identifier}
                       </span>
                       <Link
-                        className="min-w-0 flex-1 truncate text-zinc-900 hover:text-indigo-600 dark:text-zinc-100 dark:hover:text-indigo-400"
+                        className="min-w-0 flex-1 truncate text-foreground hover:text-brand"
                         href={`/${workspaceKey}/team/${team?.key ?? teamKey}`}
                       >
                         {issue.title}
                       </Link>
                       <button
-                        className="hidden rounded px-1.5 py-0.5 text-[10px] text-zinc-400 transition-colors hover:bg-zinc-200 hover:text-zinc-600 group-hover:block dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
+                        className="hidden rounded px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground-secondary group-hover:block"
                         onClick={() => handleRemoveIssue(issue.id)}
-                        title="Remove from cycle"
+                        title={t('cycles.detail.removeFromCycle')}
                         type="button"
                       >
-                        Remove
+                        {t('cycles.detail.remove')}
                       </button>
                     </div>
                   );

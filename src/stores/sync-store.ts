@@ -8,12 +8,16 @@ export class SyncStore {
   error: string | null = null;
   wsConnected = false;
   organizationName: string | null = null;
+  /** Bumped by retryBootstrap() to re-trigger SyncProvider's init effect. */
+  retryNonce = 0;
 
   constructor() {
     makeObservable(this, {
       error: observable,
       lastSyncId: observable,
       organizationName: observable,
+      retryBootstrap: action,
+      retryNonce: observable,
       setError: action,
       setLastSyncId: action,
       setOrganizationName: action,
@@ -42,5 +46,12 @@ export class SyncStore {
 
   setOrganizationName(name: string) {
     this.organizationName = name;
+  }
+
+  /** Re-run the bootstrap flow after a failed initial sync. */
+  retryBootstrap() {
+    this.status = 'bootstrapping';
+    this.error = null;
+    this.retryNonce++;
   }
 }

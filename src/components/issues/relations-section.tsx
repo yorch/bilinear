@@ -3,12 +3,14 @@
 import { ChevronDown, Plus, Trash2, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { IssuePicker } from '@/components/issues/issue-picker';
 import { useOutsideClick } from '@/hooks/use-outside-click';
+import { useTranslations } from '@/hooks/use-translations';
+import type { DBIssue } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn } from '@/lib/utils';
-import { useStore } from '@/providers/store-provider';
 
 // ─── GraphQL documents ────────────────────────────────────────────────────────
 
@@ -50,12 +52,16 @@ const RELATION_TYPES = ['blocks', 'blocked_by', 'related', 'duplicate'] as const
 
 type RelationType = (typeof RELATION_TYPES)[number];
 
-const RELATION_TYPE_LABELS: Record<RelationType, string> = {
-  blocked_by: 'Blocked by',
-  blocks: 'Blocks',
-  duplicate: 'Duplicate of',
-  related: 'Related to',
-};
+function getRelationTypeLabels(
+  t: ReturnType<typeof useTranslations>,
+): Record<RelationType, string> {
+  return {
+    blocked_by: t('issueDetail.relations.blockedBy'),
+    blocks: t('issueDetail.relations.blocks'),
+    duplicate: t('issueDetail.relations.duplicateOf'),
+    related: t('issueDetail.relations.relatedTo'),
+  };
+}
 
 interface RelatedIssueRef {
   id: string;
@@ -81,7 +87,8 @@ interface RelationsSectionProps {
 export const RelationsSection = observer(function RelationsSection({
   issueId,
 }: RelationsSectionProps) {
-  const store = useStore();
+  const t = useTranslations();
+  const RELATION_TYPE_LABELS = useMemo(() => getRelationTypeLabels(t), [t]);
   const [relations, setRelations] = useState<IssueRelation[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -104,7 +111,7 @@ export const RelationsSection = observer(function RelationsSection({
       })
       .catch(() => {
         if (!cancelled) {
-          toast.error('Failed to load relations');
+          toast.error(t('issueDetail.relations.failedToLoad'));
         }
       })
       .finally(() => {
@@ -115,7 +122,7 @@ export const RelationsSection = observer(function RelationsSection({
     return () => {
       cancelled = true;
     };
-  }, [issueId]);
+  }, [issueId, t]);
 
   const handleDelete = async (relationId: string) => {
     const prev = relations;
@@ -130,28 +137,17 @@ export const RelationsSection = observer(function RelationsSection({
         );
       });
     } catch {
-      toast.error('Failed to delete relation');
+      toast.error(t('issueDetail.relations.failedToDelete'));
       setRelations(prev);
     }
   };
 
-  const handleCreate = async (type: RelationType, relatedIdentifier: string) => {
-    const normalized = relatedIdentifier.trim().toUpperCase();
-
-    // Resolve identifier → UUID using the local issue store
-    const relatedIssue = Array.from(store.issueStore.pool.values()).find(
-      i => i.identifier === normalized,
-    );
-    if (!relatedIssue) {
-      toast.error(`Issue "${normalized}" not found`);
-      return;
-    }
-
+  const handleCreate = async (type: RelationType, relatedIssueId: string) => {
     try {
       await new Promise<void>((resolve, reject) => {
         tq.enqueue(
           CREATE_ISSUE_RELATION,
-          { input: { issueId, relatedIssueId: relatedIssue.id, type } },
+          { input: { issueId, relatedIssueId, type } },
           { onError: reject, onSuccess: () => resolve() },
         );
       });
@@ -163,7 +159,7 @@ export const RelationsSection = observer(function RelationsSection({
       }
       setShowAddForm(false);
     } catch {
-      toast.error('Failed to create relation');
+      toast.error(t('issueDetail.relations.failedToCreate'));
     }
   };
 
@@ -183,25 +179,29 @@ export const RelationsSection = observer(function RelationsSection({
   return (
     <div className="mt-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-          Relations {relations.length > 0 && `(${relations.length})`}
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {t('issueDetail.relations.title')} {relations.length > 0 && `(${relations.length})`}
         </h3>
         {!showAddForm && (
           <button
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
             onClick={() => setShowAddForm(true)}
             type="button"
           >
             <Plus className="h-3.5 w-3.5" />
-            Add relation
+            {t('issueDetail.relations.addRelation')}
           </button>
         )}
       </div>
 
-      {loading && <p className="mt-2 text-xs text-zinc-400 italic">Loading…</p>}
+      {loading && (
+        <p className="mt-2 text-xs text-muted-foreground italic">{t('common.loading')}</p>
+      )}
 
       {!loading && relations.length === 0 && !showAddForm && (
-        <p className="mt-2 text-xs text-zinc-400 italic">No relations.</p>
+        <p className="mt-2 text-xs text-muted-foreground italic">
+          {t('issueDetail.relations.empty')}
+        </p>
       )}
 
       {!loading && (
@@ -213,7 +213,7 @@ export const RelationsSection = observer(function RelationsSection({
             }
             return (
               <div key={type}>
-                <p className="mb-1 text-xs font-medium text-zinc-400 dark:text-zinc-500">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">
                   {RELATION_TYPE_LABELS[type]}
                 </p>
                 <ul className="space-y-0.5">
@@ -222,18 +222,18 @@ export const RelationsSection = observer(function RelationsSection({
                     const other = rel.issueId === issueId ? rel.relatedIssue : rel.issue;
                     return (
                       <li
-                        className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                        className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
                         key={rel.id}
                       >
-                        <span className="shrink-0 font-mono text-xs text-zinc-400">
+                        <span className="shrink-0 font-mono text-xs text-muted-foreground">
                           {other?.identifier ?? '—'}
                         </span>
-                        <span className="flex-1 truncate text-zinc-700 dark:text-zinc-300">
-                          {other?.title ?? 'Unknown issue'}
+                        <span className="flex-1 truncate text-foreground-secondary">
+                          {other?.title ?? t('issueDetail.relations.unknownIssue')}
                         </span>
                         <button
-                          aria-label="Remove relation"
-                          className="hidden items-center rounded p-0.5 text-zinc-400 hover:text-red-500 group-hover:flex"
+                          aria-label={t('issueDetail.relations.removeRelation')}
+                          className="hidden items-center rounded p-0.5 text-muted-foreground hover:text-red-500 group-hover:flex max-md:flex max-md:h-11 max-md:min-w-11 max-md:justify-center"
                           onClick={() => handleDelete(rel.id)}
                           type="button"
                         >
@@ -250,7 +250,11 @@ export const RelationsSection = observer(function RelationsSection({
       )}
 
       {showAddForm && (
-        <AddRelationForm onClose={() => setShowAddForm(false)} onSubmit={handleCreate} />
+        <AddRelationForm
+          issueId={issueId}
+          onClose={() => setShowAddForm(false)}
+          onSubmit={handleCreate}
+        />
       )}
     </div>
   );
@@ -259,112 +263,89 @@ export const RelationsSection = observer(function RelationsSection({
 // ─── Add relation form ────────────────────────────────────────────────────────
 
 interface AddRelationFormProps {
+  issueId: string;
   onClose: () => void;
-  onSubmit: (type: RelationType, identifier: string) => Promise<void>;
+  onSubmit: (type: RelationType, relatedIssueId: string) => Promise<void>;
 }
 
-function AddRelationForm({ onSubmit, onClose }: AddRelationFormProps) {
+function AddRelationForm({ onSubmit, onClose, issueId }: AddRelationFormProps) {
+  const t = useTranslations();
+  const RELATION_TYPE_LABELS = useMemo(() => getRelationTypeLabels(t), [t]);
   const [type, setType] = useState<RelationType>('related');
-  const [identifier, setIdentifier] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [typeOpen, setTypeOpen] = useState(false);
   const typeDropdownRef = useRef<HTMLDivElement>(null);
 
   useOutsideClick(typeDropdownRef, () => setTypeOpen(false), typeOpen);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!identifier.trim() || submitting) {
+  const handlePick = async (issue: DBIssue) => {
+    if (submitting) {
       return;
     }
     setSubmitting(true);
     try {
-      await onSubmit(type, identifier.trim());
+      await onSubmit(type, issue.id);
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <form
-      className="mt-2 rounded-md border border-zinc-200 p-3 dark:border-zinc-700"
-      onSubmit={handleSubmit}
-    >
-      <div className="flex items-center gap-2">
-        {/* Type selector */}
-        <div className="relative" ref={typeDropdownRef}>
-          <button
-            className="flex items-center gap-1 rounded border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
-            onClick={() => setTypeOpen(o => !o)}
-            type="button"
-          >
-            {RELATION_TYPE_LABELS[type]}
-            <ChevronDown className="h-3 w-3" />
-          </button>
-          {typeOpen && (
-            <div className="absolute left-0 top-full z-10 mt-1 w-36 rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-              {RELATION_TYPES.map(t => (
-                <button
-                  className={cn(
-                    'w-full px-3 py-1.5 text-left text-xs hover:bg-zinc-50 dark:hover:bg-zinc-800',
-                    t === type
-                      ? 'text-indigo-600 dark:text-indigo-400'
-                      : 'text-zinc-700 dark:text-zinc-300',
-                  )}
-                  key={t}
-                  onClick={() => {
-                    setType(t);
-                    setTypeOpen(false);
-                  }}
-                  type="button"
-                >
-                  {RELATION_TYPE_LABELS[t]}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Issue identifier input */}
-        <input
-          className="flex-1 rounded border border-zinc-200 bg-transparent px-2 py-1 text-xs text-zinc-900 placeholder-zinc-400 outline-none focus:border-indigo-400 dark:border-zinc-700 dark:text-zinc-100"
-          onChange={e => setIdentifier(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Escape') {
-              onClose();
-            }
-          }}
-          placeholder="Issue identifier (e.g. ENG-123)"
-          type="text"
-          value={identifier}
-        />
-
+    <div className="mt-2 flex items-center gap-2 rounded-md border border-border p-3">
+      {/* Type selector */}
+      <div className="relative" ref={typeDropdownRef}>
         <button
-          aria-label="Cancel"
-          className="rounded p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-          onClick={onClose}
+          className="flex items-center gap-1 rounded border border-border bg-card px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+          onClick={() => setTypeOpen(o => !o)}
           type="button"
         >
-          <X className="h-3.5 w-3.5" />
+          {RELATION_TYPE_LABELS[type]}
+          <ChevronDown className="h-3 w-3" />
         </button>
+        {typeOpen && (
+          <div className="absolute left-0 top-full z-10 mt-1 w-36 rounded-md border border-border bg-card py-1 shadow-lg">
+            {RELATION_TYPES.map(t => (
+              <button
+                className={cn(
+                  'w-full px-3 py-1.5 text-left text-xs hover:bg-accent',
+                  t === type ? 'text-brand' : 'text-foreground-secondary',
+                )}
+                key={t}
+                onClick={() => {
+                  setType(t);
+                  setTypeOpen(false);
+                }}
+                type="button"
+              >
+                {RELATION_TYPE_LABELS[t]}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="mt-2 flex justify-end gap-2">
-        <button
-          className="rounded px-3 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          onClick={onClose}
-          type="button"
-        >
-          Cancel
-        </button>
-        <button
-          className="rounded bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-          disabled={!identifier.trim() || submitting}
-          type="submit"
-        >
-          {submitting ? 'Adding…' : 'Add'}
-        </button>
-      </div>
-    </form>
+      {/* Issue picker — auto-opens on mount so clicking "Add relation" goes
+          straight to search instead of requiring an extra click. */}
+      <IssuePicker
+        disabled={submitting}
+        excludeId={issueId}
+        forceOpen
+        onClose={onClose}
+        onSelect={handlePick}
+        triggerChildren={
+          submitting ? t('issueDetail.relations.adding') : t('issueDetail.relations.pickIssue')
+        }
+        triggerClassName="flex-1 justify-start rounded border border-border bg-transparent px-2 py-1 text-xs text-muted-foreground hover:bg-transparent"
+      />
+
+      <button
+        aria-label={t('common.cancel')}
+        className="rounded p-1 text-muted-foreground hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+        onClick={onClose}
+        type="button"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
   );
 }

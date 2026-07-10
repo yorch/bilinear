@@ -1,16 +1,20 @@
 'use client';
 
-import { Bell, BellOff } from 'lucide-react';
+import { ArrowLeft, Bell, BellOff } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { priorityLabelKey } from '@/components/properties/priority-icon';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useHotkeys } from '@/hooks/use-hotkeys';
+import { useTranslations } from '@/hooks/use-translations';
+import { getCycleDisplayName } from '@/lib/cycle-utils';
 import { gql } from '@/lib/graphql';
 import {
   ISSUE_SUBSCRIBE_MUTATION,
   ISSUE_SUBSCRIPTION_QUERY,
   ISSUE_UNSUBSCRIBE_MUTATION,
 } from '@/lib/graphql-queries';
-import { formatDueDate, getDueDateColor, getPriorityConfig } from '@/lib/issue-utils';
+import { getDueDateColor } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -18,6 +22,7 @@ import type { IssueDetail, IssueLabel, IssueUser, WorkflowState } from '@/types/
 import { CustomFieldsEditor } from '../custom-fields/custom-fields-editor';
 import { TipTapEditor } from '../editor/tiptap-editor.lazy';
 import { AssigneeSelect } from '../properties/assignee-select';
+import { CycleSelect } from '../properties/cycle-select';
 import { DueDatePicker } from '../properties/due-date-picker';
 import { EstimatePicker } from '../properties/estimate-picker';
 import { LabelDot, LabelSelect } from '../properties/label-select';
@@ -34,6 +39,7 @@ import { RelationsSection } from './relations-section';
 import { SubIssueList } from './sub-issue-list';
 
 interface IssueDetailPanelProps {
+  breadcrumb?: { label: string; onNavigate: () => void } | null;
   issue: IssueDetail | null;
   labels: IssueLabel[];
   onClose: () => void;
@@ -43,6 +49,7 @@ interface IssueDetailPanelProps {
 }
 
 export const IssueDetailPanel = observer(function IssueDetailPanel({
+  breadcrumb,
   issue,
   states,
   users,
@@ -50,9 +57,11 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
   onClose,
   onUpdate,
 }: IssueDetailPanelProps) {
-  const { userStore, teamStore, issueStore } = useStore();
+  const t = useTranslations();
+  const { formatDueDate } = useFormatters();
+  const { userStore, teamStore, issueStore, cycleStore } = useStore();
   const currentUserId = userStore.currentUser?.id;
-  const currentUserName = userStore.currentUser?.displayName ?? 'User';
+  const currentUserName = userStore.currentUser?.displayName ?? t('issueDetail.defaultUserName');
   const mentionUsers = useMemo(() => users.map(u => ({ id: u.id, label: u.displayName })), [users]);
   // observer() tracks issueStore.all reads reactively; plain map is correct here.
   const mentionIssues = issueStore.all.map(i => ({ id: i.id, label: i.identifier, sub: i.title }));
@@ -116,19 +125,21 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
       const res = await gql(mutation, { issueId: issue.id });
       if (res.errors?.length) {
         setSubscribed(prev);
-        toast.error(prev ? 'Failed to unsubscribe' : 'Failed to subscribe');
+        toast.error(
+          prev ? t('issueDetail.failedToUnsubscribe') : t('issueDetail.failedToSubscribe'),
+        );
       }
     } catch {
       setSubscribed(prev);
-      toast.error(prev ? 'Failed to unsubscribe' : 'Failed to subscribe');
+      toast.error(prev ? t('issueDetail.failedToUnsubscribe') : t('issueDetail.failedToSubscribe'));
     }
-  }, [issue?.id, subscribed]);
+  }, [issue?.id, subscribed, t]);
 
   useHotkeys('shift+s', handleToggleSubscription, {}, [subscribed, issue?.id]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !e.defaultPrevented) {
         onClose();
       }
     };
@@ -142,8 +153,8 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
 
   const _state = states.find(s => s.id === issue.stateId);
   const assignee = users.find(u => u.id === issue.assigneeId);
-  const priorityConfig = getPriorityConfig(issue.priority);
   const dueDateColor = getDueDateColor(issue.dueDate);
+  const currentCycle = issue.cycleId ? cycleStore.findById(issue.cycleId) : null;
 
   const saveTitle = () => {
     if (titleDraft.trim() && titleDraft.trim() !== issue.title) {
@@ -164,29 +175,53 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
       {/* Backdrop */}
       <div aria-hidden="true" className="fixed inset-0 z-30" onClick={onClose} />
 
-      {/* Panel */}
+      {/* Panel — full-screen sheet below md (no room for a side panel on a
+          phone-width viewport); the fixed 480px side panel returns at md+. */}
       <div
-        className="fixed right-0 top-0 z-40 flex h-full w-[480px] flex-col border-l border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+        className="fixed inset-0 z-40 flex h-full w-full flex-col border-l border-border bg-card shadow-xl md:inset-y-0 md:right-0 md:left-auto md:w-[480px]"
         data-testid="issue-detail-panel"
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
-          <span className="font-mono text-xs text-zinc-400">{issue.identifier}</span>
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div className="flex min-w-0 items-center gap-1.5">
+            {breadcrumb && (
+              <>
+                <button
+                  className="flex items-center gap-1 truncate text-xs text-muted-foreground hover:text-foreground"
+                  onClick={breadcrumb.onNavigate}
+                  type="button"
+                >
+                  <ArrowLeft className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{breadcrumb.label}</span>
+                </button>
+                <span className="text-muted-foreground">/</span>
+              </>
+            )}
+            <span className="font-mono text-xs text-muted-foreground">{issue.identifier}</span>
+          </div>
           <div className="flex items-center gap-1">
             {subscribed !== null && (
               <button
-                aria-label={subscribed ? 'Unsubscribe (Shift+S)' : 'Subscribe (Shift+S)'}
-                className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                aria-label={
+                  subscribed
+                    ? t('issueDetail.unsubscribeShortcut')
+                    : t('issueDetail.subscribeShortcut')
+                }
+                className="rounded p-1 text-muted-foreground hover:bg-accent max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                 onClick={handleToggleSubscription}
-                title={subscribed ? 'Unsubscribe (Shift+S)' : 'Subscribe (Shift+S)'}
+                title={
+                  subscribed
+                    ? t('issueDetail.unsubscribeShortcut')
+                    : t('issueDetail.subscribeShortcut')
+                }
                 type="button"
               >
                 {subscribed ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
               </button>
             )}
             <button
-              aria-label="Close"
-              className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              aria-label={t('common.close')}
+              className="rounded p-1 text-muted-foreground hover:bg-accent max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
               onClick={onClose}
               type="button"
             >
@@ -218,7 +253,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
             />
           ) : (
             <button
-              className="cursor-text text-left text-xl font-semibold text-zinc-900 dark:text-zinc-100"
+              className="cursor-text text-left text-xl font-semibold text-foreground"
               onClick={() => {
                 setEditingTitle(true);
                 setTimeout(() => titleRef.current?.focus(), 20);
@@ -232,7 +267,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
           {/* Properties grid */}
           <div className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
             {/* Status */}
-            <span className="text-zinc-500">Status</span>
+            <span className="text-muted-foreground">{t('issueDetail.properties.status')}</span>
             <StatusSelect
               onChange={stateId => handleUpdate(issue.id, { stateId })}
               states={states}
@@ -240,30 +275,32 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
             />
 
             {/* Priority */}
-            <span className="text-zinc-500">Priority</span>
+            <span className="text-muted-foreground">{t('issueDetail.properties.priority')}</span>
             <div className="flex items-center gap-1.5">
               <PrioritySelect
                 onChange={priority => handleUpdate(issue.id, { priority })}
                 value={issue.priority}
               />
-              <span className="text-xs text-zinc-600">{priorityConfig.label}</span>
+              <span className="text-xs text-muted-foreground">
+                {t(priorityLabelKey(issue.priority))}
+              </span>
             </div>
 
             {/* Assignee */}
-            <span className="text-zinc-500">Assignee</span>
+            <span className="text-muted-foreground">{t('issueDetail.properties.assignee')}</span>
             <div className="flex items-center gap-1.5">
               <AssigneeSelect
                 onChange={assigneeId => handleUpdate(issue.id, { assigneeId })}
                 users={users}
                 value={issue.assigneeId}
               />
-              <span className="text-xs text-zinc-600">
-                {assignee?.displayName ?? 'No assignee'}
+              <span className="text-xs text-muted-foreground">
+                {assignee?.displayName ?? t('issueDetail.properties.noAssignee')}
               </span>
             </div>
 
             {/* Labels */}
-            <span className="text-zinc-500">Labels</span>
+            <span className="text-muted-foreground">{t('issueDetail.properties.labels')}</span>
             <div className="flex items-center gap-1 flex-wrap">
               <LabelSelect
                 labels={labels}
@@ -271,7 +308,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
                 value={issue.labels.map(l => l.id)}
               />
               {issue.labels.map(l => (
-                <span className="flex items-center gap-1 text-xs text-zinc-600" key={l.id}>
+                <span className="flex items-center gap-1 text-xs text-muted-foreground" key={l.id}>
                   <LabelDot color={l.color} />
                   {l.name}
                 </span>
@@ -279,14 +316,29 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
             </div>
 
             {/* Project */}
-            <span className="text-zinc-500">Project</span>
+            <span className="text-muted-foreground">{t('issueDetail.properties.project')}</span>
             <ProjectSelect
               onChange={projectId => handleUpdate(issue.id, { projectId })}
               value={issue.projectId ?? null}
             />
 
+            {/* Cycle */}
+            <span className="text-muted-foreground">{t('issueDetail.properties.cycle')}</span>
+            <div className="flex items-center gap-1.5">
+              <CycleSelect
+                onChange={cycleId => handleUpdate(issue.id, { cycleId })}
+                teamId={issue.teamId}
+                value={issue.cycleId ?? null}
+              />
+              {currentCycle && (
+                <span className="text-xs text-muted-foreground">
+                  {getCycleDisplayName(currentCycle)}
+                </span>
+              )}
+            </div>
+
             {/* Due date */}
-            <span className="text-zinc-500">Due date</span>
+            <span className="text-muted-foreground">{t('issueDetail.properties.dueDate')}</span>
             <div className="flex items-center gap-1.5">
               <DueDatePicker
                 onChange={dueDate => handleUpdate(issue.id, { dueDate })}
@@ -300,7 +352,9 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
             {/* Estimate — only shown when the team uses estimation */}
             {estimationType !== 'notUsed' && (
               <>
-                <span className="text-zinc-500">Estimate</span>
+                <span className="text-muted-foreground">
+                  {t('issueDetail.properties.estimate')}
+                </span>
                 <EstimatePicker
                   estimationType={estimationType}
                   onChange={estimate => handleUpdate(issue.id, { estimate: estimate ?? undefined })}
@@ -315,9 +369,11 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
 
           {/* Description */}
           <div className="mt-6">
-            <p className="mb-1 text-xs font-medium text-zinc-500">Description</p>
+            <p className="mb-1 text-xs font-medium text-muted-foreground">
+              {t('issueDetail.description')}
+            </p>
             {editingDesc ? (
-              <div className="rounded-md border border-indigo-400 bg-transparent p-2 transition-colors">
+              <div className="rounded-md border border-brand bg-transparent p-2 transition-colors">
                 <TipTapEditor
                   className="text-sm"
                   collabDocId={`issue:${issue.id}`}
@@ -327,7 +383,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
                   mentionUsers={mentionUsers}
                   onBlur={saveDesc}
                   onChange={html => setDescDraft(html)}
-                  placeholder="Add a description… (supports **markdown**, /slash commands, @mentions, #issues)"
+                  placeholder={t('issueDetail.descriptionPlaceholderFull')}
                   readOnly={false}
                   showToolbar={true}
                   uploadIssueId={issue.id}
@@ -335,7 +391,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
               </div>
             ) : (
               <button
-                className="w-full cursor-text rounded-md p-2 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                className="w-full cursor-text rounded-md p-2 text-left transition-colors hover:bg-accent/50"
                 onClick={() => setEditingDesc(true)}
                 type="button"
               >
@@ -344,7 +400,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
                   content={descDraft}
                   onBlur={saveDesc}
                   onChange={html => setDescDraft(html)}
-                  placeholder="Add a description… (supports **markdown**, /slash commands, @mentions)"
+                  placeholder={t('issueDetail.descriptionPlaceholder')}
                   readOnly={true}
                   showToolbar={false}
                 />
@@ -374,7 +430,9 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
 
           {/* Comments */}
           <div className="mt-6">
-            <p className="mb-3 text-xs font-medium text-zinc-500">Comments</p>
+            <p className="mb-3 text-xs font-medium text-muted-foreground">
+              {t('issueDetail.comments.title')}
+            </p>
             <CommentThread
               currentUserId={currentUserId}
               issueId={issue.id}
@@ -386,7 +444,9 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
 
           {/* Activity */}
           <div className="mt-6">
-            <p className="mb-3 text-xs font-medium text-zinc-500">Activity</p>
+            <p className="mb-3 text-xs font-medium text-muted-foreground">
+              {t('issueDetail.activity.title')}
+            </p>
             <ActivityTimeline issueId={issue.id} refetchKey={activityKey} />
           </div>
         </div>

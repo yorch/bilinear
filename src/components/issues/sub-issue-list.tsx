@@ -3,6 +3,8 @@
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useMemo, useRef, useState } from 'react';
+import { priorityLabelKey } from '@/components/properties/priority-icon';
+import { useTranslations } from '@/hooks/use-translations';
 import { CREATE_SUB_ISSUE_MUTATION } from '@/lib/graphql-queries';
 import { getPriorityConfig } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
@@ -13,19 +15,23 @@ import { useStore } from '@/providers/store-provider';
 // State type categories in display order
 const STATE_CATEGORY_ORDER = ['started', 'unstarted', 'backlog', 'completed', 'cancelled'] as const;
 
-const STATE_CATEGORY_LABELS: Record<string, string> = {
-  backlog: 'Backlog',
-  cancelled: 'Cancelled',
-  completed: 'Done',
-  started: 'In Progress',
-  unstarted: 'Todo',
-};
+function getStateCategoryLabels(t: ReturnType<typeof useTranslations>): Record<string, string> {
+  return {
+    backlog: t('issueDetail.subIssues.categories.backlog'),
+    cancelled: t('issueDetail.subIssues.categories.cancelled'),
+    completed: t('issueDetail.subIssues.categories.done'),
+    started: t('issueDetail.subIssues.categories.inProgress'),
+    unstarted: t('issueDetail.subIssues.categories.todo'),
+  };
+}
 
 interface SubIssueListProps {
   parentIssueId: string;
 }
 
 export const SubIssueList = observer(function SubIssueList({ parentIssueId }: SubIssueListProps) {
+  const t = useTranslations();
+  const STATE_CATEGORY_LABELS = useMemo(() => getStateCategoryLabels(t), [t]);
   const { issueStore, workflowStateStore } = useStore();
 
   // Resolve the parent issue's teamId, projectId, and cycleId so sub-issue
@@ -77,7 +83,7 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
     <div className="mt-6">
       <div className="flex items-center justify-between">
         <button
-          className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+          className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground-secondary"
           onClick={() => setCollapsed(c => !c)}
           type="button"
         >
@@ -86,14 +92,14 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
           ) : (
             <ChevronDown className="h-3.5 w-3.5" />
           )}
-          Sub-issues ({subIssues.length})
+          {t('issueDetail.subIssues.title')} ({subIssues.length})
         </button>
         {subIssues.length > 0 && (
           <div className="flex items-center gap-2">
-            <span className="text-xs tabular-nums text-zinc-400 dark:text-zinc-500">
+            <span className="text-xs tabular-nums text-muted-foreground">
               {completedCount}/{subIssues.length}
             </span>
-            <div className="h-1 w-20 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <div className="h-1 w-20 overflow-hidden rounded-full bg-muted">
               <div
                 className="h-full rounded-full bg-green-500 transition-all duration-300"
                 style={{ width: `${completionPct}%` }}
@@ -103,12 +109,12 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
         )}
         {!showCreateForm && (
           <button
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
             onClick={() => setShowCreateForm(true)}
             type="button"
           >
             <Plus className="h-3.5 w-3.5" />
-            Add sub-issue
+            {t('issueDetail.subIssues.addSubIssue')}
           </button>
         )}
       </div>
@@ -133,7 +139,7 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
             }
             return (
               <div key={category}>
-                <p className="mb-1 text-xs font-medium text-zinc-400 dark:text-zinc-500">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">
                   {STATE_CATEGORY_LABELS[category] ?? category}
                 </p>
                 <ul className="space-y-0.5">
@@ -142,14 +148,14 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
                     const state = workflowStateStore.findById(issue.stateId);
                     return (
                       <li
-                        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
                         key={issue.id}
                       >
                         {/* Priority dot */}
                         <span
                           className="h-2 w-2 shrink-0 rounded-full"
                           style={{ backgroundColor: priorityCfg.color }}
-                          title={priorityCfg.label}
+                          title={t(priorityLabelKey(issue.priority))}
                         />
                         {/* State color dot */}
                         <span
@@ -164,15 +170,15 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
                           title={state?.name}
                         />
                         {/* Identifier */}
-                        <span className="font-mono text-xs text-zinc-400 shrink-0">
+                        <span className="font-mono text-xs text-muted-foreground shrink-0">
                           {issue.identifier}
                         </span>
                         {/* Title */}
                         <span
                           className={cn(
-                            'flex-1 truncate text-zinc-700 dark:text-zinc-300',
+                            'flex-1 truncate text-foreground-secondary',
                             (state?.type === 'completed' || state?.type === 'cancelled') &&
-                              'line-through text-zinc-400',
+                              'line-through text-muted-foreground',
                           )}
                         >
                           {issue.title}
@@ -186,7 +192,9 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
           })}
 
           {subIssues.length === 0 && !showCreateForm && (
-            <p className="py-2 text-center text-xs text-zinc-400 italic">No sub-issues yet.</p>
+            <p className="py-2 text-center text-xs text-muted-foreground italic">
+              {t('issueDetail.subIssues.empty')}
+            </p>
           )}
         </div>
       )}
@@ -213,6 +221,7 @@ function CreateSubIssueForm({
   parentProjectId,
   parentCycleId,
 }: CreateSubIssueFormProps) {
+  const t = useTranslations();
   const [title, setTitle] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -245,42 +254,46 @@ function CreateSubIssueForm({
       });
       onClose();
     } catch {
-      toast.error('Failed to create sub-issue');
+      toast.error(t('issueDetail.subIssues.failedToCreate'));
       setSubmitting(false);
     }
   };
 
   return (
     <form
-      className="mt-2 flex items-center gap-2 rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-700"
+      className="mt-2 flex items-center gap-2 rounded-md border border-border px-3 py-2"
       onSubmit={handleSubmit}
     >
       <input
-        className="flex-1 bg-transparent text-sm text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
+        className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
         onChange={e => setTitle(e.target.value)}
         onKeyDown={e => {
           if (e.key === 'Escape') {
+            // Consume the keypress so the detail panel's window-level
+            // Escape listener doesn't also close the whole panel.
+            e.preventDefault();
+            e.stopPropagation();
             onClose();
           }
         }}
-        placeholder="Sub-issue title…"
+        placeholder={t('issueDetail.subIssues.titlePlaceholder')}
         ref={inputRef}
         type="text"
         value={title}
       />
       <button
-        className="rounded px-2 py-1 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+        className="rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground-secondary"
         onClick={onClose}
         type="button"
       >
-        Cancel
+        {t('common.cancel')}
       </button>
       <button
-        className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+        className="rounded bg-primary px-2 py-1 text-xs font-medium text-white hover:bg-primary/90 disabled:opacity-50"
         disabled={!title.trim() || submitting}
         type="submit"
       >
-        {submitting ? 'Adding…' : 'Add'}
+        {submitting ? t('issueDetail.subIssues.adding') : t('issueDetail.subIssues.add')}
       </button>
     </form>
   );

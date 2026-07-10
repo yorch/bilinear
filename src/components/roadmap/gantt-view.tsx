@@ -2,6 +2,8 @@
 
 import { addDays, addMonths, differenceInDays, format, startOfMonth } from 'date-fns';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFormatters } from '@/hooks/use-formatters';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 
 export interface GanttItem {
@@ -23,10 +25,10 @@ const ZOOM_PX: Record<GanttZoom, number> = {
   week: 14,
 };
 
-const ZOOM_LABELS: Record<GanttZoom, string> = {
-  day: 'Day',
-  month: 'Month',
-  week: 'Week',
+const ZOOM_LABEL_KEYS: Record<GanttZoom, string> = {
+  day: 'roadmap.gantt.zoomDay',
+  month: 'roadmap.gantt.zoomMonth',
+  week: 'roadmap.gantt.zoomWeek',
 };
 
 interface GanttViewProps {
@@ -65,12 +67,10 @@ function fmtIso(date: Date): string {
   return format(date, 'yyyy-MM-dd');
 }
 
-export function GanttView({
-  items,
-  onChange,
-  defaultSpanDays = 14,
-  emptyMessage = 'No items with dates yet. Add start and target dates to populate the roadmap.',
-}: GanttViewProps) {
+export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage }: GanttViewProps) {
+  const t = useTranslations();
+  const { dateFnsLocale } = useFormatters();
+  const resolvedEmptyMessage = emptyMessage ?? t('roadmap.gantt.emptyMessage');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [zoom, setZoom] = useState<GanttZoom>('week');
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -147,11 +147,14 @@ export function GanttView({
     let cur = windowStart;
     while (cur < windowEnd) {
       const days = differenceInDays(cur, windowStart);
-      markers.push({ label: format(cur, 'MMM yyyy'), x: days * pxPerDay });
+      markers.push({
+        label: format(cur, 'MMM yyyy', { locale: dateFnsLocale }),
+        x: days * pxPerDay,
+      });
       cur = addMonths(cur, 1);
     }
     return markers;
-  }, [windowStart, windowEnd, pxPerDay]);
+  }, [windowStart, windowEnd, pxPerDay, dateFnsLocale]);
 
   // Week tick marks — one every 7 days from windowStart.
   const weekMarkers = useMemo(() => {
@@ -288,8 +291,8 @@ export function GanttView({
 
   if (items.length === 0) {
     return (
-      <div className="flex h-48 items-center justify-center px-6 py-12 text-center text-sm text-zinc-400">
-        {emptyMessage}
+      <div className="flex h-48 items-center justify-center px-6 py-12 text-center text-sm text-muted-foreground">
+        {resolvedEmptyMessage}
       </div>
     );
   }
@@ -302,10 +305,10 @@ export function GanttView({
   return (
     <div className="flex flex-col">
       {/* Zoom controls */}
-      <div className="flex items-center justify-end border-b border-zinc-200 px-3 py-1.5 dark:border-zinc-800">
+      <div className="flex items-center justify-end border-b border-border px-3 py-1.5">
         <fieldset
-          aria-label="Zoom level"
-          className="flex gap-0.5 rounded-md border border-zinc-200 p-0.5 dark:border-zinc-700"
+          aria-label={t('roadmap.gantt.zoomLevel')}
+          className="flex gap-0.5 rounded-md border border-border p-0.5"
         >
           {(['month', 'week', 'day'] as GanttZoom[]).map(z => (
             <button
@@ -313,14 +316,14 @@ export function GanttView({
               className={cn(
                 'rounded px-2.5 py-0.5 text-xs font-medium transition-colors',
                 zoom === z
-                  ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
-                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200',
+                  ? 'bg-invert text-invert-foreground'
+                  : 'text-muted-foreground hover:text-foreground',
               )}
               key={z}
               onClick={() => setZoom(z)}
               type="button"
             >
-              {ZOOM_LABELS[z]}
+              {t(ZOOM_LABEL_KEYS[z])}
             </button>
           ))}
         </fieldset>
@@ -330,19 +333,14 @@ export function GanttView({
       <div className="overflow-x-auto" ref={containerRef}>
         <div style={{ minWidth: totalWidth }}>
           {/* Header */}
-          <div className="sticky top-0 z-10 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="sticky top-0 z-10 border-b border-border bg-background">
             {/* Month row */}
-            <div
-              className={cn(
-                'flex border-b border-zinc-100 dark:border-zinc-800',
-                hasSubRow ? 'h-6' : 'h-8',
-              )}
-            >
+            <div className={cn('flex border-b border-border', hasSubRow ? 'h-6' : 'h-8')}>
               {monthMarkers.map((m, i) => {
                 const nextX = monthMarkers[i + 1]?.x ?? totalWidth;
                 return (
                   <div
-                    className="overflow-hidden border-r border-zinc-100 px-2 text-xs font-medium leading-6 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400"
+                    className="overflow-hidden border-r border-border px-2 text-xs font-medium leading-6 text-muted-foreground"
                     key={m.label}
                     style={{ width: nextX - m.x }}
                   >
@@ -358,7 +356,7 @@ export function GanttView({
                 {zoom === 'week' &&
                   weekMarkers.map(wm => (
                     <div
-                      className="absolute top-0 border-l border-zinc-100 px-1 text-[10px] leading-5 text-zinc-400 dark:border-zinc-800 dark:text-zinc-500"
+                      className="absolute top-0 border-l border-border px-1 text-[10px] leading-5 text-muted-foreground"
                       key={wm.x}
                       style={{ left: wm.x }}
                     >
@@ -369,10 +367,8 @@ export function GanttView({
                   dayMarkers.map(dm => (
                     <div
                       className={cn(
-                        'absolute top-0 border-l px-0.5 text-[10px] leading-5 text-zinc-400 dark:text-zinc-500',
-                        dm.isMonthStart
-                          ? 'border-zinc-300 font-semibold dark:border-zinc-600'
-                          : 'border-zinc-100 dark:border-zinc-800',
+                        'absolute top-0 border-l px-0.5 text-[10px] leading-5 text-muted-foreground',
+                        dm.isMonthStart ? 'border-border font-semibold' : 'border-border',
                       )}
                       key={dm.x}
                       style={{ left: dm.x, width: pxPerDay }}
@@ -399,7 +395,7 @@ export function GanttView({
               weekMarkers.map(wm => (
                 <div
                   aria-hidden="true"
-                  className="absolute top-0 w-px bg-zinc-100 dark:bg-zinc-800"
+                  className="absolute top-0 w-px bg-muted"
                   key={wm.x}
                   style={{ height: items.length * rowHeight, left: wm.x }}
                 />
@@ -410,7 +406,7 @@ export function GanttView({
                 .map(dm => (
                   <div
                     aria-hidden="true"
-                    className="absolute top-0 w-px bg-zinc-200 dark:bg-zinc-700"
+                    className="absolute top-0 w-px bg-muted"
                     key={dm.x}
                     style={{ height: items.length * rowHeight, left: dm.x }}
                   />
@@ -436,7 +432,7 @@ export function GanttView({
                 }
               }
 
-              const color = item.color ?? '#6366f1';
+              const color = item.color ?? 'var(--brand)';
               const isDragging = drag?.id === item.id;
 
               return (
@@ -447,7 +443,7 @@ export function GanttView({
                 >
                   {/* biome-ignore lint/a11y/useSemanticElements: contains nested <button> resize handles; nesting <button> in <button> is invalid HTML */}
                   <div
-                    aria-label={`Drag ${item.name} timeline bar`}
+                    aria-label={t('roadmap.gantt.dragBar', { name: item.name })}
                     className={cn(
                       'absolute flex h-6 items-center gap-1.5 rounded-md border px-2 text-xs font-medium text-white shadow-sm transition-shadow',
                       !isDragging && 'cursor-grab',
@@ -465,7 +461,7 @@ export function GanttView({
                   >
                     {/* Resize handle - left */}
                     <button
-                      aria-label="Resize start"
+                      aria-label={t('roadmap.gantt.resizeStart')}
                       className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize rounded-l-md bg-black/10 opacity-0 transition-opacity group-hover:opacity-100"
                       onMouseDown={e => startDrag(item, 'resize-start', e)}
                       tabIndex={-1}
@@ -480,7 +476,7 @@ export function GanttView({
                     )}
                     {/* Resize handle - right */}
                     <button
-                      aria-label="Resize end"
+                      aria-label={t('roadmap.gantt.resizeEnd')}
                       className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize rounded-r-md bg-black/10 opacity-0 transition-opacity group-hover:opacity-100"
                       onMouseDown={e => startDrag(item, 'resize-end', e)}
                       tabIndex={-1}

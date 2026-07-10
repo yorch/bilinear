@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { cache } from 'react';
 import { PublicRoadmapView } from '@/components/roadmap/public-roadmap-view';
+import { getServerTranslations } from '@/lib/i18n/server';
 import { prisma } from '@/server/lib/prisma';
 import { verifyRoadmapPassword } from '@/server/services/roadmap.service';
 
@@ -18,7 +19,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const roadmap = await getRoadmapBySlug(slug);
   if (!roadmap) {
-    return { title: 'Roadmap not found' };
+    const { t } = await getServerTranslations();
+    return { title: t('meta.roadmapNotFound') };
   }
   return { title: roadmap.title };
 }

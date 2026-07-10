@@ -2,16 +2,13 @@
 
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
-import { ModalDialog } from '@/components/ui/modal-dialog';
+import { Input } from '@/components/ui/input';
+import { ModalDialog, ModalFooter, ModalHeader } from '@/components/ui/modal-dialog';
 import { SimpleSelect } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn, getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
-
-const STATUS_OPTIONS = [
-  { label: 'Backlog', value: 'backlog' },
-  { label: 'Planned', value: 'planned' },
-  { label: 'In Progress', value: 'inProgress' },
-] as const;
 
 interface CreateProjectModalProps {
   onClose: () => void;
@@ -32,6 +29,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
   onClose,
   onSubmit,
 }: CreateProjectModalProps) {
+  const t = useTranslations();
   const { teamStore } = useStore();
   const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState('');
@@ -44,6 +42,12 @@ export const CreateProjectModal = observer(function CreateProjectModal({
   const [submitError, setSubmitError] = useState('');
 
   const teams = teamStore.all;
+
+  const STATUS_OPTIONS = [
+    { label: t('projects.status.backlog'), value: 'backlog' },
+    { label: t('projects.status.planned'), value: 'planned' },
+    { label: t('projects.status.inProgress'), value: 'inProgress' },
+  ] as const;
 
   // Reset form state only on open transitions — including `teams` here
   // re-fires the effect whenever the MobX-derived array gets a new identity
@@ -96,7 +100,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
       });
       onClose();
     } catch (err) {
-      setSubmitError(getErrorMessage(err, 'Failed to create project'));
+      setSubmitError(getErrorMessage(err, t('projects.failedToCreate')));
     } finally {
       setSubmitting(false);
     }
@@ -105,55 +109,46 @@ export const CreateProjectModal = observer(function CreateProjectModal({
   const canSubmit = name.trim().length > 0 && selectedTeamIds.length > 0 && !submitting;
 
   return (
-    <ModalDialog aria-label="Create project" onClose={onClose} open={open}>
+    <ModalDialog aria-label={t('projects.createProject')} onClose={onClose} open={open}>
       <form className="flex flex-col" onSubmit={handleSubmit}>
-        <div className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Create project</h2>
-        </div>
+        <ModalHeader title={t('projects.createProject')} />
 
         <div className="flex flex-col gap-4 px-5 py-4">
           <div className="flex flex-col gap-1">
-            <label
-              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-              htmlFor="project-name"
-            >
-              Name
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="project-name">
+              {t('projects.name')}
             </label>
-            <input
-              className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+            <Input
               id="project-name"
               onChange={e => setName(e.target.value)}
-              placeholder="e.g. Q2 Launch"
+              placeholder={t('projects.namePlaceholder')}
               ref={nameRef}
               required
-              type="text"
               value={name}
             />
           </div>
 
           <div className="flex flex-col gap-1">
             <label
-              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+              className="text-xs font-medium text-muted-foreground"
               htmlFor="project-description"
             >
-              Description <span className="font-normal text-zinc-400">(optional)</span>
+              {t('projects.description')}{' '}
+              <span className="font-normal text-muted-foreground">({t('projects.optional')})</span>
             </label>
-            <textarea
-              className="resize-none rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-600 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-400"
+            <Textarea
+              className="resize-none"
               id="project-description"
               onChange={e => setDescription(e.target.value)}
-              placeholder="What is this project about?"
+              placeholder={t('projects.descriptionPlaceholder')}
               rows={2}
               value={description}
             />
           </div>
 
           <div className="flex flex-col gap-1">
-            <label
-              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-              htmlFor="project-status"
-            >
-              Status
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="project-status">
+              {t('projects.status.label')}
             </label>
             <SimpleSelect
               id="project-status"
@@ -164,15 +159,15 @@ export const CreateProjectModal = observer(function CreateProjectModal({
           </div>
 
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Teams</span>
+            <span className="text-xs font-medium text-muted-foreground">{t('projects.teams')}</span>
             <div className="flex flex-wrap gap-2">
               {teams.map(team => (
                 <button
                   className={cn(
                     'rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
                     selectedTeamIds.includes(team.id)
-                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
-                      : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800',
+                      ? 'border-brand bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground'
+                      : 'border-border text-muted-foreground hover:bg-muted',
                   )}
                   key={team.id}
                   onClick={() => toggleTeam(team.id)}
@@ -184,20 +179,19 @@ export const CreateProjectModal = observer(function CreateProjectModal({
               ))}
             </div>
             {teams.length === 0 && (
-              <p className="text-xs text-zinc-400">No teams available. Create a team first.</p>
+              <p className="text-xs text-muted-foreground">{t('projects.noTeamsAvailable')}</p>
             )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
-              <label
-                className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-                htmlFor="project-start"
-              >
-                Start date <span className="font-normal text-zinc-400">(optional)</span>
+              <label className="text-xs font-medium text-muted-foreground" htmlFor="project-start">
+                {t('projects.startDate')}{' '}
+                <span className="font-normal text-muted-foreground">
+                  ({t('projects.optional')})
+                </span>
               </label>
-              <input
-                className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+              <Input
                 id="project-start"
                 onChange={e => setStartDate(e.target.value)}
                 type="date"
@@ -205,14 +199,13 @@ export const CreateProjectModal = observer(function CreateProjectModal({
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label
-                className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-                htmlFor="project-target"
-              >
-                Target date <span className="font-normal text-zinc-400">(optional)</span>
+              <label className="text-xs font-medium text-muted-foreground" htmlFor="project-target">
+                {t('projects.targetDate')}{' '}
+                <span className="font-normal text-muted-foreground">
+                  ({t('projects.optional')})
+                </span>
               </label>
-              <input
-                className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+              <Input
                 id="project-target"
                 onChange={e => setTargetDate(e.target.value)}
                 type="date"
@@ -222,26 +215,13 @@ export const CreateProjectModal = observer(function CreateProjectModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
-          {submitError && <p className="flex-1 text-xs text-red-500">{submitError}</p>}
-          <button
-            className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-            onClick={onClose}
-            type="button"
-          >
-            Cancel
-          </button>
-          <button
-            className={cn(
-              'rounded-md px-4 py-1.5 text-sm font-medium text-white transition-colors',
-              'bg-indigo-600 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50',
-            )}
-            disabled={!canSubmit}
-            type="submit"
-          >
-            {submitting ? 'Creating...' : 'Create project'}
-          </button>
-        </div>
+        <ModalFooter
+          cancelLabel={t('common.cancel')}
+          onCancel={onClose}
+          submitDisabled={!canSubmit}
+          submitError={submitError}
+          submitLabel={submitting ? t('projects.creating') : t('projects.createProject')}
+        />
       </form>
     </ModalDialog>
   );

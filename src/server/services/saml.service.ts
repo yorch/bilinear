@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import type { PrismaClient, SamlConfiguration } from '../../generated/prisma';
 import { childLogger } from '../lib/logger';
+import { isFirstUser } from './user.service';
 
 const log = childLogger({ module: 'saml', service: 'SamlService' });
 
@@ -433,23 +434,29 @@ export class SamlService {
     if (existing) {
       // Ensure org membership exists
       await ensureOrgMembership(prisma, orgId, existing.id);
-      log.info({ email: claims.email, orgId, userId: existing.id }, 'SSO login — existing user');
+      // Log by userId/orgId only — the email is PII and the user id is enough
+      // to correlate an SSO login without persisting an address in log storage.
+      log.info({ orgId, userId: existing.id }, 'SSO login — existing user');
       return { isNew: false, userId: existing.id };
     }
 
-    // Create new user
+    // Create new user. Bootstrap the platform admin if this is the very first
+    // account in the deployment (an enterprise install whose first login is
+    // SSO must still end up with an operator — see UserService.isFirstUser).
     const initials = deriveInitials(claims.name);
+    const platformAdmin = await isFirstUser(prisma);
     const user = await prisma.user.create({
       data: {
         displayName: claims.name,
         email: claims.email,
         initials,
+        isPlatformAdmin: platformAdmin,
         name: claims.name,
       },
     });
 
     await ensureOrgMembership(prisma, orgId, user.id);
-    log.info({ email: claims.email, orgId, userId: user.id }, 'SSO login — new user provisioned');
+    log.info({ orgId, userId: user.id }, 'SSO login — new user provisioned');
     return { isNew: true, userId: user.id };
   }
 }

@@ -694,7 +694,9 @@ Google OAuth:
   3. Google redirects to /auth/google/callback with code + state
   4. googleAuthExchange GraphQL mutation — server verifies state JWT, then
      exchanges code with Google using the same server-controlled redirect_uri
-  5. Server creates or links user account and returns access + refresh tokens
+  5. Server requires a verified Google email (accounts link by email, so an
+     unverified address is rejected), then creates or links the user account
+     and returns access + refresh tokens
 
 Token Refresh:
   1. Client detects 401 or token expiry approaching

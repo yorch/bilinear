@@ -160,3 +160,7 @@ test-results/
 
 # We use yarn.lock
 package-lock.json
+
+# Python bytecode cache (scripts/*.py codemods)
+__pycache__/
+*.pyc

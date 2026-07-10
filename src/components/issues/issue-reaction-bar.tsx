@@ -1,8 +1,10 @@
 'use client';
 
 import { Smile } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useOutsideClick } from '@/hooks/use-outside-click';
+import { InlineRetry } from '@/components/shared/inline-retry';
+import { SelectPopover } from '@/components/ui/select-popover';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import {
   ISSUE_REACTION_ADD_MUTATION,
@@ -26,25 +28,20 @@ interface IssueReactionBarProps {
 }
 
 export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarProps) {
-  const [reactions, setReactions] = useState<Reaction[]>([]);
-  const [showPicker, setShowPicker] = useState(false);
-  const pickerRef = useRef<HTMLDivElement>(null);
-
-  const fetchReactions = useCallback(async () => {
-    try {
+  const t = useTranslations();
+  const {
+    data: reactions,
+    error: loadError,
+    refetch: fetchReactions,
+  } = useRetryableFetch<Reaction[]>(
+    async () => {
       const res = await gql(ISSUE_REACTIONS_QUERY, { id: issueId });
       const data = res.data as { issue?: { reactions: Reaction[] } } | undefined;
-      setReactions(data?.issue?.reactions ?? []);
-    } catch {
-      // Non-fatal — bar just stays empty
-    }
-  }, [issueId]);
-
-  useEffect(() => {
-    fetchReactions();
-  }, [fetchReactions]);
-
-  useOutsideClick(pickerRef, () => setShowPicker(false), showPicker);
+      return data?.issue?.reactions ?? [];
+    },
+    [issueId],
+    [],
+  );
 
   const counts = reactions.reduce<Record<string, { count: number; reacted: boolean }>>((acc, r) => {
     if (!acc[r.emoji]) {
@@ -63,15 +60,25 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
         ? await gql(ISSUE_REACTION_REMOVE_MUTATION, { emoji, issueId })
         : await gql(ISSUE_REACTION_ADD_MUTATION, { emoji, issueId });
       if (res.errors?.length) {
-        throw new Error('mutation failed');
+        throw new Error(t('common.somethingWentWrong'));
       }
-      await fetchReactions();
+      await fetchReactions({ silent: true });
     } catch {
-      toast.error('Failed to update reaction');
+      toast.error(t('issueDetail.reactions.failedToUpdate'));
     }
   };
 
   const hasAny = Object.keys(counts).length > 0;
+
+  if (loadError && !hasAny) {
+    return (
+      <InlineRetry
+        className="py-0"
+        message={t('issueDetail.reactions.failedToLoad')}
+        onRetry={fetchReactions}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-1">
@@ -80,8 +87,8 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
           className={cn(
             'flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors',
             reacted
-              ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-              : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700',
+              ? 'bg-brand-subtle text-brand-subtle-foreground'
+              : 'bg-muted text-muted-foreground hover:bg-foreground/10',
           )}
           key={emoji}
           onClick={() => toggle(emoji, reacted)}
@@ -91,33 +98,34 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
           <span>{count}</span>
         </button>
       ))}
-      <div className="relative" ref={pickerRef}>
-        <button
-          className={cn(
-            'rounded-full p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700',
-            hasAny ? '' : 'flex items-center gap-1 px-2 text-xs',
-          )}
-          onClick={() => setShowPicker(v => !v)}
-          title="Add reaction"
-          type="button"
-        >
-          <Smile className="h-3.5 w-3.5" />
-          {!hasAny && <span>React</span>}
-        </button>
-        {showPicker && (
-          <div className="absolute left-0 top-7 z-50 flex gap-1 rounded-lg border border-zinc-200 bg-white p-1.5 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+      <SelectPopover
+        panelClassName="flex gap-1 p-1.5"
+        triggerChildren={
+          <>
+            <Smile className="h-3.5 w-3.5" />
+            {!hasAny && <span>{t('issueDetail.reactions.react')}</span>}
+          </>
+        }
+        triggerClassName={cn(
+          'rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center',
+          hasAny ? '' : 'flex items-center gap-1 px-2 text-xs',
+        )}
+        triggerTitle={t('issueDetail.reactions.addReaction')}
+      >
+        {close => (
+          <>
             {QUICK_EMOJIS.map(emoji => {
               const info = counts[emoji];
               return (
                 <button
                   className={cn(
-                    'rounded px-1 py-0.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700',
-                    info?.reacted && 'bg-indigo-100 dark:bg-indigo-900/30',
+                    'rounded px-1 py-0.5 text-sm hover:bg-accent',
+                    info?.reacted && 'bg-brand-subtle',
                   )}
                   key={emoji}
                   onClick={() => {
                     toggle(emoji, info?.reacted ?? false);
-                    setShowPicker(false);
+                    close();
                   }}
                   type="button"
                 >
@@ -125,9 +133,9 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
                 </button>
               );
             })}
-          </div>
+          </>
         )}
-      </div>
+      </SelectPopover>
     </div>
   );
 }

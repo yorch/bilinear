@@ -1,12 +1,16 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter } from 'next/navigation';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { priorityLabelKey } from '@/components/properties/priority-icon';
+import { useIssueUpdate } from '@/hooks/use-issue-update';
 import type { RecentItem } from '@/hooks/use-recent-items';
+import { type Theme, useTheme } from '@/hooks/use-theme';
+import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue } from '@/lib/db';
 import { IDENTIFIER_RE } from '@/lib/identifiers';
-import { getPriorityConfig } from '@/lib/issue-utils';
+import { buildIssueHref } from '@/lib/issue-nav';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -32,6 +36,7 @@ type ResultItem = IssueItem | ActionItem;
 
 type SubMenuMode =
   | { type: 'none' }
+  | { issueId: string; type: 'actions' }
   | { issueId: string; type: 'setStatus' }
   | { issueId: string; type: 'setAssignee' }
   | { issueId: string; type: 'setPriority' }
@@ -39,11 +44,12 @@ type SubMenuMode =
 
 type SubMenuItem = { id: string; label: string; onSelect: () => void };
 
-const SUBMENU_PLACEHOLDERS = {
-  setAssignee: 'Set assignee…',
-  setLabel: 'Set label…',
-  setPriority: 'Set priority…',
-  setStatus: 'Set status…',
+const SUBMENU_PLACEHOLDER_KEYS = {
+  actions: 'commandPalette.submenu.actions',
+  setAssignee: 'commandPalette.submenu.setAssignee',
+  setLabel: 'commandPalette.submenu.setLabel',
+  setPriority: 'commandPalette.submenu.setPriority',
+  setStatus: 'commandPalette.submenu.setStatus',
 } satisfies Record<Exclude<SubMenuMode['type'], 'none'>, string>;
 
 // ---------------------------------------------------------------------------
@@ -70,6 +76,8 @@ const ResultsList = observer(function ResultsList({
   workspaceKey,
 }: ResultsListProps) {
   const { issueStore, teamStore, uiStore, workflowStateStore } = useStore();
+  const t = useTranslations();
+  const { setTheme } = useTheme();
 
   const trimmed = (query || '').trim().toUpperCase();
   const exactIdentifier = IDENTIFIER_RE.test(trimmed)
@@ -93,13 +101,34 @@ const ResultsList = observer(function ResultsList({
     teamKey: teamStore.findById(issue.teamId)?.key ?? '',
   }));
 
-  const baseActions = useMemo<ActionItem[]>(
-    () => [
+  const baseActions = useMemo<ActionItem[]>(() => {
+    const goTo = (id: string, keywords: string[], labelKey: string, path: string): ActionItem => ({
+      id,
+      keywords,
+      kind: 'action',
+      label: t(labelKey),
+      onSelect: () => {
+        uiStore.closeCommandPalette();
+        router.push(`/${workspaceKey}${path}`);
+      },
+    });
+    const switchTheme = (id: string, theme: Theme, themeLabelKey: string): ActionItem => ({
+      id,
+      keywords: ['theme', 'appearance', theme],
+      kind: 'action',
+      label: t('commandPalette.actions.switchTheme', { theme: t(themeLabelKey) }),
+      onSelect: () => {
+        uiStore.closeCommandPalette();
+        setTheme(theme);
+      },
+    });
+
+    return [
       {
         id: 'create-issue',
         keywords: ['create issue', 'new issue', 'add issue'],
         kind: 'action',
-        label: 'Create new issue',
+        label: t('commandPalette.actions.createIssue'),
         onSelect: () => {
           uiStore.closeCommandPalette();
           uiStore.openCreateIssueModal();
@@ -107,18 +136,52 @@ const ResultsList = observer(function ResultsList({
         shortcut: 'C',
       },
       {
-        id: 'go-settings',
-        keywords: ['settings', 'preferences', 'config'],
+        id: 'create-project',
+        keywords: ['create project', 'new project', 'add project'],
         kind: 'action',
-        label: 'Go to Settings',
+        label: t('commandPalette.actions.createProject'),
         onSelect: () => {
           uiStore.closeCommandPalette();
-          router.push(`/${workspaceKey}/settings`);
+          router.push(`/${workspaceKey}/projects`);
+          uiStore.openCreateProjectModal();
         },
       },
-    ],
-    [router, uiStore, workspaceKey],
-  );
+      {
+        id: 'create-team',
+        keywords: ['create team', 'new team', 'add team'],
+        kind: 'action',
+        label: t('commandPalette.actions.createTeam'),
+        onSelect: () => {
+          uiStore.closeCommandPalette();
+          uiStore.openCreateTeamModal();
+        },
+      },
+      goTo('go-my-issues', ['my issues'], 'commandPalette.actions.goToMyIssues', '/my-issues'),
+      goTo('go-inbox', ['inbox', 'notifications'], 'commandPalette.actions.goToInbox', '/inbox'),
+      goTo('go-projects', ['projects'], 'commandPalette.actions.goToProjects', '/projects'),
+      goTo(
+        'go-initiatives',
+        ['initiatives'],
+        'commandPalette.actions.goToInitiatives',
+        '/initiatives',
+      ),
+      goTo(
+        'go-analytics',
+        ['analytics', 'insights'],
+        'commandPalette.actions.goToAnalytics',
+        '/analytics',
+      ),
+      goTo(
+        'go-settings',
+        ['settings', 'preferences', 'config'],
+        'commandPalette.actions.goToSettings',
+        '/settings',
+      ),
+      switchTheme('theme-light', 'light', 'theme.light'),
+      switchTheme('theme-dark', 'dark', 'theme.dark'),
+      switchTheme('theme-system', 'system', 'theme.system'),
+    ];
+  }, [router, uiStore, workspaceKey, t, setTheme]);
   const actionItems: ActionItem[] = query
     ? baseActions.filter(a => {
         const q = query.toLowerCase();
@@ -135,22 +198,22 @@ const ResultsList = observer(function ResultsList({
   return (
     <>
       {allItems.length === 0 && (
-        <p className="px-4 py-3 text-sm text-zinc-400">No results for &ldquo;{query}&rdquo;</p>
+        <p className="px-4 py-3 text-sm text-muted-foreground">
+          {t('commandPalette.noResultsFor', { query })}
+        </p>
       )}
 
       {issueItems.length > 0 && (
         <>
-          <p className="px-4 py-1.5 text-xs font-medium uppercase tracking-wide text-zinc-400">
-            {query ? 'Issues' : 'Recent'}
+          <p className="px-4 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {query ? t('commandPalette.sections.issues') : t('commandPalette.sections.recent')}
           </p>
           {issueItems.map((item, i) => (
             <button
               aria-selected={i === activeIndex}
               className={cn(
                 'flex w-full items-center gap-3 px-4 py-2 text-sm',
-                i === activeIndex
-                  ? 'bg-zinc-100 dark:bg-zinc-800'
-                  : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
+                i === activeIndex ? 'bg-muted' : 'hover:bg-accent/50',
               )}
               data-highlighted={i === activeIndex ? 'true' : undefined}
               data-idx={i}
@@ -166,14 +229,12 @@ const ResultsList = observer(function ResultsList({
                   style={{ backgroundColor: item.stateColor }}
                 />
               )}
-              <span className="w-16 flex-shrink-0 font-mono text-xs text-zinc-400">
+              <span className="w-16 flex-shrink-0 font-mono text-xs text-muted-foreground">
                 {item.issue.identifier}
               </span>
-              <span className="flex-1 truncate text-zinc-900 dark:text-zinc-100">
-                {item.issue.title}
-              </span>
+              <span className="flex-1 truncate text-foreground">{item.issue.title}</span>
               {item.teamKey && (
-                <span className="flex-shrink-0 text-xs text-zinc-400">{item.teamKey}</span>
+                <span className="flex-shrink-0 text-xs text-muted-foreground">{item.teamKey}</span>
               )}
             </button>
           ))}
@@ -182,8 +243,8 @@ const ResultsList = observer(function ResultsList({
 
       {actionItems.length > 0 && (
         <>
-          <p className="px-4 py-1.5 text-xs font-medium uppercase tracking-wide text-zinc-400">
-            Actions
+          <p className="px-4 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {t('commandPalette.sections.actions')}
           </p>
           {actionItems.map((item, i) => {
             const globalIdx = issueItems.length + i;
@@ -192,9 +253,7 @@ const ResultsList = observer(function ResultsList({
                 aria-selected={globalIdx === activeIndex}
                 className={cn(
                   'flex w-full items-center gap-3 px-4 py-2 text-sm',
-                  globalIdx === activeIndex
-                    ? 'bg-zinc-100 dark:bg-zinc-800'
-                    : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
+                  globalIdx === activeIndex ? 'bg-muted' : 'hover:bg-accent/50',
                 )}
                 data-highlighted={globalIdx === activeIndex ? 'true' : undefined}
                 data-idx={globalIdx}
@@ -204,11 +263,9 @@ const ResultsList = observer(function ResultsList({
                 role="option"
                 type="button"
               >
-                <span className="flex-1 truncate text-zinc-900 dark:text-zinc-100">
-                  {item.label}
-                </span>
+                <span className="flex-1 truncate text-foreground">{item.label}</span>
                 {item.shortcut && (
-                  <kbd className="flex-shrink-0 rounded border border-zinc-200 px-1.5 py-0.5 font-mono text-[10px] text-zinc-400 dark:border-zinc-600">
+                  <kbd className="flex-shrink-0 rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
                     {item.shortcut}
                   </kbd>
                 )}
@@ -229,6 +286,7 @@ interface SubMenuListProps {
   activeIndex: number;
   onClose: () => void;
   onItemsChange: (items: SubMenuItem[]) => void;
+  onNavigate: (mode: SubMenuMode) => void;
   subMenu: SubMenuMode;
 }
 
@@ -236,13 +294,30 @@ const SubMenuList = observer(function SubMenuList({
   activeIndex,
   onClose,
   onItemsChange,
+  onNavigate,
   subMenu,
 }: SubMenuListProps) {
   const { issueStore, labelStore, userStore, workflowStateStore } = useStore();
+  const t = useTranslations();
+  const applyPatch = useIssueUpdate();
 
   let subItems: SubMenuItem[] = [];
 
-  if (subMenu.type === 'setStatus') {
+  if (subMenu.type === 'actions') {
+    const { issueId } = subMenu;
+    subItems = (
+      [
+        ['setStatus', 'commandPalette.submenu.setStatus'],
+        ['setAssignee', 'commandPalette.submenu.setAssignee'],
+        ['setPriority', 'commandPalette.submenu.setPriority'],
+        ['setLabel', 'commandPalette.submenu.setLabel'],
+      ] as const
+    ).map(([type, labelKey]) => ({
+      id: type,
+      label: t(labelKey),
+      onSelect: () => onNavigate({ issueId, type }),
+    }));
+  } else if (subMenu.type === 'setStatus') {
     const issue = issueStore.findById(subMenu.issueId);
     if (issue) {
       const states = workflowStateStore.findByTeamId(issue.teamId);
@@ -250,7 +325,7 @@ const SubMenuList = observer(function SubMenuList({
         id: s.id,
         label: s.name,
         onSelect: () => {
-          issueStore.optimisticUpdate(subMenu.issueId, { stateId: s.id });
+          applyPatch(subMenu.issueId, { stateId: s.id });
           onClose();
         },
       }));
@@ -260,9 +335,9 @@ const SubMenuList = observer(function SubMenuList({
     subItems = [
       {
         id: 'no-assignee',
-        label: 'No assignee',
+        label: t('commandPalette.submenu.noAssignee'),
         onSelect: () => {
-          issueStore.optimisticUpdate(subMenu.issueId, { assigneeId: null });
+          applyPatch(subMenu.issueId, { assigneeId: null });
           onClose();
         },
       },
@@ -270,7 +345,7 @@ const SubMenuList = observer(function SubMenuList({
         id: u.id,
         label: u.displayName,
         onSelect: () => {
-          issueStore.optimisticUpdate(subMenu.issueId, { assigneeId: u.id });
+          applyPatch(subMenu.issueId, { assigneeId: u.id });
           onClose();
         },
       })),
@@ -278,9 +353,9 @@ const SubMenuList = observer(function SubMenuList({
   } else if (subMenu.type === 'setPriority') {
     subItems = ([0, 1, 2, 3, 4] as const).map(p => ({
       id: String(p),
-      label: getPriorityConfig(p).label,
+      label: t(priorityLabelKey(p)),
       onSelect: () => {
-        issueStore.optimisticUpdate(subMenu.issueId, { priority: p });
+        applyPatch(subMenu.issueId, { priority: p });
         onClose();
       },
     }));
@@ -295,7 +370,7 @@ const SubMenuList = observer(function SubMenuList({
           const next = current.includes(l.id)
             ? current.filter(id => id !== l.id)
             : [...current, l.id];
-          issueStore.optimisticUpdate(subMenu.issueId, { labelIds: next });
+          applyPatch(subMenu.issueId, { labelIds: next });
           onClose();
         },
       }));
@@ -307,15 +382,17 @@ const SubMenuList = observer(function SubMenuList({
 
   return (
     <>
-      {subItems.length === 0 && <p className="px-4 py-3 text-sm text-zinc-400">No options</p>}
+      {subItems.length === 0 && (
+        <p className="px-4 py-3 text-sm text-muted-foreground">
+          {t('commandPalette.submenu.noOptions')}
+        </p>
+      )}
       {subItems.map((item, i) => (
         <button
           aria-selected={i === activeIndex}
           className={cn(
             'flex w-full items-center gap-3 px-4 py-2 text-sm',
-            i === activeIndex
-              ? 'bg-zinc-100 dark:bg-zinc-800'
-              : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
+            i === activeIndex ? 'bg-muted' : 'hover:bg-accent/50',
           )}
           data-idx={i}
           key={item.id}
@@ -323,7 +400,7 @@ const SubMenuList = observer(function SubMenuList({
           role="option"
           type="button"
         >
-          <span className="text-zinc-900 dark:text-zinc-100">{item.label}</span>
+          <span className="text-foreground">{item.label}</span>
         </button>
       ))}
     </>
@@ -339,17 +416,26 @@ const CommandPaletteFooter = memo(function CommandPaletteFooter({
 }: {
   inSubMenu: boolean;
 }) {
+  const t = useTranslations();
   return (
-    <div className="flex items-center gap-4 border-t border-zinc-100 px-4 py-2 dark:border-zinc-800">
-      <span className="text-[10px] text-zinc-400">
-        <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">↑↓</kbd> Navigate
+    <div className="flex items-center gap-4 border-t border-border px-4 py-2">
+      <span className="text-[10px] text-muted-foreground">
+        <kbd className="rounded border border-border px-1">↑↓</kbd>{' '}
+        {t('commandPalette.footer.navigate')}
       </span>
-      <span className="text-[10px] text-zinc-400">
-        <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">↵</kbd> Select
+      <span className="text-[10px] text-muted-foreground">
+        <kbd className="rounded border border-border px-1">↵</kbd>{' '}
+        {t('commandPalette.footer.select')}
       </span>
-      <span className="text-[10px] text-zinc-400">
-        <kbd className="rounded border border-zinc-200 px-1 dark:border-zinc-600">Esc</kbd>{' '}
-        {inSubMenu ? 'Back' : 'Close'}
+      {!inSubMenu && (
+        <span className="text-[10px] text-muted-foreground">
+          <kbd className="rounded border border-border px-1">Tab</kbd>{' '}
+          {t('commandPalette.footer.issueActions')}
+        </span>
+      )}
+      <span className="text-[10px] text-muted-foreground">
+        <kbd className="rounded border border-border px-1">Esc</kbd>{' '}
+        {inSubMenu ? t('commandPalette.footer.back') : t('commandPalette.footer.close')}
       </span>
     </div>
   );
@@ -361,7 +447,9 @@ const CommandPaletteFooter = memo(function CommandPaletteFooter({
 
 function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
   const { uiStore } = useStore();
+  const t = useTranslations();
   const router = useRouter();
+  const pathname = usePathname();
   const params = useParams<{ workspace?: string }>();
   const workspaceKey = params.workspace ?? '';
 
@@ -399,13 +487,17 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
         return;
       }
       if (item.kind === 'issue') {
-        router.push(`/${workspaceKey}/issue/${item.issue.id}`);
+        const href = buildIssueHref(workspaceKey, item.issue.id, {
+          label: t('commandPalette.footer.back'),
+          path: pathname,
+        });
+        router.push(href);
         uiStore.closeCommandPalette();
       } else {
         item.onSelect();
       }
     },
-    [router, workspaceKey, uiStore],
+    [router, workspaceKey, uiStore, pathname, t],
   );
 
   const onAllItemsChange = useCallback((items: ResultItem[]) => {
@@ -475,10 +567,42 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
           const target = idx === -1 ? allRef.current[0] : allRef.current[idx];
           select(target);
         }
+      } else if (e.key === 'Tab' || e.key === 'ArrowRight') {
+        if (e.key === 'Tab') {
+          // Focus never leaves the palette — it isn't a native modal, so an
+          // unhandled Tab would move focus to the page underneath.
+          e.preventDefault();
+        } else {
+          // ArrowRight opens issue actions only when it can't be a caret
+          // move: skip while the caret is anywhere but the end of the query.
+          const input = inputRef.current;
+          if (
+            input &&
+            document.activeElement === input &&
+            input.selectionStart !== input.value.length
+          ) {
+            return;
+          }
+        }
+        if (!inSub) {
+          const target = idx === -1 ? allRef.current[0] : allRef.current[idx];
+          if (target?.kind === 'issue') {
+            e.preventDefault();
+            setSub({ issueId: target.issue.id, type: 'actions' });
+            setIdx(0);
+          }
+        }
       } else if (e.key === 'Escape') {
         e.preventDefault();
         if (inSub) {
-          setSub({ type: 'none' });
+          // Leaf submenus step back to the actions list; actions closes to
+          // the main results. keyStateRef only tracks a boolean, so read the
+          // concrete mode from the state setter to decide.
+          setSub(prev =>
+            prev.type === 'none' || prev.type === 'actions'
+              ? { type: 'none' }
+              : { issueId: prev.issueId, type: 'actions' },
+          );
           setIdx(0);
         } else {
           ui.closeCommandPalette();
@@ -496,30 +620,30 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
 
       {/* Dialog */}
       <div
-        aria-label="Command palette"
+        aria-label={t('commandPalette.dialogAriaLabel')}
         aria-modal="true"
-        className="fixed left-1/2 top-[20%] z-50 w-full max-w-xl -translate-x-1/2 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900"
+        className="fixed left-1/2 top-[20%] z-50 w-full max-w-xl -translate-x-1/2 overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
         data-testid="command-palette"
         role="dialog"
       >
         {/* Search input */}
-        <div className="flex items-center gap-2 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
           {inSubMenu && (
             <button
-              aria-label="Back"
-              className="flex-shrink-0 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+              aria-label={t('commandPalette.footer.back')}
+              className="flex-shrink-0 text-xs text-muted-foreground hover:text-foreground-secondary"
               onClick={() => {
                 setSubMenu({ type: 'none' });
                 setActiveIndex(0);
               }}
               type="button"
             >
-              ← Back
+              ← {t('commandPalette.footer.back')}
             </button>
           )}
           <svg
             aria-hidden="true"
-            className="h-4 w-4 flex-shrink-0 text-zinc-400"
+            className="h-4 w-4 flex-shrink-0 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -534,18 +658,24 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
           <input
             aria-label={
               inSubMenu
-                ? (SUBMENU_PLACEHOLDERS[subMenu.type as keyof typeof SUBMENU_PLACEHOLDERS] ??
-                  'Search')
-                : 'Search issues and commands'
+                ? t(
+                    SUBMENU_PLACEHOLDER_KEYS[
+                      subMenu.type as keyof typeof SUBMENU_PLACEHOLDER_KEYS
+                    ] ?? 'commandPalette.searchAriaLabel',
+                  )
+                : t('commandPalette.searchAriaLabel')
             }
             autoComplete="off"
-            className="flex-1 bg-transparent text-sm text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
+            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
             onChange={e => setQuery(e.target.value)}
             placeholder={
               inSubMenu
-                ? (SUBMENU_PLACEHOLDERS[subMenu.type as keyof typeof SUBMENU_PLACEHOLDERS] ??
-                  'Search…')
-                : 'Search issues, commands…'
+                ? t(
+                    SUBMENU_PLACEHOLDER_KEYS[
+                      subMenu.type as keyof typeof SUBMENU_PLACEHOLDER_KEYS
+                    ] ?? 'commandPalette.searchPlaceholder',
+                  )
+                : t('commandPalette.searchPlaceholder')
             }
             ref={inputRef}
             spellCheck={false}
@@ -566,6 +696,10 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
               activeIndex={activeIndex}
               onClose={onPaletteClose}
               onItemsChange={onSubItemsChange}
+              onNavigate={mode => {
+                setSubMenu(mode);
+                setActiveIndex(0);
+              }}
               subMenu={subMenu}
             />
           ) : (

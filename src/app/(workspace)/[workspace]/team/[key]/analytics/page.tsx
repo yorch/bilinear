@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { CycleVelocitySection } from '@/components/analytics/cycle-velocity-section';
 import { InsightsSection } from '@/components/analytics/insights-section';
+import { useFormatters } from '@/hooks/use-formatters';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -21,11 +23,6 @@ function weekStart(date: Date): Date {
   d.setDate(d.getDate() + diff);
   d.setHours(0, 0, 0, 0);
   return d;
-}
-
-/** Format a Date as "MMM D". */
-function fmtShort(date: Date): string {
-  return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
 }
 
 // ---------------------------------------------------------------------------
@@ -65,11 +62,16 @@ interface BarChartProps {
   unit?: string;
 }
 
-function BarChart({ data, maxValue, unit = '', emptyMessage = 'No data' }: BarChartProps) {
+function BarChart({ data, maxValue, unit = '', emptyMessage }: BarChartProps) {
+  const t = useTranslations();
   const max = maxValue ?? Math.max(...data.map(d => d.value), 1);
 
   if (data.length === 0 || data.every(d => d.value === 0)) {
-    return <p className="py-8 text-center text-sm text-zinc-400">{emptyMessage}</p>;
+    return (
+      <p className="py-8 text-center text-sm text-muted-foreground">
+        {emptyMessage ?? t('analytics.team.noData')}
+      </p>
+    );
   }
 
   return (
@@ -78,7 +80,7 @@ function BarChart({ data, maxValue, unit = '', emptyMessage = 'No data' }: BarCh
         const pct = max > 0 ? (item.value / max) * 100 : 0;
         return (
           <div className="flex flex-1 flex-col items-center gap-1" key={item.label}>
-            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
+            <span className="text-xs font-medium text-muted-foreground">
               {item.value > 0 ? `${item.value}${unit}` : ''}
             </span>
             <div
@@ -89,7 +91,10 @@ function BarChart({ data, maxValue, unit = '', emptyMessage = 'No data' }: BarCh
                 minHeight: item.value > 0 ? '4px' : '0',
               }}
             />
-            <span className="max-w-full truncate text-[10px] text-zinc-400" title={item.label}>
+            <span
+              className="max-w-full truncate text-[10px] text-muted-foreground"
+              title={item.label}
+            >
               {item.label}
             </span>
           </div>
@@ -114,11 +119,16 @@ interface HBarChartProps {
   maxValue?: number;
 }
 
-function HBarChart({ data, maxValue, emptyMessage = 'No data' }: HBarChartProps) {
+function HBarChart({ data, maxValue, emptyMessage }: HBarChartProps) {
+  const t = useTranslations();
   const max = maxValue ?? Math.max(...data.map(d => d.value), 1);
 
   if (data.length === 0) {
-    return <p className="py-8 text-center text-sm text-zinc-400">{emptyMessage}</p>;
+    return (
+      <p className="py-8 text-center text-sm text-muted-foreground">
+        {emptyMessage ?? t('analytics.team.noData')}
+      </p>
+    );
   }
 
   return (
@@ -127,10 +137,13 @@ function HBarChart({ data, maxValue, emptyMessage = 'No data' }: HBarChartProps)
         const pct = max > 0 ? (item.value / max) * 100 : 0;
         return (
           <div className="flex items-center gap-2" key={item.label}>
-            <span className="w-28 shrink-0 truncate text-xs text-zinc-500" title={item.label}>
+            <span
+              className="w-28 shrink-0 truncate text-xs text-muted-foreground"
+              title={item.label}
+            >
               {item.label}
             </span>
-            <div className="flex-1 rounded bg-zinc-100 dark:bg-zinc-800">
+            <div className="flex-1 rounded bg-muted">
               <div
                 className="h-5 rounded transition-all"
                 style={{
@@ -139,7 +152,7 @@ function HBarChart({ data, maxValue, emptyMessage = 'No data' }: HBarChartProps)
                 }}
               />
             </div>
-            <span className="w-8 shrink-0 text-right text-xs font-medium text-zinc-600 dark:text-zinc-300">
+            <span className="w-8 shrink-0 text-right text-xs font-medium text-muted-foreground">
               {item.value}
             </span>
           </div>
@@ -161,10 +174,10 @@ interface StatCardProps {
 
 function StatCard({ label, value, sub }: StatCardProps) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-zinc-400">{sub}</p>}
+    <div className="rounded-lg border border-border bg-card p-4">
+      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
+      {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
     </div>
   );
 }
@@ -175,8 +188,8 @@ function StatCard({ label, value, sub }: StatCardProps) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-      <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">{title}</h3>
+    <div className="rounded-lg border border-border bg-card p-5">
+      <h3 className="mb-4 text-sm font-semibold text-foreground">{title}</h3>
       {children}
     </div>
   );
@@ -187,6 +200,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 // ---------------------------------------------------------------------------
 
 const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
+  const t = useTranslations();
+  const { formatDate } = useFormatters();
   const { key: teamKey } = useParams<{ workspace: string; key: string }>();
   const { issueStore, teamStore, workflowStateStore, userStore, syncStore } = useStore();
 
@@ -325,10 +340,10 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
 
     return weeks.map(w => ({
       color: 'var(--chart-primary)',
-      label: fmtShort(w.start),
+      label: formatDate(w.start, { day: 'numeric', month: 'short' }),
       value: w.count,
     }));
-  }, [issues, preset]);
+  }, [issues, preset, formatDate]);
 
   const avgVelocity = useMemo(() => {
     const nonZero = velocityData.filter(w => w.value > 0);
@@ -364,11 +379,15 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
       .sort((a, b) => b.value - a.value);
 
     if (unassigned > 0) {
-      rows.push({ color: 'var(--chart-muted)', label: 'Unassigned', value: unassigned });
+      rows.push({
+        color: 'var(--chart-muted)',
+        label: t('analytics.team.unassigned'),
+        value: unassigned,
+      });
     }
 
     return rows;
-  }, [issues, users, completedStateIds, canceledStateIds]);
+  }, [issues, users, completedStateIds, canceledStateIds, t]);
 
   // ── Cycle time (avg days from started → completed) ─────────────────────────
 
@@ -417,16 +436,16 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Loading...
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        {t('analytics.team.loading')}
       </div>
     );
   }
 
   if (!team) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Team not found.
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        {t('analytics.team.teamNotFound')}
       </div>
     );
   }
@@ -434,29 +453,31 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       {/* Page header */}
-      <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
+      <div className="border-b border-border px-6 py-4">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Analytics</h1>
-            <p className="mt-0.5 text-xs text-zinc-400">
+            <h1 className="text-base font-semibold text-foreground">{t('analytics.team.title')}</h1>
+            <p className="mt-0.5 text-xs text-muted-foreground">
               {team.displayName || team.name}
-              {preset !== 'all' ? ` · last ${preset}` : ' · all time'}
+              {preset !== 'all'
+                ? ` · ${t('analytics.team.lastPreset', { preset })}`
+                : ` · ${t('analytics.team.allTime')}`}
             </p>
           </div>
-          <div className="flex shrink-0 rounded-md border border-zinc-200 p-0.5 dark:border-zinc-800">
+          <div className="flex shrink-0 rounded-md border border-border p-0.5">
             {(['30d', '90d', '180d', 'all'] as const).map(p => (
               <button
                 className={cn(
                   'rounded px-2.5 py-1 text-xs',
                   preset === p
-                    ? 'bg-zinc-100 font-medium text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
-                    : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100',
+                    ? 'bg-muted font-medium text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
                 key={p}
                 onClick={() => setPreset(p)}
                 type="button"
               >
-                {p === 'all' ? 'All' : p}
+                {p === 'all' ? t('analytics.team.rangeAll') : p}
               </button>
             ))}
           </div>
@@ -467,23 +488,30 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
         {/* Summary stats row */}
         <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard
-            label="Total issues"
-            sub={preset !== 'all' ? `last ${preset}` : 'all time'}
+            label={t('analytics.team.totalIssues')}
+            sub={
+              preset !== 'all'
+                ? t('analytics.team.lastPreset', { preset })
+                : t('analytics.team.allTime')
+            }
             value={rangeIssues.length}
           />
           <StatCard
-            label="Completion rate"
-            sub={`${completedCount} of ${rangeIssues.length} closed`}
+            label={t('analytics.team.completionRate')}
+            sub={t('analytics.team.closedOfTotal', {
+              completed: completedCount,
+              total: rangeIssues.length,
+            })}
             value={`${completionRate}%`}
           />
           <StatCard
-            label="Avg velocity"
-            sub="over active weeks"
+            label={t('analytics.team.avgVelocity')}
+            sub={t('analytics.team.overActiveWeeks')}
             value={avgVelocity === 0 ? '—' : `${avgVelocity}/wk`}
           />
           <StatCard
-            label="Avg cycle time"
-            sub="started → completed"
+            label={t('analytics.team.avgCycleTime')}
+            sub={t('analytics.team.startedToCompleted')}
             value={avgCycleTimeDays !== null ? `${avgCycleTimeDays}d` : '—'}
           />
         </div>
@@ -491,24 +519,29 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
         {/* Issue status breakdown */}
         <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            { color: 'text-zinc-400', label: 'Open', value: openCount },
+            {
+              color: 'text-muted-foreground',
+              label: t('analytics.team.statusOpen'),
+              value: openCount,
+            },
             {
               color: 'text-blue-500',
-              label: 'In progress',
+              label: t('analytics.team.statusInProgress'),
               value: inProgressCount,
             },
             {
               color: 'text-green-500',
-              label: 'Completed',
+              label: t('analytics.team.statusCompleted'),
               value: completedCount,
             },
-            { color: 'text-zinc-400', label: 'Canceled', value: canceledCount },
+            {
+              color: 'text-muted-foreground',
+              label: t('analytics.team.statusCanceled'),
+              value: canceledCount,
+            },
           ].map(item => (
-            <div
-              className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
-              key={item.label}
-            >
-              <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
+            <div className="rounded-lg border border-border bg-card p-4" key={item.label}>
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 {item.label}
               </p>
               <p className={cn('mt-1 text-2xl font-semibold', item.color)}>{item.value}</p>
@@ -518,22 +551,25 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
 
         {/* Charts grid */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-          <Section title="Issues by state">
-            <BarChart data={byStateData} emptyMessage="No issues yet" />
+          <Section title={t('analytics.team.issuesByState')}>
+            <BarChart data={byStateData} emptyMessage={t('analytics.team.noIssuesYet')} />
           </Section>
 
-          <Section title="Velocity (issues completed per week)">
-            <BarChart data={velocityData} emptyMessage="No completed issues yet" />
+          <Section title={t('analytics.team.velocityPerWeek')}>
+            <BarChart data={velocityData} emptyMessage={t('analytics.team.noCompletedIssuesYet')} />
           </Section>
 
-          <Section title="Assignee workload (open issues)">
-            <HBarChart data={workloadData} emptyMessage="No open issues assigned" />
+          <Section title={t('analytics.team.assigneeWorkload')}>
+            <HBarChart
+              data={workloadData}
+              emptyMessage={t('analytics.team.noOpenIssuesAssigned')}
+            />
           </Section>
 
-          <Section title="Issue breakdown">
+          <Section title={t('analytics.team.issueBreakdown')}>
             <div className="space-y-3">
               {byStateData.length === 0 ? (
-                <p className="text-sm text-zinc-400">No issues yet</p>
+                <p className="text-sm text-muted-foreground">{t('analytics.team.noIssuesYet')}</p>
               ) : (
                 byStateData.map(item => {
                   const pct =
@@ -543,18 +579,18 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
                   return (
                     <div className="flex flex-col gap-1" key={item.label}>
                       <div className="flex items-center justify-between text-xs">
-                        <span className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-300">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
                           <span
                             className="h-2.5 w-2.5 rounded-full"
                             style={{ backgroundColor: item.color }}
                           />
                           {item.label}
                         </span>
-                        <span className="font-medium text-zinc-500">
+                        <span className="font-medium text-muted-foreground">
                           {item.value} ({pct}%)
                         </span>
                       </div>
-                      <div className="h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800">
+                      <div className="h-1.5 w-full rounded-full bg-muted">
                         <div
                           className="h-1.5 rounded-full transition-all"
                           style={{
@@ -583,51 +619,55 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
         {/* Team Health */}
         {teamHealth && (
           <div className="mt-5">
-            <h2 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-200">
-              Team Health
+            <h2 className="mb-3 text-sm font-semibold text-foreground">
+              {t('analytics.team.teamHealth')}
             </h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-              <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-                <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
-                  Open issues
+              <div className="rounded-lg border border-border bg-card p-4">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {t('analytics.team.openIssues')}
                 </p>
-                <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+                <p className="mt-1 text-2xl font-semibold text-foreground">
                   {teamHealth.openCount}
                 </p>
               </div>
               <div className="rounded-lg border border-red-100 bg-red-50 p-4 dark:border-red-900/40 dark:bg-red-950/30">
-                <p className="text-xs font-medium uppercase tracking-wider text-red-400">Overdue</p>
+                <p className="text-xs font-medium uppercase tracking-wider text-red-400">
+                  {t('analytics.team.overdue')}
+                </p>
                 <p className="mt-1 text-2xl font-semibold text-red-600 dark:text-red-400">
                   {teamHealth.overdueCount}
                 </p>
               </div>
-              <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-                <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
-                  Unestimated
+              <div className="rounded-lg border border-border bg-card p-4">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {t('analytics.team.unestimated')}
                 </p>
-                <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+                <p className="mt-1 text-2xl font-semibold text-foreground">
                   {teamHealth.unestimatedCount}
                 </p>
-                <p className="mt-0.5 text-xs text-zinc-400">
-                  {teamHealth.unestimatedPct.toFixed(0)}% of open
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {t('analytics.team.pctOfOpen', { pct: teamHealth.unestimatedPct.toFixed(0) })}
                 </p>
               </div>
-              <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-                <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
-                  Oldest open
+              <div className="rounded-lg border border-border bg-card p-4">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {t('analytics.team.oldestOpen')}
                 </p>
-                <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+                <p className="mt-1 text-2xl font-semibold text-foreground">
                   {teamHealth.oldestOpenAgeDays.toFixed(0)}d
                 </p>
               </div>
-              <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-                <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
-                  P75 age
+              <div className="rounded-lg border border-border bg-card p-4">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {t('analytics.team.p75Age')}
                 </p>
-                <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+                <p className="mt-1 text-2xl font-semibold text-foreground">
                   {teamHealth.p75AgeDays.toFixed(0)}d
                 </p>
-                <p className="mt-0.5 text-xs text-zinc-400">75th percentile</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {t('analytics.team.percentile75')}
+                </p>
               </div>
             </div>
           </div>

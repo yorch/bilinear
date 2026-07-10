@@ -20,6 +20,44 @@ export const GOOGLE_AUTH_START_QUERY = `
   }
 `;
 
+export const GOOGLE_AUTH_EXCHANGE_MUTATION = `
+  mutation GoogleAuthExchange($code: String!, $state: String!) {
+    googleAuthExchange(code: $code, state: $state) {
+      success
+      accessToken
+      refreshToken
+      expiresIn
+      user {
+        id
+        displayName
+        email
+      }
+    }
+  }
+`;
+
+export const GITHUB_AUTH_START_QUERY = `
+  query GithubAuthStart {
+    githubAuthStart { url state }
+  }
+`;
+
+export const GITHUB_AUTH_EXCHANGE_MUTATION = `
+  mutation GithubAuthExchange($code: String!, $state: String!) {
+    githubAuthExchange(code: $code, state: $state) {
+      success
+      accessToken
+      refreshToken
+      expiresIn
+      user {
+        id
+        displayName
+        email
+      }
+    }
+  }
+`;
+
 export const EMAIL_VERIFY_MUTATION = `
   mutation EmailVerify($input: EmailVerifyInput!) {
     emailVerify(input: $input) {
@@ -211,6 +249,15 @@ export const ISSUES_BULK_UPDATE_MUTATION = `
 export const ISSUE_ARCHIVE_MUTATION = `
   mutation IssueArchive($id: ID!) {
     issueArchive(id: $id) {
+      success
+      lastSyncId
+    }
+  }
+`;
+
+export const ISSUE_UNARCHIVE_MUTATION = `
+  mutation IssueUnarchive($id: ID!) {
+    issueUnarchive(id: $id) {
       success
       lastSyncId
     }
@@ -480,6 +527,17 @@ export const INITIATIVE_UPDATE_EDIT_MUTATION = `
       initiativeUpdate {
         id body health editedAt createdAt user { id displayName }
       }
+    }
+  }
+`;
+
+// ── User preferences ──────────────────────────────────────────────────────
+
+export const USER_UPDATE_LOCALE_MUTATION = `
+  mutation UserUpdateLocale($locale: String!) {
+    userUpdateLocale(locale: $locale) {
+      success
+      user { id locale }
     }
   }
 `;

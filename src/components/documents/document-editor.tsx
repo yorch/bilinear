@@ -4,6 +4,7 @@ import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MentionItem } from '@/components/editor/mention-list';
 import { TipTapEditor } from '@/components/editor/tiptap-editor.lazy';
+import { useTranslations } from '@/hooks/use-translations';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
 
@@ -15,11 +16,12 @@ export const DocumentEditor = observer(function DocumentEditor({
   documentId,
 }: DocumentEditorProps) {
   const { documentStore, userStore } = useStore();
+  const t = useTranslations();
   const txQueue = useMemo(() => new TransactionQueue(), []);
 
   const mentionUsers: MentionItem[] = userStore.all.map(u => ({ id: u.id, label: u.displayName }));
 
-  const currentUserName = userStore.currentUser?.displayName ?? 'User';
+  const currentUserName = userStore.currentUser?.displayName ?? t('documents.defaultUserName');
 
   const doc = documentStore.findById(documentId);
 
@@ -95,19 +97,19 @@ export const DocumentEditor = observer(function DocumentEditor({
 
   if (!doc) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Document not found.
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        {t('documents.documentNotFound')}
       </div>
     );
   }
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="border-b border-zinc-200 px-8 py-4 dark:border-zinc-800">
+      <div className="border-b border-border px-8 py-4">
         <input
-          className="w-full bg-transparent text-2xl font-bold text-zinc-900 placeholder-zinc-300 outline-none dark:text-zinc-100 dark:placeholder-zinc-600"
+          className="w-full bg-transparent text-2xl font-bold text-foreground placeholder-foreground-faint outline-none"
           onChange={handleTitleChange}
-          placeholder="Untitled"
+          placeholder={t('documents.untitled')}
           type="text"
           value={localTitle}
         />
@@ -119,7 +121,7 @@ export const DocumentEditor = observer(function DocumentEditor({
           content={doc.content ?? ''}
           mentionUsers={mentionUsers}
           onChange={handleContentChange}
-          placeholder="Start writing..."
+          placeholder={t('documents.startWriting')}
           showToolbar
         />
       </div>

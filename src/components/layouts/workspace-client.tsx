@@ -4,10 +4,13 @@ import { observer } from 'mobx-react-lite';
 import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
+import { GlobalCreateIssueModal } from '@/components/issues/global-create-issue-modal';
+import { ConnectionToasts } from '@/components/layouts/connection-toasts';
 import { ShortcutHelpModal } from '@/components/layouts/shortcut-help-modal';
 import { CreateTeamModal } from '@/components/teams/create-team-modal';
-import { useHotkeys } from '@/hooks/use-hotkeys';
+import { useChord, useHotkeys } from '@/hooks/use-hotkeys';
 import { useRecentItems } from '@/hooks/use-recent-items';
+import { useTranslations } from '@/hooks/use-translations';
 import type { DBTeam, DBWorkflowState } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { TEAM_CREATE_MUTATION } from '@/lib/graphql-queries';
@@ -33,6 +36,7 @@ export const WorkspaceClient = observer(function WorkspaceClient({
   children: React.ReactNode;
 }) {
   const { uiStore, teamStore, workflowStateStore } = useStore();
+  const t = useTranslations();
   const params = useParams<{ workspace: string }>();
   const workspaceKey = params.workspace;
   const { items: recentItems } = useRecentItems(workspaceKey);
@@ -45,11 +49,17 @@ export const WorkspaceClient = observer(function WorkspaceClient({
   useHotkeys(['meta+b', 'ctrl+b'], () => uiStore.toggleSidebarCollapsed(), {}, [uiStore]);
   useHotkeys('?', () => setShortcutHelpOpen(open => !open), {}, []);
 
+  // Global shortcuts advertised in the shortcut-help modal — registered here
+  // so they work on every workspace page, not just the team issues page.
+  useHotkeys('c', () => uiStore.openCreateIssueModal(), {}, [uiStore]);
+  useChord('g', 'i', () => router.push(`/${workspaceKey}/my-issues`), [workspaceKey]);
+  useChord('g', 'n', () => router.push(`/${workspaceKey}/inbox`), [workspaceKey]);
+
   const handleCreateTeam = useCallback(
     async (input: { name: string; key: string; description?: string; private: boolean }) => {
       const result = await gql(TEAM_CREATE_MUTATION, { input });
       if (result.errors?.length) {
-        throw new Error(gqlError(result, 'Failed to create team'));
+        throw new Error(gqlError(result, t('teams.failedToCreate')));
       }
       const payload = result.data?.teamCreate as {
         team?: DBTeam & { states?: DBWorkflowState[] };
@@ -68,13 +78,15 @@ export const WorkspaceClient = observer(function WorkspaceClient({
         }
       }
     },
-    [teamStore, workflowStateStore, workspaceKey, router],
+    [teamStore, workflowStateStore, workspaceKey, router, t],
   );
 
   return (
     <>
       {children}
       {uiStore.commandPaletteOpen && <CommandPalette recentItems={recentItems} />}
+      <GlobalCreateIssueModal />
+      <ConnectionToasts />
       <CreateTeamModal
         onClose={() => uiStore.closeCreateTeamModal()}
         onSubmit={handleCreateTeam}

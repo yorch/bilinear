@@ -1,3 +1,6 @@
+import { useFormatters } from '@/hooks/use-formatters';
+import { useTranslations } from '@/hooks/use-translations';
+
 interface BurndownPoint {
   completed: number;
   date: string;
@@ -10,11 +13,12 @@ interface BurndownChartProps {
 }
 
 export function BurndownChart({ data }: BurndownChartProps) {
+  const t = useTranslations();
+  const { formatDate } = useFormatters();
+
   if (data.length === 0) {
     return (
-      <p className="py-6 text-center text-xs text-zinc-400">
-        Burndown data will appear once the cycle starts.
-      </p>
+      <p className="py-6 text-center text-xs text-muted-foreground">{t('cycles.burndown.empty')}</p>
     );
   }
 
@@ -53,14 +57,17 @@ export function BurndownChart({ data }: BurndownChartProps) {
   const xLabels = data
     .map((d, i) => ({
       i,
-      label: new Date(d.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }),
+      label: formatDate(d.date, {
+        day: 'numeric',
+        month: 'short',
+      }),
     }))
     .filter((_, i) => i % 3 === 0 || i === n - 1);
 
   return (
     <div className="w-full overflow-x-auto">
       <svg
-        aria-label="Burndown chart"
+        aria-label={t('cycles.burndown.ariaLabel')}
         className="w-full"
         style={{ height: 300 }}
         viewBox={`0 0 ${width} ${height}`}
@@ -80,7 +87,7 @@ export function BurndownChart({ data }: BurndownChartProps) {
                 y2={y}
               />
               <text
-                className="fill-zinc-400 dark:fill-zinc-500"
+                className="fill-muted-foreground"
                 fontSize={10}
                 textAnchor="end"
                 x={paddingLeft - 4}
@@ -95,7 +102,7 @@ export function BurndownChart({ data }: BurndownChartProps) {
         {/* X-axis labels */}
         {xLabels.map(({ i, label }) => (
           <text
-            className="fill-zinc-400 dark:fill-zinc-500"
+            className="fill-muted-foreground"
             fontSize={9}
             key={i}
             textAnchor="middle"
@@ -107,15 +114,21 @@ export function BurndownChart({ data }: BurndownChartProps) {
         ))}
 
         {/* Ideal burndown line (gray dashed) */}
-        <path d={idealPath} fill="none" stroke="#a1a1aa" strokeDasharray="4 3" strokeWidth={1.5} />
+        <path
+          d={idealPath}
+          fill="none"
+          stroke="var(--chart-grid)"
+          strokeDasharray="4 3"
+          strokeWidth={1.5}
+        />
 
         {/* Remaining line (indigo) */}
-        <path d={remainingPath} fill="none" stroke="#6366f1" strokeWidth={2} />
+        <path d={remainingPath} fill="none" stroke="var(--chart-ideal)" strokeWidth={2} />
 
         {/* Legend */}
         <g transform={`translate(${paddingLeft + 8}, ${paddingTop + 8})`}>
           <line
-            stroke="#a1a1aa"
+            stroke="var(--chart-grid)"
             strokeDasharray="4 3"
             strokeWidth={1.5}
             x1={0}
@@ -123,12 +136,12 @@ export function BurndownChart({ data }: BurndownChartProps) {
             y1={5}
             y2={5}
           />
-          <text className="fill-zinc-500 dark:fill-zinc-400" fontSize={9} x={20} y={9}>
-            Ideal
+          <text className="fill-muted-foreground" fontSize={9} x={20} y={9}>
+            {t('cycles.chart.ideal')}
           </text>
-          <line stroke="#6366f1" strokeWidth={2} x1={50} x2={66} y1={5} y2={5} />
-          <text className="fill-zinc-500 dark:fill-zinc-400" fontSize={9} x={70} y={9}>
-            Remaining
+          <line stroke="var(--chart-ideal)" strokeWidth={2} x1={50} x2={66} y1={5} y2={5} />
+          <text className="fill-muted-foreground" fontSize={9} x={70} y={9}>
+            {t('cycles.chart.remaining')}
           </text>
         </g>
       </svg>

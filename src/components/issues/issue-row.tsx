@@ -1,5 +1,7 @@
 'use client';
 
+import { usePending } from '@/hooks/use-pending-ids';
+import { useTranslations } from '@/hooks/use-translations';
 import type { ColumnKey } from '@/hooks/use-visible-columns';
 import type { DBCustomFieldDefinition } from '@/lib/db';
 import { cn } from '@/lib/utils';
@@ -114,6 +116,8 @@ export function IssueRow({
   getCustomFieldValue,
   style,
 }: IssueRowProps) {
+  const t = useTranslations();
+  const pending = usePending(issue.id);
   const isBulkMode = onCheck !== undefined;
   // If no visibility function is provided, every built-in column renders
   // (callers that haven't adopted the column picker keep their current UX).
@@ -123,8 +127,8 @@ export function IssueRow({
     // biome-ignore lint/a11y/noStaticElementInteractions: presentational row container; interactive children (checkbox, button, selects) provide all a11y. onContextMenu is the only handler.
     <div
       className={cn(
-        'group flex items-center gap-2 border-b border-zinc-100 px-4 py-0 h-9 select-none hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900',
-        selected && 'bg-zinc-100 dark:bg-zinc-800',
+        'group flex items-center gap-2 border-b border-border px-4 py-0 h-9 select-none hover:bg-accent',
+        selected && 'bg-muted',
       )}
       data-selected={selected ? 'true' : undefined}
       data-testid="issue-row"
@@ -136,7 +140,9 @@ export function IssueRow({
         checked={isBulkMode ? (checked ?? false) : selected}
         className={cn(
           'h-3.5 w-3.5 flex-shrink-0 focus:opacity-100',
-          isBulkMode && checked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+          isBulkMode && checked
+            ? 'opacity-100'
+            : 'opacity-0 group-hover:opacity-100 max-md:opacity-100',
         )}
         onChange={
           isBulkMode ? e => onCheck(Boolean((e.nativeEvent as MouseEvent).shiftKey)) : onSelect
@@ -154,11 +160,23 @@ export function IssueRow({
       />
 
       {/* Identifier */}
-      <span className="w-16 flex-shrink-0 font-mono text-xs text-zinc-400">{issue.identifier}</span>
+      <span className="w-16 flex-shrink-0 font-mono text-xs text-muted-foreground">
+        {issue.identifier}
+      </span>
+
+      {/* Pending-write indicator — an unconfirmed optimistic write is in flight */}
+      {pending && (
+        <span
+          aria-label={t('issues.syncingRow')}
+          className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary"
+          role="status"
+          title={t('issues.syncingRow')}
+        />
+      )}
 
       {/* Title — clicking anywhere in this area opens the issue */}
       <button
-        className="flex-1 truncate cursor-pointer text-left text-sm text-zinc-900 dark:text-zinc-100"
+        className="flex-1 truncate cursor-pointer text-left text-sm text-foreground"
         onClick={onOpen}
         type="button"
       >
@@ -227,7 +245,7 @@ export function IssueRow({
         const raw = getCustomFieldValue?.(def.id);
         return (
           <span
-            className="max-w-[10rem] shrink-0 truncate text-xs text-zinc-500 dark:text-zinc-400"
+            className="max-w-[10rem] shrink-0 truncate text-xs text-muted-foreground"
             key={def.id}
             title={def.name}
           >

@@ -1,10 +1,16 @@
 'use client';
 
+import { observer } from 'mobx-react-lite';
 import { useEffect, useRef } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
+import { createClientLogger } from '@/lib/logger';
 import { SyncManager } from '@/lib/sync-manager';
+import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { WsClient } from '@/lib/ws-client';
 import { useStore } from './store-provider';
+
+const log = createClientLogger('SyncProvider');
 
 /**
  * Bootstraps data and maintains the WebSocket sync connection.
@@ -15,11 +21,36 @@ import { useStore } from './store-provider';
  * scoped to the WebSocket endpoint plus the resolved `{ userId, orgId }`.
  * The long-lived access token never leaves the cookie jar.
  */
-export function SyncProvider({ children }: { children: React.ReactNode }) {
+export const SyncProvider = observer(function SyncProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const store = useStore();
   const syncManagerRef = useRef<SyncManager | null>(null);
+  const t = useTranslations();
+  // Read here (not inside the effect) so retryBootstrap() — which bumps
+  // this counter — is what makes the effect below re-run.
+  const { retryNonce } = store.syncStore;
+
+  // Fallback surface for permanent mutation failures whose enqueue site has
+  // no onError (including transactions rehydrated after a reload, whose
+  // callbacks never survive). Without this they fail silently.
+  useEffect(() => {
+    TransactionQueue.setDefaultErrorHandler(err => {
+      toast.error(err.message || t('sync.changeFailed'));
+    });
+    return () => {
+      TransactionQueue.setDefaultErrorHandler(null);
+    };
+  }, [t]);
 
   useEffect(() => {
+    // retryNonce isn't read below — bumping it via retryBootstrap() is what
+    // re-runs this effect from scratch (must be referenced here; Biome
+    // strips unused effect deps).
+    void retryNonce;
+
     let cancelled = false;
     // Keep a local ref so cleanup can stop the manager even if the ref
     // assignment races with StrictMode's unmount/remount cycle.
@@ -70,7 +101,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     }
 
     init().catch(err => {
-      console.error('[SyncProvider] Init error:', err);
+      log.error('Init error', err);
     });
 
     return () => {
@@ -80,7 +111,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       (localManager ?? syncManagerRef.current)?.stop();
       localManager = null;
     };
-  }, [store]);
+  }, [store, retryNonce]);
 
   return <>{children}</>;
-}
+});

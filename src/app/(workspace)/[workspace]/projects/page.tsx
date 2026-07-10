@@ -7,6 +7,8 @@ import { useCallback, useState } from 'react';
 import { CreateProjectModal } from '@/components/projects/create-project-modal';
 import { ProjectListView } from '@/components/projects/project-list-view';
 import { ProjectRoadmapView } from '@/components/projects/project-roadmap-view';
+import { useDocumentTitle } from '@/hooks/use-document-title';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
@@ -31,6 +33,8 @@ const PROJECT_CREATE_MUTATION = `
 `;
 
 export default observer(function ProjectsPage() {
+  const t = useTranslations();
+  useDocumentTitle(t('nav.projects'));
   const { workspace } = useParams<{ workspace: string }>();
   const { uiStore } = useStore();
   const [layout, setLayout] = useState<ProjectsLayout>(() => {
@@ -61,55 +65,55 @@ export default observer(function ProjectsPage() {
       const res = await gql(PROJECT_CREATE_MUTATION, { input });
       if (res.errors?.length) {
         throw new Error(
-          (res.errors[0] as { message: string }).message ?? 'Failed to create project',
+          (res.errors[0] as { message: string }).message ?? t('projects.failedToCreate'),
         );
       }
-      toast.success('Project created');
+      toast.success(t('projects.projectCreated'));
     },
-    [],
+    [t],
   );
 
   return (
     <>
-      <div className="flex h-12 items-center gap-2 border-b border-zinc-200 px-4 dark:border-zinc-800">
-        <h1 className="flex-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Projects</h1>
-        <div className="flex rounded-md border border-zinc-200 p-0.5 dark:border-zinc-800">
+      <div className="flex h-12 items-center gap-2 border-b border-border px-4">
+        <h1 className="flex-1 text-sm font-semibold text-foreground">{t('projects.title')}</h1>
+        <div className="flex rounded-md border border-border p-0.5">
           <button
-            aria-label="List view"
+            aria-label={t('projects.listView')}
             className={cn(
               'flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors',
               layout === 'list'
-                ? 'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
-                : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100',
+                ? 'bg-muted text-foreground'
+                : 'text-muted-foreground hover:text-foreground',
             )}
             onClick={() => setLayoutPersisted('list')}
             type="button"
           >
             <LayoutList className="h-3.5 w-3.5" />
-            List
+            {t('projects.list')}
           </button>
           <button
-            aria-label="Roadmap view"
+            aria-label={t('projects.roadmapView')}
             className={cn(
               'flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors',
               layout === 'roadmap'
-                ? 'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
-                : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100',
+                ? 'bg-muted text-foreground'
+                : 'text-muted-foreground hover:text-foreground',
             )}
             onClick={() => setLayoutPersisted('roadmap')}
             type="button"
           >
             <MapIcon className="h-3.5 w-3.5" />
-            Roadmap
+            {t('projects.roadmap')}
           </button>
         </div>
         <button
-          className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-700"
+          className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-primary/90"
           onClick={() => uiStore.openCreateProjectModal()}
           type="button"
         >
           <Plus className="h-3.5 w-3.5" />
-          New Project
+          {t('projects.newProject')}
         </button>
       </div>
       {layout === 'list' ? (

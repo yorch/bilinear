@@ -4,7 +4,13 @@ import { Calendar, Plus, Target } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { PROJECT_HEALTH_CONFIG, PROJECT_STATUS_CONFIG } from '@/lib/project-constants';
+import { useTranslations } from '@/hooks/use-translations';
+import {
+  PROJECT_HEALTH_CONFIG,
+  PROJECT_HEALTH_LABEL_KEYS,
+  PROJECT_STATUS_CONFIG,
+  PROJECT_STATUS_LABEL_KEYS,
+} from '@/lib/project-constants';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -18,6 +24,7 @@ const COMPLETED_STATUSES = ['completed', 'canceled'];
 export const ProjectListView = observer(function ProjectListView({
   workspaceKey,
 }: ProjectListViewProps) {
+  const t = useTranslations();
   const { projectStore, uiStore } = useStore();
   const projects = projectStore.all;
 
@@ -37,37 +44,39 @@ export const ProjectListView = observer(function ProjectListView({
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {projects.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
-              <Target className="h-6 w-6 text-zinc-400" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+              <Target className="h-6 w-6 text-muted-foreground" />
             </div>
             <div>
-              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                No projects yet
-              </p>
-              <p className="mt-1 text-xs text-zinc-500">
-                Create a project to track work across teams.
+              <p className="text-sm font-medium text-foreground">{t('projects.noProjectsYet')}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('projects.createProjectPrompt')}
               </p>
             </div>
             <button
-              className="mt-2 flex items-center gap-1.5 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+              className="mt-2 flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
               onClick={() => uiStore.openCreateProjectModal()}
               type="button"
             >
               <Plus className="h-4 w-4" />
-              Create project
+              {t('projects.createProject')}
             </button>
           </div>
         ) : (
           <div className="flex flex-col gap-6">
             {activeProjects.length > 0 && (
-              <ProjectGroup projects={activeProjects} title="Active" workspaceKey={workspaceKey} />
+              <ProjectGroup
+                projects={activeProjects}
+                title={t('projects.active')}
+                workspaceKey={workspaceKey}
+              />
             )}
 
             {completedProjects.length > 0 && (
               <ProjectGroup
                 defaultCollapsed
                 projects={completedProjects}
-                title="Completed"
+                title={t('projects.completed')}
                 workspaceKey={workspaceKey}
               />
             )}
@@ -100,6 +109,7 @@ const ProjectGroup = observer(function ProjectGroup({
   workspaceKey: string;
   defaultCollapsed?: boolean;
 }) {
+  const t = useTranslations();
   const { issueStore, userStore } = useStore();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
@@ -123,7 +133,7 @@ const ProjectGroup = observer(function ProjectGroup({
   return (
     <div>
       <button
-        className="flex items-center gap-2 px-1 py-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+        className="flex items-center gap-2 px-1 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground-secondary"
         onClick={() => setCollapsed(!collapsed)}
         type="button"
       >
@@ -140,7 +150,7 @@ const ProjectGroup = observer(function ProjectGroup({
           />
         </svg>
         {title}
-        <span className="font-normal text-zinc-400">{projects.length}</span>
+        <span className="font-normal text-muted-foreground">{projects.length}</span>
       </button>
       {!collapsed && (
         <div className="mt-1 flex flex-col gap-1">
@@ -157,7 +167,7 @@ const ProjectGroup = observer(function ProjectGroup({
 
             return (
               <Link
-                className="group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 transition-colors hover:border-zinc-200 hover:bg-zinc-50 dark:hover:border-zinc-700 dark:hover:bg-zinc-900"
+                className="group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 transition-colors hover:border-border hover:bg-accent"
                 href={`/${workspaceKey}/project/${project.slugId}`}
                 key={project.id}
               >
@@ -172,15 +182,20 @@ const ProjectGroup = observer(function ProjectGroup({
                 </span>
 
                 <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                  <span className="truncate text-sm font-medium text-foreground">
                     {project.name}
                   </span>
                   <div className="mt-0.5 flex items-center gap-2">
-                    <span className={cn('text-xs', status.color)}>{status.label}</span>
+                    <span className={cn('text-xs', status.color)}>
+                      {t(
+                        PROJECT_STATUS_LABEL_KEYS[project.statusType] ??
+                          PROJECT_STATUS_LABEL_KEYS.planned,
+                      )}
+                    </span>
                     {health && (
-                      <span className="flex items-center gap-1 text-xs text-zinc-500">
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
                         <span className={cn('h-1.5 w-1.5 rounded-full', health.color)} />
-                        {health.label}
+                        {t(PROJECT_HEALTH_LABEL_KEYS[project.health ?? ''])}
                       </span>
                     )}
                   </div>
@@ -188,18 +203,18 @@ const ProjectGroup = observer(function ProjectGroup({
 
                 {totalIssues > 0 && (
                   <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-16 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                    <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
                       <div
-                        className="h-full rounded-full bg-indigo-500 transition-all"
+                        className="h-full rounded-full bg-brand transition-all"
                         style={{ width: `${progress}%` }}
                       />
                     </div>
-                    <span className="text-xs tabular-nums text-zinc-400">{progress}%</span>
+                    <span className="text-xs tabular-nums text-muted-foreground">{progress}%</span>
                   </div>
                 )}
 
                 {project.targetDate && (
-                  <span className="hidden items-center gap-1 text-xs text-zinc-400 sm:flex">
+                  <span className="hidden items-center gap-1 text-xs text-muted-foreground sm:flex">
                     <Calendar className="h-3 w-3" />
                     {project.targetDate}
                   </span>

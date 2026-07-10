@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { ORGANIZATION_CREATE_MUTATION } from '@/lib/graphql-queries';
 
@@ -22,6 +23,7 @@ function slugify(value: string): string {
 
 export function OnboardingForm() {
   const router = useRouter();
+  const t = useTranslations();
   const [name, setName] = useState('');
   const [urlKey, setUrlKey] = useState('');
   const [urlKeyManuallyEdited, setUrlKeyManuallyEdited] = useState(false);
@@ -72,7 +74,7 @@ export function OnboardingForm() {
 
       router.push(`/${organization.urlKey}`);
     } catch {
-      setError('Something went wrong. Please try again.');
+      setError(t('common.somethingWentWrong'));
     } finally {
       setLoading(false);
     }
@@ -81,29 +83,27 @@ export function OnboardingForm() {
   return (
     <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="org-name">
-          Organization name
+        <label className="text-sm font-medium text-foreground-secondary" htmlFor="org-name">
+          {t('auth.organizationName')}
         </label>
         <input
-          className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-600 dark:focus:ring-zinc-100"
+          className="rounded-md border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           id="org-name"
           onChange={e => handleNameChange(e.target.value)}
-          placeholder="Acme Inc."
+          placeholder={t('auth.organizationNamePlaceholder')}
           type="text"
           value={name}
         />
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="url-key">
-          Workspace URL
+        <label className="text-sm font-medium text-foreground-secondary" htmlFor="url-key">
+          {t('auth.workspaceUrl')}
         </label>
-        <div className="flex items-center rounded-md border border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-900 focus-within:ring-2 focus-within:ring-zinc-900 dark:focus-within:ring-zinc-100">
-          <span className="pl-3 text-sm text-zinc-400 dark:text-zinc-600 select-none">
-            issuetracker.app/
-          </span>
+        <div className="flex items-center rounded-md border border-border bg-card focus-within:ring-2 focus-within:ring-ring">
+          <span className="pl-3 text-sm text-muted-foreground select-none">issuetracker.app/</span>
           <input
-            className="flex-1 bg-transparent px-1 py-2 text-zinc-900 placeholder:text-zinc-400 focus:outline-none dark:text-zinc-50 dark:placeholder:text-zinc-600"
+            className="flex-1 bg-transparent px-1 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none"
             id="url-key"
             onChange={e => handleUrlKeyChange(e.target.value)}
             placeholder="acme"
@@ -112,9 +112,7 @@ export function OnboardingForm() {
           />
         </div>
         {urlKey.length > 0 && urlKey.length < 3 && (
-          <p className="text-xs text-amber-600 dark:text-amber-400">
-            Must be at least 3 characters
-          </p>
+          <p className="text-xs text-amber-600 dark:text-amber-400">{t('auth.urlKeyMinLength')}</p>
         )}
       </div>
 
@@ -125,7 +123,7 @@ export function OnboardingForm() {
         disabled={loading || !name.trim() || urlKey.length < 3}
         type="submit"
       >
-        {loading ? 'Creating workspace…' : 'Create workspace'}
+        {loading ? t('auth.creatingWorkspace') : t('auth.createWorkspaceButton')}
       </Button>
     </form>
   );

@@ -1,7 +1,11 @@
 'use client';
 
-import { Plus, X } from 'lucide-react';
+import { ChevronDown, Plus, X } from 'lucide-react';
 import { useState } from 'react';
+import { priorityLabelKey } from '@/components/properties/priority-icon';
+import { SearchableSelectPopover } from '@/components/ui/searchable-select-popover';
+import { SelectPopover } from '@/components/ui/select-popover';
+import { useTranslations } from '@/hooks/use-translations';
 import type { DBCustomFieldDefinition, DBWorkflowState } from '@/lib/db';
 import type {
   FilterComposition,
@@ -10,32 +14,37 @@ import type {
   FilterOperator,
   FilterSet,
 } from '@/lib/filter-engine';
-import { PRIORITY_OPTIONS } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser } from '@/types/issues';
 
 // ─── Field config ───────────────────────────────────────────────────────────
 
-const FILTER_FIELDS: { label: string; value: FilterField }[] = [
-  { label: 'Status', value: 'status' },
-  { label: 'Assignee', value: 'assignee' },
-  { label: 'Priority', value: 'priority' },
-  { label: 'Label', value: 'label' },
-  { label: 'Creator', value: 'creator' },
-  { label: 'Project', value: 'project' },
-  { label: 'Cycle', value: 'cycle' },
-  { label: 'Estimate', value: 'estimate' },
-  { label: 'Due date', value: 'dueDate' },
-];
+function useFilterFields(): { label: string; value: FilterField }[] {
+  const t = useTranslations();
+  return [
+    { label: t('issues.status'), value: 'status' },
+    { label: t('issues.assignee'), value: 'assignee' },
+    { label: t('issues.priority'), value: 'priority' },
+    { label: t('issues.label'), value: 'label' },
+    { label: t('issues.creator'), value: 'creator' },
+    { label: t('issues.project'), value: 'project' },
+    { label: t('issues.cycle'), value: 'cycle' },
+    { label: t('issues.estimate'), value: 'estimate' },
+    { label: t('issues.dueDate'), value: 'dueDate' },
+  ];
+}
 
-const OPERATORS: { label: string; value: FilterOperator }[] = [
-  { label: 'is', value: 'eq' },
-  { label: 'is not', value: 'neq' },
-  { label: 'is any of', value: 'in' },
-  { label: 'is none of', value: 'nin' },
-  { label: 'is set', value: 'is_set' },
-  { label: 'is not set', value: 'is_not_set' },
-];
+function useOperators(): { label: string; value: FilterOperator }[] {
+  const t = useTranslations();
+  return [
+    { label: t('issues.operatorIs'), value: 'eq' },
+    { label: t('issues.operatorIsNot'), value: 'neq' },
+    { label: t('issues.operatorIsAnyOf'), value: 'in' },
+    { label: t('issues.operatorIsNoneOf'), value: 'nin' },
+    { label: t('issues.operatorIsSet'), value: 'is_set' },
+    { label: t('issues.operatorIsNotSet'), value: 'is_not_set' },
+  ];
+}
 
 // ─── Filter Pill ────────────────────────────────────────────────────────────
 
@@ -49,15 +58,18 @@ interface FilterPillProps {
 }
 
 function FilterPill({ condition, states, users, labels, customFields, onRemove }: FilterPillProps) {
+  const t = useTranslations();
+  const filterFields = useFilterFields();
+  const operators = useOperators();
   const customDef =
     condition.field === 'custom' && condition.customFieldId
       ? customFields?.find(d => d.id === condition.customFieldId)
       : undefined;
   const fieldLabel =
     customDef?.name ??
-    FILTER_FIELDS.find(f => f.value === condition.field)?.label ??
+    filterFields.find(f => f.value === condition.field)?.label ??
     condition.field;
-  const opLabel = OPERATORS.find(o => o.value === condition.operator)?.label ?? condition.operator;
+  const opLabel = operators.find(o => o.value === condition.operator)?.label ?? condition.operator;
 
   let valueLabel = '';
   if (condition.operator === 'is_set' || condition.operator === 'is_not_set') {
@@ -73,16 +85,15 @@ function FilterPill({ condition, states, users, labels, customFields, onRemove }
       valueLabel = labels.find(l => l.id === condition.value)?.name ?? String(condition.value);
     }
   } else if (condition.field === 'priority') {
-    valueLabel =
-      PRIORITY_OPTIONS.find(p => p.value === String(condition.value))?.label ??
-      String(condition.value);
+    const p = Number(condition.value);
+    valueLabel = t(priorityLabelKey(p));
   } else if (condition.field === 'custom' && customDef) {
     if (Array.isArray(condition.value)) {
       valueLabel = condition.value
         .map(v => customDef.options?.find(o => o.value === v)?.label ?? String(v))
         .join(', ');
     } else if (customDef.type === 'checkbox') {
-      valueLabel = condition.value ? 'true' : 'false';
+      valueLabel = condition.value ? t('issues.true') : t('issues.false');
     } else {
       valueLabel =
         customDef.options?.find(o => o.value === condition.value)?.label ??
@@ -93,13 +104,15 @@ function FilterPill({ condition, states, users, labels, customFields, onRemove }
   }
 
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-0.5 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs text-foreground-secondary">
       <span className="font-medium">{fieldLabel}</span>
-      <span className="text-zinc-400 dark:text-zinc-500">{opLabel}</span>
+      <span className="text-muted-foreground">{opLabel}</span>
       {valueLabel && <span>{valueLabel}</span>}
       <button
-        className="ml-0.5 text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+        aria-label={t('issues.removeFilter')}
+        className="ml-0.5 text-muted-foreground hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
         onClick={onRemove}
+        title={t('issues.removeFilter')}
         type="button"
       >
         <X className="h-3 w-3" />
@@ -136,6 +149,9 @@ function AddFilterForm({
   onAdd,
   onCancel,
 }: AddFilterFormProps) {
+  const t = useTranslations();
+  const filterFields = useFilterFields();
+  const operators = useOperators();
   const [fieldValue, setFieldValue] = useState<string>('status');
   const [operator, setOperator] = useState<FilterOperator>('eq');
   const [value, setValue] = useState<string>('');
@@ -147,7 +163,7 @@ function AddFilterForm({
   const field: FilterField = customFieldId ? 'custom' : (fieldValue as FilterField);
 
   const fieldOptions: FieldOption[] = [
-    ...FILTER_FIELDS.map(f => ({ label: f.label, value: f.value })),
+    ...filterFields.map(f => ({ label: f.label, value: f.value })),
     ...(customFields ?? []).map(d => ({
       label: d.name,
       value: `custom:${d.id}`,
@@ -164,8 +180,8 @@ function AddFilterForm({
       }
       if (customDef.type === 'checkbox') {
         return [
-          { label: 'True', value: 'true' },
-          { label: 'False', value: 'false' },
+          { label: t('issues.true'), value: 'true' },
+          { label: t('issues.false'), value: 'false' },
         ];
       }
       return [];
@@ -179,7 +195,10 @@ function AddFilterForm({
       case 'label':
         return labels.map(l => ({ label: l.name, value: l.id }));
       case 'priority':
-        return PRIORITY_OPTIONS;
+        return [0, 1, 2, 3, 4].map(p => ({
+          label: t(priorityLabelKey(p)),
+          value: String(p),
+        }));
       default:
         return [];
     }
@@ -188,60 +207,106 @@ function AddFilterForm({
   const needsValue = operator !== 'is_set' && operator !== 'is_not_set';
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white p-2 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-      <select
-        className="rounded border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-        onChange={e => {
-          setFieldValue(e.target.value);
-          setValue('');
-        }}
-        value={fieldValue}
+    <div className="flex items-center gap-2 rounded-lg border border-border bg-card p-2 shadow-lg">
+      <SelectPopover
+        triggerChildren={
+          <>
+            <span className="truncate">
+              {fieldOptions.find(f => f.value === fieldValue)?.label}
+            </span>
+            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+          </>
+        }
+        triggerClassName="gap-1 border border-border px-2 py-1 text-xs"
       >
-        {fieldOptions.map(f => (
-          <option key={f.value} value={f.value}>
-            {f.label}
-          </option>
-        ))}
-      </select>
+        {close => (
+          <div className="max-h-64 w-40 overflow-y-auto py-1">
+            {fieldOptions.map(f => (
+              <button
+                className={cn(
+                  'flex w-full items-center px-3 py-1.5 text-left text-xs hover:bg-accent',
+                  f.value === fieldValue && 'bg-accent/50',
+                )}
+                key={f.value}
+                onClick={() => {
+                  setFieldValue(f.value);
+                  setValue('');
+                  close();
+                }}
+                type="button"
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </SelectPopover>
 
-      <select
-        className="rounded border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-        onChange={e => setOperator(e.target.value as FilterOperator)}
-        value={operator}
+      <SelectPopover
+        triggerChildren={
+          <>
+            <span className="truncate">{operators.find(o => o.value === operator)?.label}</span>
+            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+          </>
+        }
+        triggerClassName="gap-1 border border-border px-2 py-1 text-xs"
       >
-        {OPERATORS.map(o => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+        {close => (
+          <div className="max-h-64 w-44 overflow-y-auto py-1">
+            {operators.map(o => (
+              <button
+                className={cn(
+                  'flex w-full items-center px-3 py-1.5 text-left text-xs hover:bg-accent',
+                  o.value === operator && 'bg-accent/50',
+                )}
+                key={o.value}
+                onClick={() => {
+                  setOperator(o.value);
+                  close();
+                }}
+                type="button"
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </SelectPopover>
 
       {needsValue &&
         (getValueOptions().length > 0 ? (
-          <select
-            className="rounded border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-            onChange={e => setValue(e.target.value)}
-            value={value}
-          >
-            <option value="">Select...</option>
-            {getValueOptions().map(opt => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+          <SearchableSelectPopover
+            emptyText={t('commandPalette.submenu.noOptions')}
+            getKey={opt => opt.value}
+            isSelected={opt => opt.value === value}
+            items={getValueOptions()}
+            matchesSearch={(opt, search) => opt.label.toLowerCase().includes(search.toLowerCase())}
+            onSelect={opt => setValue(opt.value)}
+            renderItem={opt => <span className="truncate text-left">{opt.label}</span>}
+            searchPlaceholder={t('common.search')}
+            triggerChildren={
+              <>
+                <span className="truncate">
+                  {getValueOptions().find(opt => opt.value === value)?.label ??
+                    t('issues.selectEllipsis')}
+                </span>
+                <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+              </>
+            }
+            triggerClassName="gap-1 border border-border px-2 py-1 text-xs"
+          />
         ) : (
           <input
-            className="w-28 rounded border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+            className="w-28 rounded border border-border px-2 py-1 text-xs dark:bg-muted text-foreground"
             onChange={e => setValue(e.target.value)}
-            placeholder="Value..."
+            placeholder={t('issues.valueEllipsis')}
             type="text"
             value={value}
           />
         ))}
 
       <button
-        className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+        className="rounded bg-primary px-2 py-1 text-xs font-medium text-white hover:bg-primary/90 disabled:opacity-50"
         disabled={needsValue && !value}
         onClick={() => {
           let resolvedValue: string | number | boolean = value;
@@ -261,14 +326,14 @@ function AddFilterForm({
         }}
         type="button"
       >
-        Add
+        {t('issues.add')}
       </button>
       <button
-        className="px-1 text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+        className="px-1 text-xs text-muted-foreground hover:text-foreground-secondary"
         onClick={onCancel}
         type="button"
       >
-        Cancel
+        {t('common.cancel')}
       </button>
     </div>
   );
@@ -293,6 +358,7 @@ export function FilterBuilder({
   labels,
   customFields,
 }: FilterBuilderProps) {
+  const t = useTranslations();
   const [showAddForm, setShowAddForm] = useState(false);
 
   const handleRemove = (index: number) => {
@@ -316,12 +382,12 @@ export function FilterBuilder({
   if (filterSet.conditions.length === 0 && !showAddForm) {
     return (
       <button
-        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         onClick={() => setShowAddForm(true)}
         type="button"
       >
         <Plus className="h-3 w-3" />
-        Filter
+        {t('issues.filter')}
       </button>
     );
   }
@@ -333,13 +399,13 @@ export function FilterBuilder({
           className={cn(
             'rounded-full px-2 py-0.5 text-xs font-medium transition-colors',
             filterSet.composition === 'and'
-              ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
+              ? 'bg-brand-subtle text-brand-subtle-foreground'
               : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
           )}
           onClick={toggleComposition}
           type="button"
         >
-          {filterSet.composition === 'and' ? 'AND' : 'OR'}
+          {filterSet.composition === 'and' ? t('issues.and') : t('issues.or')}
         </button>
       )}
 
@@ -366,7 +432,7 @@ export function FilterBuilder({
         />
       ) : (
         <button
-          className="flex items-center gap-0.5 text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+          className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground-secondary max-md:h-11 max-md:min-w-11 max-md:justify-center"
           onClick={() => setShowAddForm(true)}
           type="button"
         >
@@ -376,11 +442,11 @@ export function FilterBuilder({
 
       {filterSet.conditions.length > 0 && (
         <button
-          className="text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+          className="text-xs text-muted-foreground hover:text-foreground-secondary"
           onClick={() => onChange({ composition: 'and', conditions: [] })}
           type="button"
         >
-          Clear all
+          {t('issues.clearAll')}
         </button>
       )}
     </div>

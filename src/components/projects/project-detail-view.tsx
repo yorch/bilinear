@@ -8,8 +8,16 @@ import { ProgressSparkline } from '@/components/projects/progress-sparkline';
 import { ProjectMilestonesSection } from '@/components/projects/project-milestones-section';
 import { ProjectUpdatesSection } from '@/components/projects/project-updates-section';
 import { SimpleSelect } from '@/components/ui/select';
+import { useDocumentTitle } from '@/hooks/use-document-title';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
-import { PROJECT_HEALTH_OPTIONS, PROJECT_STATUS_CONFIG } from '@/lib/project-constants';
+import { buildIssueHref } from '@/lib/issue-nav';
+import {
+  PROJECT_HEALTH_LABEL_KEYS,
+  PROJECT_HEALTH_OPTIONS,
+  PROJECT_STATUS_CONFIG,
+  PROJECT_STATUS_LABEL_KEYS,
+} from '@/lib/project-constants';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -23,9 +31,12 @@ export const ProjectDetailView = observer(function ProjectDetailView({
   projectSlugId,
   workspaceKey,
 }: ProjectDetailViewProps) {
-  const { projectStore, issueStore, userStore, teamStore, workflowStateStore } = useStore();
+  const t = useTranslations();
+  const { projectStore, issueStore, userStore, workflowStateStore } = useStore();
   const viewerId = userStore.currentUserId ?? '';
   const project = projectStore.findBySlugId(projectSlugId);
+
+  useDocumentTitle(project?.name);
 
   // useMemo must be called before any early return (Rules of Hooks).
   // pool.size is the MobX reactive dependency per repo convention.
@@ -45,8 +56,8 @@ export const ProjectDetailView = observer(function ProjectDetailView({
 
   if (!project) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Project not found.
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        {t('projects.projectNotFound')}
       </div>
     );
   }
@@ -63,7 +74,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
         { id: project.id, input: { statusType: newStatus } },
       );
     } catch {
-      toast.error('Failed to update status');
+      toast.error(t('projects.failedToUpdateStatus'));
     }
   };
 
@@ -76,15 +87,15 @@ export const ProjectDetailView = observer(function ProjectDetailView({
         { id: project.id, input: { health: newHealth } },
       );
     } catch {
-      toast.error('Failed to update health');
+      toast.error(t('projects.failedToUpdateHealth'));
     }
   };
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex h-12 items-center gap-3 border-b border-zinc-200 px-4 dark:border-zinc-800">
+      <div className="flex h-12 items-center gap-3 border-b border-border px-4">
         <Link
-          className="flex h-6 w-6 items-center justify-center rounded text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:h-11 max-md:w-11"
           href={`/${workspaceKey}/projects`}
         >
           <ArrowLeft className="h-4 w-4" />
@@ -98,7 +109,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
         >
           {project.icon ?? ''}
         </span>
-        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{project.name}</h1>
+        <h1 className="text-sm font-semibold text-foreground">{project.name}</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -108,8 +119,8 @@ export const ProjectDetailView = observer(function ProjectDetailView({
               <CircleDot className={cn('h-4 w-4', status.color)} />
               <SimpleSelect
                 onChange={handleStatusChange}
-                options={Object.entries(PROJECT_STATUS_CONFIG).map(([value, cfg]) => ({
-                  label: cfg.label,
+                options={Object.entries(PROJECT_STATUS_CONFIG).map(([value]) => ({
+                  label: t(PROJECT_STATUS_LABEL_KEYS[value]),
                   value,
                 }))}
                 value={project.statusType}
@@ -117,7 +128,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
               />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-zinc-400">Health:</span>
+              <span className="text-xs text-muted-foreground">{t('projects.healthLabel')}</span>
               <div className="flex gap-1">
                 {PROJECT_HEALTH_OPTIONS.map(h => (
                   <button
@@ -125,73 +136,81 @@ export const ProjectDetailView = observer(function ProjectDetailView({
                       'rounded px-2 py-0.5 text-xs font-medium transition-colors',
                       project.health === h.value
                         ? `${h.color} text-white`
-                        : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700',
+                        : 'bg-muted text-muted-foreground hover:bg-accent',
                     )}
                     key={h.value}
                     onClick={() => handleHealthChange(h.value)}
                     type="button"
                   >
-                    {h.label}
+                    {t(PROJECT_HEALTH_LABEL_KEYS[h.value])}
                   </button>
                 ))}
               </div>
             </div>
             {lead && (
               <div className="flex items-center gap-1.5">
-                <User className="h-3.5 w-3.5 text-zinc-400" />
-                <span className="text-xs text-zinc-600 dark:text-zinc-400">{lead.displayName}</span>
+                <User className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">{lead.displayName}</span>
               </div>
             )}
             {(project.startDate || project.targetDate) && (
               <div className="flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5 text-zinc-400" />
-                <span className="text-xs text-zinc-500">
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">
                   {project.startDate ?? '?'} &rarr; {project.targetDate ?? '?'}
                 </span>
               </div>
             )}
           </div>
           {project.description && (
-            <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">{project.description}</p>
+            <p className="mt-4 text-sm text-muted-foreground">{project.description}</p>
           )}
-          <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+          <div className="mt-6 rounded-lg border border-border p-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Progress</span>
-              <span className="text-xs tabular-nums text-zinc-500">
-                {completedIssues.length} / {projectIssues.length} issues ({progress}%)
+              <span className="text-xs font-medium text-muted-foreground">
+                {t('projects.progress')}
+              </span>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {t('projects.issuesCountRatio', {
+                  completed: completedIssues.length,
+                  progress,
+                  total: projectIssues.length,
+                })}
               </span>
             </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full rounded-full bg-indigo-500 transition-all"
+                className="h-full rounded-full bg-brand transition-all"
                 style={{ width: `${progress}%` }}
               />
             </div>
             <div className="mt-3 flex items-center justify-between">
-              <span className="text-xs text-zinc-400">Trend</span>
+              <span className="text-xs text-muted-foreground">{t('projects.trend')}</span>
               <ProgressSparkline projectId={project.id} />
             </div>
           </div>
           <ProjectMilestonesSection projectId={project.id} />
           <div className="mt-6">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                Issues ({projectIssues.length})
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {t('projects.issuesCount', { count: projectIssues.length })}
               </h3>
             </div>
             <div className="mt-2 flex flex-col gap-0.5">
               {projectIssues.length === 0 ? (
-                <p className="py-8 text-center text-xs text-zinc-400">
-                  No issues assigned to this project yet. Use Shift+P on any issue to assign it.
+                <p className="py-8 text-center text-xs text-muted-foreground">
+                  {t('projects.noIssuesAssigned')}
                 </p>
               ) : (
                 projectIssues.map(issue => {
                   const state = workflowStateStore.findById(issue.stateId);
-                  const team = teamStore.findById(issue.teamId);
                   return (
                     <Link
-                      className="flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900"
-                      href={`/${workspaceKey}/team/${team?.key ?? ''}`}
+                      className="flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent"
+                      href={buildIssueHref(workspaceKey, issue.id, {
+                        label: project.name,
+                        path: `/${workspaceKey}/project/${project.slugId}`,
+                      })}
                       key={issue.id}
                     >
                       {state && (
@@ -200,12 +219,10 @@ export const ProjectDetailView = observer(function ProjectDetailView({
                           style={{ borderColor: state.color }}
                         />
                       )}
-                      <span className="shrink-0 text-xs font-mono text-zinc-400">
+                      <span className="shrink-0 text-xs font-mono text-muted-foreground">
                         {issue.identifier}
                       </span>
-                      <span className="min-w-0 flex-1 truncate text-zinc-900 dark:text-zinc-100">
-                        {issue.title}
-                      </span>
+                      <span className="min-w-0 flex-1 truncate text-foreground">{issue.title}</span>
                     </Link>
                   );
                 })

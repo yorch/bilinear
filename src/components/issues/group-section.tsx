@@ -104,7 +104,7 @@ export function GroupSection({
       {/* Group header */}
       <button
         aria-expanded={!collapsed}
-        className="flex w-full items-center gap-2 px-4 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+        className="flex w-full items-center gap-2 px-4 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent"
         data-testid="group-header"
         onClick={() => setCollapsed(c => !c)}
         type="button"
@@ -115,8 +115,8 @@ export function GroupSection({
           ▾
         </span>
         <StatusDot color={color} />
-        <span className="text-zinc-700 dark:text-zinc-300">{name}</span>
-        <span className="text-zinc-400">{count}</span>
+        <span className="text-foreground-secondary">{name}</span>
+        <span className="text-muted-foreground">{count}</span>
       </button>
 
       {/* Issues */}

@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useFormatters } from '@/hooks/use-formatters';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 
 /**
@@ -80,6 +82,8 @@ const AUDIT_ACTIONS = [
 ] as const;
 
 export default function AuditLogPage() {
+  const t = useTranslations();
+  const { formatDateTime } = useFormatters();
   const [entries, setEntries] = useState<AuditLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
@@ -174,9 +178,7 @@ export default function AuditLogPage() {
   if (forbidden) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          You need admin access to view audit logs.
-        </p>
+        <p className="text-sm text-muted-foreground">{t('settings.auditLog.forbidden')}</p>
       </div>
     );
   }
@@ -184,20 +186,18 @@ export default function AuditLogPage() {
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-8">
       <div className="mb-6">
-        <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Audit Log</h1>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          Security-relevant events for your organization. Only admins can view this log.
-        </p>
+        <h1 className="text-lg font-semibold text-foreground">{t('settings.auditLog.title')}</h1>
+        <p className="mt-1 text-xs text-muted-foreground">{t('settings.auditLog.description')}</p>
       </div>
 
       {/* Filters */}
       <div className="mb-4 flex flex-wrap gap-2">
         <select
-          className="rounded border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
+          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
           onChange={e => setActionFilter(e.target.value)}
           value={actionFilter}
         >
-          <option value="">All actions</option>
+          <option value="">{t('settings.auditLog.allActions')}</option>
           {AUDIT_ACTIONS.map(a => (
             <option key={a} value={a}>
               {a}
@@ -205,110 +205,111 @@ export default function AuditLogPage() {
           ))}
         </select>
         <input
-          className="rounded border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
+          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
           onChange={e => setUserIdFilter(e.target.value)}
-          placeholder="Filter by user ID"
+          placeholder={t('settings.auditLog.filterByUserId')}
           value={userIdFilter}
         />
         <button
-          className="rounded bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-700"
+          className="rounded bg-primary px-3 py-1 text-xs text-white hover:bg-primary/90"
           onClick={handleApplyFilters}
           type="button"
         >
-          Apply
+          {t('settings.auditLog.apply')}
         </button>
         {(appliedAction || appliedUserId) && (
           <button
-            className="rounded border border-zinc-300 px-3 py-1 text-xs hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            className="rounded border border-border px-3 py-1 text-xs hover:bg-muted"
             onClick={handleClearFilters}
             type="button"
           >
-            Clear
+            {t('settings.auditLog.clear')}
           </button>
         )}
       </div>
 
       {loading ? (
-        <div className="flex flex-1 items-center justify-center py-16 text-sm text-zinc-400">
-          Loading...
+        <div className="flex flex-1 items-center justify-center py-16 text-sm text-muted-foreground">
+          {t('common.loading')}
         </div>
       ) : entries.length === 0 ? (
-        <div className="rounded border border-dashed border-zinc-300 px-4 py-8 text-center text-sm text-zinc-400 dark:border-zinc-700">
-          No audit log entries found.
+        <div className="rounded border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+          {t('settings.auditLog.noEntriesFound')}
         </div>
       ) : (
-        <div className="overflow-hidden rounded border border-zinc-200 dark:border-zinc-800">
+        <div className="overflow-hidden rounded border border-border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
-                <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                  Action
+              <tr className="border-b border-border bg-muted">
+                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
+                  {t('settings.auditLog.columnAction')}
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                  User
+                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
+                  {t('settings.auditLog.columnUser')}
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                  Resource
+                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
+                  {t('settings.auditLog.columnResource')}
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                  IP
+                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
+                  {t('settings.auditLog.columnIp')}
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                  Timestamp
+                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
+                  {t('settings.auditLog.columnTimestamp')}
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            <tbody className="divide-y divide-border">
               {entries.map(entry => (
-                <tr
-                  className="bg-white hover:bg-zinc-50 dark:bg-zinc-950 dark:hover:bg-zinc-900"
-                  key={entry.id}
-                >
+                <tr className="bg-background hover:bg-muted" key={entry.id}>
                   <td className="px-4 py-2">
-                    <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground-secondary">
                       {entry.action}
                     </span>
                   </td>
                   <td className="px-4 py-2">
                     {entry.user ? (
                       <div>
-                        <p className="text-xs font-medium text-zinc-900 dark:text-zinc-100">
+                        <p className="text-xs font-medium text-foreground">
                           {entry.user.displayName}
                         </p>
-                        <p className="text-[10px] text-zinc-400">{entry.user.email}</p>
+                        <p className="text-[10px] text-muted-foreground">{entry.user.email}</p>
                       </div>
                     ) : entry.userId ? (
-                      <span className="font-mono text-xs text-zinc-400">{entry.userId}</span>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {entry.userId}
+                      </span>
                     ) : (
-                      <span className="text-xs text-zinc-300 dark:text-zinc-600">system</span>
+                      <span className="text-xs text-foreground-faint">
+                        {t('settings.auditLog.system')}
+                      </span>
                     )}
                   </td>
                   <td className="px-4 py-2">
                     {entry.resourceType ? (
-                      <span className="text-xs text-zinc-600 dark:text-zinc-300">
+                      <span className="text-xs text-muted-foreground">
                         {entry.resourceType}
                         {entry.resourceId ? (
-                          <span className="ml-1 font-mono text-zinc-400">
+                          <span className="ml-1 font-mono text-muted-foreground">
                             {entry.resourceId.slice(0, 8)}
                           </span>
                         ) : null}
                       </span>
                     ) : (
-                      <span className="text-xs text-zinc-300 dark:text-zinc-600">—</span>
+                      <span className="text-xs text-foreground-faint">—</span>
                     )}
                   </td>
                   <td className="px-4 py-2">
                     {entry.ipAddress ? (
-                      <span className="font-mono text-xs text-zinc-500 dark:text-zinc-400">
+                      <span className="font-mono text-xs text-muted-foreground">
                         {entry.ipAddress}
                       </span>
                     ) : (
-                      <span className="text-xs text-zinc-300 dark:text-zinc-600">—</span>
+                      <span className="text-xs text-foreground-faint">—</span>
                     )}
                   </td>
                   <td className="px-4 py-2">
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                      {new Date(entry.createdAt).toLocaleString(undefined, {
+                    <span className="text-xs text-muted-foreground">
+                      {formatDateTime(entry.createdAt, {
                         day: 'numeric',
                         hour: '2-digit',
                         minute: '2-digit',
@@ -327,12 +328,12 @@ export default function AuditLogPage() {
       {hasMore && (
         <div className="mt-4 flex justify-center">
           <button
-            className="rounded border border-zinc-300 px-4 py-1.5 text-xs hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            className="rounded border border-border px-4 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
             disabled={loadingMore}
             onClick={handleLoadMore}
             type="button"
           >
-            {loadingMore ? 'Loading...' : 'Load more'}
+            {loadingMore ? t('common.loading') : t('settings.auditLog.loadMore')}
           </button>
         </div>
       )}

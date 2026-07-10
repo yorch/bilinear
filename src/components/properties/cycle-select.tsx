@@ -4,6 +4,7 @@ import { RefreshCw, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { Badge } from '@/components/ui/badge';
 import { SearchableSelectPopover } from '@/components/ui/searchable-select-popover';
+import { useTranslations } from '@/hooks/use-translations';
 import { getCycleDisplayName, isActiveCycle } from '@/lib/cycle-utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -22,6 +23,7 @@ export const CycleSelect = observer(function CycleSelect({
   open,
   onClose,
 }: CycleSelectProps) {
+  const t = useTranslations();
   const { cycleStore } = useStore();
   const cycles = cycleStore.findByTeamId(teamId);
   const current = value ? cycleStore.findById(value) : null;
@@ -31,10 +33,10 @@ export const CycleSelect = observer(function CycleSelect({
       clearLabel={
         <>
           <X className="h-3 w-3" />
-          Remove from cycle
+          {t('properties.cycle.removeFromCycle')}
         </>
       }
-      emptyText="No cycles found"
+      emptyText={t('properties.cycle.noCyclesFound')}
       getKey={cycle => cycle.id}
       isSelected={cycle => cycle.id === value}
       items={cycles}
@@ -47,27 +49,27 @@ export const CycleSelect = observer(function CycleSelect({
       open={open}
       renderItem={cycle => (
         <>
-          <RefreshCw className="h-3 w-3 shrink-0 text-zinc-400" />
+          <RefreshCw className="h-3 w-3 shrink-0 text-muted-foreground" />
           <span className="min-w-0 flex-1 truncate text-left">{getCycleDisplayName(cycle)}</span>
           {isActiveCycle(cycle) && (
             <Badge className="shrink-0 bg-emerald-100 px-1.5 text-[10px] text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
-              Active
+              {t('properties.cycle.active')}
             </Badge>
           )}
         </>
       )}
-      searchPlaceholder="Search cycles..."
+      searchPlaceholder={t('properties.cycle.searchPlaceholder')}
       triggerChildren={
         <>
           <RefreshCw className="h-3 w-3" />
           {current ? (
             <span className="max-w-[100px] truncate">{getCycleDisplayName(current)}</span>
           ) : (
-            <span className="text-zinc-400">Cycle</span>
+            <span className="text-muted-foreground">{t('properties.cycle.cycle')}</span>
           )}
         </>
       }
-      triggerTitle="Set cycle (Q)"
+      triggerTitle={t('properties.cycle.setCycle')}
     />
   );
 });

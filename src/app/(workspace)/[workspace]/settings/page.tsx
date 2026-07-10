@@ -6,6 +6,11 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { LanguageToggle } from '@/components/language-toggle';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
+import { useFormatters } from '@/hooks/use-formatters';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
@@ -55,6 +60,7 @@ const VIEWER_QUERY = `
       id
       emailNotificationsEnabled
       calendarFeedUrl
+      isPlatformAdmin
     }
   }
 `;
@@ -118,31 +124,31 @@ interface ApiToken {
 
 // Expiry presets offered in the create form (days).
 const TOKEN_EXPIRY_OPTIONS = [
-  { days: 30, label: '30 days' },
-  { days: 90, label: '90 days' },
-  { days: 365, label: '1 year' },
-  { days: 730, label: '2 years' },
+  { days: 30, labelKey: 'settings.tokenExpiry.30' },
+  { days: 90, labelKey: 'settings.tokenExpiry.90' },
+  { days: 365, labelKey: 'settings.tokenExpiry.365' },
+  { days: 730, labelKey: 'settings.tokenExpiry.730' },
 ] as const;
 
 const ORG_ROLES = ['owner', 'admin', 'member', 'guest'] as const;
 type OrgRole = (typeof ORG_ROLES)[number];
 
-const ROLE_BADGES: Record<OrgRole, { label: string; cls: string }> = {
+const ROLE_BADGES: Record<OrgRole, { labelKey: string; cls: string }> = {
   admin: {
     cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-    label: 'Admin',
+    labelKey: 'settings.roles.admin',
   },
   guest: {
-    cls: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400',
-    label: 'Guest',
+    cls: 'bg-muted text-muted-foreground',
+    labelKey: 'settings.roles.guest',
   },
   member: {
-    cls: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
-    label: 'Member',
+    cls: 'bg-muted text-muted-foreground',
+    labelKey: 'settings.roles.member',
   },
   owner: {
-    cls: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
-    label: 'Owner',
+    cls: 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground',
+    labelKey: 'settings.roles.owner',
   },
 };
 
@@ -153,6 +159,8 @@ const ROLE_BADGES: Record<OrgRole, { label: string; cls: string }> = {
 const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const { workspace } = useParams<{ workspace: string }>();
   const { userStore, teamStore } = useStore();
+  const t = useTranslations();
+  const { formatDate } = useFormatters();
 
   const [org, setOrg] = useState<OrgInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -160,6 +168,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const [memberRoles, setMemberRoles] = useState<Record<string, OrgRole>>({});
   const [calendarFeedUrl, setCalendarFeedUrl] = useState<string | null>(null);
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [rotatingToken, setRotatingToken] = useState(false);
   const [apiTokens, setApiTokens] = useState<ApiToken[]>([]);
   const [newTokenLabel, setNewTokenLabel] = useState('');
@@ -168,6 +177,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const [creatingToken, setCreatingToken] = useState(false);
   const [newPlaintext, setNewPlaintext] = useState<string | null>(null);
   const [revokingTokenId, setRevokingTokenId] = useState<string | null>(null);
+  const [confirmingRevokeToken, setConfirmingRevokeToken] = useState<ApiToken | null>(null);
   const [savingAi, setSavingAi] = useState(false);
 
   async function toggleAi(enabled: boolean) {
@@ -176,10 +186,12 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
     setOrg(prev => (prev ? { ...prev, aiEnabled: enabled } : prev));
     try {
       await gql(AI_SETTINGS_UPDATE_MUTATION, { enabled });
-      toast.success(enabled ? 'AI features enabled' : 'AI features disabled');
+      toast.success(
+        enabled ? t('settings.workspace.aiEnabledToast') : t('settings.workspace.aiDisabledToast'),
+      );
     } catch {
       setOrg(prev => (prev ? { ...prev, aiEnabled: !enabled } : prev));
-      toast.error('Failed to update AI settings');
+      toast.error(t('settings.workspace.aiUpdateError'));
     } finally {
       setSavingAi(false);
     }
@@ -228,11 +240,18 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
     gql(VIEWER_QUERY)
       .then(result => {
         const data = result.data as
-          | { viewer?: { calendarFeedUrl?: string | null; emailNotificationsEnabled?: boolean } }
+          | {
+              viewer?: {
+                calendarFeedUrl?: string | null;
+                emailNotificationsEnabled?: boolean;
+                isPlatformAdmin?: boolean;
+              };
+            }
           | undefined;
         if (data?.viewer) {
           setCalendarFeedUrl(data.viewer.calendarFeedUrl ?? null);
           setEmailNotificationsEnabled(data.viewer.emailNotificationsEnabled ?? true);
+          setIsPlatformAdmin(data.viewer.isPlatformAdmin ?? false);
         }
       })
       .catch(() => {});
@@ -269,7 +288,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
         setNewTokenLabel('');
       }
     } catch {
-      toast.error('Failed to create API token');
+      toast.error(t('settings.workspace.apiTokenCreateError'));
     } finally {
       setCreatingToken(false);
     }
@@ -279,10 +298,10 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
     setRevokingTokenId(id);
     try {
       await gql(API_TOKEN_REVOKE_MUTATION, { id });
-      setApiTokens(prev => prev.filter(t => t.id !== id));
-      toast.success('Token revoked');
+      setApiTokens(prev => prev.filter(tok => tok.id !== id));
+      toast.success(t('settings.workspace.tokenRevoked'));
     } catch {
-      toast.error('Failed to revoke token');
+      toast.error(t('settings.workspace.tokenRevokeError'));
     } finally {
       setRevokingTokenId(null);
     }
@@ -299,9 +318,9 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
             | undefined
         )?.userCalendarFeedTokenRotate?.user?.calendarFeedUrl ?? null;
       setCalendarFeedUrl(url);
-      toast.success('Calendar feed URL rotated');
+      toast.success(t('settings.workspace.calendarUrlRotated'));
     } catch {
-      toast.error('Failed to rotate calendar URL');
+      toast.error(t('settings.workspace.calendarUrlRotateError'));
     } finally {
       setRotatingToken(false);
     }
@@ -313,7 +332,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
       await gql(UPDATE_NOTIFICATION_PREFS_MUTATION, { emailNotificationsEnabled: enabled });
     } catch {
       setEmailNotificationsEnabled(!enabled);
-      toast.error('Failed to update notification preferences');
+      toast.error(t('settings.workspace.notificationPrefsError'));
     }
   }
 
@@ -338,9 +357,9 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
     try {
       await gql(UPDATE_ORG_MEMBER_ROLE_MUTATION, { role, userId });
       setMemberRoles(prev => ({ ...prev, [userId]: role }));
-      toast.success('Member role updated');
+      toast.success(t('settings.workspace.memberRoleUpdated'));
     } catch {
-      toast.error('Failed to update member role');
+      toast.error(t('settings.workspace.memberRoleUpdateError'));
     } finally {
       setUpdatingRole(null);
     }
@@ -348,55 +367,51 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <div className="flex items-center border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
-        <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          Workspace Settings
-        </h1>
+      <div className="flex items-center border-b border-border px-6 py-3">
+        <h1 className="text-sm font-semibold text-foreground">{t('settings.workspace.title')}</h1>
       </div>
 
       <div className="mx-auto w-full max-w-2xl px-6 py-8 flex flex-col gap-8">
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            Organization
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('settings.workspace.organization')}
           </h2>
-          <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
+          <div className="rounded-lg border border-border bg-card p-5">
             {loading ? (
               <div className="flex flex-col gap-4 animate-pulse">
-                <div className="h-4 w-48 rounded bg-zinc-200 dark:bg-zinc-700" />
-                <div className="h-4 w-32 rounded bg-zinc-200 dark:bg-zinc-700" />
+                <div className="h-4 w-48 rounded bg-muted" />
+                <div className="h-4 w-32 rounded bg-muted" />
               </div>
             ) : org ? (
               <dl className="flex flex-col gap-4">
                 <div className="grid grid-cols-3 gap-4">
-                  <dt className="text-xs font-medium text-zinc-500 dark:text-zinc-400 pt-0.5">
-                    Name
+                  <dt className="text-xs font-medium text-muted-foreground pt-0.5">
+                    {t('settings.workspace.name')}
                   </dt>
-                  <dd className="col-span-2 text-sm text-zinc-900 dark:text-zinc-100">
-                    {org.name}
-                  </dd>
+                  <dd className="col-span-2 text-sm text-foreground">{org.name}</dd>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
-                  <dt className="text-xs font-medium text-zinc-500 dark:text-zinc-400 pt-0.5">
-                    URL key
+                  <dt className="text-xs font-medium text-muted-foreground pt-0.5">
+                    {t('settings.workspace.urlKey')}
                   </dt>
-                  <dd className="col-span-2 font-mono text-sm text-zinc-700 dark:text-zinc-300">
+                  <dd className="col-span-2 font-mono text-sm text-foreground-secondary">
                     {org.urlKey}
                   </dd>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
-                  <dt className="text-xs font-medium text-zinc-500 dark:text-zinc-400 pt-0.5">
-                    Data region
+                  <dt className="text-xs font-medium text-muted-foreground pt-0.5">
+                    {t('settings.workspace.dataRegion')}
                   </dt>
-                  <dd className="col-span-2 text-sm text-zinc-700 dark:text-zinc-300 capitalize">
+                  <dd className="col-span-2 text-sm text-foreground-secondary capitalize">
                     {org.dataRegion}
                   </dd>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
-                  <dt className="text-xs font-medium text-zinc-500 dark:text-zinc-400 pt-0.5">
-                    Created
+                  <dt className="text-xs font-medium text-muted-foreground pt-0.5">
+                    {t('settings.workspace.created')}
                   </dt>
-                  <dd className="col-span-2 text-sm text-zinc-500 dark:text-zinc-400">
-                    {new Date(org.createdAt).toLocaleDateString(undefined, {
+                  <dd className="col-span-2 text-sm text-muted-foreground">
+                    {formatDate(org.createdAt, {
                       day: 'numeric',
                       month: 'long',
                       year: 'numeric',
@@ -405,61 +420,87 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                 </div>
               </dl>
             ) : (
-              <p className="text-sm text-zinc-400">Could not load organization details.</p>
+              <p className="text-sm text-muted-foreground">
+                {t('settings.workspace.orgLoadError')}
+              </p>
             )}
           </div>
         </section>
 
+        {isPlatformAdmin && (
+          <section>
+            <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {t('settings.workspace.platform')}
+            </h2>
+            <Link
+              className="flex items-center justify-between rounded-lg border border-brand-border bg-brand-subtle px-5 py-4 transition-colors hover:bg-brand/15"
+              href="/admin"
+            >
+              <div>
+                <p className="text-sm font-medium text-brand-subtle-foreground">
+                  {t('settings.workspace.platformAdminConsole')}
+                </p>
+                <p className="text-xs text-brand-subtle-foreground/70">
+                  {t('settings.workspace.platformAdminConsoleDescription')}
+                </p>
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-brand" />
+            </Link>
+          </section>
+        )}
+
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            Teams
-            <span className="ml-2 font-normal normal-case text-zinc-300 dark:text-zinc-600">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('settings.workspace.teams')}
+            <span className="ml-2 font-normal normal-case text-foreground-faint">
               {teams.length}
             </span>
           </h2>
-          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 overflow-hidden">
+          <div className="rounded-lg border border-border bg-card overflow-hidden">
             {teams.length === 0 ? (
-              <p className="px-5 py-4 text-sm text-zinc-400">
-                No teams yet. Create one from the sidebar.
+              <p className="px-5 py-4 text-sm text-muted-foreground">
+                {t('settings.workspace.noTeamsYet')}
               </p>
             ) : (
-              <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              <ul className="divide-y divide-border">
                 {teams.map(team => {
                   const isChild = !!team.parentId;
                   return (
                     <li
-                      className={cn(
-                        isChild && 'border-l-2 border-indigo-200 dark:border-indigo-800 ml-4',
-                      )}
+                      className={cn(isChild && 'border-l-2 border-brand-border ml-4')}
                       key={team.id}
                     >
                       <Link
-                        className="flex items-center gap-3 px-5 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
+                        className="flex items-center gap-3 px-5 py-3 hover:bg-accent/50 transition-colors"
                         href={`/${workspace}/team/${team.key}/settings`}
                       >
-                        {isChild && <ChevronRight className="h-3 w-3 shrink-0 text-zinc-400" />}
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-sm dark:bg-zinc-800">
+                        {isChild && (
+                          <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                        )}
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-sm">
                           {team.icon ? (
                             <span>{team.icon}</span>
                           ) : (
-                            <Users className="h-4 w-4 text-zinc-400" />
+                            <Users className="h-4 w-4 text-muted-foreground" />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                          <p className="text-sm font-medium text-foreground truncate">
                             {team.displayName || team.name}
                           </p>
                           {team.description && (
-                            <p className="text-xs text-zinc-400 truncate">{team.description}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {team.description}
+                            </p>
                           )}
                         </div>
-                        <span className="shrink-0 font-mono text-xs text-zinc-400 dark:text-zinc-500">
+                        <span className="shrink-0 font-mono text-xs text-muted-foreground">
                           {team.key}
                         </span>
                         {team.private && (
-                          <span className="flex items-center gap-1 shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                          <span className="flex items-center gap-1 shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                             <Lock className="h-2.5 w-2.5" />
-                            Private
+                            {t('settings.workspace.private')}
                           </span>
                         )}
                       </Link>
@@ -472,17 +513,19 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
         </section>
 
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            Members
-            <span className="ml-2 font-normal normal-case text-zinc-300 dark:text-zinc-600">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('settings.workspace.members')}
+            <span className="ml-2 font-normal normal-case text-foreground-faint">
               {members.length}
             </span>
           </h2>
-          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 overflow-hidden">
+          <div className="rounded-lg border border-border bg-card overflow-hidden">
             {members.length === 0 ? (
-              <p className="px-5 py-4 text-sm text-zinc-400">No members found.</p>
+              <p className="px-5 py-4 text-sm text-muted-foreground">
+                {t('settings.workspace.noMembersFound')}
+              </p>
             ) : (
-              <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              <ul className="divide-y divide-border">
                 {members.map(user => {
                   const currentRole = (memberRoles[user.id] ?? 'member') as OrgRole;
                   const roleBadge = ROLE_BADGES[currentRole];
@@ -507,14 +550,14 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                         </span>
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                        <p className="text-sm font-medium text-foreground truncate">
                           {user.displayName}
                         </p>
-                        <p className="text-xs text-zinc-400 truncate">{user.email}</p>
+                        <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                       </div>
                       {!user.active && (
-                        <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-400 dark:bg-zinc-800">
-                          Inactive
+                        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                          {t('settings.workspace.inactive')}
                         </span>
                       )}
                       {/* Role badge + dropdown */}
@@ -522,7 +565,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                         <select
                           className={cn(
                             'appearance-none rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer',
-                            'border border-transparent focus:outline-none focus:ring-1 focus:ring-indigo-400',
+                            'border border-transparent focus:outline-none focus:ring-1 focus:ring-brand',
                             'disabled:opacity-50 disabled:cursor-not-allowed',
                             roleBadge.cls,
                           )}
@@ -532,7 +575,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                         >
                           {ORG_ROLES.map(r => (
                             <option key={r} value={r}>
-                              {ROLE_BADGES[r].label}
+                              {t(ROLE_BADGES[r].labelKey)}
                             </option>
                           ))}
                         </select>
@@ -547,64 +590,57 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
 
         {/* Personal preferences */}
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            My Preferences
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('settings.workspace.myPreferences')}
           </h2>
-          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 divide-y divide-zinc-100 dark:divide-zinc-800">
-            {/* Email notifications toggle */}
-            <div className="flex items-center justify-between px-5 py-3">
-              <div>
-                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                  Email notifications
-                </p>
-                <p className="text-xs text-zinc-400">
-                  Receive emails for assignments, mentions, and status changes
-                </p>
+          <div className="rounded-lg border border-border bg-card divide-y divide-border">
+            {/* Language — also available in the sidebar footer, surfaced here too
+                since the sidebar collapses to a drawer on small screens. */}
+            <div className="px-5 py-3">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">{t('language.language')}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('settings.workspace.languageDescription')}
+                  </p>
+                </div>
+                <LanguageToggle />
               </div>
-              <button
-                aria-checked={emailNotificationsEnabled}
-                aria-label="Email notifications"
-                className={cn(
-                  'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors',
-                  'focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2',
-                  emailNotificationsEnabled ? 'bg-indigo-600' : 'bg-zinc-200 dark:bg-zinc-700',
-                )}
-                onClick={() => toggleEmailNotifications(!emailNotificationsEnabled)}
-                role="switch"
-                type="button"
-              >
-                <span
-                  className={cn(
-                    'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform',
-                    emailNotificationsEnabled ? 'translate-x-4' : 'translate-x-0',
-                  )}
-                />
-              </button>
+            </div>
+
+            {/* Email notifications toggle */}
+            <div className="px-5 py-3">
+              <SettingToggleRow
+                checked={emailNotificationsEnabled}
+                description={t('settings.workspace.emailNotificationsDescription')}
+                label={t('settings.workspace.emailNotifications')}
+                onCheckedChange={checked => toggleEmailNotifications(checked)}
+              />
             </div>
 
             {/* iCal cycle feed */}
             <div className="px-5 py-3">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
-                    <Calendar className="h-3.5 w-3.5 text-zinc-400" />
-                    Cycle calendar feed
+                  <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                    {t('settings.workspace.cycleCalendarFeed')}
                   </p>
-                  <p className="text-xs text-zinc-400 mt-0.5">
-                    Subscribe to your cycles in Google Calendar, Apple Calendar, or any .ics client.
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {t('settings.workspace.cycleCalendarFeedDescription')}
                   </p>
                   {calendarFeedUrl && (
                     <div className="mt-2 flex items-center gap-2">
-                      <code className="truncate max-w-xs text-xs bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-zinc-600 dark:text-zinc-300">
+                      <code className="truncate max-w-xs text-xs bg-muted px-2 py-1 rounded text-muted-foreground">
                         {calendarFeedUrl}
                       </code>
                       <button
-                        className="shrink-0 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                        className="shrink-0 text-muted-foreground hover:text-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                         onClick={() => {
                           void navigator.clipboard.writeText(calendarFeedUrl);
-                          toast.success('Copied to clipboard');
+                          toast.success(t('settings.workspace.copiedToClipboard'));
                         }}
-                        title="Copy URL"
+                        title={t('settings.workspace.copyUrl')}
                         type="button"
                       >
                         <Copy className="h-3.5 w-3.5" />
@@ -614,16 +650,18 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                 </div>
                 <button
                   className={cn(
-                    'shrink-0 flex items-center gap-1.5 rounded-md border border-zinc-200 dark:border-zinc-700',
-                    'px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300',
-                    'hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50',
+                    'shrink-0 flex items-center gap-1.5 rounded-md border border-border',
+                    'px-3 py-1.5 text-xs font-medium text-foreground-secondary',
+                    'hover:bg-accent disabled:opacity-50',
                   )}
                   disabled={rotatingToken}
                   onClick={rotateCalendarToken}
                   type="button"
                 >
                   <RefreshCw className={cn('h-3 w-3', rotatingToken && 'animate-spin')} />
-                  {calendarFeedUrl ? 'Rotate' : 'Generate'}
+                  {calendarFeedUrl
+                    ? t('settings.workspace.rotate')
+                    : t('settings.workspace.generate')}
                 </button>
               </div>
             </div>
@@ -632,27 +670,27 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
 
         {/* API tokens */}
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            API Tokens
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('settings.workspace.apiTokens')}
           </h2>
-          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 divide-y divide-zinc-100 dark:divide-zinc-800">
+          <div className="rounded-lg border border-border bg-card divide-y divide-border">
             {/* New plaintext banner — shown only once after creation */}
             {newPlaintext && (
               <div className="px-5 py-3 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800">
                 <p className="text-xs font-medium text-amber-700 dark:text-amber-400 mb-1.5">
-                  Copy your token now — it will not be shown again.
+                  {t('settings.workspace.copyTokenNowWarning')}
                 </p>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 truncate text-xs bg-white dark:bg-zinc-900 border border-amber-200 dark:border-amber-700 px-2 py-1 rounded text-zinc-700 dark:text-zinc-300 font-mono">
+                  <code className="flex-1 truncate text-xs bg-card border border-amber-200 dark:border-amber-700 px-2 py-1 rounded text-foreground-secondary font-mono">
                     {newPlaintext}
                   </code>
                   <button
-                    className="shrink-0 text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-200"
+                    className="shrink-0 text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-200 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                     onClick={() => {
                       void navigator.clipboard.writeText(newPlaintext);
-                      toast.success('Copied to clipboard');
+                      toast.success(t('settings.workspace.copiedToClipboard'));
                     }}
-                    title="Copy token"
+                    title={t('settings.workspace.copyToken')}
                     type="button"
                   >
                     <Copy className="h-3.5 w-3.5" />
@@ -663,23 +701,23 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   onClick={() => setNewPlaintext(null)}
                   type="button"
                 >
-                  I have copied it
+                  {t('settings.workspace.iHaveCopiedIt')}
                 </button>
               </div>
             )}
 
             {/* Create new token */}
             <div className="px-5 py-3">
-              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5 mb-2">
-                <Key className="h-3.5 w-3.5 text-zinc-400" />
-                Create token
+              <p className="text-sm font-medium text-foreground flex items-center gap-1.5 mb-2">
+                <Key className="h-3.5 w-3.5 text-muted-foreground" />
+                {t('settings.workspace.createToken')}
               </p>
               <div className="flex items-center gap-2">
                 <input
                   className={cn(
-                    'flex-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-transparent',
-                    'px-3 py-1.5 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400',
-                    'focus:outline-none focus:ring-1 focus:ring-indigo-500',
+                    'flex-1 rounded-md border border-border bg-transparent',
+                    'px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground',
+                    'focus:outline-none focus:ring-1 focus:ring-brand',
                   )}
                   disabled={creatingToken}
                   onChange={e => setNewTokenLabel(e.target.value)}
@@ -688,42 +726,42 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                       void createApiToken();
                     }
                   }}
-                  placeholder="Token label"
+                  placeholder={t('settings.workspace.tokenLabel')}
                   type="text"
                   value={newTokenLabel}
                 />
                 <button
                   className={cn(
-                    'shrink-0 rounded-md border border-zinc-200 dark:border-zinc-700',
-                    'px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300',
-                    'hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50',
+                    'shrink-0 rounded-md border border-border',
+                    'px-3 py-1.5 text-xs font-medium text-foreground-secondary',
+                    'hover:bg-accent disabled:opacity-50',
                   )}
                   disabled={creatingToken || !newTokenLabel.trim()}
                   onClick={() => void createApiToken()}
                   type="button"
                 >
-                  {creatingToken ? 'Creating…' : 'Create'}
+                  {creatingToken ? t('settings.workspace.creatingEllipsis') : t('common.create')}
                 </button>
               </div>
               {/* Scope + expiry controls */}
-              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-zinc-500 dark:text-zinc-400">
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
                 <label className="flex items-center gap-1.5">
                   <input
                     checked={newTokenWritable}
-                    className="h-3.5 w-3.5 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
+                    className="h-3.5 w-3.5 rounded border-border text-brand focus:ring-brand"
                     disabled={creatingToken}
                     onChange={e => setNewTokenWritable(e.target.checked)}
                     type="checkbox"
                   />
-                  Allow write (mutations)
+                  {t('settings.workspace.allowWrite')}
                 </label>
                 <label className="flex items-center gap-1.5">
-                  Expires in
+                  {t('settings.workspace.expiresIn')}
                   <select
                     className={cn(
-                      'rounded-md border border-zinc-200 dark:border-zinc-700 bg-transparent',
-                      'px-1.5 py-0.5 text-xs text-zinc-700 dark:text-zinc-300',
-                      'focus:outline-none focus:ring-1 focus:ring-indigo-500',
+                      'rounded-md border border-border bg-transparent',
+                      'px-1.5 py-0.5 text-xs text-foreground-secondary',
+                      'focus:outline-none focus:ring-1 focus:ring-brand',
                     )}
                     disabled={creatingToken}
                     onChange={e => setNewTokenExpiryDays(Number(e.target.value))}
@@ -731,55 +769,65 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   >
                     {TOKEN_EXPIRY_OPTIONS.map(opt => (
                       <option key={opt.days} value={opt.days}>
-                        {opt.label}
+                        {t(opt.labelKey)}
                       </option>
                     ))}
                   </select>
                 </label>
                 {!newTokenWritable && (
-                  <span className="text-amber-600 dark:text-amber-400">Read-only key</span>
+                  <span className="text-amber-600 dark:text-amber-400">
+                    {t('settings.workspace.readOnlyKey')}
+                  </span>
                 )}
               </div>
             </div>
 
             {/* Token list */}
             {apiTokens.length === 0 ? (
-              <p className="px-5 py-4 text-sm text-zinc-400">No API tokens yet.</p>
+              <p className="px-5 py-4 text-sm text-muted-foreground">
+                {t('settings.workspace.noApiTokensYet')}
+              </p>
             ) : (
-              <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              <ul className="divide-y divide-border">
                 {apiTokens.map(token => (
                   <li className="flex items-start gap-3 px-5 py-3" key={token.id}>
-                    <Key className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
+                    <Key className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate flex items-center gap-2">
+                      <p className="text-sm font-medium text-foreground truncate flex items-center gap-2">
                         {token.label}
                         <span
                           className={cn(
                             'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
                             token.scopes.length === 0 || token.scopes.includes('write')
-                              ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-                              : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300',
+                              ? 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground'
+                              : 'bg-muted text-muted-foreground',
                           )}
                         >
                           {token.scopes.length === 0 || token.scopes.includes('write')
-                            ? 'Read/Write'
-                            : 'Read only'}
+                            ? t('settings.workspace.readWrite')
+                            : t('settings.workspace.readOnly')}
                         </span>
                       </p>
-                      <p className="text-xs text-zinc-400 mt-0.5">
-                        Created{' '}
-                        {new Date(token.createdAt).toLocaleDateString(undefined, {
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {t('settings.workspace.created')}{' '}
+                        {formatDate(token.createdAt, {
                           day: 'numeric',
                           month: 'short',
                           year: 'numeric',
                         })}
                         {' · '}
                         {token.lastUsedAt
-                          ? `Last used ${new Date(token.lastUsedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`
-                          : 'Never used'}
+                          ? t('settings.workspace.lastUsedOn', {
+                              date: formatDate(token.lastUsedAt, {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                              }),
+                            })
+                          : t('settings.workspace.neverUsed')}
                         {' · '}
-                        Expires{' '}
-                        {new Date(token.expiresAt).toLocaleDateString(undefined, {
+                        {t('settings.workspace.expires')}{' '}
+                        {formatDate(token.expiresAt, {
                           day: 'numeric',
                           month: 'short',
                           year: 'numeric',
@@ -787,14 +835,10 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                       </p>
                     </div>
                     <button
-                      className="shrink-0 text-zinc-400 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40"
+                      className="shrink-0 text-muted-foreground hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                       disabled={revokingTokenId === token.id}
-                      onClick={() => {
-                        if (window.confirm(`Revoke token "${token.label}"?`)) {
-                          void revokeApiToken(token.id);
-                        }
-                      }}
-                      title="Revoke token"
+                      onClick={() => setConfirmingRevokeToken(token)}
+                      title={t('settings.workspace.revokeToken')}
                       type="button"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -804,97 +848,93 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
               </ul>
             )}
           </div>
+          <ConfirmDialog
+            confirmLabel={t('settings.workspace.revokeToken')}
+            message={t('settings.workspace.revokeTokenConfirm', {
+              label: confirmingRevokeToken?.label ?? '',
+            })}
+            onCancel={() => setConfirmingRevokeToken(null)}
+            onConfirm={() => {
+              if (confirmingRevokeToken) {
+                void revokeApiToken(confirmingRevokeToken.id);
+              }
+              setConfirmingRevokeToken(null);
+            }}
+            open={confirmingRevokeToken !== null}
+            title={t('settings.workspace.revokeToken')}
+          />
         </section>
 
         {/* AI assistant */}
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            AI
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('settings.workspace.ai')}
           </h2>
-          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 px-5 py-4">
-            <div className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">AI assistant</p>
-                <p className="mt-0.5 text-xs text-zinc-400">
-                  Title suggestions, issue summaries, and duplicate detection. Requires an Anthropic
-                  API key configured on the server.
-                </p>
-              </div>
-              <button
-                aria-checked={org?.aiEnabled ?? false}
-                aria-label="Enable AI assistant"
-                className={cn(
-                  'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors disabled:opacity-50',
-                  'focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2',
-                  org?.aiEnabled ? 'bg-indigo-600' : 'bg-zinc-300 dark:bg-zinc-600',
-                )}
-                disabled={savingAi || !org}
-                onClick={() => void toggleAi(!(org?.aiEnabled ?? false))}
-                role="switch"
-                type="button"
-              >
-                <span
-                  className={cn(
-                    'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform',
-                    org?.aiEnabled ? 'translate-x-4' : 'translate-x-0',
-                  )}
-                />
-              </button>
-            </div>
+          <div className="rounded-lg border border-border bg-card px-5 py-4">
+            <SettingToggleRow
+              checked={org?.aiEnabled ?? false}
+              description={t('settings.workspace.aiAssistantDescription')}
+              disabled={savingAi || !org}
+              label={t('settings.workspace.aiAssistant')}
+              onCheckedChange={checked => void toggleAi(checked)}
+            />
           </div>
         </section>
 
         {/* Quick links to sub-settings */}
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            Configuration
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('settings.workspace.configuration')}
           </h2>
-          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 overflow-hidden">
-            <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <div className="rounded-lg border border-border bg-card overflow-hidden">
+            <ul className="divide-y divide-border">
               {[
                 {
-                  description: 'Connect GitHub and other services',
+                  description: t('settings.workspace.integrationsDescription'),
                   href: `/${workspace}/settings/integrations`,
-                  label: 'Integrations',
+                  label: t('settings.workspace.integrations'),
                 },
                 {
-                  description: 'SAML SSO and authentication policies',
+                  description: t('settings.workspace.securityDescription'),
                   href: `/${workspace}/settings/security`,
-                  label: 'Security',
+                  label: t('settings.workspace.security'),
                 },
                 {
-                  description: 'Send outbound HTTP events',
+                  description: t('settings.workspace.webhooksDescription'),
                   href: `/${workspace}/settings/webhooks`,
-                  label: 'Webhooks',
+                  label: t('settings.workspace.webhooks'),
                 },
                 {
-                  description: 'Import issues from CSV, export data',
+                  description: t('settings.workspace.importExportDescription'),
                   href: `/${workspace}/settings/import`,
-                  label: 'Import / Export',
+                  label: t('settings.workspace.importExport'),
                 },
                 {
-                  description: 'Share project status externally',
+                  description: t('settings.workspace.publicRoadmapDescription'),
                   href: `/${workspace}/settings/roadmap`,
-                  label: 'Public roadmap',
+                  label: t('settings.workspace.publicRoadmap'),
                 },
                 {
-                  description: 'Security-relevant event history (admins only)',
+                  description: t('settings.workspace.automationsDescription'),
+                  href: `/${workspace}/settings/automations`,
+                  label: t('settings.workspace.automations'),
+                },
+                {
+                  description: t('settings.workspace.auditLogDescription'),
                   href: `/${workspace}/settings/audit-log`,
-                  label: 'Audit Log',
+                  label: t('settings.workspace.auditLog'),
                 },
               ].map(item => (
                 <li key={item.href}>
                   <Link
-                    className="flex items-center justify-between px-5 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
+                    className="flex items-center justify-between px-5 py-3 hover:bg-accent/50 transition-colors"
                     href={item.href}
                   >
                     <div>
-                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                        {item.label}
-                      </p>
-                      <p className="text-xs text-zinc-400">{item.description}</p>
+                      <p className="text-sm font-medium text-foreground">{item.label}</p>
+                      <p className="text-xs text-muted-foreground">{item.description}</p>
                     </div>
-                    <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                   </Link>
                 </li>
               ))}

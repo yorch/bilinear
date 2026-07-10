@@ -1,7 +1,9 @@
 'use client';
 
 import { SelectPopover } from '@/components/ui/select-popover';
-import { formatDueDate, getDueDateColor } from '@/lib/issue-utils';
+import { useFormatters } from '@/hooks/use-formatters';
+import { useTranslations } from '@/hooks/use-translations';
+import { getDueDateColor } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
 
 interface DueDatePickerProps {
@@ -19,6 +21,8 @@ export function DueDatePicker({
   forceOpen,
   onClose,
 }: DueDatePickerProps) {
+  const t = useTranslations();
+  const { formatDueDate } = useFormatters();
   const colorClass = getDueDateColor(value);
 
   return (
@@ -28,14 +32,18 @@ export function DueDatePicker({
       forceOpen={forceOpen}
       onClose={onClose}
       panelClassName="p-2"
-      triggerChildren={value ? formatDueDate(value) : 'Due date'}
-      triggerClassName={cn('px-1.5 py-1 text-xs', value ? colorClass : 'text-zinc-400')}
-      triggerTitle={value ? `Due ${formatDueDate(value)}` : 'No due date'}
+      triggerChildren={value ? formatDueDate(value) : t('properties.dueDate.dueDate')}
+      triggerClassName={cn('px-1.5 py-1 text-xs', value ? colorClass : 'text-muted-foreground')}
+      triggerTitle={
+        value
+          ? t('properties.dueDate.dueOn', { date: formatDueDate(value) })
+          : t('properties.dueDate.noDueDate')
+      }
     >
       {close => (
         <>
           <input
-            className="rounded border border-zinc-200 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+            className="rounded border border-border px-2 py-1 text-sm dark:bg-muted"
             onChange={e => {
               onChange(e.target.value || null);
               close();
@@ -45,14 +53,14 @@ export function DueDatePicker({
           />
           {value && (
             <button
-              className="mt-1 block w-full rounded px-2 py-1 text-center text-xs text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              className="mt-1 block w-full rounded px-2 py-1 text-center text-xs text-muted-foreground hover:bg-accent"
               onClick={() => {
                 onChange(null);
                 close();
               }}
               type="button"
             >
-              Clear date
+              {t('properties.dueDate.clearDate')}
             </button>
           )}
         </>

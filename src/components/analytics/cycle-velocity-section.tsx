@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 
 // ---------------------------------------------------------------------------
@@ -62,10 +63,15 @@ interface VelocityBarChartProps {
 }
 
 function VelocityBarChart({ data }: VelocityBarChartProps) {
+  const t = useTranslations();
   const max = Math.max(...data.map(d => d.value), 1);
 
   if (data.length === 0 || data.every(d => d.value === 0)) {
-    return <p className="py-8 text-center text-sm text-zinc-400">No completed cycles yet</p>;
+    return (
+      <p className="py-8 text-center text-sm text-muted-foreground">
+        {t('analytics.velocity.noCompletedCycles')}
+      </p>
+    );
   }
 
   return (
@@ -74,7 +80,7 @@ function VelocityBarChart({ data }: VelocityBarChartProps) {
         const pct = max > 0 ? (item.value / max) * 100 : 0;
         return (
           <div className="flex flex-1 flex-col items-center gap-1" key={item.label}>
-            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
+            <span className="text-xs font-medium text-muted-foreground">
               {item.value > 0 ? item.value : ''}
             </span>
             <div
@@ -85,7 +91,10 @@ function VelocityBarChart({ data }: VelocityBarChartProps) {
                 minHeight: item.value > 0 ? '4px' : '0',
               }}
             />
-            <span className="max-w-full truncate text-[10px] text-zinc-400" title={item.label}>
+            <span
+              className="max-w-full truncate text-[10px] text-muted-foreground"
+              title={item.label}
+            >
               {item.label}
             </span>
           </div>
@@ -106,9 +115,9 @@ interface RollingCardProps {
 
 function RollingCard({ label, value }: RollingCardProps) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+    <div className="rounded-lg border border-border bg-card p-4">
+      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="mt-1 text-2xl font-semibold text-foreground">
         {value === 0 ? '—' : value.toFixed(1)}
       </p>
     </div>
@@ -122,6 +131,7 @@ function RollingCard({ label, value }: RollingCardProps) {
 type MetricMode = 'issues' | 'points';
 
 export function CycleVelocitySection({ teamId }: CycleVelocitySectionProps) {
+  const t = useTranslations();
   const [data, setData] = useState<CycleVelocityTrendResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<MetricMode>('issues');
@@ -170,41 +180,45 @@ export function CycleVelocitySection({ teamId }: CycleVelocitySectionProps) {
   return (
     <div className="mt-5">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">Cycle Velocity</h2>
-        <div className="flex rounded-md border border-zinc-200 p-0.5 dark:border-zinc-800">
+        <h2 className="text-sm font-semibold text-foreground">{t('analytics.velocity.title')}</h2>
+        <div className="flex rounded-md border border-border p-0.5">
           {(['issues', 'points'] as MetricMode[]).map(m => (
             <button
               className={
                 mode === m
-                  ? 'rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
-                  : 'px-2 py-0.5 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
+                  ? 'rounded bg-muted px-2 py-0.5 text-xs text-foreground'
+                  : 'px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground'
               }
               key={m}
               onClick={() => setMode(m)}
               type="button"
             >
-              {m === 'issues' ? 'Issues' : 'Points'}
+              {m === 'issues' ? t('analytics.velocity.issues') : t('analytics.velocity.points')}
             </button>
           ))}
         </div>
       </div>
 
       {loading ? (
-        <p className="text-xs text-zinc-400">Loading cycle velocity…</p>
+        <p className="text-xs text-muted-foreground">{t('analytics.velocity.loading')}</p>
       ) : (
         <>
-          <div className="mb-3 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-            <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">
-              {mode === 'issues' ? 'Completed issues per cycle' : 'Completed points per cycle'}
+          <div className="mb-3 rounded-lg border border-border bg-card p-5">
+            <h3 className="mb-3 text-sm font-medium text-foreground">
+              {mode === 'issues'
+                ? t('analytics.velocity.completedIssuesPerCycle')
+                : t('analytics.velocity.completedPointsPerCycle')}
             </h3>
-            <p className="mb-3 text-[11px] text-zinc-400">Last 8 completed cycles</p>
+            <p className="mb-3 text-[11px] text-muted-foreground">
+              {t('analytics.velocity.last8Cycles')}
+            </p>
             <VelocityBarChart data={chartData} />
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            <RollingCard label="3-cycle avg" value={rolling3} />
-            <RollingCard label="6-cycle avg" value={rolling6} />
-            <RollingCard label="12-cycle avg" value={rolling12} />
+            <RollingCard label={t('analytics.velocity.avg3Cycle')} value={rolling3} />
+            <RollingCard label={t('analytics.velocity.avg6Cycle')} value={rolling6} />
+            <RollingCard label={t('analytics.velocity.avg12Cycle')} value={rolling12} />
           </div>
         </>
       )}

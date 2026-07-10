@@ -19,6 +19,8 @@ CREATE TABLE "organizations" (
     "auth_settings" JSONB NOT NULL DEFAULT '{}',
     "theme_settings" JSONB,
     "fiscal_year_start_month" INTEGER NOT NULL DEFAULT 1,
+    "suspended_at" TIMESTAMPTZ,
+    "suspended_reason" TEXT,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ NOT NULL,
     "archived_at" TIMESTAMPTZ,
@@ -43,7 +45,10 @@ CREATE TABLE "users" (
     "status_until_at" TIMESTAMPTZ,
     "password_hash" TEXT,
     "google_id" VARCHAR(255),
+    "github_id" VARCHAR(255),
     "email_notifications_enabled" BOOLEAN NOT NULL DEFAULT true,
+    "locale" VARCHAR(10),
+    "is_platform_admin" BOOLEAN NOT NULL DEFAULT false,
     "calendar_feed_token" VARCHAR(64),
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ NOT NULL,
@@ -61,6 +66,20 @@ CREATE TABLE "organization_members" (
     "updated_at" TIMESTAMPTZ NOT NULL,
 
     CONSTRAINT "organization_members_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "platform_audit_logs" (
+    "id" UUID NOT NULL,
+    "actor_id" UUID,
+    "action" VARCHAR(64) NOT NULL,
+    "target_type" VARCHAR(32),
+    "target_id" UUID,
+    "metadata" JSONB,
+    "ip_address" VARCHAR(45),
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "platform_audit_logs_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -842,6 +861,9 @@ CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 CREATE UNIQUE INDEX "users_google_id_key" ON "users"("google_id");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "users_github_id_key" ON "users"("github_id");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "users_calendar_feed_token_key" ON "users"("calendar_feed_token");
 
 -- CreateIndex
@@ -852,6 +874,12 @@ CREATE INDEX "organization_members_user_id_idx" ON "organization_members"("user_
 
 -- CreateIndex
 CREATE UNIQUE INDEX "organization_members_organization_id_user_id_key" ON "organization_members"("organization_id", "user_id");
+
+-- CreateIndex
+CREATE INDEX "platform_audit_logs_created_at_idx" ON "platform_audit_logs"("created_at");
+
+-- CreateIndex
+CREATE INDEX "platform_audit_logs_actor_id_idx" ON "platform_audit_logs"("actor_id");
 
 -- CreateIndex
 CREATE INDEX "auth_tokens_user_id_idx" ON "auth_tokens"("user_id");
@@ -1230,6 +1258,9 @@ ALTER TABLE "organization_members" ADD CONSTRAINT "organization_members_organiza
 
 -- AddForeignKey
 ALTER TABLE "organization_members" ADD CONSTRAINT "organization_members_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "platform_audit_logs" ADD CONSTRAINT "platform_audit_logs_actor_id_fkey" FOREIGN KEY ("actor_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "auth_tokens" ADD CONSTRAINT "auth_tokens_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;

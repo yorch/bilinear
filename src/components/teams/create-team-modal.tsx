@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ModalDialog } from '@/components/ui/modal-dialog';
+import { Input } from '@/components/ui/input';
+import { ModalDialog, ModalFooter, ModalHeader } from '@/components/ui/modal-dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn, getErrorMessage } from '@/lib/utils';
 
 interface CreateTeamInput {
@@ -40,6 +43,7 @@ function deriveKey(name: string): string {
 const KEY_PATTERN = /^[A-Z]{1,10}$/;
 
 export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProps) {
+  const t = useTranslations();
   const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState('');
   const [key, setKey] = useState('');
@@ -100,7 +104,7 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
       });
       onClose();
     } catch (err) {
-      const msg = getErrorMessage(err, 'Failed to create team');
+      const msg = getErrorMessage(err, t('teams.failedToCreate'));
       // Duplicate key errors shown inline; others go to the action bar
       if (msg.toLowerCase().includes('key')) {
         setKeyError(msg);
@@ -115,48 +119,38 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
   const canSubmit = name.trim().length > 0 && KEY_PATTERN.test(key) && !submitting;
 
   return (
-    <ModalDialog aria-label="Create team" onClose={onClose} open={open}>
+    <ModalDialog aria-label={t('teams.createTeam')} onClose={onClose} open={open}>
       <form className="flex flex-col" onSubmit={handleSubmit}>
-        <div className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Create team</h2>
-        </div>
+        <ModalHeader title={t('teams.createTeam')} />
 
         <div className="flex flex-col gap-4 px-5 py-4">
           <div className="flex flex-col gap-1">
-            <label
-              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-              htmlFor="team-name"
-            >
-              Name
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="team-name">
+              {t('teams.name')}
             </label>
-            <input
-              className="rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-100"
+            <Input
               id="team-name"
               onChange={e => setName(e.target.value)}
-              placeholder="e.g. Engineering"
+              placeholder={t('teams.namePlaceholder')}
               ref={nameRef}
               required
-              type="text"
               value={name}
             />
           </div>
 
           <div className="flex flex-col gap-1">
-            <label
-              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-              htmlFor="team-key"
-            >
-              Identifier
-              <span className="ml-1 font-normal text-zinc-400">
-                (used in issue IDs like ENG-123)
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="team-key">
+              {t('teams.identifier')}
+              <span className="ml-1 font-normal text-muted-foreground">
+                {t('teams.identifierHint')}
               </span>
             </label>
             <input
               className={cn(
-                'rounded-md border bg-transparent px-3 py-1.5 font-mono text-sm text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100',
+                'rounded-md border bg-transparent px-3 py-1.5 font-mono text-sm text-foreground placeholder:text-muted-foreground outline-none',
                 keyError
                   ? 'border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-500'
-                  : 'border-zinc-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700',
+                  : 'border-border focus:border-brand focus:ring-1 focus:ring-brand',
               )}
               id="team-key"
               onChange={e => handleKeyChange(e.target.value)}
@@ -169,18 +163,17 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
           </div>
 
           <div className="flex flex-col gap-1">
-            <label
-              className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
-              htmlFor="team-description"
-            >
-              Description
-              <span className="ml-1 font-normal text-zinc-400">(optional)</span>
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="team-description">
+              {t('teams.description')}
+              <span className="ml-1 font-normal text-muted-foreground">
+                ({t('teams.optional')})
+              </span>
             </label>
-            <textarea
-              className="resize-none rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm text-zinc-600 placeholder-zinc-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:text-zinc-400"
+            <Textarea
+              className="resize-none"
               id="team-description"
               onChange={e => setDescription(e.target.value)}
-              placeholder="What does this team work on?"
+              placeholder={t('teams.descriptionPlaceholder')}
               rows={2}
               value={description}
             />
@@ -189,37 +182,26 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
           <label className="flex cursor-pointer items-center gap-3">
             <input
               checked={isPrivate}
-              className="h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 dark:border-zinc-600"
+              className="h-4 w-4 rounded border-border text-brand focus:ring-brand"
               onChange={e => setIsPrivate(e.target.checked)}
               type="checkbox"
             />
             <div>
-              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Private team</p>
-              <p className="text-xs text-zinc-400">Only members can see this team and its issues</p>
+              <p className="text-sm font-medium text-foreground-secondary">
+                {t('teams.privateTeam')}
+              </p>
+              <p className="text-xs text-muted-foreground">{t('teams.privateTeamHint')}</p>
             </div>
           </label>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
-          {submitError && <p className="flex-1 text-xs text-red-500">{submitError}</p>}
-          <button
-            className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-            onClick={onClose}
-            type="button"
-          >
-            Cancel
-          </button>
-          <button
-            className={cn(
-              'rounded-md px-4 py-1.5 text-sm font-medium text-white transition-colors',
-              'bg-indigo-600 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50',
-            )}
-            disabled={!canSubmit}
-            type="submit"
-          >
-            {submitting ? 'Creating…' : 'Create team'}
-          </button>
-        </div>
+        <ModalFooter
+          cancelLabel={t('common.cancel')}
+          onCancel={onClose}
+          submitDisabled={!canSubmit}
+          submitError={submitError}
+          submitLabel={submitting ? t('teams.creating') : t('teams.createTeam')}
+        />
       </form>
     </ModalDialog>
   );

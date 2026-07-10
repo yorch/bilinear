@@ -5,6 +5,11 @@ const ACCESS_TOKEN_EXPIRY = '24h';
 const REFRESH_TOKEN_EXPIRY = '30d';
 const OAUTH_STATE_EXPIRY = '10m';
 const WS_TICKET_EXPIRY = '60s';
+// Impersonation access tokens are deliberately short-lived so a leaked one has
+// a small blast radius. On expiry the session simply becomes unauthenticated
+// and the admin is returned to login; the "Stop impersonating" control ends it
+// immediately by re-issuing the admin's own session.
+const IMPERSONATION_TOKEN_EXPIRY = '30m';
 
 // HS256 (HMAC-SHA256) recommends secrets >= 32 bytes per RFC 7518 §3.2.
 // `jose` does not enforce this itself, so we validate at boot to fail fast
@@ -32,6 +37,13 @@ function getSecret(key: string): Uint8Array {
 }
 
 export interface AccessTokenPayload {
+  /**
+   * Set only on impersonation tokens: the id of the platform admin acting as
+   * `userId`. Its presence is what the app uses to render the impersonation
+   * banner and to authorize "stop impersonating" (which re-issues a normal
+   * session for this admin). Absent on ordinary sessions.
+   */
+  impersonatorId?: string;
   orgId: string;
   userId: string;
 }
@@ -54,6 +66,24 @@ export async function signAccessToken(payload: AccessTokenPayload): Promise<stri
     .sign(getSecret('JWT_SECRET'));
 }
 
+/**
+ * Sign a short-lived impersonation access token. Identical in shape to a
+ * normal access token (so the whole app treats the session as `userId` in
+ * `orgId`) but carries the `impersonatorId` claim and a 30-minute lifetime.
+ * No matching refresh token is issued — see `IMPERSONATION_TOKEN_EXPIRY`.
+ */
+export async function signImpersonationToken(payload: {
+  orgId: string;
+  userId: string;
+  impersonatorId: string;
+}): Promise<string> {
+  return new SignJWT({ ...payload, type: 'access' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime(IMPERSONATION_TOKEN_EXPIRY)
+    .sign(getSecret('JWT_SECRET'));
+}
+
 export async function signRefreshToken(payload: RefreshTokenPayload): Promise<string> {
   return new SignJWT({ ...payload, type: 'refresh' })
     .setProtectedHeader({ alg: 'HS256' })
@@ -72,6 +102,7 @@ export async function verifyAccessToken(token: string): Promise<AccessTokenPaylo
   }
 
   return {
+    impersonatorId: typeof payload.impersonatorId === 'string' ? payload.impersonatorId : undefined,
     orgId: payload.orgId as string,
     userId: payload.userId as string,
   };
@@ -152,21 +183,29 @@ async function verifyOAuthStateJWT(
 }
 
 /**
+ * Login-flow OAuth providers. `github_login` is deliberately distinct from
+ * the `github` provider claim used by the org-integration connect flow
+ * (`signGithubOAuthState` below) so an integration state can never be
+ * presented as a login state or vice-versa.
+ */
+export type LoginOAuthProvider = 'google' | 'github_login';
+
+/**
  * Sign a short-lived OAuth "state" JWT used to prevent CSRF on the
- * Google OAuth redirect chain. The token carries a random nonce and a
- * narrow `type: 'oauth_state'` claim so it cannot be substituted for an
- * access/refresh token. Expires in 10 minutes — long enough for the user
- * to complete a Google consent screen, short enough to limit replay.
+ * login OAuth redirect chain (Google, GitHub). The token carries a random
+ * nonce and a narrow `type: 'oauth_state'` claim so it cannot be substituted
+ * for an access/refresh token. Expires in 10 minutes — long enough for the
+ * user to complete a consent screen, short enough to limit replay.
  */
 export async function signOAuthState(
-  provider: 'google',
+  provider: LoginOAuthProvider,
 ): Promise<{ state: string; nonce: string }> {
   const nonce = crypto.randomBytes(24).toString('base64url');
   const state = await signOAuthStateJWT({ nonce, provider });
   return { nonce, state };
 }
 
-export async function verifyOAuthState(state: string, provider: 'google'): Promise<void> {
+export async function verifyOAuthState(state: string, provider: LoginOAuthProvider): Promise<void> {
   await verifyOAuthStateJWT(state, provider);
 }
 

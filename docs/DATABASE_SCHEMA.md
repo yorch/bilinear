@@ -138,9 +138,17 @@ CREATE TABLE users (
     -- Auth
     password_hash   TEXT,  -- null for OAuth-only users
     google_id       VARCHAR(255),
+    github_id       VARCHAR(255),  -- numeric GitHub user id, stored as string
 
     -- Notification preferences
     email_notifications_enabled  BOOLEAN NOT NULL DEFAULT true,
+
+    -- Persisted UI/email language preference (app locale, e.g. 'en'/'es').
+    -- Written by userUpdateLocale when the user switches language; null = never
+    -- set -> transactional emails fall back to the app default locale. Distinct
+    -- from the browser `locale` cookie, which drives the UI but never reaches
+    -- server-side email rendering. See PATTERNS.md §75.1.
+    locale          VARCHAR(10),
 
     -- iCal cycle feed token (32-byte random hex, rotated via userCalendarFeedTokenRotate)
     calendar_feed_token          VARCHAR(64) UNIQUE,
@@ -1703,3 +1711,36 @@ Key properties:
 - Revoked via `revokedAt` timestamp — `authenticateScimToken` rejects revoked tokens.
 - SCIM base URL: `<APP_URL>/api/scim/v2`.
 - Service: `ScimService` in `src/server/services/scim.service.ts`.
+
+### 2.37 Platform Admin ✅
+
+Cross-tenant operator layer (see PATTERNS.md §74). Adds a global privilege flag, org suspension state, and a platform-level audit trail.
+
+```sql
+-- global operator flag (no role tier above org owner)
+ALTER TABLE users ADD COLUMN is_platform_admin BOOLEAN NOT NULL DEFAULT false;
+
+-- org suspension, distinct from soft-delete (archived_at)
+ALTER TABLE organizations ADD COLUMN suspended_at      TIMESTAMPTZ;
+ALTER TABLE organizations ADD COLUMN suspended_reason  TEXT;
+
+-- write-once audit trail for cross-tenant actions (not org-scoped)
+CREATE TABLE platform_audit_logs (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    actor_id    UUID REFERENCES users(id) ON DELETE SET NULL,  -- nullable: trail survives admin deletion
+    action      VARCHAR(64) NOT NULL,       -- tenant.suspended, user.impersonated, …
+    target_type VARCHAR(32),                -- 'Organization' | 'User'
+    target_id   UUID,
+    metadata    JSONB,
+    ip_address  VARCHAR(45),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX ON platform_audit_logs (created_at);
+CREATE INDEX ON platform_audit_logs (actor_id);
+```
+
+Key properties:
+- `is_platform_admin` is bootstrapped to `true` for the first user in an empty DB (`UserService.findOrCreate`), then managed via the `/admin` console. Never revocable below one admin (last-admin guard).
+- `suspended_at` locks members out (enforced in `extractAuthContext`) without deleting data; `archived_at` is the soft-delete used by "delete tenant".
+- `platform_audit_logs` is deliberately org-agnostic — its actor operates above any tenant. Written best-effort by `PlatformAdminService.recordAudit` and the impersonation routes.
+- Service: `PlatformAdminService` in `src/server/services/platform-admin.service.ts`.

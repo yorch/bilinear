@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 
@@ -68,6 +70,7 @@ const WEBHOOK_ROTATE_SECRET_MUTATION = `
 `;
 
 export default function WebhooksSettingsPage() {
+  const t = useTranslations();
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [availableEvents, setAvailableEvents] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,6 +79,10 @@ export default function WebhooksSettingsPage() {
   const [url, setUrl] = useState('');
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
   const [revealedSecrets, setRevealedSecrets] = useState<Set<string>>(new Set());
+  const [pendingAction, setPendingAction] = useState<{
+    hook: Webhook;
+    type: 'delete' | 'rotate';
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,7 +92,9 @@ export default function WebhooksSettingsPage() {
         return;
       }
       if (res.errors?.length) {
-        toast.error((res.errors[0] as { message?: string })?.message ?? 'Failed to load webhooks');
+        toast.error(
+          (res.errors[0] as { message?: string })?.message ?? t('settings.webhooks.loadError'),
+        );
       } else {
         const data = (res.data ?? {}) as {
           webhooks?: Webhook[];
@@ -99,11 +108,11 @@ export default function WebhooksSettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   const handleCreate = async () => {
     if (!name.trim() || !url.trim() || selectedEvents.size === 0) {
-      toast.error('Name, URL, and at least one event are required.');
+      toast.error(t('settings.webhooks.createValidationError'));
       return;
     }
     const res = await gql(WEBHOOK_CREATE_MUTATION, {
@@ -114,7 +123,9 @@ export default function WebhooksSettingsPage() {
       },
     });
     if (res.errors?.length) {
-      toast.error((res.errors[0] as { message?: string })?.message ?? 'Failed to create webhook');
+      toast.error(
+        (res.errors[0] as { message?: string })?.message ?? t('settings.webhooks.createError'),
+      );
       return;
     }
     const created = (res.data as { webhookCreate?: { webhook?: Webhook } } | undefined)
@@ -123,7 +134,7 @@ export default function WebhooksSettingsPage() {
       setWebhooks(w => [created, ...w]);
       // Reveal secret once on create so the user can copy it.
       setRevealedSecrets(s => new Set(s).add(created.id));
-      toast.success('Webhook created');
+      toast.success(t('settings.webhooks.webhookCreated'));
     }
     setName('');
     setUrl('');
@@ -149,9 +160,6 @@ export default function WebhooksSettingsPage() {
   };
 
   const handleDelete = async (hook: Webhook) => {
-    if (!confirm(`Delete webhook "${hook.name}"?`)) {
-      return;
-    }
     const res = await gql(WEBHOOK_DELETE_MUTATION, { id: hook.id });
     if (!res.errors?.length) {
       setWebhooks(w => w.filter(h => h.id !== hook.id));
@@ -159,9 +167,6 @@ export default function WebhooksSettingsPage() {
   };
 
   const handleRotate = async (hook: Webhook) => {
-    if (!confirm('Rotate the signing secret? Existing receivers will need the new value.')) {
-      return;
-    }
     const res = await gql(WEBHOOK_ROTATE_SECRET_MUTATION, { id: hook.id });
     if (!res.errors?.length) {
       const updated = (res.data as { webhookRotateSecret?: { webhook?: Webhook } } | undefined)
@@ -171,15 +176,15 @@ export default function WebhooksSettingsPage() {
           w.map(h => (h.id === hook.id ? { ...h, signingSecret: updated.signingSecret } : h)),
         );
         setRevealedSecrets(s => new Set(s).add(hook.id));
-        toast.success('Signing secret rotated');
+        toast.success(t('settings.webhooks.secretRotated'));
       }
     }
   };
 
   if (loading) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
-        Loading...
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        {t('common.loading')}
       </div>
     );
   }
@@ -188,37 +193,38 @@ export default function WebhooksSettingsPage() {
     <div className="mx-auto w-full max-w-3xl px-6 py-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Webhooks</h1>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Send events to external HTTP endpoints. Each delivery is signed with HMAC SHA-256
-            (X-Bilinear-Signature header).
-          </p>
+          <h1 className="text-lg font-semibold text-foreground">{t('settings.webhooks.title')}</h1>
+          <p className="mt-1 text-xs text-muted-foreground">{t('settings.webhooks.description')}</p>
         </div>
         <button
-          className="rounded bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-700"
+          className="rounded bg-primary px-3 py-1.5 text-xs text-white hover:bg-primary/90"
           onClick={() => setCreating(c => !c)}
           type="button"
         >
-          {creating ? 'Cancel' : '+ Add webhook'}
+          {creating ? t('common.cancel') : t('settings.webhooks.addWebhook')}
         </button>
       </div>
 
       {creating ? (
-        <div className="mb-6 rounded border border-zinc-200 p-4 dark:border-zinc-800">
+        <div className="mb-6 rounded border border-border p-4">
           <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="text-xs">
-              <span className="mb-1 block text-zinc-700 dark:text-zinc-300">Name</span>
+              <span className="mb-1 block text-foreground-secondary">
+                {t('settings.webhooks.name')}
+              </span>
               <input
-                className="w-full rounded border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
+                className="w-full rounded border border-border bg-transparent px-2 py-1 text-sm"
                 onChange={e => setName(e.target.value)}
-                placeholder="Production CI"
+                placeholder={t('settings.webhooks.namePlaceholder')}
                 value={name}
               />
             </label>
             <label className="text-xs">
-              <span className="mb-1 block text-zinc-700 dark:text-zinc-300">URL</span>
+              <span className="mb-1 block text-foreground-secondary">
+                {t('settings.webhooks.url')}
+              </span>
               <input
-                className="w-full rounded border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700"
+                className="w-full rounded border border-border bg-transparent px-2 py-1 text-sm"
                 onChange={e => setUrl(e.target.value)}
                 placeholder="https://example.com/hook"
                 value={url}
@@ -226,7 +232,9 @@ export default function WebhooksSettingsPage() {
             </label>
           </div>
           <div className="mb-3">
-            <span className="mb-1 block text-xs text-zinc-700 dark:text-zinc-300">Events</span>
+            <span className="mb-1 block text-xs text-foreground-secondary">
+              {t('settings.webhooks.events')}
+            </span>
             <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
               {availableEvents.map(e => (
                 <label className="flex items-center gap-1.5 text-xs" key={e}>
@@ -251,51 +259,53 @@ export default function WebhooksSettingsPage() {
             </div>
           </div>
           <button
-            className="rounded bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-700"
+            className="rounded bg-primary px-3 py-1.5 text-xs text-white hover:bg-primary/90"
             onClick={handleCreate}
             type="button"
           >
-            Create webhook
+            {t('settings.webhooks.createWebhook')}
           </button>
         </div>
       ) : null}
 
       {webhooks.length === 0 ? (
-        <div className="rounded border border-dashed border-zinc-300 px-4 py-8 text-center text-sm text-zinc-400 dark:border-zinc-700">
-          No webhooks yet.
+        <div className="rounded border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+          {t('settings.webhooks.noWebhooksYet')}
         </div>
       ) : (
         <div className="space-y-3">
           {webhooks.map(hook => (
-            <div className="rounded border border-zinc-200 p-4 dark:border-zinc-800" key={hook.id}>
+            <div className="rounded border border-border p-4" key={hook.id}>
               <div className="flex items-start justify-between">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm text-zinc-900 dark:text-zinc-100">
-                      {hook.name}
-                    </span>
+                    <span className="font-medium text-sm text-foreground">{hook.name}</span>
                     <span
                       className={`rounded px-1.5 py-0.5 text-xs ${
                         hook.enabled
                           ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300'
-                          : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
+                          : 'bg-muted text-muted-foreground'
                       }`}
                     >
-                      {hook.enabled ? 'Enabled' : 'Disabled'}
+                      {hook.enabled
+                        ? t('settings.webhooks.enabled')
+                        : t('settings.webhooks.disabled')}
                     </span>
                     {hook.consecutiveFailures > 0 ? (
                       <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                        {hook.consecutiveFailures} consecutive failures
+                        {t('settings.webhooks.consecutiveFailures', {
+                          count: hook.consecutiveFailures,
+                        })}
                       </span>
                     ) : null}
                   </div>
-                  <div className="mt-1 truncate font-mono text-xs text-zinc-500 dark:text-zinc-400">
+                  <div className="mt-1 truncate font-mono text-xs text-muted-foreground">
                     {hook.url}
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1">
                     {hook.events.map(e => (
                       <span
-                        className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[10px] text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                        className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground-secondary"
                         key={e}
                       >
                         {e}
@@ -303,14 +313,16 @@ export default function WebhooksSettingsPage() {
                     ))}
                   </div>
                   <div className="mt-2 flex items-center gap-2 text-xs">
-                    <span className="text-zinc-500 dark:text-zinc-400">Signing secret:</span>
+                    <span className="text-muted-foreground">
+                      {t('settings.webhooks.signingSecret')}
+                    </span>
                     {revealedSecrets.has(hook.id) ? (
-                      <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs dark:bg-zinc-800">
-                        {hook.signingSecret ?? '(hidden — non-admin)'}
+                      <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                        {hook.signingSecret ?? t('settings.webhooks.hiddenNonAdmin')}
                       </code>
                     ) : (
                       <button
-                        className="text-indigo-600 hover:underline"
+                        className="text-brand hover:underline"
                         onClick={() =>
                           setRevealedSecrets(s => {
                             const next = new Set(s);
@@ -320,32 +332,32 @@ export default function WebhooksSettingsPage() {
                         }
                         type="button"
                       >
-                        Reveal
+                        {t('settings.webhooks.reveal')}
                       </button>
                     )}
                   </div>
                 </div>
                 <div className="flex flex-shrink-0 gap-1">
                   <button
-                    className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                    className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
                     onClick={() => handleToggle(hook)}
                     type="button"
                   >
-                    {hook.enabled ? 'Disable' : 'Enable'}
+                    {hook.enabled ? t('settings.webhooks.disable') : t('settings.webhooks.enable')}
                   </button>
                   <button
-                    className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
-                    onClick={() => handleRotate(hook)}
+                    className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
+                    onClick={() => setPendingAction({ hook, type: 'rotate' })}
                     type="button"
                   >
-                    Rotate
+                    {t('settings.webhooks.rotate')}
                   </button>
                   <button
-                    className="rounded border border-zinc-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-zinc-700 dark:hover:bg-red-950/30"
-                    onClick={() => handleDelete(hook)}
+                    className="rounded border border-border px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                    onClick={() => setPendingAction({ hook, type: 'delete' })}
                     type="button"
                   >
-                    Delete
+                    {t('common.delete')}
                   </button>
                 </div>
               </div>
@@ -353,6 +365,29 @@ export default function WebhooksSettingsPage() {
           ))}
         </div>
       )}
+      <ConfirmDialog
+        confirmLabel={
+          pendingAction?.type === 'rotate' ? t('settings.webhooks.rotate') : t('common.delete')
+        }
+        message={
+          pendingAction?.type === 'rotate'
+            ? t('settings.webhooks.rotateConfirm')
+            : t('settings.webhooks.deleteConfirm', { name: pendingAction?.hook.name ?? '' })
+        }
+        onCancel={() => setPendingAction(null)}
+        onConfirm={() => {
+          if (pendingAction?.type === 'rotate') {
+            void handleRotate(pendingAction.hook);
+          } else if (pendingAction?.type === 'delete') {
+            void handleDelete(pendingAction.hook);
+          }
+          setPendingAction(null);
+        }}
+        open={pendingAction !== null}
+        title={
+          pendingAction?.type === 'rotate' ? t('settings.webhooks.rotate') : t('common.delete')
+        }
+      />
     </div>
   );
 }
