@@ -60,18 +60,21 @@ async function fetchWsTicket(): Promise<string> {
 }
 
 // Deterministic-but-varied cursor color per session. Not persisted —
-// changes on reload, which is acceptable for ephemeral presence.
+// changes on reload, which is acceptable for ephemeral presence. Values
+// live in globals.css (--cursor-1..10) — safe as var() references since
+// this color string is synced to peers via the Yjs awareness protocol and
+// every client loads the identical stylesheet.
 const CURSOR_COLORS = [
-  '#6366f1',
-  '#8b5cf6',
-  '#ec4899',
-  '#f43f5e',
-  '#f97316',
-  '#eab308',
-  '#22c55e',
-  '#14b8a6',
-  '#3b82f6',
-  '#06b6d4',
+  'var(--cursor-1)',
+  'var(--cursor-2)',
+  'var(--cursor-3)',
+  'var(--cursor-4)',
+  'var(--cursor-5)',
+  'var(--cursor-6)',
+  'var(--cursor-7)',
+  'var(--cursor-8)',
+  'var(--cursor-9)',
+  'var(--cursor-10)',
 ];
 function sessionColor(): string {
   return CURSOR_COLORS[Math.floor(Math.random() * CURSOR_COLORS.length)];

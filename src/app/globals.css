@@ -108,6 +108,30 @@
   --chart-muted: oklch(0.708 0.012 286);
   --chart-warning: oklch(0.795 0.184 86.047); /* yellow-500 */
   --state-default: oklch(0.585 0.012 286);
+  /* Fixed-meaning priority-level swatch. Consumed via inline style
+     (style={{ color: 'var(--priority-x)' }}), not a Tailwind utility class,
+     so intentionally not registered in @theme inline. Same value in both
+     themes (never adapted historically) — literal hex preserved exactly to
+     avoid any oklch-round-trip color shift. */
+  --priority-none: #8b8c91;
+  --priority-urgent: #ef4444;
+  --priority-high: #f97316;
+  --priority-medium: #eab308;
+  --priority-low: #6b7280;
+  /* Deterministic-but-varied per-session collaboration cursor palette (see
+     tiptap-editor.tsx's CURSOR_COLORS). Synced to peers via the Yjs
+     awareness protocol as a plain CSS color string — safe as a var()
+     reference since every client loads this same stylesheet. */
+  --cursor-1: #6366f1;
+  --cursor-2: #8b5cf6;
+  --cursor-3: #ec4899;
+  --cursor-4: #f43f5e;
+  --cursor-5: #f97316;
+  --cursor-6: #eab308;
+  --cursor-7: #22c55e;
+  --cursor-8: #14b8a6;
+  --cursor-9: #3b82f6;
+  --cursor-10: #06b6d4;
 }
 
 .dark {
