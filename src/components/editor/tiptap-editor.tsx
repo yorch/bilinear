@@ -940,7 +940,7 @@ function ToolbarButton({
     <button
       aria-label={title}
       className={cn(
-        'rounded px-1.5 py-0.5 text-xs font-medium transition-colors',
+        'rounded px-1.5 py-0.5 text-xs font-medium transition-colors max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center',
         active
           ? 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground'
           : 'text-muted-foreground hover:bg-muted',

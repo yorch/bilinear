@@ -95,7 +95,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex h-12 items-center gap-3 border-b border-border px-4">
         <Link
-          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
+          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:h-11 max-md:w-11"
           href={`/${workspaceKey}/projects`}
         >
           <ArrowLeft className="h-4 w-4" />

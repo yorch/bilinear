@@ -63,7 +63,7 @@ export function ThemeToggle({ className, compact = false }: ThemeToggleProps) {
         <button
           aria-pressed={mounted ? theme === value : undefined}
           className={cn(
-            'flex h-6 w-6 items-center justify-center rounded transition-colors',
+            'flex h-6 w-6 items-center justify-center rounded transition-colors max-md:h-11 max-md:w-11',
             mounted && theme === value
               ? 'bg-surface-raised text-foreground shadow-sm dark:bg-surface-raised'
               : 'text-muted-foreground hover:text-foreground',

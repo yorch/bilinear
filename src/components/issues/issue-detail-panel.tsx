@@ -207,7 +207,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
                     ? t('issueDetail.unsubscribeShortcut')
                     : t('issueDetail.subscribeShortcut')
                 }
-                className="rounded p-1 text-muted-foreground hover:bg-accent"
+                className="rounded p-1 text-muted-foreground hover:bg-accent max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                 onClick={handleToggleSubscription}
                 title={
                   subscribed

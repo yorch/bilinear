@@ -156,7 +156,7 @@ export function InitiativeUpdatesSection({
                   {isOwner && (
                     <div className="flex shrink-0 items-center gap-1">
                       <button
-                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
+                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                         onClick={() => openEdit(update.id)}
                         title={t('common.edit')}
                         type="button"

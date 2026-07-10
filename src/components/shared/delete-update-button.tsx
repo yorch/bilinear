@@ -56,7 +56,7 @@ export function DeleteUpdateButton({ updateId, mutation, onDeleted }: DeleteUpda
 
   return (
     <button
-      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-red-500"
+      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-red-500 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
       onClick={() => setConfirming(true)}
       title={t('common.delete')}
       type="button"

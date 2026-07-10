@@ -167,7 +167,7 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
       )}
       <div className="flex shrink-0 items-center gap-0.5">
         <button
-          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
+          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
           onClick={() => onEdit(milestone.id)}
           title={t('projects.editMilestone')}
           type="button"
@@ -175,7 +175,7 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
           <Pencil className="h-3.5 w-3.5" />
         </button>
         <button
-          className="rounded p-1 text-muted-foreground hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950 dark:hover:text-red-400"
+          className="rounded p-1 text-muted-foreground hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950 dark:hover:text-red-400 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
           disabled={deleting}
           onClick={() => setConfirmingDelete(true)}
           title={t('projects.deleteMilestone')}

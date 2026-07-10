@@ -198,7 +198,7 @@ export function CommentCard({
               align="right"
               panelClassName="flex gap-1 p-1.5"
               triggerChildren={<Smile className="h-3.5 w-3.5" />}
-              triggerClassName="p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
+              triggerClassName="p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
               triggerTitle={t('issueDetail.comments.react')}
             >
               {close => (
@@ -230,7 +230,7 @@ export function CommentCard({
             {depth === 0 && (
               <button
                 aria-label={t('issueDetail.comments.quoteReply')}
-                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                 onClick={handleQuoteReply}
                 title={t('issueDetail.comments.quoteReply')}
                 type="button"
@@ -245,7 +245,7 @@ export function CommentCard({
                 isResolved ? t('issueDetail.comments.unresolve') : t('issueDetail.comments.resolve')
               }
               className={cn(
-                'rounded p-1 transition-colors',
+                'rounded p-1 transition-colors max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center',
                 isResolved
                   ? 'text-green-600 hover:bg-green-100 dark:hover:bg-green-900/20'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -264,7 +264,7 @@ export function CommentCard({
               align="right"
               panelClassName="min-w-[160px] py-1"
               triggerChildren={<MoreHorizontal className="h-3.5 w-3.5" />}
-              triggerClassName="p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
+              triggerClassName="p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
             >
               {close => (
                 <>

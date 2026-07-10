@@ -266,7 +266,7 @@ export function TeamMemberManagement({
                     {canManageMembers && (
                       <button
                         className={cn(
-                          'flex h-7 w-7 items-center justify-center rounded text-xs transition-colors disabled:opacity-50',
+                          'flex h-7 w-7 items-center justify-center rounded text-xs transition-colors disabled:opacity-50 max-md:h-11 max-md:w-11',
                           member.isOwner
                             ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
                             : 'text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
@@ -281,7 +281,7 @@ export function TeamMemberManagement({
                     )}
                     {(canManageMembers || isSelf) && (
                       <button
-                        className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                        className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-900/20 dark:hover:text-red-400 max-md:h-11 max-md:w-11"
                         disabled={isLoading}
                         onClick={() => setPendingRemoveId(member.membershipId)}
                         title={isSelf ? t('teams.leaveTeam') : t('teams.removeMember')}

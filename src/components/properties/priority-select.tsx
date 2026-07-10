@@ -31,7 +31,7 @@ export function PrioritySelect({
       panelClassName="min-w-[160px] py-1"
       panelDataTestId="priority-select-popover"
       triggerChildren={<PriorityIcon priority={value} />}
-      triggerClassName="px-1.5 py-1"
+      triggerClassName="px-1.5 py-1 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
       triggerTitle={t(priorityLabelKey(value))}
     >
       {close =>

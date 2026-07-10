@@ -187,7 +187,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
                   <span className="flex-1">{p.name}</span>
                   <span className="text-muted-foreground">{Math.round(p.progress * 100)}%</span>
                   <button
-                    className="text-muted-foreground hover:text-red-500"
+                    className="text-muted-foreground hover:text-red-500 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                     onClick={async () => {
                       const res = await gql(INITIATIVE_REMOVE_PROJECT_MUTATION, {
                         initiativeId: initiative.id,

@@ -637,7 +637,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                         {calendarFeedUrl}
                       </code>
                       <button
-                        className="shrink-0 text-muted-foreground hover:text-foreground"
+                        className="shrink-0 text-muted-foreground hover:text-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                         onClick={() => {
                           void navigator.clipboard.writeText(calendarFeedUrl);
                           toast.success(t('settings.workspace.copiedToClipboard'));
@@ -687,7 +687,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                     {newPlaintext}
                   </code>
                   <button
-                    className="shrink-0 text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-200"
+                    className="shrink-0 text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-200 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                     onClick={() => {
                       void navigator.clipboard.writeText(newPlaintext);
                       toast.success(t('settings.workspace.copiedToClipboard'));
@@ -837,7 +837,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                       </p>
                     </div>
                     <button
-                      className="shrink-0 text-muted-foreground hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40"
+                      className="shrink-0 text-muted-foreground hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                       disabled={revokingTokenId === token.id}
                       onClick={() => setConfirmingRevokeToken(token)}
                       title={t('settings.workspace.revokeToken')}

@@ -47,7 +47,7 @@ export function AssigneeSelect({
           <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border-2 border-dashed border-border" />
         )
       }
-      triggerClassName="px-1 py-1"
+      triggerClassName="px-1 py-1 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
       triggerTitle={current?.displayName ?? t('properties.assignee.noAssignee')}
     >
       {close => (

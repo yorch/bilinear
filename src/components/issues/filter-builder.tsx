@@ -110,7 +110,7 @@ function FilterPill({ condition, states, users, labels, customFields, onRemove }
       {valueLabel && <span>{valueLabel}</span>}
       <button
         aria-label={t('issues.removeFilter')}
-        className="ml-0.5 text-muted-foreground hover:text-foreground-secondary"
+        className="ml-0.5 text-muted-foreground hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
         onClick={onRemove}
         title={t('issues.removeFilter')}
         type="button"
@@ -432,7 +432,7 @@ export function FilterBuilder({
         />
       ) : (
         <button
-          className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground-secondary"
+          className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground-secondary max-md:h-11 max-md:min-w-11 max-md:justify-center"
           onClick={() => setShowAddForm(true)}
           type="button"
         >

@@ -233,7 +233,7 @@ export const RelationsSection = observer(function RelationsSection({
                         </span>
                         <button
                           aria-label={t('issueDetail.relations.removeRelation')}
-                          className="hidden items-center rounded p-0.5 text-muted-foreground hover:text-red-500 group-hover:flex"
+                          className="hidden items-center rounded p-0.5 text-muted-foreground hover:text-red-500 group-hover:flex max-md:flex max-md:h-11 max-md:min-w-11 max-md:justify-center"
                           onClick={() => handleDelete(rel.id)}
                           type="button"
                         >
@@ -340,7 +340,7 @@ function AddRelationForm({ onSubmit, onClose, issueId }: AddRelationFormProps) {
 
       <button
         aria-label={t('common.cancel')}
-        className="rounded p-1 text-muted-foreground hover:text-foreground-secondary"
+        className="rounded p-1 text-muted-foreground hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
         onClick={onClose}
         type="button"
       >

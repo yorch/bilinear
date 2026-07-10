@@ -156,7 +156,7 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
               <span className="shrink-0 text-muted-foreground">{formatFileSize(att.size)}</span>
               <button
                 aria-label={t('issueDetail.attachments.removeAttachment')}
-                className="text-muted-foreground hover:text-red-500"
+                className="text-muted-foreground hover:text-red-500 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                 onClick={() => handleDelete(att)}
                 type="button"
               >

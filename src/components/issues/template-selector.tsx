@@ -104,7 +104,7 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
             </span>
             <button
               aria-label={t('common.close')}
-              className="rounded p-0.5 text-muted-foreground hover:text-foreground-secondary"
+              className="rounded p-0.5 text-muted-foreground hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
               onClick={close}
               type="button"
             >

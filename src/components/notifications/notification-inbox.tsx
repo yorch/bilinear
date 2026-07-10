@@ -156,7 +156,7 @@ function NotificationItem({
             disabled={isSnoozingThis}
             panelClassName="w-44 py-1 shadow-xl"
             triggerChildren={<Clock className="h-3.5 w-3.5" />}
-            triggerClassName="p-1 text-muted-foreground hover:text-foreground-secondary"
+            triggerClassName="p-1 text-muted-foreground hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
             triggerTitle={t('notifications.snooze.buttonTitle')}
           >
             {close => (
@@ -180,7 +180,7 @@ function NotificationItem({
 
           {/* Mark read button */}
           <button
-            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-brand dark:hover:text-brand disabled:opacity-50"
+            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-brand dark:hover:text-brand disabled:opacity-50 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
             disabled={isMarkingThis}
             onClick={() => onMarkRead(id)}
             title={t('notifications.markAsRead')}

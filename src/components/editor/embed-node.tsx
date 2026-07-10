@@ -88,7 +88,7 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
         />
         <button
           aria-label={t('editor.embed.editAriaLabel')}
-          className="absolute right-2 top-2 z-10 rounded bg-black/50 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100 max-md:opacity-100"
+          className="absolute right-2 top-2 z-10 flex rounded bg-black/50 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100 max-md:h-11 max-md:w-11 max-md:items-center max-md:justify-center max-md:opacity-100"
           onClick={() => setEditing(true)}
           title={t('editor.embed.editAriaLabel')}
           type="button"

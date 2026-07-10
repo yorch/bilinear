@@ -17,7 +17,7 @@ export function ViewToggle({ mode, onChange }: ViewToggleProps) {
     <div className="flex items-center rounded-md border border-border">
       <button
         className={cn(
-          'flex items-center justify-center rounded-l-md px-2 py-1 transition-colors',
+          'flex items-center justify-center rounded-l-md px-2 py-1 transition-colors max-md:h-11 max-md:min-w-11',
           mode === 'list'
             ? 'bg-muted text-foreground'
             : 'text-muted-foreground hover:text-foreground-secondary',
@@ -30,7 +30,7 @@ export function ViewToggle({ mode, onChange }: ViewToggleProps) {
       </button>
       <button
         className={cn(
-          'flex items-center justify-center px-2 py-1 transition-colors',
+          'flex items-center justify-center px-2 py-1 transition-colors max-md:h-11 max-md:min-w-11',
           mode === 'board'
             ? 'bg-muted text-foreground'
             : 'text-muted-foreground hover:text-foreground-secondary',
@@ -43,7 +43,7 @@ export function ViewToggle({ mode, onChange }: ViewToggleProps) {
       </button>
       <button
         className={cn(
-          'flex items-center justify-center rounded-r-md px-2 py-1 transition-colors',
+          'flex items-center justify-center rounded-r-md px-2 py-1 transition-colors max-md:h-11 max-md:min-w-11',
           mode === 'timeline'
             ? 'bg-muted text-foreground'
             : 'text-muted-foreground hover:text-foreground-secondary',
