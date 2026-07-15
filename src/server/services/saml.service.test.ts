@@ -99,10 +99,15 @@ function buildSignedResponse(opts: SignedResponseOptions = {}): string {
       ? ''
       : `<saml:AudienceRestriction><saml:Audience>${opts.audience ?? SP_ENTITY_ID}</saml:Audience></saml:AudienceRestriction>`;
 
+  // Build NotBefore/NotOnOrAfter as genuinely-optional attributes (omitted
+  // entirely, not just present-empty) so a test can exercise a conformant
+  // IdP that leaves one of them out per SAML 2.0 §2.5.1.
+  const notBeforeAttr = notBefore === null ? '' : ` NotBefore="${notBefore}"`;
+  const notOnOrAfterAttr = notOnOrAfter === null ? '' : ` NotOnOrAfter="${notOnOrAfter}"`;
   const conditionsXml =
     notBefore === null && notOnOrAfter === null
       ? ''
-      : `<saml:Conditions NotBefore="${notBefore ?? ''}" NotOnOrAfter="${notOnOrAfter ?? ''}">${audienceXml}</saml:Conditions>`;
+      : `<saml:Conditions${notBeforeAttr}${notOnOrAfterAttr}>${audienceXml}</saml:Conditions>`;
 
   const subjectConfirmationXml =
     opts.subjectConfirmationNotOnOrAfter === null
@@ -593,6 +598,51 @@ describe('SamlService', () => {
       await expect(service.parseAndValidateResponse(makeConfig(), samlResponse)).rejects.toThrow(
         /replay/,
       );
+    });
+
+    it('rejects a replay in the clock-skew tail just after NotOnOrAfter (prune-window bug)', async () => {
+      // validateConditions() still ACCEPTS an assertion for an extra
+      // CLOCK_SKEW_MS (60s) past Conditions/@NotOnOrAfter. The replay cache
+      // must key its eviction on that same acceptance horizon — otherwise
+      // the cached assertion id gets pruned right before this replay check
+      // runs, and the replay slips through.
+      vi.useFakeTimers();
+      try {
+        const start = new Date('2026-06-24T12:00:00.000Z');
+        vi.setSystemTime(start);
+
+        const notOnOrAfter = new Date(start.getTime() + 60_000).toISOString();
+        const samlResponse = buildSignedResponse({
+          assertionId: '_replay-tail',
+          notBefore: new Date(start.getTime() - 5 * 60_000).toISOString(),
+          notOnOrAfter,
+        });
+
+        const claims = await service.parseAndValidateResponse(makeConfig(), samlResponse);
+        expect(claims.email).toBe('user@example.com');
+
+        // Advance 30s past NotOnOrAfter — still inside the 60s clock-skew
+        // tolerance, so validateConditions would still accept a *fresh*
+        // assertion at this instant. The replay check must still fire.
+        vi.setSystemTime(new Date(notOnOrAfter).getTime() + 30_000);
+
+        await expect(service.parseAndValidateResponse(makeConfig(), samlResponse)).rejects.toThrow(
+          /replay/,
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('accepts an assertion with NotOnOrAfter but no NotBefore (NotBefore is optional per SAML core)', async () => {
+      const samlResponse = buildSignedResponse({
+        assertionId: '_no-notbefore',
+        notBefore: null,
+        notOnOrAfter: new Date(Date.now() + 5 * 60_000).toISOString(),
+      });
+
+      const claims = await service.parseAndValidateResponse(makeConfig(), samlResponse);
+      expect(claims.email).toBe('user@example.com');
     });
 
     it('throws when the SignedInfo Reference has no URI (fails closed instead of trusting the whole document)', async () => {

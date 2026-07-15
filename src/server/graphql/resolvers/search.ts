@@ -1,4 +1,4 @@
-import { requireAuth } from '../../middleware/auth';
+import { getGuestTeamIds, requireAuth } from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
 
 export const searchResolvers = {
@@ -24,11 +24,13 @@ export const searchResolvers = {
       const memberTeamIds = memberships
         .filter(m => m.team.organizationId === ctx.orgId)
         .map(m => m.teamId);
-      const roleRows = await ctx.prisma.teamMemberRole.findMany({
-        select: { teamId: true },
-        where: { role: 'guest', teamId: { in: memberTeamIds }, userId: ctx.userId },
-      });
-      const guestTeamIds = roleRows.map(r => r.teamId);
+      // Reuse the shared helper (also used by the sync bootstrap path)
+      // instead of a raw `role: 'guest'` query — the raw query missed
+      // getTeamRole's "unknown/unexpected role value defaults to guest
+      // (least privilege)" fallback, so a corrupted team_member_roles row
+      // would leak full (non-guest-scoped) search results here while every
+      // other guest-gated read path still restricted correctly.
+      const guestTeamIds = await getGuestTeamIds(ctx.prisma, ctx.userId, ctx.orgId);
 
       const issues = await ctx.services.search.searchIssues(
         ctx.orgId,

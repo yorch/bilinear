@@ -148,6 +148,51 @@ describe('FavoriteService', () => {
       // matched — that would be the exact cross-org mutation this fixes.
       expect(prisma.favorite.update).not.toHaveBeenCalled();
     });
+
+    it('treats a concurrent same-org double-favorite race as idempotent success', async () => {
+      // A double-click / optimistic-retry can lose a race: our initial
+      // org-scoped findFirst sees nothing, but by the time our create()
+      // hits the DB, a concurrent request for the SAME org has already
+      // inserted the row and committed, so our create() throws P2002.
+      // That must resolve as idempotent success (like the old upsert did),
+      // not a FavoriteCrossOrgConflictError.
+      prisma.issue.findUnique.mockResolvedValue({ organizationId: TEST_ORG.id });
+      prisma.favorite.findFirst
+        .mockResolvedValueOnce(null) // initial org-scoped check
+        .mockResolvedValueOnce(TEST_FAVORITE); // re-read after P2002: winner's row, same org
+      prisma.favorite.create.mockRejectedValue(
+        Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }),
+      );
+
+      const result = await service.create(TEST_ORG.id, TEST_USER.id, {
+        entityId: TEST_FAVORITE.entityId,
+        entityType: 'Issue',
+      });
+
+      expect(result).toEqual(TEST_FAVORITE);
+      expect(prisma.favorite.update).not.toHaveBeenCalled();
+    });
+
+    it('updates sortOrder on the winner row when the race includes an explicit sortOrder', async () => {
+      prisma.issue.findUnique.mockResolvedValue({ organizationId: TEST_ORG.id });
+      prisma.favorite.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(TEST_FAVORITE);
+      prisma.favorite.create.mockRejectedValue(
+        Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }),
+      );
+      prisma.favorite.update.mockResolvedValue({ ...TEST_FAVORITE, sortOrder: 7 });
+
+      const result = await service.create(TEST_ORG.id, TEST_USER.id, {
+        entityId: TEST_FAVORITE.entityId,
+        entityType: 'Issue',
+        sortOrder: 7,
+      });
+
+      expect(result.sortOrder).toBe(7);
+      expect(prisma.favorite.update).toHaveBeenCalledWith({
+        data: { sortOrder: 7 },
+        where: { id: TEST_FAVORITE.id },
+      });
+    });
   });
 
   describe('delete', () => {

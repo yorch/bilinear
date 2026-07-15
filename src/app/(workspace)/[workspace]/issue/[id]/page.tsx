@@ -2,12 +2,15 @@
 
 import { observer } from 'mobx-react-lite';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
 import { useDocumentTitle } from '@/hooks/use-document-title';
-import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
+import { ISSUE_UPDATE_MUTATION } from '@/lib/graphql-queries';
+import { toast } from '@/lib/toast';
+import { TransactionQueue } from '@/lib/transaction-queue';
+import { getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 
@@ -109,11 +112,17 @@ const IssueDetailPage = observer(function IssueDetailPage() {
       .finally(() => setLoading(false));
   }, [id, issueStore, teamStore, workflowStateStore, labelStore, userStore]);
 
-  // Owns the optimistic apply against issueStore, TransactionQueue enqueue,
-  // rollback, and failure toast — see src/hooks/use-issue-update.ts. Reused
-  // here (instead of a bespoke `await gql(...)`) so this route gets the same
-  // offline-safe persistence and error handling as every other issue surface.
-  const applyIssueUpdate = useIssueUpdate();
+  // This route renders from its own local `issue` useState rather than the
+  // shared issueStore (it can show an issue the store hasn't hydrated yet —
+  // see the temp-id branch above), so `useIssueUpdate()` can't be reused
+  // as-is: its optimistic-apply/rollback/success-merge all target
+  // issueStore, which this page's render doesn't read from. Enqueuing
+  // through the same shared `TransactionQueue` singleton directly (same
+  // mutation, same persistence/retry/backoff, same default-error-handler
+  // fallback as every other issue surface) but with callbacks that
+  // reconcile THIS page's local state gets the offline-queue benefit back
+  // without losing local rollback-on-failure / merge-on-success.
+  const txQueue = useMemo(() => new TransactionQueue(), []);
 
   const handleUpdate = useCallback(
     (issueId: string, patch: Record<string, unknown>) => {
@@ -130,10 +139,30 @@ const IssueDetailPage = observer(function IssueDetailPage() {
         };
       }
 
+      // Snapshot the pre-edit state (for this specific call) so a failed
+      // mutation can restore exactly what was on screen before it — this
+      // page has no shared-store rollback to fall back on.
+      const snapshot = issue;
       setIssue(prev => (prev ? { ...prev, ...optimisticPatch } : prev));
-      applyIssueUpdate(issueId, patch);
+
+      txQueue.enqueue(
+        ISSUE_UPDATE_MUTATION,
+        { id: issueId, input: patch },
+        {
+          onError: err => {
+            toast.error(getErrorMessage(err, t('issues.updateFailed')));
+            setIssue(snapshot);
+          },
+          onSuccess: data => {
+            const updated = (data as { issueUpdate?: { issue?: IssueDetail } })?.issueUpdate?.issue;
+            if (updated) {
+              setIssue(prev => (prev ? { ...prev, ...updated } : prev));
+            }
+          },
+        },
+      );
     },
-    [applyIssueUpdate, labels],
+    [issue, labels, t, txQueue],
   );
 
   const handleClose = () => {

@@ -384,7 +384,13 @@ export class IssueService {
       nodes: issues,
       pageInfo: {
         endCursor,
-        hasNextPage: !!pagination.first && hasMore,
+        // `hasMore` already folds in `overFetchForward` (true whenever we're
+        // not doing backward/`last` pagination), so it's the correct signal
+        // on its own — gating it on `!!pagination.first` additionally caused
+        // the common no-args default (take=50, forward direction) to always
+        // report `false` even when a 51st row was over-fetched, silently
+        // dropping rows past page 1 for any caller that omits `first`.
+        hasNextPage: hasMore,
         hasPreviousPage: !!pagination.last && rawIssues.length === take,
         startCursor,
       },
@@ -506,6 +512,7 @@ export class IssueService {
           canceledAt: true,
           completedAt: true,
           organizationId: true,
+          projectId: true,
           startedAt: true,
           stateId: true,
           teamId: true,
@@ -548,13 +555,23 @@ export class IssueService {
       // Cross-org / cross-team reference validation — see `create()` for
       // the full rationale. Falsy values (undefined = unchanged, null =
       // clearing the reference) are skipped by validateReferences itself.
-      await this.validateReferences(tx, existing.organizationId, [existing.teamId], {
-        assigneeId: input.assigneeId,
-        cycleId: input.cycleId,
-        parentId: input.parentId,
-        projectId: input.projectId,
-        projectMilestoneId: input.projectMilestoneId,
-      });
+      // `existing.projectId` is passed as the milestone-consistency fallback
+      // so an update that touches ONLY projectMilestoneId (no projectId in
+      // the same call) is still validated against the issue's actual
+      // current project, not skipped outright.
+      await this.validateReferences(
+        tx,
+        existing.organizationId,
+        [existing.teamId],
+        {
+          assigneeId: input.assigneeId,
+          cycleId: input.cycleId,
+          parentId: input.parentId,
+          projectId: input.projectId,
+          projectMilestoneId: input.projectMilestoneId,
+        },
+        existing.projectId,
+      );
 
       const issue = await tx.issue.update({ data, where: { id } });
 
@@ -1093,6 +1110,16 @@ export class IssueService {
    * skipped — there's nothing to look up. Throws IssueInvalidReferenceError
    * on any mismatch. Shared by create()/update()/bulkUpdate() so the three
    * write paths can't drift out of sync on which references get checked.
+   *
+   * `currentProjectId` is the milestone-consistency fallback: when a call
+   * sets `projectMilestoneId` WITHOUT also passing `projectId` (e.g. an
+   * update that only touches the milestone), there's no explicit projectId
+   * in `refs` to validate the milestone against, so a same-org milestone
+   * belonging to a completely different project could otherwise attach
+   * silently. Only `update()` has a "current" project to fall back to
+   * (fetched from the existing row); `create()`/`bulkUpdate()` pass nothing,
+   * which means a milestone with no explicit project reference at all is
+   * rejected outright — a milestone can't float free of a project.
    */
   private async validateReferences(
     tx: Pick<
@@ -1102,6 +1129,7 @@ export class IssueService {
     orgId: string,
     teamIds: string[],
     refs: IssueReferenceInput,
+    currentProjectId?: string | null,
   ): Promise<void> {
     if (refs.parentId) {
       const parent = await tx.issue.findUnique({
@@ -1145,7 +1173,13 @@ export class IssueService {
       if (!milestone || milestone.project.organizationId !== orgId) {
         throw new IssueInvalidReferenceError('projectMilestoneId');
       }
-      if (refs.projectId && milestone.projectId !== refs.projectId) {
+      // The milestone must belong to the issue's actual project. Prefer an
+      // explicit projectId supplied in this same call; otherwise fall back
+      // to the caller-supplied "current" project (update() only). Neither
+      // present means there's nothing to validate consistency against, so
+      // reject rather than silently accepting an unrelated milestone.
+      const expectedProjectId = refs.projectId !== undefined ? refs.projectId : currentProjectId;
+      if (!expectedProjectId || milestone.projectId !== expectedProjectId) {
         throw new IssueInvalidReferenceError('projectMilestoneId');
       }
     }

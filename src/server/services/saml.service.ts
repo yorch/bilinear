@@ -282,18 +282,32 @@ function validateConditions(signedContent: string, now: Date): { notOnOrAfterMs:
   const attrs = conditionsMatch[1] ?? '';
   const notBefore = attrs.match(/\bNotBefore="([^"]+)"/i)?.[1];
   const notOnOrAfter = attrs.match(/\bNotOnOrAfter="([^"]+)"/i)?.[1];
-  if (!notBefore || !notOnOrAfter) {
-    throw new SamlParseError('SAML assertion Conditions is missing NotBefore/NotOnOrAfter');
+  // NotOnOrAfter is required here (fail closed): without it there is no
+  // expiry bound and nothing to key the replay-prune cache on. NotBefore,
+  // however, is individually optional per SAML 2.0 §2.5.1 — a conformant IdP
+  // may omit it, and rejecting that assertion would be a false-positive SSO
+  // failure, not a real security check (omitting NotBefore only means the
+  // assertion has no "not yet valid" bound, which is a strictly narrower
+  // relaxation than omitting NotOnOrAfter's expiry bound).
+  if (!notOnOrAfter) {
+    throw new SamlParseError('SAML assertion Conditions is missing NotOnOrAfter');
   }
 
-  const notBeforeMs = Date.parse(notBefore);
+  let notBeforeMs: number | undefined;
+  if (notBefore) {
+    notBeforeMs = Date.parse(notBefore);
+    if (Number.isNaN(notBeforeMs)) {
+      throw new SamlParseError('SAML assertion Conditions has an unparseable NotBefore timestamp');
+    }
+  }
+
   const notOnOrAfterMs = Date.parse(notOnOrAfter);
-  if (Number.isNaN(notBeforeMs) || Number.isNaN(notOnOrAfterMs)) {
-    throw new SamlParseError('SAML assertion Conditions has an unparseable timestamp');
+  if (Number.isNaN(notOnOrAfterMs)) {
+    throw new SamlParseError('SAML assertion Conditions has an unparseable NotOnOrAfter timestamp');
   }
 
   const nowMs = now.getTime();
-  if (nowMs < notBeforeMs - CLOCK_SKEW_MS) {
+  if (notBeforeMs !== undefined && nowMs < notBeforeMs - CLOCK_SKEW_MS) {
     throw new SamlParseError('SAML assertion is not yet valid (Conditions NotBefore)');
   }
   if (nowMs >= notOnOrAfterMs + CLOCK_SKEW_MS) {
@@ -379,10 +393,19 @@ function validateSubjectConfirmation(signedContent: string, now: Date): void {
 // ---------------------------------------------------------------------------
 
 const MAX_REPLAY_CACHE_SIZE = 10_000;
-const seenAssertionIds = new Map<string, number>(); // assertionId -> NotOnOrAfter (epoch ms)
+// assertionId -> acceptance-horizon expiry (epoch ms). This is NOT the raw
+// Conditions/@NotOnOrAfter instant — validateConditions() still ACCEPTS an
+// assertion for an extra CLOCK_SKEW_MS past NotOnOrAfter, so pruning a cache
+// entry at the bare NotOnOrAfter instant would evict it right before a
+// replay attempt inside that skew tail could still be accepted, letting the
+// replay through. The stored expiry must be the actual last instant at which
+// the assertion could still pass validateConditions.
+const seenAssertionIds = new Map<string, number>();
 
 function recordAssertionUseOrThrow(assertionId: string, notOnOrAfterMs: number): void {
   const now = Date.now();
+  const acceptanceHorizonMs = notOnOrAfterMs + CLOCK_SKEW_MS;
+
   for (const [id, expiry] of seenAssertionIds) {
     if (expiry <= now) {
       seenAssertionIds.delete(id);
@@ -402,7 +425,7 @@ function recordAssertionUseOrThrow(assertionId: string, notOnOrAfterMs: number):
     }
   }
 
-  seenAssertionIds.set(assertionId, notOnOrAfterMs);
+  seenAssertionIds.set(assertionId, acceptanceHorizonMs);
 }
 
 /** Test-only: clear the in-memory replay cache between test cases. */

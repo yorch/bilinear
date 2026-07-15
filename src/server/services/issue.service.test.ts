@@ -922,6 +922,23 @@ describe('IssueService', () => {
       expect(result.nodes).toHaveLength(2);
       expect(result.pageInfo.hasNextPage).toBe(false);
     });
+
+    it('reports hasNextPage=true for the no-args default pagination when >50 rows exist', async () => {
+      // Regression: hasNextPage used to be gated on `!!pagination.first`,
+      // so a caller that omits BOTH `first` and `last` (a valid call — the
+      // default take is 50) always got hasNextPage=false even though a
+      // 51st row was over-fetched and hasMore was true, silently hiding
+      // the fact that more rows exist past the first page.
+      const rows = Array.from({ length: 51 }, (_, i) => ({ ...TEST_ISSUE, id: `row-${i}` }));
+      prisma.issue.findMany.mockResolvedValue(rows);
+      prisma.issue.count.mockResolvedValue(51);
+
+      const result = await service.findMany(TEST_ORG.id, {}, {});
+
+      expect(prisma.issue.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 51 }));
+      expect(result.nodes).toHaveLength(50);
+      expect(result.pageInfo.hasNextPage).toBe(true);
+    });
   });
 
   describe('findByTeamId', () => {

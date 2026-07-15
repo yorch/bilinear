@@ -153,6 +153,119 @@ describe('SyncService.getDeltaSyncActions — pagination', () => {
   });
 });
 
+describe('SyncService.getDeltaSyncActions — guest visibility (IssueRelation both endpoints)', () => {
+  let prisma: MockPrismaClient;
+  let svc: SyncService;
+
+  const GUEST_TEAM = '00000000-0000-0000-0000-0000000team1';
+  const OTHER_TEAM = '00000000-0000-0000-0000-0000000team2';
+  const GUEST_USER = '00000000-0000-0000-0000-00000guest1';
+
+  beforeEach(() => {
+    prisma = createMockPrisma();
+    svc = new SyncService(prisma as never, mockRedis);
+  });
+
+  function makeRelationAction(id: bigint, data: Record<string, unknown>) {
+    return {
+      action: 'I' as const,
+      committedAt: new Date('2026-04-22T00:00:00Z'),
+      createdAt: new Date('2026-04-22T00:00:00Z'),
+      data,
+      id,
+      modelId: data.id as string,
+      modelName: 'IssueRelation',
+      organizationId: TEST_ORG.id,
+    };
+  }
+
+  it('drops an IssueRelation row when only the `issue` side is guest-visible but `relatedIssue` is not', async () => {
+    // Previously only `issueId` was checked, so a guest could see this row
+    // (and thus the relatedIssue's UUID + relation type) purely because the
+    // `issue` side was visible, even though the relatedIssue sits on a
+    // guest-restricted team the caller has no other access to.
+    const relationData = {
+      id: 'rel-1',
+      issueId: 'issue-visible',
+      relatedIssueId: 'issue-hidden',
+      type: 'blocks',
+    };
+    prisma.syncAction.findMany.mockResolvedValue([makeRelationAction(BigInt(1), relationData)]);
+    prisma.issue.findMany.mockResolvedValue([
+      { assigneeId: null, creatorId: null, id: 'issue-visible', teamId: OTHER_TEAM },
+      { assigneeId: null, creatorId: 'someone-else', id: 'issue-hidden', teamId: GUEST_TEAM },
+    ]);
+
+    const result = await svc.getDeltaSyncActions(TEST_ORG.id, parseCursor('0'), undefined, 50, {
+      guestTeamIds: [GUEST_TEAM],
+      userId: GUEST_USER,
+    });
+
+    expect(result.actions).toHaveLength(0);
+  });
+
+  it('drops an IssueRelation row when only the `relatedIssue` side is guest-visible but `issue` is not', async () => {
+    const relationData = {
+      id: 'rel-2',
+      issueId: 'issue-hidden',
+      relatedIssueId: 'issue-visible',
+      type: 'blocks',
+    };
+    prisma.syncAction.findMany.mockResolvedValue([makeRelationAction(BigInt(2), relationData)]);
+    prisma.issue.findMany.mockResolvedValue([
+      { assigneeId: null, creatorId: 'someone-else', id: 'issue-hidden', teamId: GUEST_TEAM },
+      { assigneeId: null, creatorId: null, id: 'issue-visible', teamId: OTHER_TEAM },
+    ]);
+
+    const result = await svc.getDeltaSyncActions(TEST_ORG.id, parseCursor('0'), undefined, 50, {
+      guestTeamIds: [GUEST_TEAM],
+      userId: GUEST_USER,
+    });
+
+    expect(result.actions).toHaveLength(0);
+  });
+
+  it('keeps an IssueRelation row when both endpoints are guest-visible', async () => {
+    const relationData = {
+      id: 'rel-3',
+      issueId: 'issue-a',
+      relatedIssueId: 'issue-b',
+      type: 'related',
+    };
+    prisma.syncAction.findMany.mockResolvedValue([makeRelationAction(BigInt(3), relationData)]);
+    prisma.issue.findMany.mockResolvedValue([
+      { assigneeId: null, creatorId: null, id: 'issue-a', teamId: OTHER_TEAM },
+      { assigneeId: GUEST_USER, creatorId: null, id: 'issue-b', teamId: GUEST_TEAM },
+    ]);
+
+    const result = await svc.getDeltaSyncActions(TEST_ORG.id, parseCursor('0'), undefined, 50, {
+      guestTeamIds: [GUEST_TEAM],
+      userId: GUEST_USER,
+    });
+
+    expect(result.actions).toHaveLength(1);
+  });
+
+  it('does not filter IssueRelation rows for a non-guest caller (empty guestTeamIds)', async () => {
+    const relationData = {
+      id: 'rel-4',
+      issueId: 'issue-x',
+      relatedIssueId: 'issue-y',
+      type: 'blocks',
+    };
+    prisma.syncAction.findMany.mockResolvedValue([makeRelationAction(BigInt(4), relationData)]);
+
+    const result = await svc.getDeltaSyncActions(TEST_ORG.id, parseCursor('0'), undefined, 50, {
+      guestTeamIds: [],
+      userId: 'someone',
+    });
+
+    expect(result.actions).toHaveLength(1);
+    // No guest scoping means no need to even look up the issues.
+    expect(prisma.issue.findMany).not.toHaveBeenCalled();
+  });
+});
+
 describe('SyncService — atomic write helpers', () => {
   let prisma: MockPrismaClient;
   let svc: SyncService;

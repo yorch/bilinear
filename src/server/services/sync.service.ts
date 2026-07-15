@@ -273,6 +273,14 @@ export class SyncService {
             trashed: false,
             ...(guestVisibilityClause ? { AND: [guestVisibilityClause] } : {}),
           },
+          // A relation row embeds the OTHER issue's UUID + relation type too,
+          // so a guest must be able to see BOTH endpoints — otherwise they'd
+          // learn about (and the type of relation to) a relatedIssue on a
+          // guest-restricted team purely through this row, even though they
+          // can't see that issue through any other query. Only applied when
+          // the caller is actually a guest somewhere; non-guests are
+          // unaffected (guestVisibilityClause is null for them).
+          ...(guestVisibilityClause ? { relatedIssue: guestVisibilityClause } : {}),
         },
       }),
       this.prisma.issueTemplate.findMany({
@@ -493,12 +501,18 @@ export class SyncService {
 
     const relatedIssueIds = new Set<string>();
     for (const row of rows) {
-      if (
-        (row.modelName === 'IssueRelation' || row.modelName === 'IssueReaction') &&
-        row.data &&
-        typeof (row.data as Record<string, unknown>).issueId === 'string'
-      ) {
-        relatedIssueIds.add((row.data as Record<string, unknown>).issueId as string);
+      if ((row.modelName === 'IssueRelation' || row.modelName === 'IssueReaction') && row.data) {
+        const data = row.data as Record<string, unknown>;
+        if (typeof data.issueId === 'string') {
+          relatedIssueIds.add(data.issueId);
+        }
+        // IssueRelation carries a SECOND issue endpoint (relatedIssueId) —
+        // both sides need a visibility lookup, not just `issueId`, or a
+        // guest could see a relation for a relatedIssue they can't
+        // otherwise access.
+        if (row.modelName === 'IssueRelation' && typeof data.relatedIssueId === 'string') {
+          relatedIssueIds.add(data.relatedIssueId);
+        }
       }
     }
 
@@ -546,10 +560,28 @@ export class SyncService {
         // Issue no longer exists (hard-deleted) or wasn't found — nothing
         // left to gate visibility on; let it through rather than silently
         // dropping a row we can't reason about.
-        if (!info) {
-          return true;
+        if (info && !canSee(info.teamId, info.creatorId, info.assigneeId)) {
+          return false;
         }
-        return canSee(info.teamId, info.creatorId, info.assigneeId);
+
+        // IssueRelation additionally embeds a relatedIssueId — a guest must
+        // be able to see BOTH endpoints, since this row leaks the related
+        // issue's UUID + relation type even when they can already see the
+        // `issue` side.
+        if (row.modelName === 'IssueRelation') {
+          const relatedIssueId = data.relatedIssueId as string | undefined;
+          if (relatedIssueId) {
+            const relatedInfo = issueLookup.get(relatedIssueId);
+            if (
+              relatedInfo &&
+              !canSee(relatedInfo.teamId, relatedInfo.creatorId, relatedInfo.assigneeId)
+            ) {
+              return false;
+            }
+          }
+        }
+
+        return true;
       }
       return true;
     });

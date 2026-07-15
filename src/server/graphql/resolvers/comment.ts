@@ -113,9 +113,27 @@ export const commentResolvers = {
       const mentionedUserIds = extractMentionedUserIds(input.bodyData);
       if (mentionedUserIds.length > 0) {
         void (async () => {
+          // Access-control gate: bodyData is client-authored editor state, so
+          // a mention node's `attrs.id` could name ANY user id, including one
+          // with no relationship to this issue's team (or a different org
+          // entirely). Without this check, createForMention would happily
+          // email the issue title + comment excerpt and create a
+          // Notification row for an arbitrary/foreign user. Only notify
+          // mentioned ids that are actual members of the issue's team, in
+          // this org — the same membership rule requireTeamMember enforces,
+          // batched for every mentioned id in one query.
+          const teamMembers = await ctx.prisma.teamMembership.findMany({
+            select: { userId: true },
+            where: {
+              team: { organizationId: ctx.orgId },
+              teamId: issue.teamId,
+              userId: { in: mentionedUserIds },
+            },
+          });
+          const authorizedMentionedIds = new Set(teamMembers.map(m => m.userId));
           const subscribers = new Set(await ctx.services.notification.getSubscribers(issue.id));
           for (const userId of mentionedUserIds) {
-            if (subscribers.has(userId)) {
+            if (!authorizedMentionedIds.has(userId) || subscribers.has(userId)) {
               continue;
             }
             await ctx.services.notification.createForMention(

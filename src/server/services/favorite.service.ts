@@ -100,14 +100,43 @@ export class FavoriteService {
         },
       });
     } catch (err) {
-      // The physical unique constraint is (userId, entityType, entityId)
-      // with no organizationId column. Our org-scoped findFirst above
-      // found nothing, which means a row for this exact
-      // (userId, entityType, entityId) already exists in a DIFFERENT org.
-      // Surface a clear conflict instead of letting Prisma's raw P2002
-      // bubble up — and, critically, instead of silently falling back to
-      // an update that would mutate that other org's row.
       if ((err as { code?: string }).code === 'P2002') {
+        // The physical unique constraint is (userId, entityType, entityId)
+        // with no organizationId column. Our org-scoped findFirst above
+        // found nothing at the time — but two possible races land here:
+        //   1. A concurrent request for the SAME org (double-click,
+        //      optimistic-retry) won the race and committed its row
+        //      between our findFirst and our create. That's not a real
+        //      conflict — the old upsert-based implementation was
+        //      idempotent for exactly this case, and losing that
+        //      idempotency turned a harmless double-click into a
+        //      confusing BAD_USER_INPUT that rolled back the optimistic
+        //      UI add.
+        //   2. A row for this exact (userId, entityType, entityId) already
+        //      exists in a genuinely DIFFERENT org — the real cross-org
+        //      conflict this error exists to catch.
+        // Re-read (unscoped by org, since we need to see whichever row the
+        // unique constraint collided with) to tell the two apart.
+        const raced = await this.prisma.favorite.findFirst({
+          where: {
+            entityId: input.entityId,
+            entityType: input.entityType,
+            userId,
+          },
+        });
+        if (raced && raced.organizationId === orgId) {
+          if (input.sortOrder === undefined) {
+            return raced;
+          }
+          return this.prisma.favorite.update({
+            data: { sortOrder: input.sortOrder },
+            where: { id: raced.id },
+          });
+        }
+        // Either no row was found (shouldn't happen given P2002, but fail
+        // safe) or it belongs to a different org — surface a clear
+        // conflict instead of silently falling back to an update that
+        // would mutate that other org's row.
         throw new FavoriteCrossOrgConflictError();
       }
       throw err;

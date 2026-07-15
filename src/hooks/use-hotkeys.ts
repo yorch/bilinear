@@ -40,7 +40,12 @@ function eventMatchesBinding(e: KeyboardEvent, binding: string): boolean {
   }
 
   if (wantAlt && /^[0-9]$/.test(key)) {
-    return e.code === `Digit${key}`;
+    // Match the physical digit key AND shift state explicitly — `e.key`
+    // can't be trusted here (that's the whole reason we fell back to
+    // `e.code`), so an unrequested Shift has to be checked the same way
+    // the alphanumeric branch below does, or e.g. `alt+shift+1` would
+    // spuriously satisfy a plain `alt+1` binding.
+    return e.code === `Digit${key}` && e.shiftKey === wantShift;
   }
 
   const eventKey = e.key;
@@ -57,6 +62,27 @@ function eventMatchesBinding(e: KeyboardEvent, binding: string): boolean {
     return false;
   }
   return eventKey.toLowerCase() === key;
+}
+
+// Elements the browser natively activates on a bare (unmodified) Enter or
+// Space keypress — a focused element matching one of these already gets its
+// own click/activation from the keydown, independent of any global hotkey.
+const NATIVE_ACTIVATION_SELECTOR = 'button, a[href], [role="button"], input, textarea, select';
+
+/**
+ * Whether `target` is an element the browser would natively activate (or
+ * otherwise already handle) on a bare Enter/Space keypress — a focused
+ * button, link, form control, or contenteditable region. Used to suppress a
+ * plain-key/Enter *hotkey* handler in that case so a single keypress doesn't
+ * both activate the focused control AND run an unrelated global handler
+ * (e.g. focusing a row-action button and pressing Enter shouldn't both click
+ * the button and open the list's detail panel via its global 'enter' hotkey).
+ */
+function isNativeActivationTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+  return (target as HTMLElement).isContentEditable || target.matches(NATIVE_ACTIVATION_SELECTOR);
 }
 
 export interface HotkeyOptions {
@@ -127,10 +153,26 @@ export function useHotkeys(
         return;
       }
 
+      // Bare Enter (and Space) is a plain activation key. When the focused
+      // element is one the browser natively activates on that keypress (a
+      // button, link, form control, or contenteditable region), defer to
+      // that native behavior entirely and skip this hotkey's handler — else
+      // a single keypress both activates the focused control AND runs a
+      // global handler (e.g. focusing a row-action button and pressing
+      // Enter would both click the button and open the issues list's
+      // detail panel via its global 'enter' hotkey). Modified variants
+      // (e.g. 'shift+enter') aren't bare activation keys, so they're
+      // unaffected — `matched` only equals the plain key string here.
+      const matchedKey = matched.toLowerCase();
+      const isBareActivationKey = matchedKey === 'enter' || matchedKey === 'space';
+      if (isBareActivationKey && isNativeActivationTarget(e.target)) {
+        return;
+      }
+
       // Bare Enter is a plain activation key — e.g. a focused button relies
       // on its own default keydown/click behavior to fire. Only preventDefault
       // for bindings that actually need to suppress the browser default.
-      if (matched.toLowerCase() !== 'enter') {
+      if (matchedKey !== 'enter') {
         e.preventDefault();
       }
       handler(e);

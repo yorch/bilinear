@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/server/lib/prisma';
 import { getUploadDir } from '@/server/lib/upload-dir';
 import { extractAuthContext } from '@/server/middleware/auth';
+import { apiScopesAllowWrite } from '@/server/services/auth.service';
 import { FileService } from '@/server/services/file.service';
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
@@ -48,6 +49,13 @@ export async function POST(req: NextRequest) {
 
   if (!authCtx.orgId || !authCtx.userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  // Mirror /api/graphql's mutation gate: a request authenticated via API key
+  // (bil_...) rather than a user session carries `apiKeyScopes`, and uploading
+  // a file is a write — a read-only key must not be able to do it. Session/JWT
+  // auth leaves apiKeyScopes null, so ordinary logged-in users are unaffected.
+  if (authCtx.apiKeyScopes != null && !apiScopesAllowWrite(authCtx.apiKeyScopes)) {
+    return NextResponse.json({ error: 'API key lacks the "write" scope' }, { status: 403 });
   }
   const { userId, orgId } = authCtx;
 

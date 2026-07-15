@@ -26,12 +26,6 @@ interface ActiveSession {
 
 const MAX_RETRIES = 3;
 const RETRY_DELAYS_MS = [1_000, 3_000, 10_000];
-// Delay between retries of a transport/network failure (offline, fetch
-// rejection, 5xx/429). Deliberately NOT part of RETRY_DELAYS_MS / MAX_RETRIES
-// — these failures must never count toward the permanent-drop budget, so
-// they get their own fixed backoff instead of an escalating, budget-limited
-// one. See `isTransportFailure`.
-const TRANSIENT_RETRY_DELAY_MS = 5_000;
 
 /**
  * Module-scoped singleton state. All `TransactionQueue` instances share the
@@ -263,39 +257,36 @@ function isOffline(): boolean {
 }
 
 /**
- * True for failures that reflect a transport/connectivity problem rather
- * than a genuine application-level rejection of this specific mutation:
- * the browser is offline, `fetch` itself rejected (network unreachable —
- * surfaces as a `TypeError` in every major browser, e.g. "Failed to
- * fetch"/"NetworkError when attempting to fetch resource"/"Load failed"),
- * or the server responded with a transient status (5xx, 429).
+ * True only when the browser itself reports it is offline
+ * (`navigator.onLine === false`) at the moment of failure. This is the ONLY
+ * case that must never count toward the permanent-failure budget and never
+ * roll back — the write is still valid, just undeliverable right now, and
+ * draining resumes automatically via the `'online'` listener below.
  *
- * These must NEVER count toward the permanent-failure budget — an
- * offline (or flaky-network) user's edits must never be silently dropped.
- * Genuine GraphQL errors are already flagged `permanent: true` where
- * they're thrown (see `processNext`) and are excluded here so they still
- * go through the normal retry-then-permanent path.
+ * Deliberately NOT included here: a fetch rejection (`TypeError`, "Failed to
+ * fetch", etc.) or a 5xx/429 HTTP response while the browser reports itself
+ * online. Those mean the server (or some hop in front of it) is reachable
+ * but erroring — a real, if hopefully transient, condition on THIS specific
+ * mutation, not proof the user is disconnected. Treating them the same as
+ * true offline previously caused a persistently-failing mutation (e.g. an
+ * unhandled resolver exception that always 500s) to retry forever on a
+ * fixed short delay, without ever counting toward `MAX_RETRIES` — since
+ * `processNext` only ever drains `queue[0]`, that single bad
+ * transaction blocked the entire FIFO for every other queued mutation,
+ * indefinitely, with no rollback and no user-visible error. Excluding them
+ * here routes them through the normal bounded `RETRY_DELAYS_MS`/`MAX_RETRIES`
+ * path below, so they eventually become permanent (shift/unpersist/
+ * rollback/onError) and unblock the queue instead of stalling it forever.
+ *
+ * Genuine GraphQL application errors are already flagged `permanent: true`
+ * where they're thrown (see `processNext`) and are excluded here too, so
+ * they always go through the bounded path regardless of connectivity.
  */
 function isTransportFailure(error: Error & { permanent?: boolean }): boolean {
   if (error.permanent) {
     return false;
   }
-  if (isOffline()) {
-    return true;
-  }
-  if (error instanceof TypeError) {
-    return true;
-  }
-  const message = error.message ?? '';
-  if (/failed to fetch|networkerror|load failed|fetch failed/i.test(message)) {
-    return true;
-  }
-  const statusMatch = /GraphQL request failed: (\d{3})/.exec(message);
-  if (statusMatch) {
-    const status = Number(statusMatch[1]);
-    return status === 429 || status >= 500;
-  }
-  return false;
+  return isOffline();
 }
 
 // Re-kick the drain the moment the browser reports connectivity back.
@@ -372,27 +363,13 @@ async function processNext(): Promise<void> {
     const error = err as Error & { permanent?: boolean };
 
     if (isTransportFailure(error)) {
-      // Network/offline failure: never counts toward the permanent-drop
-      // budget and never rolls back — the write is still valid, just
-      // undeliverable right now. `retryCount` (and the persisted row) are
-      // left untouched so a later genuine application error still gets
-      // its full retry budget.
-      if (isOffline()) {
-        // Fully pause; resume is driven by the 'online' listener above.
-        processing = false;
-        return;
-      }
-      // Online but the transport/server hiccuped (5xx/429/TypeError) —
-      // retry the same transaction after a short fixed delay instead of
-      // spinning, and instead of ever declaring it permanent. Keep
-      // `processing` true across the delay (matching the genuine-error
-      // backoff below) so a stray 'online'/enqueue can't start a second
-      // attempt concurrently.
-      await sleep(TRANSIENT_RETRY_DELAY_MS);
+      // Genuinely offline: never counts toward the permanent-drop budget
+      // and never rolls back — the write is still valid, just undeliverable
+      // right now. `retryCount` (and the persisted row) are left untouched
+      // so a later genuine application error still gets its full retry
+      // budget. Fully pause; resume is driven by the 'online' listener
+      // above (or the next enqueue, which also re-kicks the drain).
       processing = false;
-      if (queue.length > 0) {
-        void processNext();
-      }
       return;
     }
 

@@ -86,21 +86,48 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
   // Subscription state: null = loading, true = subscribed, false = not subscribed
   const [subscribed, setSubscribed] = useState<boolean | null>(null);
 
-  // Only reset drafts when actually switching issues (by id) — the `issue`
-  // object itself is rebuilt on every render by callers (useIssueListPage
-  // literal, observer() re-renders on any pool change), so depending on the
-  // object would wipe in-progress title/description edits on every WS
-  // update or unrelated property change.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally keyed on issue?.id, not the issue object
+  // Tracks the previously-rendered issue id so the effect below can tell an
+  // actual issue switch apart from an in-place field update on the same
+  // issue (e.g. a collaborator's edit arriving over WS).
+  const prevIssueIdRef = useRef<string | null>(null);
+
+  // Reset title/description drafts when switching issues, and refresh
+  // whichever draft the user ISN'T actively editing when the same issue's
+  // title/description changes underneath us (e.g. a collaborator's edit).
+  // Two failure modes this balances:
+  //  - Resetting on every render of the `issue` object (rebuilt on every
+  //    pool change since callers pass a literal / observer() re-renders on
+  //    any store change) would wipe in-progress typing on every unrelated
+  //    property change — the original bug, fixed by keying off `issue?.id`.
+  //  - But keying ONLY off `issue?.id` means a collaborator's incoming
+  //    title/description change while the panel stays open on the same
+  //    issue never refreshes the draft: clicking to edit later shows a
+  //    stale value, and blurring can stomp the collaborator's change right
+  //    back (`saveTitle`/`saveDesc` compare the stale draft against
+  //    `issue.title`/`issue.description` and "helpfully" re-save it).
+  // Switching issues (by id) always resets both drafts and collapses the
+  // description editor, regardless of any in-flight edit for the issue
+  // being left, so the collab provider remounts for the new document room.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally excludes editingTitle/editingDesc — see comment above; only their freshest value at the moment id/title/description change matters, not a re-run when they toggle on their own
   useEffect(() => {
-    if (issue) {
+    if (!issue) {
+      return;
+    }
+    const switchedIssue = prevIssueIdRef.current !== issue.id;
+    prevIssueIdRef.current = issue.id;
+
+    if (switchedIssue || !editingTitle) {
       setTitleDraft(issue.title);
-      setDescDraft(issue.description ?? '');
+    }
+    if (switchedIssue) {
       // Collapse the description editor when switching issues so the collab
       // provider is remounted for the correct document room.
       setEditingDesc(false);
+      setDescDraft(issue.description ?? '');
+    } else if (!editingDesc) {
+      setDescDraft(issue.description ?? '');
     }
-  }, [issue?.id]);
+  }, [issue?.id, issue?.title, issue?.description]);
 
   // Fetch subscription status when issue changes
   useEffect(() => {

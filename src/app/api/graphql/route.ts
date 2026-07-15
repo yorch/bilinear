@@ -38,6 +38,12 @@ const CLIENT_ERROR_CODES = new Set([
   'INVALID_CODE',
   'INVALID_TOKEN',
   'RATELIMITED',
+  // Thrown by resolvers/auth.ts's remapOAuthError (e.g. "Invalid or expired
+  // OAuth state", "no verified email") — a client-fault from a bad/expired
+  // OAuth callback, never internal state, so it belongs alongside the other
+  // auth-flow codes above (both for formatError passthrough and so it's
+  // logged at debug rather than flagged as a server fault).
+  'OAUTH_ERROR',
 ]);
 
 // Codes that are readable to the client even though they aren't in
