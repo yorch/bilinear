@@ -1,5 +1,11 @@
 import type { Favorite, PrismaClient } from '../../generated/prisma';
 
+/** Hard cap on a single reorder batch, matching `issuesBulkUpdate`'s 200-row
+ * convention — an unbounded payload would serialize hundreds of sequential
+ * UPDATE statements inside one transaction and hold the connection open for
+ * the duration. */
+const MAX_REORDER_ENTRIES = 200;
+
 export type FavoriteEntityType =
   | 'Issue'
   | 'Project'
@@ -44,26 +50,135 @@ export class FavoriteService {
     if (!VALID_ENTITY_TYPES.has(input.entityType)) {
       throw new FavoriteInvalidEntityTypeError();
     }
-    return this.prisma.favorite.upsert({
-      create: {
+
+    // Verify the target entity actually belongs to the caller's org BEFORE
+    // writing. The GraphQL resolver already checks this at request time
+    // (see `entityBelongsToOrg` in resolvers/favorite.ts) — this is
+    // defense-in-depth at the actual write boundary, and protects any
+    // other caller of this service that skips the resolver's check.
+    const belongs = await this.entityBelongsToOrg(input.entityType, input.entityId, orgId);
+    if (!belongs) {
+      throw new FavoriteEntityNotInOrgError();
+    }
+
+    // The DB unique key is `(userId, entityType, entityId)` — NOT scoped
+    // by organizationId (a schema/migration change, out of scope here; see
+    // the module doc comment above). Upserting on that key directly would
+    // find-and-mutate a favorite belonging to a DIFFERENT org whenever the
+    // same user has favorited the same literal entityId in two orgs (an
+    // id collision across tenants). Scope the lookup by organizationId
+    // ourselves instead of trusting the unique key to do it.
+    const existing = await this.prisma.favorite.findFirst({
+      where: {
         entityId: input.entityId,
         entityType: input.entityType,
         organizationId: orgId,
-        sortOrder: input.sortOrder ?? 0,
         userId,
       },
-      // Upsert by the natural key — re-favoriting an entity is idempotent
-      // and the existing row's sortOrder is preserved unless the caller
-      // explicitly provided a new one.
-      update: input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {},
-      where: {
-        userId_entityType_entityId: {
+    });
+    if (existing) {
+      // Re-favoriting an entity already favorited in this org is
+      // idempotent — the existing row's sortOrder is preserved unless the
+      // caller explicitly provided a new one.
+      if (input.sortOrder === undefined) {
+        return existing;
+      }
+      return this.prisma.favorite.update({
+        data: { sortOrder: input.sortOrder },
+        where: { id: existing.id },
+      });
+    }
+
+    try {
+      return await this.prisma.favorite.create({
+        data: {
           entityId: input.entityId,
           entityType: input.entityType,
+          organizationId: orgId,
+          sortOrder: input.sortOrder ?? 0,
           userId,
         },
-      },
-    });
+      });
+    } catch (err) {
+      // The physical unique constraint is (userId, entityType, entityId)
+      // with no organizationId column. Our org-scoped findFirst above
+      // found nothing, which means a row for this exact
+      // (userId, entityType, entityId) already exists in a DIFFERENT org.
+      // Surface a clear conflict instead of letting Prisma's raw P2002
+      // bubble up — and, critically, instead of silently falling back to
+      // an update that would mutate that other org's row.
+      if ((err as { code?: string }).code === 'P2002') {
+        throw new FavoriteCrossOrgConflictError();
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Confirm `entityId` belongs to a row of `entityType` AND to `orgId`.
+   * Mirrors `entityBelongsToOrg` in `resolvers/favorite.ts` (kept in sync
+   * by hand — the resolver's version also handles the GraphQL union return
+   * shape, which this write-time guard doesn't need). Every model listed
+   * in `FavoriteEntityType` carries a direct `organizationId` column.
+   */
+  private async entityBelongsToOrg(
+    entityType: FavoriteEntityType,
+    entityId: string,
+    orgId: string,
+  ): Promise<boolean> {
+    switch (entityType) {
+      case 'Issue': {
+        const row = await this.prisma.issue.findUnique({
+          select: { organizationId: true },
+          where: { id: entityId },
+        });
+        return row?.organizationId === orgId;
+      }
+      case 'Project': {
+        const row = await this.prisma.project.findUnique({
+          select: { organizationId: true },
+          where: { id: entityId },
+        });
+        return row?.organizationId === orgId;
+      }
+      case 'Initiative': {
+        const row = await this.prisma.initiative.findUnique({
+          select: { organizationId: true },
+          where: { id: entityId },
+        });
+        return row?.organizationId === orgId;
+      }
+      case 'CustomView': {
+        const row = await this.prisma.customView.findUnique({
+          select: { organizationId: true },
+          where: { id: entityId },
+        });
+        return row?.organizationId === orgId;
+      }
+      case 'Cycle': {
+        const row = await this.prisma.cycle.findUnique({
+          select: { organizationId: true },
+          where: { id: entityId },
+        });
+        return row?.organizationId === orgId;
+      }
+      case 'Document': {
+        const row = await this.prisma.document.findUnique({
+          select: { organizationId: true },
+          where: { id: entityId },
+        });
+        return row?.organizationId === orgId;
+      }
+      case 'Team': {
+        const row = await this.prisma.team.findUnique({
+          select: { organizationId: true },
+          where: { id: entityId },
+        });
+        return row?.organizationId === orgId;
+      }
+      default:
+        return false;
+    }
   }
 
   async delete(orgId: string, userId: string, id: string): Promise<Favorite> {
@@ -96,6 +211,13 @@ export class FavoriteService {
   ): Promise<Favorite[]> {
     if (entries.length === 0) {
       return [];
+    }
+    // Hard cap mirroring issuesBulkUpdate's 200-row limit — an unbounded
+    // payload would serialize hundreds of sequential UPDATEs (see the
+    // sequential-update comment below) inside one transaction and hold a
+    // request slot for minutes.
+    if (entries.length > MAX_REORDER_ENTRIES) {
+      throw new FavoriteReorderTooLargeError();
     }
     return this.prisma.$transaction(async tx => {
       // Verify every row belongs to the caller before touching it — without
@@ -145,5 +267,29 @@ export class FavoriteInvalidEntityTypeError extends Error {
       'Favorite entityType must be one of: Issue, Project, Initiative, CustomView, Cycle, Document, Team',
     );
     this.name = 'FavoriteInvalidEntityTypeError';
+  }
+}
+
+export class FavoriteEntityNotInOrgError extends Error {
+  constructor() {
+    super('Entity not found in this organization');
+    this.name = 'FavoriteEntityNotInOrgError';
+  }
+}
+
+export class FavoriteCrossOrgConflictError extends Error {
+  constructor() {
+    super(
+      'This entity is already favorited under a different organization (the underlying unique ' +
+        'constraint is not yet org-scoped — this requires a migration)',
+    );
+    this.name = 'FavoriteCrossOrgConflictError';
+  }
+}
+
+export class FavoriteReorderTooLargeError extends Error {
+  constructor() {
+    super(`Favorite reorder is capped at ${MAX_REORDER_ENTRIES} entries per request`);
+    this.name = 'FavoriteReorderTooLargeError';
   }
 }

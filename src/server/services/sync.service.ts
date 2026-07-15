@@ -149,7 +149,36 @@ export class SyncService {
     return syncAction;
   }
 
-  async getBootstrapData(orgId: string) {
+  /**
+   * @param userId The caller's id — needed to evaluate guest visibility
+   * (creator-or-assignee) against `guestTeamIds`. Non-guest callers should
+   * still pass their own userId; it's only consulted when `guestTeamIds`
+   * is non-empty.
+   * @param guestTeamIds Team ids (within `orgId`) where the caller holds the
+   * `guest` role — see `getGuestTeamIds` in `middleware/auth.ts`. When
+   * non-empty, every issue-derived collection below is narrowed to: issues
+   * on a NON-guest team, OR issues the caller created, OR issues the caller
+   * is assigned to — mirroring the same visibility rule the top-level
+   * `issues` query and `Project.issues` resolver apply (guests only see
+   * their own work on teams where they're a guest). Empty array (the
+   * default) means "not a guest anywhere" — no narrowing, full org data,
+   * preserving prior behavior for ordinary members/admins/owners.
+   */
+  async getBootstrapData(orgId: string, userId: string, guestTeamIds: string[] = []) {
+    // `AND` (not a top-level `OR`) so this composes with the existing
+    // archivedAt/organizationId/trashed filters via implicit-AND — see
+    // buildWhere in issue.service.ts for the same pattern.
+    const guestVisibilityClause =
+      guestTeamIds.length > 0
+        ? {
+            OR: [
+              { teamId: { notIn: guestTeamIds } },
+              { creatorId: userId },
+              { assigneeId: userId },
+            ],
+          }
+        : null;
+
     const [
       organizations,
       teams,
@@ -180,7 +209,17 @@ export class SyncService {
         where: { orgMemberships: { some: { organizationId: orgId } } },
       }),
       this.prisma.issue.findMany({
-        where: { archivedAt: null, organizationId: orgId, trashed: false },
+        // descriptionState is a YJS binary blob used only by the detail
+        // panel's collaborative editor (re-synced via Hocuspocus, not the
+        // bootstrap payload) — pure over-fetch here, same reasoning as
+        // IssueService.findMany/findByTeamId.
+        omit: { descriptionState: true },
+        where: {
+          archivedAt: null,
+          organizationId: orgId,
+          trashed: false,
+          ...(guestVisibilityClause ? { AND: [guestVisibilityClause] } : {}),
+        },
       }),
       this.prisma.workflowState.findMany({
         where: { archivedAt: null, team: { organizationId: orgId } },
@@ -190,13 +229,21 @@ export class SyncService {
       }),
       this.prisma.issueLabelAssignment.findMany({
         where: {
-          issue: { archivedAt: null, organizationId: orgId, trashed: false },
+          issue: {
+            archivedAt: null,
+            organizationId: orgId,
+            trashed: false,
+            ...(guestVisibilityClause ? { AND: [guestVisibilityClause] } : {}),
+          },
         },
       }),
       this.prisma.cycle.findMany({
         where: { archivedAt: null, organizationId: orgId },
       }),
       this.prisma.document.findMany({
+        // contentState is the analogous YJS blob for documents — same
+        // over-fetch reasoning as Issue.descriptionState above.
+        omit: { contentState: true },
         where: { archivedAt: null, organizationId: orgId },
       }),
       this.prisma.project.findMany({
@@ -220,7 +267,12 @@ export class SyncService {
       }),
       this.prisma.issueRelation.findMany({
         where: {
-          issue: { archivedAt: null, organizationId: orgId, trashed: false },
+          issue: {
+            archivedAt: null,
+            organizationId: orgId,
+            trashed: false,
+            ...(guestVisibilityClause ? { AND: [guestVisibilityClause] } : {}),
+          },
         },
       }),
       this.prisma.issueTemplate.findMany({
@@ -235,7 +287,12 @@ export class SyncService {
       }),
       this.prisma.customFieldValue.findMany({
         where: {
-          issue: { archivedAt: null, organizationId: orgId, trashed: false },
+          issue: {
+            archivedAt: null,
+            organizationId: orgId,
+            trashed: false,
+            ...(guestVisibilityClause ? { AND: [guestVisibilityClause] } : {}),
+          },
         },
       }),
       this.prisma.initiative.findMany({
@@ -312,12 +369,24 @@ export class SyncService {
    * by resubmitting with the last returned cursor until `hasMore` is
    * false. `toCursor`, when provided, caps the upper bound — useful for
    * the bootstrap-then-delta handoff.
+   *
+   * @param guestScope When the caller is a guest on one or more teams
+   * (`guestTeamIds` non-empty), the returned page is post-filtered via
+   * `filterGuestVisibleActions` so a guest never receives a SyncAction for
+   * an issue (or issue-derived row) they can't see through the regular
+   * `issues` query. Undefined (the default) means "not a guest anywhere" —
+   * no filtering, preserving prior behavior. NOTE: filtering happens AFTER
+   * the `limit`/`hasMore` page slice, so a guest-heavy page can come back
+   * smaller than `limit` even when `hasMore` is true — callers already
+   * paginate by resubmitting with the last cursor, so this just means an
+   * extra round-trip, not a correctness gap.
    */
   async getDeltaSyncActions(
     orgId: string,
     fromCursor: DeltaCursor,
     toCursor?: DeltaCursor,
     limit = DELTA_PAGE_SIZE,
+    guestScope?: { userId: string; guestTeamIds: string[] },
   ): Promise<{ actions: SyncAction[]; hasMore: boolean }> {
     const fromCommittedAt = new Date(Number(fromCursor.committedAtMicros / BigInt(1000)));
     const watermark = this.watermark();
@@ -374,7 +443,116 @@ export class SyncService {
       },
     });
     const hasMore = rows.length > limit;
-    return { actions: hasMore ? rows.slice(0, limit) : rows, hasMore };
+    const page = hasMore ? rows.slice(0, limit) : rows;
+
+    if (guestScope && guestScope.guestTeamIds.length > 0) {
+      const actions = await this.filterGuestVisibleActions(
+        page,
+        guestScope.guestTeamIds,
+        guestScope.userId,
+      );
+      return { actions, hasMore };
+    }
+
+    return { actions: page, hasMore };
+  }
+
+  /**
+   * Post-filter a page of SyncActions so a guest caller only receives rows
+   * for issues (or issue-derived rows) they're allowed to see — mirroring
+   * `IssueService.buildWhere`'s `guestUserId` clause. SyncActions aren't a
+   * clean fit for this: each row's `data` is a point-in-time JSON snapshot
+   * taken at write time (see `recordSyncAction` call sites), not a live
+   * join, so visibility has to be derived from whatever the payload itself
+   * carries.
+   *
+   * Covers the two modelNames that carry issue-scoped data: `Issue` rows
+   * embed `teamId`/`creatorId`/`assigneeId` directly (the full issue is the
+   * payload); `IssueRelation`/`IssueReaction` rows embed `issueId` but not
+   * the parent issue's team/creator/assignee, so those are resolved with a
+   * single batched lookup instead of a query per row.
+   *
+   * A row with no `data` (delete actions are recorded with `data: null`)
+   * carries nothing to leak beyond "this id was deleted", so it passes
+   * through unfiltered — dropping it would just leave a stale row in a
+   * guest's local cache with no confidentiality benefit.
+   *
+   * KNOWN RESIDUAL: other issue-derived writes (label/custom-field changes)
+   * are folded into an `Issue` `U` SyncAction by their resolvers (see
+   * custom-field.ts, issue.ts label handling) rather than getting their own
+   * modelName, so they're covered by the `Issue` branch above. Any FUTURE
+   * modelName that carries issue-derived data would need a case added here
+   * — this is a denylist-by-omission, not a structurally-enforced guarantee.
+   */
+  private async filterGuestVisibleActions(
+    rows: SyncAction[],
+    guestTeamIds: string[],
+    guestUserId: string,
+  ): Promise<SyncAction[]> {
+    const guestTeamSet = new Set(guestTeamIds);
+
+    const relatedIssueIds = new Set<string>();
+    for (const row of rows) {
+      if (
+        (row.modelName === 'IssueRelation' || row.modelName === 'IssueReaction') &&
+        row.data &&
+        typeof (row.data as Record<string, unknown>).issueId === 'string'
+      ) {
+        relatedIssueIds.add((row.data as Record<string, unknown>).issueId as string);
+      }
+    }
+
+    let issueLookup = new Map<
+      string,
+      { teamId: string; creatorId: string | null; assigneeId: string | null }
+    >();
+    if (relatedIssueIds.size > 0) {
+      const found = await this.prisma.issue.findMany({
+        select: { assigneeId: true, creatorId: true, id: true, teamId: true },
+        where: { id: { in: [...relatedIssueIds] } },
+      });
+      issueLookup = new Map(found.map(i => [i.id, i]));
+    }
+
+    const canSee = (
+      teamId: string | null | undefined,
+      creatorId: string | null | undefined,
+      assigneeId: string | null | undefined,
+    ): boolean => {
+      if (!teamId || !guestTeamSet.has(teamId)) {
+        return true;
+      }
+      return creatorId === guestUserId || assigneeId === guestUserId;
+    };
+
+    return rows.filter(row => {
+      if (!row.data) {
+        return true;
+      }
+      const data = row.data as Record<string, unknown>;
+      if (row.modelName === 'Issue') {
+        return canSee(
+          data.teamId as string | undefined,
+          data.creatorId as string | undefined,
+          data.assigneeId as string | undefined,
+        );
+      }
+      if (row.modelName === 'IssueRelation' || row.modelName === 'IssueReaction') {
+        const issueId = data.issueId as string | undefined;
+        if (!issueId) {
+          return true;
+        }
+        const info = issueLookup.get(issueId);
+        // Issue no longer exists (hard-deleted) or wasn't found — nothing
+        // left to gate visibility on; let it through rather than silently
+        // dropping a row we can't reason about.
+        if (!info) {
+          return true;
+        }
+        return canSee(info.teamId, info.creatorId, info.assigneeId);
+      }
+      return true;
+    });
   }
 
   /**

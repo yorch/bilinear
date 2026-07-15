@@ -4,6 +4,24 @@ import type {
   InitiativeUpdate,
   PrismaClient,
 } from '../../generated/prisma';
+import { ProjectService } from './project.service';
+
+/**
+ * Deps the progress rollup needs to compute each linked project's progress
+ * LIVE instead of reading the `Project.progress` column — nothing in the
+ * codebase writes that column (see ProjectService.getProgress, the actual
+ * source of truth), so every rollup that read it was silently averaging in
+ * zeros. Optional + defaulted (not required) because `InitiativeService` is
+ * constructed directly (`new InitiativeService(prisma)`, no DI container)
+ * from `src/server/graphql/context.ts`. When the caller doesn't inject
+ * deps, a real `ProjectService` bound to the same `prisma` client is built
+ * here so production is correct without touching that call site. Unit
+ * tests inject a fake `{ getProgress }` instead, keeping the progress math
+ * isolated from ProjectService's own issue-counting implementation.
+ */
+export interface InitiativeServiceDeps {
+  project: Pick<ProjectService, 'getProgress'>;
+}
 
 export interface InitiativeCreateInput {
   color?: string;
@@ -82,7 +100,14 @@ const STATUS_TRANSITION_CLEARS: Record<
  * recomputed on project add/remove and on demand.
  */
 export class InitiativeService {
-  constructor(private prisma: PrismaClient) {}
+  private readonly deps: InitiativeServiceDeps;
+
+  constructor(
+    private prisma: PrismaClient,
+    deps?: InitiativeServiceDeps,
+  ) {
+    this.deps = deps ?? { project: new ProjectService(prisma) };
+  }
 
   async create(
     orgId: string,
@@ -124,13 +149,8 @@ export class InitiativeService {
 
       if (input.projectIds?.length) {
         // Verify all projects belong to the same org before linking.
-        // Capture progress on the same query so we can compute the
-        // initial rollup inline — without this the returned initiative
-        // would carry progress=0 even if every linked project is at
-        // 100%, and the create-time SyncAction would broadcast that
-        // wrong value.
         const projects = await tx.project.findMany({
-          select: { archivedAt: true, id: true, progress: true, trashed: true },
+          select: { archivedAt: true, id: true, trashed: true },
           where: { id: { in: input.projectIds }, organizationId: orgId },
         });
         if (projects.length !== input.projectIds.length) {
@@ -145,10 +165,19 @@ export class InitiativeService {
           skipDuplicates: true,
         });
         const eligible = projects.filter(p => !p.archivedAt && !p.trashed);
+        // Compute the initial rollup inline so the returned initiative
+        // doesn't carry progress=0 even when every linked project is at
+        // 100% (and the create-time SyncAction would broadcast that wrong
+        // value). `Project.progress` is a dead column — nothing writes
+        // it — so the real value is fetched live via
+        // ProjectService.getProgress() instead of read off the row.
+        const progresses = await Promise.all(
+          eligible.map(p => this.deps.project.getProgress(p.id)),
+        );
         const progress =
-          eligible.length === 0
+          progresses.length === 0
             ? 0
-            : eligible.reduce((sum, p) => sum + p.progress, 0) / eligible.length;
+            : progresses.reduce((sum, p) => sum + p.progress, 0) / progresses.length;
         if (progress > 0) {
           return tx.initiative.update({
             data: { progress },
@@ -485,10 +514,11 @@ export class InitiativeService {
 
     const [links, children, current] = await Promise.all([
       this.prisma.initiativeProject.findMany({
-        include: {
+        select: {
           project: {
-            select: { archivedAt: true, progress: true, trashed: true },
+            select: { archivedAt: true, trashed: true },
           },
+          projectId: true,
         },
         where: { initiativeId },
       }),
@@ -503,11 +533,21 @@ export class InitiativeService {
     }
     const eligible = links.filter(l => l.project && !l.project.archivedAt && !l.project.trashed);
     const eligibleChildren = (children ?? []).filter(c => !c.archivedAt);
+
+    // `Project.progress` is a dead column — nothing writes it. The real
+    // value is computed live from issue completion via
+    // ProjectService.getProgress(). Fan the reads out in parallel rather
+    // than serially; still O(N) round-trips in N linked projects, but N is
+    // bounded by how many projects one initiative links.
+    const projectProgresses = await Promise.all(
+      eligible.map(l => this.deps.project.getProgress(l.projectId)),
+    );
+
     const totalCount = eligible.length + eligibleChildren.length;
     const progress =
       totalCount === 0
         ? 0
-        : (eligible.reduce((sum, l) => sum + (l.project?.progress ?? 0), 0) +
+        : (projectProgresses.reduce((sum, p) => sum + p.progress, 0) +
             eligibleChildren.reduce((sum, c) => sum + c.progress, 0)) /
           totalCount;
 

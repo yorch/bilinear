@@ -95,6 +95,59 @@ export interface IssueFilter {
 // re-fetch via findById / findByIdentifier.
 export type IssueListRow = Omit<Issue, 'descriptionState'>;
 
+// Server-side input caps. Title/description mirror the column width (title
+// is VarChar(1000) in the DB; 512 is a tighter app-level guard) and a
+// generous-but-bounded description/comment-body size so a malicious or
+// buggy client can't push multi-megabyte payloads through the mutation
+// path. Priority is clamped to the app's 0(none)-4(low) scale (see
+// import.service.ts's PRIORITY_BY_NAME for the same range).
+const MAX_TITLE_LENGTH = 512;
+const MAX_DESCRIPTION_LENGTH = 100_000;
+const MIN_PRIORITY = 0;
+const MAX_PRIORITY = 4;
+
+function assertValidTitle(title: string | undefined): void {
+  if (title !== undefined && title.length > MAX_TITLE_LENGTH) {
+    throw new IssueValidationError(`title must be ${MAX_TITLE_LENGTH} characters or fewer`);
+  }
+}
+
+function assertValidDescription(description: string | undefined): void {
+  if (description !== undefined && description.length > MAX_DESCRIPTION_LENGTH) {
+    throw new IssueValidationError(
+      `description must be ${MAX_DESCRIPTION_LENGTH} characters or fewer`,
+    );
+  }
+}
+
+function assertValidPriority(priority: number | undefined): void {
+  if (
+    priority !== undefined &&
+    (!Number.isInteger(priority) || priority < MIN_PRIORITY || priority > MAX_PRIORITY)
+  ) {
+    throw new IssueValidationError(
+      `priority must be an integer between ${MIN_PRIORITY} and ${MAX_PRIORITY}`,
+    );
+  }
+}
+
+/**
+ * References supplied on create/update/bulkUpdate that point at another
+ * entity by id (parent issue, project, cycle, milestone, assignee). Every
+ * one of these was previously written unvalidated — only `stateId` was
+ * checked against the team. A member of team A could set an issue's
+ * parentId/projectId/cycleId/projectMilestoneId to another ORG's row id
+ * (cross-tenant injection) or assign an issue to a user with no
+ * relationship to the org at all. `validateReferences` closes that hole.
+ */
+interface IssueReferenceInput {
+  assigneeId?: string | null;
+  cycleId?: string | null;
+  parentId?: string | null;
+  projectId?: string | null;
+  projectMilestoneId?: string | null;
+}
+
 export interface IssuePage {
   nodes: IssueListRow[];
   pageInfo: {
@@ -115,6 +168,10 @@ export class IssueService {
     input: IssueCreateInput,
     txHook?: IssueCreateTxHook,
   ): Promise<Issue> {
+    assertValidTitle(input.title);
+    assertValidDescription(input.description);
+    assertValidPriority(input.priority);
+
     return this.prisma.$transaction(async tx => {
       // Atomically increment issueCount and use it as the issue number
       const team = await tx.team.update({
@@ -170,27 +227,43 @@ export class IssueService {
         const parent = await tx.issue.findUnique({
           select: {
             cycleId: true,
+            organizationId: true,
             projectId: true,
             projectMilestoneId: true,
           },
           where: { id: input.parentId },
         });
-        if (parent) {
-          if (inheritedProjectId === undefined) {
-            inheritedProjectId = parent.projectId ?? undefined;
-          }
-          if (
-            inheritedProjectMilestoneId === undefined &&
-            // Only inherit the milestone if we're also on the parent's project
-            inheritedProjectId === parent.projectId
-          ) {
-            inheritedProjectMilestoneId = parent.projectMilestoneId ?? undefined;
-          }
-          if (inheritedCycleId === undefined) {
-            inheritedCycleId = parent.cycleId ?? undefined;
-          }
+        // A parentId must resolve to an issue in the SAME org — otherwise a
+        // caller could point a new issue's parentId at another org's issue
+        // (cross-tenant reference injection) and, as a side effect, inherit
+        // that org's project/cycle/milestone onto this issue.
+        if (!parent || parent.organizationId !== orgId) {
+          throw new IssueInvalidReferenceError('parentId');
+        }
+        if (inheritedProjectId === undefined) {
+          inheritedProjectId = parent.projectId ?? undefined;
+        }
+        if (
+          inheritedProjectMilestoneId === undefined &&
+          // Only inherit the milestone if we're also on the parent's project
+          inheritedProjectId === parent.projectId
+        ) {
+          inheritedProjectMilestoneId = parent.projectMilestoneId ?? undefined;
+        }
+        if (inheritedCycleId === undefined) {
+          inheritedCycleId = parent.cycleId ?? undefined;
         }
       }
+
+      // Validate every other cross-entity reference (post-inheritance, so
+      // inherited values are checked too) belongs to this org — and, for
+      // cycleId, to this issue's team.
+      await this.validateReferences(tx, orgId, [input.teamId], {
+        assigneeId: input.assigneeId,
+        cycleId: inheritedCycleId,
+        projectId: inheritedProjectId,
+        projectMilestoneId: inheritedProjectMilestoneId,
+      });
 
       const issue = await tx.issue.create({
         data: {
@@ -220,7 +293,7 @@ export class IssueService {
       });
 
       if (input.labelIds?.length) {
-        await this.syncLabels(tx, issue.id, input.labelIds);
+        await this.syncLabels(tx, issue.id, orgId, input.labelIds);
       }
 
       // Persist the SyncAction inside this transaction (atomic with the issue
@@ -270,8 +343,18 @@ export class IssueService {
     const where = this.buildWhere(orgId, filter, includeArchived);
     const take = pagination.first ?? pagination.last ?? 50;
     const cursorId = pagination.after ?? pagination.before;
+    // Forward pagination (first/after, or the no-args default) fetches one
+    // extra row so hasNextPage reflects whether more rows actually exist
+    // past this page — the old `issues.length === take` heuristic
+    // over-reported hasNextPage whenever the remaining set happened to be
+    // exactly `take` long (the common "last page" case). Backward
+    // pagination (last/before) keeps the previous heuristic; Prisma's
+    // negative-take + cursor semantics make an equivalent over-fetch
+    // trickier to slice correctly, and `last`/`before` isn't exercised by
+    // any current caller.
+    const overFetchForward = !pagination.last;
 
-    const [issues, totalCount] = await Promise.all([
+    const [rawIssues, totalCount] = await Promise.all([
       this.prisma.issue.findMany({
         cursor: cursorId ? { id: cursorId } : undefined,
         include: { labelAssignments: { include: { label: true } } },
@@ -280,13 +363,19 @@ export class IssueService {
         // Issue type. Loading it for every row on a list page is pure
         // over-fetch. findById keeps it.
         omit: { descriptionState: true },
-        orderBy: { sortOrder: 'asc' },
+        // sortOrder defaults to 0 for every issue, so ordering by it alone
+        // is nondeterministic among ties — a cursor page could skip or
+        // repeat rows across requests. `id` is a stable, unique tiebreak.
+        orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
         skip: cursorId ? 1 : 0,
-        take: pagination.last ? -take : take,
+        take: pagination.last ? -take : overFetchForward ? take + 1 : take,
         where,
       }),
       this.prisma.issue.count({ where }),
     ]);
+
+    const hasMore = overFetchForward && rawIssues.length > take;
+    const issues = hasMore ? rawIssues.slice(0, take) : rawIssues;
 
     const startCursor = issues[0]?.id ?? null;
     const endCursor = issues[issues.length - 1]?.id ?? null;
@@ -295,21 +384,33 @@ export class IssueService {
       nodes: issues,
       pageInfo: {
         endCursor,
-        hasNextPage: !!pagination.first && issues.length === take,
-        hasPreviousPage: !!pagination.last && issues.length === take,
+        hasNextPage: !!pagination.first && hasMore,
+        hasPreviousPage: !!pagination.last && rawIssues.length === take,
         startCursor,
       },
       totalCount,
     };
   }
 
-  async findByTeamId(teamId: string, includeArchived = false): Promise<IssueListRow[]> {
+  async findByTeamId(
+    teamId: string,
+    includeArchived = false,
+    guestUserId?: string,
+  ): Promise<IssueListRow[]> {
+    // Guest visibility + snooze-hide, mirroring Cycle.issues/Project.issues/
+    // Issue.children — without this, Team.issues was a backdoor around the
+    // top-level `issues` query's guest scoping and snooze filter.
+    const ands: Array<Record<string, unknown>> = [IssueService.snoozeHideClause()];
+    if (guestUserId) {
+      ands.push({ OR: [{ creatorId: guestUserId }, { assigneeId: guestUserId }] });
+    }
     return this.prisma.issue.findMany({
       include: { labelAssignments: { include: { label: true } } },
       // See findMany: descriptionState is never rendered in lists.
       omit: { descriptionState: true },
       orderBy: { sortOrder: 'asc' },
       where: {
+        AND: ands,
         archivedAt: includeArchived ? undefined : null,
         teamId,
         trashed: false,
@@ -330,6 +431,10 @@ export class IssueService {
     input: IssueUpdateInput,
     txHook?: IssueUpdateTxHook,
   ): Promise<{ issue: Issue; cascaded: Issue[] }> {
+    assertValidTitle(input.title);
+    assertValidDescription(input.description);
+    assertValidPriority(input.priority);
+
     const data: Parameters<PrismaClient['issue']['update']>[0]['data'] = {};
 
     if (input.title !== undefined) {
@@ -392,6 +497,25 @@ export class IssueService {
     }
 
     return this.prisma.$transaction(async tx => {
+      // Fetch the current row once, up front — needed both for the stateId/
+      // team check below AND to validate every other cross-entity reference
+      // (parentId/projectId/cycleId/projectMilestoneId/assigneeId) against
+      // THIS issue's org/team, not the caller-supplied `id` alone.
+      const existing = await tx.issue.findUnique({
+        select: {
+          canceledAt: true,
+          completedAt: true,
+          organizationId: true,
+          startedAt: true,
+          stateId: true,
+          teamId: true,
+        },
+        where: { id },
+      });
+      if (!existing) {
+        throw new IssueNotFoundError();
+      }
+
       // Validate stateId belongs to the same team as the issue. Create
       // already does this; the update path must too, or a member can move
       // their issue into another team's workflow state.
@@ -400,19 +524,6 @@ export class IssueService {
       // regardless of how the state transition is initiated (user,
       // automation, GitHub PR merge).
       if (input.stateId !== undefined) {
-        const existing = await tx.issue.findUnique({
-          select: {
-            canceledAt: true,
-            completedAt: true,
-            startedAt: true,
-            stateId: true,
-            teamId: true,
-          },
-          where: { id },
-        });
-        if (!existing) {
-          throw new IssueInvalidStateError();
-        }
         const state = await tx.workflowState.findFirst({
           select: { teamId: true, type: true },
           where: { archivedAt: null, id: input.stateId },
@@ -434,10 +545,21 @@ export class IssueService {
         }
       }
 
+      // Cross-org / cross-team reference validation — see `create()` for
+      // the full rationale. Falsy values (undefined = unchanged, null =
+      // clearing the reference) are skipped by validateReferences itself.
+      await this.validateReferences(tx, existing.organizationId, [existing.teamId], {
+        assigneeId: input.assigneeId,
+        cycleId: input.cycleId,
+        parentId: input.parentId,
+        projectId: input.projectId,
+        projectMilestoneId: input.projectMilestoneId,
+      });
+
       const issue = await tx.issue.update({ data, where: { id } });
 
       if (input.labelIds !== undefined) {
-        await this.syncLabels(tx, id, input.labelIds);
+        await this.syncLabels(tx, id, existing.organizationId, input.labelIds);
       }
 
       const cascaded: Issue[] = [];
@@ -563,6 +685,9 @@ export class IssueService {
     if (ids.length > 200) {
       throw new IssueBulkLimitExceededError();
     }
+    assertValidTitle(input.title);
+    assertValidDescription(input.description);
+    assertValidPriority(input.priority);
 
     const data: Parameters<PrismaClient['issue']['update']>[0]['data'] = {};
     if (input.title !== undefined) {
@@ -616,9 +741,11 @@ export class IssueService {
     return this.prisma.$transaction(async tx => {
       // Verify every id belongs to the org before touching anything. A row
       // count mismatch means at least one id is cross-tenant or missing —
-      // either way, abort the whole batch.
+      // either way, abort the whole batch. Also pull stateId/startedAt so
+      // the lifecycle-timestamp stamping below can tell which rows are
+      // actually transitioning.
       const claim = await tx.issue.findMany({
-        select: { id: true, teamId: true },
+        select: { id: true, startedAt: true, stateId: true, teamId: true },
         where: { id: { in: ids }, organizationId: orgId },
       });
       if (claim.length !== ids.length) {
@@ -628,9 +755,10 @@ export class IssueService {
       // stateId validation: if a target state was supplied, every issue
       // must belong to a team that owns that state. Mixing teams in a
       // single bulk state change is a no-op the caller must prevent.
+      let targetState: { teamId: string; type: string } | null = null;
       if (input.stateId !== undefined) {
         const state = await tx.workflowState.findFirst({
-          select: { teamId: true },
+          select: { teamId: true, type: true },
           where: { archivedAt: null, id: input.stateId },
         });
         if (!state) {
@@ -639,7 +767,20 @@ export class IssueService {
         if (claim.some(c => c.teamId !== state.teamId)) {
           throw new IssueInvalidStateError();
         }
+        targetState = state;
       }
+
+      // Cross-org / cross-team reference validation — same rule as
+      // create()/update(). cycleId is checked against every distinct team
+      // represented in the batch (a single cycle can't span teams).
+      const teamIds = Array.from(new Set(claim.map(c => c.teamId)));
+      await this.validateReferences(tx, orgId, teamIds, {
+        assigneeId: input.assigneeId,
+        cycleId: input.cycleId,
+        parentId: input.parentId,
+        projectId: input.projectId,
+        projectMilestoneId: input.projectMilestoneId,
+      });
 
       if (input.labelIds !== undefined) {
         // Bulk label replacement: sequential per-row because Prisma's
@@ -647,14 +788,59 @@ export class IssueService {
         // connection — Promise.all here can throw "Transaction already
         // closed" or apply writes out of order under load.
         for (const id of ids) {
-          await this.syncLabels(tx as unknown as PrismaLike, id, input.labelIds ?? []);
+          await this.syncLabels(tx as unknown as PrismaLike, id, orgId, input.labelIds ?? []);
         }
       }
 
-      await tx.issue.updateMany({
-        data,
-        where: { id: { in: ids }, organizationId: orgId },
-      });
+      if (targetState) {
+        // Replicate update()'s first-set / clear-on-leave lifecycle-
+        // timestamp semantics for a bulk stateId change. Only rows actually
+        // transitioning into the target state get startedAt/completedAt/
+        // canceledAt touched — issues already sitting at that state must
+        // not have their historical completedAt/canceledAt clobbered with
+        // `now` just because they were swept up in the same batch.
+        const now = new Date();
+        const byId = new Map(claim.map(c => [c.id, c]));
+        const transitioning = ids.filter(rowId => byId.get(rowId)?.stateId !== input.stateId);
+        const nonTransitioning = ids.filter(rowId => !transitioning.includes(rowId));
+
+        if (nonTransitioning.length > 0) {
+          await tx.issue.updateMany({
+            data,
+            where: { id: { in: nonTransitioning }, organizationId: orgId },
+          });
+        }
+
+        if (transitioning.length > 0) {
+          const clearBase = {
+            canceledAt: targetState.type === 'canceled' ? now : null,
+            completedAt: targetState.type === 'completed' ? now : null,
+          };
+          const stampStarted = targetState.type === 'started';
+          const needsStartedStamp = stampStarted
+            ? transitioning.filter(rowId => !byId.get(rowId)?.startedAt)
+            : [];
+          const noStartedStamp = transitioning.filter(rowId => !needsStartedStamp.includes(rowId));
+
+          if (noStartedStamp.length > 0) {
+            await tx.issue.updateMany({
+              data: { ...data, ...clearBase },
+              where: { id: { in: noStartedStamp }, organizationId: orgId },
+            });
+          }
+          if (needsStartedStamp.length > 0) {
+            await tx.issue.updateMany({
+              data: { ...data, ...clearBase, startedAt: now },
+              where: { id: { in: needsStartedStamp }, organizationId: orgId },
+            });
+          }
+        }
+      } else {
+        await tx.issue.updateMany({
+          data,
+          where: { id: { in: ids }, organizationId: orgId },
+        });
+      }
 
       // Re-read so the caller can emit one SyncAction per updated row.
       // Ordered by input position so the SyncAction sequence is deterministic.
@@ -842,11 +1028,18 @@ export class IssueService {
     })) as Issue[];
   }
 
-  private async syncLabels(tx: PrismaLike, issueId: string, labelIds: string[]): Promise<void> {
+  private async syncLabels(
+    tx: PrismaLike,
+    issueId: string,
+    orgId: string,
+    labelIds: string[],
+  ): Promise<void> {
     // Enforce single-select-per-group: if two labels share the same group
     // parent, keep only the last one in input order so group labels behave
-    // as radio buttons, not checkboxes.
-    const effectiveIds = await this.enforceSingleSelectPerGroup(tx, labelIds);
+    // as radio buttons, not checkboxes. Also drops any labelId that doesn't
+    // belong to this org (see enforceSingleSelectPerGroup) — a foreign or
+    // garbage label id must never become attachable to this issue.
+    const effectiveIds = await this.enforceSingleSelectPerGroup(tx, orgId, labelIds);
 
     await tx.issueLabelAssignment.deleteMany({ where: { issueId } });
 
@@ -858,15 +1051,23 @@ export class IssueService {
     }
   }
 
-  private async enforceSingleSelectPerGroup(tx: PrismaLike, labelIds: string[]): Promise<string[]> {
+  private async enforceSingleSelectPerGroup(
+    tx: PrismaLike,
+    orgId: string,
+    labelIds: string[],
+  ): Promise<string[]> {
     if (labelIds.length === 0) {
       return [];
     }
     const labels = await tx.issueLabel.findMany({
-      select: { id: true, parentId: true },
+      select: { id: true, organizationId: true, parentId: true },
       where: { id: { in: labelIds } },
     });
-    const byId = new Map(labels.map(l => [l.id, l]));
+    // Labels that don't exist, or that belong to a different org, are
+    // dropped silently (not surfaced as an error — a stale/garbage id in
+    // the list shouldn't fail the whole write, same as the prior
+    // not-found handling, but a CROSS-ORG label must never be attachable).
+    const byId = new Map(labels.filter(l => l.organizationId === orgId).map(l => [l.id, l]));
     // Walk input order; last writer per group parent wins.
     const seenGroup = new Map<string, string>();
     for (const id of labelIds) {
@@ -878,8 +1079,85 @@ export class IssueService {
     const survivorSet = new Set(seenGroup.values());
     return labelIds.filter(id => {
       const label = byId.get(id);
-      return !label?.parentId || survivorSet.has(id);
+      if (!label) {
+        return false;
+      }
+      return !label.parentId || survivorSet.has(id);
     });
+  }
+
+  /**
+   * Validates that every provided cross-entity reference belongs to `orgId`
+   * (and, for cycleId, to every team in `teamIds`). Falsy values (undefined
+   * = "no change"/"not provided", null = "clear the reference") are
+   * skipped — there's nothing to look up. Throws IssueInvalidReferenceError
+   * on any mismatch. Shared by create()/update()/bulkUpdate() so the three
+   * write paths can't drift out of sync on which references get checked.
+   */
+  private async validateReferences(
+    tx: Pick<
+      PrismaClient,
+      'cycle' | 'issue' | 'organizationMember' | 'project' | 'projectMilestone'
+    >,
+    orgId: string,
+    teamIds: string[],
+    refs: IssueReferenceInput,
+  ): Promise<void> {
+    if (refs.parentId) {
+      const parent = await tx.issue.findUnique({
+        select: { organizationId: true },
+        where: { id: refs.parentId },
+      });
+      if (!parent || parent.organizationId !== orgId) {
+        throw new IssueInvalidReferenceError('parentId');
+      }
+    }
+
+    if (refs.projectId) {
+      const project = await tx.project.findUnique({
+        select: { organizationId: true },
+        where: { id: refs.projectId },
+      });
+      if (!project || project.organizationId !== orgId) {
+        throw new IssueInvalidReferenceError('projectId');
+      }
+    }
+
+    if (refs.cycleId) {
+      const cycle = await tx.cycle.findUnique({
+        select: { organizationId: true, teamId: true },
+        where: { id: refs.cycleId },
+      });
+      if (
+        !cycle ||
+        cycle.organizationId !== orgId ||
+        teamIds.some(teamId => teamId !== cycle.teamId)
+      ) {
+        throw new IssueInvalidReferenceError('cycleId');
+      }
+    }
+
+    if (refs.projectMilestoneId) {
+      const milestone = await tx.projectMilestone.findUnique({
+        select: { project: { select: { organizationId: true } }, projectId: true },
+        where: { id: refs.projectMilestoneId },
+      });
+      if (!milestone || milestone.project.organizationId !== orgId) {
+        throw new IssueInvalidReferenceError('projectMilestoneId');
+      }
+      if (refs.projectId && milestone.projectId !== refs.projectId) {
+        throw new IssueInvalidReferenceError('projectMilestoneId');
+      }
+    }
+
+    if (refs.assigneeId) {
+      const member = await tx.organizationMember.findUnique({
+        where: { organizationId_userId: { organizationId: orgId, userId: refs.assigneeId } },
+      });
+      if (!member) {
+        throw new IssueInvalidReferenceError('assigneeId');
+      }
+    }
   }
 
   private buildWhere(orgId: string, filter: IssueFilter, includeArchived: boolean) {
@@ -1020,5 +1298,23 @@ export class IssueBulkLimitExceededError extends Error {
   constructor() {
     super('Bulk update is capped at 200 issues per request');
     this.name = 'IssueBulkLimitExceededError';
+  }
+}
+
+/** A caller-supplied parentId/projectId/cycleId/projectMilestoneId/assigneeId
+ *  does not resolve inside the issue's own organization (or, for cycleId,
+ *  team) — cross-tenant / cross-team reference injection. */
+export class IssueInvalidReferenceError extends Error {
+  constructor(field: string) {
+    super(`${field} does not resolve to a valid reference in this organization`);
+    this.name = 'IssueInvalidReferenceError';
+  }
+}
+
+/** A title/description/priority value violates the server-side input caps. */
+export class IssueValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'IssueValidationError';
   }
 }

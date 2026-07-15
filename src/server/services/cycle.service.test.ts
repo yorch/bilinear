@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TEST_ORG, TEST_TEAM } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
@@ -314,6 +314,57 @@ describe('CycleService', () => {
       expect(result.movedCount).toBe(0);
       expect(result.movedIssueIds).toEqual([]);
       expect(prisma.issue.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('picks the contiguous next cycle (already started) when the sweep runs just after endsAt', async () => {
+      // The completed cycle ends 2026-03-15; the sweep fires slightly
+      // after that, by which point the contiguous next cycle (which also
+      // starts 03-15) has ALREADY started. The old `startsAt: { gte: now }`
+      // filter would have excluded it entirely, jumping carryover issues
+      // ahead a cycle (or unassigning them if none started later).
+      const now = new Date('2026-03-15T00:00:05Z');
+      vi.useFakeTimers();
+      vi.setSystemTime(now);
+
+      try {
+        const CONTIGUOUS_NEXT_CYCLE = {
+          ...TEST_CYCLE,
+          endsAt: new Date('2026-03-29T00:00:00Z'),
+          id: '00000000-0000-0000-0000-000000000602',
+          number: 2,
+          startsAt: new Date('2026-03-15T00:00:00Z'),
+        };
+
+        const issueId = '00000000-0000-0000-0000-000000000400';
+        prisma.cycle.findFirst.mockResolvedValueOnce(TEST_CYCLE); // org scope check
+        prisma.cycle.update.mockResolvedValue({ ...TEST_CYCLE, completedAt: new Date() });
+        prisma.issue.findMany.mockResolvedValue([
+          { archivedAt: null, id: issueId, state: { type: 'started' }, trashed: false },
+        ]);
+        prisma.cycle.findFirst.mockResolvedValueOnce(CONTIGUOUS_NEXT_CYCLE); // next-cycle lookup
+        prisma.issue.updateMany.mockResolvedValue({ count: 1 });
+
+        const result = await service.rollover(TEST_ORG.id, TEST_CYCLE.id);
+
+        expect(result.nextCycleId).toBe(CONTIGUOUS_NEXT_CYCLE.id);
+        // Assert the query shape, not just that the mock happened to
+        // return the row handed to it: the lookup must filter on
+        // `endsAt: { gt: now }` (the codebase's exclusive-endsAt
+        // convention), NOT `startsAt: { gte: now }` — the latter would
+        // exclude a cycle that has already started.
+        const nextCycleCall = prisma.cycle.findFirst.mock.calls[1][0] as {
+          where: Record<string, unknown>;
+        };
+        expect(nextCycleCall.where).toEqual({
+          archivedAt: null,
+          endsAt: { gt: now },
+          id: { not: TEST_CYCLE.id },
+          organizationId: TEST_ORG.id,
+          teamId: TEST_CYCLE.teamId,
+        });
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 

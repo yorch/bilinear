@@ -4,6 +4,61 @@ import { useEffect } from 'react';
 
 type Handler = (e: KeyboardEvent) => void;
 
+interface ParsedBinding {
+  key: string;
+  mods: Set<string>;
+}
+
+function parseBinding(binding: string): ParsedBinding {
+  const parts = binding.toLowerCase().split('+');
+  return { key: parts[parts.length - 1] ?? '', mods: new Set(parts.slice(0, -1)) };
+}
+
+/**
+ * Whether a keydown event satisfies a single `[modifier+]key` binding string.
+ *
+ * Two layout/OS quirks the naive `e.key`-plus-modifier-flags comparison gets
+ * wrong:
+ *  - Shifted punctuation (e.g. `'?'`, produced by Shift+/) already encodes
+ *    Shift in `e.key` itself — requiring an explicit `shift` modifier match
+ *    would mean a plain `'?'` binding never fires. Only alphanumeric keys
+ *    need the modifier flag checked explicitly (Shift changes their case,
+ *    which `.toLowerCase()` erases).
+ *  - Alt+digit combos produce OS-composed characters on macOS keyboard
+ *    layouts (e.g. Alt+1 does not yield `e.key === '1'`), so those are
+ *    matched against the physical `e.code` instead.
+ */
+function eventMatchesBinding(e: KeyboardEvent, binding: string): boolean {
+  const { key, mods } = parseBinding(binding);
+  const wantMeta = mods.has('meta');
+  const wantCtrl = mods.has('ctrl');
+  const wantAlt = mods.has('alt');
+  const wantShift = mods.has('shift');
+
+  if (e.metaKey !== wantMeta || e.ctrlKey !== wantCtrl || e.altKey !== wantAlt) {
+    return false;
+  }
+
+  if (wantAlt && /^[0-9]$/.test(key)) {
+    return e.code === `Digit${key}`;
+  }
+
+  const eventKey = e.key;
+  const isAlphaNumeric = eventKey.length === 1 && /^[a-z0-9]$/i.test(eventKey);
+
+  if (isAlphaNumeric) {
+    return e.shiftKey === wantShift && eventKey.toLowerCase() === key;
+  }
+
+  // Non-alphanumeric key (punctuation, 'escape', 'enter', etc.): e.key already
+  // reflects any Shift that was required to produce it, so only enforce an
+  // explicit 'shift' modifier when the binding actually asked for one.
+  if (wantShift && !e.shiftKey) {
+    return false;
+  }
+  return eventKey.toLowerCase() === key;
+}
+
 export interface HotkeyOptions {
   /**
    * When true, the shortcut fires even when focus is inside an input,
@@ -49,6 +104,13 @@ export function useHotkeys(
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
+      // Respect the Escape contract (see CLAUDE.md): whichever surface
+      // consumes a key claims it via preventDefault, and any other
+      // window-level listener on the same event must back off.
+      if (e.defaultPrevented) {
+        return;
+      }
+
       if (!allowInInput) {
         const target = e.target as HTMLElement;
         if (
@@ -60,20 +122,18 @@ export function useHotkeys(
         }
       }
 
-      const pressed = [
-        e.metaKey && 'meta',
-        e.ctrlKey && 'ctrl',
-        e.shiftKey && 'shift',
-        e.altKey && 'alt',
-        e.key.toLowerCase(),
-      ]
-        .filter(Boolean)
-        .join('+');
-
-      if (keys.some(k => pressed === k.toLowerCase())) {
-        e.preventDefault();
-        handler(e);
+      const matched = keys.find(k => eventMatchesBinding(e, k));
+      if (!matched) {
+        return;
       }
+
+      // Bare Enter is a plain activation key — e.g. a focused button relies
+      // on its own default keydown/click behavior to fire. Only preventDefault
+      // for bindings that actually need to suppress the browser default.
+      if (matched.toLowerCase() !== 'enter') {
+        e.preventDefault();
+      }
+      handler(e);
     };
 
     window.addEventListener('keydown', onKeyDown);

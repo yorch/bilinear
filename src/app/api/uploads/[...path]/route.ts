@@ -4,9 +4,9 @@ import { basename, join } from 'node:path';
 import { Readable } from 'node:stream';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { verifyAccessToken } from '@/server/lib/jwt';
 import { prisma } from '@/server/lib/prisma';
 import { getUploadDir } from '@/server/lib/upload-dir';
+import { extractAuthContext } from '@/server/middleware/auth';
 import { FileService } from '@/server/services/file.service';
 
 // MIME types that can be rendered as executable content (SVG scripts, HTML,
@@ -71,21 +71,19 @@ const SAFE_MIME: Record<string, string> = {
  * so a leaked URL cannot be used to download another org's attachments.
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
-  const token =
-    req.cookies.get('access_token')?.value ??
-    req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ??
-    null;
+  // Routed through extractAuthContext (not a raw verifyAccessToken call) so
+  // a deactivated user or a suspended/archived org loses download access
+  // immediately rather than for the rest of the JWT's 24h lifetime — see
+  // sync/bootstrap/route.ts for the same reasoning. Also picks up API-key
+  // (`bil_...`) auth for free.
+  const authHeader = req.headers.get('authorization');
+  const cookieToken = req.cookies.get('access_token')?.value ?? null;
+  const authCtx = await extractAuthContext(authHeader, cookieToken, prisma);
 
-  if (!token) {
+  if (!authCtx.orgId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-
-  let orgId: string;
-  try {
-    ({ orgId } = await verifyAccessToken(token));
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const { orgId } = authCtx;
 
   const { path } = await params;
 

@@ -5,9 +5,9 @@ import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { verifyAccessToken } from '@/server/lib/jwt';
 import { prisma } from '@/server/lib/prisma';
 import { getUploadDir } from '@/server/lib/upload-dir';
+import { extractAuthContext } from '@/server/middleware/auth';
 import { FileService } from '@/server/services/file.service';
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
@@ -38,22 +38,18 @@ function getAppUrl(): string {
  * Returns: { id, name, url, size, mimeType }
  */
 export async function POST(req: NextRequest) {
-  const token =
-    req.cookies.get('access_token')?.value ??
-    req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ??
-    null;
+  // Routed through extractAuthContext (not a raw verifyAccessToken call) so
+  // a deactivated user or a suspended/archived org can't keep uploading
+  // files off a still-valid JWT — see sync/bootstrap/route.ts for the same
+  // reasoning. Also picks up API-key (`bil_...`) auth for free.
+  const authHeader = req.headers.get('authorization');
+  const cookieToken = req.cookies.get('access_token')?.value ?? null;
+  const authCtx = await extractAuthContext(authHeader, cookieToken, prisma);
 
-  if (!token) {
+  if (!authCtx.orgId || !authCtx.userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-
-  let userId: string;
-  let orgId: string;
-  try {
-    ({ userId, orgId } = await verifyAccessToken(token));
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const { userId, orgId } = authCtx;
 
   let formData: FormData;
   try {

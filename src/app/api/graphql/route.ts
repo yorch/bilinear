@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { ApolloServerPlugin, GraphQLRequestListener } from '@apollo/server';
 import { ApolloServer } from '@apollo/server';
 import { startServerAndCreateNextHandler } from '@as-integrations/next';
+import type { GraphQLFormattedError } from 'graphql';
 import { GraphQLError } from 'graphql';
 import depthLimit from 'graphql-depth-limit';
 import { getComplexity, simpleEstimator } from 'graphql-query-complexity';
@@ -38,6 +39,15 @@ const CLIENT_ERROR_CODES = new Set([
   'INVALID_TOKEN',
   'RATELIMITED',
 ]);
+
+// Codes that are readable to the client even though they aren't in
+// CLIENT_ERROR_CODES above (that set drives server-error *logging*; this one
+// drives response *masking* in formatError). Graphql-js itself stamps parse
+// and validation failures with these codes before any resolver runs — they
+// describe a malformed request, never internal state, so passing the
+// message through is safe and expected (e.g. "Cannot query field 'x' on
+// type 'Y'").
+const CLIENT_READABLE_ERROR_CODES = new Set(['GRAPHQL_PARSE_FAILED', 'GRAPHQL_VALIDATION_FAILED']);
 
 // Requests at/above this duration are always logged even when sampling is on.
 const SLOW_REQUEST_MS = 1000;
@@ -127,6 +137,31 @@ const server = new ApolloServer<GraphQLContext>({
   // the user's cookie attached and trigger mutations. SameSite=lax helps
   // for top-level navigations but not for sub-resource POSTs.
   csrfPrevention: true,
+  // No error masking previously meant unmapped errors (raw Prisma P2002/
+  // P2023, unexpected throws, …) reached the client as-is — message and
+  // extensions included, e.g. Prisma's own message which can quote SQL
+  // column/table names. Known client-fault codes are already deliberate,
+  // hand-written GraphQLErrors (see CLIENT_ERROR_CODES / mapServiceError) —
+  // pass those through untouched. Everything else gets collapsed to a
+  // single generic message with no extensions beyond a stable code, so
+  // internals never leak. The original error is already logged server-side
+  // by observabilityPlugin's didEncounterErrors hook above (which runs
+  // before formatError, on the pre-masking error) — nothing here re-logs it.
+  formatError(formattedError: GraphQLFormattedError): GraphQLFormattedError {
+    const code =
+      typeof formattedError.extensions?.code === 'string'
+        ? formattedError.extensions.code
+        : undefined;
+    if (code && (CLIENT_ERROR_CODES.has(code) || CLIENT_READABLE_ERROR_CODES.has(code))) {
+      return formattedError;
+    }
+    return {
+      extensions: { code: 'INTERNAL_SERVER_ERROR' },
+      locations: formattedError.locations,
+      message: 'Internal server error',
+      path: formattedError.path,
+    };
+  },
   plugins: [
     observabilityPlugin,
     {

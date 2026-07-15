@@ -26,6 +26,12 @@ interface ActiveSession {
 
 const MAX_RETRIES = 3;
 const RETRY_DELAYS_MS = [1_000, 3_000, 10_000];
+// Delay between retries of a transport/network failure (offline, fetch
+// rejection, 5xx/429). Deliberately NOT part of RETRY_DELAYS_MS / MAX_RETRIES
+// — these failures must never count toward the permanent-drop budget, so
+// they get their own fixed backoff instead of an escalating, budget-limited
+// one. See `isTransportFailure`.
+const TRANSIENT_RETRY_DELAY_MS = 5_000;
 
 /**
  * Module-scoped singleton state. All `TransactionQueue` instances share the
@@ -252,8 +258,71 @@ async function unpersist(id: string): Promise<void> {
   }
 }
 
+function isOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
+/**
+ * True for failures that reflect a transport/connectivity problem rather
+ * than a genuine application-level rejection of this specific mutation:
+ * the browser is offline, `fetch` itself rejected (network unreachable —
+ * surfaces as a `TypeError` in every major browser, e.g. "Failed to
+ * fetch"/"NetworkError when attempting to fetch resource"/"Load failed"),
+ * or the server responded with a transient status (5xx, 429).
+ *
+ * These must NEVER count toward the permanent-failure budget — an
+ * offline (or flaky-network) user's edits must never be silently dropped.
+ * Genuine GraphQL errors are already flagged `permanent: true` where
+ * they're thrown (see `processNext`) and are excluded here so they still
+ * go through the normal retry-then-permanent path.
+ */
+function isTransportFailure(error: Error & { permanent?: boolean }): boolean {
+  if (error.permanent) {
+    return false;
+  }
+  if (isOffline()) {
+    return true;
+  }
+  if (error instanceof TypeError) {
+    return true;
+  }
+  const message = error.message ?? '';
+  if (/failed to fetch|networkerror|load failed|fetch failed/i.test(message)) {
+    return true;
+  }
+  const statusMatch = /GraphQL request failed: (\d{3})/.exec(message);
+  if (statusMatch) {
+    const status = Number(statusMatch[1]);
+    return status === 429 || status >= 500;
+  }
+  return false;
+}
+
+// Re-kick the drain the moment the browser reports connectivity back.
+// Registered once at module scope (guarded for SSR/non-DOM) rather than
+// per-instance so multiple `TransactionQueue` mounts never accumulate
+// duplicate 'online' listeners — every instance shares this one module-
+// scoped queue/drain loop anyway.
+let onlineListenerRegistered = false;
+function ensureOnlineListenerRegistered(): void {
+  if (onlineListenerRegistered || typeof window === 'undefined') {
+    return;
+  }
+  onlineListenerRegistered = true;
+  window.addEventListener('online', () => {
+    void processNext();
+  });
+}
+
 async function processNext(): Promise<void> {
   if (processing || queue.length === 0) {
+    return;
+  }
+  ensureOnlineListenerRegistered();
+  if (isOffline()) {
+    // Don't burn a doomed-to-fail fetch while the browser reports us
+    // offline — stay paused. The 'online' listener above re-kicks the
+    // drain the moment connectivity returns.
     return;
   }
   processing = true;
@@ -281,9 +350,52 @@ async function processNext(): Promise<void> {
     await unpersist(tx.id);
     const cb = callbackMap.get(tx.id);
     callbackMap.delete(tx.id);
-    cb?.onSuccess?.(result.data);
+    processing = false;
+    // The server mutation already succeeded — everything past this point
+    // is best-effort notification. Run onSuccess in its own try/catch,
+    // OUTSIDE the block that guards the network call: onSuccess typically
+    // runs MobX mutations that can throw, and if that exception propagated
+    // into the outer catch below, it would be misclassified as a failed
+    // mutation — bumping retryCount and re-persisting an already-succeeded
+    // tx, which `hydrate()` would then replay as a duplicate server
+    // mutation on the next reload.
+    try {
+      cb?.onSuccess?.(result.data);
+    } catch (err) {
+      log.error('onSuccess callback threw after a successful mutation; not retrying', err);
+    }
+    if (queue.length > 0) {
+      void processNext();
+    }
+    return;
   } catch (err) {
     const error = err as Error & { permanent?: boolean };
+
+    if (isTransportFailure(error)) {
+      // Network/offline failure: never counts toward the permanent-drop
+      // budget and never rolls back — the write is still valid, just
+      // undeliverable right now. `retryCount` (and the persisted row) are
+      // left untouched so a later genuine application error still gets
+      // its full retry budget.
+      if (isOffline()) {
+        // Fully pause; resume is driven by the 'online' listener above.
+        processing = false;
+        return;
+      }
+      // Online but the transport/server hiccuped (5xx/429/TypeError) —
+      // retry the same transaction after a short fixed delay instead of
+      // spinning, and instead of ever declaring it permanent. Keep
+      // `processing` true across the delay (matching the genuine-error
+      // backoff below) so a stray 'online'/enqueue can't start a second
+      // attempt concurrently.
+      await sleep(TRANSIENT_RETRY_DELAY_MS);
+      processing = false;
+      if (queue.length > 0) {
+        void processNext();
+      }
+      return;
+    }
+
     const isPermanent = error.permanent || tx.retryCount >= MAX_RETRIES;
 
     if (isPermanent) {
@@ -292,6 +404,7 @@ async function processNext(): Promise<void> {
       await unpersist(tx.id);
       const cb = callbackMap.get(tx.id);
       callbackMap.delete(tx.id);
+      processing = false;
       if (cb?.onError) {
         cb.onError(error);
       } else {
@@ -304,9 +417,8 @@ async function processNext(): Promise<void> {
       await persist(tx);
       const delay = RETRY_DELAYS_MS[tx.retryCount - 1] ?? 10_000;
       await sleep(delay);
+      processing = false;
     }
-  } finally {
-    processing = false;
     if (queue.length > 0) {
       void processNext();
     }

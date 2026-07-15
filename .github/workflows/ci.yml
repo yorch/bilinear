@@ -56,6 +56,9 @@ jobs:
     needs: ci
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # E2E tests are skipped on fork PRs because they cannot access repository secrets
+    # (DATABASE_URL, REDIS_URL, JWT secrets, etc.). The e2e-fork-notice job below
+    # provides visibility when this condition causes the job to skip.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
 
     # Use the official Playwright image so chromium/firefox come pre-installed.
@@ -131,3 +134,20 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+  e2e-fork-notice:
+    # Provides visibility when E2E tests are skipped on fork PRs.
+    # This job reports the reason (no access to repository secrets) and succeeds
+    # so the workflow completion is not obscured by a skipped check.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Notice E2E skipped on fork PR
+        run: |
+          echo "ℹ️ E2E tests skipped on fork PRs"
+          echo ""
+          echo "Fork pull requests cannot access repository secrets needed for E2E:"
+          echo "  - DATABASE_URL, REDIS_URL, JWT secrets"
+          echo ""
+          echo "Before merge, ensure the main branch runs E2E tests successfully."

@@ -86,6 +86,12 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
   // Subscription state: null = loading, true = subscribed, false = not subscribed
   const [subscribed, setSubscribed] = useState<boolean | null>(null);
 
+  // Only reset drafts when actually switching issues (by id) — the `issue`
+  // object itself is rebuilt on every render by callers (useIssueListPage
+  // literal, observer() re-renders on any pool change), so depending on the
+  // object would wipe in-progress title/description edits on every WS
+  // update or unrelated property change.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally keyed on issue?.id, not the issue object
   useEffect(() => {
     if (issue) {
       setTitleDraft(issue.title);
@@ -94,7 +100,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
       // provider is remounted for the correct document room.
       setEditingDesc(false);
     }
-  }, [issue]);
+  }, [issue?.id]);
 
   // Fetch subscription status when issue changes
   useEffect(() => {

@@ -9,6 +9,11 @@ import {
 import type { GraphQLContext } from '../context';
 import { mapServiceError } from '../types/errors';
 
+// Matches the MAX-200 convention used elsewhere (auditLogs, platform-admin
+// lists) — caps an uncapped client-supplied `limit` so a single query can't
+// force an unbounded fetch.
+const MAX_DELIVERIES_LIMIT = 200;
+
 const WEBHOOK_ERROR_MAP = {
   BAD_USER_INPUT: [
     'WebhookInvalidUrlError',
@@ -121,7 +126,11 @@ export const webhookResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      return ctx.services.webhook.listDeliveries(auth.orgId, webhookId, limit ?? 50);
+      return ctx.services.webhook.listDeliveries(
+        auth.orgId,
+        webhookId,
+        Math.min(limit ?? 50, MAX_DELIVERIES_LIMIT),
+      );
     },
 
     // Admin-gated to match the rest of the webhook surface — the event

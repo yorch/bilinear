@@ -3,9 +3,12 @@ import type { Favorite } from '../../../generated/prisma';
 import { requireAuth } from '../../middleware/auth';
 import {
   type FavoriteCreateInput,
+  FavoriteCrossOrgConflictError,
+  FavoriteEntityNotInOrgError,
   FavoriteInvalidEntityTypeError,
   FavoriteNotFoundError,
   type FavoriteReorderEntry,
+  FavoriteReorderTooLargeError,
 } from '../../services/favorite.service';
 import type { GraphQLContext } from '../context';
 
@@ -65,6 +68,21 @@ function mapError(err: unknown): never {
     });
   }
   if (err instanceof FavoriteInvalidEntityTypeError) {
+    throw new GraphQLError(err.message, {
+      extensions: { code: 'BAD_USER_INPUT' },
+    });
+  }
+  if (err instanceof FavoriteEntityNotInOrgError) {
+    throw new GraphQLError(err.message, {
+      extensions: { code: 'BAD_USER_INPUT' },
+    });
+  }
+  if (err instanceof FavoriteCrossOrgConflictError) {
+    throw new GraphQLError(err.message, {
+      extensions: { code: 'BAD_USER_INPUT' },
+    });
+  }
+  if (err instanceof FavoriteReorderTooLargeError) {
     throw new GraphQLError(err.message, {
       extensions: { code: 'BAD_USER_INPUT' },
     });

@@ -8,11 +8,22 @@ import {
   TEST_USER,
 } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
+import { redis } from '../lib/redis';
 import {
   GitHubIntegrationAlreadyConnectedError,
   GitHubIntegrationNotFoundError,
   GitHubService,
 } from './github.service';
+
+// GitHubService, when constructed without explicit deps (the production
+// shape — see the two route handlers that do `new GitHubService(prisma)`),
+// builds a real SyncService bound to the redis singleton so a PR-merge
+// auto-close still gets a genuine SyncAction publish in production. Mock
+// the redis module so that publish is a no-op vi.fn() instead of a real
+// network call during these unit tests.
+vi.mock('../lib/redis', () => ({
+  redis: { publish: vi.fn().mockResolvedValue(1) },
+}));
 
 const TEST_INTEGRATION = {
   accessToken: 'gho_testtoken',
@@ -58,7 +69,36 @@ describe('GitHubService', () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
+    // Constructed WITHOUT explicit deps, exactly like the two production
+    // route handlers — exercises the default-constructed IssueService /
+    // SyncService / WebhookService wiring (all bound to this same mock
+    // prisma) rather than a test-only shortcut, so these tests actually
+    // verify the production DI path.
     service = new GitHubService(prisma as never);
+
+    // Default: no webhook subscribers, so dispatchEvent's fire-and-forget
+    // call is a harmless no-op unless a test explicitly cares about it.
+    prisma.webhook.findMany.mockResolvedValue([]);
+
+    // recordSyncAction (called via the txHook during auto-close) persists
+    // through `syncAction.create` — echo the write back with an
+    // incrementing id so multiple SyncActions in one test are distinguishable.
+    let syncActionIdCounter = 0;
+    prisma.syncAction.create.mockImplementation(
+      ({ data }: { data: Record<string, unknown> }) =>
+        Promise.resolve({
+          action: data.action,
+          committedAt: new Date(),
+          createdAt: new Date(),
+          data: data.data ?? null,
+          id: BigInt(++syncActionIdCounter),
+          modelId: data.modelId,
+          modelName: data.modelName,
+          organizationId: data.organizationId,
+        }) as never,
+    );
+
+    vi.mocked(redis.publish).mockClear();
   });
 
   describe('findByOrg', () => {
@@ -379,7 +419,7 @@ describe('GitHubService', () => {
       expect(prisma.issue.update).not.toHaveBeenCalled();
     });
 
-    it('auto-closes matched issues to the first completed state on merge', async () => {
+    it('auto-closes matched issues to the first completed state on merge, emitting a SyncAction and issue.updated webhook', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2026-06-24T12:00:00Z'));
       const completedState = DEFAULT_WORKFLOW_STATES[3];
@@ -396,7 +436,31 @@ describe('GitHubService', () => {
           },
         ]);
       prisma.gitHubPullRequest.upsert.mockResolvedValue({});
-      prisma.issue.update.mockResolvedValue(TEST_ISSUE);
+
+      // The auto-close now routes through IssueService.update (same path
+      // issueUpdate uses), which re-validates the stateId transition and
+      // checks the team's cascade flags inside its own transaction.
+      prisma.issue.findUnique.mockResolvedValue({
+        canceledAt: null,
+        completedAt: null,
+        startedAt: null,
+        stateId: DEFAULT_WORKFLOW_STATES[2].id,
+        teamId: TEST_TEAM.id,
+      });
+      prisma.workflowState.findFirst.mockResolvedValue({
+        teamId: TEST_TEAM.id,
+        type: 'completed',
+      });
+      prisma.team.findUnique.mockResolvedValue({
+        autoCloseChildIssues: false,
+        autoCloseParentIssues: false,
+      });
+      const updatedIssue = {
+        ...TEST_ISSUE,
+        completedAt: new Date('2026-06-24T12:00:00Z'),
+        stateId: completedState.id,
+      };
+      prisma.issue.update.mockResolvedValue(updatedIssue);
 
       await service.handlePullRequestEvent(
         TEST_ORG.id,
@@ -431,13 +495,115 @@ describe('GitHubService', () => {
       });
       expect(prisma.issue.update).toHaveBeenCalledWith({
         data: {
+          canceledAt: null,
           completedAt: new Date('2026-06-24T12:00:00Z'),
+          startedAt: null,
           stateId: completedState.id,
         },
         where: { id: TEST_ISSUE.id },
       });
 
+      // Critical fix: a SyncAction must be recorded for the closed issue so
+      // delta sync ships the change — before this fix, PR-merge auto-close
+      // was a bare prisma write with no SyncAction, and clients showed the
+      // issue open forever.
+      expect(prisma.syncAction.create).toHaveBeenCalledWith({
+        data: {
+          action: 'U',
+          data: updatedIssue,
+          modelId: TEST_ISSUE.id,
+          modelName: 'Issue',
+          organizationId: TEST_ORG.id,
+        },
+      });
+      // ...and published to Redis after the (mocked) transaction commits.
+      expect(redis.publish).toHaveBeenCalled();
+
+      // The standard issue.updated webhook fires too.
+      expect(prisma.webhook.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ events: { has: 'issue.updated' } }),
+        }),
+      );
+
       vi.useRealTimers();
+    });
+
+    it('fires the parent auto-close cascade (with its own SyncAction) when the team has autoCloseParentIssues enabled', async () => {
+      const completedState = DEFAULT_WORKFLOW_STATES[3];
+      const parentId = '00000000-0000-0000-0000-000000000401';
+
+      prisma.issue.findMany
+        // identifier resolution
+        .mockResolvedValueOnce([{ id: TEST_ISSUE.id, identifier: 'ENG-1', teamId: TEST_TEAM.id }])
+        // auto-close re-query
+        .mockResolvedValueOnce([
+          {
+            ...TEST_ISSUE,
+            parentId,
+            state: { type: 'started' },
+            team: { ...TEST_TEAM, workflowStates: [completedState] },
+          },
+        ])
+        // maybeCloseParentTx: sibling query — only this child, now completed
+        .mockResolvedValueOnce([{ id: TEST_ISSUE.id, state: { type: 'completed' } }]);
+      prisma.gitHubPullRequest.upsert.mockResolvedValue({});
+
+      prisma.issue.findUnique
+        // stateId-belongs-to-team validation (child's own transition)
+        .mockResolvedValueOnce({
+          canceledAt: null,
+          completedAt: null,
+          startedAt: null,
+          stateId: DEFAULT_WORKFLOW_STATES[2].id,
+          teamId: TEST_TEAM.id,
+        })
+        // maybeCloseParentTx: parent fetch — not yet done
+        .mockResolvedValueOnce({
+          id: parentId,
+          state: { type: 'started' },
+        });
+
+      prisma.workflowState.findFirst
+        // stateId-belongs-to-team validation
+        .mockResolvedValueOnce({ teamId: TEST_TEAM.id, type: 'completed' })
+        // maybeCloseParentTx completed-state lookup
+        .mockResolvedValueOnce(completedState);
+
+      prisma.team.findUnique.mockResolvedValue({
+        autoCloseChildIssues: false,
+        autoCloseParentIssues: true,
+      });
+
+      const updatedChild = { ...TEST_ISSUE, parentId, stateId: completedState.id };
+      const updatedParent = {
+        completedAt: new Date('2026-06-24T12:00:00Z'),
+        id: parentId,
+        stateId: completedState.id,
+        teamId: TEST_TEAM.id,
+      };
+      prisma.issue.update
+        .mockResolvedValueOnce(updatedChild) // child close
+        .mockResolvedValueOnce(updatedParent); // cascaded parent close
+
+      await service.handlePullRequestEvent(
+        TEST_ORG.id,
+        buildPrPayload({ action: 'closed', merged: true, title: 'Fix ENG-1' }),
+      );
+
+      // The parent got closed too.
+      expect(prisma.issue.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: parentId } }),
+      );
+      // A SyncAction is recorded for BOTH the child and the cascaded
+      // parent — without one for the parent, its auto-close would never
+      // reach delta sync even though the child's did.
+      expect(prisma.syncAction.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ modelId: TEST_ISSUE.id }) }),
+      );
+      expect(prisma.syncAction.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ modelId: parentId }) }),
+      );
     });
 
     it('skips auto-close for an issue whose team has no completed state', async () => {
@@ -472,6 +638,19 @@ describe('GitHubService', () => {
           },
         ]);
       prisma.gitHubPullRequest.upsert.mockResolvedValue({});
+      // Validation passes, but the actual write inside IssueService.update's
+      // transaction fails ("db down").
+      prisma.issue.findUnique.mockResolvedValue({
+        canceledAt: null,
+        completedAt: null,
+        startedAt: null,
+        stateId: DEFAULT_WORKFLOW_STATES[2].id,
+        teamId: TEST_TEAM.id,
+      });
+      prisma.workflowState.findFirst.mockResolvedValue({
+        teamId: TEST_TEAM.id,
+        type: 'completed',
+      });
       prisma.issue.update.mockRejectedValue(new Error('db down'));
 
       await expect(
@@ -480,6 +659,10 @@ describe('GitHubService', () => {
           buildPrPayload({ action: 'closed', merged: true, title: 'Fix ENG-1' }),
         ),
       ).resolves.toBeUndefined();
+
+      // The failed write must not leak a SyncAction — recordSyncAction only
+      // runs (via the txHook) after tx.issue.update succeeds.
+      expect(prisma.syncAction.create).not.toHaveBeenCalled();
     });
   });
 

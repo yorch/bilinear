@@ -119,6 +119,52 @@ describe('ProjectService', () => {
       });
     });
 
+    it('clears stale terminal timestamps when reverting statusType (e.g. completed → inProgress)', async () => {
+      prisma.project.update.mockResolvedValue(TEST_PROJECT);
+      // No prior startedAt on record — first entry into inProgress.
+      prisma.project.findUnique.mockResolvedValue(null);
+
+      await service.update(TEST_PROJECT.id, { statusType: 'inProgress' });
+
+      // Reverting out of 'completed' must clear the stale completedAt (and
+      // canceledAt) that a prior transition may have left behind — before
+      // this fix, only the entered status's own timestamp was stamped and
+      // the others were left untouched.
+      expect(prisma.project.update.mock.calls[0][0].data).toMatchObject({
+        canceledAt: null,
+        completedAt: null,
+        startedAt: expect.any(Date),
+      });
+    });
+
+    it('clears completedAt when a project is un-paused back to backlog', async () => {
+      prisma.project.update.mockResolvedValue(TEST_PROJECT);
+
+      await service.update(TEST_PROJECT.id, { statusType: 'backlog' });
+
+      expect(prisma.project.update.mock.calls[0][0].data).toMatchObject({
+        canceledAt: null,
+        completedAt: null,
+        startedAt: null,
+        statusType: 'backlog',
+      });
+    });
+
+    it('does not re-stamp startedAt when a project already has one (paused → inProgress resume)', async () => {
+      prisma.project.update.mockResolvedValue(TEST_PROJECT);
+      const originalStartedAt = new Date('2026-03-01T00:00:00Z');
+      prisma.project.findUnique.mockResolvedValue({ startedAt: originalStartedAt });
+
+      await service.update(TEST_PROJECT.id, { statusType: 'inProgress' });
+
+      const call = prisma.project.update.mock.calls[0][0];
+      expect(call.data.startedAt).toBeUndefined();
+      // completedAt/canceledAt are still cleared even though startedAt itself
+      // isn't re-stamped.
+      expect(call.data.completedAt).toBeNull();
+      expect(call.data.canceledAt).toBeNull();
+    });
+
     it('stamps healthUpdatedAt when health changes', async () => {
       prisma.project.update.mockResolvedValue(TEST_PROJECT);
 

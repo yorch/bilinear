@@ -3,6 +3,11 @@ import type { Notification } from '../../../generated/prisma';
 import { requireAuth, requireTeamMember } from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
 
+// Matches the MAX-200 convention used elsewhere (auditLogs, platform-admin
+// lists) — caps an uncapped client-supplied `limit` so a single query can't
+// force an unbounded fetch.
+const MAX_NOTIFICATIONS_LIMIT = 200;
+
 export const notificationResolvers = {
   Mutation: {
     notificationMarkAllRead: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
@@ -166,7 +171,11 @@ export const notificationResolvers = {
 
     notifications: async (_parent: unknown, { limit }: { limit?: number }, ctx: GraphQLContext) => {
       requireAuth(ctx);
-      return ctx.services.notification.findByUserId(ctx.userId, ctx.orgId, limit ?? 50);
+      return ctx.services.notification.findByUserId(
+        ctx.userId,
+        ctx.orgId,
+        Math.min(limit ?? 50, MAX_NOTIFICATIONS_LIMIT),
+      );
     },
     notificationUnreadCount: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);

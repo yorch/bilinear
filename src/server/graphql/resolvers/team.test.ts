@@ -240,11 +240,13 @@ describe('teamResolvers', () => {
   });
 
   describe('Mutation.teamUpdate', () => {
-    it('updates a team when user is a team member', async () => {
-      // requireTeamMember check
-      ctx.prisma.teamMembership.findUnique.mockResolvedValue(TEST_TEAM_MEMBERSHIP);
+    it('updates a team when user is a (non-guest) team owner', async () => {
       // org-scope check via findById
       ctx.prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
+      // not an org admin — falls through to the team-owner check
+      ctx.prisma.organizationMember.findUnique.mockResolvedValue(undefined);
+      // requireTeamOwner / requireTeamMemberNotGuest checks
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue(TEST_TEAM_MEMBERSHIP);
       const updated = { ...TEST_TEAM, name: 'New Name' };
       ctx.prisma.team.update.mockResolvedValue(updated);
 
@@ -256,6 +258,60 @@ describe('teamResolvers', () => {
 
       expect(result.success).toBe(true);
       expect(result.team.name).toBe('New Name');
+    });
+
+    it('updates a team when the user is an org admin but not a team member', async () => {
+      ctx.prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
+      ctx.prisma.organizationMember.findUnique.mockResolvedValue({
+        organizationId: TEST_ORG.id,
+        role: 'admin',
+        userId: TEST_USER.id,
+      });
+      const updated = { ...TEST_TEAM, name: 'New Name' };
+      ctx.prisma.team.update.mockResolvedValue(updated);
+
+      const result = await teamResolvers.Mutation.teamUpdate(
+        null,
+        { id: TEST_TEAM.id, input: { name: 'New Name' } },
+        ctx as never,
+      );
+
+      expect(result.success).toBe(true);
+      // requireTeamOwner/requireTeamMemberNotGuest must not even be
+      // consulted — org-admin status alone is sufficient.
+      expect(ctx.prisma.teamMembership.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('throws FORBIDDEN when a non-owner, non-admin team member tries to update', async () => {
+      ctx.prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
+      ctx.prisma.organizationMember.findUnique.mockResolvedValue(undefined);
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        ...TEST_TEAM_MEMBERSHIP,
+        isOwner: false,
+      });
+
+      await expect(
+        teamResolvers.Mutation.teamUpdate(
+          null,
+          { id: TEST_TEAM.id, input: { name: 'X' } },
+          ctx as never,
+        ),
+      ).rejects.toMatchObject({ extensions: { code: 'FORBIDDEN' } });
+    });
+
+    it('throws FORBIDDEN when a guest team owner tries to update', async () => {
+      ctx.prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
+      ctx.prisma.organizationMember.findUnique.mockResolvedValue(undefined);
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue(TEST_TEAM_MEMBERSHIP);
+      ctx.prisma.teamMemberRole.findUnique.mockResolvedValue({ role: 'guest' });
+
+      await expect(
+        teamResolvers.Mutation.teamUpdate(
+          null,
+          { id: TEST_TEAM.id, input: { name: 'X' } },
+          ctx as never,
+        ),
+      ).rejects.toMatchObject({ extensions: { code: 'FORBIDDEN' } });
     });
 
     it('throws NOT_FOUND when team belongs to different org', async () => {
@@ -308,6 +364,41 @@ describe('teamResolvers', () => {
       const result = await teamResolvers.Team.children(TEST_TEAM as never, {}, ctx as never);
 
       expect(result).toEqual([]);
+    });
+
+    describe('Team.issues', () => {
+      it('passes no guestUserId (sees all issues) for a non-guest member', async () => {
+        ctx.prisma.teamMembership.findUnique.mockResolvedValue(TEST_TEAM_MEMBERSHIP);
+        ctx.prisma.issue.findMany.mockResolvedValue([]);
+
+        await teamResolvers.Team.issues(TEST_TEAM as never, {}, ctx as never);
+
+        expect(ctx.prisma.issue.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({ teamId: TEST_TEAM.id }),
+          }),
+        );
+        // No creator/assignee restriction applied for a non-guest.
+        const call = ctx.prisma.issue.findMany.mock.calls[0][0];
+        expect(JSON.stringify(call.where.AND)).not.toContain('creatorId');
+      });
+
+      it('scopes to creator/assignee for a guest team member', async () => {
+        ctx.prisma.teamMembership.findUnique.mockResolvedValue(TEST_TEAM_MEMBERSHIP);
+        ctx.prisma.teamMemberRole.findUnique.mockResolvedValue({ role: 'guest' });
+        ctx.prisma.issue.findMany.mockResolvedValue([]);
+
+        await teamResolvers.Team.issues(TEST_TEAM as never, {}, ctx as never);
+
+        const call = ctx.prisma.issue.findMany.mock.calls[0][0];
+        expect(call.where.AND).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              OR: [{ creatorId: TEST_USER.id }, { assigneeId: TEST_USER.id }],
+            }),
+          ]),
+        );
+      });
     });
   });
 

@@ -34,6 +34,53 @@ export class CommentReactionNotFoundError extends Error {
   }
 }
 
+export class CommentValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CommentValidationError';
+  }
+}
+
+// Server-side cap so a malicious or buggy client can't push a
+// multi-megabyte comment body through the mutation path.
+const MAX_BODY_LENGTH = 100_000;
+
+function assertValidBody(body: string | undefined): void {
+  if (body !== undefined && body.length > MAX_BODY_LENGTH) {
+    throw new CommentValidationError(`body must be ${MAX_BODY_LENGTH} characters or fewer`);
+  }
+}
+
+/**
+ * Walks a TipTap/ProseMirror document (as JSON) collecting the userIds of
+ * every `@user` mention node — see `buildMentionExtension` in
+ * tiptap-editor.tsx, which stamps `{ type: 'mention', attrs: { id, label } }`
+ * nodes into the doc. Issue (`#`) and project (`~`) mentions use different
+ * node names (`issueMention`/`projectMention`) and are intentionally not
+ * treated as user mentions here. Best-effort: unrecognised/malformed JSON
+ * shapes are simply skipped rather than throwing, since bodyData is
+ * client-authored editor state, not a validated input contract.
+ */
+export function extractMentionedUserIds(bodyData: unknown): string[] {
+  const ids = new Set<string>();
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== 'object') {
+      return;
+    }
+    const n = node as { attrs?: { id?: unknown }; content?: unknown; type?: unknown };
+    if (n.type === 'mention' && typeof n.attrs?.id === 'string') {
+      ids.add(n.attrs.id);
+    }
+    if (Array.isArray(n.content)) {
+      for (const child of n.content) {
+        walk(child);
+      }
+    }
+  };
+  walk(bodyData);
+  return Array.from(ids);
+}
+
 /**
  * Result of a comment access check — `commentId` is known to belong to an
  * issue inside `orgId` on `teamId`. Resolver still owes a `requireTeamMember`
@@ -119,6 +166,8 @@ export class CommentService {
     authorId: string,
     input: CommentCreateInput,
   ): Promise<Comment & { author: unknown; reactions: unknown[]; replies: unknown[] }> {
+    assertValidBody(input.body);
+
     if (input.parentId) {
       const parent = await this.prisma.comment.findUnique({
         select: { archivedAt: true, issueId: true },
@@ -151,6 +200,8 @@ export class CommentService {
     userId: string,
     input: CommentUpdateInput,
   ): Promise<Comment & { author: unknown; reactions: unknown[]; replies: unknown[] }> {
+    assertValidBody(input.body);
+
     const existing = await this.prisma.comment.findUnique({ where: { id } });
     if (!existing) {
       throw new CommentNotFoundError();

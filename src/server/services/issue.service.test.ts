@@ -7,7 +7,13 @@ import {
   TEST_USER,
 } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
-import { IssueInvalidStateError, IssueService, IssueStateRequiredError } from './issue.service';
+import {
+  IssueInvalidReferenceError,
+  IssueInvalidStateError,
+  IssueService,
+  IssueStateRequiredError,
+  IssueValidationError,
+} from './issue.service';
 
 const COMPLETED_STATE = DEFAULT_WORKFLOW_STATES[3]; // type: 'completed'
 const CANCELED_STATE = DEFAULT_WORKFLOW_STATES[4]; // type: 'canceled'
@@ -208,6 +214,17 @@ describe('IssueService', () => {
         projectId,
         projectMilestoneId: milestoneId,
       });
+      // Inherited references must each resolve inside the caller's org —
+      // validateReferences checks all three.
+      prisma.project.findUnique.mockResolvedValue({ organizationId: TEST_ORG.id });
+      prisma.cycle.findUnique.mockResolvedValue({
+        organizationId: TEST_ORG.id,
+        teamId: TEST_TEAM.id,
+      });
+      prisma.projectMilestone.findUnique.mockResolvedValue({
+        project: { organizationId: TEST_ORG.id },
+        projectId,
+      });
 
       await service.create(TEST_ORG.id, TEST_USER.id, {
         parentId: PARENT_ISSUE.id,
@@ -240,6 +257,8 @@ describe('IssueService', () => {
         projectMilestoneId: parentMilestoneId,
       });
       prisma.issue.create.mockResolvedValue(CHILD_ISSUE);
+      // The explicit override project must resolve inside the caller's org.
+      prisma.project.findUnique.mockResolvedValue({ organizationId: TEST_ORG.id });
 
       await service.create(TEST_ORG.id, TEST_USER.id, {
         parentId: PARENT_ISSUE.id,
@@ -264,7 +283,9 @@ describe('IssueService', () => {
       const labelId = '00000000-0000-0000-0000-000000000500';
       prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1 });
       prisma.issue.create.mockResolvedValue(TEST_ISSUE);
-      prisma.issueLabel.findMany.mockResolvedValue([{ id: labelId, parentId: null }]);
+      prisma.issueLabel.findMany.mockResolvedValue([
+        { id: labelId, organizationId: TEST_ORG.id, parentId: null },
+      ]);
       prisma.issueLabelAssignment.deleteMany.mockResolvedValue({ count: 0 });
       prisma.issueLabelAssignment.createMany.mockResolvedValue({ count: 1 });
 
@@ -307,7 +328,10 @@ describe('IssueService', () => {
     // satisfy the validation so tests not specifically exercising it
     // stay focused on the field being asserted.
     beforeEach(() => {
-      prisma.issue.findUnique.mockResolvedValue({ teamId: TEST_TEAM.id });
+      prisma.issue.findUnique.mockResolvedValue({
+        organizationId: TEST_ORG.id,
+        teamId: TEST_TEAM.id,
+      });
       prisma.workflowState.findFirst.mockResolvedValue({ teamId: TEST_TEAM.id });
     });
 
@@ -336,7 +360,9 @@ describe('IssueService', () => {
     it('syncs labels when labelIds provided', async () => {
       const labelId = '00000000-0000-0000-0000-000000000500';
       prisma.issue.update.mockResolvedValue(TEST_ISSUE);
-      prisma.issueLabel.findMany.mockResolvedValue([{ id: labelId, parentId: null }]);
+      prisma.issueLabel.findMany.mockResolvedValue([
+        { id: labelId, organizationId: TEST_ORG.id, parentId: null },
+      ]);
       prisma.issueLabelAssignment.deleteMany.mockResolvedValue({ count: 0 });
       prisma.issueLabelAssignment.createMany.mockResolvedValue({ count: 1 });
 
@@ -850,6 +876,79 @@ describe('IssueService', () => {
       const call = prisma.issue.findMany.mock.calls[0][0];
       expect(call.where.archivedAt).toBeUndefined();
     });
+
+    it('orders by sortOrder with an id tiebreak for stable pagination', async () => {
+      prisma.issue.findMany.mockResolvedValue([]);
+      prisma.issue.count.mockResolvedValue(0);
+
+      await service.findMany(TEST_ORG.id, {}, { first: 50 });
+
+      expect(prisma.issue.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+        }),
+      );
+    });
+
+    it('fetches one extra row and reports hasNextPage from the real remainder', async () => {
+      // 3 rows returned for a page size of 2 — one extra row proves there's
+      // a next page; the old `length === take` heuristic couldn't tell
+      // "exactly 2 left" from "more than 2 left".
+      prisma.issue.findMany.mockResolvedValue([
+        { ...TEST_ISSUE, id: 'a' },
+        { ...TEST_ISSUE, id: 'b' },
+        { ...TEST_ISSUE, id: 'c' },
+      ]);
+      prisma.issue.count.mockResolvedValue(3);
+
+      const result = await service.findMany(TEST_ORG.id, {}, { first: 2 });
+
+      expect(prisma.issue.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 3 }));
+      expect(result.nodes).toHaveLength(2);
+      expect(result.nodes.map(n => n.id)).toEqual(['a', 'b']);
+      expect(result.pageInfo.hasNextPage).toBe(true);
+      expect(result.pageInfo.endCursor).toBe('b');
+    });
+
+    it('reports hasNextPage=false when the fetch returns exactly `take` rows', async () => {
+      prisma.issue.findMany.mockResolvedValue([
+        { ...TEST_ISSUE, id: 'a' },
+        { ...TEST_ISSUE, id: 'b' },
+      ]);
+      prisma.issue.count.mockResolvedValue(2);
+
+      const result = await service.findMany(TEST_ORG.id, {}, { first: 2 });
+
+      expect(result.nodes).toHaveLength(2);
+      expect(result.pageInfo.hasNextPage).toBe(false);
+    });
+  });
+
+  describe('findByTeamId', () => {
+    it('hides snoozed-not-yet-woken issues for a non-guest', async () => {
+      prisma.issue.findMany.mockResolvedValue([]);
+
+      await service.findByTeamId(TEST_TEAM.id);
+
+      const call = prisma.issue.findMany.mock.calls[0][0];
+      expect(call.where.AND).toEqual([
+        { OR: [{ snoozedUntilAt: null }, { snoozedUntilAt: { lte: expect.any(Date) } }] },
+      ]);
+      expect(call.where.teamId).toBe(TEST_TEAM.id);
+    });
+
+    it('adds the creator/assignee restriction when guestUserId is supplied', async () => {
+      prisma.issue.findMany.mockResolvedValue([]);
+
+      await service.findByTeamId(TEST_TEAM.id, false, TEST_USER.id);
+
+      const call = prisma.issue.findMany.mock.calls[0][0];
+      expect(call.where.AND).toEqual(
+        expect.arrayContaining([
+          { OR: [{ creatorId: TEST_USER.id }, { assigneeId: TEST_USER.id }] },
+        ]),
+      );
+    });
   });
 
   describe('reactions', () => {
@@ -949,6 +1048,319 @@ describe('IssueService', () => {
       prisma.issue.findFirst.mockResolvedValue(null);
       const result = await service.findByIdentifier(TEST_ORG.id, 'ENG-99');
       expect(result).toBeNull();
+    });
+  });
+
+  describe('input validation caps', () => {
+    beforeEach(() => {
+      prisma.workflowState.findFirst.mockResolvedValue({ teamId: TEST_TEAM.id });
+      prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1 });
+      prisma.issue.findUnique.mockResolvedValue({
+        organizationId: TEST_ORG.id,
+        teamId: TEST_TEAM.id,
+      });
+    });
+
+    it('create rejects a title over the length cap', async () => {
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, {
+          teamId: TEST_TEAM.id,
+          title: 'a'.repeat(513),
+        }),
+      ).rejects.toThrow(IssueValidationError);
+      expect(prisma.team.update).not.toHaveBeenCalled();
+    });
+
+    it('create rejects a description over the length cap', async () => {
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, {
+          description: 'a'.repeat(100_001),
+          teamId: TEST_TEAM.id,
+          title: 'Test',
+        }),
+      ).rejects.toThrow(IssueValidationError);
+    });
+
+    it('create rejects an out-of-range priority', async () => {
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, {
+          priority: 5,
+          teamId: TEST_TEAM.id,
+          title: 'Test',
+        }),
+      ).rejects.toThrow(IssueValidationError);
+    });
+
+    it('update rejects a title over the length cap', async () => {
+      await expect(service.update(TEST_ISSUE.id, { title: 'a'.repeat(513) })).rejects.toThrow(
+        IssueValidationError,
+      );
+      expect(prisma.issue.update).not.toHaveBeenCalled();
+    });
+
+    it('bulkUpdate rejects an out-of-range priority', async () => {
+      await expect(
+        service.bulkUpdate(TEST_ORG.id, [TEST_ISSUE.id], { priority: -1 }),
+      ).rejects.toThrow(IssueValidationError);
+    });
+  });
+
+  describe('cross-org / cross-team reference validation', () => {
+    const FOREIGN_ID = '00000000-0000-0000-0000-0000000000f1';
+
+    beforeEach(() => {
+      prisma.workflowState.findFirst.mockResolvedValue({ teamId: TEST_TEAM.id });
+      prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1 });
+      prisma.issue.create.mockResolvedValue(TEST_ISSUE);
+      prisma.issueLabelAssignment.deleteMany.mockResolvedValue({ count: 0 });
+    });
+
+    it('create rejects a parentId belonging to a different org', async () => {
+      prisma.issue.findUnique.mockResolvedValue({ organizationId: 'other-org' });
+
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, {
+          parentId: FOREIGN_ID,
+          stateId: DEFAULT_WORKFLOW_STATES[0].id,
+          teamId: TEST_TEAM.id,
+          title: 'Test',
+        }),
+      ).rejects.toThrow(IssueInvalidReferenceError);
+      expect(prisma.issue.create).not.toHaveBeenCalled();
+    });
+
+    it('create rejects a nonexistent parentId', async () => {
+      prisma.issue.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, {
+          parentId: FOREIGN_ID,
+          stateId: DEFAULT_WORKFLOW_STATES[0].id,
+          teamId: TEST_TEAM.id,
+          title: 'Test',
+        }),
+      ).rejects.toThrow(IssueInvalidReferenceError);
+    });
+
+    it('create rejects a projectId belonging to a different org', async () => {
+      prisma.project.findUnique.mockResolvedValue({ organizationId: 'other-org' });
+
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, {
+          projectId: FOREIGN_ID,
+          stateId: DEFAULT_WORKFLOW_STATES[0].id,
+          teamId: TEST_TEAM.id,
+          title: 'Test',
+        }),
+      ).rejects.toThrow(IssueInvalidReferenceError);
+    });
+
+    it('create rejects a cycleId belonging to a different team', async () => {
+      prisma.cycle.findUnique.mockResolvedValue({
+        organizationId: TEST_ORG.id,
+        teamId: 'other-team',
+      });
+
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, {
+          cycleId: FOREIGN_ID,
+          stateId: DEFAULT_WORKFLOW_STATES[0].id,
+          teamId: TEST_TEAM.id,
+          title: 'Test',
+        }),
+      ).rejects.toThrow(IssueInvalidReferenceError);
+    });
+
+    it('create rejects a projectMilestoneId whose project belongs to a different org', async () => {
+      prisma.projectMilestone.findUnique.mockResolvedValue({
+        project: { organizationId: 'other-org' },
+        projectId: FOREIGN_ID,
+      });
+
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, {
+          projectMilestoneId: FOREIGN_ID,
+          stateId: DEFAULT_WORKFLOW_STATES[0].id,
+          teamId: TEST_TEAM.id,
+          title: 'Test',
+        }),
+      ).rejects.toThrow(IssueInvalidReferenceError);
+    });
+
+    it('create rejects an assigneeId who is not an org member', async () => {
+      prisma.organizationMember.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, {
+          assigneeId: FOREIGN_ID,
+          stateId: DEFAULT_WORKFLOW_STATES[0].id,
+          teamId: TEST_TEAM.id,
+          title: 'Test',
+        }),
+      ).rejects.toThrow(IssueInvalidReferenceError);
+    });
+
+    it('create succeeds when every reference resolves inside the org/team', async () => {
+      prisma.project.findUnique.mockResolvedValue({ organizationId: TEST_ORG.id });
+      prisma.cycle.findUnique.mockResolvedValue({
+        organizationId: TEST_ORG.id,
+        teamId: TEST_TEAM.id,
+      });
+      prisma.organizationMember.findUnique.mockResolvedValue({ organizationId: TEST_ORG.id });
+
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, {
+          assigneeId: FOREIGN_ID,
+          cycleId: FOREIGN_ID,
+          projectId: FOREIGN_ID,
+          stateId: DEFAULT_WORKFLOW_STATES[0].id,
+          teamId: TEST_TEAM.id,
+          title: 'Test',
+        }),
+      ).resolves.toBeDefined();
+    });
+
+    it('update rejects a cross-org assigneeId', async () => {
+      prisma.issue.findUnique.mockResolvedValue({
+        organizationId: TEST_ORG.id,
+        teamId: TEST_TEAM.id,
+      });
+      prisma.organizationMember.findUnique.mockResolvedValue(null);
+
+      await expect(service.update(TEST_ISSUE.id, { assigneeId: FOREIGN_ID })).rejects.toThrow(
+        IssueInvalidReferenceError,
+      );
+      expect(prisma.issue.update).not.toHaveBeenCalled();
+    });
+
+    it('update allows clearing a reference (null) without validating it', async () => {
+      prisma.issue.findUnique.mockResolvedValue({
+        organizationId: TEST_ORG.id,
+        teamId: TEST_TEAM.id,
+      });
+      prisma.issue.update.mockResolvedValue(TEST_ISSUE);
+
+      await service.update(TEST_ISSUE.id, { assigneeId: null, projectId: null });
+
+      expect(prisma.organizationMember.findUnique).not.toHaveBeenCalled();
+      expect(prisma.project.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('bulkUpdate rejects a cross-org projectId across the whole batch', async () => {
+      const a = { ...TEST_ISSUE, id: '00000000-0000-0000-0000-0000000000b1' };
+      prisma.issue.findMany.mockResolvedValue([a]);
+      prisma.project.findUnique.mockResolvedValue({ organizationId: 'other-org' });
+
+      await expect(
+        service.bulkUpdate(TEST_ORG.id, [a.id], { projectId: FOREIGN_ID }),
+      ).rejects.toThrow(IssueInvalidReferenceError);
+      expect(prisma.issue.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('bulkUpdate rejects a cycleId that does not match every affected team', async () => {
+      const a = { ...TEST_ISSUE, id: '00000000-0000-0000-0000-0000000000b2', teamId: 'team-a' };
+      const b = { ...TEST_ISSUE, id: '00000000-0000-0000-0000-0000000000b3', teamId: 'team-b' };
+      prisma.issue.findMany.mockResolvedValue([a, b]);
+      prisma.cycle.findUnique.mockResolvedValue({ organizationId: TEST_ORG.id, teamId: 'team-a' });
+
+      await expect(
+        service.bulkUpdate(TEST_ORG.id, [a.id, b.id], { cycleId: FOREIGN_ID }),
+      ).rejects.toThrow(IssueInvalidReferenceError);
+    });
+  });
+
+  describe('bulkUpdate lifecycle timestamps', () => {
+    const COMPLETED_STATE_ID = DEFAULT_WORKFLOW_STATES[3].id; // type: 'completed'
+
+    it('stamps completedAt only on rows actually transitioning into the target state', async () => {
+      const transitioning = {
+        ...TEST_ISSUE,
+        id: '00000000-0000-0000-0000-0000000000c1',
+        startedAt: null,
+        stateId: DEFAULT_WORKFLOW_STATES[2].id, // 'started' — not yet completed
+      };
+      const alreadyThere = {
+        ...TEST_ISSUE,
+        completedAt: new Date('2026-01-01T00:00:00Z'),
+        id: '00000000-0000-0000-0000-0000000000c2',
+        stateId: COMPLETED_STATE_ID, // already at the target state
+      };
+      prisma.issue.findMany.mockResolvedValue([transitioning, alreadyThere]);
+      prisma.workflowState.findFirst.mockResolvedValue({
+        teamId: TEST_TEAM.id,
+        type: 'completed',
+      });
+      prisma.issue.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.bulkUpdate(TEST_ORG.id, [transitioning.id, alreadyThere.id], {
+        stateId: COMPLETED_STATE_ID,
+      });
+
+      // One updateMany for the non-transitioning row (no lifecycle fields),
+      // one for the transitioning row (stamped with completedAt/startedAt).
+      expect(prisma.issue.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.not.objectContaining({ completedAt: expect.anything() }),
+          where: expect.objectContaining({ id: { in: [alreadyThere.id] } }),
+        }),
+      );
+      expect(prisma.issue.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ canceledAt: null, completedAt: expect.any(Date) }),
+          where: expect.objectContaining({ id: { in: [transitioning.id] } }),
+        }),
+      );
+    });
+
+    it('applies first-set semantics for startedAt (only stamps if not already set)', async () => {
+      const startedStateId = DEFAULT_WORKFLOW_STATES[2].id; // type: 'started'
+      const needsStamp = {
+        ...TEST_ISSUE,
+        id: '00000000-0000-0000-0000-0000000000d1',
+        startedAt: null,
+        stateId: DEFAULT_WORKFLOW_STATES[1].id,
+      };
+      const alreadyStarted = {
+        ...TEST_ISSUE,
+        id: '00000000-0000-0000-0000-0000000000d2',
+        startedAt: new Date('2026-01-01T00:00:00Z'),
+        stateId: DEFAULT_WORKFLOW_STATES[1].id,
+      };
+      prisma.issue.findMany.mockResolvedValue([needsStamp, alreadyStarted]);
+      prisma.workflowState.findFirst.mockResolvedValue({ teamId: TEST_TEAM.id, type: 'started' });
+      prisma.issue.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.bulkUpdate(TEST_ORG.id, [needsStamp.id, alreadyStarted.id], {
+        stateId: startedStateId,
+      });
+
+      expect(prisma.issue.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ startedAt: expect.any(Date) }),
+          where: expect.objectContaining({ id: { in: [needsStamp.id] } }),
+        }),
+      );
+      expect(prisma.issue.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.not.objectContaining({ startedAt: expect.anything() }),
+          where: expect.objectContaining({ id: { in: [alreadyStarted.id] } }),
+        }),
+      );
+    });
+
+    it('does not touch lifecycle timestamps when the batch has no stateId change', async () => {
+      const a = { ...TEST_ISSUE, id: '00000000-0000-0000-0000-0000000000e1' };
+      prisma.issue.findMany.mockResolvedValue([a]);
+      prisma.issue.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.bulkUpdate(TEST_ORG.id, [a.id], { priority: 3 });
+
+      expect(prisma.issue.updateMany).toHaveBeenCalledTimes(1);
+      expect(prisma.issue.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.not.objectContaining({ completedAt: expect.anything() }),
+        }),
+      );
     });
   });
 });

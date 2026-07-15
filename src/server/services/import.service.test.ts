@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TEST_ORG, TEST_TEAM, TEST_USER } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
-import { ImportService, MAX_IMPORT_ROWS, parseCsv } from './import.service';
+import { ImportService, MAX_EXPORT_ROWS, MAX_IMPORT_ROWS, parseCsv } from './import.service';
 
 describe('parseCsv', () => {
   it('parses headers and rows', () => {
@@ -102,5 +102,54 @@ describe('ImportService.importIssues', () => {
         title: 'Title',
       }),
     ).rejects.toThrow(/Too many rows/);
+  });
+});
+
+describe('ImportService.exportData', () => {
+  let prisma: MockPrismaClient;
+  let svc: ImportService;
+
+  beforeEach(() => {
+    prisma = createMockPrisma();
+    svc = new ImportService(prisma as never, { create: vi.fn() } as never);
+  });
+
+  it('caps the query at MAX_EXPORT_ROWS and reports truncated when hit', async () => {
+    const rows = Array.from({ length: MAX_EXPORT_ROWS }, (_, i) => ({
+      identifier: `ENG-${i}`,
+      title: `Issue ${i}`,
+    }));
+    prisma.issue.findMany.mockResolvedValue(rows);
+
+    const result = (await svc.exportData(TEST_ORG.id)) as {
+      issueCount: number;
+      truncated: boolean;
+    };
+
+    expect(prisma.issue.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: MAX_EXPORT_ROWS }),
+    );
+    expect(result.issueCount).toBe(MAX_EXPORT_ROWS);
+    expect(result.truncated).toBe(true);
+  });
+
+  it('reports truncated=false when under the cap', async () => {
+    prisma.issue.findMany.mockResolvedValue([{ identifier: 'ENG-1', title: 'Only issue' }]);
+
+    const result = (await svc.exportData(TEST_ORG.id)) as { truncated: boolean };
+
+    expect(result.truncated).toBe(false);
+  });
+
+  it('scopes to a single team when teamId is provided', async () => {
+    prisma.issue.findMany.mockResolvedValue([]);
+
+    await svc.exportData(TEST_ORG.id, TEST_TEAM.id);
+
+    expect(prisma.issue.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ organizationId: TEST_ORG.id, teamId: TEST_TEAM.id }),
+      }),
+    );
   });
 });

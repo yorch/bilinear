@@ -82,6 +82,15 @@ export class SyncManager {
   // rapid succession (e.g. a hydrate replay batch) collapse to one
   // delta-sync after the last one settles.
   private drainedRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  // Follow-up delta scheduled ~800ms after every successful (re)connect and
+  // after fullBootstrap — catches actions that land in the gap between the
+  // server's 500ms commit watermark and Redis pub/sub's no-replay semantics
+  // (a message published before this client's SUBSCRIBE completed is gone
+  // forever). Coalesced the same way as drainedRetryTimer.
+  private connectFollowUpTimer: ReturnType<typeof setTimeout> | null = null;
+  // The 'resync' WS message's jittered retry timer — tracked so stop() can
+  // cancel it instead of leaving a stray deltaSync() to fire after teardown.
+  private resyncJitterTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(stores: RootStore, wsClient: WsClient) {
     this.stores = stores;
@@ -109,6 +118,11 @@ export class SyncManager {
     } else {
       // No cache — do a full bootstrap
       await this.fullBootstrap();
+      // Bootstrap's own lastSyncId comes from the server at request time, so
+      // it has exactly the same commit-watermark/pub-sub-no-replay gap as a
+      // post-connect delta (see scheduleFollowUpDelta docstring) — schedule
+      // the same catch-up.
+      this.scheduleFollowUpDelta();
     }
 
     // Don't open a WS connection if stop() was called while we were bootstrapping
@@ -138,6 +152,14 @@ export class SyncManager {
     if (this.drainedRetryTimer) {
       clearTimeout(this.drainedRetryTimer);
       this.drainedRetryTimer = null;
+    }
+    if (this.connectFollowUpTimer) {
+      clearTimeout(this.connectFollowUpTimer);
+      this.connectFollowUpTimer = null;
+    }
+    if (this.resyncJitterTimer) {
+      clearTimeout(this.resyncJitterTimer);
+      this.resyncJitterTimer = null;
     }
     window.removeEventListener('bilinear:transaction-drained', this.handleTransactionDrained);
     for (const unsub of this.wsUnsubscribers) {
@@ -515,20 +537,31 @@ export class SyncManager {
   }
 
   private async deltaSync() {
-    if (this.isDeltaSyncing) {
+    if (this.isDeltaSyncing || this.stopped) {
       return;
     }
     this.isDeltaSyncing = true;
 
     const { syncStore } = this.stores;
 
+    // Local pagination cursor, captured once and advanced only from each
+    // page's OWN actions — never re-read from `syncStore.lastSyncId` inside
+    // the loop. `applyActions()` is also invoked directly by live WS
+    // messages (`setupWebSocket`'s onMessage handler) and mutates that same
+    // shared cursor; a live action arriving mid-backlog could otherwise jump
+    // the shared value to ~now, making the next page request
+    // `?lastSyncId=<now>` and silently skip the remaining backlog. Paging
+    // strictly off a local variable makes concurrent WS applies invisible to
+    // (and unable to corrupt) this loop.
+    let cursor = syncStore.lastSyncId;
+
     try {
       // Server caps each delta response; loop until hasMore=false so a
-      // long-offline client catches up fully. `syncStore.lastSyncId`
-      // advances inside applyActions, so each iteration sends the fresh
-      // cursor.
+      // long-offline client catches up fully.
       for (let page = 0; page < MAX_DELTA_PAGES; page++) {
-        const cursor = syncStore.lastSyncId;
+        if (this.stopped) {
+          return;
+        }
         const res = await fetch(`/api/sync/delta?lastSyncId=${encodeURIComponent(cursor)}`, {
           credentials: 'include',
         });
@@ -547,10 +580,27 @@ export class SyncManager {
         if (body.actions.length === 0) {
           break;
         }
+        // Advance the LOCAL cursor from this page's own actions before
+        // applying them (see rationale above) so a concurrent WS apply
+        // can't affect what page we request next.
+        for (const action of body.actions) {
+          const actionC = actionCursor(action);
+          if (compareCursor(actionC, cursor) > 0) {
+            cursor = actionC;
+          }
+        }
         await this.applyActions(body.actions);
         if (!body.hasMore) {
           break;
         }
+      }
+      // Commit the shared cursor to the max of (its current value, which a
+      // concurrent WS apply may have already advanced further, and what
+      // this delta paged through) — never regress it, and never let a
+      // partial/early-exit path above leave it behind what we actually
+      // fetched.
+      if (compareCursor(cursor, syncStore.lastSyncId) > 0) {
+        syncStore.setLastSyncId(cursor);
       }
       syncStore.setStatus('connected');
     } catch (err) {
@@ -1053,7 +1103,14 @@ export class SyncManager {
         // Stagger the request with a small jitter so a fleet-wide hint
         // doesn't trigger a thundering herd against /api/sync/delta.
         const jitterMs = Math.floor(Math.random() * 500);
-        setTimeout(() => {
+        if (this.resyncJitterTimer) {
+          clearTimeout(this.resyncJitterTimer);
+        }
+        this.resyncJitterTimer = setTimeout(() => {
+          this.resyncJitterTimer = null;
+          if (this.stopped) {
+            return;
+          }
           void this.deltaSync();
         }, jitterMs);
       }
@@ -1066,6 +1123,7 @@ export class SyncManager {
         syncStore.setStatus('connected');
         // Catch up on any missed actions
         this.deltaSync();
+        this.scheduleFollowUpDelta();
       } else {
         syncStore.setStatus('offline');
       }
@@ -1074,6 +1132,34 @@ export class SyncManager {
     this.wsUnsubscribers.push(unsub1, unsub2);
     this.wsClient.connect();
   }
+
+  /**
+   * Schedule one follow-up delta-sync ~800ms after a (re)connect or a
+   * fullBootstrap. Redis pub/sub only delivers messages published after
+   * this client's SUBSCRIBE completes — it has no replay — and the delta
+   * endpoint itself excludes rows inside the server's 500ms commit
+   * watermark. An action that commits right around connect time can
+   * therefore be neither delta'd (still inside the watermark) nor pushed
+   * (published before the subscribe), leaving it invisible until the next
+   * reconnect. Waiting ~800ms (past the watermark) and re-running delta
+   * closes that gap. Coalesced like `handleTransactionDrained` so rapid
+   * reconnects collapse to a single follow-up.
+   */
+  private scheduleFollowUpDelta = () => {
+    if (this.stopped) {
+      return;
+    }
+    if (this.connectFollowUpTimer) {
+      clearTimeout(this.connectFollowUpTimer);
+    }
+    this.connectFollowUpTimer = setTimeout(() => {
+      this.connectFollowUpTimer = null;
+      if (this.stopped) {
+        return;
+      }
+      void this.deltaSync();
+    }, 800);
+  };
 
   /**
    * Coalesce drain notifications into a single delta-sync past the server's

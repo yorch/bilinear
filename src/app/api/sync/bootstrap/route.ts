@@ -1,10 +1,10 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { verifyAccessToken } from '@/server/lib/jwt';
 import { logger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { redis } from '@/server/lib/redis';
 import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
+import { extractAuthContext, getGuestTeamIds } from '@/server/middleware/auth';
 import { SyncService } from '@/server/services/sync.service';
 
 /**
@@ -15,27 +15,26 @@ import { SyncService } from '@/server/services/sync.service';
  * `_metadata_={"lastSyncId":"<N>"}`.
  */
 async function handleGet(req: NextRequest) {
-  const token =
-    req.cookies.get('access_token')?.value ??
-    req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ??
-    null;
+  // Routed through extractAuthContext (not a raw verifyAccessToken call) so
+  // a deactivated user or a suspended/archived org is rejected here too —
+  // it re-checks both against the DB on every request instead of trusting
+  // the JWT claims for the token's full lifetime. Also picks up API-key
+  // (`bil_...`) auth for free, matching the GraphQL route's auth surface.
+  const authHeader = req.headers.get('authorization');
+  const cookieToken = req.cookies.get('access_token')?.value ?? null;
+  const ctx = await extractAuthContext(authHeader, cookieToken, prisma);
 
-  if (!token) {
+  if (!ctx.orgId || !ctx.userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-
-  let orgId: string;
-  try {
-    ({ orgId } = await verifyAccessToken(token));
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const { orgId, userId } = ctx;
   bindRequestContext({ orgId });
 
+  const guestTeamIds = await getGuestTeamIds(prisma, userId, orgId);
   const syncService = new SyncService(prisma, redis);
 
   try {
-    const data = await syncService.getBootstrapData(orgId);
+    const data = await syncService.getBootstrapData(orgId, userId, guestTeamIds);
 
     const lines: string[] = [];
 

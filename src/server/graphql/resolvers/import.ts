@@ -1,5 +1,5 @@
 import { GraphQLError } from 'graphql';
-import { requireAuth, requireTeamMemberNotGuest } from '../../middleware/auth';
+import { requireAuth, requireOrgRole, requireTeamMemberNotGuest } from '../../middleware/auth';
 import type { ImportMapping } from '../../services/import.service';
 import type { GraphQLContext } from '../context';
 
@@ -65,6 +65,12 @@ export const importResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+      // Exporting is an admin action (a full dump of every issue in the
+      // org, or of a whole team) — was previously requireAuth-only, so
+      // ANY member (including guests) could pull every other team's issue
+      // data. Restrict to org owner/admin, matching teamCreate/teamDelete's
+      // bar.
+      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
       const data = await ctx.services.import.exportData(ctx.orgId, teamId ?? undefined);
       return JSON.stringify(data);
     },

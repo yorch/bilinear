@@ -3,6 +3,11 @@ import type { IssueActivity } from '../../../generated/prisma';
 import { requireAuth } from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
 
+// Matches the MAX-200 convention used elsewhere (auditLogs, platform-admin
+// lists) — caps an uncapped client-supplied `limit` so a single query can't
+// force an unbounded fetch.
+const MAX_ACTIVITIES_LIMIT = 200;
+
 export const issueActivityResolvers = {
   IssueActivity: {
     actor: async (activity: IssueActivity, _args: unknown, ctx: GraphQLContext) => {
@@ -28,7 +33,10 @@ export const issueActivityResolvers = {
         });
       }
 
-      return ctx.services.issueActivity.findByIssueId(issueId, limit ?? 100);
+      return ctx.services.issueActivity.findByIssueId(
+        issueId,
+        Math.min(limit ?? 100, MAX_ACTIVITIES_LIMIT),
+      );
     },
   },
 };

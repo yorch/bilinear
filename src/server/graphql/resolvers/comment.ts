@@ -7,6 +7,7 @@ import {
   requireTeamMember,
 } from '../../middleware/auth';
 import type { CommentCreateInput, CommentUpdateInput } from '../../services/comment.service';
+import { extractMentionedUserIds } from '../../services/comment.service';
 import type { GraphQLContext } from '../context';
 
 /** Verifies org + team access for a comment via CommentService.findAccessTarget,
@@ -35,6 +36,11 @@ function handleCommentError(err: unknown): never {
   if (error.name === 'CommentForbiddenError') {
     throw new GraphQLError(error.message, {
       extensions: { code: 'FORBIDDEN' },
+    });
+  }
+  if (error.name === 'CommentValidationError') {
+    throw new GraphQLError(error.message, {
+      extensions: { code: 'BAD_USER_INPUT' },
     });
   }
   throw err;
@@ -79,7 +85,12 @@ export const commentResolvers = {
       }
       await requireIssueAccessNotGuestOrOwn(ctx.prisma, issue, ctx.userId, ctx.orgId);
 
-      const comment = await ctx.services.comment.create(ctx.userId, input);
+      let comment: Awaited<ReturnType<typeof ctx.services.comment.create>>;
+      try {
+        comment = await ctx.services.comment.create(ctx.userId, input);
+      } catch (err) {
+        handleCommentError(err);
+      }
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
         'I',
@@ -92,6 +103,31 @@ export const commentResolvers = {
       await ctx.services.notification
         .notifyCommentSubscribers(ctx.orgId, comment.issueId, ctx.userId, comment.id)
         .catch(() => {}); // non-fatal
+
+      // Mention notifications: parse @user mentions out of the comment's
+      // TipTap doc (bodyData) and notify anyone mentioned who isn't already
+      // an issue subscriber — subscribers already got notified above via
+      // notifyCommentSubscribers, so this only covers people newly pulled
+      // in by an @mention. createForMention itself no-ops a self-mention.
+      // Fire-and-forget, matching every other side effect on this path.
+      const mentionedUserIds = extractMentionedUserIds(input.bodyData);
+      if (mentionedUserIds.length > 0) {
+        void (async () => {
+          const subscribers = new Set(await ctx.services.notification.getSubscribers(issue.id));
+          for (const userId of mentionedUserIds) {
+            if (subscribers.has(userId)) {
+              continue;
+            }
+            await ctx.services.notification.createForMention(
+              ctx.orgId,
+              issue.id,
+              userId,
+              ctx.userId,
+              comment.body.slice(0, 200),
+            );
+          }
+        })().catch(err => logger.error({ err }, 'Failed to create mention notifications'));
+      }
 
       // Webhook fan-out — fire-and-forget, scoped to the issue's team.
       void ctx.services.webhook
@@ -249,7 +285,11 @@ export const commentResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+      // Guest visibility: a plain requireTeamMember let a guest read
+      // comments on ANY issue on their team by id — the same gap as the
+      // top-level `issue` query. Guests may only read comments on issues
+      // they created or are assigned to.
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, issue, ctx.userId, ctx.orgId);
       return ctx.services.comment.findByIssueId(issueId, includeArchived ?? false);
     },
   },
