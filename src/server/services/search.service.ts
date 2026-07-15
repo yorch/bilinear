@@ -1,6 +1,7 @@
 import type { Issue, PrismaClient } from '../../generated/prisma';
 import { Prisma } from '../../generated/prisma';
 import { IDENTIFIER_RE } from '../../lib/identifiers';
+import { buildGuestVisibilityWhere } from '../lib/issue-visibility';
 
 /**
  * Caller visibility scope for searchIssues — mirrors the guest/team
@@ -131,13 +132,12 @@ export class SearchService {
     }
     const ands: Array<Record<string, unknown>> = [{ teamId: { in: visibility.memberTeamIds } }];
     if (visibility.guestTeamIds.length > 0) {
-      ands.push({
-        OR: [
-          { teamId: { notIn: visibility.guestTeamIds } },
-          { creatorId: visibility.userId },
-          { assigneeId: visibility.userId },
-        ],
-      });
+      ands.push(
+        buildGuestVisibilityWhere({
+          guestTeamIds: visibility.guestTeamIds,
+          userId: visibility.userId,
+        }),
+      );
     }
     return { AND: ands };
   }

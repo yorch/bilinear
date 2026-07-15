@@ -165,9 +165,6 @@ export class SyncService {
    * preserving prior behavior for ordinary members/admins/owners.
    */
   async getBootstrapData(orgId: string, userId: string, guestTeamIds: string[] = []) {
-    // `AND` (not a top-level `OR`) so this composes with the existing
-    // archivedAt/organizationId/trashed filters via implicit-AND — see
-    // buildWhere in issue.service.ts for the same pattern.
     const guestVisibilityClause =
       guestTeamIds.length > 0
         ? {
@@ -178,6 +175,17 @@ export class SyncService {
             ],
           }
         : null;
+    // Spread directly rather than wrapping in `AND: [guestVisibilityClause]`
+    // — none of the four where-clauses below already declare a top-level
+    // `OR`, so Prisma's implicit AND between sibling keys already composes
+    // this `OR` with the existing archivedAt/organizationId/trashed filters
+    // identically to the explicit `AND` wrapper (see buildWhere in
+    // issue.service.ts for the same underlying pattern). If a future
+    // clause here ever needs its own top-level `OR`, that one call site
+    // will need the `AND: [...]` wrapper back to avoid the two `OR` keys
+    // colliding.
+    const withGuestVisibility = <T extends object>(where: T): T =>
+      guestVisibilityClause ? ({ ...where, ...guestVisibilityClause } as T) : where;
 
     const [
       organizations,
@@ -214,12 +222,11 @@ export class SyncService {
         // bootstrap payload) — pure over-fetch here, same reasoning as
         // IssueService.findMany/findByTeamId.
         omit: { descriptionState: true },
-        where: {
+        where: withGuestVisibility({
           archivedAt: null,
           organizationId: orgId,
           trashed: false,
-          ...(guestVisibilityClause ? { AND: [guestVisibilityClause] } : {}),
-        },
+        }),
       }),
       this.prisma.workflowState.findMany({
         where: { archivedAt: null, team: { organizationId: orgId } },
@@ -229,12 +236,11 @@ export class SyncService {
       }),
       this.prisma.issueLabelAssignment.findMany({
         where: {
-          issue: {
+          issue: withGuestVisibility({
             archivedAt: null,
             organizationId: orgId,
             trashed: false,
-            ...(guestVisibilityClause ? { AND: [guestVisibilityClause] } : {}),
-          },
+          }),
         },
       }),
       this.prisma.cycle.findMany({
@@ -267,12 +273,11 @@ export class SyncService {
       }),
       this.prisma.issueRelation.findMany({
         where: {
-          issue: {
+          issue: withGuestVisibility({
             archivedAt: null,
             organizationId: orgId,
             trashed: false,
-            ...(guestVisibilityClause ? { AND: [guestVisibilityClause] } : {}),
-          },
+          }),
           // A relation row embeds the OTHER issue's UUID + relation type too,
           // so a guest must be able to see BOTH endpoints — otherwise they'd
           // learn about (and the type of relation to) a relatedIssue on a
@@ -295,12 +300,11 @@ export class SyncService {
       }),
       this.prisma.customFieldValue.findMany({
         where: {
-          issue: {
+          issue: withGuestVisibility({
             archivedAt: null,
             organizationId: orgId,
             trashed: false,
-            ...(guestVisibilityClause ? { AND: [guestVisibilityClause] } : {}),
-          },
+          }),
         },
       }),
       this.prisma.initiative.findMany({

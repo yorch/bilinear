@@ -106,46 +106,21 @@ export const commentResolvers = {
 
       // Mention notifications: parse @user mentions out of the comment's
       // TipTap doc (bodyData) and notify anyone mentioned who isn't already
-      // an issue subscriber — subscribers already got notified above via
-      // notifyCommentSubscribers, so this only covers people newly pulled
-      // in by an @mention. createForMention itself no-ops a self-mention.
-      // Fire-and-forget, matching every other side effect on this path.
-      const mentionedUserIds = extractMentionedUserIds(input.bodyData);
-      if (mentionedUserIds.length > 0) {
-        void (async () => {
-          // Access-control gate: bodyData is client-authored editor state, so
-          // a mention node's `attrs.id` could name ANY user id, including one
-          // with no relationship to this issue's team (or a different org
-          // entirely). Without this check, createForMention would happily
-          // email the issue title + comment excerpt and create a
-          // Notification row for an arbitrary/foreign user. Only notify
-          // mentioned ids that are actual members of the issue's team, in
-          // this org — the same membership rule requireTeamMember enforces,
-          // batched for every mentioned id in one query.
-          const teamMembers = await ctx.prisma.teamMembership.findMany({
-            select: { userId: true },
-            where: {
-              team: { organizationId: ctx.orgId },
-              teamId: issue.teamId,
-              userId: { in: mentionedUserIds },
-            },
-          });
-          const authorizedMentionedIds = new Set(teamMembers.map(m => m.userId));
-          const subscribers = new Set(await ctx.services.notification.getSubscribers(issue.id));
-          for (const userId of mentionedUserIds) {
-            if (!authorizedMentionedIds.has(userId) || subscribers.has(userId)) {
-              continue;
-            }
-            await ctx.services.notification.createForMention(
-              ctx.orgId,
-              issue.id,
-              userId,
-              ctx.userId,
-              comment.body.slice(0, 200),
-            );
-          }
-        })().catch(err => logger.error({ err }, 'Failed to create mention notifications'));
-      }
+      // an issue subscriber (subscribers were already notified above via
+      // notifyCommentSubscribers). Membership filtering + fan-out lives in
+      // NotificationService.notifyMentions (a Resolver→Service violation to
+      // keep inline here) — fire-and-forget, matching every other side
+      // effect on this path.
+      void ctx.services.notification
+        .notifyMentions({
+          actorId: ctx.userId,
+          excerpt: comment.body.slice(0, 200),
+          issueId: issue.id,
+          mentionedUserIds: extractMentionedUserIds(input.bodyData),
+          orgId: ctx.orgId,
+          teamId: issue.teamId,
+        })
+        .catch(err => logger.error({ err }, 'Failed to create mention notifications'));
 
       // Webhook fan-out — fire-and-forget, scoped to the issue's team.
       void ctx.services.webhook

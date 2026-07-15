@@ -37,6 +37,44 @@ export interface FavoriteReorderEntry {
 }
 
 /**
+ * Confirm `entityId` belongs to a row of `entityType` AND to `orgId`. Single
+ * shared implementation used by both `FavoriteService.create` (write-time
+ * defense-in-depth) and the GraphQL resolver's read-time check before
+ * persisting a Favorite (`resolvers/favorite.ts` imports this directly) —
+ * collapses what used to be two hand-synced copies of the same 7-case
+ * per-entity-type switch into one model-lookup map. Every model listed in
+ * `FavoriteEntityType` carries a direct `organizationId` column.
+ */
+export async function entityBelongsToOrg(
+  prisma: PrismaClient,
+  entityType: string,
+  entityId: string,
+  orgId: string,
+): Promise<boolean> {
+  const modelsByEntityType = {
+    CustomView: prisma.customView,
+    Cycle: prisma.cycle,
+    Document: prisma.document,
+    Initiative: prisma.initiative,
+    Issue: prisma.issue,
+    Project: prisma.project,
+    Team: prisma.team,
+  } as unknown as Record<
+    FavoriteEntityType,
+    { findUnique: (args: unknown) => Promise<{ organizationId: string } | null> }
+  >;
+  const model = modelsByEntityType[entityType as FavoriteEntityType];
+  if (!model) {
+    return false;
+  }
+  const row = await model.findUnique({
+    select: { organizationId: true },
+    where: { id: entityId },
+  });
+  return row?.organizationId === orgId;
+}
+
+/**
  * Sidebar pinning: a Favorite associates one entity (issue, project,
  * initiative, view, cycle, document, team) with a user inside an
  * organization. Uniqueness is on `(userId, entityType, entityId)` so
@@ -53,10 +91,11 @@ export class FavoriteService {
 
     // Verify the target entity actually belongs to the caller's org BEFORE
     // writing. The GraphQL resolver already checks this at request time
-    // (see `entityBelongsToOrg` in resolvers/favorite.ts) — this is
-    // defense-in-depth at the actual write boundary, and protects any
-    // other caller of this service that skips the resolver's check.
-    const belongs = await this.entityBelongsToOrg(input.entityType, input.entityId, orgId);
+    // (see `entityBelongsToOrg`, imported by resolvers/favorite.ts from
+    // this module) — this is defense-in-depth at the actual write
+    // boundary, and protects any other caller of this service that skips
+    // the resolver's check.
+    const belongs = await entityBelongsToOrg(this.prisma, input.entityType, input.entityId, orgId);
     if (!belongs) {
       throw new FavoriteEntityNotInOrgError();
     }
@@ -140,73 +179,6 @@ export class FavoriteService {
         throw new FavoriteCrossOrgConflictError();
       }
       throw err;
-    }
-  }
-
-  /**
-   * Confirm `entityId` belongs to a row of `entityType` AND to `orgId`.
-   * Mirrors `entityBelongsToOrg` in `resolvers/favorite.ts` (kept in sync
-   * by hand — the resolver's version also handles the GraphQL union return
-   * shape, which this write-time guard doesn't need). Every model listed
-   * in `FavoriteEntityType` carries a direct `organizationId` column.
-   */
-  private async entityBelongsToOrg(
-    entityType: FavoriteEntityType,
-    entityId: string,
-    orgId: string,
-  ): Promise<boolean> {
-    switch (entityType) {
-      case 'Issue': {
-        const row = await this.prisma.issue.findUnique({
-          select: { organizationId: true },
-          where: { id: entityId },
-        });
-        return row?.organizationId === orgId;
-      }
-      case 'Project': {
-        const row = await this.prisma.project.findUnique({
-          select: { organizationId: true },
-          where: { id: entityId },
-        });
-        return row?.organizationId === orgId;
-      }
-      case 'Initiative': {
-        const row = await this.prisma.initiative.findUnique({
-          select: { organizationId: true },
-          where: { id: entityId },
-        });
-        return row?.organizationId === orgId;
-      }
-      case 'CustomView': {
-        const row = await this.prisma.customView.findUnique({
-          select: { organizationId: true },
-          where: { id: entityId },
-        });
-        return row?.organizationId === orgId;
-      }
-      case 'Cycle': {
-        const row = await this.prisma.cycle.findUnique({
-          select: { organizationId: true },
-          where: { id: entityId },
-        });
-        return row?.organizationId === orgId;
-      }
-      case 'Document': {
-        const row = await this.prisma.document.findUnique({
-          select: { organizationId: true },
-          where: { id: entityId },
-        });
-        return row?.organizationId === orgId;
-      }
-      case 'Team': {
-        const row = await this.prisma.team.findUnique({
-          select: { organizationId: true },
-          where: { id: entityId },
-        });
-        return row?.organizationId === orgId;
-      }
-      default:
-        return false;
     }
   }
 

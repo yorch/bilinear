@@ -960,9 +960,19 @@ describe('IssueService', () => {
       await service.findByTeamId(TEST_TEAM.id, false, TEST_USER.id);
 
       const call = prisma.issue.findMany.mock.calls[0][0];
+      // Built via the shared buildGuestVisibilityWhere helper (also used by
+      // SearchService): the query is already pinned to `teamId` below, so
+      // the `notIn: [teamId]` branch can never match — the predicate is
+      // equivalent to plain creator-or-assignee, same as before extraction.
       expect(call.where.AND).toEqual(
         expect.arrayContaining([
-          { OR: [{ creatorId: TEST_USER.id }, { assigneeId: TEST_USER.id }] },
+          {
+            OR: [
+              { teamId: { notIn: [TEST_TEAM.id] } },
+              { creatorId: TEST_USER.id },
+              { assigneeId: TEST_USER.id },
+            ],
+          },
         ]),
       );
     });

@@ -1,4 +1,5 @@
 import type { Issue, IssueLabel, IssueReaction, PrismaClient } from '../../generated/prisma';
+import { buildGuestVisibilityWhere } from '../lib/issue-visibility';
 import type { SyncWriteClient } from './sync.service';
 
 type PrismaLike = Pick<PrismaClient, 'issue' | 'issueLabelAssignment' | 'issueLabel' | 'team'>;
@@ -408,7 +409,11 @@ export class IssueService {
     // top-level `issues` query's guest scoping and snooze filter.
     const ands: Array<Record<string, unknown>> = [IssueService.snoozeHideClause()];
     if (guestUserId) {
-      ands.push({ OR: [{ creatorId: guestUserId }, { assigneeId: guestUserId }] });
+      // See buildGuestVisibilityWhere's doc comment: this query is already
+      // pinned to `teamId` below, so passing `[teamId]` as the escape-hatch
+      // list collapses the shared predicate to plain creator-or-assignee —
+      // identical to the restriction this branch applied before extraction.
+      ands.push(buildGuestVisibilityWhere({ guestTeamIds: [teamId], userId: guestUserId }));
     }
     return this.prisma.issue.findMany({
       include: { labelAssignments: { include: { label: true } } },
@@ -1226,9 +1231,18 @@ export class IssueService {
     const ands: Array<Record<string, unknown>> = [];
 
     if (filter.guestUserId) {
-      ands.push({
-        OR: [{ creatorId: filter.guestUserId }, { assigneeId: filter.guestUserId }],
-      });
+      // guestUserId is only ever set by the `issues` resolver, which always
+      // pairs it with a required filter.teamId (the guest's own team) — so,
+      // as in findByTeamId above, passing `[filter.teamId]` as the
+      // escape-hatch list collapses the shared predicate to plain
+      // creator-or-assignee, matching the restriction this branch applied
+      // before extraction.
+      ands.push(
+        buildGuestVisibilityWhere({
+          guestTeamIds: filter.teamId ? [filter.teamId] : [],
+          userId: filter.guestUserId,
+        }),
+      );
     }
 
     if (!filter.includeSnoozed) {

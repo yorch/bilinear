@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { IssueActivity } from '../../../generated/prisma';
+import { clampLimit } from '../../lib/pagination';
 import { requireAuth } from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
 
@@ -35,7 +36,7 @@ export const issueActivityResolvers = {
 
       return ctx.services.issueActivity.findByIssueId(
         issueId,
-        Math.min(limit ?? 100, MAX_ACTIVITIES_LIMIT),
+        clampLimit(limit, MAX_ACTIVITIES_LIMIT, 100),
       );
     },
   },

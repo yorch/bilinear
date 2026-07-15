@@ -5,6 +5,10 @@ import type {
   ProjectMilestone,
   ProjectUpdate,
 } from '../../generated/prisma';
+import {
+  applyStatusTransitionTimestamps,
+  type StatusTimestampTransition,
+} from '../lib/status-timestamps';
 
 export interface ProgressHistoryEntry {
   /** UTC date in YYYY-MM-DD form */
@@ -30,19 +34,14 @@ function parseHistory(value: unknown): ProgressHistoryEntry[] | null {
  * Stamps the entered status's marker and clears the others so reverting
  * (e.g. completed → inProgress, or completed → paused) doesn't leave a
  * stale terminal timestamp behind. Mirrors InitiativeService's
- * `STATUS_TRANSITION_CLEARS` table. `startedAt: 'now'` is only actually
- * applied on first entry into `inProgress` — see the `current` check below,
- * which preserves the original start across a no-op re-save or a
- * paused → inProgress resume.
+ * `STATUS_TRANSITION_CLEARS` table — both are applied via the shared
+ * `applyStatusTransitionTimestamps` helper (see
+ * `src/server/lib/status-timestamps.ts`). `startedAt: 'now'` is only
+ * actually applied on first entry into `inProgress` — see the `current`
+ * check below, which preserves the original start across a no-op re-save or
+ * a paused → inProgress resume.
  */
-const STATUS_TRANSITION_CLEARS: Record<
-  string,
-  {
-    startedAt: 'now' | 'clear' | 'leave';
-    completedAt: 'clear' | 'now' | 'leave';
-    canceledAt: 'clear' | 'now' | 'leave';
-  }
-> = {
+const STATUS_TRANSITION_CLEARS: Record<string, StatusTimestampTransition> = {
   backlog: { canceledAt: 'clear', completedAt: 'clear', startedAt: 'clear' },
   canceled: { canceledAt: 'now', completedAt: 'clear', startedAt: 'leave' },
   completed: { canceledAt: 'clear', completedAt: 'now', startedAt: 'leave' },
@@ -235,11 +234,14 @@ export class ProjectService {
       const transition = STATUS_TRANSITION_CLEARS[input.statusType];
       if (transition) {
         const now = new Date();
-        const apply = (op: 'now' | 'clear' | 'leave') =>
-          op === 'now' ? now : op === 'clear' ? null : undefined;
-        let startedAt = apply(transition.startedAt);
-        const completedAt = apply(transition.completedAt);
-        const canceledAt = apply(transition.canceledAt);
+        const patch = applyStatusTransitionTimestamps(
+          STATUS_TRANSITION_CLEARS,
+          input.statusType,
+          now,
+        );
+        let startedAt = patch.startedAt;
+        const completedAt = patch.completedAt;
+        const canceledAt = patch.canceledAt;
         // First-set semantics for startedAt: only stamp `now` on first
         // entry into `inProgress`, so a no-op re-save or a
         // paused → inProgress resume doesn't overwrite the original start.

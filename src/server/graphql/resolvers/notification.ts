@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { Notification } from '../../../generated/prisma';
+import { clampLimit } from '../../lib/pagination';
 import { requireAuth, requireTeamMember } from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
 
@@ -174,7 +175,7 @@ export const notificationResolvers = {
       return ctx.services.notification.findByUserId(
         ctx.userId,
         ctx.orgId,
-        Math.min(limit ?? 50, MAX_NOTIFICATIONS_LIMIT),
+        clampLimit(limit, MAX_NOTIFICATIONS_LIMIT, 50),
       );
     },
     notificationUnreadCount: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {

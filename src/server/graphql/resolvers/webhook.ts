@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { Webhook } from '../../../generated/prisma';
+import { clampLimit } from '../../lib/pagination';
 import { requireAuth, requireOrgRole } from '../../middleware/auth';
 import {
   WEBHOOK_EVENTS,
@@ -129,7 +130,7 @@ export const webhookResolvers = {
       return ctx.services.webhook.listDeliveries(
         auth.orgId,
         webhookId,
-        Math.min(limit ?? 50, MAX_DELIVERIES_LIMIT),
+        clampLimit(limit, MAX_DELIVERIES_LIMIT, 50),
       );
     },
 

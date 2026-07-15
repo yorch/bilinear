@@ -49,6 +49,29 @@ function issueFieldToString(issue: Issue, field: string): string | null {
   return String(v);
 }
 
+/**
+ * Maps the four issue-service "bad input" error classes to a BAD_USER_INPUT
+ * GraphQLError, or returns null if `err` isn't one of them (so the caller
+ * can fall through to its own NOT_FOUND / rethrow handling). Shared by
+ * issueCreate/issueUpdate/issuesBulkUpdate so the three mutations can't
+ * drift on which input errors get remapped — issueUpdate previously omitted
+ * IssueStateRequiredError, which is really just another "no valid stateId
+ * to write" input error and belongs in the same bucket as its siblings.
+ */
+function toIssueInputGraphQLError(err: unknown): GraphQLError | null {
+  if (
+    err instanceof IssueStateRequiredError ||
+    err instanceof IssueInvalidStateError ||
+    err instanceof IssueInvalidReferenceError ||
+    err instanceof IssueValidationError
+  ) {
+    return new GraphQLError(err.message, {
+      extensions: { code: 'BAD_USER_INPUT' },
+    });
+  }
+  return null;
+}
+
 export const issueResolvers = {
   Issue: {
     assignee: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
@@ -242,16 +265,9 @@ export const issueResolvers = {
           .catch(err => log.error({ err }, 'automation evaluate failed: issue_created'));
         return { issue, lastSyncId: issueSync?.id.toString() ?? '0', success: true };
       } catch (err) {
-        const error = err as Error;
-        if (
-          error.name === 'IssueStateRequiredError' ||
-          error.name === 'IssueInvalidStateError' ||
-          error.name === 'IssueInvalidReferenceError' ||
-          error.name === 'IssueValidationError'
-        ) {
-          throw new GraphQLError(error.message, {
-            extensions: { code: 'BAD_USER_INPUT' },
-          });
+        const mapped = toIssueInputGraphQLError(err);
+        if (mapped) {
+          throw mapped;
         }
         throw err;
       }
@@ -495,15 +511,9 @@ export const issueResolvers = {
             extensions: { code: 'BAD_USER_INPUT' },
           });
         }
-        if (
-          err instanceof IssueInvalidStateError ||
-          err instanceof IssueStateRequiredError ||
-          err instanceof IssueInvalidReferenceError ||
-          err instanceof IssueValidationError
-        ) {
-          throw new GraphQLError(err.message, {
-            extensions: { code: 'BAD_USER_INPUT' },
-          });
+        const mapped = toIssueInputGraphQLError(err);
+        if (mapped) {
+          throw mapped;
         }
         if (err instanceof IssueNotFoundError) {
           throw new GraphQLError(err.message, {
@@ -638,14 +648,9 @@ export const issueResolvers = {
           }
         });
       } catch (err) {
-        if (
-          err instanceof IssueInvalidStateError ||
-          err instanceof IssueInvalidReferenceError ||
-          err instanceof IssueValidationError
-        ) {
-          throw new GraphQLError(err.message, {
-            extensions: { code: 'BAD_USER_INPUT' },
-          });
+        const mapped = toIssueInputGraphQLError(err);
+        if (mapped) {
+          throw mapped;
         }
         if (err instanceof IssueNotFoundError) {
           throw new GraphQLError(err.message, {

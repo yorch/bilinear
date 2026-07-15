@@ -4,6 +4,10 @@ import type {
   InitiativeUpdate,
   PrismaClient,
 } from '../../generated/prisma';
+import {
+  applyStatusTransitionTimestamps,
+  type StatusTimestampTransition,
+} from '../lib/status-timestamps';
 import { ProjectService } from './project.service';
 
 /**
@@ -77,16 +81,12 @@ const VALID_STATUSES = new Set<InitiativeStatus>(['planned', 'active', 'complete
  * Only the timestamps are listed here; the caller still sets `status`.
  *
  * `startedAt: now` for `active` is set by the caller (Date is created
- * once per update call); this table holds the constants only.
+ * once per update call); this table holds the constants only. Applied via
+ * the shared `applyStatusTransitionTimestamps` helper (see
+ * `src/server/lib/status-timestamps.ts`), also used by
+ * `ProjectService.update` with its own status-keyed table.
  */
-const STATUS_TRANSITION_CLEARS: Record<
-  InitiativeStatus,
-  {
-    startedAt: 'now' | 'clear' | 'leave';
-    completedAt: 'clear' | 'now' | 'leave';
-    canceledAt: 'clear' | 'now' | 'leave';
-  }
-> = {
+const STATUS_TRANSITION_CLEARS: Record<InitiativeStatus, StatusTimestampTransition> = {
   active: { canceledAt: 'clear', completedAt: 'clear', startedAt: 'now' },
   canceled: { canceledAt: 'now', completedAt: 'clear', startedAt: 'leave' },
   completed: { canceledAt: 'clear', completedAt: 'now', startedAt: 'leave' },
@@ -244,15 +244,17 @@ export class InitiativeService {
     if (input.status !== undefined) {
       data.status = input.status;
       const now = new Date();
-      const transition = STATUS_TRANSITION_CLEARS[input.status as InitiativeStatus];
+      const patch = applyStatusTransitionTimestamps(
+        STATUS_TRANSITION_CLEARS,
+        input.status as InitiativeStatus,
+        now,
+      );
       // For startedAt: only stamp `now` when transitioning INTO active from a
       // non-active state, so re-saving an already-active initiative (or
       // bouncing canceled→active) doesn't overwrite the original start.
-      const apply = (op: 'now' | 'clear' | 'leave') =>
-        op === 'now' ? now : op === 'clear' ? null : undefined;
-      let startedAt = apply(transition.startedAt);
-      const completedAt = apply(transition.completedAt);
-      const canceledAt = apply(transition.canceledAt);
+      let startedAt = patch.startedAt;
+      const completedAt = patch.completedAt;
+      const canceledAt = patch.canceledAt;
       if (input.status === 'active') {
         const current = await this.prisma.initiative.findFirst({
           select: { startedAt: true, status: true },

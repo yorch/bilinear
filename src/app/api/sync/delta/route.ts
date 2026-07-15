@@ -4,7 +4,7 @@ import { logger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { redis } from '@/server/lib/redis';
 import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
-import { extractAuthContext, getGuestTeamIds } from '@/server/middleware/auth';
+import { getGuestTeamIds, requireAuthContext } from '@/server/middleware/auth';
 import { parseCursor, SyncService, serializeSyncAction } from '@/server/services/sync.service';
 
 /**
@@ -19,17 +19,14 @@ import { parseCursor, SyncService, serializeSyncAction } from '@/server/services
  * Response: { actions: SerializedSyncAction[]; hasMore: boolean }.
  */
 async function handleGet(req: NextRequest) {
-  // Routed through extractAuthContext (not a raw verifyAccessToken call) so
+  // Routed through requireAuthContext (not a raw verifyAccessToken call) so
   // a deactivated user or a suspended/archived org is rejected here too —
   // see bootstrap/route.ts for the same reasoning.
-  const authHeader = req.headers.get('authorization');
-  const cookieToken = req.cookies.get('access_token')?.value ?? null;
-  const ctx = await extractAuthContext(authHeader, cookieToken, prisma);
-
-  if (!ctx.orgId || !ctx.userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const authResult = await requireAuthContext(req, prisma);
+  if ('response' in authResult) {
+    return authResult.response;
   }
-  const { orgId, userId } = ctx;
+  const { orgId, userId } = authResult.ctx;
   bindRequestContext({ orgId });
 
   const url = new URL(req.url);

@@ -394,7 +394,15 @@ describe('teamResolvers', () => {
         expect(call.where.AND).toEqual(
           expect.arrayContaining([
             expect.objectContaining({
-              OR: [{ creatorId: TEST_USER.id }, { assigneeId: TEST_USER.id }],
+              // findByTeamId now routes through the shared buildGuestVisibilityWhere
+              // helper, which emits a `teamId notIn [teamId]` escape branch. That
+              // branch is always false here (the query already filters teamId = this
+              // team), so the effective predicate is still creator-or-assignee.
+              OR: [
+                { teamId: { notIn: [TEST_TEAM.id] } },
+                { creatorId: TEST_USER.id },
+                { assigneeId: TEST_USER.id },
+              ],
             }),
           ]),
         );

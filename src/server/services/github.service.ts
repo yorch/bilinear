@@ -310,56 +310,63 @@ export class GitHubService {
       },
     });
 
-    for (const issue of issues) {
-      const completedState = issue.team.workflowStates[0];
-      if (!completedState) {
-        continue;
-      }
-      try {
-        type RecordedSync = Awaited<ReturnType<SyncService['recordSyncAction']>>;
-        let issueSync: RecordedSync | undefined;
-        const cascadedSyncs: RecordedSync[] = [];
+    // Each issue routes through its own independent transaction (no shared
+    // tx across issues), so these can run concurrently instead of one at a
+    // time — cuts wall-clock on a merge that closes several issues at once.
+    // The per-issue try/catch is preserved as-is: one issue failing to
+    // close must still not abort the rest of the batch.
+    await Promise.all(
+      issues.map(async issue => {
+        const completedState = issue.team.workflowStates[0];
+        if (!completedState) {
+          return;
+        }
+        try {
+          type RecordedSync = Awaited<ReturnType<SyncService['recordSyncAction']>>;
+          let issueSync: RecordedSync | undefined;
+          const cascadedSyncs: RecordedSync[] = [];
 
-        const { issue: updated, cascaded } = await this.deps.issue.update(
-          issue.id,
-          { stateId: completedState.id },
-          async (tx, res) => {
-            issueSync = await this.deps.sync.recordSyncAction(
-              tx,
-              orgId,
-              'U',
-              'Issue',
-              res.issue.id,
-              res.issue,
-            );
-            for (const row of res.cascaded) {
-              cascadedSyncs.push(
-                await this.deps.sync.recordSyncAction(tx, orgId, 'U', 'Issue', row.id, row),
+          const { issue: updated, cascaded } = await this.deps.issue.update(
+            issue.id,
+            { stateId: completedState.id },
+            async (tx, res) => {
+              issueSync = await this.deps.sync.recordSyncAction(
+                tx,
+                orgId,
+                'U',
+                'Issue',
+                res.issue.id,
+                res.issue,
               );
-            }
-          },
-        );
+              for (const row of res.cascaded) {
+                cascadedSyncs.push(
+                  await this.deps.sync.recordSyncAction(tx, orgId, 'U', 'Issue', row.id, row),
+                );
+              }
+            },
+          );
 
-        // Publish only after the transaction has committed.
-        if (issueSync) {
-          this.deps.sync.publish(issueSync);
-        }
-        for (const s of cascadedSyncs) {
-          this.deps.sync.publish(s);
-        }
-
-        if (this.deps.webhook) {
-          this.dispatchIssueUpdatedWebhook(orgId, updated);
-          for (const row of cascaded) {
-            this.dispatchIssueUpdatedWebhook(orgId, row);
+          // Publish only after the transaction has committed.
+          if (issueSync) {
+            this.deps.sync.publish(issueSync);
           }
-        }
+          for (const s of cascadedSyncs) {
+            this.deps.sync.publish(s);
+          }
 
-        log.info({ identifier: issue.identifier, orgId }, 'Auto-closed issue on PR merge');
-      } catch (err) {
-        log.error({ err, issueId: issue.id }, 'Failed to auto-close issue on PR merge');
-      }
-    }
+          if (this.deps.webhook) {
+            this.dispatchIssueUpdatedWebhook(orgId, updated);
+            for (const row of cascaded) {
+              this.dispatchIssueUpdatedWebhook(orgId, row);
+            }
+          }
+
+          log.info({ identifier: issue.identifier, orgId }, 'Auto-closed issue on PR merge');
+        } catch (err) {
+          log.error({ err, issueId: issue.id }, 'Failed to auto-close issue on PR merge');
+        }
+      }),
+    );
   }
 
   /** Fire-and-forget `issue.updated` webhook dispatch — never blocks the merge handler. */

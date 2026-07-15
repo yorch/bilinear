@@ -7,7 +7,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/server/lib/prisma';
 import { getUploadDir } from '@/server/lib/upload-dir';
-import { extractAuthContext } from '@/server/middleware/auth';
+import { requireAuthContext } from '@/server/middleware/auth';
 import { apiScopesAllowWrite } from '@/server/services/auth.service';
 import { FileService } from '@/server/services/file.service';
 
@@ -39,17 +39,15 @@ function getAppUrl(): string {
  * Returns: { id, name, url, size, mimeType }
  */
 export async function POST(req: NextRequest) {
-  // Routed through extractAuthContext (not a raw verifyAccessToken call) so
+  // Routed through requireAuthContext (not a raw verifyAccessToken call) so
   // a deactivated user or a suspended/archived org can't keep uploading
   // files off a still-valid JWT — see sync/bootstrap/route.ts for the same
   // reasoning. Also picks up API-key (`bil_...`) auth for free.
-  const authHeader = req.headers.get('authorization');
-  const cookieToken = req.cookies.get('access_token')?.value ?? null;
-  const authCtx = await extractAuthContext(authHeader, cookieToken, prisma);
-
-  if (!authCtx.orgId || !authCtx.userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const authResult = await requireAuthContext(req, prisma);
+  if ('response' in authResult) {
+    return authResult.response;
   }
+  const authCtx = authResult.ctx;
   // Mirror /api/graphql's mutation gate: a request authenticated via API key
   // (bil_...) rather than a user session carries `apiKeyScopes`, and uploading
   // a file is a write — a read-only key must not be able to do it. Session/JWT

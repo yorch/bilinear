@@ -190,6 +190,54 @@ export class NotificationService {
     return notification;
   }
 
+  /**
+   * Fan out @mention notifications parsed out of a comment's TipTap doc.
+   * `bodyData` is client-authored editor state, so a mention node's
+   * `attrs.id` could name ANY user id, including one with no relationship
+   * to this issue's team (or a different org entirely) — access-control
+   * gate: only notify mentioned ids that are actual members of `teamId` in
+   * `orgId`, the same membership rule `requireTeamMember` enforces,
+   * batched for every mentioned id in one query. Anyone already an issue
+   * subscriber is skipped since `notifyCommentSubscribers` already
+   * notified them — this only covers people newly pulled in by the
+   * mention. `createForMention` itself no-ops a self-mention.
+   *
+   * Fire-and-forget by convention: callers (see `resolvers/comment.ts`)
+   * invoke this without awaiting and attach their own `.catch` for
+   * logging. The per-recipient `createForMention` calls run concurrently
+   * (Promise.all) — each is independent, so there's no ordering
+   * requirement between them.
+   */
+  async notifyMentions(params: {
+    orgId: string;
+    teamId: string;
+    issueId: string;
+    mentionedUserIds: string[];
+    actorId: string;
+    excerpt?: string;
+  }): Promise<void> {
+    const { orgId, teamId, issueId, mentionedUserIds, actorId, excerpt } = params;
+    if (mentionedUserIds.length === 0) {
+      return;
+    }
+    const teamMembers = await this.prisma.teamMembership.findMany({
+      select: { userId: true },
+      where: {
+        team: { organizationId: orgId },
+        teamId,
+        userId: { in: mentionedUserIds },
+      },
+    });
+    const authorizedMentionedIds = new Set(teamMembers.map(m => m.userId));
+    const subscribers = new Set(await this.getSubscribers(issueId));
+    const recipientIds = mentionedUserIds.filter(
+      userId => authorizedMentionedIds.has(userId) && !subscribers.has(userId),
+    );
+    await Promise.all(
+      recipientIds.map(userId => this.createForMention(orgId, issueId, userId, actorId, excerpt)),
+    );
+  }
+
   async subscribe(userId: string, issueId: string): Promise<void> {
     await this.prisma.notificationSubscription.upsert({
       create: { active: true, issueId, userId },
