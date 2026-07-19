@@ -1,6 +1,8 @@
 import { GraphQLError } from 'graphql';
 import type { Project, ProjectUpdate } from '../../../generated/prisma';
+import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../../lib/limits';
 import { logger } from '../../lib/logger';
+import { clampLimit } from '../../lib/pagination';
 import { getGuestTeamIds, requireAuth, requireOrgRole } from '../../middleware/auth';
 import { IssueService } from '../../services/issue.service';
 import type {
@@ -682,7 +684,9 @@ export const projectResolvers = {
           start = idx + 1;
         }
       }
-      const limit = args.first ?? 50;
+      // Clamp to MAX_LIST_LIMIT — previously unclamped, so a client-supplied
+      // `first` could force an unbounded in-memory slice.
+      const limit = clampLimit(args.first, MAX_LIST_LIMIT, DEFAULT_LIST_LIMIT);
       const page = filtered.slice(start, start + limit);
 
       return {

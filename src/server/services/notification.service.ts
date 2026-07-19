@@ -5,6 +5,7 @@ import {
   sendMentionNotificationEmail,
   sendStatusChangeNotificationEmail,
 } from '../lib/email';
+import { DEFAULT_LIST_LIMIT } from '../lib/limits';
 import { childLogger } from '../lib/logger';
 
 const log = childLogger({ module: 'notification' });
@@ -44,7 +45,11 @@ export class NotificationService {
     return this.prisma.notification.findUnique({ where: { id } });
   }
 
-  async findByUserId(userId: string, orgId: string, limit = 50): Promise<Notification[]> {
+  async findByUserId(
+    userId: string,
+    orgId: string,
+    limit = DEFAULT_LIST_LIMIT,
+  ): Promise<Notification[]> {
     const now = new Date();
     return this.prisma.notification.findMany({
       orderBy: { createdAt: 'desc' },

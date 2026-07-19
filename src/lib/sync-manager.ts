@@ -1,3 +1,4 @@
+import { COMMIT_WATERMARK_LAG_MS, DELTA_PAGE_SIZE } from '@/lib/sync-config';
 import type { RootStore } from '@/stores/root-store';
 import { db } from './db';
 import { createClientLogger } from './logger';
@@ -56,10 +57,10 @@ function actionCursor(action: SerializedSyncAction): string {
 }
 
 // Upper bound on delta pages consumed per deltaSync call. Server returns
-// 5,000 rows/page, so this covers a 1M-row backlog — far more than any
-// realistic offline gap. A finite loop prevents a malformed server
+// `DELTA_PAGE_SIZE` rows/page, so this covers a 1M-row backlog — far more
+// than any realistic offline gap. A finite loop prevents a malformed server
 // response (always returning hasMore=true) from spinning forever.
-const MAX_DELTA_PAGES = 200;
+const MAX_DELTA_PAGES = 1_000_000 / DELTA_PAGE_SIZE;
 
 /**
  * SyncManager orchestrates the full sync lifecycle:
@@ -1137,13 +1138,14 @@ export class SyncManager {
    * Schedule one follow-up delta-sync ~800ms after a (re)connect or a
    * fullBootstrap. Redis pub/sub only delivers messages published after
    * this client's SUBSCRIBE completes — it has no replay — and the delta
-   * endpoint itself excludes rows inside the server's 500ms commit
-   * watermark. An action that commits right around connect time can
+   * endpoint itself excludes rows inside the server's `COMMIT_WATERMARK_LAG_MS`
+   * commit watermark. An action that commits right around connect time can
    * therefore be neither delta'd (still inside the watermark) nor pushed
    * (published before the subscribe), leaving it invisible until the next
-   * reconnect. Waiting ~800ms (past the watermark) and re-running delta
-   * closes that gap. Coalesced like `handleTransactionDrained` so rapid
-   * reconnects collapse to a single follow-up.
+   * reconnect. Waiting past the watermark (a 300ms margin on top of it) and
+   * re-running delta closes that gap. Coalesced like
+   * `handleTransactionDrained` so rapid reconnects collapse to a single
+   * follow-up.
    */
   private scheduleFollowUpDelta = () => {
     if (this.stopped) {
@@ -1158,14 +1160,15 @@ export class SyncManager {
         return;
       }
       void this.deltaSync();
-    }, 800);
+    }, COMMIT_WATERMARK_LAG_MS + 300);
   };
 
   /**
    * Coalesce drain notifications into a single delta-sync past the server's
-   * 500ms watermark. Server has had at least 600ms (well past the watermark)
-   * to flush the SyncAction, so the next delta is guaranteed to include it
-   * even if the WS broadcast was lost in a reconnect handshake gap.
+   * `COMMIT_WATERMARK_LAG_MS` watermark. By the time this fires, the server
+   * has had at least a 100ms margin past the watermark to flush the
+   * SyncAction, so the next delta is guaranteed to include it even if the WS
+   * broadcast was lost in a reconnect handshake gap.
    */
   private handleTransactionDrained = () => {
     if (this.stopped) {
@@ -1177,7 +1180,7 @@ export class SyncManager {
     this.drainedRetryTimer = setTimeout(() => {
       this.drainedRetryTimer = null;
       void this.deltaSync();
-    }, 600);
+    }, COMMIT_WATERMARK_LAG_MS + 100);
   };
 
   private handleOnline = () => {

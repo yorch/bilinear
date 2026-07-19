@@ -1,10 +1,5 @@
 import type { Favorite, PrismaClient } from '../../generated/prisma';
-
-/** Hard cap on a single reorder batch, matching `issuesBulkUpdate`'s 200-row
- * convention — an unbounded payload would serialize hundreds of sequential
- * UPDATE statements inside one transaction and hold the connection open for
- * the duration. */
-const MAX_REORDER_ENTRIES = 200;
+import { MAX_BULK_OPERATION } from '../lib/limits';
 
 export type FavoriteEntityType =
   | 'Issue'
@@ -213,11 +208,11 @@ export class FavoriteService {
     if (entries.length === 0) {
       return [];
     }
-    // Hard cap mirroring issuesBulkUpdate's 200-row limit — an unbounded
-    // payload would serialize hundreds of sequential UPDATEs (see the
-    // sequential-update comment below) inside one transaction and hold a
+    // Hard cap mirroring issuesBulkUpdate's bulk-operation limit — an
+    // unbounded payload would serialize hundreds of sequential UPDATEs (see
+    // the sequential-update comment below) inside one transaction and hold a
     // request slot for minutes.
-    if (entries.length > MAX_REORDER_ENTRIES) {
+    if (entries.length > MAX_BULK_OPERATION) {
       throw new FavoriteReorderTooLargeError();
     }
     return this.prisma.$transaction(async tx => {
@@ -290,7 +285,7 @@ export class FavoriteCrossOrgConflictError extends Error {
 
 export class FavoriteReorderTooLargeError extends Error {
   constructor() {
-    super(`Favorite reorder is capped at ${MAX_REORDER_ENTRIES} entries per request`);
+    super(`Favorite reorder is capped at ${MAX_BULK_OPERATION} entries per request`);
     this.name = 'FavoriteReorderTooLargeError';
   }
 }

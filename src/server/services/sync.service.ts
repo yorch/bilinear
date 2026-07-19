@@ -1,19 +1,23 @@
 import type { Redis } from 'ioredis';
 import type { PrismaClient, SyncAction } from '../../generated/prisma';
+import { COMMIT_WATERMARK_LAG_MS, DELTA_PAGE_SIZE } from '../../lib/sync-config';
 import { childLogger } from '../lib/logger';
 
 const log = childLogger({ module: 'sync' });
 
 // Maximum SyncAction rows returned per delta request. Keeps the server
 // memory footprint bounded even when a client has been offline for weeks.
-const DELTA_PAGE_SIZE = 5000;
+// Sourced from the shared `sync-config` module so client and server can't
+// silently drift — see `src/lib/sync-config.ts`.
+export { DELTA_PAGE_SIZE };
 
 // Safety window for the committed-at watermark. Rows committed inside this
 // window may have been preceded by a row whose transaction was still
 // in-flight at our last read — wait for it to land before serving the
 // span to a client. 500ms covers typical write tail latency comfortably
-// while keeping real-time sync feel instant.
-const COMMITTED_WATERMARK_LAG_MS = 500;
+// while keeping real-time sync feel instant. Sourced from the shared
+// `sync-config` module — see `src/lib/sync-config.ts`.
+const COMMITTED_WATERMARK_LAG_MS = COMMIT_WATERMARK_LAG_MS;
 
 export type SyncActionType = 'I' | 'U' | 'D' | 'A';
 

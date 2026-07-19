@@ -1,11 +1,20 @@
 import crypto from 'node:crypto';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { ACCESS_TOKEN_EXPIRY_SECONDS, signAccessToken, signRefreshToken } from '@/server/lib/jwt';
+import {
+  ACCESS_TOKEN_EXPIRY_SECONDS,
+  REFRESH_TOKEN_DAYS,
+  signAccessToken,
+  signRefreshToken,
+} from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
-import { getClientIp, setSessionCookie } from '@/server/lib/request-security';
+import {
+  getClientIp,
+  REFRESH_TOKEN_MAX_AGE,
+  setSessionCookie,
+} from '@/server/lib/request-security';
 import { AuditLogService } from '@/server/services/audit-log.service';
 import { SamlService } from '@/server/services/saml.service';
 
@@ -14,8 +23,6 @@ const samlService = new SamlService(prisma);
 const auditLogService = new AuditLogService(prisma);
 
 const ACCESS_TOKEN_MAX_AGE = ACCESS_TOKEN_EXPIRY_SECONDS; // 24h
-const REFRESH_TOKEN_MAX_AGE = 60 * 60 * 24 * 30; // 30d
-const REFRESH_TOKEN_DAYS = 30;
 
 /**
  * POST /api/auth/saml/callback

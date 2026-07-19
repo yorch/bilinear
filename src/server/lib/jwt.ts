@@ -2,7 +2,13 @@ import crypto from 'node:crypto';
 import { jwtVerify, SignJWT } from 'jose';
 
 const ACCESS_TOKEN_EXPIRY = '24h';
-const REFRESH_TOKEN_EXPIRY = '30d';
+// Single source of truth for the refresh-token lifetime. `REFRESH_TOKEN_EXPIRY`
+// (the JWT `exp` claim string below) is derived from this number so the JWT
+// expiry and the DB `AuthToken.expiresAt` / cookie `maxAge` computed elsewhere
+// (auth.service.ts, saml/callback/route.ts, request-security.ts) can't drift
+// from each other.
+export const REFRESH_TOKEN_DAYS = 30;
+const REFRESH_TOKEN_EXPIRY = `${REFRESH_TOKEN_DAYS}d`;
 const OAUTH_STATE_EXPIRY = '10m';
 const WS_TICKET_EXPIRY = '60s';
 // Impersonation access tokens are deliberately short-lived so a leaked one has

@@ -1,5 +1,14 @@
 import type { Issue, IssueLabel, IssueReaction, PrismaClient } from '../../generated/prisma';
 import { buildGuestVisibilityWhere } from '../lib/issue-visibility';
+import {
+  DEFAULT_LIST_LIMIT,
+  MAX_BULK_OPERATION,
+  MAX_LIST_LIMIT,
+  MAX_PRIORITY,
+  MAX_RICH_TEXT_LENGTH,
+  MIN_PRIORITY,
+} from '../lib/limits';
+import { clampLimit } from '../lib/pagination';
 import type { SyncWriteClient } from './sync.service';
 
 type PrismaLike = Pick<PrismaClient, 'issue' | 'issueLabelAssignment' | 'issueLabel' | 'team'>;
@@ -96,16 +105,13 @@ export interface IssueFilter {
 // re-fetch via findById / findByIdentifier.
 export type IssueListRow = Omit<Issue, 'descriptionState'>;
 
-// Server-side input caps. Title/description mirror the column width (title
-// is VarChar(1000) in the DB; 512 is a tighter app-level guard) and a
-// generous-but-bounded description/comment-body size so a malicious or
+// Server-side input caps. Title mirrors the column width (title is
+// VarChar(1000) in the DB; 512 is a tighter app-level guard); description
+// shares the app-wide rich-text cap (see ../lib/limits) so a malicious or
 // buggy client can't push multi-megabyte payloads through the mutation
 // path. Priority is clamped to the app's 0(none)-4(low) scale (see
 // import.service.ts's PRIORITY_BY_NAME for the same range).
 const MAX_TITLE_LENGTH = 512;
-const MAX_DESCRIPTION_LENGTH = 100_000;
-const MIN_PRIORITY = 0;
-const MAX_PRIORITY = 4;
 
 function assertValidTitle(title: string | undefined): void {
   if (title !== undefined && title.length > MAX_TITLE_LENGTH) {
@@ -114,9 +120,9 @@ function assertValidTitle(title: string | undefined): void {
 }
 
 function assertValidDescription(description: string | undefined): void {
-  if (description !== undefined && description.length > MAX_DESCRIPTION_LENGTH) {
+  if (description !== undefined && description.length > MAX_RICH_TEXT_LENGTH) {
     throw new IssueValidationError(
-      `description must be ${MAX_DESCRIPTION_LENGTH} characters or fewer`,
+      `description must be ${MAX_RICH_TEXT_LENGTH} characters or fewer`,
     );
   }
 }
@@ -342,7 +348,14 @@ export class IssueService {
     includeArchived = false,
   ): Promise<IssuePage> {
     const where = this.buildWhere(orgId, filter, includeArchived);
-    const take = pagination.first ?? pagination.last ?? 50;
+    // Clamp to MAX_LIST_LIMIT — previously unclamped, so a client-supplied
+    // `first`/`last` could force an unbounded fetch (see sibling resolvers,
+    // which all clamp their `limit` args the same way).
+    const take = clampLimit(
+      pagination.first ?? pagination.last,
+      MAX_LIST_LIMIT,
+      DEFAULT_LIST_LIMIT,
+    );
     const cursorId = pagination.after ?? pagination.before;
     // Forward pagination (first/after, or the no-args default) fetches one
     // extra row so hasNextPage reflects whether more rows actually exist
@@ -704,7 +717,7 @@ export class IssueService {
     }
     // Hard cap on bulk size so a runaway client can't take a request slot
     // for minutes. 200 matches Linear's UI cap for the bulk toolbar.
-    if (ids.length > 200) {
+    if (ids.length > MAX_BULK_OPERATION) {
       throw new IssueBulkLimitExceededError();
     }
     assertValidTitle(input.title);
@@ -1344,7 +1357,7 @@ export class IssueInvalidStateError extends Error {
 
 export class IssueBulkLimitExceededError extends Error {
   constructor() {
-    super('Bulk update is capped at 200 issues per request');
+    super(`Bulk update is capped at ${MAX_BULK_OPERATION} issues per request`);
     this.name = 'IssueBulkLimitExceededError';
   }
 }

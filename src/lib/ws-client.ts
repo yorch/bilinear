@@ -10,6 +10,8 @@
  * lifetime still authenticate.
  */
 
+import { WS_HEARTBEAT_CLIENT_TIMEOUT_MS } from '@/lib/sync-config';
+
 export type WsMessage =
   | { cmd: 'connected'; orgId: string }
   | { cmd: 'sync'; sync: SerializedSyncAction[] }
@@ -42,8 +44,9 @@ const MAX_RECONNECT_DELAY_MS = 30_000;
 // If we haven't received any frame (data or ping) for this long, the
 // underlying socket is presumed dead even if the OS hasn't reaped it.
 // Server pings every 30s, so 75s gives 2 missed pings of slack before
-// we force a reconnect.
-const HEARTBEAT_TIMEOUT_MS = 75_000;
+// we force a reconnect. Sourced from the shared `sync-config` module so
+// client and server can't silently drift — see `src/lib/sync-config.ts`.
+const HEARTBEAT_TIMEOUT_MS = WS_HEARTBEAT_CLIENT_TIMEOUT_MS;
 
 export class WsClient {
   private ws: WebSocket | null = null;

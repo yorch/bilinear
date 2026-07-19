@@ -1,4 +1,5 @@
 import type { NextRequest, NextResponse } from 'next/server';
+import { REFRESH_TOKEN_DAYS } from './jwt';
 
 /**
  * Shared request-security helpers used by the GraphQL route and the
@@ -10,8 +11,12 @@ import type { NextRequest, NextResponse } from 'next/server';
 
 /** Access-token cookie lifetime (24h in seconds), matching the JWT expiry. */
 export const ACCESS_TOKEN_MAX_AGE = 60 * 60 * 24;
-/** Refresh-token cookie lifetime (30d in seconds). */
-export const REFRESH_TOKEN_MAX_AGE = 60 * 60 * 24 * 30;
+/**
+ * Refresh-token cookie lifetime (in seconds), derived from the single
+ * `REFRESH_TOKEN_DAYS` source of truth in jwt.ts so the cookie's `maxAge`
+ * can never drift from the JWT `exp` claim or the DB `AuthToken.expiresAt`.
+ */
+export const REFRESH_TOKEN_MAX_AGE = REFRESH_TOKEN_DAYS * 60 * 60 * 24;
 
 /**
  * Write a session JWT into an httpOnly cookie with the app-wide security

@@ -1,4 +1,5 @@
 import type { Issue, PrismaClient } from '../../generated/prisma';
+import { MAX_PRIORITY, MIN_PRIORITY } from '../lib/limits';
 import { childLogger } from '../lib/logger';
 import type { IssueService } from './issue.service';
 
@@ -107,7 +108,7 @@ function parsePriority(raw: string | undefined): number {
     return PRIORITY_BY_NAME[trimmed];
   }
   const n = Number.parseInt(trimmed, 10);
-  return Number.isInteger(n) && n >= 0 && n <= 4 ? n : 0;
+  return Number.isInteger(n) && n >= MIN_PRIORITY && n <= MAX_PRIORITY ? n : 0;
 }
 
 export class ImportService {

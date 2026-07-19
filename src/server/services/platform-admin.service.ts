@@ -1,4 +1,5 @@
 import { type Organization, Prisma, type PrismaClient, type User } from '../../generated/prisma';
+import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../lib/limits';
 import { childLogger } from '../lib/logger';
 
 const log = childLogger({ module: 'platform-admin' });
@@ -10,8 +11,6 @@ const log = childLogger({ module: 'platform-admin' });
  * caller is gated by `requirePlatformAdmin` at the resolver/route boundary.
  */
 
-const DEFAULT_LIST_LIMIT = 50;
-const MAX_LIST_LIMIT = 200;
 const RECENT_WINDOW_DAYS = 7;
 const MONTH_WINDOW_DAYS = 30;
 const TOP_ORGS = 5;

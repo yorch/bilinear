@@ -14,6 +14,7 @@
 import { createServer } from 'node:http';
 import Redis from 'ioredis';
 import { type WebSocket, WebSocketServer } from 'ws';
+import { WS_PING_INTERVAL_MS, WS_PONG_TIMEOUT_MS } from '@/lib/sync-config';
 import { verifyWsTicket } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
@@ -26,10 +27,12 @@ const log = childLogger({ module: 'ws' });
 
 const PORT = Number(process.env.WS_PORT ?? 3001);
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
-const PING_INTERVAL_MS = 30_000;
+// Sourced from the shared `sync-config` module so client and server can't
+// silently drift — see `src/lib/sync-config.ts`.
+const PING_INTERVAL_MS = WS_PING_INTERVAL_MS;
 // Force-terminate clients that haven't responded to two consecutive pings,
 // so half-open TCP connections don't accumulate ConnectionManager entries.
-const PONG_TIMEOUT_MS = PING_INTERVAL_MS * 2 + 5_000;
+const PONG_TIMEOUT_MS = WS_PONG_TIMEOUT_MS;
 // Run the webhook delivery scheduler every 30s. It picks up any pending
 // deliveries whose nextAttemptAt has passed and retries them. Co-locating
 // with the WS server (instead of the Next request path) keeps retries

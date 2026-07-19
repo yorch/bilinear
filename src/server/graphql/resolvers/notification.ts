@@ -1,13 +1,9 @@
 import { GraphQLError } from 'graphql';
 import type { Notification } from '../../../generated/prisma';
+import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../../lib/limits';
 import { clampLimit } from '../../lib/pagination';
 import { requireAuth, requireTeamMember } from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
-
-// Matches the MAX-200 convention used elsewhere (auditLogs, platform-admin
-// lists) — caps an uncapped client-supplied `limit` so a single query can't
-// force an unbounded fetch.
-const MAX_NOTIFICATIONS_LIMIT = 200;
 
 export const notificationResolvers = {
   Mutation: {
@@ -175,7 +171,7 @@ export const notificationResolvers = {
       return ctx.services.notification.findByUserId(
         ctx.userId,
         ctx.orgId,
-        clampLimit(limit, MAX_NOTIFICATIONS_LIMIT, 50),
+        clampLimit(limit, MAX_LIST_LIMIT, DEFAULT_LIST_LIMIT),
       );
     },
     notificationUnreadCount: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {

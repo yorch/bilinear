@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { Webhook } from '../../../generated/prisma';
+import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../../lib/limits';
 import { clampLimit } from '../../lib/pagination';
 import { requireAuth, requireOrgRole } from '../../middleware/auth';
 import {
@@ -9,11 +10,6 @@ import {
 } from '../../services/webhook.service';
 import type { GraphQLContext } from '../context';
 import { mapServiceError } from '../types/errors';
-
-// Matches the MAX-200 convention used elsewhere (auditLogs, platform-admin
-// lists) — caps an uncapped client-supplied `limit` so a single query can't
-// force an unbounded fetch.
-const MAX_DELIVERIES_LIMIT = 200;
 
 const WEBHOOK_ERROR_MAP = {
   BAD_USER_INPUT: [
@@ -130,7 +126,7 @@ export const webhookResolvers = {
       return ctx.services.webhook.listDeliveries(
         auth.orgId,
         webhookId,
-        clampLimit(limit, MAX_DELIVERIES_LIMIT, 50),
+        clampLimit(limit, MAX_LIST_LIMIT, DEFAULT_LIST_LIMIT),
       );
     },
 

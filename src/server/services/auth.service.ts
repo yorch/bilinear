@@ -3,6 +3,7 @@ import type { AuthToken, PrismaClient } from '../../generated/prisma';
 import { sendMagicLinkEmail } from '../lib/email';
 import {
   ACCESS_TOKEN_EXPIRY_SECONDS,
+  REFRESH_TOKEN_DAYS,
   signAccessToken,
   signOAuthState,
   signRefreshToken,
@@ -16,7 +17,6 @@ const securityLog = childLogger({ event: 'security', module: 'auth' });
 
 const MAGIC_LINK_EXPIRY_MINUTES = 15;
 const REFRESH_GRACE_PERIOD_MINUTES = 30;
-const REFRESH_TOKEN_DAYS = 30;
 
 /** Recognised API-key permission scopes. */
 export const VALID_API_SCOPES = new Set(['read', 'write']);
