@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { env } from '@/server/lib/env';
 import { verifySlackOAuthState } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
@@ -16,7 +17,7 @@ const log = childLogger({ module: 'slack-callback' });
  * integration, then redirects to the integrations settings page.
  */
 async function handleGet(req: NextRequest) {
-  const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
+  const appUrl = env.APP_URL;
 
   const code = req.nextUrl.searchParams.get('code');
   const stateParam = req.nextUrl.searchParams.get('state');

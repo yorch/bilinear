@@ -5,6 +5,7 @@ import {
   sendMentionNotificationEmail,
   sendStatusChangeNotificationEmail,
 } from '../lib/email';
+import { env } from '../lib/env';
 import { DEFAULT_LIST_LIMIT } from '../lib/limits';
 import { childLogger } from '../lib/logger';
 
@@ -353,7 +354,7 @@ export class NotificationService {
       return null;
     }
 
-    const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
+    const appUrl = env.APP_URL;
     const workspaceKey = issue.team.organization.urlKey;
 
     return {
@@ -430,7 +431,7 @@ export class NotificationService {
       return;
     }
 
-    const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
+    const appUrl = env.APP_URL;
     const issueUrl = `${appUrl}/${issue.team.organization.urlKey}/issue/${issue.identifier}`;
 
     const recipients = await this.prisma.user.findMany({
@@ -478,7 +479,7 @@ export class NotificationService {
       return;
     }
 
-    const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
+    const appUrl = env.APP_URL;
     const issueUrl = `${appUrl}/${issue.team.organization.urlKey}/issue/${issue.identifier}`;
 
     const recipients = await this.prisma.user.findMany({

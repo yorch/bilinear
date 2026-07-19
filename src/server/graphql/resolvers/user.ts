@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { GraphQLError } from 'graphql';
 import type { User } from '../../../generated/prisma';
+import { env } from '../../lib/env';
 import { requireAuth } from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
 
@@ -119,8 +120,7 @@ export const userResolvers = {
       if (user.id !== ctx.userId) {
         return null;
       }
-      const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
-      return buildCalendarFeedUrl(user.calendarFeedToken ?? null, appUrl);
+      return buildCalendarFeedUrl(user.calendarFeedToken ?? null, env.APP_URL);
     },
     emailNotificationsEnabled: (user: User) => user.emailNotificationsEnabled,
     isMe: (user: User, _args: unknown, ctx: GraphQLContext) => user.id === ctx.userId,

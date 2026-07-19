@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { env } from '@/server/lib/env';
 import { prisma } from '@/server/lib/prisma';
 import { SamlService } from '@/server/services/saml.service';
 
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
+  const appUrl = env.APP_URL;
   const spEntityId = `${appUrl}/api/auth/saml/metadata?org=${orgKey}`;
   const acsUrl = `${appUrl}/api/auth/saml/callback`;
 

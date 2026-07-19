@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { APP_NAME } from '@/lib/app-config';
 import { defaultLocale, isLocale, type Locale, translate } from '@/lib/i18n';
+import { env } from './env';
 import { childLogger } from './logger';
 
 const log = childLogger({ module: 'email' });
@@ -21,7 +22,7 @@ function emailT(
 
 function createTransport() {
   const host = process.env.SMTP_HOST;
-  const port = Number(process.env.SMTP_PORT ?? 587);
+  const port = env.SMTP_PORT;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
 
@@ -50,7 +51,7 @@ function createTransport() {
 }
 
 function appUrl(): string {
-  return process.env.APP_URL ?? 'http://localhost:3000';
+  return env.APP_URL;
 }
 
 function escapeHtml(text: string): string {

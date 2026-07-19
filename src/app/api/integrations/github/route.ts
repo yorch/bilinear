@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { env } from '@/server/lib/env';
 import { signGithubOAuthState } from '@/server/lib/jwt';
 import { prisma } from '@/server/lib/prisma';
 import { requireAuthContext } from '@/server/middleware/auth';
@@ -63,7 +64,7 @@ export async function GET(req: NextRequest) {
     webhookSecret,
   });
 
-  const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
+  const appUrl = env.APP_URL;
   const redirectUri = `${appUrl}/api/integrations/github/callback`;
 
   const authUrl = new URL('https://github.com/login/oauth/authorize');

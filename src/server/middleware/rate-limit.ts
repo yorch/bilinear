@@ -1,3 +1,4 @@
+import { env } from '../lib/env';
 import { logger } from '../lib/logger';
 import { redis } from '../lib/redis';
 
@@ -195,7 +196,7 @@ export async function checkAuthMutationLimit(
   kind: 'login' | 'verify',
   email: string,
   clientIp: string | null,
-  failClosed = process.env.AUTH_RATE_LIMIT_FAIL_CLOSED === '1',
+  failClosed = env.AUTH_RATE_LIMIT_FAIL_CLOSED,
 ): Promise<{ exceeded: boolean }> {
   // E2E tests reuse a single fixture email and exceed the per-email
   // login cap (5/hour) within the first batch. The TEST_AUTH_CODE

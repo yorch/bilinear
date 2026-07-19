@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { env } from '@/server/lib/env';
 import { signSlackOAuthState, verifyAccessToken } from '@/server/lib/jwt';
 import { prisma } from '@/server/lib/prisma';
 
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest) {
   }
 
   const state = await signSlackOAuthState({ orgId: claims.orgId, userId: claims.userId });
-  const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
+  const appUrl = env.APP_URL;
   const redirectUri = `${appUrl}/api/integrations/slack/callback`;
 
   const authUrl = new URL('https://slack.com/oauth/v2/authorize');

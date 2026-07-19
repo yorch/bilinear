@@ -2,6 +2,7 @@ import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import type { PrismaClient, Webhook, WebhookDelivery } from '../../generated/prisma';
+import { env } from '../lib/env';
 import { childLogger } from '../lib/logger';
 
 const log = childLogger({ module: 'webhook' });
@@ -578,7 +579,7 @@ export class WebhookService {
     if (isBlockedHost(host)) {
       // Default-deny: only allow private/loopback when explicitly opted
       // in (e.g. local dev with `.env` set).
-      if (process.env.ALLOW_PRIVATE_WEBHOOK_URLS !== '1') {
+      if (!env.ALLOW_PRIVATE_WEBHOOK_URLS) {
         throw new WebhookPrivateUrlError();
       }
     }
@@ -792,7 +793,7 @@ function isPrivateIp(ip: string): boolean {
  * resolver to win an SSRF.
  */
 async function assertSafeUrl(url: string): Promise<void> {
-  if (process.env.ALLOW_PRIVATE_WEBHOOK_URLS === '1') {
+  if (env.ALLOW_PRIVATE_WEBHOOK_URLS) {
     return;
   }
   const parsed = new URL(url);

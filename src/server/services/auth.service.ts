@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import type { AuthToken, PrismaClient } from '../../generated/prisma';
 import { sendMagicLinkEmail } from '../lib/email';
+import { env } from '../lib/env';
 import {
   ACCESS_TOKEN_EXPIRY_SECONDS,
   REFRESH_TOKEN_DAYS,
@@ -465,7 +466,7 @@ function getOAuthRedirectUri(explicitUri: string | undefined, callbackPath: stri
   if (explicitUri) {
     return explicitUri;
   }
-  const appUrl = (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+  const appUrl = env.APP_URL.replace(/\/$/, '');
   return `${appUrl}${callbackPath}`;
 }
 

@@ -11,6 +11,7 @@ import type { GraphQLContext } from '@/server/graphql/context';
 import { createContext } from '@/server/graphql/context';
 import { resolvers } from '@/server/graphql/resolvers';
 import { typeDefs } from '@/server/graphql/schema';
+import { env } from '@/server/lib/env';
 import { logger, runWithRequestContext } from '@/server/lib/logger';
 import { isOriginStringAllowed } from '@/server/lib/request-security';
 import {
@@ -63,14 +64,8 @@ const SLOW_REQUEST_MS = 1000;
 // Defaults to 1 (log everything); lower it (e.g. LOG_HTTP_SAMPLE_RATE=0.1) at
 // high volume. An explicitly-empty value (`LOG_HTTP_SAMPLE_RATE=`) is treated
 // as unset so a blank env var doesn't silently disable all sampled logs.
-const HTTP_LOG_SAMPLE_RATE = (() => {
-  const raw = process.env.LOG_HTTP_SAMPLE_RATE;
-  if (raw === undefined || raw === '') {
-    return 1;
-  }
-  const n = Number(raw);
-  return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 1;
-})();
+// Validation lives in `env.ts` (`env.LOG_HTTP_SAMPLE_RATE`).
+const HTTP_LOG_SAMPLE_RATE = env.LOG_HTTP_SAMPLE_RATE;
 
 /**
  * Apollo plugin: one structured access log per operation (operationName,

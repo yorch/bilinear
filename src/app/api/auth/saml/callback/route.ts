@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { env } from '@/server/lib/env';
 import {
   ACCESS_TOKEN_EXPIRY_SECONDS,
   REFRESH_TOKEN_DAYS,
@@ -89,7 +90,7 @@ async function handlePost(req: NextRequest) {
   // Computed the same way as the initiate/metadata routes so the audience
   // check in parseAndValidateResponse can confirm this assertion was minted
   // for this SP, not replayed from a different one.
-  const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
+  const appUrl = env.APP_URL;
   const spEntityId = `${appUrl}/api/auth/saml/metadata?org=${orgKey}`;
 
   const samlConfig = {

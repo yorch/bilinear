@@ -5,6 +5,7 @@ import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { env } from '@/server/lib/env';
 import { prisma } from '@/server/lib/prisma';
 import { getUploadDir } from '@/server/lib/upload-dir';
 import { requireAuthContext } from '@/server/middleware/auth';
@@ -25,7 +26,7 @@ const uploadDir = getUploadDir();
 mkdirSync(uploadDir, { recursive: true });
 
 function getAppUrl(): string {
-  return (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+  return env.APP_URL.replace(/\/$/, '');
 }
 
 /**

@@ -7,11 +7,12 @@
  * Auth uses the same JWT_SECRET as the main WS server (ws_ticket tokens).
  */
 
+import { env } from '@/server/lib/env';
 import { childLogger } from '@/server/lib/logger';
 import { server } from './server';
 
 const log = childLogger({ module: 'yjs' });
-const PORT = Number(process.env.YJS_PORT ?? 1234);
+const PORT = env.YJS_PORT;
 
 if (!process.env.JWT_SECRET) {
   log.fatal('JWT_SECRET is not set — cannot verify ws_ticket tokens');

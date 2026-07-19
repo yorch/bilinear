@@ -15,6 +15,7 @@ import { createServer } from 'node:http';
 import Redis from 'ioredis';
 import { type WebSocket, WebSocketServer } from 'ws';
 import { WS_PING_INTERVAL_MS, WS_PONG_TIMEOUT_MS } from '@/lib/sync-config';
+import { env } from '@/server/lib/env';
 import { verifyWsTicket } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
@@ -25,7 +26,7 @@ import { ConnectionManager } from './connection-manager';
 
 const log = childLogger({ module: 'ws' });
 
-const PORT = Number(process.env.WS_PORT ?? 3001);
+const PORT = env.WS_PORT;
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
 // Sourced from the shared `sync-config` module so client and server can't
 // silently drift — see `src/lib/sync-config.ts`.

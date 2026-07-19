@@ -1,4 +1,5 @@
 import type { NextRequest, NextResponse } from 'next/server';
+import { env } from './env';
 import { REFRESH_TOKEN_DAYS } from './jwt';
 
 /**
@@ -45,7 +46,7 @@ export function setSessionCookie(
  * peer. Never trust the raw header by default — it is attacker-controlled.
  */
 export function getClientIp(req: NextRequest): string | null {
-  if (process.env.TRUST_PROXY_HEADERS === '1') {
+  if (env.TRUST_PROXY_HEADERS) {
     const xff = req.headers.get('x-forwarded-for');
     const first = xff?.split(',')[0]?.trim();
     if (first) {
