@@ -46,10 +46,13 @@ export interface InitiativeUpdateInput {
 }
 
 /**
- * Max nesting depth for sub-initiatives. Past this the breadcrumb in the
- * detail panel becomes unreadable and the recursive progress rollup
+ * Default max nesting depth for sub-initiatives. Past this the breadcrumb in
+ * the detail panel becomes unreadable and the recursive progress rollup
  * starts to dominate the project-update hot path. Matches Linear's
- * Enterprise plan cap.
+ * Enterprise plan cap. The enforced value is read per-org from
+ * `Organization.maxInitiativeDepth` (see `assertParentAcceptsChild`) — this
+ * constant only documents the default and backs the fallback / error message
+ * when the org row can't be read.
  */
 export const MAX_INITIATIVE_DEPTH = 5;
 
@@ -642,6 +645,15 @@ export class InitiativeService {
     if (childId && parentId === childId) {
       throw new InitiativeInvalidParentError();
     }
+    // Fetched once per call (not per recursion level below) — the org's
+    // plan-tier depth cap (Organization.maxInitiativeDepth) doesn't change
+    // mid-walk, so there's no reason to re-read it on every ancestor hop.
+    const org = await this.prisma.organization.findUnique({
+      select: { maxInitiativeDepth: true },
+      where: { id: orgId },
+    });
+    const maxDepth = org?.maxInitiativeDepth ?? MAX_INITIATIVE_DEPTH;
+
     const parent = await this.prisma.initiative.findFirst({
       select: { id: true, parentId: true },
       where: { id: parentId, organizationId: orgId },
@@ -664,8 +676,8 @@ export class InitiativeService {
       }
       seen.add(cursor.parentId);
       depth += 1;
-      if (depth >= MAX_INITIATIVE_DEPTH) {
-        throw new InitiativeMaxDepthError();
+      if (depth >= maxDepth) {
+        throw new InitiativeMaxDepthError(maxDepth);
       }
       const next: { id: string; parentId: string | null } | null =
         await this.prisma.initiative.findUnique({
@@ -767,8 +779,8 @@ export class InitiativeInvalidParentError extends Error {
 }
 
 export class InitiativeMaxDepthError extends Error {
-  constructor() {
-    super(`Initiative nesting depth cannot exceed ${MAX_INITIATIVE_DEPTH}`);
+  constructor(maxDepth: number = MAX_INITIATIVE_DEPTH) {
+    super(`Initiative nesting depth cannot exceed ${maxDepth}`);
     this.name = 'InitiativeMaxDepthError';
   }
 }

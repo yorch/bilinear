@@ -12,6 +12,11 @@ export const TEST_ORG = {
   id: '00000000-0000-0000-0000-000000000001',
   initiativesEnabled: false,
   logoUrl: null,
+  maxCustomFieldsPerOrg: 30,
+  maxCustomFieldsPerTeam: 20,
+  maxExportRows: 10000,
+  maxInitiativeDepth: 5,
+  maxLabelGroupChildren: 250,
   name: 'Test Organization',
   roadmapEnabled: false,
   securitySettings: {},
@@ -109,6 +114,7 @@ export const TEST_TEAM = {
   retiredAt: null,
   timezone: 'UTC',
   triageEnabled: false,
+  upcomingCycleCount: 15,
   updatedAt: new Date('2026-01-15T00:00:00Z'),
 };
 

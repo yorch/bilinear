@@ -112,6 +112,9 @@ describe('ImportService.exportData', () => {
   beforeEach(() => {
     prisma = createMockPrisma();
     svc = new ImportService(prisma as never, { create: vi.fn() } as never);
+    // exportData reads the org's plan-tier cap (Organization.maxExportRows)
+    // instead of the old hardcoded constant; the fixture default matches it.
+    prisma.organization.findUnique.mockResolvedValue(TEST_ORG);
   });
 
   it('caps the query at MAX_EXPORT_ROWS and reports truncated when hit', async () => {
@@ -130,6 +133,23 @@ describe('ImportService.exportData', () => {
       expect.objectContaining({ take: MAX_EXPORT_ROWS }),
     );
     expect(result.issueCount).toBe(MAX_EXPORT_ROWS);
+    expect(result.truncated).toBe(true);
+  });
+
+  it('honours an org-configured maxExportRows override', async () => {
+    prisma.organization.findUnique.mockResolvedValueOnce({ maxExportRows: 3 });
+    const rows = Array.from({ length: 3 }, (_, i) => ({
+      identifier: `ENG-${i}`,
+      title: `Issue ${i}`,
+    }));
+    prisma.issue.findMany.mockResolvedValue(rows);
+
+    const result = (await svc.exportData(TEST_ORG.id)) as {
+      issueCount: number;
+      truncated: boolean;
+    };
+
+    expect(prisma.issue.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 3 }));
     expect(result.truncated).toBe(true);
   });
 

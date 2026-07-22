@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { TEST_TEAM } from '../../test/fixtures';
+import { TEST_ORG, TEST_TEAM } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
   CustomFieldDefinitionNotFoundError,
@@ -43,6 +43,10 @@ describe('CustomFieldService', () => {
   beforeEach(() => {
     prisma = createMockPrisma();
     service = new CustomFieldService(prisma as never);
+    // createDefinition reads the org's plan-tier caps
+    // (maxCustomFieldsPerTeam/maxCustomFieldsPerOrg) instead of the old
+    // hardcoded constants; default fixture values match those constants.
+    prisma.organization.findUnique.mockResolvedValue(TEST_ORG);
   });
 
   describe('createDefinition', () => {

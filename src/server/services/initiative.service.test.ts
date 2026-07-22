@@ -63,6 +63,10 @@ describe('InitiativeService', () => {
     // about progress don't have to stub it.
     issueGroupBy = vi.fn().mockResolvedValue([]);
     (prisma.issue as unknown as { groupBy: typeof issueGroupBy }).groupBy = issueGroupBy;
+    // assertParentAcceptsChild reads the org's plan-tier depth cap
+    // (Organization.maxInitiativeDepth) instead of the old hardcoded
+    // constant; the fixture default matches that constant.
+    prisma.organization.findUnique.mockResolvedValue(TEST_ORG);
     service = new InitiativeService(prisma as never);
   });
 
@@ -131,6 +135,30 @@ describe('InitiativeService', () => {
         ],
         skipDuplicates: true,
       });
+    });
+
+    it('rejects parenting that would exceed the org-configured max depth', async () => {
+      // Org has a (hypothetical, admin-lowered) depth cap of 2 instead of
+      // the MAX_INITIATIVE_DEPTH=5 default — proves the cap is actually
+      // read from Organization.maxInitiativeDepth, not the constant.
+      prisma.organization.findUnique.mockResolvedValueOnce({ maxInitiativeDepth: 2 });
+      // Parent 'p1' itself has a parent 'p0' → depth would become 2, at cap.
+      prisma.initiative.findFirst.mockResolvedValueOnce({ id: 'p1', parentId: 'p0' });
+
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, { name: 'Q3', parentId: 'p1' }),
+      ).rejects.toThrow('Initiative nesting depth cannot exceed 2');
+    });
+
+    it('allows parenting within the default depth cap when the org row has no override', async () => {
+      // Org fixture default (maxInitiativeDepth: 5) is used via beforeEach's
+      // organization.findUnique mock — a single level of nesting is fine.
+      prisma.initiative.create.mockResolvedValue(TEST_INITIATIVE);
+      prisma.initiative.findFirst.mockResolvedValueOnce({ id: 'p1', parentId: null });
+
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, { name: 'Q3', parentId: 'p1' }),
+      ).resolves.toEqual(TEST_INITIATIVE);
     });
   });
 
