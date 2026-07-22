@@ -368,7 +368,7 @@ and documents.
 - Resolution policy: existing `onBlur` saves `editor.getHTML()` (merged YJS state)
   to `Issue.description` via `issueUpdate` — search/sync/webhooks unaffected
 - `TipTapEditor` gains `collabDocId` + `collabUserName` props; uses
-  `Collaboration` + `CollaborationCursor` extensions when enabled
+  `Collaboration` + `CollaborationCaret` extensions when enabled
 - `IssueDetailPanel` passes `collabDocId={`issue:${issue.id}`}` and
   `collabUserName` to the edit-mode TipTapEditor
 - Feature flag: `NEXT_PUBLIC_COLLAB_ENABLED=true` (default off)
