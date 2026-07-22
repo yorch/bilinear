@@ -12,6 +12,14 @@ import {
   WebhookService,
 } from './webhook.service';
 
+// Mirrors the private constants in webhook.service.ts (not exported — kept
+// in sync by name/value so these tests fail loudly if the schedule drifts).
+const REQUEST_TIMEOUT_MS = 10_000;
+const CLAIM_WINDOW_MS = REQUEST_TIMEOUT_MS + 60_000; // 70s
+const MAX_ATTEMPTS = 5;
+const RETRY_BACKOFF_SECONDS = [30, 120, 600, 1800, 7200];
+const AUTO_DISABLE_AFTER = 20;
+
 const TEST_WEBHOOK = {
   archivedAt: null,
   consecutiveFailures: 0,
@@ -29,6 +37,35 @@ const TEST_WEBHOOK = {
   updatedAt: new Date('2026-05-01T00:00:00Z'),
   url: 'https://example.com/hook',
 };
+
+// A public IP-literal URL so processDelivery's assertSafeUrl() short-
+// circuits on parseIpLiteral() and never calls dns.lookup() — keeps these
+// tests hermetic (no real DNS resolution) and deterministic.
+const TEST_WEBHOOK_IP = { ...TEST_WEBHOOK, url: 'https://93.184.216.34/hook' };
+
+const TEST_DELIVERY = {
+  attempts: 0,
+  createdAt: new Date('2026-06-01T00:00:00Z'),
+  deliveredAt: null,
+  errorMessage: null,
+  event: 'issue.created',
+  id: '00000000-0000-0000-0000-000000000b00',
+  nextAttemptAt: new Date('2026-06-01T00:00:00Z'),
+  payload: {
+    data: { id: 'issue-1' },
+    deliveryId: '00000000-0000-0000-0000-000000000b00',
+    event: 'issue.created',
+    organizationId: TEST_ORG.id,
+    timestamp: '2026-06-01T00:00:00.000Z',
+  },
+  responseBody: null,
+  responseStatus: null,
+  status: 'pending',
+  updatedAt: new Date('2026-06-01T00:00:00Z'),
+  webhookId: TEST_WEBHOOK_IP.id,
+};
+
+const FROZEN_NOW = new Date('2026-06-01T00:00:00.000Z');
 
 describe('WebhookService', () => {
   let prisma: MockPrismaClient;
@@ -253,6 +290,298 @@ describe('WebhookService', () => {
       });
       // Each delivery's first attempt is queued.
       expect(spy).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('processDelivery', () => {
+    const fetchMock = vi.fn();
+
+    beforeEach(() => {
+      fetchMock.mockReset();
+      vi.stubGlobal('fetch', fetchMock);
+      vi.useFakeTimers();
+      vi.setSystemTime(FROZEN_NOW);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    });
+
+    describe('atomic pending→in_flight claim', () => {
+      it('claims via a conditional updateMany with a pending-or-stale-in_flight where-guard', async () => {
+        prisma.webhookDelivery.updateMany.mockResolvedValue({ count: 1 });
+        prisma.webhookDelivery.findUnique.mockResolvedValue({
+          ...TEST_DELIVERY,
+          webhook: TEST_WEBHOOK_IP,
+        });
+        prisma.webhookDelivery.update.mockResolvedValue({});
+        prisma.webhook.update.mockResolvedValue({});
+        fetchMock.mockResolvedValue({ status: 200, text: async () => 'ok' });
+
+        await service.processDelivery(TEST_DELIVERY.id);
+
+        expect(prisma.webhookDelivery.updateMany).toHaveBeenCalledTimes(1);
+        const [claimArgs] = prisma.webhookDelivery.updateMany.mock.calls[0];
+        expect(claimArgs.where.id).toBe(TEST_DELIVERY.id);
+        expect(claimArgs.data.status).toBe('in_flight');
+        // Claim deadline stamped into nextAttemptAt is symmetric with the
+        // reclaim window below (now + CLAIM_WINDOW_MS).
+        expect(claimArgs.data.nextAttemptAt).toEqual(
+          new Date(FROZEN_NOW.getTime() + CLAIM_WINDOW_MS),
+        );
+        // The where-guard: claim if pending, OR if a prior claim's window
+        // (in_flight + stale nextAttemptAt) has elapsed.
+        const pendingArm = claimArgs.where.OR.find(
+          (c: { status: string }) => c.status === 'pending',
+        );
+        expect(pendingArm).toEqual({ status: 'pending' });
+        const staleArm = claimArgs.where.OR.find(
+          (c: { status: string }) => c.status === 'in_flight',
+        );
+        expect(staleArm.nextAttemptAt).toEqual({
+          lte: new Date(FROZEN_NOW.getTime() - CLAIM_WINDOW_MS),
+        });
+        // Claim succeeded, so the delivery was actually fetched.
+        expect(prisma.webhookDelivery.findUnique).toHaveBeenCalledWith({
+          include: { webhook: true },
+          where: { id: TEST_DELIVERY.id },
+        });
+      });
+
+      it('does not re-claim a row already in_flight within its (non-stale) claim window', async () => {
+        // updateMany returns count 0 — the where-guard above (pending OR
+        // stale-in_flight) simply doesn't match a fresh in_flight row on a
+        // real Postgres, so the mock is set up to reflect that outcome.
+        prisma.webhookDelivery.updateMany.mockResolvedValue({ count: 0 });
+
+        await service.processDelivery(TEST_DELIVERY.id);
+
+        // No further work happens — no read of the row, no HTTP attempt, no
+        // status-transition writes. A second concurrent runner is a no-op.
+        expect(prisma.webhookDelivery.findUnique).not.toHaveBeenCalled();
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(prisma.webhookDelivery.update).not.toHaveBeenCalled();
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      });
+
+      it('reclaims a stale in_flight row past the claim deadline and proceeds with delivery', async () => {
+        // Row is in_flight (a prior worker claimed it) but its claim window
+        // has elapsed — the mock reflects a successful reclaim (count: 1).
+        prisma.webhookDelivery.updateMany.mockResolvedValue({ count: 1 });
+        prisma.webhookDelivery.findUnique.mockResolvedValue({
+          ...TEST_DELIVERY,
+          nextAttemptAt: new Date(FROZEN_NOW.getTime() - CLAIM_WINDOW_MS - 1000),
+          status: 'in_flight',
+          webhook: TEST_WEBHOOK_IP,
+        });
+        prisma.webhookDelivery.update.mockResolvedValue({});
+        prisma.webhook.update.mockResolvedValue({});
+        fetchMock.mockResolvedValue({ status: 200, text: async () => 'ok' });
+
+        await service.processDelivery(TEST_DELIVERY.id);
+
+        // The claim query's stale-reclaim arm is exactly the boundary a
+        // Postgres `lte` comparison would use to pick up this row.
+        const [claimArgs] = prisma.webhookDelivery.updateMany.mock.calls[0];
+        const staleArm = claimArgs.where.OR.find(
+          (c: { status: string }) => c.status === 'in_flight',
+        );
+        expect(staleArm.nextAttemptAt.lte.getTime()).toBe(FROZEN_NOW.getTime() - CLAIM_WINDOW_MS);
+        // Reclaim succeeded, so processing continued past the claim.
+        expect(prisma.webhookDelivery.findUnique).toHaveBeenCalled();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('success path', () => {
+      it('marks a 2xx delivery delivered, resets consecutiveFailures, and schedules no retry', async () => {
+        prisma.webhookDelivery.updateMany.mockResolvedValue({ count: 1 });
+        prisma.webhookDelivery.findUnique.mockResolvedValue({
+          ...TEST_DELIVERY,
+          attempts: 0,
+          webhook: TEST_WEBHOOK_IP,
+        });
+        prisma.webhookDelivery.update.mockResolvedValue({});
+        prisma.webhook.update.mockResolvedValue({});
+        fetchMock.mockResolvedValue({ status: 204, text: async () => '' });
+
+        await service.processDelivery(TEST_DELIVERY.id);
+
+        expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+        expect(prisma.webhookDelivery.update).toHaveBeenCalledWith({
+          data: {
+            attempts: 1,
+            deliveredAt: FROZEN_NOW,
+            errorMessage: null,
+            nextAttemptAt: null,
+            responseBody: '',
+            responseStatus: 204,
+            status: 'success',
+          },
+          where: { id: TEST_DELIVERY.id },
+        });
+        expect(prisma.webhook.update).toHaveBeenCalledWith({
+          data: {
+            consecutiveFailures: 0,
+            lastDeliveryAt: FROZEN_NOW,
+            lastSuccessAt: FROZEN_NOW,
+          },
+          where: { id: TEST_WEBHOOK_IP.id },
+        });
+        // No retry: exactly one webhookDelivery.update call (the success
+        // write), and it never touches the pending/failed retry fields.
+        expect(prisma.webhookDelivery.update).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('failure + backoff', () => {
+      it('increments attempts and schedules nextAttemptAt per RETRY_BACKOFF_SECONDS on the first failure', async () => {
+        prisma.webhookDelivery.updateMany.mockResolvedValue({ count: 1 });
+        prisma.webhookDelivery.findUnique.mockResolvedValue({
+          ...TEST_DELIVERY,
+          attempts: 0,
+          webhook: TEST_WEBHOOK_IP,
+        });
+        prisma.webhookDelivery.update.mockResolvedValue({});
+        prisma.webhook.update.mockResolvedValue({});
+        fetchMock.mockResolvedValue({ status: 500, text: async () => 'server error' });
+
+        await service.processDelivery(TEST_DELIVERY.id);
+
+        expect(prisma.webhookDelivery.update).toHaveBeenCalledWith({
+          data: {
+            attempts: 1,
+            errorMessage: null,
+            nextAttemptAt: new Date(FROZEN_NOW.getTime() + RETRY_BACKOFF_SECONDS[0] * 1000),
+            responseBody: 'server error',
+            responseStatus: 500,
+            status: 'pending',
+          },
+          where: { id: TEST_DELIVERY.id },
+        });
+        expect(prisma.webhook.update).toHaveBeenCalledWith({
+          data: { lastDeliveryAt: FROZEN_NOW },
+          where: { id: TEST_WEBHOOK_IP.id },
+        });
+        // Not yet at MAX_ATTEMPTS — the auto-disable guard must not run.
+        expect(prisma.webhook.updateMany).not.toHaveBeenCalled();
+      });
+
+      it('records a network error as errorMessage and still schedules a backoff retry', async () => {
+        prisma.webhookDelivery.updateMany.mockResolvedValue({ count: 1 });
+        prisma.webhookDelivery.findUnique.mockResolvedValue({
+          ...TEST_DELIVERY,
+          attempts: 1,
+          webhook: TEST_WEBHOOK_IP,
+        });
+        prisma.webhookDelivery.update.mockResolvedValue({});
+        prisma.webhook.update.mockResolvedValue({});
+        fetchMock.mockRejectedValue(new Error('ECONNREFUSED'));
+
+        await service.processDelivery(TEST_DELIVERY.id);
+
+        expect(prisma.webhookDelivery.update).toHaveBeenCalledWith({
+          data: {
+            attempts: 2,
+            errorMessage: 'ECONNREFUSED',
+            nextAttemptAt: new Date(FROZEN_NOW.getTime() + RETRY_BACKOFF_SECONDS[1] * 1000),
+            responseBody: null,
+            responseStatus: null,
+            status: 'pending',
+          },
+          where: { id: TEST_DELIVERY.id },
+        });
+      });
+
+      it('marks the delivery failed on the final attempt without scheduling a further retry', async () => {
+        prisma.webhookDelivery.updateMany.mockResolvedValue({ count: 1 });
+        prisma.webhookDelivery.findUnique.mockResolvedValue({
+          ...TEST_DELIVERY,
+          attempts: MAX_ATTEMPTS - 1,
+          webhook: TEST_WEBHOOK_IP,
+        });
+        prisma.webhookDelivery.update.mockResolvedValue({});
+        prisma.webhook.update.mockResolvedValue({});
+        prisma.webhook.updateMany.mockResolvedValue({ count: 0 });
+        fetchMock.mockResolvedValue({ status: 503, text: async () => 'down' });
+
+        await service.processDelivery(TEST_DELIVERY.id);
+
+        expect(prisma.webhookDelivery.update).toHaveBeenCalledWith({
+          data: {
+            attempts: MAX_ATTEMPTS,
+            errorMessage: null,
+            nextAttemptAt: null,
+            responseBody: 'down',
+            responseStatus: 503,
+            status: 'failed',
+          },
+          where: { id: TEST_DELIVERY.id },
+        });
+        expect(prisma.webhook.update).toHaveBeenCalledWith({
+          data: { consecutiveFailures: { increment: 1 }, lastDeliveryAt: FROZEN_NOW },
+          where: { id: TEST_WEBHOOK_IP.id },
+        });
+        // Only ever one delivery-row write on the final attempt — no
+        // separate retry-scheduling write follows it.
+        expect(prisma.webhookDelivery.update).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('auto-disable', () => {
+      it('disables the webhook via a conditional updateMany once consecutiveFailures reaches AUTO_DISABLE_AFTER', async () => {
+        prisma.webhookDelivery.updateMany.mockResolvedValue({ count: 1 });
+        prisma.webhookDelivery.findUnique.mockResolvedValue({
+          ...TEST_DELIVERY,
+          attempts: MAX_ATTEMPTS - 1,
+          webhook: TEST_WEBHOOK_IP,
+        });
+        prisma.webhookDelivery.update.mockResolvedValue({});
+        prisma.webhook.update.mockResolvedValue({});
+        // Simulates the DB row having reached the threshold.
+        prisma.webhook.updateMany.mockResolvedValue({ count: 1 });
+        fetchMock.mockResolvedValue({ status: 500, text: async () => 'err' });
+
+        await service.processDelivery(TEST_DELIVERY.id);
+
+        expect(prisma.webhook.updateMany).toHaveBeenCalledWith({
+          data: { enabled: false },
+          where: {
+            consecutiveFailures: { gte: AUTO_DISABLE_AFTER },
+            enabled: true,
+            id: TEST_WEBHOOK_IP.id,
+          },
+        });
+      });
+
+      it('uses a where-guard that cannot clobber a concurrent success (count 0 -> no throw, no double-disable)', async () => {
+        prisma.webhookDelivery.updateMany.mockResolvedValue({ count: 1 });
+        prisma.webhookDelivery.findUnique.mockResolvedValue({
+          ...TEST_DELIVERY,
+          attempts: MAX_ATTEMPTS - 1,
+          webhook: TEST_WEBHOOK_IP,
+        });
+        prisma.webhookDelivery.update.mockResolvedValue({});
+        prisma.webhook.update.mockResolvedValue({});
+        // A concurrent successful delivery already reset consecutiveFailures
+        // to 0 in the "real" DB, so the conditional updateMany matches
+        // nothing here — the guard clause (consecutiveFailures gte
+        // threshold AND enabled: true) is what prevents the clobber.
+        prisma.webhook.updateMany.mockResolvedValue({ count: 0 });
+        fetchMock.mockResolvedValue({ status: 500, text: async () => 'err' });
+
+        await expect(service.processDelivery(TEST_DELIVERY.id)).resolves.toBeUndefined();
+
+        expect(prisma.webhook.updateMany).toHaveBeenCalledWith({
+          data: { enabled: false },
+          where: {
+            consecutiveFailures: { gte: AUTO_DISABLE_AFTER },
+            enabled: true,
+            id: TEST_WEBHOOK_IP.id,
+          },
+        });
+      });
     });
   });
 });
