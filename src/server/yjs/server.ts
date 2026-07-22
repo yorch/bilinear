@@ -342,7 +342,26 @@ export const server = new Server<HookContext>({
 // and each room's live connections (`Document.getConnections()`), so we can
 // walk all of them on a timer and close anything whose access no longer
 // checks out, independent of write activity.
+let yjsSweepInFlight = false;
+
 export async function sweepRevokedYjsConnections(): Promise<void> {
+  // Re-entrancy guard: a sweep does one sequential DB round-trip per
+  // connection per room, so under heavy collab load a pass can exceed the
+  // interval. Without this, the next tick would start a second overlapping
+  // sweep, compounding DB load in a self-reinforcing loop. Skip if one is
+  // already running — the next tick will cover anything missed.
+  if (yjsSweepInFlight) {
+    return;
+  }
+  yjsSweepInFlight = true;
+  try {
+    await runYjsSweep();
+  } finally {
+    yjsSweepInFlight = false;
+  }
+}
+
+async function runYjsSweep(): Promise<void> {
   for (const [documentName, document] of server.hocuspocus.documents) {
     const parsed = parseDocName(documentName);
     if (!parsed) {

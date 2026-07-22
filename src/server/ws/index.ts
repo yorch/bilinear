@@ -230,9 +230,18 @@ async function sweepRevokedConnections(): Promise<void> {
     return;
   }
 
+  // Snapshot the connections up front. The terminate loop below must only
+  // consider sockets whose user/org were actually included in the batched
+  // lookups — a connection that joins DURING the await would be present in the
+  // live `liveConnections` Set but absent from the queried Maps, and
+  // shouldTerminateConnection(undefined, undefined) fail-closes, so iterating
+  // the live set would spuriously kill brand-new, fully-authorized
+  // connections. Anything that joins mid-sweep just authenticated at connect
+  // and is picked up on the next cycle.
+  const conns = [...liveConnections];
   const userIds = new Set<string>();
   const orgIds = new Set<string>();
-  for (const conn of liveConnections) {
+  for (const conn of conns) {
     userIds.add(conn.userId);
     orgIds.add(conn.orgId);
   }
@@ -250,7 +259,7 @@ async function sweepRevokedConnections(): Promise<void> {
   const userById = new Map(users.map(u => [u.id, u]));
   const orgById = new Map(orgs.map(o => [o.id, o]));
 
-  for (const conn of liveConnections) {
+  for (const conn of conns) {
     if (conn.ws.readyState !== 1 /* OPEN */) {
       continue;
     }

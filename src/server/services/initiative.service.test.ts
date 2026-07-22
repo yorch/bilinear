@@ -160,6 +160,19 @@ describe('InitiativeService', () => {
         service.create(TEST_ORG.id, TEST_USER.id, { name: 'Q3', parentId: 'p1' }),
       ).resolves.toEqual(TEST_INITIATIVE);
     });
+
+    it('rejects nesting under a ROOT parent when the cap is 1 (baseline depth check)', async () => {
+      // maxInitiativeDepth = 1 forbids all nesting. The ancestor-walk loop
+      // never runs for a root parent (parentId: null), so the baseline depth
+      // check must reject here — otherwise a "no nesting" cap is silently
+      // ignored for top-level parents.
+      prisma.organization.findUnique.mockResolvedValueOnce({ maxInitiativeDepth: 1 });
+      prisma.initiative.findFirst.mockResolvedValueOnce({ id: 'p1', parentId: null });
+
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, { name: 'Q3', parentId: 'p1' }),
+      ).rejects.toThrow('Initiative nesting depth cannot exceed 1');
+    });
   });
 
   describe('update', () => {

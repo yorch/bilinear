@@ -664,6 +664,14 @@ export class InitiativeService {
     // Walk up to root, counting depth and detecting cycles.
     let cursor: { id: string; parentId: string | null } | null = parent;
     let depth = 1;
+    // Baseline check: if the target parent already sits at (or beyond) the
+    // cap, no child can be attached — even when the parent is itself a root
+    // (parentId === null), in which case the loop below never runs. Without
+    // this, a per-org `maxInitiativeDepth = 1` (forbid all nesting) would be
+    // silently ignored for a root parent.
+    if (depth >= maxDepth) {
+      throw new InitiativeMaxDepthError(maxDepth);
+    }
     const seen = new Set<string>([parent.id]);
     while (cursor?.parentId) {
       if (childId && cursor.parentId === childId) {
