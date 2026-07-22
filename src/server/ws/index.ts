@@ -9,6 +9,13 @@
  *  2. Subscribes to Redis PubSub channel `sync:<orgId>`
  *  3. Broadcasts incoming SyncActions to all connected org clients
  *  4. Sends periodic pings and handles pong / reconnection
+ *  5. Periodically re-validates each connection's auth (see
+ *     `sweepRevokedConnections`) so a socket authenticated at connect time
+ *     doesn't keep receiving the org's sync stream forever after the
+ *     underlying user/org is deactivated/suspended — the 60s `ws_ticket`
+ *     only proves auth was valid AT CONNECT TIME, and unlike an HTTP
+ *     request, a long-lived socket never gives `extractAuthContext` another
+ *     chance to re-check.
  */
 
 import { createServer } from 'node:http';
@@ -41,6 +48,15 @@ const PONG_TIMEOUT_MS = WS_PONG_TIMEOUT_MS;
 const WEBHOOK_RETRY_INTERVAL_MS = 30_000;
 // Check for cycles past their endsAt every 5 minutes and roll them over.
 const CYCLE_ROLLOVER_INTERVAL_MS = 5 * 60_000;
+// Re-validate every live connection's auth (user still active, org not
+// suspended/archived) every 60s — matches the ws_ticket's own lifetime, so a
+// revoked connection is caught about as fast as a fresh connect attempt
+// would be rejected.
+const REAUTH_SWEEP_INTERVAL_MS = 60_000;
+// Close code for a connection whose auth was found revoked by the sweep.
+// Distinct from 4001 (used for connect-time rejection) so the reason is
+// unambiguous in logs/client handling.
+const REVOKED_CLOSE_CODE = 4003;
 
 // verifyWsTicket() reads JWT_SECRET via getSecret() and throws if unset
 if (!process.env.JWT_SECRET) {
@@ -151,6 +167,103 @@ redisSubscriber.on('ready', () => {
   }
 });
 
+// ─── Re-auth sweep ───────────────────────────────────────────────────────────
+// Connect-time auth (the ws_ticket) only proves the user/org were valid 60s
+// ago. A socket can stay open indefinitely afterward, so we periodically
+// re-derive the same suspension/deactivation checks `extractAuthContext`
+// applies per-request (src/server/middleware/auth.ts) and force-close any
+// connection that's no longer valid.
+
+export interface ReauthUserRow {
+  active: boolean;
+}
+
+export interface ReauthOrgRow {
+  archivedAt: Date | null;
+  suspendedAt: Date | null;
+}
+
+/**
+ * Pure predicate: given freshly re-queried user/org rows for a live
+ * connection, decide whether it should be force-closed. Mirrors
+ * `extractAuthContext`'s suspension checks — a deactivated user or a
+ * suspended/archived org invalidates the connection. A missing row (the
+ * user or org was deleted since connect) is treated the same as invalid —
+ * fail closed.
+ *
+ * Kept as a standalone, side-effect-free function (no DB/socket access) so
+ * it's unit-testable without a live connection or database.
+ */
+export function shouldTerminateConnection(
+  user: ReauthUserRow | null | undefined,
+  org: ReauthOrgRow | null | undefined,
+): boolean {
+  if (!user?.active) {
+    return true;
+  }
+  if (!org || org.suspendedAt || org.archivedAt) {
+    return true;
+  }
+  return false;
+}
+
+interface LiveConnection {
+  orgId: string;
+  userId: string;
+  ws: WebSocket;
+}
+
+// All currently-open, authenticated connections. Populated on connect,
+// removed on close (mirrors ConnectionManager's own bookkeeping, kept
+// separate so the sweep doesn't need ConnectionManager to expose an
+// iteration API it doesn't otherwise need).
+const liveConnections = new Set<LiveConnection>();
+
+/**
+ * Re-validate every live connection in one pass. Batches the user/org
+ * lookups into two `findMany` queries (keyed by the distinct ids currently
+ * connected) instead of one query per connection, so the sweep's DB cost is
+ * bounded by the number of distinct users/orgs, not the number of sockets.
+ */
+async function sweepRevokedConnections(): Promise<void> {
+  if (liveConnections.size === 0) {
+    return;
+  }
+
+  const userIds = new Set<string>();
+  const orgIds = new Set<string>();
+  for (const conn of liveConnections) {
+    userIds.add(conn.userId);
+    orgIds.add(conn.orgId);
+  }
+
+  const [users, orgs] = await Promise.all([
+    prisma.user.findMany({
+      select: { active: true, id: true },
+      where: { id: { in: [...userIds] } },
+    }),
+    prisma.organization.findMany({
+      select: { archivedAt: true, id: true, suspendedAt: true },
+      where: { id: { in: [...orgIds] } },
+    }),
+  ]);
+  const userById = new Map(users.map(u => [u.id, u]));
+  const orgById = new Map(orgs.map(o => [o.id, o]));
+
+  for (const conn of liveConnections) {
+    if (conn.ws.readyState !== 1 /* OPEN */) {
+      continue;
+    }
+    if (shouldTerminateConnection(userById.get(conn.userId), orgById.get(conn.orgId))) {
+      log.info(
+        { orgId: conn.orgId, userId: conn.userId },
+        'Re-auth sweep: connection revoked — closing socket',
+      );
+      conn.ws.close(REVOKED_CLOSE_CODE, 'Session revoked');
+    }
+  }
+}
+
 // ─── HTTP + WS server ────────────────────────────────────────────────────────
 
 const httpServer = createServer((_req, res) => {
@@ -185,6 +298,8 @@ wss.on('connection', async (ws: WebSocket, req) => {
 
   // Register client
   const clientInfo = connectionManager.add(orgId, userId, ws);
+  const liveConn: LiveConnection = { orgId, userId, ws };
+  liveConnections.add(liveConn);
   await ensureOrgSubscription(orgId);
 
   log.info({ orgId, total: connectionManager.clientCount(), userId }, 'Client connected');
@@ -221,6 +336,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
 
   ws.on('close', () => {
     clearInterval(pingTimer);
+    liveConnections.delete(liveConn);
     const orgEmpty = connectionManager.remove(clientInfo);
     log.info({ orgId, total: connectionManager.clientCount(), userId }, 'Client disconnected');
     if (orgEmpty) {
@@ -239,6 +355,13 @@ wss.on('connection', async (ws: WebSocket, req) => {
 httpServer.listen(PORT, () => {
   log.info({ port: PORT }, 'WebSocket server listening');
 });
+
+// ─── Re-auth sweep scheduler ────────────────────────────────────────────────
+const reauthTimer = setInterval(() => {
+  sweepRevokedConnections().catch((err: unknown) => {
+    log.error({ err }, 'Re-auth sweep failed');
+  });
+}, REAUTH_SWEEP_INTERVAL_MS);
 
 // ─── Webhook retry scheduler ────────────────────────────────────────────────
 // Periodically drain any due `pending` deliveries. The first attempt for
@@ -293,6 +416,7 @@ const cycleRolloverTimer = setInterval(() => {
 function shutdown() {
   clearInterval(webhookTimer);
   clearInterval(cycleRolloverTimer);
+  clearInterval(reauthTimer);
   wss.close();
   redisSubscriber.disconnect();
   redisPublisher.disconnect();

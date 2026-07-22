@@ -6,6 +6,17 @@
  * Persistence reads/writes Issue.descriptionState (Bytes) via Prisma.
  *
  * Start with:  yarn yjs:server
+ *
+ * Re-validation: `onAuthenticate` only proves access at connect time — a
+ * room can stay open indefinitely afterward. Two layers close that gap:
+ *  (a) `onStoreDocument` (already runs on every debounced write) re-checks
+ *      the writer's access via `revalidateAccess` and skips the persist +
+ *      closes that connection if it's been revoked since connect.
+ *  (b) a periodic sweep (`sweepRevokedYjsConnections`, every
+ *      `REAUTH_SWEEP_INTERVAL_MS`) walks every open document room via
+ *      Hocuspocus's own `documents` map and `Document.getConnections()` and
+ *      closes any connection whose access no longer checks out — this
+ *      covers a connected-but-idle peer who isn't triggering writes.
  */
 
 import { Server } from '@hocuspocus/server';
@@ -14,8 +25,14 @@ import { verifyWsTicket } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { getTeamRole } from '@/server/middleware/auth';
+import type { PrismaClient } from '../../generated/prisma';
 
 const log = childLogger({ module: 'yjs' });
+
+// Re-validate every open room every 60s — matches the WS server's own
+// re-auth sweep interval (src/server/ws/index.ts) so both channels close a
+// revoked session on a comparable timescale.
+const REAUTH_SWEEP_INTERVAL_MS = 60_000;
 
 // Context stamped by onAuthenticate and forwarded to subsequent hooks.
 type HookContext = { orgId: string; userId: string };
@@ -35,6 +52,82 @@ function parseDocName(name: string): { type: 'issue' | 'document'; id: string } 
     return { id: m[1], type: 'document' };
   }
   return null;
+}
+
+export interface RevalidateResult {
+  /** Present only when `valid` is `false` — for logging, not user-facing. */
+  reason?: string;
+  valid: boolean;
+}
+
+/**
+ * Re-run the same accessibility checks `onAuthenticate` performs at connect
+ * time — user still active, org not suspended/archived, and (for issues)
+ * still a member of the issue's team with guest visibility honored — some
+ * time AFTER a connection was first authenticated. Used by both the
+ * `onStoreDocument` gate and the periodic sweep below.
+ *
+ * Takes `prisma` as a parameter (rather than reaching for the module-level
+ * singleton) so it's directly unit-testable with a mocked client — no live
+ * socket, Hocuspocus runtime, or DB required.
+ */
+export async function revalidateAccess(
+  prismaClient: Pick<
+    PrismaClient,
+    'document' | 'issue' | 'organization' | 'teamMemberRole' | 'teamMembership' | 'user'
+  >,
+  parsed: { id: string; type: 'document' | 'issue' },
+  orgId: string,
+  userId: string,
+): Promise<RevalidateResult> {
+  const user = await prismaClient.user.findUnique({
+    select: { active: true },
+    where: { id: userId },
+  });
+  if (!user?.active) {
+    return { reason: 'user deactivated', valid: false };
+  }
+
+  const org = await prismaClient.organization.findUnique({
+    select: { archivedAt: true, suspendedAt: true },
+    where: { id: orgId },
+  });
+  if (!org || org.suspendedAt || org.archivedAt) {
+    return { reason: 'org suspended or archived', valid: false };
+  }
+
+  if (parsed.type === 'issue') {
+    const issue = await prismaClient.issue.findFirst({
+      select: { assigneeId: true, creatorId: true, teamId: true },
+      where: { archivedAt: null, id: parsed.id, organizationId: orgId },
+    });
+    if (!issue) {
+      return { reason: 'issue not found or archived', valid: false };
+    }
+    const role = await getTeamRole(prismaClient as PrismaClient, issue.teamId, userId, orgId);
+    if (!role) {
+      return { reason: 'no longer a member of this team', valid: false };
+    }
+    if (role === 'guest' && issue.creatorId !== userId && issue.assigneeId !== userId) {
+      return { reason: 'guest no longer has access to this issue', valid: false };
+    }
+  } else {
+    const doc = await prismaClient.document.findFirst({
+      select: { teamId: true },
+      where: { archivedAt: null, id: parsed.id, organizationId: orgId },
+    });
+    if (!doc) {
+      return { reason: 'document not found or archived', valid: false };
+    }
+    if (doc.teamId) {
+      const role = await getTeamRole(prismaClient as PrismaClient, doc.teamId, userId, orgId);
+      if (!role) {
+        return { reason: 'no longer a member of this team', valid: false };
+      }
+    }
+  }
+
+  return { valid: true };
 }
 
 export const server = new Server<HookContext>({
@@ -183,10 +276,38 @@ export const server = new Server<HookContext>({
   // ─── Store ────────────────────────────────────────────────────────────────
   // Persist the YJS document state to the DB. Debounced by the config above
   // so we don't hammer Postgres on every keystroke.
-  async onStoreDocument({ document, documentName }) {
+  async onStoreDocument({ document, documentName, lastContext }) {
     const parsed = parseDocName(documentName);
     if (!parsed) {
       return;
+    }
+
+    // Re-validate the writer whose transaction triggered this (debounced)
+    // flush — `lastContext` is the HookContext stamped by onAuthenticate for
+    // whichever connection made the most recent change. Tenant isolation is
+    // enforced at connect time, but a session can be revoked (deactivated,
+    // org suspended, removed from the team) any time after that while the
+    // room stays open — this is the layer that catches it on every write.
+    const { orgId, userId } = (lastContext ?? {}) as Partial<HookContext>;
+    if (orgId && userId) {
+      const result = await revalidateAccess(prisma, parsed, orgId, userId);
+      if (!result.valid) {
+        log.warn(
+          { documentName, orgId, reason: result.reason, userId },
+          'YJS store skipped: writer access revoked since connect — closing their connection',
+        );
+        // Don't persist an edit from a session that should no longer have
+        // access, and close that specific connection so it stops being able
+        // to make further edits. Other still-valid connections on the same
+        // room are left alone.
+        for (const connection of document.getConnections()) {
+          const ctx = connection.context as Partial<HookContext> | undefined;
+          if (ctx?.orgId === orgId && ctx?.userId === userId) {
+            connection.close();
+          }
+        }
+        return;
+      }
     }
 
     // Tenant isolation is enforced at connection time in onAuthenticate. The
@@ -213,3 +334,53 @@ export const server = new Server<HookContext>({
   // Keep quiet=true; structured pino logs below surface what matters.
   quiet: true,
 });
+
+// ─── Periodic re-auth sweep ─────────────────────────────────────────────────
+// `onStoreDocument` above only re-validates on a write — a connected peer who
+// isn't editing (just reading, or idle) could otherwise go unchecked between
+// writes. Hocuspocus exposes every open room (`server.hocuspocus.documents`)
+// and each room's live connections (`Document.getConnections()`), so we can
+// walk all of them on a timer and close anything whose access no longer
+// checks out, independent of write activity.
+export async function sweepRevokedYjsConnections(): Promise<void> {
+  for (const [documentName, document] of server.hocuspocus.documents) {
+    const parsed = parseDocName(documentName);
+    if (!parsed) {
+      // Shouldn't happen — onAuthenticate already rejects any documentName
+      // that doesn't parse, so no room should exist under a bad name.
+      continue;
+    }
+    for (const connection of document.getConnections()) {
+      const ctx = connection.context as Partial<HookContext> | undefined;
+      if (!ctx?.orgId || !ctx.userId) {
+        continue;
+      }
+      try {
+        const result = await revalidateAccess(prisma, parsed, ctx.orgId, ctx.userId);
+        if (!result.valid) {
+          log.info(
+            { documentName, orgId: ctx.orgId, reason: result.reason, userId: ctx.userId },
+            'YJS re-auth sweep: closing revoked connection',
+          );
+          connection.close();
+        }
+      } catch (err) {
+        log.error(
+          { documentName, err, orgId: ctx.orgId, userId: ctx.userId },
+          'YJS re-auth sweep failed for connection',
+        );
+      }
+    }
+  }
+}
+
+const reauthSweepTimer = setInterval(() => {
+  sweepRevokedYjsConnections().catch((err: unknown) => {
+    log.error({ err }, 'YJS re-auth sweep failed');
+  });
+}, REAUTH_SWEEP_INTERVAL_MS);
+// Don't let this timer alone keep the process alive — the Hocuspocus HTTP
+// server's own listening socket is what should do that (matches the
+// `unref()`-free-but-explicit `shutdown()` teardown in yjs/index.ts, which
+// exits the process directly rather than clearing individual timers).
+reauthSweepTimer.unref();

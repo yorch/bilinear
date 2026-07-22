@@ -1,7 +1,55 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { COMMIT_WATERMARK_LAG_MS } from '../../lib/sync-config';
 import { TEST_ORG } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import { parseCursor, SyncService } from './sync.service';
+
+// A fixed DB-clock "now", deliberately far from the real system clock, so
+// tests can prove the watermark is derived from the DATABASE's clock (via
+// `$queryRaw`) rather than the app server's `Date.now()` — the exact
+// cross-clock-skew hazard this fix closes. Every describe block below mocks
+// `$queryRaw` to return this so existing delta/bootstrap assertions don't
+// have to change their expectations about what "now" means, only where it
+// comes from.
+const DB_NOW = new Date('2020-01-01T00:00:00.000Z');
+
+function mockDbNow(prisma: MockPrismaClient, now: Date = DB_NOW) {
+  prisma.$queryRaw.mockResolvedValue([{ now }]);
+}
+
+/**
+ * `getBootstrapData` fans out into ~20 Prisma queries via `Promise.all`.
+ * Stub every collection query to an empty result and `findUnique`/
+ * `findFirst` to `null` so tests can focus on the watermark plumbing
+ * without asserting on unrelated bootstrap payload shape.
+ */
+function mockEmptyBootstrap(prisma: MockPrismaClient) {
+  prisma.organization.findUnique.mockResolvedValue(null);
+  const emptyModels = [
+    'team',
+    'user',
+    'issue',
+    'workflowState',
+    'issueLabel',
+    'issueLabelAssignment',
+    'cycle',
+    'document',
+    'project',
+    'projectMilestone',
+    'projectUpdate',
+    'customView',
+    'issueRelation',
+    'issueTemplate',
+    'customFieldDefinition',
+    'customFieldValue',
+    'initiative',
+    'initiativeProject',
+  ] as const;
+  for (const model of emptyModels) {
+    prisma[model].findMany.mockResolvedValue([]);
+  }
+  prisma.syncAction.findFirst.mockResolvedValue(null);
+}
 
 // Minimal stand-in for the ioredis Redis instance — only `publish` is
 // touched on the path under test (createSyncAction fires it, but the
@@ -41,6 +89,7 @@ describe('SyncService.getDeltaSyncActions — pagination', () => {
   beforeEach(() => {
     prisma = createMockPrisma();
     svc = new SyncService(prisma as never, mockRedis);
+    mockDbNow(prisma);
   });
 
   it('returns the page and reports hasMore=false when fewer than the cap exist', async () => {
@@ -164,6 +213,7 @@ describe('SyncService.getDeltaSyncActions — guest visibility (IssueRelation bo
   beforeEach(() => {
     prisma = createMockPrisma();
     svc = new SyncService(prisma as never, mockRedis);
+    mockDbNow(prisma);
   });
 
   function makeRelationAction(id: bigint, data: Record<string, unknown>) {
@@ -263,6 +313,71 @@ describe('SyncService.getDeltaSyncActions — guest visibility (IssueRelation bo
     expect(result.actions).toHaveLength(1);
     // No guest scoping means no need to even look up the issues.
     expect(prisma.issue.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('SyncService — watermark uses the DB clock, not the app clock', () => {
+  let prisma: MockPrismaClient;
+  let svc: SyncService;
+
+  beforeEach(() => {
+    prisma = createMockPrisma();
+    svc = new SyncService(prisma as never, mockRedis);
+    mockDbNow(prisma);
+  });
+
+  it('derives the delta-sync watermark from `SELECT now()`, not Date.now()', async () => {
+    prisma.syncAction.findMany.mockResolvedValue([]);
+
+    await svc.getDeltaSyncActions(TEST_ORG.id, parseCursor('0'));
+
+    const call = prisma.syncAction.findMany.mock.calls[0]?.[0] as DeltaCall;
+    const watermark = call.where.AND[0].committedAt?.lte as Date;
+    expect(watermark.getTime()).toBe(DB_NOW.getTime() - COMMIT_WATERMARK_LAG_MS);
+    // DB_NOW is fixed in 2020 — nowhere near the real system clock. If the
+    // watermark had instead been derived from the app's Date.now(), it
+    // would land near the real current time, not decades in the past. This
+    // is exactly the cross-clock-skew scenario the fix closes: an app
+    // clock that has drifted ahead of the DB clock must not shrink the
+    // safety window.
+    expect(watermark.getTime()).toBeLessThan(Date.now() - 1000 * 60 * 60 * 24 * 365);
+  });
+
+  it('fetches the DB clock exactly once per delta call, even with a toCursor upper bound', async () => {
+    prisma.syncAction.findMany.mockResolvedValue([]);
+
+    await svc.getDeltaSyncActions(
+      TEST_ORG.id,
+      parseCursor('0'),
+      parseCursor('1900000000000000-1'),
+      50,
+    );
+
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it('derives the bootstrap "watermarked latest row" query from the DB clock', async () => {
+    mockEmptyBootstrap(prisma);
+
+    await svc.getBootstrapData(TEST_ORG.id, 'user-1');
+
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    const call = prisma.syncAction.findFirst.mock.calls[0]?.[0] as {
+      where: { committedAt?: { lte?: Date } };
+    };
+    expect(call.where.committedAt?.lte?.getTime()).toBe(DB_NOW.getTime() - COMMIT_WATERMARK_LAG_MS);
+  });
+
+  it('derives the getLastSyncId watermark from the DB clock', async () => {
+    prisma.syncAction.findFirst.mockResolvedValue(null);
+
+    await svc.getLastSyncId(TEST_ORG.id);
+
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    const call = prisma.syncAction.findFirst.mock.calls[0]?.[0] as {
+      where: { committedAt?: { lte?: Date } };
+    };
+    expect(call.where.committedAt?.lte?.getTime()).toBe(DB_NOW.getTime() - COMMIT_WATERMARK_LAG_MS);
   });
 });
 
