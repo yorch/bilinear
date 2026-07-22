@@ -19,8 +19,9 @@ describe('withRequestContext', () => {
 
     expect(res).toBe(okResponse);
     expect(seen?.route).toBe('sync/delta');
-    expect(typeof seen?.requestId).toBe('string');
-    expect((seen?.requestId as string).length).toBeGreaterThan(0);
+    const requestId = seen?.requestId;
+    expect(typeof requestId).toBe('string');
+    expect((requestId as string).length).toBeGreaterThan(0);
   });
 
   it('preserves the context across an await inside the handler', async () => {

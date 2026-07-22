@@ -4,7 +4,7 @@ import { HocuspocusProvider } from '@hocuspocus/provider';
 import { CharacterCount } from '@tiptap/extension-character-count';
 import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight';
 import { Collaboration } from '@tiptap/extension-collaboration';
-import { CollaborationCursor } from '@tiptap/extension-collaboration-cursor';
+import { CollaborationCaret } from '@tiptap/extension-collaboration-caret';
 import { Color } from '@tiptap/extension-color';
 import { Highlight } from '@tiptap/extension-highlight';
 import { HorizontalRule } from '@tiptap/extension-horizontal-rule';
@@ -569,7 +569,7 @@ export function TipTapEditor({
       url: YJS_SERVER_URL,
     });
 
-    // Stamp cursor awareness with user identity for CollaborationCursor.
+    // Stamp cursor awareness with user identity for CollaborationCaret.
     providerRef.current.setAwarenessField('user', {
       color: cursorColor,
       name: resolvedCollabUserName,
@@ -649,7 +649,7 @@ export function TipTapEditor({
       ...(collabEnabled && ydocRef.current && providerRef.current
         ? [
             Collaboration.configure({ document: ydocRef.current }),
-            CollaborationCursor.configure({
+            CollaborationCaret.configure({
               provider: providerRef.current,
             }),
           ]

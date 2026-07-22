@@ -1885,7 +1885,9 @@ When `NEXT_PUBLIC_COLLAB_ENABLED=true` and `collabDocId` is provided AND
    they're available for `useMemo` extensions).
 2. Includes `Collaboration.configure({ document: ydoc })` which replaces
    the StarterKit's `undoRedo` extension (Yjs provides its own undo/redo).
-3. Includes `CollaborationCursor.configure({ provider })` for presence indicators.
+3. Includes `CollaborationCaret.configure({ provider })` (from
+   `@tiptap/extension-collaboration-caret` — the Tiptap v3 successor to the
+   deprecated `@tiptap/extension-collaboration-cursor`) for presence indicators.
 4. Stamps cursor awareness: `{ color: <random session color>, name: collabUserName }`.
 
 ### Deferred

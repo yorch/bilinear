@@ -67,7 +67,7 @@ jobs:
     # image bypasses that entirely. Tag is pinned to the @playwright/test
     # version used by the repo.
     container:
-      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      image: mcr.microsoft.com/playwright:v1.61.1-noble
 
     services:
       postgres:
