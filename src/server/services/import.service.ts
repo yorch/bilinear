@@ -1,4 +1,5 @@
 import type { Issue, PrismaClient } from '../../generated/prisma';
+import { MAX_PRIORITY, MIN_PRIORITY } from '../lib/limits';
 import { childLogger } from '../lib/logger';
 import type { IssueService } from './issue.service';
 
@@ -7,6 +8,11 @@ const log = childLogger({ module: 'import' });
 // Hard cap so a single synchronous import can't tie up the request path or
 // blow memory. Larger migrations should be chunked by the client.
 export const MAX_IMPORT_ROWS = 500;
+
+// Hard cap on organizationExport's row count — a basic guard against an
+// unbounded response (a JSON export of every issue in a very large org).
+// Not real pagination; see exportData's doc comment.
+export const MAX_EXPORT_ROWS = 10_000;
 
 /**
  * Parse CSV text into headers + rows. Handles quoted fields, escaped quotes
@@ -102,7 +108,7 @@ function parsePriority(raw: string | undefined): number {
     return PRIORITY_BY_NAME[trimmed];
   }
   const n = Number.parseInt(trimmed, 10);
-  return Number.isInteger(n) && n >= 0 && n <= 4 ? n : 0;
+  return Number.isInteger(n) && n >= MIN_PRIORITY && n <= MAX_PRIORITY ? n : 0;
 }
 
 export class ImportService {
@@ -200,6 +206,13 @@ export class ImportService {
   /**
    * Full JSON export of a team's issues (or the whole org when teamId is
    * omitted). Returns a serialisable object; the resolver stringifies it.
+   *
+   * `take: MAX_EXPORT_ROWS` bounds the response size — without it, a large
+   * org's export is an unbounded synchronous query + a potentially huge
+   * JSON string built and returned in a single GraphQL response. This is a
+   * basic guard, not real pagination: callers needing the full data set
+   * for a very large org still need a paginated/streaming export, which is
+   * out of scope here (noting as a residual, not implementing).
    */
   async exportData(orgId: string, teamId?: string): Promise<object> {
     const issues = await this.prisma.issue.findMany({
@@ -216,6 +229,7 @@ export class ImportService {
         teamId: true,
         title: true,
       },
+      take: MAX_EXPORT_ROWS,
       where: {
         archivedAt: null,
         organizationId: orgId,
@@ -223,6 +237,11 @@ export class ImportService {
         ...(teamId ? { teamId } : {}),
       },
     });
-    return { exportedAt: new Date().toISOString(), issueCount: issues.length, issues };
+    return {
+      exportedAt: new Date().toISOString(),
+      issueCount: issues.length,
+      issues,
+      truncated: issues.length === MAX_EXPORT_ROWS,
+    };
   }
 }

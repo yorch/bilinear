@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
 import { GraphQLError } from 'graphql';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import type { PrismaClient } from '../../generated/prisma';
 import type { AccessTokenPayload } from '../lib/jwt';
 import { verifyAccessToken } from '../lib/jwt';
@@ -132,6 +134,69 @@ export async function extractAuthContext(
   }
 
   return resolved;
+}
+
+export interface RequireAuthContextOptions {
+  /**
+   * Also read a Bearer token from the `Authorization` header (in addition
+   * to the `access_token` cookie). Default `true`. Routes that are only
+   * ever called from the authenticated browser session (`ws-ticket`,
+   * `integrations/github`) pass `false` to preserve their cookie-only
+   * behavior.
+   */
+  allowHeader?: boolean;
+  /** Message used in the 401 JSON body. Default `'Unauthorized'`. */
+  unauthorizedMessage?: string;
+}
+
+/**
+ * Shared "read the request's auth, 401 if missing" prologue used by every
+ * Next.js route handler that authenticates outside GraphQL (bootstrap,
+ * delta, upload, uploads/[...path], ws-ticket, integrations/github). Reads
+ * the `access_token` cookie (and, unless `allowHeader` is `false`, the
+ * `Authorization` header) and resolves it via `extractAuthContext` — which
+ * re-checks user/org suspension against the DB on every call, so a
+ * deactivated user or a suspended/archived org loses access immediately
+ * rather than for the rest of the JWT's lifetime.
+ *
+ * Returns a discriminated result: `{ response }` when auth is missing (the
+ * caller should return it as-is — same 401 shape each route used before
+ * this helper existed), or `{ ctx }` on success. `requireUserId` (default
+ * `true`) controls whether `ctx.userId` must also be present — pass
+ * `false` for routes that only need `orgId` (e.g. `uploads/[...path]`),
+ * since a caller whose org got suspended keeps a non-null `userId` while
+ * `orgId` is cleared (see the suspension handling in `extractAuthContext`),
+ * and narrowing on both would reject a case the route never rejected
+ * before.
+ */
+export async function requireAuthContext(
+  req: NextRequest,
+  prisma: PrismaClient,
+  options?: RequireAuthContextOptions & { requireUserId?: true },
+): Promise<{ ctx: AuthContext & { orgId: string; userId: string } } | { response: NextResponse }>;
+export async function requireAuthContext(
+  req: NextRequest,
+  prisma: PrismaClient,
+  options: RequireAuthContextOptions & { requireUserId: false },
+): Promise<{ ctx: AuthContext & { orgId: string } } | { response: NextResponse }>;
+export async function requireAuthContext(
+  req: NextRequest,
+  prisma: PrismaClient,
+  options: RequireAuthContextOptions & { requireUserId?: boolean } = {},
+): Promise<{ ctx: AuthContext } | { response: NextResponse }> {
+  const {
+    allowHeader = true,
+    unauthorizedMessage = 'Unauthorized',
+    requireUserId = true,
+  } = options;
+  const authHeader = allowHeader ? req.headers.get('authorization') : null;
+  const cookieToken = req.cookies.get('access_token')?.value ?? null;
+  const ctx = await extractAuthContext(authHeader, cookieToken, prisma);
+
+  if (!ctx.orgId || (requireUserId && !ctx.userId)) {
+    return { response: NextResponse.json({ error: unauthorizedMessage }, { status: 401 }) };
+  }
+  return { ctx };
 }
 
 export function requireAuth(ctx: AuthContext): asserts ctx is { userId: string; orgId: string } {

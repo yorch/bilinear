@@ -1,6 +1,7 @@
 'use client';
 
 import { Bookmark, Settings } from 'lucide-react';
+import { runInAction } from 'mobx';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -249,7 +250,9 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   const handleDelete = useCallback(
     (id: string) => {
       const snapshot = issueStore.findById(id);
-      issueStore.pool.delete(id);
+      runInAction(() => {
+        issueStore.pool.delete(id);
+      });
       txQueue.enqueue(
         ISSUE_DELETE_MUTATION,
         { id },

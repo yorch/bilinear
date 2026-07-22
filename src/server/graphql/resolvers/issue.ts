@@ -11,10 +11,12 @@ import {
 import type { IssueCreateInput, IssueFilter, IssueUpdateInput } from '../../services/issue.service';
 import {
   IssueBulkLimitExceededError,
+  IssueInvalidReferenceError,
   IssueInvalidStateError,
   IssueNotFoundError,
   IssueService,
   IssueStateRequiredError,
+  IssueValidationError,
 } from '../../services/issue.service';
 import type { IssueActivityCreateInput } from '../../services/issue-activity.service';
 import type { GraphQLContext } from '../context';
@@ -47,6 +49,29 @@ function issueFieldToString(issue: Issue, field: string): string | null {
   return String(v);
 }
 
+/**
+ * Maps the four issue-service "bad input" error classes to a BAD_USER_INPUT
+ * GraphQLError, or returns null if `err` isn't one of them (so the caller
+ * can fall through to its own NOT_FOUND / rethrow handling). Shared by
+ * issueCreate/issueUpdate/issuesBulkUpdate so the three mutations can't
+ * drift on which input errors get remapped — issueUpdate previously omitted
+ * IssueStateRequiredError, which is really just another "no valid stateId
+ * to write" input error and belongs in the same bucket as its siblings.
+ */
+function toIssueInputGraphQLError(err: unknown): GraphQLError | null {
+  if (
+    err instanceof IssueStateRequiredError ||
+    err instanceof IssueInvalidStateError ||
+    err instanceof IssueInvalidReferenceError ||
+    err instanceof IssueValidationError
+  ) {
+    return new GraphQLError(err.message, {
+      extensions: { code: 'BAD_USER_INPUT' },
+    });
+  }
+  return null;
+}
+
 export const issueResolvers = {
   Issue: {
     assignee: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
@@ -68,7 +93,17 @@ export const issueResolvers = {
       }
       return ctx.prisma.issue.findMany({
         orderBy: { subIssueSortOrder: 'asc' },
-        where: { AND: ands, parentId: issue.id, trashed: false },
+        // organizationId scoping: children are looked up by parentId alone,
+        // so a cross-org parentId (see IssueService.validateReferences —
+        // this closes the write side; this closes the read side / any
+        // pre-existing bad data) could otherwise surface another org's
+        // issues here.
+        where: {
+          AND: ands,
+          organizationId: issue.organizationId,
+          parentId: issue.id,
+          trashed: false,
+        },
       });
     },
 
@@ -100,7 +135,10 @@ export const issueResolvers = {
         return null;
       }
       const parent = await ctx.services.issue.findById(issue.parentId);
-      if (!parent) {
+      // Org scoping: mirror the cycle/project field resolvers immediately
+      // below/above — a cross-org parentId (bad data, or a pre-fix write)
+      // must never surface another org's issue here.
+      if (!parent || parent.organizationId !== ctx.orgId) {
         return null;
       }
       // Guest visibility: if the caller is a guest on the parent's team
@@ -227,11 +265,9 @@ export const issueResolvers = {
           .catch(err => log.error({ err }, 'automation evaluate failed: issue_created'));
         return { issue, lastSyncId: issueSync?.id.toString() ?? '0', success: true };
       } catch (err) {
-        const error = err as Error;
-        if (error.name === 'IssueStateRequiredError' || error.name === 'IssueInvalidStateError') {
-          throw new GraphQLError(error.message, {
-            extensions: { code: 'BAD_USER_INPUT' },
-          });
+        const mapped = toIssueInputGraphQLError(err);
+        if (mapped) {
+          throw mapped;
         }
         throw err;
       }
@@ -475,10 +511,9 @@ export const issueResolvers = {
             extensions: { code: 'BAD_USER_INPUT' },
           });
         }
-        if (err instanceof IssueInvalidStateError || err instanceof IssueStateRequiredError) {
-          throw new GraphQLError(err.message, {
-            extensions: { code: 'BAD_USER_INPUT' },
-          });
+        const mapped = toIssueInputGraphQLError(err);
+        if (mapped) {
+          throw mapped;
         }
         if (err instanceof IssueNotFoundError) {
           throw new GraphQLError(err.message, {
@@ -595,21 +630,36 @@ export const issueResolvers = {
       type RecordedSync = Awaited<ReturnType<typeof ctx.services.sync.recordSyncAction>>;
       let issueSync: RecordedSync | undefined;
       const cascadedSyncs: RecordedSync[] = [];
-      const { issue, cascaded } = await ctx.services.issue.update(id, input, async (tx, res) => {
-        issueSync = await ctx.services.sync.recordSyncAction(
-          tx,
-          ctx.orgId,
-          'U',
-          'Issue',
-          id,
-          res.issue,
-        );
-        for (const row of res.cascaded) {
-          cascadedSyncs.push(
-            await ctx.services.sync.recordSyncAction(tx, ctx.orgId, 'U', 'Issue', row.id, row),
+      let updateResult: Awaited<ReturnType<typeof ctx.services.issue.update>>;
+      try {
+        updateResult = await ctx.services.issue.update(id, input, async (tx, res) => {
+          issueSync = await ctx.services.sync.recordSyncAction(
+            tx,
+            ctx.orgId,
+            'U',
+            'Issue',
+            id,
+            res.issue,
           );
+          for (const row of res.cascaded) {
+            cascadedSyncs.push(
+              await ctx.services.sync.recordSyncAction(tx, ctx.orgId, 'U', 'Issue', row.id, row),
+            );
+          }
+        });
+      } catch (err) {
+        const mapped = toIssueInputGraphQLError(err);
+        if (mapped) {
+          throw mapped;
         }
-      });
+        if (err instanceof IssueNotFoundError) {
+          throw new GraphQLError(err.message, {
+            extensions: { code: 'NOT_FOUND' },
+          });
+        }
+        throw err;
+      }
+      const { issue, cascaded } = updateResult;
       if (issueSync) {
         ctx.services.sync.publish(issueSync);
       }
@@ -671,7 +721,9 @@ export const issueResolvers = {
 
       // Auto-subscribe the actor so they receive future notifications on issues
       // they interact with (consistent with Linear's subscription behaviour).
-      void ctx.services.notification.autoSubscribe(ctx.userId, issue.id);
+      void ctx.services.notification
+        .autoSubscribe(ctx.userId, issue.id)
+        .catch(err => log.error({ err }, 'Failed to auto-subscribe issue actor'));
 
       // Notifications: assignment change
       if (
@@ -693,13 +745,9 @@ export const issueResolvers = {
       // Notifications: status change — oldStatus/newStatus are workflow-state UUIDs;
       // human-readable names are resolved in the notification UI via the state store.
       if ('stateId' in input && input.stateId && input.stateId !== existing.stateId) {
-        void ctx.services.notification.createForStatusChange(
-          ctx.orgId,
-          issue.id,
-          ctx.userId,
-          existing.stateId,
-          input.stateId,
-        );
+        void ctx.services.notification
+          .createForStatusChange(ctx.orgId, issue.id, ctx.userId, existing.stateId, input.stateId)
+          .catch(err => log.error({ err }, 'Failed to create status change notification'));
       }
 
       // The issue + cascaded SyncActions were recorded inside the update
@@ -779,7 +827,11 @@ export const issueResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+      // Guest visibility: fetching by id must apply the same "own work
+      // only" restriction as the top-level `issues` query and every other
+      // per-issue mutation — a plain requireTeamMember let a guest read
+      // any issue on their team by id.
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, issue, ctx.userId, ctx.orgId);
       return issue;
     },
 

@@ -6,6 +6,8 @@ import {
   CommentNotFoundError,
   CommentReactionNotFoundError,
   CommentService,
+  CommentValidationError,
+  extractMentionedUserIds,
 } from './comment.service';
 
 const TEST_COMMENT = {
@@ -148,6 +150,16 @@ describe('CommentService', () => {
         }),
       ).rejects.toThrow(CommentNotFoundError);
     });
+
+    it('rejects a body over the length cap', async () => {
+      await expect(
+        service.create(TEST_USER.id, {
+          body: 'a'.repeat(100_001),
+          issueId: TEST_ISSUE.id,
+        }),
+      ).rejects.toThrow(CommentValidationError);
+      expect(prisma.comment.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('update', () => {
@@ -181,6 +193,13 @@ describe('CommentService', () => {
         CommentForbiddenError,
       );
       expect(prisma.comment.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a body over the length cap', async () => {
+      await expect(
+        service.update(TEST_COMMENT.id, TEST_USER.id, { body: 'a'.repeat(100_001) }),
+      ).rejects.toThrow(CommentValidationError);
+      expect(prisma.comment.findUnique).not.toHaveBeenCalled();
     });
   });
 
@@ -301,5 +320,57 @@ describe('CommentService', () => {
       );
       expect(prisma.commentReaction.delete).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('extractMentionedUserIds', () => {
+  it('returns an empty array for undefined/null/empty bodyData', () => {
+    expect(extractMentionedUserIds(undefined)).toEqual([]);
+    expect(extractMentionedUserIds(null)).toEqual([]);
+    expect(extractMentionedUserIds({})).toEqual([]);
+  });
+
+  it('collects mention node ids from a nested ProseMirror doc', () => {
+    const doc = {
+      content: [
+        {
+          content: [
+            { text: 'Hey ', type: 'text' },
+            { attrs: { id: 'user-1', label: 'Alice' }, type: 'mention' },
+            { text: ' and ', type: 'text' },
+            { attrs: { id: 'user-2', label: 'Bob' }, type: 'mention' },
+          ],
+          type: 'paragraph',
+        },
+      ],
+      type: 'doc',
+    };
+
+    expect(extractMentionedUserIds(doc)).toEqual(['user-1', 'user-2']);
+  });
+
+  it('de-duplicates repeated mentions of the same user', () => {
+    const doc = {
+      content: [
+        { attrs: { id: 'user-1' }, type: 'mention' },
+        { attrs: { id: 'user-1' }, type: 'mention' },
+      ],
+      type: 'doc',
+    };
+
+    expect(extractMentionedUserIds(doc)).toEqual(['user-1']);
+  });
+
+  it('ignores issue (#) and project (~) mention node types', () => {
+    const doc = {
+      content: [
+        { attrs: { id: 'ENG-1' }, type: 'issueMention' },
+        { attrs: { id: 'proj-1' }, type: 'projectMention' },
+        { attrs: { id: 'user-1' }, type: 'mention' },
+      ],
+      type: 'doc',
+    };
+
+    expect(extractMentionedUserIds(doc)).toEqual(['user-1']);
   });
 });

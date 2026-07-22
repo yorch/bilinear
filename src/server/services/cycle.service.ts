@@ -295,15 +295,23 @@ export class CycleService {
         i => i.state.type !== 'completed' && i.state.type !== 'canceled',
       );
 
-      // Find next upcoming cycle for this org+team
+      // Find the next contiguous cycle for this org+team. The sweep runs
+      // AFTER the rolled-over cycle's endsAt has passed, so by the time
+      // this fires the correct next cycle has typically already started
+      // (startsAt <= now) — filtering on `startsAt: { gte: now }` would
+      // exclude it and skip carryover issues ahead to whatever cycle
+      // starts next, or unassign them entirely if none does. Instead,
+      // select the earliest non-archived, not-yet-ended cycle (excluding
+      // the one being rolled over) — matching the codebase's exclusive-
+      // endsAt convention (see SyncAction commit watermark / burndown).
       const now = new Date();
       const nextCycle = await tx.cycle.findFirst({
         orderBy: { startsAt: 'asc' },
         where: {
           archivedAt: null,
+          endsAt: { gt: now },
           id: { not: cycleId },
           organizationId: orgId,
-          startsAt: { gte: now },
           teamId: cycle.teamId,
         },
       });

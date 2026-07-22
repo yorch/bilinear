@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { env } from '@/server/lib/env';
 import { verifyGithubOAuthState } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
@@ -16,7 +17,7 @@ const log = childLogger({ module: 'github-callback' });
  * settings page when done.
  */
 async function handleGet(req: NextRequest) {
-  const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
+  const appUrl = env.APP_URL;
   const fallbackUrl = `${appUrl}`;
 
   const code = req.nextUrl.searchParams.get('code');

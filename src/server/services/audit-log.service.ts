@@ -1,5 +1,6 @@
 import type { AuditLogEntry, PrismaClient } from '../../generated/prisma';
 import { Prisma } from '../../generated/prisma';
+import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../lib/limits';
 import { childLogger } from '../lib/logger';
 
 const log = childLogger({ module: 'audit-log' });
@@ -58,9 +59,6 @@ export interface AuditLogPage {
   nextCursor: string | null;
 }
 
-const DEFAULT_LIMIT = 50;
-const MAX_LIMIT = 200;
-
 /**
  * Write-once audit trail for security-relevant org events.
  *
@@ -100,7 +98,7 @@ export class AuditLogService {
    * timestamp — entries strictly older than the cursor are returned.
    */
   async findByOrg(filter: AuditLogFilter): Promise<AuditLogPage> {
-    const limit = Math.min(filter.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
+    const limit = Math.min(filter.limit ?? DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT);
 
     const where: Prisma.AuditLogEntryWhereInput = {
       organizationId: filter.orgId,

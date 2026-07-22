@@ -112,6 +112,12 @@ describe('issueResolvers', () => {
         teamId: TEST_TEAM.id,
         userId: TEST_USER.id,
       });
+      // assigneeId must resolve to an org member — see validateReferences.
+      ctx.prisma.organizationMember.findUnique.mockResolvedValue({
+        organizationId: TEST_ORG.id,
+        role: 'member',
+        userId: TEST_USER_2.id,
+      });
       ctx.prisma.notificationSubscription.findUnique.mockResolvedValue(null);
       ctx.prisma.notificationSubscription.create.mockResolvedValue({
         active: true,
@@ -170,6 +176,12 @@ describe('issueResolvers', () => {
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({
         team: { organizationId: TEST_ORG.id },
         teamId: TEST_TEAM.id,
+        userId: TEST_USER.id,
+      });
+      // assigneeId must resolve to an org member — see validateReferences.
+      ctx.prisma.organizationMember.findUnique.mockResolvedValue({
+        organizationId: TEST_ORG.id,
+        role: 'member',
         userId: TEST_USER.id,
       });
       ctx.prisma.notificationSubscription.findUnique.mockResolvedValue(null);
@@ -266,6 +278,12 @@ describe('issueResolvers', () => {
         team: { organizationId: TEST_ORG.id },
         teamId: TEST_TEAM.id,
         userId: TEST_USER.id,
+      });
+      // assigneeId must resolve to an org member — see validateReferences.
+      ctx.prisma.organizationMember.findUnique.mockResolvedValue({
+        organizationId: TEST_ORG.id,
+        role: 'member',
+        userId: TEST_USER_2.id,
       });
       ctx.prisma.notificationSubscription.findUnique.mockResolvedValue(null);
       ctx.prisma.notificationSubscription.create.mockResolvedValue({
@@ -491,6 +509,44 @@ describe('issueResolvers', () => {
         issueResolvers.Query.issue(null, { id: TEST_ISSUE.id }, ctx as never),
       ).rejects.toMatchObject({ extensions: { code: 'NOT_FOUND' } });
     });
+
+    it('throws FORBIDDEN when a guest requests an issue they neither created nor are assigned to', async () => {
+      ctx.prisma.issue.findUnique.mockResolvedValue({
+        ...TEST_ISSUE,
+        assigneeId: TEST_USER_2.id,
+        creatorId: TEST_USER_2.id,
+      });
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        isOwner: false,
+        team: { organizationId: TEST_ORG.id },
+        teamId: TEST_ISSUE.teamId,
+        userId: TEST_USER.id,
+      });
+      ctx.prisma.teamMemberRole.findUnique.mockResolvedValue({ role: 'guest' });
+
+      await expect(
+        issueResolvers.Query.issue(null, { id: TEST_ISSUE.id }, ctx as never),
+      ).rejects.toMatchObject({ extensions: { code: 'FORBIDDEN' } });
+    });
+
+    it('allows a guest to read an issue they created', async () => {
+      ctx.prisma.issue.findUnique.mockResolvedValue({
+        ...TEST_ISSUE,
+        assigneeId: null,
+        creatorId: TEST_USER.id,
+      });
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        isOwner: false,
+        team: { organizationId: TEST_ORG.id },
+        teamId: TEST_ISSUE.teamId,
+        userId: TEST_USER.id,
+      });
+      ctx.prisma.teamMemberRole.findUnique.mockResolvedValue({ role: 'guest' });
+
+      const result = await issueResolvers.Query.issue(null, { id: TEST_ISSUE.id }, ctx as never);
+
+      expect(result.id).toBe(TEST_ISSUE.id);
+    });
   });
 
   // ── Query.issues ──────────────────────────────────────────────────────────
@@ -543,6 +599,59 @@ describe('issueResolvers', () => {
       expect(ctx.prisma.issue.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({ teamId: TEST_TEAM.id }),
+        }),
+      );
+    });
+  });
+
+  // ── Issue field resolvers ────────────────────────────────────────────────
+
+  describe('Issue.parent', () => {
+    it('returns null when the parent belongs to a different org', async () => {
+      ctx.prisma.issue.findUnique.mockResolvedValue({
+        ...TEST_ISSUE,
+        id: 'parent-1',
+        organizationId: 'other-org',
+      });
+
+      const result = await issueResolvers.Issue.parent(
+        { ...TEST_ISSUE, parentId: 'parent-1' } as never,
+        {},
+        ctx as never,
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it('returns the parent when it belongs to the same org', async () => {
+      const parent = { ...TEST_ISSUE, id: 'parent-1' };
+      ctx.prisma.issue.findUnique.mockResolvedValue(parent);
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        isOwner: false,
+        team: { organizationId: TEST_ORG.id },
+        teamId: parent.teamId,
+        userId: TEST_USER.id,
+      });
+
+      const result = await issueResolvers.Issue.parent(
+        { ...TEST_ISSUE, parentId: 'parent-1' } as never,
+        {},
+        ctx as never,
+      );
+
+      expect(result).toEqual(parent);
+    });
+  });
+
+  describe('Issue.children', () => {
+    it('scopes the children lookup to the issue own organizationId', async () => {
+      ctx.prisma.issue.findMany.mockResolvedValue([]);
+
+      await issueResolvers.Issue.children(TEST_ISSUE as never, {}, ctx as never);
+
+      expect(ctx.prisma.issue.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ organizationId: TEST_ISSUE.organizationId }),
         }),
       );
     });

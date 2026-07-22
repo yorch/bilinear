@@ -5,9 +5,11 @@ import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { verifyAccessToken } from '@/server/lib/jwt';
+import { env } from '@/server/lib/env';
 import { prisma } from '@/server/lib/prisma';
 import { getUploadDir } from '@/server/lib/upload-dir';
+import { requireAuthContext } from '@/server/middleware/auth';
+import { apiScopesAllowWrite } from '@/server/services/auth.service';
 import { FileService } from '@/server/services/file.service';
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
@@ -24,7 +26,7 @@ const uploadDir = getUploadDir();
 mkdirSync(uploadDir, { recursive: true });
 
 function getAppUrl(): string {
-  return (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+  return env.APP_URL.replace(/\/$/, '');
 }
 
 /**
@@ -38,22 +40,23 @@ function getAppUrl(): string {
  * Returns: { id, name, url, size, mimeType }
  */
 export async function POST(req: NextRequest) {
-  const token =
-    req.cookies.get('access_token')?.value ??
-    req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ??
-    null;
-
-  if (!token) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Routed through requireAuthContext (not a raw verifyAccessToken call) so
+  // a deactivated user or a suspended/archived org can't keep uploading
+  // files off a still-valid JWT — see sync/bootstrap/route.ts for the same
+  // reasoning. Also picks up API-key (`bil_...`) auth for free.
+  const authResult = await requireAuthContext(req, prisma);
+  if ('response' in authResult) {
+    return authResult.response;
   }
-
-  let userId: string;
-  let orgId: string;
-  try {
-    ({ userId, orgId } = await verifyAccessToken(token));
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const authCtx = authResult.ctx;
+  // Mirror /api/graphql's mutation gate: a request authenticated via API key
+  // (bil_...) rather than a user session carries `apiKeyScopes`, and uploading
+  // a file is a write — a read-only key must not be able to do it. Session/JWT
+  // auth leaves apiKeyScopes null, so ordinary logged-in users are unaffected.
+  if (authCtx.apiKeyScopes != null && !apiScopesAllowWrite(authCtx.apiKeyScopes)) {
+    return NextResponse.json({ error: 'API key lacks the "write" scope' }, { status: 403 });
   }
+  const { userId, orgId } = authCtx;
 
   let formData: FormData;
   try {

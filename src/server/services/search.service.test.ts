@@ -154,5 +154,96 @@ describe('SearchService', () => {
       expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
       expect(result).toEqual([TEST_ISSUE]);
     });
+
+    describe('visibility scoping', () => {
+      const TEAM_A = '00000000-0000-0000-0000-0000000000a1';
+      const TEAM_B = '00000000-0000-0000-0000-0000000000a2';
+      const USER = '00000000-0000-0000-0000-0000000000a3';
+
+      it('returns empty array when the caller has no visible teams', async () => {
+        const prisma = createMockPrisma();
+        const service = new SearchService(prisma as never);
+
+        const result = await service.searchIssues(TEST_ORG.id, 'broken login', 20, false, {
+          guestTeamIds: [],
+          memberTeamIds: [],
+          userId: USER,
+        });
+
+        expect(result).toEqual([]);
+        expect(prisma.$queryRaw).not.toHaveBeenCalled();
+      });
+
+      it('identifier lookup is scoped to the caller member teams', async () => {
+        const prisma = createMockPrisma();
+        prisma.issue.findFirst.mockResolvedValue(TEST_ISSUE);
+        const service = new SearchService(prisma as never);
+
+        await service.searchIssues(TEST_ORG.id, 'ENG-1', 20, false, {
+          guestTeamIds: [],
+          memberTeamIds: [TEAM_A],
+          userId: USER,
+        });
+
+        expect(prisma.issue.findFirst).toHaveBeenCalledWith({
+          where: {
+            AND: [{ teamId: { in: [TEAM_A] } }],
+            archivedAt: null,
+            identifier: 'ENG-1',
+            organizationId: TEST_ORG.id,
+            trashed: false,
+          },
+        });
+      });
+
+      it('identifier lookup applies the guest creator/assignee restriction on guest teams', async () => {
+        const prisma = createMockPrisma();
+        prisma.issue.findFirst.mockResolvedValue(TEST_ISSUE);
+        const service = new SearchService(prisma as never);
+
+        await service.searchIssues(TEST_ORG.id, 'ENG-1', 20, false, {
+          guestTeamIds: [TEAM_A],
+          memberTeamIds: [TEAM_A, TEAM_B],
+          userId: USER,
+        });
+
+        expect(prisma.issue.findFirst).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              AND: [
+                { teamId: { in: [TEAM_A, TEAM_B] } },
+                {
+                  OR: [{ teamId: { notIn: [TEAM_A] } }, { creatorId: USER }, { assigneeId: USER }],
+                },
+              ],
+            }),
+          }),
+        );
+      });
+
+      it('free-text search embeds the team + guest scoping in the raw query', async () => {
+        const prisma = createMockPrisma();
+        prisma.$queryRaw.mockResolvedValue([{ id: TEST_ISSUE.id }]);
+        prisma.issue.findMany.mockResolvedValue([TEST_ISSUE]);
+        const service = new SearchService(prisma as never);
+
+        const result = await service.searchIssues(TEST_ORG.id, 'broken login', 20, false, {
+          guestTeamIds: [TEAM_A],
+          memberTeamIds: [TEAM_A, TEAM_B],
+          userId: USER,
+        });
+
+        expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+        // The raw query is a Prisma.sql tagged template — inspect its
+        // serialized text/values instead of trying to match the object.
+        const rawArg = prisma.$queryRaw.mock.calls[0][0] as { sql: string; values: unknown[] };
+        expect(rawArg.sql).toContain('team_id = ANY(');
+        expect(rawArg.sql).toContain('team_id != ALL(');
+        expect(rawArg.values).toEqual(
+          expect.arrayContaining([[TEAM_A, TEAM_B], [TEAM_A], USER, USER]),
+        );
+        expect(result).toEqual([TEST_ISSUE]);
+      });
+    });
   });
 });

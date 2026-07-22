@@ -3,7 +3,13 @@ import zlib from 'node:zlib';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TEST_ORG, TEST_USER } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
-import { type SamlConfig, type SamlConfigInput, SamlParseError, SamlService } from './saml.service';
+import {
+  resetSamlReplayCacheForTests,
+  type SamlConfig,
+  type SamlConfigInput,
+  SamlParseError,
+  SamlService,
+} from './saml.service';
 
 // ---------------------------------------------------------------------------
 // Signed-XML test helpers
@@ -28,6 +34,7 @@ const { privateKey, certPem } = (() => {
 })();
 
 const IDP_ENTITY_ID = 'https://idp.example.com/metadata';
+const SP_ENTITY_ID = 'https://sp.example.com/api/auth/saml/metadata?org=acme';
 
 function normalize(xml: string): string {
   return xml.replace(/>\s+</g, '><').trim();
@@ -35,6 +42,8 @@ function normalize(xml: string): string {
 
 interface SignedResponseOptions {
   assertionId?: string;
+  /** Pass null to omit AudienceRestriction/Audience entirely. */
+  audience?: string | null;
   digestAlg?: 'sha1' | 'sha256';
   email?: string | null;
   emailAttribute?: string;
@@ -42,8 +51,13 @@ interface SignedResponseOptions {
   name?: string | null;
   nameAttribute?: string;
   nameId?: string;
+  /** Pass null to omit the Conditions element entirely (fails closed). */
+  notBefore?: string | null;
+  notOnOrAfter?: string | null;
   sigAlg?: 'rsa-sha1' | 'rsa-sha256';
   signKey?: crypto.KeyObject;
+  /** Pass null to omit SubjectConfirmationData entirely. */
+  subjectConfirmationNotOnOrAfter?: string | null;
   tamperAssertionAfterSign?: boolean;
 }
 
@@ -70,9 +84,44 @@ function buildSignedResponse(opts: SignedResponseOptions = {}): string {
     );
   }
 
+  // Default to a comfortably valid 10-minute window around "now" so the
+  // happy-path tests (which don't mock time) pass without extra setup.
+  const nowMs = Date.now();
+  const notBefore =
+    opts.notBefore === null ? null : (opts.notBefore ?? new Date(nowMs - 5 * 60_000).toISOString());
+  const notOnOrAfter =
+    opts.notOnOrAfter === null
+      ? null
+      : (opts.notOnOrAfter ?? new Date(nowMs + 5 * 60_000).toISOString());
+
+  const audienceXml =
+    opts.audience === null
+      ? ''
+      : `<saml:AudienceRestriction><saml:Audience>${opts.audience ?? SP_ENTITY_ID}</saml:Audience></saml:AudienceRestriction>`;
+
+  // Build NotBefore/NotOnOrAfter as genuinely-optional attributes (omitted
+  // entirely, not just present-empty) so a test can exercise a conformant
+  // IdP that leaves one of them out per SAML 2.0 §2.5.1.
+  const notBeforeAttr = notBefore === null ? '' : ` NotBefore="${notBefore}"`;
+  const notOnOrAfterAttr = notOnOrAfter === null ? '' : ` NotOnOrAfter="${notOnOrAfter}"`;
+  const conditionsXml =
+    notBefore === null && notOnOrAfter === null
+      ? ''
+      : `<saml:Conditions${notBeforeAttr}${notOnOrAfterAttr}>${audienceXml}</saml:Conditions>`;
+
+  const subjectConfirmationXml =
+    opts.subjectConfirmationNotOnOrAfter === null
+      ? ''
+      : `<saml:SubjectConfirmation><saml:SubjectConfirmationData NotOnOrAfter="${
+          opts.subjectConfirmationNotOnOrAfter ??
+          notOnOrAfter ??
+          new Date(nowMs + 5 * 60_000).toISOString()
+        }"/></saml:SubjectConfirmation>`;
+
   const assertion =
     `<saml:Assertion ID="${assertionId}">` +
-    `<saml:Subject><saml:NameID>${nameId}</saml:NameID></saml:Subject>` +
+    `<saml:Subject><saml:NameID>${nameId}</saml:NameID>${subjectConfirmationXml}</saml:Subject>` +
+    conditionsXml +
     `<saml:AttributeStatement>${attrLines.join('')}</saml:AttributeStatement>` +
     `</saml:Assertion>`;
 
@@ -132,6 +181,7 @@ function makeConfig(overrides: Partial<SamlConfig> = {}): SamlConfig {
     idpSsoUrl: 'https://idp.example.com/sso',
     jitProvisioning: true,
     nameAttribute: 'name',
+    spEntityId: SP_ENTITY_ID,
     ...overrides,
   };
 }
@@ -143,6 +193,10 @@ describe('SamlService', () => {
   beforeEach(() => {
     prisma = createMockPrisma();
     service = new SamlService(prisma as never);
+    // The replay guard is a module-level cache keyed by assertion ID; many
+    // tests reuse the same default assertion ID, so it must be reset between
+    // tests to avoid cross-test contamination.
+    resetSamlReplayCacheForTests();
   });
 
   // -------------------------------------------------------------------------
@@ -480,6 +534,181 @@ describe('SamlService', () => {
       await expect(service.parseAndValidateResponse(makeConfig(), samlResponse)).rejects.toThrow(
         /missing email attribute/,
       );
+    });
+
+    // -----------------------------------------------------------------------
+    // Hardening: Conditions / audience / replay / signature fail-closed
+    // -----------------------------------------------------------------------
+
+    it('rejects an assertion with no Conditions element (no expiry to enforce)', async () => {
+      const samlResponse = buildSignedResponse({ notBefore: null, notOnOrAfter: null });
+      await expect(service.parseAndValidateResponse(makeConfig(), samlResponse)).rejects.toThrow(
+        /Conditions/,
+      );
+    });
+
+    it('rejects an assertion that is not yet valid (NotBefore in the future)', async () => {
+      const future = new Date(Date.now() + 10 * 60_000).toISOString();
+      const samlResponse = buildSignedResponse({ notBefore: future });
+      await expect(service.parseAndValidateResponse(makeConfig(), samlResponse)).rejects.toThrow(
+        /not yet valid/,
+      );
+    });
+
+    it('rejects an expired assertion (NotOnOrAfter in the past)', async () => {
+      const past = new Date(Date.now() - 10 * 60_000).toISOString();
+      const samlResponse = buildSignedResponse({
+        notBefore: new Date(Date.now() - 20 * 60_000).toISOString(),
+        notOnOrAfter: past,
+      });
+      await expect(service.parseAndValidateResponse(makeConfig(), samlResponse)).rejects.toThrow(
+        /expired/,
+      );
+    });
+
+    it('rejects an assertion whose SubjectConfirmationData has expired', async () => {
+      const past = new Date(Date.now() - 10 * 60_000).toISOString();
+      const samlResponse = buildSignedResponse({ subjectConfirmationNotOnOrAfter: past });
+      await expect(service.parseAndValidateResponse(makeConfig(), samlResponse)).rejects.toThrow(
+        /SubjectConfirmationData has expired/,
+      );
+    });
+
+    it('rejects an assertion whose Audience does not match the configured SP entity id', async () => {
+      const samlResponse = buildSignedResponse({ audience: 'https://evil.example.com/sp' });
+      await expect(service.parseAndValidateResponse(makeConfig(), samlResponse)).rejects.toThrow(
+        /audience restriction mismatch/,
+      );
+    });
+
+    it('accepts an AudienceRestriction match and does not fail closed when no spEntityId is configured', async () => {
+      // No spEntityId configured: audience validation is skipped defensively
+      // rather than failing closed (documented limitation).
+      const samlResponse = buildSignedResponse({ audience: 'https://anything.example.com/sp' });
+      const configWithoutAudience = makeConfig({ spEntityId: undefined });
+      const claims = await service.parseAndValidateResponse(configWithoutAudience, samlResponse);
+      expect(claims.email).toBe('user@example.com');
+    });
+
+    it('rejects a replayed assertion (same ID used twice)', async () => {
+      const samlResponse = buildSignedResponse({ assertionId: '_replay-once' });
+      const claims = await service.parseAndValidateResponse(makeConfig(), samlResponse);
+      expect(claims.email).toBe('user@example.com');
+
+      await expect(service.parseAndValidateResponse(makeConfig(), samlResponse)).rejects.toThrow(
+        /replay/,
+      );
+    });
+
+    it('rejects a replay in the clock-skew tail just after NotOnOrAfter (prune-window bug)', async () => {
+      // validateConditions() still ACCEPTS an assertion for an extra
+      // CLOCK_SKEW_MS (60s) past Conditions/@NotOnOrAfter. The replay cache
+      // must key its eviction on that same acceptance horizon — otherwise
+      // the cached assertion id gets pruned right before this replay check
+      // runs, and the replay slips through.
+      vi.useFakeTimers();
+      try {
+        const start = new Date('2026-06-24T12:00:00.000Z');
+        vi.setSystemTime(start);
+
+        const notOnOrAfter = new Date(start.getTime() + 60_000).toISOString();
+        const samlResponse = buildSignedResponse({
+          assertionId: '_replay-tail',
+          notBefore: new Date(start.getTime() - 5 * 60_000).toISOString(),
+          notOnOrAfter,
+        });
+
+        const claims = await service.parseAndValidateResponse(makeConfig(), samlResponse);
+        expect(claims.email).toBe('user@example.com');
+
+        // Advance 30s past NotOnOrAfter — still inside the 60s clock-skew
+        // tolerance, so validateConditions would still accept a *fresh*
+        // assertion at this instant. The replay check must still fire.
+        vi.setSystemTime(new Date(notOnOrAfter).getTime() + 30_000);
+
+        await expect(service.parseAndValidateResponse(makeConfig(), samlResponse)).rejects.toThrow(
+          /replay/,
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('accepts an assertion with NotOnOrAfter but no NotBefore (NotBefore is optional per SAML core)', async () => {
+      const samlResponse = buildSignedResponse({
+        assertionId: '_no-notbefore',
+        notBefore: null,
+        notOnOrAfter: new Date(Date.now() + 5 * 60_000).toISOString(),
+      });
+
+      const claims = await service.parseAndValidateResponse(makeConfig(), samlResponse);
+      expect(claims.email).toBe('user@example.com');
+    });
+
+    it('throws when the SignedInfo Reference has no URI (fails closed instead of trusting the whole document)', async () => {
+      const assertion =
+        '<saml:Assertion ID="_a"><saml:Subject><saml:NameID>x@example.com</saml:NameID></saml:Subject></saml:Assertion>';
+      const signedInfo =
+        '<ds:SignedInfo>' +
+        '<ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/>' +
+        '<ds:Reference>' +
+        '<ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/>' +
+        '<ds:DigestValue>AAAA</ds:DigestValue>' +
+        '</ds:Reference>' +
+        '</ds:SignedInfo>';
+      const signer = crypto.createSign('RSA-SHA256');
+      signer.update(normalize(signedInfo), 'utf8');
+      const signatureValue = signer.sign(privateKey, 'base64');
+      const xml =
+        `<samlp:Response><saml:Issuer>${IDP_ENTITY_ID}</saml:Issuer>` +
+        `<ds:Signature>${signedInfo}<ds:SignatureValue>${signatureValue}</ds:SignatureValue></ds:Signature>` +
+        assertion +
+        `</samlp:Response>`;
+      const encoded = Buffer.from(xml, 'utf8').toString('base64');
+
+      await expect(service.parseAndValidateResponse(makeConfig(), encoded)).rejects.toThrow(
+        /no Reference URI/,
+      );
+    });
+
+    it('throws when the Reference has no DigestMethod/DigestValue (fails closed instead of skipping)', async () => {
+      const assertionId = '_a';
+      const assertion = `<saml:Assertion ID="${assertionId}"><saml:Subject><saml:NameID>x@example.com</saml:NameID></saml:Subject></saml:Assertion>`;
+      const signedInfo =
+        '<ds:SignedInfo>' +
+        '<ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/>' +
+        `<ds:Reference URI="#${assertionId}"></ds:Reference>` +
+        '</ds:SignedInfo>';
+      const signer = crypto.createSign('RSA-SHA256');
+      signer.update(normalize(signedInfo), 'utf8');
+      const signatureValue = signer.sign(privateKey, 'base64');
+      const xml =
+        `<samlp:Response><saml:Issuer>${IDP_ENTITY_ID}</saml:Issuer>` +
+        `<ds:Signature>${signedInfo}<ds:SignatureValue>${signatureValue}</ds:SignatureValue></ds:Signature>` +
+        assertion +
+        `</samlp:Response>`;
+      const encoded = Buffer.from(xml, 'utf8').toString('base64');
+
+      await expect(service.parseAndValidateResponse(makeConfig(), encoded)).rejects.toThrow(
+        /missing a DigestMethod\/DigestValue/,
+      );
+    });
+
+    it('still accepts a fully valid assertion after all hardening checks', async () => {
+      const samlResponse = buildSignedResponse({
+        assertionId: '_valid-assertion',
+        email: 'Valid.User@Example.com',
+        name: 'Valid User',
+        nameId: 'valid-nameid',
+      });
+
+      const claims = await service.parseAndValidateResponse(makeConfig(), samlResponse);
+
+      expect(claims).toEqual({
+        email: 'valid.user@example.com',
+        name: 'Valid User',
+        nameId: 'valid-nameid',
+      });
     });
   });
 

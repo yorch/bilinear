@@ -1,3 +1,4 @@
+import { env } from '../lib/env';
 import { logger } from '../lib/logger';
 import { redis } from '../lib/redis';
 
@@ -7,7 +8,11 @@ import { redis } from '../lib/redis';
  */
 const WINDOW_SECONDS = 60 * 60; // 1 hour
 const REQUEST_LIMIT = 5_000;
-const COMPLEXITY_LIMIT = 250_000;
+// Cumulative complexity budget per user across the whole 1-hour window —
+// distinct from graphql/route.ts's MAX_QUERY_COMPLEXITY, which caps a single
+// request's complexity. Named explicitly so the two budgets (one per-request,
+// one per-hour) can't be confused with each other.
+const HOURLY_COMPLEXITY_BUDGET = 250_000;
 const MAX_SINGLE_COMPLEXITY = 10_000;
 
 /**
@@ -77,12 +82,12 @@ export async function checkRateLimit(
 
   const resetAt = Math.floor(Date.now() / 1000 / WINDOW_SECONDS + 1) * WINDOW_SECONDS;
   const requestsRemaining = Math.max(0, REQUEST_LIMIT - reqCount);
-  const complexityRemaining = Math.max(0, COMPLEXITY_LIMIT - cmpCount);
-  const exceeded = reqCount > REQUEST_LIMIT || cmpCount > COMPLEXITY_LIMIT;
+  const complexityRemaining = Math.max(0, HOURLY_COMPLEXITY_BUDGET - cmpCount);
+  const exceeded = reqCount > REQUEST_LIMIT || cmpCount > HOURLY_COMPLEXITY_BUDGET;
 
   const headers: Record<string, string> = {
     'X-Complexity': String(complexity),
-    'X-RateLimit-Complexity-Limit': String(COMPLEXITY_LIMIT),
+    'X-RateLimit-Complexity-Limit': String(HOURLY_COMPLEXITY_BUDGET),
     'X-RateLimit-Complexity-Remaining': String(complexityRemaining),
     'X-RateLimit-Requests-Limit': String(REQUEST_LIMIT),
     'X-RateLimit-Requests-Remaining': String(requestsRemaining),
@@ -191,7 +196,7 @@ export async function checkAuthMutationLimit(
   kind: 'login' | 'verify',
   email: string,
   clientIp: string | null,
-  failClosed = process.env.AUTH_RATE_LIMIT_FAIL_CLOSED === '1',
+  failClosed = env.AUTH_RATE_LIMIT_FAIL_CLOSED,
 ): Promise<{ exceeded: boolean }> {
   // E2E tests reuse a single fixture email and exceed the per-email
   // login cap (5/hour) within the first batch. The TEST_AUTH_CODE

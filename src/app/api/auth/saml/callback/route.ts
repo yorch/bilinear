@@ -1,11 +1,21 @@
 import crypto from 'node:crypto';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { ACCESS_TOKEN_EXPIRY_SECONDS, signAccessToken, signRefreshToken } from '@/server/lib/jwt';
+import { env } from '@/server/lib/env';
+import {
+  ACCESS_TOKEN_EXPIRY_SECONDS,
+  REFRESH_TOKEN_DAYS,
+  signAccessToken,
+  signRefreshToken,
+} from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
-import { getClientIp, setSessionCookie } from '@/server/lib/request-security';
+import {
+  getClientIp,
+  REFRESH_TOKEN_MAX_AGE,
+  setSessionCookie,
+} from '@/server/lib/request-security';
 import { AuditLogService } from '@/server/services/audit-log.service';
 import { SamlService } from '@/server/services/saml.service';
 
@@ -14,8 +24,6 @@ const samlService = new SamlService(prisma);
 const auditLogService = new AuditLogService(prisma);
 
 const ACCESS_TOKEN_MAX_AGE = ACCESS_TOKEN_EXPIRY_SECONDS; // 24h
-const REFRESH_TOKEN_MAX_AGE = 60 * 60 * 24 * 30; // 30d
-const REFRESH_TOKEN_DAYS = 30;
 
 /**
  * POST /api/auth/saml/callback
@@ -79,6 +87,12 @@ async function handlePost(req: NextRequest) {
     return NextResponse.json({ error: 'SAML SSO is not enabled' }, { status: 400 });
   }
 
+  // Computed the same way as the initiate/metadata routes so the audience
+  // check in parseAndValidateResponse can confirm this assertion was minted
+  // for this SP, not replayed from a different one.
+  const appUrl = env.APP_URL;
+  const spEntityId = `${appUrl}/api/auth/saml/metadata?org=${orgKey}`;
+
   const samlConfig = {
     emailAttribute: config.emailAttribute,
     idpCert: config.idpCert,
@@ -86,6 +100,7 @@ async function handlePost(req: NextRequest) {
     idpSsoUrl: config.idpSsoUrl,
     jitProvisioning: config.jitProvisioning,
     nameAttribute: config.nameAttribute,
+    spEntityId,
   };
 
   let claims: Awaited<ReturnType<SamlService['parseAndValidateResponse']>>;
@@ -152,7 +167,6 @@ async function handlePost(req: NextRequest) {
   // Sanitize redirect: must start with '/' but not '//' (protocol-relative URLs).
   const safeRedirect =
     redirectPath.startsWith('/') && !redirectPath.startsWith('//') ? redirectPath : `/${orgKey}`;
-  const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
   const destination = `${appUrl}${safeRedirect}`;
 
   const res = NextResponse.redirect(destination, 302);

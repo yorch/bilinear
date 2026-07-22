@@ -1,7 +1,14 @@
 import { GraphQLError } from 'graphql';
 import type { Team, TeamMembership } from '../../../generated/prisma';
 import { childLogger } from '../../lib/logger';
-import { requireAuth, requireOrgRole, requireTeamMember } from '../../middleware/auth';
+import {
+  isTeamGuest,
+  requireAuth,
+  requireOrgRole,
+  requireTeamMember,
+  requireTeamMemberNotGuest,
+  requireTeamOwner,
+} from '../../middleware/auth';
 import type {
   TeamCreateInput,
   TeamDeleteInput,
@@ -155,13 +162,21 @@ export const teamResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, id, ctx.userId, ctx.orgId);
 
       const existing = await ctx.services.team.findById(id);
       if (!existing || existing.organizationId !== ctx.orgId) {
         throw new GraphQLError('Team not found', {
           extensions: { code: 'NOT_FOUND' },
         });
+      }
+
+      // A plain requireTeamMember let ANY team member — including guests —
+      // rename the team or flip triage/cycle settings. Require org
+      // admin/owner (same bar as teamCreate/teamDelete), or a non-guest
+      // team owner.
+      if (!(await isOrgAdmin(ctx.prisma, ctx.orgId, ctx.userId))) {
+        await requireTeamOwner(ctx.prisma, id, ctx.userId, ctx.orgId);
+        await requireTeamMemberNotGuest(ctx.prisma, id, ctx.userId, ctx.orgId);
       }
 
       const team = await ctx.services.team.update(id, input);
@@ -215,7 +230,12 @@ export const teamResolvers = {
     issues: async (team: Team, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
       await requireTeamMember(ctx.prisma, team.id, ctx.userId, ctx.orgId);
-      return ctx.services.issue.findByTeamId(team.id);
+      // Guest visibility + snooze-hide: findByTeamId used to return every
+      // non-archived, non-trashed issue on the team with no guest scoping
+      // or snooze filter at all — a backdoor around the guarded top-level
+      // `issues` query. Mirror Cycle.issues/Project.issues/Issue.children.
+      const guest = await isTeamGuest(ctx.prisma, team.id, ctx.userId, ctx.orgId);
+      return ctx.services.issue.findByTeamId(team.id, false, guest ? ctx.userId : undefined);
     },
 
     members: async (team: Team, _args: unknown, ctx: GraphQLContext) =>

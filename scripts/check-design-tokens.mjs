@@ -56,6 +56,30 @@ function main() {
   const current = scan();
 
   if (update) {
+    const baseline = existsSync(BASELINE_PATH)
+      ? JSON.parse(readFileSync(BASELINE_PATH, 'utf8'))
+      : {};
+
+    // Check for any file whose count would increase
+    const increases = [];
+    for (const [file, count] of Object.entries(current)) {
+      const allowed = baseline[file] ?? 0;
+      if (count > allowed) {
+        increases.push({ allowed, count, file });
+      }
+    }
+
+    if (increases.length > 0) {
+      console.error('Cannot update baseline: raw color usage would increase in these files:');
+      for (const { file, count, allowed } of increases) {
+        console.error(`  ${file}: ${count} violations (baseline allows ${allowed})`);
+      }
+      console.error(
+        '\nBaseline can only shrink or stay the same. Clean up the violations above first.',
+      );
+      process.exit(1);
+    }
+
     writeFileSync(BASELINE_PATH, `${JSON.stringify(current, null, 2)}\n`);
     const total = Object.values(current).reduce((a, b) => a + b, 0);
     console.log(`Baseline updated: ${Object.keys(current).length} files, ${total} violations.`);

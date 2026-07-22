@@ -17,6 +17,17 @@ export interface SamlConfig {
   idpSsoUrl: string;
   jitProvisioning: boolean;
   nameAttribute: string;
+  /**
+   * Expected SP entity id / audience for this deployment's ACS endpoint.
+   * Used to validate an assertion's `<AudienceRestriction><Audience>` so an
+   * assertion minted for a *different* SP can't be replayed against this one.
+   * Optional and not persisted in `SamlConfiguration` — callers (the SAML
+   * callback route) compute it per-request the same way the metadata/initiate
+   * routes do (`${appUrl}/api/auth/saml/metadata?org=${orgKey}`) and pass it
+   * through. If omitted, audience validation is skipped defensively rather
+   * than failing closed — see `validateAudience`.
+   */
+  spEntityId?: string;
 }
 
 export interface SamlUserClaims {
@@ -123,7 +134,9 @@ function validateReferenceDigest(signedInfoXml: string, content: string): void {
     /<ds:DigestValue[^>]*>\s*([\s\S]*?)\s*<\/ds:DigestValue>/i,
   );
   if (!digestMethodMatch || !digestValueMatch) {
-    return; // No digest present in this Reference — skip
+    // Fail closed: a Reference with no digest can't be checked for content
+    // substitution, so it must be rejected rather than silently trusted.
+    throw new SamlParseError('SAML signature reference is missing a DigestMethod/DigestValue');
   }
 
   const digestAlgUri = digestMethodMatch[1];
@@ -134,6 +147,7 @@ function validateReferenceDigest(signedInfoXml: string, content: string): void {
     hashAlg = 'sha256';
   } else if (digestAlgUri.includes('sha1')) {
     hashAlg = 'sha1';
+    log.warn('SAML reference digest uses deprecated SHA-1; migrate the IdP to SHA-256');
   } else {
     throw new SamlParseError(`Unsupported SAML digest algorithm: ${digestAlgUri}`);
   }
@@ -152,9 +166,15 @@ function validateReferenceDigest(signedInfoXml: string, content: string): void {
  * to the verified content, preventing XML signature-wrapping attacks.
  *
  * Also validates the <ds:DigestValue> of the referenced element to detect
- * content substitution.
+ * content substitution, and requires the signed content to contain exactly
+ * one Assertion (defense against signature-wrapping attacks where a decoy
+ * Assertion is injected alongside the legitimately-signed one).
  *
- * Limitation: uses whitespace-only normalisation instead of full Exclusive C14N.
+ * Limitation: uses whitespace-only normalisation instead of full Exclusive
+ * C14N. This whole function remains a hand-rolled XML-DSig verifier; the
+ * recommended long-term fix is to replace it with a vetted library (e.g.
+ * `xml-crypto` or `@node-saml/node-saml`) rather than continuing to harden
+ * this by hand.
  */
 function verifyXmlSignature(xml: string, certPem: string): string {
   const sigInfoMatch = xml.match(/<ds:SignedInfo[\s\S]*?<\/ds:SignedInfo>/i);
@@ -178,6 +198,7 @@ function verifyXmlSignature(xml: string, certPem: string): string {
     nodeAlg = 'RSA-SHA256';
   } else if (algorithm.includes('rsa-sha1')) {
     nodeAlg = 'RSA-SHA1';
+    log.warn('SAML signature uses deprecated SHA-1 (rsa-sha1); migrate the IdP to rsa-sha256');
   } else {
     throw new SamlParseError(`Unsupported SAML signature algorithm: ${algorithm}`);
   }
@@ -199,9 +220,13 @@ function verifyXmlSignature(xml: string, certPem: string): string {
   }
 
   // Locate the signed element via the Reference URI to prevent wrapping attacks.
+  // Fail closed: a signature with no identifiable Reference target must never
+  // be treated as covering the whole (otherwise-unsigned) document.
   const refMatch = signedInfoXml.match(/<ds:Reference\s+URI="#([^"]+)"/i);
   if (!refMatch?.[1]) {
-    return xml;
+    throw new SamlParseError(
+      'SAML signature has no Reference URI — refusing to trust the entire document',
+    );
   }
   const signedElement = extractElementById(xml, refMatch[1]);
   if (!signedElement) {
@@ -210,12 +235,202 @@ function verifyXmlSignature(xml: string, certPem: string): string {
 
   validateReferenceDigest(signedInfoXml, signedElement);
 
+  // Guard against signature-wrapping: the signed content must cover exactly
+  // one Assertion. If claim extraction could see a second, unsigned
+  // Assertion alongside the signed one, an attacker could rely on the
+  // legitimate signature while injecting forged claims elsewhere.
+  const assertionMatches = signedElement.match(/<(?:saml2?:)?Assertion(?=[\s>])/gi) ?? [];
+  if (assertionMatches.length !== 1) {
+    throw new SamlParseError(
+      'SAML signed content must contain exactly one Assertion (possible signature-wrapping attempt)',
+    );
+  }
+
   return signedElement;
 }
 
 /** Generate a random ID suitable for SAML request identifiers. */
 function generateSamlId(): string {
   return `_${crypto.randomUUID().replace(/-/g, '')}`;
+}
+
+/** Extract the ID attribute of the (single, verified) Assertion element. */
+function extractAssertionId(xml: string): string | null {
+  const m = xml.match(/<(?:saml2?:)?Assertion\b[^>]*\bID="([^"]+)"/i);
+  return m?.[1] ?? null;
+}
+
+// Tolerate small clock drift between the IdP and this server when checking
+// Conditions/SubjectConfirmationData time bounds.
+const CLOCK_SKEW_MS = 60_000;
+
+/**
+ * Validate <Conditions NotBefore/NotOnOrAfter> on the signed assertion.
+ *
+ * A previous version of this service never checked Conditions at all, which
+ * meant a captured SAMLResponse had no expiry and could be replayed
+ * indefinitely. Conditions is required here (fail closed) rather than
+ * treated as optional — an assertion with no time bound at all provides no
+ * real defense against replay even before the one-time-use check below.
+ */
+function validateConditions(signedContent: string, now: Date): { notOnOrAfterMs: number } {
+  const conditionsMatch = signedContent.match(/<(?:saml2?:)?Conditions\b([^>]*)>/i);
+  if (!conditionsMatch) {
+    throw new SamlParseError('SAML assertion is missing a Conditions element');
+  }
+
+  const attrs = conditionsMatch[1] ?? '';
+  const notBefore = attrs.match(/\bNotBefore="([^"]+)"/i)?.[1];
+  const notOnOrAfter = attrs.match(/\bNotOnOrAfter="([^"]+)"/i)?.[1];
+  // NotOnOrAfter is required here (fail closed): without it there is no
+  // expiry bound and nothing to key the replay-prune cache on. NotBefore,
+  // however, is individually optional per SAML 2.0 §2.5.1 — a conformant IdP
+  // may omit it, and rejecting that assertion would be a false-positive SSO
+  // failure, not a real security check (omitting NotBefore only means the
+  // assertion has no "not yet valid" bound, which is a strictly narrower
+  // relaxation than omitting NotOnOrAfter's expiry bound).
+  if (!notOnOrAfter) {
+    throw new SamlParseError('SAML assertion Conditions is missing NotOnOrAfter');
+  }
+
+  let notBeforeMs: number | undefined;
+  if (notBefore) {
+    notBeforeMs = Date.parse(notBefore);
+    if (Number.isNaN(notBeforeMs)) {
+      throw new SamlParseError('SAML assertion Conditions has an unparseable NotBefore timestamp');
+    }
+  }
+
+  const notOnOrAfterMs = Date.parse(notOnOrAfter);
+  if (Number.isNaN(notOnOrAfterMs)) {
+    throw new SamlParseError('SAML assertion Conditions has an unparseable NotOnOrAfter timestamp');
+  }
+
+  const nowMs = now.getTime();
+  if (notBeforeMs !== undefined && nowMs < notBeforeMs - CLOCK_SKEW_MS) {
+    throw new SamlParseError('SAML assertion is not yet valid (Conditions NotBefore)');
+  }
+  if (nowMs >= notOnOrAfterMs + CLOCK_SKEW_MS) {
+    throw new SamlParseError('SAML assertion has expired (Conditions NotOnOrAfter)');
+  }
+
+  return { notOnOrAfterMs };
+}
+
+/**
+ * Validate <AudienceRestriction><Audience> against the configured SP entity
+ * id, when both are present. Guards against an assertion legitimately signed
+ * by the IdP but minted for a *different* SP being replayed against this one.
+ */
+function validateAudience(signedContent: string, expectedAudience: string | undefined): void {
+  const audiences = [
+    ...signedContent.matchAll(/<(?:saml2?:)?Audience>\s*([^<]+?)\s*<\/(?:saml2?:)?Audience>/gi),
+  ].map(m => m[1]);
+
+  if (audiences.length === 0) {
+    // SAML core does not mandate AudienceRestriction — nothing to validate.
+    return;
+  }
+
+  if (!expectedAudience) {
+    // Documented limitation: SamlConfig.spEntityId is optional and not every
+    // caller supplies it. Tolerate absence of configuration here rather than
+    // failing closed, since we can't invent an expected audience — but this
+    // means audience scoping is not enforced unless callers pass it through.
+    log.warn(
+      'SAML assertion has an AudienceRestriction but no expected SP audience is configured to validate it against',
+    );
+    return;
+  }
+
+  if (!audiences.includes(expectedAudience)) {
+    throw new SamlParseError(`SAML audience restriction mismatch: expected "${expectedAudience}"`);
+  }
+}
+
+/**
+ * Reject an expired <SubjectConfirmationData NotOnOrAfter>, when present.
+ * Optional per SAML core, so absence is not itself an error.
+ */
+function validateSubjectConfirmation(signedContent: string, now: Date): void {
+  const match = signedContent.match(/<(?:saml2?:)?SubjectConfirmationData\b([^>]*)>/i);
+  if (!match) {
+    return;
+  }
+
+  const notOnOrAfter = match[1]?.match(/\bNotOnOrAfter="([^"]+)"/i)?.[1];
+  if (!notOnOrAfter) {
+    return;
+  }
+
+  const notOnOrAfterMs = Date.parse(notOnOrAfter);
+  if (Number.isNaN(notOnOrAfterMs)) {
+    throw new SamlParseError(
+      'SAML SubjectConfirmationData has an unparseable NotOnOrAfter timestamp',
+    );
+  }
+
+  if (now.getTime() >= notOnOrAfterMs + CLOCK_SKEW_MS) {
+    throw new SamlParseError('SAML SubjectConfirmationData has expired (NotOnOrAfter)');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Replay guard (one-time-use enforcement)
+//
+// Best-effort, in-process cache of consumed assertion IDs. This is per-server-
+// instance and in-memory only:
+//   - it does NOT prevent replay across multiple app instances/processes in a
+//     horizontally-scaled deployment (an attacker could replay a captured
+//     SAMLResponse against a different instance than the one that already
+//     consumed it);
+//   - it resets on process restart/deploy.
+//
+// TODO(security): back this with a durable, shared store (e.g. Redis, which
+// is already used elsewhere in this app for pub/sub) keyed by assertion ID
+// with a TTL derived from Conditions/@NotOnOrAfter before relying on this in
+// a multi-instance production deployment.
+// ---------------------------------------------------------------------------
+
+const MAX_REPLAY_CACHE_SIZE = 10_000;
+// assertionId -> acceptance-horizon expiry (epoch ms). This is NOT the raw
+// Conditions/@NotOnOrAfter instant — validateConditions() still ACCEPTS an
+// assertion for an extra CLOCK_SKEW_MS past NotOnOrAfter, so pruning a cache
+// entry at the bare NotOnOrAfter instant would evict it right before a
+// replay attempt inside that skew tail could still be accepted, letting the
+// replay through. The stored expiry must be the actual last instant at which
+// the assertion could still pass validateConditions.
+const seenAssertionIds = new Map<string, number>();
+
+function recordAssertionUseOrThrow(assertionId: string, notOnOrAfterMs: number): void {
+  const now = Date.now();
+  const acceptanceHorizonMs = notOnOrAfterMs + CLOCK_SKEW_MS;
+
+  for (const [id, expiry] of seenAssertionIds) {
+    if (expiry <= now) {
+      seenAssertionIds.delete(id);
+    }
+  }
+
+  if (seenAssertionIds.has(assertionId)) {
+    throw new SamlParseError('SAML assertion has already been used (replay detected)');
+  }
+
+  if (seenAssertionIds.size >= MAX_REPLAY_CACHE_SIZE) {
+    // Defensive bound so a flood of distinct assertion IDs can't grow this
+    // map unboundedly; drop the oldest (insertion-ordered) entry.
+    const oldestId = seenAssertionIds.keys().next().value;
+    if (oldestId !== undefined) {
+      seenAssertionIds.delete(oldestId);
+    }
+  }
+
+  seenAssertionIds.set(assertionId, acceptanceHorizonMs);
+}
+
+/** Test-only: clear the in-memory replay cache between test cases. */
+export function resetSamlReplayCacheForTests(): void {
+  seenAssertionIds.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -380,8 +595,26 @@ export class SamlService {
       );
     }
 
-    // Verify XML signature and get the signed fragment to restrict all claim extraction.
+    // Verify XML signature and get the signed fragment to restrict all claim
+    // extraction AND all condition/audience/replay validation to content that
+    // is actually covered by the signature (prevents signature-wrapping
+    // attacks from smuggling unsigned Conditions/Audience/claims in).
     const signedContent = verifyXmlSignature(xml, config.idpCert);
+
+    // Assertion condition/replay validation. A previous version of this
+    // service validated only Issuer + XML signature, which meant a captured
+    // SAMLResponse could be replayed indefinitely and an assertion minted for
+    // a different SP could be accepted here.
+    const now = new Date();
+    const { notOnOrAfterMs } = validateConditions(signedContent, now);
+    validateAudience(signedContent, config.spEntityId);
+    validateSubjectConfirmation(signedContent, now);
+
+    const assertionId = extractAssertionId(signedContent);
+    if (!assertionId) {
+      throw new SamlParseError('SAML assertion is missing an ID');
+    }
+    recordAssertionUseOrThrow(assertionId, notOnOrAfterMs);
 
     const nameId = extractNameId(signedContent);
     if (!nameId) {

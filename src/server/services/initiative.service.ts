@@ -4,6 +4,28 @@ import type {
   InitiativeUpdate,
   PrismaClient,
 } from '../../generated/prisma';
+import {
+  applyStatusTransitionTimestamps,
+  type StatusTimestampTransition,
+} from '../lib/status-timestamps';
+import { ProjectService } from './project.service';
+
+/**
+ * Deps the progress rollup needs to compute each linked project's progress
+ * LIVE instead of reading the `Project.progress` column — nothing in the
+ * codebase writes that column (see ProjectService.getProgress, the actual
+ * source of truth), so every rollup that read it was silently averaging in
+ * zeros. Optional + defaulted (not required) because `InitiativeService` is
+ * constructed directly (`new InitiativeService(prisma)`, no DI container)
+ * from `src/server/graphql/context.ts`. When the caller doesn't inject
+ * deps, a real `ProjectService` bound to the same `prisma` client is built
+ * here so production is correct without touching that call site. Unit
+ * tests inject a fake `{ getProgress }` instead, keeping the progress math
+ * isolated from ProjectService's own issue-counting implementation.
+ */
+export interface InitiativeServiceDeps {
+  project: Pick<ProjectService, 'getProgress'>;
+}
 
 export interface InitiativeCreateInput {
   color?: string;
@@ -59,16 +81,12 @@ const VALID_STATUSES = new Set<InitiativeStatus>(['planned', 'active', 'complete
  * Only the timestamps are listed here; the caller still sets `status`.
  *
  * `startedAt: now` for `active` is set by the caller (Date is created
- * once per update call); this table holds the constants only.
+ * once per update call); this table holds the constants only. Applied via
+ * the shared `applyStatusTransitionTimestamps` helper (see
+ * `src/server/lib/status-timestamps.ts`), also used by
+ * `ProjectService.update` with its own status-keyed table.
  */
-const STATUS_TRANSITION_CLEARS: Record<
-  InitiativeStatus,
-  {
-    startedAt: 'now' | 'clear' | 'leave';
-    completedAt: 'clear' | 'now' | 'leave';
-    canceledAt: 'clear' | 'now' | 'leave';
-  }
-> = {
+const STATUS_TRANSITION_CLEARS: Record<InitiativeStatus, StatusTimestampTransition> = {
   active: { canceledAt: 'clear', completedAt: 'clear', startedAt: 'now' },
   canceled: { canceledAt: 'now', completedAt: 'clear', startedAt: 'leave' },
   completed: { canceledAt: 'clear', completedAt: 'now', startedAt: 'leave' },
@@ -82,7 +100,14 @@ const STATUS_TRANSITION_CLEARS: Record<
  * recomputed on project add/remove and on demand.
  */
 export class InitiativeService {
-  constructor(private prisma: PrismaClient) {}
+  private readonly deps: InitiativeServiceDeps;
+
+  constructor(
+    private prisma: PrismaClient,
+    deps?: InitiativeServiceDeps,
+  ) {
+    this.deps = deps ?? { project: new ProjectService(prisma) };
+  }
 
   async create(
     orgId: string,
@@ -124,13 +149,8 @@ export class InitiativeService {
 
       if (input.projectIds?.length) {
         // Verify all projects belong to the same org before linking.
-        // Capture progress on the same query so we can compute the
-        // initial rollup inline — without this the returned initiative
-        // would carry progress=0 even if every linked project is at
-        // 100%, and the create-time SyncAction would broadcast that
-        // wrong value.
         const projects = await tx.project.findMany({
-          select: { archivedAt: true, id: true, progress: true, trashed: true },
+          select: { archivedAt: true, id: true, trashed: true },
           where: { id: { in: input.projectIds }, organizationId: orgId },
         });
         if (projects.length !== input.projectIds.length) {
@@ -145,10 +165,19 @@ export class InitiativeService {
           skipDuplicates: true,
         });
         const eligible = projects.filter(p => !p.archivedAt && !p.trashed);
+        // Compute the initial rollup inline so the returned initiative
+        // doesn't carry progress=0 even when every linked project is at
+        // 100% (and the create-time SyncAction would broadcast that wrong
+        // value). `Project.progress` is a dead column — nothing writes
+        // it — so the real value is fetched live via
+        // ProjectService.getProgress() instead of read off the row.
+        const progresses = await Promise.all(
+          eligible.map(p => this.deps.project.getProgress(p.id)),
+        );
         const progress =
-          eligible.length === 0
+          progresses.length === 0
             ? 0
-            : eligible.reduce((sum, p) => sum + p.progress, 0) / eligible.length;
+            : progresses.reduce((sum, p) => sum + p.progress, 0) / progresses.length;
         if (progress > 0) {
           return tx.initiative.update({
             data: { progress },
@@ -215,15 +244,17 @@ export class InitiativeService {
     if (input.status !== undefined) {
       data.status = input.status;
       const now = new Date();
-      const transition = STATUS_TRANSITION_CLEARS[input.status as InitiativeStatus];
+      const patch = applyStatusTransitionTimestamps(
+        STATUS_TRANSITION_CLEARS,
+        input.status as InitiativeStatus,
+        now,
+      );
       // For startedAt: only stamp `now` when transitioning INTO active from a
       // non-active state, so re-saving an already-active initiative (or
       // bouncing canceled→active) doesn't overwrite the original start.
-      const apply = (op: 'now' | 'clear' | 'leave') =>
-        op === 'now' ? now : op === 'clear' ? null : undefined;
-      let startedAt = apply(transition.startedAt);
-      const completedAt = apply(transition.completedAt);
-      const canceledAt = apply(transition.canceledAt);
+      let startedAt = patch.startedAt;
+      const completedAt = patch.completedAt;
+      const canceledAt = patch.canceledAt;
       if (input.status === 'active') {
         const current = await this.prisma.initiative.findFirst({
           select: { startedAt: true, status: true },
@@ -485,10 +516,11 @@ export class InitiativeService {
 
     const [links, children, current] = await Promise.all([
       this.prisma.initiativeProject.findMany({
-        include: {
+        select: {
           project: {
-            select: { archivedAt: true, progress: true, trashed: true },
+            select: { archivedAt: true, trashed: true },
           },
+          projectId: true,
         },
         where: { initiativeId },
       }),
@@ -503,11 +535,21 @@ export class InitiativeService {
     }
     const eligible = links.filter(l => l.project && !l.project.archivedAt && !l.project.trashed);
     const eligibleChildren = (children ?? []).filter(c => !c.archivedAt);
+
+    // `Project.progress` is a dead column — nothing writes it. The real
+    // value is computed live from issue completion via
+    // ProjectService.getProgress(). Fan the reads out in parallel rather
+    // than serially; still O(N) round-trips in N linked projects, but N is
+    // bounded by how many projects one initiative links.
+    const projectProgresses = await Promise.all(
+      eligible.map(l => this.deps.project.getProgress(l.projectId)),
+    );
+
     const totalCount = eligible.length + eligibleChildren.length;
     const progress =
       totalCount === 0
         ? 0
-        : (eligible.reduce((sum, l) => sum + (l.project?.progress ?? 0), 0) +
+        : (projectProgresses.reduce((sum, p) => sum + p.progress, 0) +
             eligibleChildren.reduce((sum, c) => sum + c.progress, 0)) /
           totalCount;
 

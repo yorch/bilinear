@@ -1,8 +1,42 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import type { GitHubIntegration, GitHubPullRequest, PrismaClient } from '../../generated/prisma';
+import type {
+  GitHubIntegration,
+  GitHubPullRequest,
+  Issue,
+  PrismaClient,
+} from '../../generated/prisma';
 import { childLogger } from '../lib/logger';
+import { redis } from '../lib/redis';
+import { IssueService } from './issue.service';
+import { SyncService } from './sync.service';
+import { WebhookService } from './webhook.service';
 
 const log = childLogger({ module: 'github' });
+
+/**
+ * Deps the auto-close path needs to route issue state transitions through
+ * the SAME write path user-initiated `issueUpdate` mutations use, so a PR
+ * merge emits a SyncAction (delta sync ships it to every client), runs the
+ * team's auto-close-parent/child cascade, and dispatches the `issue.updated`
+ * webhook — instead of a bare `prisma.issue.update` that silently updates
+ * the DB with none of that.
+ *
+ * Optional + defaulted (not required) because `GitHubService` is
+ * constructed directly (`new GitHubService(prisma)`, no DI container) from
+ * two route handlers this fix must not touch:
+ * `src/app/api/integrations/github/callback/route.ts` and
+ * `src/app/api/integrations/github/webhook/route.ts`. When the caller
+ * doesn't inject deps, real ones are built here from the same `prisma`
+ * client (+ the redis singleton for SyncAction publish) so production
+ * behaves correctly without any call-site changes. Unit tests inject fakes
+ * instead (see github.service.test.ts) to avoid touching a real Redis
+ * connection.
+ */
+export interface GitHubServiceDeps {
+  issue: Pick<IssueService, 'update'>;
+  sync: Pick<SyncService, 'recordSyncAction' | 'publish'>;
+  webhook?: Pick<WebhookService, 'dispatchEvent'>;
+}
 
 // Regex that matches issue identifiers like ENG-123, PLAT-42, etc.
 const IDENTIFIER_RE = /\b([A-Z][A-Z0-9]{1,9}-\d+)\b/g;
@@ -40,7 +74,18 @@ interface GitHubUser {
 }
 
 export class GitHubService {
-  constructor(private prisma: PrismaClient) {}
+  private readonly deps: GitHubServiceDeps;
+
+  constructor(
+    private prisma: PrismaClient,
+    deps?: GitHubServiceDeps,
+  ) {
+    this.deps = deps ?? {
+      issue: new IssueService(prisma),
+      sync: new SyncService(prisma, redis),
+      webhook: new WebhookService(prisma),
+    };
+  }
 
   async findByOrg(orgId: string): Promise<GitHubIntegration | null> {
     return this.prisma.gitHubIntegration.findUnique({ where: { organizationId: orgId } });
@@ -227,7 +272,23 @@ export class GitHubService {
     }
   }
 
-  /** Transition issues to their team's first completed workflow state on merge. */
+  /**
+   * Transition issues to their team's first completed workflow state on
+   * merge. Routes each transition through `IssueService.update` (the same
+   * path the `issueUpdate` GraphQL mutation uses) instead of a bare
+   * `prisma.issue.update`, so a PR merge gets the identical guarantees a
+   * user-initiated close gets:
+   *   - a SyncAction is recorded INSIDE the same transaction as the issue
+   *     write (via the `txHook`) and published to Redis only after commit —
+   *     without this, delta sync never ships the change and connected
+   *     clients show the issue open forever.
+   *   - the team's auto-close-parent/child cascade runs (and each cascaded
+   *     row gets its own SyncAction the same way).
+   *   - an `issue.updated` webhook fires for the closed issue and any
+   *     cascaded rows.
+   * Per-issue try/catch preserved: one issue failing to close (e.g. a
+   * concurrent delete) must not abort the rest of the merge's batch.
+   */
   private async autoCloseIssuesOnMerge(orgId: string, issueIds: string[]): Promise<void> {
     const issues = await this.prisma.issue.findMany({
       include: {
@@ -249,24 +310,75 @@ export class GitHubService {
       },
     });
 
-    for (const issue of issues) {
-      const completedState = issue.team.workflowStates[0];
-      if (!completedState) {
-        continue;
-      }
-      try {
-        await this.prisma.issue.update({
-          data: {
-            completedAt: new Date(),
-            stateId: completedState.id,
-          },
-          where: { id: issue.id },
-        });
-        log.info({ identifier: issue.identifier, orgId }, 'Auto-closed issue on PR merge');
-      } catch (err) {
-        log.error({ err, issueId: issue.id }, 'Failed to auto-close issue on PR merge');
-      }
-    }
+    // Each issue routes through its own independent transaction (no shared
+    // tx across issues), so these can run concurrently instead of one at a
+    // time — cuts wall-clock on a merge that closes several issues at once.
+    // The per-issue try/catch is preserved as-is: one issue failing to
+    // close must still not abort the rest of the batch.
+    await Promise.all(
+      issues.map(async issue => {
+        const completedState = issue.team.workflowStates[0];
+        if (!completedState) {
+          return;
+        }
+        try {
+          type RecordedSync = Awaited<ReturnType<SyncService['recordSyncAction']>>;
+          let issueSync: RecordedSync | undefined;
+          const cascadedSyncs: RecordedSync[] = [];
+
+          const { issue: updated, cascaded } = await this.deps.issue.update(
+            issue.id,
+            { stateId: completedState.id },
+            async (tx, res) => {
+              issueSync = await this.deps.sync.recordSyncAction(
+                tx,
+                orgId,
+                'U',
+                'Issue',
+                res.issue.id,
+                res.issue,
+              );
+              for (const row of res.cascaded) {
+                cascadedSyncs.push(
+                  await this.deps.sync.recordSyncAction(tx, orgId, 'U', 'Issue', row.id, row),
+                );
+              }
+            },
+          );
+
+          // Publish only after the transaction has committed.
+          if (issueSync) {
+            this.deps.sync.publish(issueSync);
+          }
+          for (const s of cascadedSyncs) {
+            this.deps.sync.publish(s);
+          }
+
+          if (this.deps.webhook) {
+            this.dispatchIssueUpdatedWebhook(orgId, updated);
+            for (const row of cascaded) {
+              this.dispatchIssueUpdatedWebhook(orgId, row);
+            }
+          }
+
+          log.info({ identifier: issue.identifier, orgId }, 'Auto-closed issue on PR merge');
+        } catch (err) {
+          log.error({ err, issueId: issue.id }, 'Failed to auto-close issue on PR merge');
+        }
+      }),
+    );
+  }
+
+  /** Fire-and-forget `issue.updated` webhook dispatch — never blocks the merge handler. */
+  private dispatchIssueUpdatedWebhook(orgId: string, issue: Issue): void {
+    void this.deps.webhook
+      ?.dispatchEvent(orgId, 'issue.updated', issue, issue.teamId)
+      .catch(err =>
+        log.error(
+          { err, issueId: issue.id },
+          'webhook dispatch failed: issue.updated (auto-close)',
+        ),
+      );
   }
 
   async getPullRequestsForIssue(issueId: string): Promise<GitHubPullRequest[]> {

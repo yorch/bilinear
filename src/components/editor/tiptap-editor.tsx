@@ -949,6 +949,7 @@ function ToolbarButton({
           : 'text-muted-foreground hover:bg-foreground/10',
       )}
       onClick={onClick}
+      onMouseDown={e => e.preventDefault()}
       title={title}
       type="button"
     >

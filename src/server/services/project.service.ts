@@ -5,6 +5,10 @@ import type {
   ProjectMilestone,
   ProjectUpdate,
 } from '../../generated/prisma';
+import {
+  applyStatusTransitionTimestamps,
+  type StatusTimestampTransition,
+} from '../lib/status-timestamps';
 
 export interface ProgressHistoryEntry {
   /** UTC date in YYYY-MM-DD form */
@@ -24,6 +28,27 @@ function parseHistory(value: unknown): ProgressHistoryEntry[] | null {
       typeof (e as { v?: unknown }).v === 'number',
   );
 }
+
+/**
+ * Lifecycle-timestamp patch applied when transitioning into each statusType.
+ * Stamps the entered status's marker and clears the others so reverting
+ * (e.g. completed → inProgress, or completed → paused) doesn't leave a
+ * stale terminal timestamp behind. Mirrors InitiativeService's
+ * `STATUS_TRANSITION_CLEARS` table — both are applied via the shared
+ * `applyStatusTransitionTimestamps` helper (see
+ * `src/server/lib/status-timestamps.ts`). `startedAt: 'now'` is only
+ * actually applied on first entry into `inProgress` — see the `current`
+ * check below, which preserves the original start across a no-op re-save or
+ * a paused → inProgress resume.
+ */
+const STATUS_TRANSITION_CLEARS: Record<string, StatusTimestampTransition> = {
+  backlog: { canceledAt: 'clear', completedAt: 'clear', startedAt: 'clear' },
+  canceled: { canceledAt: 'now', completedAt: 'clear', startedAt: 'leave' },
+  completed: { canceledAt: 'clear', completedAt: 'now', startedAt: 'leave' },
+  inProgress: { canceledAt: 'clear', completedAt: 'clear', startedAt: 'now' },
+  paused: { canceledAt: 'clear', completedAt: 'clear', startedAt: 'leave' },
+  planned: { canceledAt: 'clear', completedAt: 'clear', startedAt: 'clear' },
+};
 
 function appendOrReplaceToday(
   history: ProgressHistoryEntry[],
@@ -206,12 +231,38 @@ export class ProjectService {
 
     if (input.statusType !== undefined) {
       data.statusType = input.statusType;
-      if (input.statusType === 'inProgress') {
-        data.startedAt = new Date();
-      } else if (input.statusType === 'completed') {
-        data.completedAt = new Date();
-      } else if (input.statusType === 'canceled') {
-        data.canceledAt = new Date();
+      const transition = STATUS_TRANSITION_CLEARS[input.statusType];
+      if (transition) {
+        const now = new Date();
+        const patch = applyStatusTransitionTimestamps(
+          STATUS_TRANSITION_CLEARS,
+          input.statusType,
+          now,
+        );
+        let startedAt = patch.startedAt;
+        const completedAt = patch.completedAt;
+        const canceledAt = patch.canceledAt;
+        // First-set semantics for startedAt: only stamp `now` on first
+        // entry into `inProgress`, so a no-op re-save or a
+        // paused → inProgress resume doesn't overwrite the original start.
+        if (input.statusType === 'inProgress' && startedAt !== undefined) {
+          const current = await this.prisma.project.findUnique({
+            select: { startedAt: true },
+            where: { id },
+          });
+          if (current?.startedAt) {
+            startedAt = undefined;
+          }
+        }
+        if (startedAt !== undefined) {
+          data.startedAt = startedAt;
+        }
+        if (completedAt !== undefined) {
+          data.completedAt = completedAt;
+        }
+        if (canceledAt !== undefined) {
+          data.canceledAt = canceledAt;
+        }
       }
     }
 

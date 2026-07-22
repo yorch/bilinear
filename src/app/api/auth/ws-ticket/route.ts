@@ -1,6 +1,8 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { signWsTicket, verifyAccessToken } from '@/server/lib/jwt';
+import { signWsTicket } from '@/server/lib/jwt';
+import { prisma } from '@/server/lib/prisma';
+import { requireAuthContext } from '@/server/middleware/auth';
 
 /**
  * GET /api/auth/ws-ticket
@@ -15,26 +17,25 @@ import { signWsTicket, verifyAccessToken } from '@/server/lib/jwt';
  * needs to verify the ticket, not the access cookie.
  */
 export async function GET(req: NextRequest) {
-  const accessToken = req.cookies.get('access_token')?.value ?? null;
-  if (!accessToken) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  // Routed through requireAuthContext (not a raw verifyAccessToken call) so
+  // a deactivated user or a suspended/archived org can't mint a fresh
+  // real-time ws_ticket off a still-valid JWT — see sync/bootstrap/route.ts
+  // for the same reasoning. Cookie-only (no Authorization header/API-key
+  // path) — unchanged from prior behavior, this endpoint is only ever
+  // called from the authenticated browser session.
+  const authResult = await requireAuthContext(req, prisma, {
+    allowHeader: false,
+    unauthorizedMessage: 'Not authenticated',
+  });
+  if ('response' in authResult) {
+    return authResult.response;
   }
+  const { ctx } = authResult;
 
-  let claims: { orgId: string; userId: string };
-  try {
-    claims = await verifyAccessToken(accessToken);
-  } catch {
-    return NextResponse.json({ error: 'Invalid access token' }, { status: 401 });
-  }
-
-  if (!claims.orgId || !claims.userId) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-  }
-
-  const ticket = await signWsTicket({ orgId: claims.orgId, userId: claims.userId });
+  const ticket = await signWsTicket({ orgId: ctx.orgId, userId: ctx.userId });
 
   return NextResponse.json(
-    { orgId: claims.orgId, ticket, userId: claims.userId },
+    { orgId: ctx.orgId, ticket, userId: ctx.userId },
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }

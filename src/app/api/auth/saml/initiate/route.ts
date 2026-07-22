@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { env } from '@/server/lib/env';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
@@ -55,7 +56,7 @@ async function handleGet(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
+  const appUrl = env.APP_URL;
   const spEntityId = `${appUrl}/api/auth/saml/metadata?org=${orgKey}`;
   const acsUrl = `${appUrl}/api/auth/saml/callback`;
 

@@ -13,6 +13,7 @@ import * as Y from 'yjs';
 import { verifyWsTicket } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
+import { getTeamRole } from '@/server/middleware/auth';
 
 const log = childLogger({ module: 'yjs' });
 
@@ -68,18 +69,44 @@ export const server = new Server<HookContext>({
     // Tenant guard — verify the entity belongs to the authenticated org.
     // Archived entities are treated as inaccessible to prevent collab sessions
     // on soft-deleted content.
+    //
+    // Beyond the org check, also enforce team-membership + guest visibility:
+    // without this, any org member could open a collab room for ANY issue by
+    // UUID and read/edit its body, including issues on teams they aren't in,
+    // or a guest issue they don't own — bypassing the same rule the
+    // top-level `issues` query and `IssueService.buildWhere`'s
+    // `guestUserId` clause enforce elsewhere.
     if (parsed.type === 'issue') {
       const issue = await prisma.issue.findFirst({
-        select: { id: true },
+        select: { assigneeId: true, creatorId: true, id: true, teamId: true },
         where: { archivedAt: null, id: parsed.id, organizationId: claims.orgId },
       });
       if (!issue) {
         log.warn({ documentName, orgId: claims.orgId }, 'YJS connection rejected: issue not found');
         throw new Error('Not found');
       }
+      const role = await getTeamRole(prisma, issue.teamId, claims.userId, claims.orgId);
+      if (!role) {
+        log.warn(
+          { documentName, orgId: claims.orgId, userId: claims.userId },
+          "YJS connection rejected: not a member of this issue's team",
+        );
+        throw new Error('Not a member of this team');
+      }
+      if (
+        role === 'guest' &&
+        issue.creatorId !== claims.userId &&
+        issue.assigneeId !== claims.userId
+      ) {
+        log.warn(
+          { documentName, orgId: claims.orgId, userId: claims.userId },
+          'YJS connection rejected: guest cannot access this issue',
+        );
+        throw new Error('Guests can only access issues they created or are assigned to');
+      }
     } else {
       const doc = await prisma.document.findFirst({
-        select: { id: true },
+        select: { id: true, teamId: true },
         where: { archivedAt: null, id: parsed.id, organizationId: claims.orgId },
       });
       if (!doc) {
@@ -88,6 +115,20 @@ export const server = new Server<HookContext>({
           'YJS connection rejected: document not found',
         );
         throw new Error('Not found');
+      }
+      // Documents are only team-scoped when teamId is set (workspace-level
+      // docs have a null teamId and are visible to the whole org, matching
+      // the GraphQL `documents`/`document` resolvers, which apply no
+      // team-membership check today).
+      if (doc.teamId) {
+        const role = await getTeamRole(prisma, doc.teamId, claims.userId, claims.orgId);
+        if (!role) {
+          log.warn(
+            { documentName, orgId: claims.orgId, userId: claims.userId },
+            "YJS connection rejected: not a member of this document's team",
+          );
+          throw new Error('Not a member of this team');
+        }
       }
     }
 

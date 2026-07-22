@@ -1,7 +1,9 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { signGithubOAuthState, verifyAccessToken } from '@/server/lib/jwt';
+import { env } from '@/server/lib/env';
+import { signGithubOAuthState } from '@/server/lib/jwt';
 import { prisma } from '@/server/lib/prisma';
+import { requireAuthContext } from '@/server/middleware/auth';
 
 /**
  * GET /api/integrations/github
@@ -20,17 +22,20 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'GitHub integration is not configured' }, { status: 503 });
   }
 
-  const accessToken = req.cookies.get('access_token')?.value ?? null;
-  if (!accessToken) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  // Routed through requireAuthContext (not a raw verifyAccessToken call) so
+  // a deactivated user or a suspended/archived org can't kick off a new
+  // GitHub OAuth connection off a still-valid JWT — see
+  // sync/bootstrap/route.ts for the same reasoning. Cookie-only (no
+  // Authorization header/API-key path) — unchanged from prior behavior.
+  const authResult = await requireAuthContext(req, prisma, {
+    allowHeader: false,
+    unauthorizedMessage: 'Not authenticated',
+  });
+  if ('response' in authResult) {
+    return authResult.response;
   }
-
-  let claims: { orgId: string; userId: string };
-  try {
-    claims = await verifyAccessToken(accessToken);
-  } catch {
-    return NextResponse.json({ error: 'Invalid access token' }, { status: 401 });
-  }
+  const { ctx } = authResult;
+  const claims = { orgId: ctx.orgId, userId: ctx.userId };
 
   // Only org owners and admins may connect a GitHub integration
   const membership = await prisma.organizationMember.findUnique({
@@ -59,7 +64,7 @@ export async function GET(req: NextRequest) {
     webhookSecret,
   });
 
-  const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
+  const appUrl = env.APP_URL;
   const redirectUri = `${appUrl}/api/integrations/github/callback`;
 
   const authUrl = new URL('https://github.com/login/oauth/authorize');

@@ -1,10 +1,10 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { verifyAccessToken } from '@/server/lib/jwt';
 import { logger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { redis } from '@/server/lib/redis';
 import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
+import { getGuestTeamIds, requireAuthContext } from '@/server/middleware/auth';
 import { parseCursor, SyncService, serializeSyncAction } from '@/server/services/sync.service';
 
 /**
@@ -19,21 +19,14 @@ import { parseCursor, SyncService, serializeSyncAction } from '@/server/services
  * Response: { actions: SerializedSyncAction[]; hasMore: boolean }.
  */
 async function handleGet(req: NextRequest) {
-  const token =
-    req.cookies.get('access_token')?.value ??
-    req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ??
-    null;
-
-  if (!token) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Routed through requireAuthContext (not a raw verifyAccessToken call) so
+  // a deactivated user or a suspended/archived org is rejected here too —
+  // see bootstrap/route.ts for the same reasoning.
+  const authResult = await requireAuthContext(req, prisma);
+  if ('response' in authResult) {
+    return authResult.response;
   }
-
-  let orgId: string;
-  try {
-    ({ orgId } = await verifyAccessToken(token));
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const { orgId, userId } = authResult.ctx;
   bindRequestContext({ orgId });
 
   const url = new URL(req.url);
@@ -48,9 +41,16 @@ async function handleGet(req: NextRequest) {
   const toCursor = toSyncIdParam ? parseCursor(toSyncIdParam) : undefined;
 
   const syncService = new SyncService(prisma, redis);
+  const guestTeamIds = await getGuestTeamIds(prisma, userId, orgId);
 
   try {
-    const { actions, hasMore } = await syncService.getDeltaSyncActions(orgId, fromCursor, toCursor);
+    const { actions, hasMore } = await syncService.getDeltaSyncActions(
+      orgId,
+      fromCursor,
+      toCursor,
+      undefined,
+      guestTeamIds.length > 0 ? { guestTeamIds, userId } : undefined,
+    );
     return NextResponse.json(
       { actions: actions.map(serializeSyncAction), hasMore },
       { headers: { 'Cache-Control': 'no-store' } },

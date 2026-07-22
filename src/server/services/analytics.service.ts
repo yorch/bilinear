@@ -180,7 +180,7 @@ export class AnalyticsService {
 
   /**
    * Team health snapshot: overdue issues, unestimated issues, and open-issue
-   * age statistics. "Open" excludes completed, cancelled, trashed, and
+   * age statistics. "Open" excludes completed, canceled, trashed, and
    * archived issues. No date-range filter — this is a point-in-time view.
    */
   async teamHealth(filter: AnalyticsFilter): Promise<TeamHealthResult> {
@@ -199,7 +199,7 @@ export class AnalyticsService {
       WHERE i.organization_id = ${filter.orgId}::uuid
         AND i.archived_at IS NULL
         AND i.trashed = false
-        AND ws.type NOT IN ('completed', 'cancelled')
+        AND ws.type NOT IN ('completed', 'canceled')
         ${filter.teamId ? Prisma.sql`AND i.team_id = ${filter.teamId}::uuid` : Prisma.empty}
       ORDER BY age_days DESC
     `;
@@ -386,7 +386,7 @@ export class AnalyticsService {
             where: {
               archivedAt: null,
               completedAt: null,
-              state: { type: { notIn: ['completed', 'cancelled'] } },
+              state: { type: { notIn: ['completed', 'canceled'] } },
               teamId: team.id,
               trashed: false,
             },

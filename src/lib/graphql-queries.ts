@@ -160,7 +160,7 @@ export const ISSUE_ACTIVITIES_QUERY = `
         id
         displayName
         initials
-        avatarBgColor
+        avatarBgColor: avatarBackgroundColor
       }
     }
   }

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TEST_ORG, TEST_USER } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
@@ -36,10 +36,21 @@ const TEST_INITIATIVE = {
 describe('InitiativeService', () => {
   let prisma: MockPrismaClient;
   let service: InitiativeService;
+  // Project.progress is a dead column (nothing writes it) — the service
+  // now computes each linked project's progress LIVE via
+  // ProjectService.getProgress(), injected here as a fake so these tests
+  // control the progress values directly instead of exercising
+  // ProjectService's own issue-counting SQL.
+  let fakeGetProgress: ReturnType<
+    typeof vi.fn<(projectId: string) => Promise<{ progress: number; scope: number }>>
+  >;
 
   beforeEach(() => {
     prisma = createMockPrisma();
-    service = new InitiativeService(prisma as never);
+    fakeGetProgress = vi.fn().mockResolvedValue({ progress: 0, scope: 0 });
+    service = new InitiativeService(prisma as never, {
+      project: { getProgress: fakeGetProgress },
+    });
   });
 
   describe('create', () => {
@@ -184,33 +195,46 @@ describe('InitiativeService', () => {
       expect(result?.progress).toBe(0);
     });
 
-    it('computes mean of linked project progress', async () => {
+    it('computes mean of linked project progress from LIVE ProjectService.getProgress reads, not the dead Project.progress column', async () => {
       prisma.initiativeProject.findMany.mockResolvedValue([
-        { project: { archivedAt: null, progress: 0.5, trashed: false } },
-        { project: { archivedAt: null, progress: 1.0, trashed: false } },
+        { project: { archivedAt: null, trashed: false }, projectId: 'p1' },
+        { project: { archivedAt: null, trashed: false }, projectId: 'p2' },
       ]);
+      // Deliberately does NOT set project.progress at all above — if the
+      // implementation regressed to reading that dead column instead of
+      // calling getProgress(), it would read `undefined` for every
+      // project and this test would fail loudly instead of silently
+      // averaging in zeros.
+      fakeGetProgress
+        .mockResolvedValueOnce({ progress: 0.5, scope: 2 })
+        .mockResolvedValueOnce({ progress: 1.0, scope: 2 });
       prisma.initiative.findUnique.mockResolvedValue({ progress: 0 });
       prisma.initiative.update.mockResolvedValue({ ...TEST_INITIATIVE, progress: 0.75 });
 
       const result = await service.recomputeProgress(TEST_INITIATIVE.id);
       expect(result?.progress).toBe(0.75);
+      expect(fakeGetProgress).toHaveBeenCalledWith('p1');
+      expect(fakeGetProgress).toHaveBeenCalledWith('p2');
       expect(prisma.initiative.update).toHaveBeenCalledWith({
         data: { progress: 0.75 },
         where: { id: TEST_INITIATIVE.id },
       });
     });
 
-    it('skips archived/trashed projects', async () => {
+    it('skips archived/trashed projects (and never fetches their live progress)', async () => {
       prisma.initiativeProject.findMany.mockResolvedValue([
-        { project: { archivedAt: null, progress: 0.5, trashed: false } },
-        { project: { archivedAt: new Date(), progress: 1.0, trashed: false } },
-        { project: { archivedAt: null, progress: 1.0, trashed: true } },
+        { project: { archivedAt: null, trashed: false }, projectId: 'p1' },
+        { project: { archivedAt: new Date(), trashed: false }, projectId: 'p2-archived' },
+        { project: { archivedAt: null, trashed: true }, projectId: 'p3-trashed' },
       ]);
+      fakeGetProgress.mockResolvedValueOnce({ progress: 0.5, scope: 2 });
       prisma.initiative.findUnique.mockResolvedValue({ progress: 0 });
       prisma.initiative.update.mockResolvedValue({ ...TEST_INITIATIVE, progress: 0.5 });
 
       const result = await service.recomputeProgress(TEST_INITIATIVE.id);
       expect(result?.progress).toBe(0.5);
+      expect(fakeGetProgress).toHaveBeenCalledTimes(1);
+      expect(fakeGetProgress).toHaveBeenCalledWith('p1');
     });
 
     it('returns null if the initiative has been deleted', async () => {
@@ -224,8 +248,9 @@ describe('InitiativeService', () => {
 
     it('skips the write (and SyncAction) when progress is unchanged', async () => {
       prisma.initiativeProject.findMany.mockResolvedValue([
-        { project: { archivedAt: null, progress: 0.5, trashed: false } },
+        { project: { archivedAt: null, trashed: false }, projectId: 'p1' },
       ]);
+      fakeGetProgress.mockResolvedValueOnce({ progress: 0.5, scope: 2 });
       prisma.initiative.findUnique.mockResolvedValue({ progress: 0.5 });
 
       const result = await service.recomputeProgress(TEST_INITIATIVE.id);

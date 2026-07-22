@@ -1,5 +1,7 @@
 import { GraphQLError } from 'graphql';
 import type { Webhook } from '../../../generated/prisma';
+import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../../lib/limits';
+import { clampLimit } from '../../lib/pagination';
 import { requireAuth, requireOrgRole } from '../../middleware/auth';
 import {
   WEBHOOK_EVENTS,
@@ -121,7 +123,11 @@ export const webhookResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      return ctx.services.webhook.listDeliveries(auth.orgId, webhookId, limit ?? 50);
+      return ctx.services.webhook.listDeliveries(
+        auth.orgId,
+        webhookId,
+        clampLimit(limit, MAX_LIST_LIMIT, DEFAULT_LIST_LIMIT),
+      );
     },
 
     // Admin-gated to match the rest of the webhook surface — the event
