@@ -183,8 +183,9 @@ export class CustomFieldService {
         where: { id: input.organizationId },
       });
       const cap =
-        (input.teamId === null ? org?.maxCustomFieldsPerOrg : org?.maxCustomFieldsPerTeam) ??
-        (input.teamId === null ? MAX_CUSTOM_FIELDS_PER_ORG : MAX_CUSTOM_FIELDS_PER_TEAM);
+        input.teamId === null
+          ? (org?.maxCustomFieldsPerOrg ?? MAX_CUSTOM_FIELDS_PER_ORG)
+          : (org?.maxCustomFieldsPerTeam ?? MAX_CUSTOM_FIELDS_PER_TEAM);
 
       const activeCount = await tx.customFieldDefinition.count({
         where:

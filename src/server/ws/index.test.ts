@@ -11,10 +11,10 @@
  *
  * The predicate is the only part of the re-auth sweep that's meaningfully
  * unit-testable this way — the sweep's DB batching and actual socket
- * termination (`sweepRevokedConnections`, wired to live `liveConnections`)
- * need a real socket/Redis/DB and are covered by reasoning + code review
- * here; a staging pass should verify a revoked user's WS connection is
- * actually closed within one sweep interval.
+ * termination (`sweepRevokedConnections`, walking live connections via
+ * `ConnectionManager.getAll()`) need a real socket/Redis/DB and are covered
+ * by reasoning + code review here; a staging pass should verify a revoked
+ * user's WS connection is actually closed within one sweep interval.
  */
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';

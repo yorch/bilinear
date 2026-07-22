@@ -26,6 +26,11 @@ import { env } from '@/server/lib/env';
 import { verifyWsTicket } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
+import {
+  checkSessionValidity,
+  type SessionOrgRow,
+  type SessionUserRow,
+} from '@/server/middleware/auth';
 import { CycleService } from '@/server/services/cycle.service';
 import { SyncService } from '@/server/services/sync.service';
 import { WebhookService } from '@/server/services/webhook.service';
@@ -174,50 +179,22 @@ redisSubscriber.on('ready', () => {
 // applies per-request (src/server/middleware/auth.ts) and force-close any
 // connection that's no longer valid.
 
-export interface ReauthUserRow {
-  active: boolean;
-}
-
-export interface ReauthOrgRow {
-  archivedAt: Date | null;
-  suspendedAt: Date | null;
-}
-
 /**
  * Pure predicate: given freshly re-queried user/org rows for a live
- * connection, decide whether it should be force-closed. Mirrors
- * `extractAuthContext`'s suspension checks — a deactivated user or a
- * suspended/archived org invalidates the connection. A missing row (the
- * user or org was deleted since connect) is treated the same as invalid —
- * fail closed.
+ * connection, decide whether it should be force-closed. Thin wrapper over
+ * the shared `checkSessionValidity` (src/server/middleware/auth.ts) — the
+ * same "user still active AND org not suspended/archived" check
+ * `extractAuthContext` applies per-request, fail-closed on a missing row.
  *
  * Kept as a standalone, side-effect-free function (no DB/socket access) so
  * it's unit-testable without a live connection or database.
  */
 export function shouldTerminateConnection(
-  user: ReauthUserRow | null | undefined,
-  org: ReauthOrgRow | null | undefined,
+  user: SessionUserRow | null | undefined,
+  org: SessionOrgRow | null | undefined,
 ): boolean {
-  if (!user?.active) {
-    return true;
-  }
-  if (!org || org.suspendedAt || org.archivedAt) {
-    return true;
-  }
-  return false;
+  return !checkSessionValidity(user, org).valid;
 }
-
-interface LiveConnection {
-  orgId: string;
-  userId: string;
-  ws: WebSocket;
-}
-
-// All currently-open, authenticated connections. Populated on connect,
-// removed on close (mirrors ConnectionManager's own bookkeeping, kept
-// separate so the sweep doesn't need ConnectionManager to expose an
-// iteration API it doesn't otherwise need).
-const liveConnections = new Set<LiveConnection>();
 
 /**
  * Re-validate every live connection in one pass. Batches the user/org
@@ -226,19 +203,21 @@ const liveConnections = new Set<LiveConnection>();
  * bounded by the number of distinct users/orgs, not the number of sockets.
  */
 async function sweepRevokedConnections(): Promise<void> {
-  if (liveConnections.size === 0) {
+  // Snapshot the connections up front — ConnectionManager is the single
+  // source of truth for "what's connected right now" (see its `getAll()`).
+  // The terminate loop below must only consider sockets whose user/org were
+  // actually included in the batched lookups — a connection that joins
+  // DURING the await would be present in a live re-read of the manager but
+  // absent from the queried Maps, and shouldTerminateConnection(undefined,
+  // undefined) fail-closes, so re-reading `getAll()` after the await would
+  // spuriously kill brand-new, fully-authorized connections. Anything that
+  // joins mid-sweep just authenticated at connect and is picked up on the
+  // next cycle.
+  const conns = connectionManager.getAll();
+  if (conns.length === 0) {
     return;
   }
 
-  // Snapshot the connections up front. The terminate loop below must only
-  // consider sockets whose user/org were actually included in the batched
-  // lookups — a connection that joins DURING the await would be present in the
-  // live `liveConnections` Set but absent from the queried Maps, and
-  // shouldTerminateConnection(undefined, undefined) fail-closes, so iterating
-  // the live set would spuriously kill brand-new, fully-authorized
-  // connections. Anything that joins mid-sweep just authenticated at connect
-  // and is picked up on the next cycle.
-  const conns = [...liveConnections];
   const userIds = new Set<string>();
   const orgIds = new Set<string>();
   for (const conn of conns) {
@@ -307,8 +286,6 @@ wss.on('connection', async (ws: WebSocket, req) => {
 
   // Register client
   const clientInfo = connectionManager.add(orgId, userId, ws);
-  const liveConn: LiveConnection = { orgId, userId, ws };
-  liveConnections.add(liveConn);
   await ensureOrgSubscription(orgId);
 
   log.info({ orgId, total: connectionManager.clientCount(), userId }, 'Client connected');
@@ -345,7 +322,6 @@ wss.on('connection', async (ws: WebSocket, req) => {
 
   ws.on('close', () => {
     clearInterval(pingTimer);
-    liveConnections.delete(liveConn);
     const orgEmpty = connectionManager.remove(clientInfo);
     log.info({ orgId, total: connectionManager.clientCount(), userId }, 'Client disconnected');
     if (orgEmpty) {

@@ -153,10 +153,10 @@ function verifyXmlSignature(xml: string, certPem: string): string {
   const referencedId = refMatch[1];
 
   const digestMethodMatch = signedInfoXml.match(/<ds:DigestMethod[^>]+Algorithm="([^"]+)"/i);
-  const digestValueMatch = signedInfoXml.match(
-    /<ds:DigestValue[^>]*>\s*([\s\S]*?)\s*<\/ds:DigestValue>/i,
+  const hasDigestValue = /<ds:DigestValue[^>]*>\s*[\s\S]*?\s*<\/ds:DigestValue>/i.test(
+    signedInfoXml,
   );
-  if (!digestMethodMatch || !digestValueMatch) {
+  if (!digestMethodMatch || !hasDigestValue) {
     // Fail closed: a Reference with no digest can't be checked for content
     // substitution, so it must be rejected rather than silently trusted.
     throw new SamlParseError('SAML signature reference is missing a DigestMethod/DigestValue');

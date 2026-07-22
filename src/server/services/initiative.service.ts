@@ -4,11 +4,12 @@ import type {
   InitiativeUpdate,
   PrismaClient,
 } from '../../generated/prisma';
-import { MAX_RICH_TEXT_LENGTH } from '../lib/limits';
+import { assertMaxLength, MAX_RICH_TEXT_LENGTH } from '../lib/limits';
 import {
   applyStatusTransitionTimestamps,
   type StatusTimestampTransition,
 } from '../lib/status-timestamps';
+import { ProjectService } from './project.service';
 
 export interface InitiativeCreateInput {
   color?: string;
@@ -64,11 +65,12 @@ const VALID_STATUSES = new Set<InitiativeStatus>(['planned', 'active', 'complete
 // rich-text cap (see ../lib/limits) so a malicious or buggy client can't
 // push a multi-megabyte payload through initiative create/update.
 function assertValidDescription(description: string | null | undefined): void {
-  if (description != null && description.length > MAX_RICH_TEXT_LENGTH) {
-    throw new InitiativeValidationError(
-      `description must be ${MAX_RICH_TEXT_LENGTH} characters or fewer`,
-    );
-  }
+  assertMaxLength(
+    description,
+    MAX_RICH_TEXT_LENGTH,
+    msg => new InitiativeValidationError(msg),
+    'description',
+  );
 }
 
 /**
@@ -97,7 +99,14 @@ const STATUS_TRANSITION_CLEARS: Record<InitiativeStatus, StatusTimestampTransiti
  * recomputed on project add/remove and on demand.
  */
 export class InitiativeService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(
+    private prisma: PrismaClient,
+    // Defaults to a fresh ProjectService over the same prisma client for
+    // call sites that construct InitiativeService standalone (e.g. test
+    // helpers) — real wiring (src/server/graphql/context.ts) passes its own
+    // already-constructed ProjectService instance explicitly.
+    private project: ProjectService = new ProjectService(prisma),
+  ) {}
 
   async create(
     orgId: string,
@@ -162,9 +171,9 @@ export class InitiativeService {
         // value). `Project.progress` is a dead column — nothing writes
         // it — so the real value is fetched live, batched over every
         // linked project id in one pair of queries (see
-        // `getProgressByProjectIds`) instead of one
-        // ProjectService.getProgress() round-trip per project.
-        const progressByProject = await this.getProgressByProjectIds(eligible.map(p => p.id));
+        // `ProjectService.getProgressBatch`) instead of one
+        // `ProjectService.getProgress()` round-trip per project.
+        const progressByProject = await this.project.getProgressBatch(eligible.map(p => p.id));
         const progresses = eligible.map(
           p => progressByProject.get(p.id) ?? { progress: 0, scope: 0 },
         );
@@ -534,10 +543,10 @@ export class InitiativeService {
     // `Project.progress` is a dead column — nothing writes it. The real
     // value is computed live from issue completion, batched over every
     // linked project id in one pair of groupBy queries (see
-    // `getProgressByProjectIds`) rather than 2 issue.count queries PER
-    // linked project (an N+1 that used to run on every project/issue
+    // `ProjectService.getProgressBatch`) rather than 2 issue.count queries
+    // PER linked project (an N+1 that used to run on every project/issue
     // mutation via the recompute cascade).
-    const progressByProject = await this.getProgressByProjectIds(eligible.map(l => l.projectId));
+    const progressByProject = await this.project.getProgressBatch(eligible.map(l => l.projectId));
     const projectProgresses = eligible.map(
       l => progressByProject.get(l.projectId) ?? { progress: 0, scope: 0 },
     );
@@ -564,71 +573,6 @@ export class InitiativeService {
     } catch {
       return null;
     }
-  }
-
-  /**
-   * Batched replacement for calling `ProjectService.getProgress()` once per
-   * linked project id (each call = 2 `issue.count` queries, so N linked
-   * projects meant 2N round-trips via `Promise.all` — an N+1 that ran on
-   * every initiative create-with-projects and on every recompute cascade
-   * step, i.e. potentially on every issue completion). Computes the exact
-   * same per-project `{ progress, scope }` shape as
-   * `ProjectService.getProgress` — identical row filter (`archivedAt: null`,
-   * `trashed: false`, plus `completedAt: { not: null }` for the completed
-   * half) — via two `groupBy` queries over the whole id set instead of
-   * per-project counts.
-   *
-   * Projects with zero matching issues (or that otherwise don't appear in
-   * either `groupBy` result) are given an explicit `{ progress: 0, scope: 0
-   * }` entry so every requested id has an entry in the returned map —
-   * matching `getProgress`'s own "total === 0 → progress 0" behavior.
-   */
-  private async getProgressByProjectIds(
-    projectIds: string[],
-  ): Promise<Map<string, { progress: number; scope: number }>> {
-    const result = new Map<string, { progress: number; scope: number }>();
-    if (projectIds.length === 0) {
-      return result;
-    }
-
-    const [totals, completed] = await Promise.all([
-      this.prisma.issue.groupBy({
-        _count: true,
-        by: ['projectId'],
-        where: { archivedAt: null, projectId: { in: projectIds }, trashed: false },
-      }),
-      this.prisma.issue.groupBy({
-        _count: true,
-        by: ['projectId'],
-        where: {
-          archivedAt: null,
-          completedAt: { not: null },
-          projectId: { in: projectIds },
-          trashed: false,
-        },
-      }),
-    ]);
-
-    const completedByProject = new Map<string, number>();
-    for (const row of completed) {
-      if (row.projectId) {
-        completedByProject.set(row.projectId, row._count);
-      }
-    }
-    for (const row of totals) {
-      if (!row.projectId) {
-        continue;
-      }
-      const total = row._count;
-      const done = completedByProject.get(row.projectId) ?? 0;
-      result.set(row.projectId, { progress: total > 0 ? done / total : 0, scope: total });
-    }
-    for (const id of projectIds) {
-      if (!result.has(id)) {
-        result.set(id, { progress: 0, scope: 0 });
-      }
-    }
-    return result;
   }
 
   /**

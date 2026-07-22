@@ -35,3 +35,23 @@ export const MAX_WEBHOOK_NAME_LENGTH = 256;
  * connected client as a "reaction".
  */
 export const MAX_EMOJI_LENGTH = 32;
+
+/**
+ * Shared length guard for nullable rich-text-ish string inputs (issue
+ * description, comment body, project description, initiative description,
+ * etc). Each call site previously hand-rolled this exact check with its own
+ * error class — centralized here so the rule ("null/undefined is fine,
+ * anything longer than `max` isn't") only needs to be read once. The caller
+ * supplies its own error class (via `makeError`) and field name so the
+ * thrown error's type and message text are unchanged from before.
+ */
+export function assertMaxLength(
+  value: string | null | undefined,
+  max: number,
+  makeError: (message: string) => Error,
+  fieldName: string,
+): void {
+  if (value != null && value.length > max) {
+    throw makeError(`${fieldName} must be ${max} characters or fewer`);
+  }
+}

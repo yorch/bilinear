@@ -185,16 +185,7 @@ export function createLoaders(prisma: PrismaClient, orgId: string | null): Loade
         include: { label: true },
         where: { issueId: { in: issueIds as string[] } },
       });
-      const grouped = new Map<string, IssueLabel[]>();
-      for (const a of assignments) {
-        const list = grouped.get(a.issueId);
-        if (list) {
-          list.push(a.label);
-        } else {
-          grouped.set(a.issueId, [a.label]);
-        }
-      }
-      return issueIds.map(id => grouped.get(id) ?? []);
+      return groupBy(assignments, issueIds, a => a.issueId).map(list => list.map(a => a.label));
     }),
 
     project: new DataLoader(async (ids: readonly string[]) => {

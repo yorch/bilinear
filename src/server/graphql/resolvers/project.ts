@@ -17,6 +17,17 @@ import type { GraphQLContext } from '../context';
 
 const PROJECT_MEMBERSHIP_ROLES = ['owner', 'admin', 'member'] as const;
 
+// Shared by projectCreate/projectUpdate: both map a ProjectValidationError to
+// a BAD_USER_INPUT GraphQLError and rethrow anything else unchanged.
+function mapProjectError(err: unknown): never {
+  if ((err as Error).name === 'ProjectValidationError') {
+    throw new GraphQLError((err as Error).message, {
+      extensions: { code: 'BAD_USER_INPUT' },
+    });
+  }
+  throw err;
+}
+
 // Per-request cache to avoid duplicate getProgress calls when both progress and scope are queried
 const progressCacheKey = Symbol('projectProgress');
 
@@ -179,12 +190,7 @@ export const projectResolvers = {
       try {
         project = await ctx.services.project.create(ctx.orgId, ctx.userId, input);
       } catch (err) {
-        if ((err as Error).name === 'ProjectValidationError') {
-          throw new GraphQLError((err as Error).message, {
-            extensions: { code: 'BAD_USER_INPUT' },
-          });
-        }
-        throw err;
+        mapProjectError(err);
       }
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
@@ -409,12 +415,7 @@ export const projectResolvers = {
       try {
         project = await ctx.services.project.update(id, input);
       } catch (err) {
-        if ((err as Error).name === 'ProjectValidationError') {
-          throw new GraphQLError((err as Error).message, {
-            extensions: { code: 'BAD_USER_INPUT' },
-          });
-        }
-        throw err;
+        mapProjectError(err);
       }
       let sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Project', id, project);
       void ctx.services.webhook

@@ -16,15 +16,19 @@
  *      `REAUTH_SWEEP_INTERVAL_MS`) walks every open document room via
  *      Hocuspocus's own `documents` map and `Document.getConnections()` and
  *      closes any connection whose access no longer checks out — this
- *      covers a connected-but-idle peer who isn't triggering writes.
+ *      covers a connected-but-idle peer who isn't triggering writes. Every
+ *      connection in a room shares the same document, so the sweep uses the
+ *      batched `revalidateRoomAccess` (org + issue/document row fetched once
+ *      per room, not once per connection) rather than calling
+ *      `revalidateAccess` in a per-connection loop.
  */
 
-import { Server } from '@hocuspocus/server';
+import { type Connection, Server } from '@hocuspocus/server';
 import * as Y from 'yjs';
 import { verifyWsTicket } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
-import { getTeamRole } from '@/server/middleware/auth';
+import { checkSessionValidity, getTeamRole } from '@/server/middleware/auth';
 import type { PrismaClient } from '../../generated/prisma';
 
 const log = childLogger({ module: 'yjs' });
@@ -60,12 +64,60 @@ export interface RevalidateResult {
   valid: boolean;
 }
 
+type EntityAccessPrisma = Pick<PrismaClient, 'teamMemberRole' | 'teamMembership'>;
+type IssueEntityRow = { assigneeId: string | null; creatorId: string | null; teamId: string };
+type DocEntityRow = { teamId: string | null };
+
+/**
+ * The part of the accessibility check that depends on which user is asking:
+ * team membership + guest visibility for an already-fetched issue/document
+ * row. Split out from `revalidateAccess` so the batched, per-room
+ * `revalidateRoomAccess` below can fetch the shared issue/org rows ONCE per
+ * room and only re-run this (genuinely per-user) part for each connection.
+ */
+async function checkEntityAccessForUser(
+  prismaClient: EntityAccessPrisma,
+  parsed: { type: 'document' | 'issue' },
+  entity: DocEntityRow | IssueEntityRow | null,
+  orgId: string,
+  userId: string,
+): Promise<RevalidateResult> {
+  if (parsed.type === 'issue') {
+    const issue = entity as IssueEntityRow | null;
+    if (!issue) {
+      return { reason: 'issue not found or archived', valid: false };
+    }
+    const role = await getTeamRole(prismaClient as PrismaClient, issue.teamId, userId, orgId);
+    if (!role) {
+      return { reason: 'no longer a member of this team', valid: false };
+    }
+    if (role === 'guest' && issue.creatorId !== userId && issue.assigneeId !== userId) {
+      return { reason: 'guest no longer has access to this issue', valid: false };
+    }
+    return { valid: true };
+  }
+
+  const doc = entity as DocEntityRow | null;
+  if (!doc) {
+    return { reason: 'document not found or archived', valid: false };
+  }
+  if (doc.teamId) {
+    const role = await getTeamRole(prismaClient as PrismaClient, doc.teamId, userId, orgId);
+    if (!role) {
+      return { reason: 'no longer a member of this team', valid: false };
+    }
+  }
+  return { valid: true };
+}
+
 /**
  * Re-run the same accessibility checks `onAuthenticate` performs at connect
  * time — user still active, org not suspended/archived, and (for issues)
  * still a member of the issue's team with guest visibility honored — some
- * time AFTER a connection was first authenticated. Used by both the
- * `onStoreDocument` gate and the periodic sweep below.
+ * time AFTER a connection was first authenticated. Used by the
+ * `onStoreDocument` gate (a single writer's connection, so there's no room
+ * to batch across). The periodic sweep below uses the batched
+ * `revalidateRoomAccess` instead — see its doc comment for why.
  *
  * Takes `prisma` as a parameter (rather than reaching for the module-level
  * singleton) so it's directly unit-testable with a mocked client — no live
@@ -84,6 +136,10 @@ export async function revalidateAccess(
     select: { active: true },
     where: { id: userId },
   });
+  // Checked inline (rather than deferring to checkSessionValidity below)
+  // so a deactivated user short-circuits before the org query — matches
+  // the original behavior and this file's own test coverage, which asserts
+  // `organization.findUnique` is never called in that case.
   if (!user?.active) {
     return { reason: 'user deactivated', valid: false };
   }
@@ -92,8 +148,12 @@ export async function revalidateAccess(
     select: { archivedAt: true, suspendedAt: true },
     where: { id: orgId },
   });
-  if (!org || org.suspendedAt || org.archivedAt) {
-    return { reason: 'org suspended or archived', valid: false };
+  // Shared "user active AND org not suspended/archived" predicate — see its
+  // doc comment in middleware/auth.ts for why this used to be hand-rolled
+  // three times and had drifted between callers.
+  const sessionValidity = checkSessionValidity(user, org);
+  if (!sessionValidity.valid) {
+    return sessionValidity;
   }
 
   if (parsed.type === 'issue') {
@@ -101,33 +161,86 @@ export async function revalidateAccess(
       select: { assigneeId: true, creatorId: true, teamId: true },
       where: { archivedAt: null, id: parsed.id, organizationId: orgId },
     });
-    if (!issue) {
-      return { reason: 'issue not found or archived', valid: false };
-    }
-    const role = await getTeamRole(prismaClient as PrismaClient, issue.teamId, userId, orgId);
-    if (!role) {
-      return { reason: 'no longer a member of this team', valid: false };
-    }
-    if (role === 'guest' && issue.creatorId !== userId && issue.assigneeId !== userId) {
-      return { reason: 'guest no longer has access to this issue', valid: false };
-    }
-  } else {
-    const doc = await prismaClient.document.findFirst({
-      select: { teamId: true },
-      where: { archivedAt: null, id: parsed.id, organizationId: orgId },
-    });
-    if (!doc) {
-      return { reason: 'document not found or archived', valid: false };
-    }
-    if (doc.teamId) {
-      const role = await getTeamRole(prismaClient as PrismaClient, doc.teamId, userId, orgId);
-      if (!role) {
-        return { reason: 'no longer a member of this team', valid: false };
-      }
-    }
+    return checkEntityAccessForUser(prismaClient, parsed, issue, orgId, userId);
   }
 
-  return { valid: true };
+  const doc = await prismaClient.document.findFirst({
+    select: { teamId: true },
+    where: { archivedAt: null, id: parsed.id, organizationId: orgId },
+  });
+  return checkEntityAccessForUser(prismaClient, parsed, doc, orgId, userId);
+}
+
+/**
+ * Batched version of `revalidateAccess` for the periodic sweep
+ * (`sweepRevokedYjsConnections`), which re-checks every connection in every
+ * open room. Every connection in a *room* shares the same document — so the
+ * org row and the issue/document row are fetched exactly ONCE per room here,
+ * instead of once per connection as a naive per-connection loop over
+ * `revalidateAccess` would do. The user-active check is batched into a
+ * single `findMany` across the room's distinct user ids.
+ *
+ * Residual: the team-membership/guest check (`checkEntityAccessForUser` →
+ * `getTeamRole`) still runs per user (2 queries each — team membership +
+ * team role) — it's the one part of the check that's genuinely
+ * user-specific, not shared across the room. Batching it further would mean
+ * teaching `getTeamRole` to accept a set of user ids, which is more
+ * invasive than this pass's scope; the win here is the org + issue/document
+ * fetch, which no longer scales with connection count.
+ *
+ * Returns a `Map<userId, RevalidateResult>` — one entry per distinct user id
+ * passed in — so the caller can look up each connection's result by its
+ * owning user without re-deriving it.
+ */
+export async function revalidateRoomAccess(
+  prismaClient: Pick<
+    PrismaClient,
+    'document' | 'issue' | 'organization' | 'teamMemberRole' | 'teamMembership' | 'user'
+  >,
+  parsed: { id: string; type: 'document' | 'issue' },
+  orgId: string,
+  userIds: string[],
+): Promise<Map<string, RevalidateResult>> {
+  const results = new Map<string, RevalidateResult>();
+  const distinctIds = [...new Set(userIds)];
+  if (distinctIds.length === 0) {
+    return results;
+  }
+
+  const [users, org, entity] = await Promise.all([
+    prismaClient.user.findMany({
+      select: { active: true, id: true },
+      where: { id: { in: distinctIds } },
+    }),
+    prismaClient.organization.findUnique({
+      select: { archivedAt: true, suspendedAt: true },
+      where: { id: orgId },
+    }),
+    parsed.type === 'issue'
+      ? prismaClient.issue.findFirst({
+          select: { assigneeId: true, creatorId: true, teamId: true },
+          where: { archivedAt: null, id: parsed.id, organizationId: orgId },
+        })
+      : prismaClient.document.findFirst({
+          select: { teamId: true },
+          where: { archivedAt: null, id: parsed.id, organizationId: orgId },
+        }),
+  ]);
+  const userById = new Map(users.map(u => [u.id, u]));
+
+  for (const userId of distinctIds) {
+    const sessionValidity = checkSessionValidity(userById.get(userId), org);
+    if (!sessionValidity.valid) {
+      results.set(userId, sessionValidity);
+      continue;
+    }
+    results.set(
+      userId,
+      await checkEntityAccessForUser(prismaClient, parsed, entity, orgId, userId),
+    );
+  }
+
+  return results;
 }
 
 export const server = new Server<HookContext>({
@@ -369,25 +482,49 @@ async function runYjsSweep(): Promise<void> {
       // that doesn't parse, so no room should exist under a bad name.
       continue;
     }
+
+    // Group this room's connections by orgId, then by userId, instead of
+    // re-validating each connection one at a time — every connection in a
+    // room shares the same document (and, in practice, the same org, since
+    // onAuthenticate ties a document to exactly one org at connect time), so
+    // `revalidateRoomAccess` can fetch the org + issue/document row ONCE for
+    // the whole room. Grouping by orgId is defensive (costs nothing, and
+    // keeps this correct even if that single-org invariant were ever
+    // violated); grouping by userId handles a user with more than one open
+    // connection to the same room (e.g. two tabs) sharing one result.
+    const byOrg = new Map<string, Map<string, Connection[]>>();
     for (const connection of document.getConnections()) {
       const ctx = connection.context as Partial<HookContext> | undefined;
       if (!ctx?.orgId || !ctx.userId) {
         continue;
       }
+      let byUser = byOrg.get(ctx.orgId);
+      if (!byUser) {
+        byUser = new Map();
+        byOrg.set(ctx.orgId, byUser);
+      }
+      const connections = byUser.get(ctx.userId) ?? [];
+      connections.push(connection);
+      byUser.set(ctx.userId, connections);
+    }
+
+    for (const [orgId, byUser] of byOrg) {
       try {
-        const result = await revalidateAccess(prisma, parsed, ctx.orgId, ctx.userId);
-        if (!result.valid) {
-          log.info(
-            { documentName, orgId: ctx.orgId, reason: result.reason, userId: ctx.userId },
-            'YJS re-auth sweep: closing revoked connection',
-          );
-          connection.close();
+        const results = await revalidateRoomAccess(prisma, parsed, orgId, [...byUser.keys()]);
+        for (const [userId, connections] of byUser) {
+          const result = results.get(userId);
+          if (!result?.valid) {
+            for (const connection of connections) {
+              log.info(
+                { documentName, orgId, reason: result?.reason, userId },
+                'YJS re-auth sweep: closing revoked connection',
+              );
+              connection.close();
+            }
+          }
         }
       } catch (err) {
-        log.error(
-          { documentName, err, orgId: ctx.orgId, userId: ctx.userId },
-          'YJS re-auth sweep failed for connection',
-        );
+        log.error({ documentName, err, orgId }, 'YJS re-auth sweep failed for room');
       }
     }
   }

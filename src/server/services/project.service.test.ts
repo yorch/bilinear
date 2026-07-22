@@ -244,6 +244,71 @@ describe('ProjectService', () => {
     });
   });
 
+  describe('getProgressBatch', () => {
+    // `groupBy` isn't part of the shared mock model (see
+    // src/test/prisma-mock.ts) — added ad hoc here rather than widening the
+    // shared mock shape, matching the pattern used by
+    // initiative.service.test.ts before this logic moved here.
+    let issueGroupBy: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      issueGroupBy = vi.fn().mockResolvedValue([]);
+      (prisma.issue as unknown as { groupBy: typeof issueGroupBy }).groupBy = issueGroupBy;
+    });
+
+    it('returns an empty map without querying when given no ids', async () => {
+      const result = await service.getProgressBatch([]);
+
+      expect(result).toEqual(new Map());
+      expect(issueGroupBy).not.toHaveBeenCalled();
+    });
+
+    it('computes per-project progress from two batched groupBy queries', async () => {
+      issueGroupBy
+        .mockResolvedValueOnce([
+          { _count: 2, projectId: 'p1' },
+          { _count: 2, projectId: 'p2' },
+        ])
+        .mockResolvedValueOnce([
+          { _count: 1, projectId: 'p1' },
+          { _count: 2, projectId: 'p2' },
+        ]);
+
+      const result = await service.getProgressBatch(['p1', 'p2']);
+
+      expect(result).toEqual(
+        new Map([
+          ['p1', { progress: 0.5, scope: 2 }],
+          ['p2', { progress: 1, scope: 2 }],
+        ]),
+      );
+      expect(issueGroupBy).toHaveBeenCalledTimes(2);
+      expect(issueGroupBy).toHaveBeenNthCalledWith(1, {
+        _count: true,
+        by: ['projectId'],
+        where: { archivedAt: null, projectId: { in: ['p1', 'p2'] }, trashed: false },
+      });
+      expect(issueGroupBy).toHaveBeenNthCalledWith(2, {
+        _count: true,
+        by: ['projectId'],
+        where: {
+          archivedAt: null,
+          completedAt: { not: null },
+          projectId: { in: ['p1', 'p2'] },
+          trashed: false,
+        },
+      });
+    });
+
+    it('gives a requested project with no matching issues an explicit zero entry', async () => {
+      issueGroupBy.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+      const result = await service.getProgressBatch(['p-empty']);
+
+      expect(result).toEqual(new Map([['p-empty', { progress: 0, scope: 0 }]]));
+    });
+  });
+
   describe('recordProgressSnapshotIfStale', () => {
     beforeEach(() => {
       vi.useFakeTimers();

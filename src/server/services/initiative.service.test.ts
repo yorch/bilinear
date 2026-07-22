@@ -6,6 +6,7 @@ import {
   InitiativeProjectNotFoundError,
   InitiativeService,
 } from './initiative.service';
+import type { ProjectService } from './project.service';
 
 const TEST_INITIATIVE = {
   archivedAt: null,
@@ -33,41 +34,31 @@ const TEST_INITIATIVE = {
   updatedAt: new Date('2026-04-01T00:00:00Z'),
 };
 
-/**
- * Shapes an `issue.groupBy` mock resolved value from a plain
- * `{ projectId: count }` map — the two `groupBy` calls inside
- * `getProgressByProjectIds` (totals, then completed) each return this
- * shape (`_count` as a bare number since the service passes `_count:
- * true`, not a nested per-field selector).
- */
-function groupByRows(counts: Record<string, number>): Array<{ projectId: string; _count: number }> {
-  return Object.entries(counts).map(([projectId, count]) => ({ _count: count, projectId }));
-}
-
 describe('InitiativeService', () => {
   let prisma: MockPrismaClient;
   let service: InitiativeService;
-  // `groupBy` isn't part of the shared mock model (see
-  // src/test/prisma-mock.ts) — the service's batched progress rollup
-  // (`getProgressByProjectIds`) is the only caller in this test suite, so
-  // it's added ad hoc here (via this typed handle) rather than widening the
-  // shared mock shape. Project.progress is a dead column (nothing writes
-  // it) — the service computes each linked project's progress LIVE via two
-  // batched `issue.groupBy` queries (totals, then completed) instead of one
-  // `ProjectService.getProgress()` round-trip per project.
-  let issueGroupBy: ReturnType<typeof vi.fn>;
+  // The batched progress rollup now lives on ProjectService
+  // (`getProgressBatch`) — Project.progress is a dead column (nothing
+  // writes it), so InitiativeService fetches each linked project's
+  // progress LIVE via this dependency instead of reading that column, and
+  // instead of one `ProjectService.getProgress()` round-trip per project.
+  // Mocked directly here (rather than exercising ProjectService's real
+  // `issue.groupBy` queries) since that batching logic has its own
+  // dedicated coverage in project.service.test.ts.
+  let getProgressBatch: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     prisma = createMockPrisma();
-    // Default to "no matching issues anywhere" so tests that don't care
-    // about progress don't have to stub it.
-    issueGroupBy = vi.fn().mockResolvedValue([]);
-    (prisma.issue as unknown as { groupBy: typeof issueGroupBy }).groupBy = issueGroupBy;
+    // Default to "no matching projects" so tests that don't care about
+    // progress don't have to stub it — InitiativeService's own `?? {
+    // progress: 0, scope: 0 }` fallback covers any id missing from the map.
+    getProgressBatch = vi.fn().mockResolvedValue(new Map());
+    const projectService = { getProgressBatch } as unknown as ProjectService;
     // assertParentAcceptsChild reads the org's plan-tier depth cap
     // (Organization.maxInitiativeDepth) instead of the old hardcoded
     // constant; the fixture default matches that constant.
     prisma.organization.findUnique.mockResolvedValue(TEST_ORG);
-    service = new InitiativeService(prisma as never);
+    service = new InitiativeService(prisma as never, projectService);
   });
 
   describe('create', () => {
@@ -249,42 +240,31 @@ describe('InitiativeService', () => {
       expect(result?.progress).toBe(0);
     });
 
-    it('computes mean of linked project progress from LIVE batched issue.groupBy reads, not the dead Project.progress column', async () => {
+    it('computes mean of linked project progress from ProjectService.getProgressBatch, not the dead Project.progress column', async () => {
       prisma.initiativeProject.findMany.mockResolvedValue([
         { project: { archivedAt: null, trashed: false }, projectId: 'p1' },
         { project: { archivedAt: null, trashed: false }, projectId: 'p2' },
       ]);
       // Deliberately does NOT set project.progress at all above — if the
       // implementation regressed to reading that dead column instead of
-      // the batched groupBy reads, it would read `undefined` for every
-      // project and this test would fail loudly instead of silently
+      // the batched getProgressBatch read, it would read `undefined` for
+      // every project and this test would fail loudly instead of silently
       // averaging in zeros. p1: 1/2 issues done = 0.5; p2: 2/2 = 1.0.
-      issueGroupBy
-        .mockResolvedValueOnce(groupByRows({ p1: 2, p2: 2 }))
-        .mockResolvedValueOnce(groupByRows({ p1: 1, p2: 2 }));
+      getProgressBatch.mockResolvedValue(
+        new Map([
+          ['p1', { progress: 0.5, scope: 2 }],
+          ['p2', { progress: 1, scope: 2 }],
+        ]),
+      );
       prisma.initiative.findUnique.mockResolvedValue({ progress: 0 });
       prisma.initiative.update.mockResolvedValue({ ...TEST_INITIATIVE, progress: 0.75 });
 
       const result = await service.recomputeProgress(TEST_INITIATIVE.id);
       expect(result?.progress).toBe(0.75);
-      // Batched: exactly ONE groupBy call for totals and ONE for completed,
-      // covering both linked projects — not one round-trip pair per project.
-      expect(issueGroupBy).toHaveBeenCalledTimes(2);
-      expect(issueGroupBy).toHaveBeenNthCalledWith(1, {
-        _count: true,
-        by: ['projectId'],
-        where: { archivedAt: null, projectId: { in: ['p1', 'p2'] }, trashed: false },
-      });
-      expect(issueGroupBy).toHaveBeenNthCalledWith(2, {
-        _count: true,
-        by: ['projectId'],
-        where: {
-          archivedAt: null,
-          completedAt: { not: null },
-          projectId: { in: ['p1', 'p2'] },
-          trashed: false,
-        },
-      });
+      // Batched: exactly ONE getProgressBatch call covering both linked
+      // projects — not one round-trip per project.
+      expect(getProgressBatch).toHaveBeenCalledTimes(1);
+      expect(getProgressBatch).toHaveBeenCalledWith(['p1', 'p2']);
       expect(prisma.initiative.update).toHaveBeenCalledWith({
         data: { progress: 0.75 },
         where: { id: TEST_INITIATIVE.id },
@@ -297,21 +277,16 @@ describe('InitiativeService', () => {
         { project: { archivedAt: new Date(), trashed: false }, projectId: 'p2-archived' },
         { project: { archivedAt: null, trashed: true }, projectId: 'p3-trashed' },
       ]);
-      issueGroupBy
-        .mockResolvedValueOnce(groupByRows({ p1: 2 }))
-        .mockResolvedValueOnce(groupByRows({ p1: 1 }));
+      getProgressBatch.mockResolvedValue(new Map([['p1', { progress: 0.5, scope: 2 }]]));
       prisma.initiative.findUnique.mockResolvedValue({ progress: 0 });
       prisma.initiative.update.mockResolvedValue({ ...TEST_INITIATIVE, progress: 0.5 });
 
       const result = await service.recomputeProgress(TEST_INITIATIVE.id);
       expect(result?.progress).toBe(0.5);
-      // Still batched into 2 calls total (not skipped entirely) but the
-      // `in` filter only ever names the eligible project.
-      expect(issueGroupBy).toHaveBeenCalledTimes(2);
-      expect(issueGroupBy).toHaveBeenNthCalledWith(
-        1,
-        expect.objectContaining({ where: expect.objectContaining({ projectId: { in: ['p1'] } }) }),
-      );
+      // Still batched into a single call (not skipped entirely) but the id
+      // list only ever names the eligible project.
+      expect(getProgressBatch).toHaveBeenCalledTimes(1);
+      expect(getProgressBatch).toHaveBeenCalledWith(['p1']);
     });
 
     it('returns null if the initiative has been deleted', async () => {
@@ -327,9 +302,7 @@ describe('InitiativeService', () => {
       prisma.initiativeProject.findMany.mockResolvedValue([
         { project: { archivedAt: null, trashed: false }, projectId: 'p1' },
       ]);
-      issueGroupBy
-        .mockResolvedValueOnce(groupByRows({ p1: 2 }))
-        .mockResolvedValueOnce(groupByRows({ p1: 1 }));
+      getProgressBatch.mockResolvedValue(new Map([['p1', { progress: 0.5, scope: 2 }]]));
       prisma.initiative.findUnique.mockResolvedValue({ progress: 0.5 });
 
       const result = await service.recomputeProgress(TEST_INITIATIVE.id);

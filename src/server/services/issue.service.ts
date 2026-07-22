@@ -1,6 +1,7 @@
 import type { Issue, IssueLabel, IssueReaction, PrismaClient } from '../../generated/prisma';
 import { buildGuestVisibilityWhere } from '../lib/issue-visibility';
 import {
+  assertMaxLength,
   DEFAULT_LIST_LIMIT,
   MAX_BULK_OPERATION,
   MAX_EMOJI_LENGTH,
@@ -121,11 +122,12 @@ function assertValidTitle(title: string | undefined): void {
 }
 
 function assertValidDescription(description: string | undefined): void {
-  if (description !== undefined && description.length > MAX_RICH_TEXT_LENGTH) {
-    throw new IssueValidationError(
-      `description must be ${MAX_RICH_TEXT_LENGTH} characters or fewer`,
-    );
-  }
+  assertMaxLength(
+    description,
+    MAX_RICH_TEXT_LENGTH,
+    msg => new IssueValidationError(msg),
+    'description',
+  );
 }
 
 function assertValidPriority(priority: number | undefined): void {
