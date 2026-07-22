@@ -2,15 +2,12 @@
 
 import { observer } from 'mobx-react-lite';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
 import { useDocumentTitle } from '@/hooks/use-document-title';
+import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
-import { ISSUE_UPDATE_MUTATION } from '@/lib/graphql-queries';
-import { toast } from '@/lib/toast';
-import { TransactionQueue } from '@/lib/transaction-queue';
-import { getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 
@@ -114,56 +111,45 @@ const IssueDetailPage = observer(function IssueDetailPage() {
 
   // This route renders from its own local `issue` useState rather than the
   // shared issueStore (it can show an issue the store hasn't hydrated yet —
-  // see the temp-id branch above), so `useIssueUpdate()` can't be reused
-  // as-is: its optimistic-apply/rollback/success-merge all target
-  // issueStore, which this page's render doesn't read from. Enqueuing
-  // through the same shared `TransactionQueue` singleton directly (same
-  // mutation, same persistence/retry/backoff, same default-error-handler
-  // fallback as every other issue surface) but with callbacks that
-  // reconcile THIS page's local state gets the offline-queue benefit back
-  // without losing local rollback-on-failure / merge-on-success.
-  const txQueue = useMemo(() => new TransactionQueue(), []);
+  // see the temp-id branch above), so the default issueStore-backed
+  // `useIssueUpdate()` behavior would optimistically write to state this
+  // page doesn't read from. `useIssueUpdate`'s override hooks let this route
+  // share the exact same TransactionQueue enqueue / offline-queue / rollback
+  // / reconcile implementation as every other issue surface, just pointed at
+  // this page's local `issue` state instead of the store.
+  const snapshotLocal = useCallback(() => issue, [issue]);
 
-  const handleUpdate = useCallback(
-    (issueId: string, patch: Record<string, unknown>) => {
+  const applyLocal = useCallback(
+    (_issueId: string, patch: unknown) => {
+      const p = patch as Record<string, unknown>;
       // Convert labelIds to label objects for optimistic display in this
       // page's own issue snapshot (a plain useState, not the shared
       // issueStore — this route can render an issue the store hasn't
       // hydrated yet, so it keeps its own copy for immediate feedback).
-      let optimisticPatch: Record<string, unknown> = patch;
-      if (Array.isArray(patch.labelIds)) {
-        const { labelIds, ...rest } = patch;
+      // Rollback (re-applying a full prior snapshot) has no `labelIds` key,
+      // so it skips this branch and merges the snapshot's own `labels` as-is.
+      let optimisticPatch: Record<string, unknown> = p;
+      if (Array.isArray(p.labelIds)) {
+        const { labelIds, ...rest } = p;
         optimisticPatch = {
           ...rest,
           labels: labels.filter(l => (labelIds as string[]).includes(l.id)),
         };
       }
-
-      // Snapshot the pre-edit state (for this specific call) so a failed
-      // mutation can restore exactly what was on screen before it — this
-      // page has no shared-store rollback to fall back on.
-      const snapshot = issue;
       setIssue(prev => (prev ? { ...prev, ...optimisticPatch } : prev));
-
-      txQueue.enqueue(
-        ISSUE_UPDATE_MUTATION,
-        { id: issueId, input: patch },
-        {
-          onError: err => {
-            toast.error(getErrorMessage(err, t('issues.updateFailed')));
-            setIssue(snapshot);
-          },
-          onSuccess: data => {
-            const updated = (data as { issueUpdate?: { issue?: IssueDetail } })?.issueUpdate?.issue;
-            if (updated) {
-              setIssue(prev => (prev ? { ...prev, ...updated } : prev));
-            }
-          },
-        },
-      );
     },
-    [issue, labels, t, txQueue],
+    [labels],
   );
+
+  const reconcileLocal = useCallback((_issueId: string, updated: Record<string, unknown>) => {
+    setIssue(prev => (prev ? { ...prev, ...updated } : prev));
+  }, []);
+
+  const handleUpdate = useIssueUpdate({
+    apply: applyLocal,
+    reconcile: reconcileLocal,
+    snapshot: snapshotLocal,
+  });
 
   const handleClose = () => {
     if (returnTo) {

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TEST_ORG, TEST_TEAM, TEST_USER } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
-import { ProjectService } from './project.service';
+import { ProjectService, ProjectValidationError } from './project.service';
 
 const TEST_PROJECT = {
   archivedAt: null,
@@ -84,6 +84,17 @@ describe('ProjectService', () => {
 
       const slug = prisma.project.create.mock.calls[0][0].data.slugId as string;
       expect(slug).toMatch(/^my-cool-project-[a-z0-9]{4}$/);
+    });
+
+    it('rejects a description over the length cap', async () => {
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, {
+          description: 'a'.repeat(100_001),
+          name: 'Apollo',
+          teamIds: [],
+        }),
+      ).rejects.toThrow(ProjectValidationError);
+      expect(prisma.project.create).not.toHaveBeenCalled();
     });
   });
 
@@ -185,6 +196,13 @@ describe('ProjectService', () => {
         startDate: null,
         targetDate: null,
       });
+    });
+
+    it('rejects a description over the length cap', async () => {
+      await expect(
+        service.update(TEST_PROJECT.id, { description: 'a'.repeat(100_001) }),
+      ).rejects.toThrow(ProjectValidationError);
+      expect(prisma.project.update).not.toHaveBeenCalled();
     });
   });
 

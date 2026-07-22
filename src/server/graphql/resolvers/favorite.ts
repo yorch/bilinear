@@ -46,8 +46,15 @@ function mapError(err: unknown): never {
  * Resolve the favorite's target entity to the matching union member. Returns
  * null when the row was deleted or moved to a different org (the caller's
  * Favorite row carries a dangling `entityId`); the sidebar component skips
- * null entries silently rather than 404ing. Best-effort: no batching here
- * because the typical user has <50 favorites and entity types are mixed.
+ * null entries silently rather than 404ing.
+ *
+ * Batched per entity type via the per-request DataLoaders — a `favorites`
+ * list of N rows fires at most one `IN (...)` query per distinct
+ * `entityType` present (GraphQL resolves each row's `entity` field
+ * concurrently, so DataLoader coalesces the `.load()` calls within the
+ * tick), instead of one query per favorite. Cross-org/deleted → null
+ * behavior is unchanged — same per-row check against `ctx.orgId`, just
+ * against a batch-fetched row instead of a per-row query.
  */
 async function resolveEntity(
   fav: Favorite,
@@ -59,7 +66,7 @@ async function resolveEntity(
   }
   switch (fav.entityType) {
     case 'Issue': {
-      const issue = await ctx.services.issue.findById(fav.entityId);
+      const issue = await ctx.loaders.issueById.load(fav.entityId);
       if (!issue || issue.organizationId !== orgId) {
         return null;
       }
@@ -73,11 +80,14 @@ async function resolveEntity(
       return { ...project, __typename: 'Project' };
     }
     case 'Initiative': {
-      const initiative = await ctx.services.initiative.findById(orgId, fav.entityId);
+      // initiativeById is already org-scoped in its batch query (mirrors
+      // InitiativeService.findById(orgId, id)), so no extra org check here
+      // — matches the pre-batching behavior exactly.
+      const initiative = await ctx.loaders.initiativeById.load(fav.entityId);
       return initiative ? { ...initiative, __typename: 'Initiative' } : null;
     }
     case 'CustomView': {
-      const view = await ctx.services.customView.findById(fav.entityId);
+      const view = await ctx.loaders.customViewById.load(fav.entityId);
       if (!view || view.organizationId !== orgId) {
         return null;
       }
@@ -91,7 +101,7 @@ async function resolveEntity(
       return { ...cycle, __typename: 'Cycle' };
     }
     case 'Document': {
-      const doc = await ctx.services.document.findById(fav.entityId);
+      const doc = await ctx.loaders.documentById.load(fav.entityId);
       if (!doc || doc.organizationId !== orgId) {
         return null;
       }

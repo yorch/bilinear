@@ -6,6 +6,7 @@ import {
   signPayload,
   verifySignature,
   WebhookInvalidEventError,
+  WebhookInvalidNameError,
   WebhookInvalidUrlError,
   WebhookNoEventsError,
   WebhookPrivateUrlError,
@@ -124,6 +125,26 @@ describe('WebhookService', () => {
           url: 'https://example.com/hook',
         }),
       ).rejects.toThrow(WebhookNoEventsError);
+    });
+
+    it('rejects a name over the length cap', async () => {
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, {
+          events: ['issue.created'],
+          name: 'a'.repeat(257),
+          url: 'https://example.com/hook',
+        }),
+      ).rejects.toThrow(WebhookInvalidNameError);
+      expect(prisma.webhook.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('update', () => {
+    it('rejects a name over the length cap', async () => {
+      await expect(
+        service.update(TEST_ORG.id, TEST_WEBHOOK.id, { name: 'a'.repeat(257) }),
+      ).rejects.toThrow(WebhookInvalidNameError);
+      expect(prisma.webhook.updateMany).not.toHaveBeenCalled();
     });
   });
 

@@ -5,6 +5,7 @@ import type {
   ProjectMilestone,
   ProjectUpdate,
 } from '../../generated/prisma';
+import { MAX_RICH_TEXT_LENGTH } from '../lib/limits';
 import {
   applyStatusTransitionTimestamps,
   type StatusTimestampTransition,
@@ -125,10 +126,22 @@ export interface ProjectUpdateUpdateInput {
   health?: string;
 }
 
+// Server-side cap on project description length — shares the app-wide
+// rich-text cap (see ../lib/limits) so a malicious or buggy client can't
+// push a multi-megabyte payload through project create/update.
+function assertValidDescription(description: string | undefined): void {
+  if (description !== undefined && description.length > MAX_RICH_TEXT_LENGTH) {
+    throw new ProjectValidationError(
+      `description must be ${MAX_RICH_TEXT_LENGTH} characters or fewer`,
+    );
+  }
+}
+
 export class ProjectService {
   constructor(private prisma: PrismaClient) {}
 
   async create(orgId: string, creatorId: string, input: ProjectCreateInput): Promise<Project> {
+    assertValidDescription(input.description);
     return this.prisma.$transaction(async tx => {
       const slugId = await this.generateUniqueSlugId(
         tx as unknown as PrismaClient,
@@ -202,6 +215,7 @@ export class ProjectService {
   }
 
   async update(id: string, input: ProjectUpdateInput): Promise<Project> {
+    assertValidDescription(input.description);
     const data: Record<string, unknown> = {};
 
     if (input.name !== undefined) {
@@ -610,5 +624,13 @@ export class ProjectService {
 
     // Final fallback with timestamp + random
     return `${slug}-${Date.now().toString(36)}`;
+  }
+}
+
+/** A description value violates the server-side input length cap. */
+export class ProjectValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ProjectValidationError';
   }
 }

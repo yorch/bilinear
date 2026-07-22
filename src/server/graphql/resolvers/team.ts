@@ -257,18 +257,12 @@ export const teamResolvers = {
 
   TeamMembership: {
     owner: (membership: TeamMembership) => membership.isOwner,
-    role: async (membership: TeamMembership, _args: unknown, ctx: GraphQLContext) => {
-      const tmr = await ctx.prisma.teamMemberRole.findUnique({
-        select: { role: true },
-        where: {
-          teamId_userId: {
-            teamId: membership.teamId,
-            userId: membership.userId,
-          },
-        },
-      });
-      return tmr?.role ?? 'member';
-    },
+    role: async (membership: TeamMembership, _args: unknown, ctx: GraphQLContext) =>
+      // Batched via roleByTeamUser — a `Team.members` list of N
+      // TeamMembership rows previously fired N `teamMemberRole.findUnique`
+      // calls; the loader coalesces concurrent `.load()`s into one
+      // `findMany({ teamId: in, userId: in })` per request tick.
+      ctx.loaders.roleByTeamUser.load(`${membership.teamId}::${membership.userId}`),
 
     team: async (membership: TeamMembership, _args: unknown, ctx: GraphQLContext) =>
       ctx.services.team.findById(membership.teamId),

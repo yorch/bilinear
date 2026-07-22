@@ -5,13 +5,15 @@ import { startServerAndCreateNextHandler } from '@as-integrations/next';
 import type { GraphQLFormattedError } from 'graphql';
 import { GraphQLError } from 'graphql';
 import depthLimit from 'graphql-depth-limit';
-import { getComplexity, simpleEstimator } from 'graphql-query-complexity';
+import type { ComplexityEstimator } from 'graphql-query-complexity';
+import { fieldExtensionsEstimator, getComplexity, simpleEstimator } from 'graphql-query-complexity';
 import { NextRequest } from 'next/server';
 import type { GraphQLContext } from '@/server/graphql/context';
 import { createContext } from '@/server/graphql/context';
 import { resolvers } from '@/server/graphql/resolvers';
 import { typeDefs } from '@/server/graphql/schema';
 import { env } from '@/server/lib/env';
+import { MAX_LIST_LIMIT } from '@/server/lib/limits';
 import { logger, runWithRequestContext } from '@/server/lib/logger';
 import { isOriginStringAllowed } from '@/server/lib/request-security';
 import {
@@ -27,6 +29,17 @@ import { apiScopesAllowWrite } from '@/server/services/auth.service';
 // which tracks request budget over a 1-hour window.
 const MAX_QUERY_DEPTH = 10;
 const MAX_QUERY_COMPLEXITY = 1000;
+
+// Cap applied to any `first`/`limit`/`last` argument value when it's used as
+// a complexity multiplier below, so a client-claimed absurd page size (e.g.
+// `first: 999999`) can't be used to either (a) fan out real cost unbounded
+// or (b) inflate the *computed* complexity number itself into overflow/
+// nonsense territory. Deliberately reuses MAX_LIST_LIMIT — the same ceiling
+// every list resolver already clamps to at runtime (see clampLimit) — so a
+// caller can never be penalized in the complexity check beyond what the
+// server would actually let them page through. Tune alongside MAX_LIST_LIMIT
+// if that ceiling ever changes.
+const MAX_LIST_COMPLEXITY_MULTIPLIER = MAX_LIST_LIMIT;
 
 // GraphQL error codes that represent expected client-side conditions (bad
 // input, auth, not-found, …) rather than a server fault. These are logged at
@@ -66,6 +79,47 @@ const SLOW_REQUEST_MS = 1000;
 // as unset so a blank env var doesn't silently disable all sampled logs.
 // Validation lives in `env.ts` (`env.LOG_HTTP_SAMPLE_RATE`).
 const HTTP_LOG_SAMPLE_RATE = env.LOG_HTTP_SAMPLE_RATE;
+
+/**
+ * List-aware complexity estimator. The schema has no per-field `complexity`
+ * extensions (so `fieldExtensionsEstimator` below is a structural no-op — it
+ * always falls through), and `simpleEstimator` treats every field as cost 1
+ * regardless of how many rows it can return — so `issues(first: 10000) {
+ * assignee { ... } }` costs the same as `issues(first: 1) { assignee { ... }
+ * }` even though the former can fan out its child selection thousands of
+ * times over. This estimator multiplies a field's child complexity by its
+ * `first`/`limit`/`last` argument (when present and numeric), capped at
+ * MAX_LIST_COMPLEXITY_MULTIPLIER so a legitimate large-but-bounded page
+ * request is never penalized beyond the server's own enforced ceiling.
+ *
+ * Deliberately conservative: fields with no first/limit/last arg (the vast
+ * majority — every non-list field, plus list fields with no pagination arg)
+ * get multiplier 1, i.e. byte-identical behavior to the old
+ * `simpleEstimator`-only setup. Only list queries that actually request a
+ * page size change complexity at all, so the app's existing bootstrap/list
+ * queries (which all page well under MAX_LIST_LIMIT — see PATTERNS.md /
+ * clampLimit call sites) are unaffected.
+ *
+ * Tuning caveat: this is a heuristic, not a precise cost model — it doesn't
+ * know a field's actual DB fan-out (e.g. an N+1 relation) or weight nested
+ * lists multiplicatively beyond the single level graphql-query-complexity
+ * already recurses through via childComplexity. If a legitimate query still
+ * gets rejected in practice, prefer raising MAX_QUERY_COMPLEXITY or this
+ * estimator's cap over removing the guard.
+ */
+function listArgumentEstimator(): ComplexityEstimator {
+  return ({ args, childComplexity }) => {
+    const rawArg = (args?.first ?? args?.limit ?? args?.last) as unknown;
+    let multiplier = 1;
+    if (typeof rawArg === 'number' && Number.isFinite(rawArg) && rawArg > 1) {
+      multiplier = Math.min(Math.floor(rawArg), MAX_LIST_COMPLEXITY_MULTIPLIER);
+    }
+    // Matches simpleEstimator's own `defaultComplexity + childComplexity`
+    // shape (defaultComplexity 1) when multiplier is 1, so a field with no
+    // list arg costs exactly what it did before this change.
+    return 1 + multiplier * childComplexity;
+  };
+}
 
 /**
  * Apollo plugin: one structured access log per operation (operationName,
@@ -210,7 +264,18 @@ const server = new ApolloServer<GraphQLContext>({
         return {
           async didResolveOperation({ request, document, schema }) {
             const complexity = getComplexity({
-              estimators: [simpleEstimator({ defaultComplexity: 1 })],
+              // Order matters — the first estimator to return a defined
+              // number for a field wins. fieldExtensionsEstimator is a
+              // no-op today (no field in the schema declares a `complexity`
+              // extension) but costs nothing to keep first, in case one is
+              // added later. listArgumentEstimator applies the
+              // first/limit/last multiplier described above. simpleEstimator
+              // is the final fallback, unchanged from before.
+              estimators: [
+                fieldExtensionsEstimator(),
+                listArgumentEstimator(),
+                simpleEstimator({ defaultComplexity: 1 }),
+              ],
               operationName: request.operationName ?? undefined,
               query: document,
               schema,

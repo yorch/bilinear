@@ -228,9 +228,14 @@ describe('NotificationService', () => {
   });
 
   describe('autoSubscribe', () => {
-    it('creates subscription if none exists', async () => {
-      prisma.notificationSubscription.findUnique.mockResolvedValue(null);
-      prisma.notificationSubscription.create.mockResolvedValue({
+    // autoSubscribe is now an upsert (see notification.service.ts) rather
+    // than a find-then-create, so two near-simultaneous calls for the same
+    // (userId, issueId) can no longer race into a P2002 unique-constraint
+    // error — Postgres resolves the insert-or-update atomically. The
+    // `update: {}` no-op preserves "does not override an existing
+    // subscription" (e.g. a prior explicit unsubscribe stays unsubscribed).
+    it('upserts with a no-op update so an existing subscription is not overridden', async () => {
+      prisma.notificationSubscription.upsert.mockResolvedValue({
         active: true,
         issueId: TEST_ISSUE.id,
         userId: TEST_USER.id,
@@ -238,21 +243,13 @@ describe('NotificationService', () => {
 
       await service.autoSubscribe(TEST_USER.id, TEST_ISSUE.id);
 
-      expect(prisma.notificationSubscription.create).toHaveBeenCalledWith({
-        data: { active: true, issueId: TEST_ISSUE.id, userId: TEST_USER.id },
+      expect(prisma.notificationSubscription.upsert).toHaveBeenCalledWith({
+        create: { active: true, issueId: TEST_ISSUE.id, userId: TEST_USER.id },
+        update: {},
+        where: {
+          userId_issueId: { issueId: TEST_ISSUE.id, userId: TEST_USER.id },
+        },
       });
-    });
-
-    it('does NOT override existing subscription', async () => {
-      prisma.notificationSubscription.findUnique.mockResolvedValue({
-        active: false,
-        issueId: TEST_ISSUE.id,
-        userId: TEST_USER.id,
-      });
-
-      await service.autoSubscribe(TEST_USER.id, TEST_ISSUE.id);
-
-      expect(prisma.notificationSubscription.create).not.toHaveBeenCalled();
     });
   });
 });

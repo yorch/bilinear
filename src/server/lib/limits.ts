@@ -23,3 +23,15 @@ export const MIN_PRIORITY = 0;
 
 /** Upper bound of the issue priority scale (4 = low). */
 export const MAX_PRIORITY = 4;
+
+/** Character-length cap for a webhook's display name. */
+export const MAX_WEBHOOK_NAME_LENGTH = 256;
+
+/**
+ * Character-length cap for a single emoji reaction. Emoji (including ZWJ
+ * sequences/skin-tone modifiers) are at most a handful of codepoints —
+ * this just needs to be generous enough for any real emoji while blocking
+ * an arbitrary-length string from being stored and broadcast to every
+ * connected client as a "reaction".
+ */
+export const MAX_EMOJI_LENGTH = 32;

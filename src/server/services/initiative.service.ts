@@ -4,28 +4,11 @@ import type {
   InitiativeUpdate,
   PrismaClient,
 } from '../../generated/prisma';
+import { MAX_RICH_TEXT_LENGTH } from '../lib/limits';
 import {
   applyStatusTransitionTimestamps,
   type StatusTimestampTransition,
 } from '../lib/status-timestamps';
-import { ProjectService } from './project.service';
-
-/**
- * Deps the progress rollup needs to compute each linked project's progress
- * LIVE instead of reading the `Project.progress` column — nothing in the
- * codebase writes that column (see ProjectService.getProgress, the actual
- * source of truth), so every rollup that read it was silently averaging in
- * zeros. Optional + defaulted (not required) because `InitiativeService` is
- * constructed directly (`new InitiativeService(prisma)`, no DI container)
- * from `src/server/graphql/context.ts`. When the caller doesn't inject
- * deps, a real `ProjectService` bound to the same `prisma` client is built
- * here so production is correct without touching that call site. Unit
- * tests inject a fake `{ getProgress }` instead, keeping the progress math
- * isolated from ProjectService's own issue-counting implementation.
- */
-export interface InitiativeServiceDeps {
-  project: Pick<ProjectService, 'getProgress'>;
-}
 
 export interface InitiativeCreateInput {
   color?: string;
@@ -74,6 +57,17 @@ export type InitiativeStatus = 'planned' | 'active' | 'completed' | 'canceled';
 
 const VALID_STATUSES = new Set<InitiativeStatus>(['planned', 'active', 'completed', 'canceled']);
 
+// Server-side cap on initiative description length — shares the app-wide
+// rich-text cap (see ../lib/limits) so a malicious or buggy client can't
+// push a multi-megabyte payload through initiative create/update.
+function assertValidDescription(description: string | null | undefined): void {
+  if (description != null && description.length > MAX_RICH_TEXT_LENGTH) {
+    throw new InitiativeValidationError(
+      `description must be ${MAX_RICH_TEXT_LENGTH} characters or fewer`,
+    );
+  }
+}
+
 /**
  * Lifecycle-timestamp patch applied when transitioning into each status.
  * Stamps the entered status's marker and clears the others so a revert
@@ -100,14 +94,7 @@ const STATUS_TRANSITION_CLEARS: Record<InitiativeStatus, StatusTimestampTransiti
  * recomputed on project add/remove and on demand.
  */
 export class InitiativeService {
-  private readonly deps: InitiativeServiceDeps;
-
-  constructor(
-    private prisma: PrismaClient,
-    deps?: InitiativeServiceDeps,
-  ) {
-    this.deps = deps ?? { project: new ProjectService(prisma) };
-  }
+  constructor(private prisma: PrismaClient) {}
 
   async create(
     orgId: string,
@@ -117,6 +104,7 @@ export class InitiativeService {
     if (input.status && !VALID_STATUSES.has(input.status)) {
       throw new InitiativeInvalidStatusError();
     }
+    assertValidDescription(input.description);
 
     // Verify parent exists in this org and that the resulting depth is
     // within the cap. Both checks run before the create so we never end up
@@ -169,10 +157,13 @@ export class InitiativeService {
         // doesn't carry progress=0 even when every linked project is at
         // 100% (and the create-time SyncAction would broadcast that wrong
         // value). `Project.progress` is a dead column — nothing writes
-        // it — so the real value is fetched live via
-        // ProjectService.getProgress() instead of read off the row.
-        const progresses = await Promise.all(
-          eligible.map(p => this.deps.project.getProgress(p.id)),
+        // it — so the real value is fetched live, batched over every
+        // linked project id in one pair of queries (see
+        // `getProgressByProjectIds`) instead of one
+        // ProjectService.getProgress() round-trip per project.
+        const progressByProject = await this.getProgressByProjectIds(eligible.map(p => p.id));
+        const progresses = eligible.map(
+          p => progressByProject.get(p.id) ?? { progress: 0, scope: 0 },
         );
         const progress =
           progresses.length === 0
@@ -194,6 +185,7 @@ export class InitiativeService {
     if (input.status !== undefined && !VALID_STATUSES.has(input.status)) {
       throw new InitiativeInvalidStatusError();
     }
+    assertValidDescription(input.description);
 
     const data: Parameters<PrismaClient['initiative']['update']>[0]['data'] = {};
     if (input.name !== undefined) {
@@ -537,12 +529,14 @@ export class InitiativeService {
     const eligibleChildren = (children ?? []).filter(c => !c.archivedAt);
 
     // `Project.progress` is a dead column — nothing writes it. The real
-    // value is computed live from issue completion via
-    // ProjectService.getProgress(). Fan the reads out in parallel rather
-    // than serially; still O(N) round-trips in N linked projects, but N is
-    // bounded by how many projects one initiative links.
-    const projectProgresses = await Promise.all(
-      eligible.map(l => this.deps.project.getProgress(l.projectId)),
+    // value is computed live from issue completion, batched over every
+    // linked project id in one pair of groupBy queries (see
+    // `getProgressByProjectIds`) rather than 2 issue.count queries PER
+    // linked project (an N+1 that used to run on every project/issue
+    // mutation via the recompute cascade).
+    const progressByProject = await this.getProgressByProjectIds(eligible.map(l => l.projectId));
+    const projectProgresses = eligible.map(
+      l => progressByProject.get(l.projectId) ?? { progress: 0, scope: 0 },
     );
 
     const totalCount = eligible.length + eligibleChildren.length;
@@ -567,6 +561,71 @@ export class InitiativeService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Batched replacement for calling `ProjectService.getProgress()` once per
+   * linked project id (each call = 2 `issue.count` queries, so N linked
+   * projects meant 2N round-trips via `Promise.all` — an N+1 that ran on
+   * every initiative create-with-projects and on every recompute cascade
+   * step, i.e. potentially on every issue completion). Computes the exact
+   * same per-project `{ progress, scope }` shape as
+   * `ProjectService.getProgress` — identical row filter (`archivedAt: null`,
+   * `trashed: false`, plus `completedAt: { not: null }` for the completed
+   * half) — via two `groupBy` queries over the whole id set instead of
+   * per-project counts.
+   *
+   * Projects with zero matching issues (or that otherwise don't appear in
+   * either `groupBy` result) are given an explicit `{ progress: 0, scope: 0
+   * }` entry so every requested id has an entry in the returned map —
+   * matching `getProgress`'s own "total === 0 → progress 0" behavior.
+   */
+  private async getProgressByProjectIds(
+    projectIds: string[],
+  ): Promise<Map<string, { progress: number; scope: number }>> {
+    const result = new Map<string, { progress: number; scope: number }>();
+    if (projectIds.length === 0) {
+      return result;
+    }
+
+    const [totals, completed] = await Promise.all([
+      this.prisma.issue.groupBy({
+        _count: true,
+        by: ['projectId'],
+        where: { archivedAt: null, projectId: { in: projectIds }, trashed: false },
+      }),
+      this.prisma.issue.groupBy({
+        _count: true,
+        by: ['projectId'],
+        where: {
+          archivedAt: null,
+          completedAt: { not: null },
+          projectId: { in: projectIds },
+          trashed: false,
+        },
+      }),
+    ]);
+
+    const completedByProject = new Map<string, number>();
+    for (const row of completed) {
+      if (row.projectId) {
+        completedByProject.set(row.projectId, row._count);
+      }
+    }
+    for (const row of totals) {
+      if (!row.projectId) {
+        continue;
+      }
+      const total = row._count;
+      const done = completedByProject.get(row.projectId) ?? 0;
+      result.set(row.projectId, { progress: total > 0 ? done / total : 0, scope: total });
+    }
+    for (const id of projectIds) {
+      if (!result.has(id)) {
+        result.set(id, { progress: 0, scope: 0 });
+      }
+    }
+    return result;
   }
 
   /**
@@ -711,5 +770,13 @@ export class InitiativeMaxDepthError extends Error {
   constructor() {
     super(`Initiative nesting depth cannot exceed ${MAX_INITIATIVE_DEPTH}`);
     this.name = 'InitiativeMaxDepthError';
+  }
+}
+
+/** A description value violates the server-side input length cap. */
+export class InitiativeValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InitiativeValidationError';
   }
 }
