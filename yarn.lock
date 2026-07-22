@@ -3253,12 +3253,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tiptap/extension-image@npm:3.22.4":
-  version: 3.22.4
-  resolution: "@tiptap/extension-image@npm:3.22.4"
+"@tiptap/extension-image@npm:3.28.0":
+  version: 3.28.0
+  resolution: "@tiptap/extension-image@npm:3.28.0"
   peerDependencies:
-    "@tiptap/core": 3.22.4
-  checksum: 10c0/fcdf69066c0828ed8196ab3e42ce99ead7bd75c0f32ab3de0b69a563852a9844dc4f9db37e2c05a20bfc8085e5bd2b3f4ea8cfddf62f6b46e89030412155b092
+    "@tiptap/core": 3.28.0
+  checksum: 10c0/7f9211c91ce88fbc98db820f12f5803031153cad2ee07f0bb9e308985e04407710df653b2159382c275df4201983ea5e054b38e347bdbf151ff1ceb1c96392cb
   languageName: node
   linkType: hard
 
@@ -6082,7 +6082,7 @@ __metadata:
     "@tiptap/extension-color": "npm:3.22.4"
     "@tiptap/extension-highlight": "npm:3.22.4"
     "@tiptap/extension-horizontal-rule": "npm:3.22.4"
-    "@tiptap/extension-image": "npm:3.22.4"
+    "@tiptap/extension-image": "npm:3.28.0"
     "@tiptap/extension-link": "npm:3.22.4"
     "@tiptap/extension-mention": "npm:3.22.4"
     "@tiptap/extension-placeholder": "npm:3.22.4"
