@@ -1,5 +1,15 @@
 import crypto from 'node:crypto';
 import zlib from 'node:zlib';
+// `@xmldom/xmldom` is not a direct dependency of this package — it's a
+// runtime dependency of `xml-crypto` itself (same parser xml-crypto uses
+// internally), so it's guaranteed present. We use its `DOMParser` to build a
+// real DOM (with correct ancestor-scoped XML namespace resolution) so the
+// `<ds:Signature>` node we hand to `xml-crypto` carries proper namespace
+// context regardless of whether the IdP declares `xmlns:ds` on the Signature
+// element itself or up on a document ancestor — required for Exclusive C14N
+// to canonicalize identically to what the IdP signed.
+import { DOMParser } from '@xmldom/xmldom';
+import { SignedXml } from 'xml-crypto';
 import type { PrismaClient, SamlConfiguration } from '../../generated/prisma';
 import { childLogger } from '../lib/logger';
 import { isFirstUser } from './user.service';
@@ -82,53 +92,66 @@ function extractIssuer(xml: string): string | null {
   return m?.[1]?.trim() ?? null;
 }
 
-/**
- * Extract an XML element with the given ID attribute using balanced-tag scanning.
- * Returns the full element string including open/close tags, or null if not found.
- */
-function extractElementById(xml: string, id: string): string | null {
-  const escapedId = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const openTagMatch = xml.match(new RegExp(`<([\\w:]+)[^>]*\\bID="${escapedId}"[^>]*>`));
-  if (!openTagMatch) {
-    return null;
-  }
-
-  const tagName = openTagMatch[1];
-  const startPos = xml.indexOf(openTagMatch[0]);
-  if (startPos < 0) {
-    return null;
-  }
-
-  const openTag = `<${tagName}`;
-  const closeTag = `</${tagName}>`;
-  let depth = 0;
-  let pos = startPos;
-
-  while (pos < xml.length) {
-    const nextOpen = xml.indexOf(openTag, pos);
-    const nextClose = xml.indexOf(closeTag, pos);
-    if (nextClose < 0) {
-      break;
-    }
-    if (nextOpen >= 0 && nextOpen < nextClose) {
-      depth++;
-      pos = nextOpen + openTag.length;
-    } else {
-      depth--;
-      if (depth === 0) {
-        return xml.slice(startPos, nextClose + closeTag.length);
-      }
-      pos = nextClose + closeTag.length;
-    }
-  }
-  return null;
-}
+/** XML-DSig namespace URI for locating the `<ds:Signature>` element by identity, not string prefix. */
+const DSIG_NS = 'http://www.w3.org/2000/09/xmldsig#';
 
 /**
- * Validate the <ds:DigestValue> of a signed reference element to detect
- * content substitution (signature wrapping attacks).
+ * Verify the XML-DSig signature on a SAML Response using the IdP certificate,
+ * via the vetted `xml-crypto` library (real Exclusive C14N + digest +
+ * signature verification, rather than the whitespace-normalization shortcut
+ * this function used to hand-roll).
+ *
+ * Returns the signed content — the canonicalized, cryptographically-verified
+ * XML of the *referenced* element only — so callers restrict all claim
+ * extraction to it, preventing XML signature-wrapping attacks. Two layers of
+ * wrapping defense are applied on top of xml-crypto's own verification:
+ *   1. Exactly one `<ds:Signature>` and exactly one signed `Reference` are
+ *      required (no ambiguity about which element is "the" signed content).
+ *   2. The signed content itself must contain exactly one Assertion element
+ *      (defends against a Reference whose target is a *wrapper* containing
+ *      both a legitimately-signed Assertion and an injected, unsigned decoy).
+ * xml-crypto also independently refuses to validate a document containing
+ * multiple elements sharing the same ID attribute value — a classic
+ * signature-wrapping vector — before this function is ever reached.
+ *
+ * The IdP certificate is always the one pinned in the org's SamlConfig
+ * (`certPem`); `getCertFromKeyInfo` is forced to return null so a certificate
+ * embedded in the document's own `<ds:KeyInfo>` is never trusted, even if
+ * present.
  */
-function validateReferenceDigest(signedInfoXml: string, content: string): void {
+function verifyXmlSignature(xml: string, certPem: string): string {
+  // --- Structural + algorithm-posture pre-checks (fail closed) --------------
+  // These mirror the checks this function has always made; only the actual
+  // C14N/digest/signature cryptography below is now delegated to xml-crypto.
+  const sigInfoMatch = xml.match(/<ds:SignedInfo[\s\S]*?<\/ds:SignedInfo>/i);
+  if (!sigInfoMatch) {
+    throw new SamlParseError('SAML response is not signed');
+  }
+  const signedInfoXml = sigInfoMatch[0];
+
+  const algMatch = signedInfoXml.match(/<ds:SignatureMethod[^>]+Algorithm="([^"]+)"/i);
+  const algorithm = algMatch?.[1] ?? '';
+  if (algorithm.includes('rsa-sha256')) {
+    // preferred algorithm — no action needed
+  } else if (algorithm.includes('rsa-sha1')) {
+    log.warn('SAML signature uses deprecated SHA-1 (rsa-sha1); migrate the IdP to rsa-sha256');
+  } else {
+    throw new SamlParseError(`Unsupported SAML signature algorithm: ${algorithm}`);
+  }
+
+  // Fail closed: a signature with no identifiable Reference target must never
+  // be treated as covering the whole (otherwise-unsigned) document. xml-crypto
+  // itself would treat an empty/absent URI as "the whole document" (a
+  // same-document same-URI reference), so this must be rejected before we
+  // ever hand the document to it.
+  const refMatch = signedInfoXml.match(/<ds:Reference\s+URI="#([^"]+)"/i);
+  if (!refMatch?.[1]) {
+    throw new SamlParseError(
+      'SAML signature has no Reference URI — refusing to trust the entire document',
+    );
+  }
+  const referencedId = refMatch[1];
+
   const digestMethodMatch = signedInfoXml.match(/<ds:DigestMethod[^>]+Algorithm="([^"]+)"/i);
   const digestValueMatch = signedInfoXml.match(
     /<ds:DigestValue[^>]*>\s*([\s\S]*?)\s*<\/ds:DigestValue>/i,
@@ -138,107 +161,115 @@ function validateReferenceDigest(signedInfoXml: string, content: string): void {
     // substitution, so it must be rejected rather than silently trusted.
     throw new SamlParseError('SAML signature reference is missing a DigestMethod/DigestValue');
   }
-
   const digestAlgUri = digestMethodMatch[1];
-  const expectedDigest = digestValueMatch[1].replace(/\s+/g, '');
-
-  let hashAlg: string;
   if (digestAlgUri.includes('sha256')) {
-    hashAlg = 'sha256';
+    // preferred algorithm — no action needed
   } else if (digestAlgUri.includes('sha1')) {
-    hashAlg = 'sha1';
     log.warn('SAML reference digest uses deprecated SHA-1; migrate the IdP to SHA-256');
   } else {
     throw new SamlParseError(`Unsupported SAML digest algorithm: ${digestAlgUri}`);
   }
 
-  const normalized = content.replace(/>\s+</g, '><').trim();
-  const actualDigest = crypto.createHash(hashAlg).update(normalized, 'utf8').digest('base64');
-
-  if (actualDigest !== expectedDigest) {
-    throw new SamlParseError('SAML response reference digest mismatch');
+  // --- Parse the document and locate the Signature node ---------------------
+  let doc: Document;
+  try {
+    doc = new DOMParser().parseFromString(xml, 'text/xml');
+  } catch {
+    throw new SamlParseError('Failed to parse SAML response XML');
   }
-}
 
-/**
- * Verify the XML-DSig signature on a SAML Response using the IdP certificate.
- * Returns the signed XML fragment so callers can restrict attribute extraction
- * to the verified content, preventing XML signature-wrapping attacks.
- *
- * Also validates the <ds:DigestValue> of the referenced element to detect
- * content substitution, and requires the signed content to contain exactly
- * one Assertion (defense against signature-wrapping attacks where a decoy
- * Assertion is injected alongside the legitimately-signed one).
- *
- * Limitation: uses whitespace-only normalisation instead of full Exclusive
- * C14N. This whole function remains a hand-rolled XML-DSig verifier; the
- * recommended long-term fix is to replace it with a vetted library (e.g.
- * `xml-crypto` or `@node-saml/node-saml`) rather than continuing to harden
- * this by hand.
- */
-function verifyXmlSignature(xml: string, certPem: string): string {
-  const sigInfoMatch = xml.match(/<ds:SignedInfo[\s\S]*?<\/ds:SignedInfo>/i);
-  if (!sigInfoMatch) {
+  // Located by (localName, namespace) identity, not string prefix — this also
+  // correctly resolves a `ds` namespace declared on an ancestor rather than
+  // repeated on the Signature element itself (a real-IdP pattern the old
+  // regex/whitespace-normalization approach could not have handled safely).
+  const signatureNodes = doc.getElementsByTagNameNS(DSIG_NS, 'Signature');
+  if (signatureNodes.length === 0) {
     throw new SamlParseError('SAML response is not signed');
   }
-
-  const sigValMatch = xml.match(/<ds:SignatureValue[^>]*>\s*([\s\S]*?)\s*<\/ds:SignatureValue>/i);
-  if (!sigValMatch) {
-    throw new SamlParseError('SAML response signature value is missing');
+  if (signatureNodes.length > 1) {
+    // Ambiguous: refuse to guess which Signature covers the assertion we're
+    // about to trust.
+    throw new SamlParseError(
+      'SAML response contains more than one Signature element — refusing to trust ambiguous content',
+    );
   }
 
-  const signedInfoXml = sigInfoMatch[0];
-  const signatureB64 = sigValMatch[1].replace(/\s+/g, '');
+  // --- Verify via xml-crypto, pinned to the configured IdP certificate -------
+  const verifier = new SignedXml({
+    // Never trust a certificate embedded in the document's own KeyInfo — the
+    // only certificate that may verify this signature is the one configured
+    // for this org's IdP.
+    getCertFromKeyInfo: () => null,
+    publicCert: certPem,
+  });
 
-  const algMatch = signedInfoXml.match(/<ds:SignatureMethod[^>]+Algorithm="([^"]+)"/i);
-  const algorithm = algMatch?.[1] ?? '';
-
-  let nodeAlg: string;
-  if (algorithm.includes('rsa-sha256')) {
-    nodeAlg = 'RSA-SHA256';
-  } else if (algorithm.includes('rsa-sha1')) {
-    nodeAlg = 'RSA-SHA1';
-    log.warn('SAML signature uses deprecated SHA-1 (rsa-sha1); migrate the IdP to rsa-sha256');
-  } else {
-    throw new SamlParseError(`Unsupported SAML signature algorithm: ${algorithm}`);
+  try {
+    verifier.loadSignature(signatureNodes[0]);
+  } catch (err) {
+    throw new SamlParseError(
+      `SAML signature could not be parsed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
-
-  // Whitespace-only normalization (not true Exclusive C14N).
-  const normalizedSignedInfo = signedInfoXml.replace(/>\s+</g, '><').trim();
 
   let valid: boolean;
   try {
-    const verifier = crypto.createVerify(nodeAlg);
-    verifier.update(normalizedSignedInfo, 'utf8');
-    valid = verifier.verify(certPem, signatureB64, 'base64');
-  } catch {
-    throw new SamlParseError('SAML signature verification error');
-  }
-
-  if (!valid) {
+    valid = verifier.checkSignature(xml);
+  } catch (err) {
+    // xml-crypto itself refuses to validate a document containing multiple
+    // elements that share the same ID attribute value — a classic
+    // signature-wrapping vector (the Reference resolves ambiguously between
+    // the legitimately-signed element and an attacker-injected one with the
+    // same ID). Surface that distinctly; anything else (e.g. the
+    // SignatureValue itself doesn't verify against the SignedInfo) collapses
+    // to the generic invalid-signature error.
+    if (err instanceof Error && err.message.includes('multiple elements with the same value')) {
+      throw new SamlParseError(
+        'SAML response contains multiple elements with the same ID (possible signature-wrapping attempt)',
+      );
+    }
     throw new SamlParseError('SAML response signature is invalid');
   }
 
-  // Locate the signed element via the Reference URI to prevent wrapping attacks.
-  // Fail closed: a signature with no identifiable Reference target must never
-  // be treated as covering the whole (otherwise-unsigned) document.
-  const refMatch = signedInfoXml.match(/<ds:Reference\s+URI="#([^"]+)"/i);
-  if (!refMatch?.[1]) {
+  if (!valid) {
+    // checkSignature() returns false (rather than throwing) when a
+    // Reference's digest doesn't match its element — surface that
+    // distinctly, matching this function's historical wrapping-detection
+    // message, since it usually indicates post-signing content substitution.
+    const failedReference = verifier.getReferences().find(ref => ref.validationError);
+    if (failedReference?.validationError?.message.includes('calculated digest')) {
+      throw new SamlParseError('SAML response reference digest mismatch');
+    }
+    throw new SamlParseError('SAML response signature is invalid');
+  }
+
+  // --- Signature-wrapping defense: trust ONLY the verified reference --------
+  // Never fall back to the raw `xml` for claim extraction. Require exactly
+  // one Reference so there's no ambiguity, and confirm it's the same element
+  // named by the SignedInfo's Reference URI checked above.
+  const references = verifier.getReferences();
+  if (references.length !== 1) {
     throw new SamlParseError(
-      'SAML signature has no Reference URI — refusing to trust the entire document',
+      'SAML signature must cover exactly one Reference (possible signature-wrapping attempt)',
     );
   }
-  const signedElement = extractElementById(xml, refMatch[1]);
+  const [reference] = references;
+  const referenceUri = reference.uri?.startsWith('#') ? reference.uri.slice(1) : reference.uri;
+  if (referenceUri !== referencedId) {
+    throw new SamlParseError('SAML signature Reference URI mismatch');
+  }
+  const signedElement = reference.signedReference;
   if (!signedElement) {
-    throw new SamlParseError('SAML signed reference element not found');
+    // Should be unreachable given `valid === true` above, but fail closed
+    // rather than trust anything if xml-crypto ever changes this invariant.
+    throw new SamlParseError('SAML signed reference content is unavailable after verification');
   }
 
-  validateReferenceDigest(signedInfoXml, signedElement);
-
   // Guard against signature-wrapping: the signed content must cover exactly
-  // one Assertion. If claim extraction could see a second, unsigned
-  // Assertion alongside the signed one, an attacker could rely on the
-  // legitimate signature while injecting forged claims elsewhere.
+  // one Assertion. Even though `signedElement` is now cryptographically
+  // verified, it may be a *wrapper* whose signed subtree contains both a
+  // legitimate Assertion and an injected, unsigned decoy — if claim
+  // extraction could see a second Assertion here, an attacker could rely on
+  // the legitimate signature while smuggling in forged claims.
   const assertionMatches = signedElement.match(/<(?:saml2?:)?Assertion(?=[\s>])/gi) ?? [];
   if (assertionMatches.length !== 1) {
     throw new SamlParseError(

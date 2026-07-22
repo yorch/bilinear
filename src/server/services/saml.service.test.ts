@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SignedXml } from 'xml-crypto';
 import { TEST_ORG, TEST_USER } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
@@ -14,24 +15,69 @@ import {
 // ---------------------------------------------------------------------------
 // Signed-XML test helpers
 //
-// We generate a real RSA keypair so the service's crypto.verify path runs for
-// real. The signature is computed over the whitespace-normalized <ds:SignedInfo>
-// exactly the way the service normalizes it before verifying, and the
-// <ds:DigestValue> is computed over the whitespace-normalized referenced
-// element — matching validateReferenceDigest's normalization.
+// We generate a real RSA keypair and sign fixtures with xml-crypto's own
+// `SignedXml` (real Exclusive C14N + digest + signature computation) so the
+// service's xml-crypto-based verification path runs for real end-to-end,
+// rather than the old whitespace-normalization shortcut (which xml-crypto
+// would — correctly — reject as an invalid signature).
 // ---------------------------------------------------------------------------
 
 const { privateKey, certPem } = (() => {
   const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
     modulusLength: 2048,
   });
-  // The service passes the PEM straight to crypto.verify, which accepts a raw
+  // The service passes the PEM straight to xml-crypto, which accepts a raw
   // public key PEM, so we can use the SPKI public key in place of a certificate.
   return {
     certPem: publicKey.export({ format: 'pem', type: 'spki' }).toString(),
     privateKey,
   };
 })();
+
+const SIGNATURE_ALGORITHM_URI: Record<'rsa-sha1' | 'rsa-sha256', string> = {
+  'rsa-sha1': 'http://www.w3.org/2000/09/xmldsig#rsa-sha1',
+  'rsa-sha256': 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
+};
+const DIGEST_ALGORITHM_URI: Record<'sha1' | 'sha256', string> = {
+  sha1: 'http://www.w3.org/2000/09/xmldsig#sha1',
+  sha256: 'http://www.w3.org/2001/04/xmlenc#sha256',
+};
+const EXC_C14N = 'http://www.w3.org/2001/10/xml-exc-c14n#';
+
+/**
+ * Sign `xml` (which must contain exactly one element matching `referenceXpath`,
+ * carrying its own ID attribute) using xml-crypto, inserting the resulting
+ * `<ds:Signature>` immediately after the element matched by `insertAfterXpath`.
+ * Mirrors how a real IdP places a Response-level signature referencing the
+ * Assertion by ID (Signature as a sibling of Issuer/Assertion, not enveloping
+ * them).
+ */
+function signXml(
+  xml: string,
+  opts: {
+    digestAlg: 'sha1' | 'sha256';
+    insertAfterXpath: string;
+    referenceXpath: string;
+    sigAlg: 'rsa-sha1' | 'rsa-sha256';
+    signKey: crypto.KeyObject;
+  },
+): string {
+  const signer = new SignedXml({
+    canonicalizationAlgorithm: EXC_C14N,
+    privateKey: opts.signKey,
+    signatureAlgorithm: SIGNATURE_ALGORITHM_URI[opts.sigAlg],
+  });
+  signer.addReference({
+    digestAlgorithm: DIGEST_ALGORITHM_URI[opts.digestAlg],
+    transforms: [EXC_C14N],
+    xpath: opts.referenceXpath,
+  });
+  signer.computeSignature(xml, {
+    location: { action: 'after', reference: opts.insertAfterXpath },
+    prefix: 'ds',
+  });
+  return signer.getSignedXml();
+}
 
 const IDP_ENTITY_ID = 'https://idp.example.com/metadata';
 const SP_ENTITY_ID = 'https://sp.example.com/api/auth/saml/metadata?org=acme';
@@ -119,52 +165,25 @@ function buildSignedResponse(opts: SignedResponseOptions = {}): string {
         }"/></saml:SubjectConfirmation>`;
 
   const assertion =
-    `<saml:Assertion ID="${assertionId}">` +
+    `<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="${assertionId}">` +
     `<saml:Subject><saml:NameID>${nameId}</saml:NameID>${subjectConfirmationXml}</saml:Subject>` +
     conditionsXml +
     `<saml:AttributeStatement>${attrLines.join('')}</saml:AttributeStatement>` +
     `</saml:Assertion>`;
 
-  const digestUri =
-    digestAlg === 'sha256'
-      ? 'http://www.w3.org/2001/04/xmlenc#sha256'
-      : 'http://www.w3.org/2000/09/xmldsig#sha1';
-  const sigUri =
-    sigAlg === 'rsa-sha256'
-      ? 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256'
-      : 'http://www.w3.org/2000/09/xmldsig#rsa-sha1';
-
-  const digestValue = crypto
-    .createHash(digestAlg)
-    .update(normalize(assertion), 'utf8')
-    .digest('base64');
-
-  const signedInfo =
-    `<ds:SignedInfo>` +
-    `<ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/>` +
-    `<ds:SignatureMethod Algorithm="${sigUri}"/>` +
-    `<ds:Reference URI="#${assertionId}">` +
-    `<ds:DigestMethod Algorithm="${digestUri}"/>` +
-    `<ds:DigestValue>${digestValue}</ds:DigestValue>` +
-    `</ds:Reference>` +
-    `</ds:SignedInfo>`;
-
-  const nodeAlg = sigAlg === 'rsa-sha256' ? 'RSA-SHA256' : 'RSA-SHA1';
-  const signer = crypto.createSign(nodeAlg);
-  signer.update(normalize(signedInfo), 'utf8');
-  const signatureValue = signer.sign(signKey, 'base64');
-
-  const signature =
-    `<ds:Signature>${signedInfo}` +
-    `<ds:SignatureValue>${signatureValue}</ds:SignatureValue>` +
-    `</ds:Signature>`;
-
-  let xml =
-    `<samlp:Response>` +
+  const unsignedResponse =
+    `<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">` +
     `<saml:Issuer>${issuer}</saml:Issuer>` +
-    signature +
     assertion +
     `</samlp:Response>`;
+
+  let xml = signXml(unsignedResponse, {
+    digestAlg,
+    insertAfterXpath: "//*[local-name(.)='Issuer']",
+    referenceXpath: "//*[local-name(.)='Assertion']",
+    sigAlg,
+    signKey,
+  });
 
   if (opts.tamperAssertionAfterSign) {
     xml = xml.replace('Jane Doe', 'Evil Hacker');
@@ -522,6 +541,92 @@ describe('SamlService', () => {
       });
       await expect(service.parseAndValidateResponse(makeConfig(), samlResponse)).rejects.toThrow(
         /digest mismatch/,
+      );
+    });
+
+    it('rejects a signature-wrapping attempt where the signed Reference wraps two assertions', async () => {
+      // The Reference targets a wrapper element (not the Assertion itself)
+      // that legitimately contains BOTH a real Assertion and an attacker's
+      // injected decoy — the digest over the whole wrapper still validates
+      // (nothing was tampered with post-signing), but claim extraction must
+      // never be ambiguous about which Assertion is trustworthy.
+      const notOnOrAfter = new Date(Date.now() + 5 * 60_000).toISOString();
+      const realAssertion =
+        '<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_real">' +
+        '<saml:Subject><saml:NameID>user@example.com</saml:NameID></saml:Subject>' +
+        `<saml:Conditions NotOnOrAfter="${notOnOrAfter}"/>` +
+        '<saml:AttributeStatement/></saml:Assertion>';
+      const decoyAssertion =
+        '<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_decoy">' +
+        '<saml:Subject><saml:NameID>attacker@evil.example.com</saml:NameID></saml:Subject>' +
+        `<saml:Conditions NotOnOrAfter="${notOnOrAfter}"/>` +
+        '<saml:AttributeStatement><saml:Attribute Name="email">' +
+        '<saml:AttributeValue>attacker@evil.example.com</saml:AttributeValue>' +
+        '</saml:Attribute></saml:AttributeStatement></saml:Assertion>';
+      const wrapper =
+        '<saml:Extensions xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_wrap1">' +
+        `${realAssertion}${decoyAssertion}</saml:Extensions>`;
+
+      const unsignedResponse =
+        `<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">` +
+        `<saml:Issuer>${IDP_ENTITY_ID}</saml:Issuer>` +
+        wrapper +
+        `</samlp:Response>`;
+
+      const xml = signXml(unsignedResponse, {
+        digestAlg: 'sha256',
+        insertAfterXpath: "//*[local-name(.)='Issuer']",
+        referenceXpath: "//*[local-name(.)='Extensions']",
+        sigAlg: 'rsa-sha256',
+        signKey: privateKey,
+      });
+      const samlResponse = Buffer.from(xml, 'utf8').toString('base64');
+
+      await expect(service.parseAndValidateResponse(makeConfig(), samlResponse)).rejects.toThrow(
+        /exactly one Assertion/,
+      );
+    });
+
+    it('rejects a signature-wrapping attempt via a duplicate-ID decoy assertion', async () => {
+      // A second, unsigned Assertion is injected as a sibling of the
+      // legitimately-signed one, reusing its exact ID attribute value — the
+      // classic XML signature-wrapping vector. xml-crypto refuses to
+      // validate any document containing duplicate ID values outright,
+      // regardless of what our own Reference/Assertion-count guards do.
+      const assertionId = '_dup-id';
+      const notOnOrAfter = new Date(Date.now() + 5 * 60_000).toISOString();
+      const legitAssertion =
+        `<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="${assertionId}">` +
+        '<saml:Subject><saml:NameID>user@example.com</saml:NameID></saml:Subject>' +
+        `<saml:Conditions NotOnOrAfter="${notOnOrAfter}"/>` +
+        '<saml:AttributeStatement/></saml:Assertion>';
+
+      const unsignedResponse =
+        `<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">` +
+        `<saml:Issuer>${IDP_ENTITY_ID}</saml:Issuer>` +
+        legitAssertion +
+        `</samlp:Response>`;
+
+      const signedXml = signXml(unsignedResponse, {
+        digestAlg: 'sha256',
+        insertAfterXpath: "//*[local-name(.)='Issuer']",
+        referenceXpath: "//*[local-name(.)='Assertion']",
+        sigAlg: 'rsa-sha256',
+        signKey: privateKey,
+      });
+
+      const decoyAssertion =
+        `<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="${assertionId}">` +
+        '<saml:Subject><saml:NameID>attacker@evil.example.com</saml:NameID></saml:Subject>' +
+        `<saml:Conditions NotOnOrAfter="${notOnOrAfter}"/>` +
+        '<saml:AttributeStatement><saml:Attribute Name="email">' +
+        '<saml:AttributeValue>attacker@evil.example.com</saml:AttributeValue>' +
+        '</saml:Attribute></saml:AttributeStatement></saml:Assertion>';
+      const xml = signedXml.replace('</samlp:Response>', `${decoyAssertion}</samlp:Response>`);
+      const samlResponse = Buffer.from(xml, 'utf8').toString('base64');
+
+      await expect(service.parseAndValidateResponse(makeConfig(), samlResponse)).rejects.toThrow(
+        /signature-wrapping/,
       );
     });
 
