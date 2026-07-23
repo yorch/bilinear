@@ -1,6 +1,6 @@
 import type { Redis } from 'ioredis';
 import { Prisma, type PrismaClient } from '../../generated/prisma';
-import { DELTA_PAGE_SIZE } from '../../lib/sync-config';
+import { DELTA_PAGE_SIZE, MAX_PLAUSIBLE_XACT_ID } from '../../lib/sync-config';
 import { childLogger } from '../lib/logger';
 
 const log = childLogger({ module: 'sync' });
@@ -82,10 +82,13 @@ export type SyncWriteClient = Pick<PrismaClient, '$queryRaw'>;
  * Postgres transaction id — see `getDeltaSyncActions` for the commit-order
  * fence that makes this never-skip.
  *
- * `parseCursor` is backward-compatible with the legacy `<id>` format —
- * a client persisted with the old encoding will be treated as cursor
- * `(0, id)` so the next delta re-reads from the very beginning (xid8 values
- * are always > 0), i.e. it picks up everything.
+ * `parseCursor` self-heals BOTH older encodings:
+ *   - the original `<id>` (no dash) → `(0, id)`; and
+ *   - the intermediate `<committedAtMicros>-<id>`, whose first component is an
+ *     epoch-microseconds value far above any real xid8 (see
+ *     `MAX_PLAUSIBLE_XACT_ID`) → reset to the zero cursor.
+ * Either way the next delta re-reads from the very beginning (all real xid8
+ * values are > 0), i.e. it picks up everything, instead of stalling.
  */
 export interface DeltaCursor {
   id: bigint;
@@ -109,10 +112,14 @@ export function parseCursor(raw: string | null | undefined): DeltaCursor {
     }
   }
   try {
-    return {
-      id: BigInt(raw.slice(dash + 1)),
-      xactId: BigInt(raw.slice(0, dash)),
-    };
+    const xactId = BigInt(raw.slice(0, dash));
+    // A first component at/above the plausible-xid ceiling is a stale
+    // `<committedAtMicros>-<id>` cursor from before the xact_id migration —
+    // reset so delta re-reads from the start rather than filtering to nothing.
+    if (xactId >= MAX_PLAUSIBLE_XACT_ID) {
+      return ZERO_CURSOR;
+    }
+    return { id: BigInt(raw.slice(dash + 1)), xactId };
   } catch {
     return ZERO_CURSOR;
   }
@@ -245,6 +252,19 @@ export class SyncService {
     const withGuestVisibility = <T extends object>(where: T): T =>
       guestVisibilityClause ? ({ ...where, ...guestVisibilityClause } as T) : where;
 
+    // Take the cursor BEFORE the (non-atomic, individually-snapshotted) entity
+    // reads below — never inside their `Promise.all`. Under READ COMMITTED each
+    // query gets its own snapshot, so a transaction that commits DURING
+    // bootstrap could otherwise land in the cursor (settled by the cursor read)
+    // yet be absent from an entity read that snapshotted earlier — and delta,
+    // which reads strictly after the cursor, would never re-fetch it. Reading
+    // the cursor first guarantees it sits at or below every entity snapshot:
+    // any transaction still in flight at cursor time has `xact_id` ABOVE the
+    // cursor (the fence excludes it from the max), so the first delta re-reads
+    // it, closing the bootstrap→delta gap. Costs one sequential round-trip, the
+    // same shape the former `watermark()` pre-fetch had.
+    const bootstrapCursor = await this.latestSettledCursor(orgId);
+
     const [
       organizations,
       teams,
@@ -265,7 +285,6 @@ export class SyncService {
       customFieldValues,
       initiatives,
       initiativeProjects,
-      bootstrapCursor,
     ] = await Promise.all([
       this.prisma.organization.findUnique({
         // Both are settings blobs for the admin console (SSO config, security
@@ -393,11 +412,6 @@ export class SyncService {
       this.prisma.initiativeProject.findMany({
         where: { initiative: { archivedAt: null, organizationId: orgId } },
       }),
-      // Fenced latest row: the topmost SETTLED `(xactId, id)` tuple, so the
-      // returned cursor never sits above a transaction still in flight at
-      // bootstrap time (which could later commit below max(id) and be skipped
-      // by the next delta). See `latestSettledCursor`.
-      this.latestSettledCursor(orgId),
     ]);
 
     // Denormalize label IDs onto each issue

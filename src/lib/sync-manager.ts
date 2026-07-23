@@ -1,4 +1,8 @@
-import { COMMIT_WATERMARK_LAG_MS, DELTA_PAGE_SIZE } from '@/lib/sync-config';
+import {
+  COMMIT_WATERMARK_LAG_MS,
+  DELTA_PAGE_SIZE,
+  MAX_PLAUSIBLE_XACT_ID,
+} from '@/lib/sync-config';
 import { normalizeIssueRow } from '@/stores/issue-store';
 import type { RootStore } from '@/stores/root-store';
 import { db } from './db';
@@ -45,7 +49,16 @@ function splitCursor(c: string): [bigint, bigint] {
     }
   }
   try {
-    return [BigInt(c.slice(0, dash)), BigInt(c.slice(dash + 1))];
+    const xact = BigInt(c.slice(0, dash));
+    // A first component above the plausible-xid ceiling is a stale
+    // `<committedAtMicros>-<id>` cursor from before the xact_id migration;
+    // collapse it to the zero cursor so a real incoming action's small xactId
+    // overtakes it (and the persisted cursor heals) instead of the stale huge
+    // value pinning `max()` forever. See MAX_PLAUSIBLE_XACT_ID.
+    if (xact >= MAX_PLAUSIBLE_XACT_ID) {
+      return [BigInt(0), BigInt(0)];
+    }
+    return [xact, BigInt(c.slice(dash + 1))];
   } catch {
     return [BigInt(0), BigInt(0)];
   }

@@ -280,6 +280,23 @@ describe('SyncManager', () => {
       await (manager as Instance).applyActions([makeAction({ id: '10', xactId: '0' })]);
       expect(stores.syncStore.lastSyncId).toBe('0-10');
     });
+
+    it('heals a stale `<committedAtMicros>-<id>` cursor instead of letting its huge value pin max()', async () => {
+      const stores = createFakeStores();
+      // A cursor persisted before the xact_id migration: the first component is
+      // an epoch-microseconds value (~1.7e15) far above any real xid8. Left as
+      // a raw BigInt it would dominate every real (small-xactId) action forever,
+      // so the persisted cursor would never advance and delta would keep
+      // re-reading from a wedged position.
+      stores.syncStore.lastSyncId = '1750000000000000-12345';
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+
+      await (manager as Instance).applyActions([makeAction({ id: '5', xactId: '1001' })]);
+
+      // The stale cursor collapses to (0,0), so the real action overtakes it and
+      // the persisted cursor heals to a real `<xactId>-<id>` value.
+      expect(stores.syncStore.lastSyncId).toBe('1001-5');
+    });
   });
 
   // ─── deltaSync local-cursor pagination ──────────────────────────────────

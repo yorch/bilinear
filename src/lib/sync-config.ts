@@ -32,6 +32,22 @@ export const COMMIT_WATERMARK_LAG_MS = 500;
 export const DELTA_PAGE_SIZE = 5000;
 
 /**
+ * Upper bound distinguishing a real `xact_id` (the current `<xactId>-<id>`
+ * cursor's first component) from a stale first component left by an OLDER
+ * cursor encoding. The delta cursor was briefly `<committedAtMicros>-<id>`
+ * before moving to `<xactId>-<id>`; a client (or IndexedDB `lastSyncId`)
+ * carrying that intermediate form would otherwise be parsed as an astronomically
+ * large `xactId` (epoch-microseconds ≈ 1.7e15), making `xact_id > <that>` match
+ * zero rows and wedging delta sync forever. Real xid8 values grow by one per
+ * write transaction, so they stay far below this ceiling for millennia; any
+ * parsed first component at or above it is treated as a stale/unknown cursor and
+ * reset to the zero cursor, which triggers a one-time full re-read (safe,
+ * idempotent) instead of a silent stall. Shared by `SyncService.parseCursor`
+ * (server) and `sync-manager`'s `splitCursor` (client) so both self-heal.
+ */
+export const MAX_PLAUSIBLE_XACT_ID = BigInt('1000000000000000');
+
+/**
  * Cadence at which the WS server pings each connected client to detect dead
  * connections. Server-only value, but kept here alongside its dependent
  * (`WS_PONG_TIMEOUT_MS`) and the client's own heartbeat timeout for a single

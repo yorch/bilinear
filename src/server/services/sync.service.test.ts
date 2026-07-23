@@ -186,6 +186,16 @@ describe('SyncService.getDeltaSyncActions — pagination', () => {
     expect(c.id).toBe(BigInt(99));
   });
 
+  it('parseCursor resets a stale `<committedAtMicros>-<id>` cursor to zero (self-heal)', () => {
+    // A cursor from before the xact_id migration: the first component is an
+    // epoch-microseconds value (~1.7e15) far above any real xid8. Parsing it as
+    // an xactId would make `xact_id > 1.7e15` match nothing and wedge delta
+    // forever — so it must reset to the zero cursor for a full re-read.
+    const c = parseCursor('1750000000000000-12345');
+    expect(c.xactId).toBe(BigInt(0));
+    expect(c.id).toBe(BigInt(0));
+  });
+
   it('encodeCursor round-trips a (xactId, id) tuple', () => {
     expect(encodeCursor(BigInt(1700), BigInt(99))).toBe('1700-99');
   });
