@@ -34,35 +34,33 @@ CREATE INDEX "auth_tokens_token_hash_magic_link_idx"
   WHERE "type" = 'magic_link';
 
 -- ---------------------------------------------------------------------------
--- sync_actions.committed_at trigger
+-- sync_actions.xact_id commit-order fence
 -- ---------------------------------------------------------------------------
--- Stamps committed_at to the statement's start time on every INSERT so
--- ordering by committed_at corresponds to wall-clock order. Combined with
--- the 500ms safety window + (organization_id, committed_at, id) cursor in
--- SyncService.getDeltaSyncActions, this closes the BIGSERIAL ordering hole
--- (ids are assigned at INSERT but transactions commit out of order — a
--- client recording lastSyncId=max(id) could otherwise miss a row whose id
--- is lower but commits later). Load-bearing for delta sync.
+-- Stamps every insert with the writing transaction's 64-bit transaction id
+-- (`pg_current_xact_id()` → xid8, no wraparound). Delta sync
+-- (SyncService.getDeltaSyncActions) orders by `(xact_id, id)` and reads only
+-- rows with `xact_id < pg_snapshot_xmin(pg_current_snapshot())` — i.e. rows
+-- whose transaction has SETTLED and below which no transaction is still in
+-- flight. This is a provably never-skip cursor: it replaces the former
+-- `committed_at = statement_timestamp()` + 500ms wall-clock safety window,
+-- which could still miss a row whose transaction inserted early but committed
+-- more than the window later (BIGSERIAL ids are assigned at INSERT but commit
+-- out of order — a client recording lastSyncId=max(id) could skip a
+-- lower-id-but-later-commit row). Fencing on the transaction id instead of a
+-- timestamp removes the wall-clock guess entirely: an in-flight xid keeps its
+-- rows fenced until it actually commits, regardless of how long that takes.
+-- Load-bearing for delta sync.
 --
--- The assignment is UNCONDITIONAL on purpose. The column carries a DB DEFAULT
--- (CURRENT_TIMESTAMP, from `@default(now())` in schema.prisma), and PostgreSQL
--- materializes column DEFAULTs into NEW *before* BEFORE INSERT triggers fire.
--- A guarded `IF NEW.committed_at IS NULL` would therefore never run — NEW
--- always arrives pre-populated with the (wrong, transaction-START) default.
--- Overwriting it here with statement_timestamp() is what makes the watermark
--- correct, and is robust even if a future `prisma migrate`/`db push` re-adds
--- the default.
-CREATE OR REPLACE FUNCTION sync_action_set_committed_at()
-RETURNS TRIGGER LANGUAGE plpgsql AS $$
-BEGIN
-  NEW.committed_at := statement_timestamp();
-  RETURN NEW;
-END;
-$$;
+-- Prisma's DSL cannot express the `xid8` type, the `pg_current_xact_id()`
+-- default, or an index on an Unsupported-typed column, so the column and its
+-- covering index live here rather than in the generated init. `pg_current_xact_id()`
+-- returns the xid the INSERT already assigns, so this consumes no extra xids
+-- beyond what the write itself does.
+ALTER TABLE "sync_actions"
+  ADD COLUMN "xact_id" xid8 NOT NULL DEFAULT pg_current_xact_id();
 
-CREATE TRIGGER set_sync_action_committed_at
-  BEFORE INSERT ON sync_actions
-  FOR EACH ROW EXECUTE FUNCTION sync_action_set_committed_at();
+CREATE INDEX "sync_actions_organization_id_xact_id_id_idx"
+  ON "sync_actions" ("organization_id", "xact_id", "id");
 
 -- ---------------------------------------------------------------------------
 -- Full-text search GIN index on issues

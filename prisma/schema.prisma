@@ -554,23 +554,26 @@ model SyncAction {
   data           Json?
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-  // statement_timestamp() stamped by the BEFORE INSERT trigger
-  // `set_sync_action_committed_at`, which assigns it UNCONDITIONALLY and so
-  // overrides the `@default(now())` column default below (a BEFORE INSERT
-  // trigger runs after the default is materialized). The default is kept only
-  // so Prisma's create input doesn't require the column. Delta-sync orders by
-  // `committedAt` and ignores rows newer than `now() - SAFETY_WINDOW_MS` so a
-  // slow commit cannot leave a gap in the sequence — without this, BIGSERIAL
-  // ids can commit out of order and a client that records lastSyncId=N would
-  // silently skip an earlier-id-but-later-commit row. See
-  // `SyncService.getDeltaSyncActions` and the `sync_action_set_committed_at`
-  // trigger in migration 00000000000001_custom_constraints_and_triggers.
-  committedAt DateTime @default(now()) @map("committed_at") @db.Timestamptz
+  // Commit-order fence for delta sync. `pg_current_xact_id()` stamps every
+  // insert with the writing transaction's 64-bit transaction id (xid8, no
+  // wraparound). Delta reads order by `(xactId, id)` AND fence on
+  // `xact_id < pg_snapshot_xmin(pg_current_snapshot())`, so a row is served
+  // only once its transaction has SETTLED and no smaller-xid transaction is
+  // still in flight below the cursor. This is provably never-skip: unlike the
+  // former `committed_at = statement_timestamp()` + wall-clock safety window,
+  // a transaction that inserts early and commits arbitrarily later can no
+  // longer be missed — its xid keeps it fenced until it actually commits,
+  // regardless of elapsed time. The `xid8` type, the `pg_current_xact_id()`
+  // default, and the `(organization_id, xact_id, id)` index all live in
+  // migration 00000000000001_custom_constraints_and_triggers (Prisma's DSL
+  // can't express any of them). Unsupported here means the field is not
+  // selectable through the Prisma client — it is read only via the raw SQL
+  // in `SyncService` (see `getDeltaSyncActions`).
+  xactId Unsupported("xid8")? @default(dbgenerated("pg_current_xact_id()")) @map("xact_id")
 
   organization Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId, id])
-  @@index([organizationId, committedAt, id])
   @@index([createdAt])
   @@map("sync_actions")
 }

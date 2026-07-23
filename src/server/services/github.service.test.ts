@@ -25,6 +25,28 @@ vi.mock('../lib/redis', () => ({
   redis: { publish: vi.fn().mockResolvedValue(1) },
 }));
 
+/**
+ * Extract the `{ orgId, action, modelName, modelId, data }` of every raw
+ * `INSERT INTO "sync_actions"` issued through the mocked `$queryRaw` — the
+ * shape `recordSyncAction` binds (see the beforeEach mock). Lets these tests
+ * assert on recorded SyncActions without depending on the raw SQL text.
+ */
+function readSyncActionInserts(prisma: MockPrismaClient) {
+  return prisma.$queryRaw.mock.calls
+    .map(([query]) => query as { sql?: string; values?: unknown[] })
+    .filter(q => typeof q?.sql === 'string' && q.sql.includes('INSERT INTO "sync_actions"'))
+    .map(q => {
+      const v = q.values ?? [];
+      return {
+        action: v[1],
+        data: typeof v[4] === 'string' ? JSON.parse(v[4] as string) : null,
+        modelId: v[3],
+        modelName: v[2],
+        organizationId: v[0],
+      };
+    });
+}
+
 const TEST_INTEGRATION = {
   accessToken: 'gho_testtoken',
   createdAt: new Date('2026-04-01T00:00:00Z'),
@@ -81,22 +103,32 @@ describe('GitHubService', () => {
     prisma.webhook.findMany.mockResolvedValue([]);
 
     // recordSyncAction (called via the txHook during auto-close) persists
-    // through `syncAction.create` — echo the write back with an
-    // incrementing id so multiple SyncActions in one test are distinguishable.
+    // through a raw `INSERT INTO "sync_actions" ... RETURNING` (it needs the
+    // DB-assigned xact_id back). Echo the write back with an incrementing id
+    // + xact_id so multiple SyncActions in one test are distinguishable. The
+    // INSERT's bound params are, in order: orgId, action, modelName, modelId,
+    // data (a JSON string or null) — see `readSyncActionInsert`.
     let syncActionIdCounter = 0;
-    prisma.syncAction.create.mockImplementation(
-      ({ data }: { data: Record<string, unknown> }) =>
-        Promise.resolve({
-          action: data.action,
-          committedAt: new Date(),
-          createdAt: new Date(),
-          data: data.data ?? null,
-          id: BigInt(++syncActionIdCounter),
-          modelId: data.modelId,
-          modelName: data.modelName,
-          organizationId: data.organizationId,
-        }) as never,
-    );
+    prisma.$queryRaw.mockImplementation((query: { sql?: string; values?: unknown[] }) => {
+      const values = query?.values ?? [];
+      if (typeof query?.sql === 'string' && query.sql.includes('INSERT INTO "sync_actions"')) {
+        const n = ++syncActionIdCounter;
+        const rawData = values[4];
+        return Promise.resolve([
+          {
+            action: values[1],
+            createdAt: new Date(),
+            data: typeof rawData === 'string' ? JSON.parse(rawData) : null,
+            id: BigInt(n),
+            modelId: values[3],
+            modelName: values[2],
+            organizationId: values[0],
+            xactId: String(1000 + n),
+          },
+        ]) as never;
+      }
+      return Promise.resolve([]) as never;
+    });
 
     vi.mocked(redis.publish).mockClear();
   });
@@ -507,14 +539,12 @@ describe('GitHubService', () => {
       // delta sync ships the change — before this fix, PR-merge auto-close
       // was a bare prisma write with no SyncAction, and clients showed the
       // issue open forever.
-      expect(prisma.syncAction.create).toHaveBeenCalledWith({
-        data: {
-          action: 'U',
-          data: updatedIssue,
-          modelId: TEST_ISSUE.id,
-          modelName: 'Issue',
-          organizationId: TEST_ORG.id,
-        },
+      expect(readSyncActionInserts(prisma)).toContainEqual({
+        action: 'U',
+        data: JSON.parse(JSON.stringify(updatedIssue)),
+        modelId: TEST_ISSUE.id,
+        modelName: 'Issue',
+        organizationId: TEST_ORG.id,
       });
       // ...and published to Redis after the (mocked) transaction commits.
       expect(redis.publish).toHaveBeenCalled();
@@ -598,12 +628,9 @@ describe('GitHubService', () => {
       // A SyncAction is recorded for BOTH the child and the cascaded
       // parent — without one for the parent, its auto-close would never
       // reach delta sync even though the child's did.
-      expect(prisma.syncAction.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ modelId: TEST_ISSUE.id }) }),
-      );
-      expect(prisma.syncAction.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ modelId: parentId }) }),
-      );
+      const inserts = readSyncActionInserts(prisma);
+      expect(inserts).toContainEqual(expect.objectContaining({ modelId: TEST_ISSUE.id }));
+      expect(inserts).toContainEqual(expect.objectContaining({ modelId: parentId }));
     });
 
     it('skips auto-close for an issue whose team has no completed state', async () => {
@@ -662,7 +689,7 @@ describe('GitHubService', () => {
 
       // The failed write must not leak a SyncAction — recordSyncAction only
       // runs (via the txHook) after tx.issue.update succeeds.
-      expect(prisma.syncAction.create).not.toHaveBeenCalled();
+      expect(readSyncActionInserts(prisma)).toHaveLength(0);
     });
   });
 

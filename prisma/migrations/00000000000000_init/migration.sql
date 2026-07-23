@@ -259,7 +259,6 @@ CREATE TABLE "sync_actions" (
     "model_id" UUID NOT NULL,
     "data" JSONB,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "committed_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "sync_actions_pkey" PRIMARY KEY ("id")
 );
@@ -995,9 +994,6 @@ CREATE INDEX "issue_labels_parent_id_idx" ON "issue_labels"("parent_id");
 
 -- CreateIndex
 CREATE INDEX "sync_actions_organization_id_id_idx" ON "sync_actions"("organization_id", "id");
-
--- CreateIndex
-CREATE INDEX "sync_actions_organization_id_committed_at_id_idx" ON "sync_actions"("organization_id", "committed_at", "id");
 
 -- CreateIndex
 CREATE INDEX "sync_actions_created_at_idx" ON "sync_actions"("created_at");

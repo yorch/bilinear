@@ -9,13 +9,17 @@
  */
 
 /**
- * Safety window for the server's committed-at watermark. Rows committed
- * inside this window may have been preceded by a row whose transaction was
- * still in-flight at the server's last read, so the server withholds them
- * from delta-sync responses until the window elapses. The client sizes its
- * post-connect / post-drain follow-up delta delays off this value (see
- * `src/lib/sync-manager.ts`'s `scheduleFollowUpDelta`/`handleTransactionDrained`)
- * to guarantee the follow-up lands after the watermark has cleared.
+ * Client-side settle delay for follow-up delta syncs. The server no longer
+ * applies a wall-clock watermark — delta reads are fenced on the writing
+ * transaction's xid8 (`xact_id < pg_snapshot_xmin(...)`), so a row becomes
+ * delta-visible exactly when its transaction settles, however long that
+ * takes. The client still schedules a short follow-up delta after a
+ * (re)connect / queue drain to cover the Redis pub/sub no-replay gap (a
+ * message published before this client's SUBSCRIBE completed is lost); this
+ * value is how long it waits for the just-committed transaction to settle
+ * before re-reading. See `src/lib/sync-manager.ts`'s
+ * `scheduleFollowUpDelta`/`handleTransactionDrained`. Named for the former
+ * server watermark it replaced, kept identical so the timing is unchanged.
  */
 export const COMMIT_WATERMARK_LAG_MS = 500;
 
