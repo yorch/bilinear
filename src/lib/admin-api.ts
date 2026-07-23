@@ -4,7 +4,10 @@
  * throws on GraphQL errors so callers can `try/catch` and toast.
  */
 import { gql } from './graphql';
+import type { OrganizationPlanLimits } from './plan-limits';
 import { gqlError } from './utils';
+
+export type { OrganizationPlanLimits };
 
 export interface PlatformMetrics {
   activeOrgs: number;
@@ -48,6 +51,7 @@ export interface PlatformTenantOwner {
 }
 
 export interface PlatformTenantDetail extends PlatformTenant {
+  limits: OrganizationPlanLimits;
   owners: PlatformTenantOwner[];
   projectCount: number;
   teamCount: number;
@@ -85,6 +89,11 @@ export interface PlatformAuditEntry {
 const TENANT_FIELDS = `
   id name urlKey dataRegion suspendedAt suspendedReason archivedAt createdAt
   memberCount issueCount
+`;
+
+const LIMITS_FIELDS = `
+  maxCustomFieldsPerTeam maxCustomFieldsPerOrg maxLabelGroupChildren
+  maxInitiativeDepth maxExportRows
 `;
 
 const USER_FIELDS = `
@@ -133,10 +142,29 @@ export function fetchTenant(id: string): Promise<PlatformTenantDetail | null> {
         ${TENANT_FIELDS}
         teamCount projectCount
         owners { id email displayName }
+        limits { ${LIMITS_FIELDS} }
       }
     }`,
     { id },
     'platformTenant',
+  );
+}
+
+export function updateTenantLimits(
+  id: string,
+  limits: OrganizationPlanLimits,
+): Promise<PlatformTenantDetail> {
+  return run(
+    `mutation UpdateTenantLimits($id: ID!, $limits: OrganizationPlanLimitsInput!) {
+      platformTenantUpdateLimits(id: $id, limits: $limits) {
+        ${TENANT_FIELDS}
+        teamCount projectCount
+        owners { id email displayName }
+        limits { ${LIMITS_FIELDS} }
+      }
+    }`,
+    { id, limits },
+    'platformTenantUpdateLimits',
   );
 }
 

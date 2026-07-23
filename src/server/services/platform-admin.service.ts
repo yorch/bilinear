@@ -19,6 +19,7 @@ export type PlatformAuditAction =
   | 'tenant.suspended'
   | 'tenant.restored'
   | 'tenant.deleted'
+  | 'tenant.limits_updated'
   | 'user.suspended'
   | 'user.reactivated'
   | 'user.platform_admin_granted'
@@ -46,7 +47,34 @@ export interface TenantOwner {
   id: string;
 }
 
+/**
+ * Per-org plan-tier caps (the `Organization.max*` columns). These default to
+ * the old hard-coded constants, so an org's behavior is unchanged until a
+ * platform admin edits them here. `Team.upcomingCycleCount` is deliberately
+ * excluded — it's a per-team knob, not an org-wide plan limit.
+ */
+export interface TenantLimits {
+  maxCustomFieldsPerOrg: number;
+  maxCustomFieldsPerTeam: number;
+  maxExportRows: number;
+  maxInitiativeDepth: number;
+  maxLabelGroupChildren: number;
+}
+
+// Accepted range for each cap. Min 1 (a 0 cap would brick the feature); the
+// max is a generous ceiling that blocks fat-finger/abuse values (e.g. an
+// export cap of a billion rows) while leaving ample headroom above every
+// default. Validated in `updateTenantLimits`.
+const TENANT_LIMIT_BOUNDS: Record<keyof TenantLimits, { min: number; max: number }> = {
+  maxCustomFieldsPerOrg: { max: 1000, min: 1 },
+  maxCustomFieldsPerTeam: { max: 1000, min: 1 },
+  maxExportRows: { max: 1_000_000, min: 1 },
+  maxInitiativeDepth: { max: 20, min: 1 },
+  maxLabelGroupChildren: { max: 10_000, min: 1 },
+};
+
 export interface TenantDetail extends TenantSummary {
+  limits: TenantLimits;
   owners: TenantOwner[];
   projectCount: number;
   teamCount: number;
@@ -118,6 +146,13 @@ export class LastPlatformAdminError extends Error {
   }
 }
 
+export class InvalidTenantLimitsError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidTenantLimitsError';
+  }
+}
+
 export class ImpersonationTargetError extends Error {
   constructor(message: string) {
     super(message);
@@ -182,6 +217,13 @@ export class PlatformAdminService {
     }
     return {
       ...this.toTenantSummary(row),
+      limits: {
+        maxCustomFieldsPerOrg: row.maxCustomFieldsPerOrg,
+        maxCustomFieldsPerTeam: row.maxCustomFieldsPerTeam,
+        maxExportRows: row.maxExportRows,
+        maxInitiativeDepth: row.maxInitiativeDepth,
+        maxLabelGroupChildren: row.maxLabelGroupChildren,
+      },
       owners: row.members.map(m => ({
         displayName: m.user.displayName,
         email: m.user.email,
@@ -190,6 +232,34 @@ export class PlatformAdminService {
       projectCount: row._count.projects,
       teamCount: row._count.teams,
     };
+  }
+
+  /**
+   * Overwrite an org's per-org plan-tier caps. Every field is required (the
+   * admin form submits the full set) and validated against
+   * `TENANT_LIMIT_BOUNDS`; an out-of-range or non-integer value rejects the
+   * whole update so a tenant can never be left with a partially-applied or
+   * nonsensical cap. Audit logging is the caller's (resolver's) job.
+   */
+  async updateTenantLimits(id: string, limits: TenantLimits): Promise<Organization> {
+    await this.assertTenantExists(id);
+    for (const key of Object.keys(TENANT_LIMIT_BOUNDS) as Array<keyof TenantLimits>) {
+      const value = limits[key];
+      const { min, max } = TENANT_LIMIT_BOUNDS[key];
+      if (!Number.isInteger(value) || value < min || value > max) {
+        throw new InvalidTenantLimitsError(`${key} must be an integer between ${min} and ${max}`);
+      }
+    }
+    return this.prisma.organization.update({
+      data: {
+        maxCustomFieldsPerOrg: limits.maxCustomFieldsPerOrg,
+        maxCustomFieldsPerTeam: limits.maxCustomFieldsPerTeam,
+        maxExportRows: limits.maxExportRows,
+        maxInitiativeDepth: limits.maxInitiativeDepth,
+        maxLabelGroupChildren: limits.maxLabelGroupChildren,
+      },
+      where: { id },
+    });
   }
 
   async suspendTenant(id: string, reason: string | null): Promise<Organization> {

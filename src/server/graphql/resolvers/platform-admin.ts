@@ -2,9 +2,11 @@ import { GraphQLError } from 'graphql';
 import { requirePlatformAdmin } from '../../middleware/auth';
 import {
   ImpersonationTargetError,
+  InvalidTenantLimitsError,
   LastPlatformAdminError,
   type PlatformAuditAction,
   PlatformUserNotFoundError,
+  type TenantLimits,
   TenantNotFoundError,
 } from '../../services/platform-admin.service';
 import type { GraphQLContext } from '../context';
@@ -19,7 +21,11 @@ function mapPlatformError(err: unknown): never {
   if (err instanceof TenantNotFoundError || err instanceof PlatformUserNotFoundError) {
     throw new GraphQLError(err.message, { extensions: { code: 'NOT_FOUND' } });
   }
-  if (err instanceof LastPlatformAdminError || err instanceof ImpersonationTargetError) {
+  if (
+    err instanceof LastPlatformAdminError ||
+    err instanceof ImpersonationTargetError ||
+    err instanceof InvalidTenantLimitsError
+  ) {
     throw new GraphQLError(err.message, { extensions: { code: 'BAD_USER_INPUT' } });
   }
   throw err;
@@ -81,6 +87,17 @@ export const platformAdminResolvers = {
       const actorId = await requirePlatformAdmin(ctx.prisma, ctx);
       await mapped(() => ctx.services.platformAdmin.suspendTenant(id, reason ?? null));
       audit(ctx, actorId, 'tenant.suspended', 'Organization', id, { reason: reason ?? null });
+      return ctx.services.platformAdmin.getTenant(id);
+    },
+
+    platformTenantUpdateLimits: async (
+      _parent: unknown,
+      { id, limits }: { id: string; limits: TenantLimits },
+      ctx: GraphQLContext,
+    ) => {
+      const actorId = await requirePlatformAdmin(ctx.prisma, ctx);
+      await mapped(() => ctx.services.platformAdmin.updateTenantLimits(id, limits));
+      audit(ctx, actorId, 'tenant.limits_updated', 'Organization', id, { ...limits });
       return ctx.services.platformAdmin.getTenant(id);
     },
 

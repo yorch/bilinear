@@ -364,6 +364,18 @@ export const organizationResolvers = {
       return enterOrganization(ctx, membership.organization);
     },
   },
+  Organization: {
+    // Surface the per-org plan-tier caps read-only to any org member. The
+    // parent is the Prisma org row (see `Query.organization` / bootstrap),
+    // which carries the `max*` columns directly.
+    planLimits: (org: Organization) => ({
+      maxCustomFieldsPerOrg: org.maxCustomFieldsPerOrg,
+      maxCustomFieldsPerTeam: org.maxCustomFieldsPerTeam,
+      maxExportRows: org.maxExportRows,
+      maxInitiativeDepth: org.maxInitiativeDepth,
+      maxLabelGroupChildren: org.maxLabelGroupChildren,
+    }),
+  },
 
   Query: {
     organization: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {

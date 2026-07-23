@@ -64,10 +64,25 @@
       "impersonateOwnerActive": "Iniciar sesión como este propietario",
       "impersonateOwnerInactive": "La organización no está activa",
       "includeArchived": "Incluir archivadas",
+      "limits": {
+        "description": "Límites del plan por espacio de trabajo. Se aplican los valores predeterminados hasta que un administrador los cambie.",
+        "edit": "Editar límites",
+        "invalid": "Cada límite debe ser un número entero de al menos 1.",
+        "save": "Guardar límites",
+        "savedToast": "Límites del plan actualizados para {name}",
+        "title": "Límites del plan"
+      },
       "loadingDetail": "Cargando organización…",
       "noOwners": "Sin propietarios.",
       "notFound": "Organización no encontrada.",
       "owners": "Propietarios",
+      "planLimits": {
+        "maxCustomFieldsPerOrg": "Campos personalizados por espacio de trabajo",
+        "maxCustomFieldsPerTeam": "Campos personalizados por equipo",
+        "maxExportRows": "Límite de filas de exportación",
+        "maxInitiativeDepth": "Profundidad de anidamiento de iniciativas",
+        "maxLabelGroupChildren": "Etiquetas por grupo"
+      },
       "restore": "Restaurar",
       "restoredToast": "Se restauró {name}",
       "searchPlaceholder": "Buscar por nombre o clave de URL",
@@ -1568,6 +1583,15 @@
       "notificationPrefsError": "Error al actualizar las preferencias de notificaciones",
       "organization": "Organización",
       "orgLoadError": "No se pudieron cargar los detalles de la organización.",
+      "planLimits": {
+        "maxCustomFieldsPerOrg": "Campos personalizados por espacio de trabajo",
+        "maxCustomFieldsPerTeam": "Campos personalizados por equipo",
+        "maxExportRows": "Límite de filas de exportación",
+        "maxInitiativeDepth": "Profundidad de anidamiento de iniciativas",
+        "maxLabelGroupChildren": "Etiquetas por grupo"
+      },
+      "planLimitsDescription": "Los límites del plan de tu espacio de trabajo, definidos por tu proveedor.",
+      "planLimitsTitle": "Límites del plan",
       "platform": "Plataforma",
       "platformAdminConsole": "Consola de administración de la plataforma",
       "platformAdminConsoleDescription": "Gestiona organizaciones, usuarios y suplantación en todas las organizaciones",

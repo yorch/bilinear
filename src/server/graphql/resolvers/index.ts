@@ -184,6 +184,10 @@ export const resolvers = {
     ...notificationResolvers.Notification,
   },
 
+  Organization: {
+    ...organizationResolvers.Organization,
+  },
+
   Project: {
     ...projectResolvers.Project,
   },

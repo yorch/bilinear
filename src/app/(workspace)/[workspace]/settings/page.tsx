@@ -12,6 +12,7 @@ import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
+import { type OrganizationPlanLimits, PLAN_LIMIT_FIELDS } from '@/lib/plan-limits';
 import { toast } from '@/lib/toast';
 import { cn, getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -29,6 +30,13 @@ const ORGANIZATION_QUERY = `
       dataRegion
       aiEnabled
       createdAt
+      planLimits {
+        maxCustomFieldsPerTeam
+        maxCustomFieldsPerOrg
+        maxLabelGroupChildren
+        maxInitiativeDepth
+        maxExportRows
+      }
     }
   }
 `;
@@ -98,6 +106,7 @@ interface OrgInfo {
   dataRegion: string;
   id: string;
   name: string;
+  planLimits: OrganizationPlanLimits;
   urlKey: string;
 }
 
@@ -363,6 +372,40 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                     })}
                   </dd>
                 </div>
+              </dl>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {t('settings.workspace.orgLoadError')}
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section>
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('settings.workspace.planLimitsTitle')}
+          </h2>
+          <div className="rounded-lg border border-border bg-card p-5">
+            <p className="mb-4 text-xs text-muted-foreground">
+              {t('settings.workspace.planLimitsDescription')}
+            </p>
+            {loading ? (
+              <div className="flex flex-col gap-4 animate-pulse">
+                <div className="h-4 w-48 rounded bg-muted" />
+                <div className="h-4 w-32 rounded bg-muted" />
+              </div>
+            ) : org ? (
+              <dl className="flex flex-col gap-4">
+                {PLAN_LIMIT_FIELDS.map(({ key, labelKey }) => (
+                  <div className="grid grid-cols-3 gap-4" key={key}>
+                    <dt className="col-span-2 text-xs font-medium text-muted-foreground pt-0.5">
+                      {t(`settings.workspace.${labelKey}`)}
+                    </dt>
+                    <dd className="text-right text-sm tabular-nums text-foreground">
+                      {org.planLimits[key].toLocaleString()}
+                    </dd>
+                  </div>
+                ))}
               </dl>
             ) : (
               <p className="text-sm text-muted-foreground">
