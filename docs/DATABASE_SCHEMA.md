@@ -1065,26 +1065,35 @@ CREATE TABLE sync_actions (
     data            JSONB,  -- null for deletes
 
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    -- Statement-time timestamp populated by the
-    -- `sync_action_set_committed_at` BEFORE INSERT trigger. Delta-sync
-    -- orders by `committed_at` and waits a small safety window so an
-    -- earlier-id row whose transaction commits late can't be skipped.
-    committed_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    -- The writing transaction's 64-bit transaction id (no wraparound),
+    -- stamped by the column DEFAULT. THE commit-order fence for delta sync
+    -- (see the ordering invariant below). Added by the custom migration
+    -- (Prisma's DSL can't express the xid8 type / pg_current_xact_id()
+    -- default / index on an Unsupported column).
+    xact_id         xid8 NOT NULL DEFAULT pg_current_xact_id()
 );
 CREATE INDEX idx_sync_actions_org ON sync_actions(organization_id, id);
-CREATE INDEX idx_sync_actions_org_committed ON sync_actions(organization_id, committed_at, id);
+CREATE INDEX idx_sync_actions_org_xact ON sync_actions(organization_id, xact_id, id);
 CREATE INDEX idx_sync_actions_model ON sync_actions(model_name, model_id);
 
 -- Partition by organization for scale (optional)
 -- Prune old entries (>30 days) via background job
 ```
 
-> **Ordering invariant.** BIGSERIAL `id` values are assigned at INSERT
-> but transactions commit out of order. Delta-sync MUST order by
-> `(committed_at, id)` and exclude rows newer than
-> `now() - SyncService.COMMITTED_WATERMARK_LAG_MS` (500ms today). Reading
-> by `id` alone permanently skips rows whose commit lands after a faster
-> later-id row. See `SyncService.getDeltaSyncActions`.
+> **Ordering invariant.** BIGSERIAL `id` values are assigned at INSERT but
+> transactions commit out of order. Delta-sync MUST order by `(xact_id, id)`
+> and read only rows with
+> `xact_id < pg_snapshot_xmin(pg_current_snapshot())` — rows whose
+> transaction has SETTLED and below which no transaction is still in flight.
+> This is a provably never-skip cursor: reading by `id` alone permanently
+> skips rows whose commit lands after a faster later-id row, and the former
+> `committed_at = statement_timestamp()` + 500ms wall-clock watermark could
+> still miss a transaction that inserted early and committed more than the
+> window later. Fencing on the transaction id needs no wall clock — an
+> in-flight xid keeps its rows fenced until it actually commits. The client
+> `lastSyncId` cursor is `<xactId>-<id>`. See `SyncService.getDeltaSyncActions`.
+> (The `xid8`/`pg_snapshot_xmin` behavior needs a real-Postgres staging soak
+> to verify end to end.)
 
 ### 2.22a Action codes
 
@@ -1621,9 +1630,11 @@ prisma/
                                                   --   partial/expression indexes (incl. the
                                                   --   teams(org, key) WHERE archived_at IS
                                                   --   NULL unique), the FTS GIN index and
-                                                  --   trigger, the sync_actions committed_at
-                                                  --   trigger, check constraints, and the
-                                                  --   String[] NOT NULL guards
+                                                  --   trigger, the sync_actions.xact_id xid8
+                                                  --   column + pg_current_xact_id() default +
+                                                  --   (org, xact_id, id) index, check
+                                                  --   constraints, and the String[] NOT NULL
+                                                  --   guards
 ```
 
 **Regenerating the baseline** (no database required — it diffs an empty

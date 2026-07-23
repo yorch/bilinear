@@ -292,12 +292,16 @@ Phase 2 (Real-time):
   → {cmd: "resync"} → Redis subscriber blip; client re-runs delta sync
 
 Reconnection (Delta Sync):
-  GET /api/sync/delta?lastSyncId=X
-  → Returns SyncActions with id > X for the authenticated org, ORDERED
-    BY (committed_at, id) and ignoring rows committed in the last 500ms
-    (the safety window) so an earlier-id row whose transaction commits
-    late can't be skipped. See DATABASE_SCHEMA.md §2.22 for the
-    `committed_at` trigger.
+  GET /api/sync/delta?lastSyncId=X   (X is a `<xactId>-<id>` cursor)
+  → Returns SyncActions after the cursor for the authenticated org, ORDERED
+    BY (xact_id, id) and fenced to rows with
+    xact_id < pg_snapshot_xmin(pg_current_snapshot()) — i.e. rows whose
+    transaction has SETTLED and below which no transaction is still in
+    flight. This is a provably never-skip commit-order fence (an earlier-id
+    row whose transaction commits late can't be skipped, however long the
+    commit takes) that replaces the former (committed_at, id) + 500ms
+    wall-clock watermark. See DATABASE_SCHEMA.md §2.22 for the `xact_id`
+    column.
   → Client applies deltas; updates lastSyncId in IndexedDB
   → Falls back to full bootstrap if delta returns non-200
 ```
