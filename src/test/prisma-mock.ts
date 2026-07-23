@@ -91,10 +91,20 @@ export type MockPrismaClient = {
 export function createMockPrisma(): MockPrismaClient {
   const mock = {
     $queryRaw: vi.fn(),
-    $transaction: vi.fn(async (fn: (tx: MockPrismaClient) => Promise<unknown>) => {
-      // By default, $transaction passes itself so the callback uses the same mock
-      return fn(mock as MockPrismaClient);
-    }),
+    $transaction: vi.fn(
+      async (arg: ((tx: MockPrismaClient) => Promise<unknown>) | Promise<unknown>[]) => {
+        // Prisma supports two call shapes:
+        //  - callback form: $transaction(fn) — fn receives the tx client.
+        //  - array form: $transaction([p1, p2, ...]) — each element is
+        //    already an invoked Prisma promise; resolve them all.
+        // By default, the callback form passes the mock itself so the
+        // callback uses the same mock.
+        if (typeof arg === 'function') {
+          return arg(mock as MockPrismaClient);
+        }
+        return Promise.all(arg);
+      },
+    ),
     auditLogEntry: createMockModel(),
     authToken: createMockModel(),
     automationRule: createMockModel(),

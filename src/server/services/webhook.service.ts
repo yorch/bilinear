@@ -3,6 +3,7 @@ import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import type { PrismaClient, Webhook, WebhookDelivery } from '../../generated/prisma';
 import { env } from '../lib/env';
+import { MAX_WEBHOOK_NAME_LENGTH } from '../lib/limits';
 import { childLogger } from '../lib/logger';
 
 const log = childLogger({ module: 'webhook' });
@@ -83,6 +84,7 @@ export class WebhookService {
   async create(orgId: string, creatorId: string, input: WebhookCreateInput): Promise<Webhook> {
     this.validateUrl(input.url);
     this.validateEvents(input.events);
+    this.validateName(input.name);
 
     const signingSecret = generateSigningSecret();
     return this.prisma.webhook.create({
@@ -105,6 +107,9 @@ export class WebhookService {
     }
     if (input.events !== undefined) {
       this.validateEvents(input.events);
+    }
+    if (input.name !== undefined) {
+      this.validateName(input.name);
     }
     // Re-validate the stored URL when (re-)enabling a hook. A row created
     // when ALLOW_PRIVATE_WEBHOOK_URLS=1 was set could otherwise silently
@@ -585,6 +590,12 @@ export class WebhookService {
     }
   }
 
+  private validateName(name: string): void {
+    if (name.length > MAX_WEBHOOK_NAME_LENGTH) {
+      throw new WebhookInvalidNameError();
+    }
+  }
+
   private validateEvents(events: string[]): void {
     if (events.length === 0) {
       throw new WebhookNoEventsError();
@@ -853,5 +864,12 @@ export class WebhookNoEventsError extends Error {
   constructor() {
     super('Webhook must subscribe to at least one event');
     this.name = 'WebhookNoEventsError';
+  }
+}
+
+export class WebhookInvalidNameError extends Error {
+  constructor() {
+    super(`Webhook name must be ${MAX_WEBHOOK_NAME_LENGTH} characters or fewer`);
+    this.name = 'WebhookInvalidNameError';
   }
 }

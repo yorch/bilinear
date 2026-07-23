@@ -35,6 +35,57 @@ const EMPTY_CONTEXT: AuthContext = {
   userId: null,
 };
 
+export interface SessionUserRow {
+  active: boolean;
+}
+
+export interface SessionOrgRow {
+  archivedAt: Date | null;
+  suspendedAt: Date | null;
+}
+
+export interface SessionValidityResult {
+  /** Present only when `valid` is `false` — for logging, not user-facing. */
+  reason?: string;
+  valid: boolean;
+}
+
+/**
+ * Fail-closed "is this session still allowed to act" predicate, shared by
+ * every long-lived-auth re-check in the app: `extractAuthContext` below
+ * (every HTTP/GraphQL request), the WS server's periodic re-auth sweep
+ * (`shouldTerminateConnection` in `server/ws/index.ts`), and the Yjs collab
+ * server's `revalidateAccess` (`server/yjs/server.ts`).
+ *
+ * All three re-derive the same "user still active AND org not
+ * suspended/archived" check against freshly re-queried rows — previously
+ * written three times, and it had drifted: this file's suspension check
+ * only invalidated on `org && (org.suspendedAt || org.archivedAt)` (a
+ * *missing* org row left the session alone), while the other two
+ * fail-closed on a missing org (`!org || org.suspendedAt || org.archivedAt`).
+ * This is the single source of truth going forward — fail-closed: invalid
+ * whenever the user row is missing/inactive, OR the org row is
+ * missing/suspended/archived. A missing row is always treated as invalid,
+ * never as "no constraint to check".
+ *
+ * Operates on already-fetched rows (no DB access itself) so it's a pure,
+ * trivially unit-testable predicate — callers own the query shape/timing
+ * (e.g. `revalidateAccess` fetches `org` lazily, only after confirming the
+ * user is active, to avoid a wasted query).
+ */
+export function checkSessionValidity(
+  user: SessionUserRow | null | undefined,
+  org: SessionOrgRow | null | undefined,
+): SessionValidityResult {
+  if (!user?.active) {
+    return { reason: 'user deactivated', valid: false };
+  }
+  if (!org || org.suspendedAt || org.archivedAt) {
+    return { reason: 'org suspended or archived', valid: false };
+  }
+  return { valid: true };
+}
+
 export async function extractAuthContext(
   authHeader: string | null,
   cookieToken: string | null,
@@ -125,10 +176,23 @@ export async function extractAuthContext(
           })
         : Promise.resolve(null),
     ]);
-    if (!user?.active) {
-      return { ...EMPTY_CONTEXT };
-    }
-    if (org && (org.suspendedAt || org.archivedAt)) {
+    const validity = checkSessionValidity(user, org);
+    if (!validity.valid) {
+      if (validity.reason === 'user deactivated') {
+        return { ...EMPTY_CONTEXT };
+      }
+      // Org invalid (suspended, archived, or — see checkSessionValidity's
+      // doc comment — now also a missing row) drops only `orgId`, not the
+      // whole session. NOTE the intentional tightening here: a missing org
+      // row used to leave `orgId` untouched (only `org && (...)` invalidated,
+      // so a null `org` from the lookup above was silently treated as "no
+      // constraint"); `checkSessionValidity` fails closed on it instead. This
+      // is safe in practice — `orgId` comes from a signed JWT and
+      // `Organization` is FK-backed and never hard-deleted, so a missing org
+      // row was already practically impossible. Fail-closing a case that
+      // can't really happen is strictly more correct than the old
+      // "practically impossible, and also would have silently kept working"
+      // behavior.
       resolved = { ...resolved, orgId: null };
     }
   }

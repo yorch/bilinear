@@ -14,7 +14,6 @@ import {
   IssueInvalidReferenceError,
   IssueInvalidStateError,
   IssueNotFoundError,
-  IssueService,
   IssueStateRequiredError,
   IssueValidationError,
 } from '../../services/issue.service';
@@ -82,29 +81,18 @@ export const issueResolvers = {
     },
 
     children: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
-      // Guest visibility: hide sub-issues on the same team unless the
-      // guest created or is assigned to them. Snooze hide is applied
-      // uniformly so children doesn't bypass the global snooze filter.
+      // The base fetch (org/trashed-scoped, snooze-hidden rows excluded)
+      // is batched via childrenByParentId — one findMany per request tick
+      // instead of one per parent issue. Guest visibility depends on the
+      // caller, not on the row set, so it's still applied per-issue here,
+      // in memory against the (already batched) result.
+      const rows = await ctx.loaders.childrenByParentId.load(issue.id);
       const userId = ctx.userId;
       const orgId = ctx.orgId;
-      const ands: Array<Record<string, unknown>> = [IssueService.snoozeHideClause()];
       if (userId && orgId && (await isTeamGuest(ctx.prisma, issue.teamId, userId, orgId))) {
-        ands.push({ OR: [{ creatorId: userId }, { assigneeId: userId }] });
+        return rows.filter(r => r.creatorId === userId || r.assigneeId === userId);
       }
-      return ctx.prisma.issue.findMany({
-        orderBy: { subIssueSortOrder: 'asc' },
-        // organizationId scoping: children are looked up by parentId alone,
-        // so a cross-org parentId (see IssueService.validateReferences —
-        // this closes the write side; this closes the read side / any
-        // pre-existing bad data) could otherwise surface another org's
-        // issues here.
-        where: {
-          AND: ands,
-          organizationId: issue.organizationId,
-          parentId: issue.id,
-          trashed: false,
-        },
-      });
+      return rows;
     },
 
     creator: async (issue: Issue, _args: unknown, ctx: GraphQLContext) => {
@@ -134,7 +122,7 @@ export const issueResolvers = {
       if (!issue.parentId) {
         return null;
       }
-      const parent = await ctx.services.issue.findById(issue.parentId);
+      const parent = await ctx.loaders.issueById.load(issue.parentId);
       // Org scoping: mirror the cycle/project field resolvers immediately
       // below/above — a cross-org parentId (bad data, or a pre-fix write)
       // must never surface another org's issue here.
@@ -166,7 +154,7 @@ export const issueResolvers = {
     },
 
     reactions: async (issue: Issue, _args: unknown, ctx: GraphQLContext) =>
-      ctx.services.issue.listReactions(issue.id),
+      ctx.loaders.reactionsByIssueId.load(issue.id),
 
     startDate: (issue: Issue) =>
       issue.startDate ? issue.startDate.toISOString().split('T')[0] : null,

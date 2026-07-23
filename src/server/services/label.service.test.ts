@@ -10,6 +10,10 @@ describe('LabelService', () => {
   beforeEach(() => {
     prisma = createMockPrisma();
     service = new LabelService(prisma as never);
+    // create/update read the org's plan-tier cap
+    // (Organization.maxLabelGroupChildren) instead of the old hardcoded
+    // constant; the fixture default matches that constant.
+    prisma.organization.findUnique.mockResolvedValue(TEST_ORG);
   });
 
   describe('create', () => {

@@ -191,6 +191,13 @@ export class SyncService {
     const withGuestVisibility = <T extends object>(where: T): T =>
       guestVisibilityClause ? ({ ...where, ...guestVisibilityClause } as T) : where;
 
+    // Fetch the watermark ONCE (a single DB-clock round-trip) up front and
+    // thread it through, rather than letting the syncAction.findFirst query
+    // below (or `watermark()` itself) issue its own `SELECT now()` inline —
+    // see `watermark()`'s doc comment for why this must be the DB clock, not
+    // the app server's.
+    const bootstrapWatermark = await this.watermark();
+
     const [
       organizations,
       teams,
@@ -326,7 +333,7 @@ export class SyncService {
         orderBy: [{ committedAt: 'desc' }, { id: 'desc' }],
         select: { committedAt: true, id: true },
         where: {
-          committedAt: { lte: this.watermark() },
+          committedAt: { lte: bootstrapWatermark },
           organizationId: orgId,
         },
       }),
@@ -405,7 +412,8 @@ export class SyncService {
     guestScope?: { userId: string; guestTeamIds: string[] },
   ): Promise<{ actions: SyncAction[]; hasMore: boolean }> {
     const fromCommittedAt = new Date(Number(fromCursor.committedAtMicros / BigInt(1000)));
-    const watermark = this.watermark();
+    // Single DB-clock round-trip for this operation — see `watermark()`.
+    const watermark = await this.watermark();
     const toCommittedAt = toCursor
       ? new Date(Number(toCursor.committedAtMicros / BigInt(1000)))
       : null;
@@ -602,19 +610,52 @@ export class SyncService {
    * (return type changed from BigInt to opaque string).
    */
   async getLastSyncId(orgId: string): Promise<string> {
+    // Single DB-clock round-trip for this operation — see `watermark()`.
+    const watermark = await this.watermark();
     const last = await this.prisma.syncAction.findFirst({
       orderBy: [{ committedAt: 'desc' }, { id: 'desc' }],
       select: { committedAt: true, id: true },
       where: {
-        committedAt: { lte: this.watermark() },
+        committedAt: { lte: watermark },
         organizationId: orgId,
       },
     });
     return last ? encodeCursor(last.committedAt, last.id) : '0-0';
   }
 
-  private watermark(): Date {
-    return new Date(Date.now() - COMMITTED_WATERMARK_LAG_MS);
+  /**
+   * Safety-window watermark, computed against the SAME clock that stamps
+   * `committed_at` — Postgres's `statement_timestamp()` — rather than the
+   * app server's `Date.now()`. The two clocks can drift: if the app clock
+   * runs ahead of the DB clock by more than `COMMITTED_WATERMARK_LAG_MS`,
+   * an app-clock-derived watermark would treat rows whose transactions are
+   * still in flight as already safe to serve, fully defeating the safety
+   * window documented above `COMMITTED_WATERMARK_LAG_MS`. Fetching the DB's
+   * own `now()` and subtracting the lag from THAT removes cross-clock skew
+   * from the equation entirely — the comparison and the bound it's checked
+   * against now share one clock.
+   *
+   * Costs one extra round-trip (`SELECT now()`) per call. Each of this
+   * class's three read paths (`getBootstrapData`, `getDeltaSyncActions`,
+   * `getLastSyncId`) calls this exactly once per invocation and threads the
+   * result through the rest of that call — never call this more than once
+   * within a single operation, or add a second raw query where the already-
+   * fetched value could be reused instead.
+   *
+   * RESIDUAL (not fixed here, needs a live DB to verify against): the row's
+   * `committed_at` is still stamped by `statement_timestamp()` — the start
+   * of the statement, not the moment the transaction actually commits. A
+   * transaction that inserts its SyncAction row early and then takes longer
+   * than the lag window to actually commit can still be missed by a delta
+   * read that has already advanced past that window, even though both
+   * reads now agree on what "now" means. Closing that gap fully needs
+   * commit-ordered reads — e.g. fencing on Postgres's transaction id/xmin,
+   * or stamping `committed_at` from a COMMIT-time trigger instead of
+   * statement start — a larger redesign left as a follow-up.
+   */
+  private async watermark(): Promise<Date> {
+    const [{ now }] = await this.prisma.$queryRaw<[{ now: Date }]>`SELECT now() as now`;
+    return new Date(now.getTime() - COMMITTED_WATERMARK_LAG_MS);
   }
 }
 

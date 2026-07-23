@@ -1,5 +1,5 @@
 import type { Comment, CommentReaction, Prisma, PrismaClient } from '../../generated/prisma';
-import { MAX_RICH_TEXT_LENGTH } from '../lib/limits';
+import { assertMaxLength, MAX_RICH_TEXT_LENGTH } from '../lib/limits';
 
 export interface CommentCreateInput {
   body: string;
@@ -43,9 +43,7 @@ export class CommentValidationError extends Error {
 }
 
 function assertValidBody(body: string | undefined): void {
-  if (body !== undefined && body.length > MAX_RICH_TEXT_LENGTH) {
-    throw new CommentValidationError(`body must be ${MAX_RICH_TEXT_LENGTH} characters or fewer`);
-  }
+  assertMaxLength(body, MAX_RICH_TEXT_LENGTH, msg => new CommentValidationError(msg), 'body');
 }
 
 /**

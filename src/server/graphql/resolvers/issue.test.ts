@@ -70,7 +70,8 @@ describe('issueResolvers', () => {
         userId: TEST_USER.id,
       });
       ctx.prisma.notificationSubscription.findUnique.mockResolvedValue(null);
-      ctx.prisma.notificationSubscription.create.mockResolvedValue({
+      // autoSubscribe is idempotent via upsert (avoids a P2002 race).
+      ctx.prisma.notificationSubscription.upsert.mockResolvedValue({
         active: true,
         issueId: TEST_ISSUE.id,
         userId: TEST_USER.id,
@@ -90,9 +91,9 @@ describe('issueResolvers', () => {
 
       // Allow fire-and-forget promises to settle
       await vi.waitFor(() =>
-        expect(ctx.prisma.notificationSubscription.create).toHaveBeenCalledWith(
+        expect(ctx.prisma.notificationSubscription.upsert).toHaveBeenCalledWith(
           expect.objectContaining({
-            data: expect.objectContaining({ userId: TEST_USER.id }),
+            create: expect.objectContaining({ userId: TEST_USER.id }),
           }),
         ),
       );
@@ -254,7 +255,8 @@ describe('issueResolvers', () => {
         userId: TEST_USER.id,
       });
       ctx.prisma.notificationSubscription.findUnique.mockResolvedValue(null);
-      ctx.prisma.notificationSubscription.create.mockResolvedValue({
+      // autoSubscribe is idempotent via upsert (avoids a P2002 race).
+      ctx.prisma.notificationSubscription.upsert.mockResolvedValue({
         active: true,
         issueId: TEST_ISSUE.id,
         userId: TEST_USER.id,
@@ -266,7 +268,7 @@ describe('issueResolvers', () => {
         ctx as never,
       );
 
-      await vi.waitFor(() => expect(ctx.prisma.notificationSubscription.create).toHaveBeenCalled());
+      await vi.waitFor(() => expect(ctx.prisma.notificationSubscription.upsert).toHaveBeenCalled());
     });
 
     it('notifies and subscribes the new assignee when assigneeId changes', async () => {
@@ -608,11 +610,15 @@ describe('issueResolvers', () => {
 
   describe('Issue.parent', () => {
     it('returns null when the parent belongs to a different org', async () => {
-      ctx.prisma.issue.findUnique.mockResolvedValue({
-        ...TEST_ISSUE,
-        id: 'parent-1',
-        organizationId: 'other-org',
-      });
+      // Issue.parent now resolves via the batched issueById DataLoader,
+      // which fetches via findMany rather than a per-row findUnique.
+      ctx.prisma.issue.findMany.mockResolvedValue([
+        {
+          ...TEST_ISSUE,
+          id: 'parent-1',
+          organizationId: 'other-org',
+        },
+      ]);
 
       const result = await issueResolvers.Issue.parent(
         { ...TEST_ISSUE, parentId: 'parent-1' } as never,
@@ -625,7 +631,7 @@ describe('issueResolvers', () => {
 
     it('returns the parent when it belongs to the same org', async () => {
       const parent = { ...TEST_ISSUE, id: 'parent-1' };
-      ctx.prisma.issue.findUnique.mockResolvedValue(parent);
+      ctx.prisma.issue.findMany.mockResolvedValue([parent]);
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({
         isOwner: false,
         team: { organizationId: TEST_ORG.id },
@@ -654,6 +660,38 @@ describe('issueResolvers', () => {
           where: expect.objectContaining({ organizationId: TEST_ISSUE.organizationId }),
         }),
       );
+    });
+
+    it('narrows to own-work children for a guest, against the batched result', async () => {
+      const own = {
+        ...TEST_ISSUE,
+        assigneeId: TEST_USER.id,
+        creatorId: null,
+        id: 'child-own',
+        parentId: TEST_ISSUE.id,
+      };
+      const other = {
+        ...TEST_ISSUE,
+        assigneeId: TEST_USER_2.id,
+        creatorId: null,
+        id: 'child-other',
+        parentId: TEST_ISSUE.id,
+      };
+      ctx.prisma.issue.findMany.mockResolvedValue([own, other]);
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        isOwner: false,
+        team: { organizationId: TEST_ORG.id },
+        teamId: TEST_ISSUE.teamId,
+        userId: TEST_USER.id,
+      });
+      ctx.prisma.teamMemberRole.findUnique.mockResolvedValue({ role: 'guest' });
+
+      const result = await issueResolvers.Issue.children(TEST_ISSUE as never, {}, ctx as never);
+
+      expect(result).toEqual([own]);
+      // The base fetch is batched — one findMany call regardless of the
+      // guest filter applied afterwards in memory.
+      expect(ctx.prisma.issue.findMany).toHaveBeenCalledTimes(1);
     });
   });
 });

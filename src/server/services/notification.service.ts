@@ -275,15 +275,23 @@ export class NotificationService {
     return subscriptions.map(s => s.userId);
   }
 
+  /**
+   * Ensure a subscription row exists for (userId, issueId), without
+   * forcing an existing row back to active (an explicit unsubscribe
+   * should stick). Implemented as an upsert with a no-op `update` rather
+   * than the previous find-then-create: two near-simultaneous calls for
+   * the same user/issue (e.g. concurrent comment + assignment on the same
+   * request) used to race between the `findUnique` and the `create`,
+   * throwing a P2002 unique-constraint violation when both lost the race.
+   * Postgres resolves the upsert's insert-or-update atomically, so the
+   * race can no longer surface as an error.
+   */
   async autoSubscribe(userId: string, issueId: string): Promise<void> {
-    const existing = await this.prisma.notificationSubscription.findUnique({
+    await this.prisma.notificationSubscription.upsert({
+      create: { active: true, issueId, userId },
+      update: {},
       where: { userId_issueId: { issueId, userId } },
     });
-    if (!existing) {
-      await this.prisma.notificationSubscription.create({
-        data: { active: true, issueId, userId },
-      });
-    }
   }
 
   async notifyCommentSubscribers(

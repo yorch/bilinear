@@ -5,6 +5,7 @@ import type {
   ProjectMilestone,
   ProjectUpdate,
 } from '../../generated/prisma';
+import { assertMaxLength, MAX_RICH_TEXT_LENGTH } from '../lib/limits';
 import {
   applyStatusTransitionTimestamps,
   type StatusTimestampTransition,
@@ -125,10 +126,23 @@ export interface ProjectUpdateUpdateInput {
   health?: string;
 }
 
+// Server-side cap on project description length — shares the app-wide
+// rich-text cap (see ../lib/limits) so a malicious or buggy client can't
+// push a multi-megabyte payload through project create/update.
+function assertValidDescription(description: string | undefined): void {
+  assertMaxLength(
+    description,
+    MAX_RICH_TEXT_LENGTH,
+    msg => new ProjectValidationError(msg),
+    'description',
+  );
+}
+
 export class ProjectService {
   constructor(private prisma: PrismaClient) {}
 
   async create(orgId: string, creatorId: string, input: ProjectCreateInput): Promise<Project> {
+    assertValidDescription(input.description);
     return this.prisma.$transaction(async tx => {
       const slugId = await this.generateUniqueSlugId(
         tx as unknown as PrismaClient,
@@ -202,6 +216,7 @@ export class ProjectService {
   }
 
   async update(id: string, input: ProjectUpdateInput): Promise<Project> {
+    assertValidDescription(input.description);
     const data: Record<string, unknown> = {};
 
     if (input.name !== undefined) {
@@ -366,6 +381,70 @@ export class ProjectService {
       }),
     ]);
     return { progress: total > 0 ? completed / total : 0, scope: total };
+  }
+
+  /**
+   * Batched form of `getProgress`, computing the exact same per-project
+   * `{ progress, scope }` shape — identical row filter (`archivedAt: null`,
+   * `trashed: false`, plus `completedAt: { not: null }` for the completed
+   * half) — for every id in `projectIds` via two `groupBy` queries instead
+   * of one `getProgress` round-trip (2 `issue.count` queries) per project.
+   * Used by callers that need the rollup for many projects at once (e.g.
+   * `InitiativeService`'s progress rollup), where the N+1 of per-project
+   * calls would otherwise run on every initiative create-with-projects and
+   * on every recompute cascade step.
+   *
+   * Projects with zero matching issues (or that otherwise don't appear in
+   * either `groupBy` result) are given an explicit `{ progress: 0, scope: 0
+   * }` entry so every requested id has an entry in the returned map —
+   * matching `getProgress`'s own "total === 0 → progress 0" behavior.
+   */
+  async getProgressBatch(
+    projectIds: string[],
+  ): Promise<Map<string, { progress: number; scope: number }>> {
+    const result = new Map<string, { progress: number; scope: number }>();
+    if (projectIds.length === 0) {
+      return result;
+    }
+
+    const [totals, completed] = await Promise.all([
+      this.prisma.issue.groupBy({
+        _count: true,
+        by: ['projectId'],
+        where: { archivedAt: null, projectId: { in: projectIds }, trashed: false },
+      }),
+      this.prisma.issue.groupBy({
+        _count: true,
+        by: ['projectId'],
+        where: {
+          archivedAt: null,
+          completedAt: { not: null },
+          projectId: { in: projectIds },
+          trashed: false,
+        },
+      }),
+    ]);
+
+    const completedByProject = new Map<string, number>();
+    for (const row of completed) {
+      if (row.projectId) {
+        completedByProject.set(row.projectId, row._count);
+      }
+    }
+    for (const row of totals) {
+      if (!row.projectId) {
+        continue;
+      }
+      const total = row._count;
+      const done = completedByProject.get(row.projectId) ?? 0;
+      result.set(row.projectId, { progress: total > 0 ? done / total : 0, scope: total });
+    }
+    for (const id of projectIds) {
+      if (!result.has(id)) {
+        result.set(id, { progress: 0, scope: 0 });
+      }
+    }
+    return result;
   }
 
   /**
@@ -610,5 +689,13 @@ export class ProjectService {
 
     // Final fallback with timestamp + random
     return `${slug}-${Date.now().toString(36)}`;
+  }
+}
+
+/** A description value violates the server-side input length cap. */
+export class ProjectValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ProjectValidationError';
   }
 }

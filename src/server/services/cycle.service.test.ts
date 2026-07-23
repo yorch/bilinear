@@ -447,4 +447,62 @@ describe('CycleService', () => {
       expect(day1?.scope).toBe(2);
     });
   });
+
+  describe('autoCreateUpcomingCycles', () => {
+    const CYCLES_TEAM = {
+      cycleCooldownTime: 0,
+      cycleDuration: 2,
+      cycleStartDay: 1,
+      cyclesEnabled: true,
+      upcomingCycleCount: TEST_TEAM.upcomingCycleCount, // 15, the default cap
+    };
+
+    it('defaults to the team-configured upcomingCycleCount (no explicit count passed)', async () => {
+      prisma.team.findUnique.mockResolvedValue(CYCLES_TEAM);
+      prisma.cycle.findFirst.mockResolvedValue(null); // no existing cycles
+      prisma.cycle.findMany.mockResolvedValue([]); // no existing upcoming
+      prisma.cycle.create.mockImplementation(({ data }) =>
+        Promise.resolve({ ...TEST_CYCLE, ...data }),
+      );
+
+      const result = await service.autoCreateUpcomingCycles(TEST_ORG.id, TEST_TEAM.id);
+
+      // Team's upcomingCycleCount default (15) minus 0 existing = 15 created.
+      expect(result).toHaveLength(15);
+    });
+
+    it('honours a team-configured upcomingCycleCount override', async () => {
+      prisma.team.findUnique.mockResolvedValue({ ...CYCLES_TEAM, upcomingCycleCount: 3 });
+      prisma.cycle.findFirst.mockResolvedValue(null);
+      prisma.cycle.findMany.mockResolvedValue([]);
+      prisma.cycle.create.mockImplementation(({ data }) =>
+        Promise.resolve({ ...TEST_CYCLE, ...data }),
+      );
+
+      const result = await service.autoCreateUpcomingCycles(TEST_ORG.id, TEST_TEAM.id);
+
+      expect(result).toHaveLength(3);
+    });
+
+    it('an explicit count argument still overrides the team-configured default', async () => {
+      prisma.team.findUnique.mockResolvedValue(CYCLES_TEAM);
+      prisma.cycle.findFirst.mockResolvedValue(null);
+      prisma.cycle.findMany.mockResolvedValue([]);
+      prisma.cycle.create.mockImplementation(({ data }) =>
+        Promise.resolve({ ...TEST_CYCLE, ...data }),
+      );
+
+      const result = await service.autoCreateUpcomingCycles(TEST_ORG.id, TEST_TEAM.id, 2);
+
+      expect(result).toHaveLength(2);
+    });
+
+    it('returns no cycles when the team does not have cycles enabled', async () => {
+      prisma.team.findUnique.mockResolvedValue({ ...CYCLES_TEAM, cyclesEnabled: false });
+
+      const result = await service.autoCreateUpcomingCycles(TEST_ORG.id, TEST_TEAM.id);
+
+      expect(result).toEqual([]);
+    });
+  });
 });

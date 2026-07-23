@@ -17,6 +17,7 @@ const WEBHOOK_ERROR_MAP = {
     'WebhookPrivateUrlError',
     'WebhookInvalidEventError',
     'WebhookNoEventsError',
+    'WebhookInvalidNameError',
   ],
   NOT_FOUND: ['WebhookNotFoundError'],
 } as const;

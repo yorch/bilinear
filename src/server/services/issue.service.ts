@@ -1,8 +1,10 @@
 import type { Issue, IssueLabel, IssueReaction, PrismaClient } from '../../generated/prisma';
 import { buildGuestVisibilityWhere } from '../lib/issue-visibility';
 import {
+  assertMaxLength,
   DEFAULT_LIST_LIMIT,
   MAX_BULK_OPERATION,
+  MAX_EMOJI_LENGTH,
   MAX_LIST_LIMIT,
   MAX_PRIORITY,
   MAX_RICH_TEXT_LENGTH,
@@ -120,11 +122,12 @@ function assertValidTitle(title: string | undefined): void {
 }
 
 function assertValidDescription(description: string | undefined): void {
-  if (description !== undefined && description.length > MAX_RICH_TEXT_LENGTH) {
-    throw new IssueValidationError(
-      `description must be ${MAX_RICH_TEXT_LENGTH} characters or fewer`,
-    );
-  }
+  assertMaxLength(
+    description,
+    MAX_RICH_TEXT_LENGTH,
+    msg => new IssueValidationError(msg),
+    'description',
+  );
 }
 
 function assertValidPriority(priority: number | undefined): void {
@@ -135,6 +138,16 @@ function assertValidPriority(priority: number | undefined): void {
     throw new IssueValidationError(
       `priority must be an integer between ${MIN_PRIORITY} and ${MAX_PRIORITY}`,
     );
+  }
+}
+
+// A reaction emoji is client-supplied and gets stored + broadcast to every
+// connected client verbatim — cap its length so a malicious/buggy client
+// can't push an arbitrarily large string through this path (unlike
+// title/description, there's no legitimate reason for this to be long).
+function assertValidEmoji(emoji: string): void {
+  if (emoji.length > MAX_EMOJI_LENGTH) {
+    throw new IssueValidationError(`emoji must be ${MAX_EMOJI_LENGTH} characters or fewer`);
   }
 }
 
@@ -1277,6 +1290,7 @@ export class IssueService {
     emoji: string,
     txHook?: IssueReactionTxHook,
   ): Promise<IssueReaction & { user: unknown }> {
+    assertValidEmoji(emoji);
     const existing = await this.prisma.issue.findUnique({
       where: { id: issueId },
     });

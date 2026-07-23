@@ -27,6 +27,17 @@ model Organization {
 
   fiscalYearStartMonth Int @default(1) @map("fiscal_year_start_month")
 
+  // Plan-tier caps. Defaults match the previously-hardcoded constants they
+  // replace (see custom-field.service.ts, label.service.ts,
+  // initiative.service.ts, import.service.ts) — data-driven so a future
+  // admin UI can raise/lower them per org without a code change. Until that
+  // UI ships, these are only settable directly in the DB.
+  maxCustomFieldsPerTeam Int @default(20) @map("max_custom_fields_per_team")
+  maxCustomFieldsPerOrg  Int @default(30) @map("max_custom_fields_per_org")
+  maxLabelGroupChildren  Int @default(250) @map("max_label_group_children")
+  maxInitiativeDepth     Int @default(5) @map("max_initiative_depth")
+  maxExportRows          Int @default(10000) @map("max_export_rows")
+
   // Platform-admin suspension. Distinct from `archivedAt` (soft-delete): a
   // suspended org is locked (members can't authenticate into it) but not
   // deleted, so it can be restored. Set/cleared only from the /admin console.
@@ -260,6 +271,10 @@ model Team {
   cycleLockToActive        Boolean @default(false) @map("cycle_lock_to_active")
   cycleAutoAssignStarted   Boolean @default(false) @map("cycle_auto_assign_started")
   cycleAutoAssignCompleted Boolean @default(false) @map("cycle_auto_assign_completed")
+  // Plan-tier cap: how many upcoming cycles autoCreateUpcomingCycles keeps
+  // pre-populated. Default matches the previously-hardcoded constant in
+  // cycle.service.ts.
+  upcomingCycleCount       Int     @default(15) @map("upcoming_cycle_count")
 
   // Auto-close/archive
   autoClosePeriod       Int?    @map("auto_close_period")

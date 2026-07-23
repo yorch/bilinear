@@ -6,6 +6,7 @@ import {
   InitiativeProjectNotFoundError,
   InitiativeService,
 } from './initiative.service';
+import type { ProjectService } from './project.service';
 
 const TEST_INITIATIVE = {
   archivedAt: null,
@@ -36,21 +37,28 @@ const TEST_INITIATIVE = {
 describe('InitiativeService', () => {
   let prisma: MockPrismaClient;
   let service: InitiativeService;
-  // Project.progress is a dead column (nothing writes it) — the service
-  // now computes each linked project's progress LIVE via
-  // ProjectService.getProgress(), injected here as a fake so these tests
-  // control the progress values directly instead of exercising
-  // ProjectService's own issue-counting SQL.
-  let fakeGetProgress: ReturnType<
-    typeof vi.fn<(projectId: string) => Promise<{ progress: number; scope: number }>>
-  >;
+  // The batched progress rollup now lives on ProjectService
+  // (`getProgressBatch`) — Project.progress is a dead column (nothing
+  // writes it), so InitiativeService fetches each linked project's
+  // progress LIVE via this dependency instead of reading that column, and
+  // instead of one `ProjectService.getProgress()` round-trip per project.
+  // Mocked directly here (rather than exercising ProjectService's real
+  // `issue.groupBy` queries) since that batching logic has its own
+  // dedicated coverage in project.service.test.ts.
+  let getProgressBatch: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     prisma = createMockPrisma();
-    fakeGetProgress = vi.fn().mockResolvedValue({ progress: 0, scope: 0 });
-    service = new InitiativeService(prisma as never, {
-      project: { getProgress: fakeGetProgress },
-    });
+    // Default to "no matching projects" so tests that don't care about
+    // progress don't have to stub it — InitiativeService's own `?? {
+    // progress: 0, scope: 0 }` fallback covers any id missing from the map.
+    getProgressBatch = vi.fn().mockResolvedValue(new Map());
+    const projectService = { getProgressBatch } as unknown as ProjectService;
+    // assertParentAcceptsChild reads the org's plan-tier depth cap
+    // (Organization.maxInitiativeDepth) instead of the old hardcoded
+    // constant; the fixture default matches that constant.
+    prisma.organization.findUnique.mockResolvedValue(TEST_ORG);
+    service = new InitiativeService(prisma as never, projectService);
   });
 
   describe('create', () => {
@@ -118,6 +126,43 @@ describe('InitiativeService', () => {
         ],
         skipDuplicates: true,
       });
+    });
+
+    it('rejects parenting that would exceed the org-configured max depth', async () => {
+      // Org has a (hypothetical, admin-lowered) depth cap of 2 instead of
+      // the MAX_INITIATIVE_DEPTH=5 default — proves the cap is actually
+      // read from Organization.maxInitiativeDepth, not the constant.
+      prisma.organization.findUnique.mockResolvedValueOnce({ maxInitiativeDepth: 2 });
+      // Parent 'p1' itself has a parent 'p0' → depth would become 2, at cap.
+      prisma.initiative.findFirst.mockResolvedValueOnce({ id: 'p1', parentId: 'p0' });
+
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, { name: 'Q3', parentId: 'p1' }),
+      ).rejects.toThrow('Initiative nesting depth cannot exceed 2');
+    });
+
+    it('allows parenting within the default depth cap when the org row has no override', async () => {
+      // Org fixture default (maxInitiativeDepth: 5) is used via beforeEach's
+      // organization.findUnique mock — a single level of nesting is fine.
+      prisma.initiative.create.mockResolvedValue(TEST_INITIATIVE);
+      prisma.initiative.findFirst.mockResolvedValueOnce({ id: 'p1', parentId: null });
+
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, { name: 'Q3', parentId: 'p1' }),
+      ).resolves.toEqual(TEST_INITIATIVE);
+    });
+
+    it('rejects nesting under a ROOT parent when the cap is 1 (baseline depth check)', async () => {
+      // maxInitiativeDepth = 1 forbids all nesting. The ancestor-walk loop
+      // never runs for a root parent (parentId: null), so the baseline depth
+      // check must reject here — otherwise a "no nesting" cap is silently
+      // ignored for top-level parents.
+      prisma.organization.findUnique.mockResolvedValueOnce({ maxInitiativeDepth: 1 });
+      prisma.initiative.findFirst.mockResolvedValueOnce({ id: 'p1', parentId: null });
+
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, { name: 'Q3', parentId: 'p1' }),
+      ).rejects.toThrow('Initiative nesting depth cannot exceed 1');
     });
   });
 
@@ -195,26 +240,31 @@ describe('InitiativeService', () => {
       expect(result?.progress).toBe(0);
     });
 
-    it('computes mean of linked project progress from LIVE ProjectService.getProgress reads, not the dead Project.progress column', async () => {
+    it('computes mean of linked project progress from ProjectService.getProgressBatch, not the dead Project.progress column', async () => {
       prisma.initiativeProject.findMany.mockResolvedValue([
         { project: { archivedAt: null, trashed: false }, projectId: 'p1' },
         { project: { archivedAt: null, trashed: false }, projectId: 'p2' },
       ]);
       // Deliberately does NOT set project.progress at all above — if the
       // implementation regressed to reading that dead column instead of
-      // calling getProgress(), it would read `undefined` for every
-      // project and this test would fail loudly instead of silently
-      // averaging in zeros.
-      fakeGetProgress
-        .mockResolvedValueOnce({ progress: 0.5, scope: 2 })
-        .mockResolvedValueOnce({ progress: 1.0, scope: 2 });
+      // the batched getProgressBatch read, it would read `undefined` for
+      // every project and this test would fail loudly instead of silently
+      // averaging in zeros. p1: 1/2 issues done = 0.5; p2: 2/2 = 1.0.
+      getProgressBatch.mockResolvedValue(
+        new Map([
+          ['p1', { progress: 0.5, scope: 2 }],
+          ['p2', { progress: 1, scope: 2 }],
+        ]),
+      );
       prisma.initiative.findUnique.mockResolvedValue({ progress: 0 });
       prisma.initiative.update.mockResolvedValue({ ...TEST_INITIATIVE, progress: 0.75 });
 
       const result = await service.recomputeProgress(TEST_INITIATIVE.id);
       expect(result?.progress).toBe(0.75);
-      expect(fakeGetProgress).toHaveBeenCalledWith('p1');
-      expect(fakeGetProgress).toHaveBeenCalledWith('p2');
+      // Batched: exactly ONE getProgressBatch call covering both linked
+      // projects — not one round-trip per project.
+      expect(getProgressBatch).toHaveBeenCalledTimes(1);
+      expect(getProgressBatch).toHaveBeenCalledWith(['p1', 'p2']);
       expect(prisma.initiative.update).toHaveBeenCalledWith({
         data: { progress: 0.75 },
         where: { id: TEST_INITIATIVE.id },
@@ -227,14 +277,16 @@ describe('InitiativeService', () => {
         { project: { archivedAt: new Date(), trashed: false }, projectId: 'p2-archived' },
         { project: { archivedAt: null, trashed: true }, projectId: 'p3-trashed' },
       ]);
-      fakeGetProgress.mockResolvedValueOnce({ progress: 0.5, scope: 2 });
+      getProgressBatch.mockResolvedValue(new Map([['p1', { progress: 0.5, scope: 2 }]]));
       prisma.initiative.findUnique.mockResolvedValue({ progress: 0 });
       prisma.initiative.update.mockResolvedValue({ ...TEST_INITIATIVE, progress: 0.5 });
 
       const result = await service.recomputeProgress(TEST_INITIATIVE.id);
       expect(result?.progress).toBe(0.5);
-      expect(fakeGetProgress).toHaveBeenCalledTimes(1);
-      expect(fakeGetProgress).toHaveBeenCalledWith('p1');
+      // Still batched into a single call (not skipped entirely) but the id
+      // list only ever names the eligible project.
+      expect(getProgressBatch).toHaveBeenCalledTimes(1);
+      expect(getProgressBatch).toHaveBeenCalledWith(['p1']);
     });
 
     it('returns null if the initiative has been deleted', async () => {
@@ -250,7 +302,7 @@ describe('InitiativeService', () => {
       prisma.initiativeProject.findMany.mockResolvedValue([
         { project: { archivedAt: null, trashed: false }, projectId: 'p1' },
       ]);
-      fakeGetProgress.mockResolvedValueOnce({ progress: 0.5, scope: 2 });
+      getProgressBatch.mockResolvedValue(new Map([['p1', { progress: 0.5, scope: 2 }]]));
       prisma.initiative.findUnique.mockResolvedValue({ progress: 0.5 });
 
       const result = await service.recomputeProgress(TEST_INITIATIVE.id);

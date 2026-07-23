@@ -550,15 +550,18 @@ export class CycleService {
 
   /**
    * Auto-create upcoming cycles for a team based on its cycle configuration.
-   * Creates cycles up to the specified count into the future.
+   * Creates cycles up to `count` into the future — defaulting to the team's
+   * configured `upcomingCycleCount` (Team.upcomingCycleCount, default 15) when
+   * the caller doesn't pass an explicit override.
    */
-  async autoCreateUpcomingCycles(orgId: string, teamId: string, count = 15): Promise<Cycle[]> {
+  async autoCreateUpcomingCycles(orgId: string, teamId: string, count?: number): Promise<Cycle[]> {
     const team = await this.prisma.team.findUnique({
       select: {
         cycleCooldownTime: true,
         cycleDuration: true,
         cycleStartDay: true,
         cyclesEnabled: true,
+        upcomingCycleCount: true,
       },
       where: { id: teamId },
     });
@@ -567,6 +570,7 @@ export class CycleService {
       return [];
     }
 
+    const targetCount = count ?? team.upcomingCycleCount;
     const durationWeeks = team.cycleDuration ?? 2;
     const cooldownDays = team.cycleCooldownTime ?? 0;
 
@@ -577,7 +581,7 @@ export class CycleService {
     });
 
     const existingUpcoming = await this.getUpcomingCycles(teamId);
-    const toCreate = count - existingUpcoming.length;
+    const toCreate = targetCount - existingUpcoming.length;
     if (toCreate <= 0) {
       return [];
     }

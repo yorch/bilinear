@@ -9,9 +9,11 @@ const log = childLogger({ module: 'import' });
 // blow memory. Larger migrations should be chunked by the client.
 export const MAX_IMPORT_ROWS = 500;
 
-// Hard cap on organizationExport's row count — a basic guard against an
-// unbounded response (a JSON export of every issue in a very large org).
-// Not real pagination; see exportData's doc comment.
+// Default hard cap on organizationExport's row count — a basic guard against
+// an unbounded response (a JSON export of every issue in a very large org).
+// Not real pagination; see exportData's doc comment. The enforced value is
+// read per-org from `Organization.maxExportRows`; this constant documents
+// the default and backs the fallback if the org row can't be read.
 export const MAX_EXPORT_ROWS = 10_000;
 
 /**
@@ -215,6 +217,12 @@ export class ImportService {
    * out of scope here (noting as a residual, not implementing).
    */
   async exportData(orgId: string, teamId?: string): Promise<object> {
+    const org = await this.prisma.organization.findUnique({
+      select: { maxExportRows: true },
+      where: { id: orgId },
+    });
+    const maxRows = org?.maxExportRows ?? MAX_EXPORT_ROWS;
+
     const issues = await this.prisma.issue.findMany({
       orderBy: { createdAt: 'asc' },
       select: {
@@ -229,7 +237,7 @@ export class ImportService {
         teamId: true,
         title: true,
       },
-      take: MAX_EXPORT_ROWS,
+      take: maxRows,
       where: {
         archivedAt: null,
         organizationId: orgId,
@@ -241,7 +249,7 @@ export class ImportService {
       exportedAt: new Date().toISOString(),
       issueCount: issues.length,
       issues,
-      truncated: issues.length === MAX_EXPORT_ROWS,
+      truncated: issues.length === maxRows,
     };
   }
 }

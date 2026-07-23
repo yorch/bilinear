@@ -1015,6 +1015,14 @@ describe('IssueService', () => {
           'Issue not found',
         );
       });
+
+      it('rejects an emoji over the length cap', async () => {
+        prisma.issue.findUnique.mockResolvedValue(TEST_ISSUE);
+        await expect(
+          service.addReaction(TEST_ISSUE.id, TEST_USER.id, 'a'.repeat(33)),
+        ).rejects.toThrow(IssueValidationError);
+        expect(prisma.issueReaction.upsert).not.toHaveBeenCalled();
+      });
     });
 
     describe('removeReaction', () => {

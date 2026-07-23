@@ -112,13 +112,13 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const teamService = new TeamService(prisma);
   const workflowStateService = new WorkflowStateService(prisma);
   const cycleService = new CycleService(prisma);
-  const initiativeService = new InitiativeService(prisma);
   const issueService = new IssueService(prisma);
   const importService = new ImportService(prisma, issueService);
   const issueRelationService = new IssueRelationService(prisma);
   const issueTemplateService = new IssueTemplateService(prisma);
   const labelService = new LabelService(prisma);
   const projectService = new ProjectService(prisma);
+  const initiativeService = new InitiativeService(prisma, projectService);
   const roadmapService = new RoadmapService(prisma);
   const syncService = new SyncService(prisma, redis);
   const searchService = new SearchService(prisma);

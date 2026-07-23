@@ -1,6 +1,6 @@
 import type { WebSocket } from 'ws';
 
-interface ClientInfo {
+export interface ClientInfo {
   orgId: string;
   userId: string;
   ws: WebSocket;
@@ -49,6 +49,24 @@ export class ConnectionManager {
         info.ws.send(message);
       }
     }
+  }
+
+  /**
+   * Every currently-tracked client across all orgs, flattened to a single
+   * array. Used by the WS server's periodic re-auth sweep, which needs to
+   * walk every live connection regardless of org — this is the single
+   * source of truth for "what's connected right now", so callers don't need
+   * to maintain their own parallel bookkeeping of the same connect/close
+   * events this class already tracks.
+   */
+  getAll(): ClientInfo[] {
+    const all: ClientInfo[] = [];
+    for (const set of this.clients.values()) {
+      for (const info of set) {
+        all.push(info);
+      }
+    }
+    return all;
   }
 
   clientCount(orgId?: string): number {

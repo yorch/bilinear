@@ -17,6 +17,17 @@ import type { GraphQLContext } from '../context';
 
 const PROJECT_MEMBERSHIP_ROLES = ['owner', 'admin', 'member'] as const;
 
+// Shared by projectCreate/projectUpdate: both map a ProjectValidationError to
+// a BAD_USER_INPUT GraphQLError and rethrow anything else unchanged.
+function mapProjectError(err: unknown): never {
+  if ((err as Error).name === 'ProjectValidationError') {
+    throw new GraphQLError((err as Error).message, {
+      extensions: { code: 'BAD_USER_INPUT' },
+    });
+  }
+  throw err;
+}
+
 // Per-request cache to avoid duplicate getProgress calls when both progress and scope are queried
 const progressCacheKey = Symbol('projectProgress');
 
@@ -175,7 +186,12 @@ export const projectResolvers = {
         }
       }
 
-      const project = await ctx.services.project.create(ctx.orgId, ctx.userId, input);
+      let project: Awaited<ReturnType<typeof ctx.services.project.create>>;
+      try {
+        project = await ctx.services.project.create(ctx.orgId, ctx.userId, input);
+      } catch (err) {
+        mapProjectError(err);
+      }
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
         'I',
@@ -395,7 +411,12 @@ export const projectResolvers = {
         });
       }
 
-      const project = await ctx.services.project.update(id, input);
+      let project: Awaited<ReturnType<typeof ctx.services.project.update>>;
+      try {
+        project = await ctx.services.project.update(id, input);
+      } catch (err) {
+        mapProjectError(err);
+      }
       let sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Project', id, project);
       void ctx.services.webhook
         .dispatchEvent(ctx.orgId, 'project.updated', project)
@@ -588,6 +609,21 @@ export const projectResolvers = {
       return result.progress;
     },
 
+    // N+1 SKIPPED INTENTIONALLY (see loaders.ts task notes / code review):
+    // recordProgressSnapshotIfStale is a conditional read-modify-write per
+    // project (findUnique, then — only when today's snapshot is missing —
+    // two count()s + two aggregate()s + one update()). Batching the write
+    // path would mean duplicating that aggregation/write logic (which
+    // lives in ProjectService, out of this pass's edit scope) into a
+    // loader, with real correctness risk: the per-project "is today's
+    // entry already present" check and the exact appendOrReplaceToday
+    // semantics would have to be reimplemented byte-for-byte outside the
+    // service that owns them. The staleness check IS naturally
+    // self-limiting — once any request has stamped today's snapshot for a
+    // project, every subsequent progressHistory read that day short-
+    // circuits on the single findUnique with no further queries — so the
+    // full N-query storm only recurs once per UTC day per active project,
+    // not on every list request. Left as-is; correctness over cleanup.
     progressHistory: async (project: Project, _args: unknown, ctx: GraphQLContext) => {
       const snapshot = await ctx.services.project.recordProgressSnapshotIfStale(project.id);
       // Each history array is daily-aligned by `t`; merge them on date so the

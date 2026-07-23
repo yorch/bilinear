@@ -15,6 +15,7 @@ const INITIATIVE_ERROR_MAP = {
     'InitiativeProjectNotFoundError',
     'InitiativeInvalidParentError',
     'InitiativeMaxDepthError',
+    'InitiativeValidationError',
   ],
   NOT_FOUND: ['InitiativeNotFoundError'],
 } as const;
@@ -25,27 +26,23 @@ export const initiativeResolvers = {
   Initiative: {
     children: async (initiative: Initiative, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
-      return ctx.prisma.initiative.findMany({
-        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-        where: {
-          archivedAt: null,
-          organizationId: ctx.orgId,
-          parentId: initiative.id,
-        },
-      });
+      return ctx.loaders.childrenByInitiativeId.load(initiative.id);
     },
 
     creator: async (initiative: Initiative, _args: unknown, ctx: GraphQLContext) =>
       initiative.creatorId ? ctx.loaders.user.load(initiative.creatorId) : null,
 
     health: async (initiative: Initiative, _args: unknown, ctx: GraphQLContext) => {
-      const since = new Date(Date.now() - THIRTY_DAYS_MS);
-      const latest = await ctx.prisma.initiativeUpdate.findFirst({
-        orderBy: { createdAt: 'desc' },
-        select: { health: true },
-        where: { archivedAt: null, createdAt: { gte: since }, initiativeId: initiative.id },
-      });
-      if (latest) {
+      // Reuses the same batched updates loader as the `updates` field
+      // (they share the identical archivedAt:null / createdAt-desc query)
+      // instead of a second per-initiative findFirst. The loader's array
+      // is already ordered newest-first, so its head is the latest update;
+      // if that one falls outside the 30-day window, none do (everything
+      // else is older still), matching the original findFirst's filter.
+      const since = Date.now() - THIRTY_DAYS_MS;
+      const updates = await ctx.loaders.updatesByInitiativeId.load(initiative.id);
+      const latest = updates[0];
+      if (latest && latest.createdAt.getTime() >= since) {
         return latest.health;
       }
       // Fall back to a progress-based heuristic when no recent update exists.
@@ -86,7 +83,7 @@ export const initiativeResolvers = {
     },
 
     updates: async (initiative: Initiative, _args: unknown, ctx: GraphQLContext) =>
-      ctx.services.initiative.getInitiativeUpdates(initiative.id),
+      ctx.loaders.updatesByInitiativeId.load(initiative.id),
   },
 
   InitiativeUpdate: {

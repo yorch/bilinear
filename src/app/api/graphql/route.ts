@@ -5,13 +5,14 @@ import { startServerAndCreateNextHandler } from '@as-integrations/next';
 import type { GraphQLFormattedError } from 'graphql';
 import { GraphQLError } from 'graphql';
 import depthLimit from 'graphql-depth-limit';
-import { getComplexity, simpleEstimator } from 'graphql-query-complexity';
+import { fieldExtensionsEstimator, getComplexity, simpleEstimator } from 'graphql-query-complexity';
 import { NextRequest } from 'next/server';
 import type { GraphQLContext } from '@/server/graphql/context';
 import { createContext } from '@/server/graphql/context';
 import { resolvers } from '@/server/graphql/resolvers';
 import { typeDefs } from '@/server/graphql/schema';
 import { env } from '@/server/lib/env';
+import { listArgumentEstimator, MAX_QUERY_COMPLEXITY } from '@/server/lib/graphql-complexity';
 import { logger, runWithRequestContext } from '@/server/lib/logger';
 import { isOriginStringAllowed } from '@/server/lib/request-security';
 import {
@@ -24,9 +25,10 @@ import { apiScopesAllowWrite } from '@/server/services/auth.service';
 
 // Hard caps enforced by GraphQL validation rules — reject queries before any
 // resolver runs. Complementary to the per-user rate limiter in rate-limit.ts,
-// which tracks request budget over a 1-hour window.
+// which tracks request budget over a 1-hour window. MAX_QUERY_COMPLEXITY and
+// the list-aware estimator live in ../lib/graphql-complexity (unit-tested so
+// the cap stays calibrated to the estimator).
 const MAX_QUERY_DEPTH = 10;
-const MAX_QUERY_COMPLEXITY = 1000;
 
 // GraphQL error codes that represent expected client-side conditions (bad
 // input, auth, not-found, …) rather than a server fault. These are logged at
@@ -210,7 +212,18 @@ const server = new ApolloServer<GraphQLContext>({
         return {
           async didResolveOperation({ request, document, schema }) {
             const complexity = getComplexity({
-              estimators: [simpleEstimator({ defaultComplexity: 1 })],
+              // Order matters — the first estimator to return a defined
+              // number for a field wins. fieldExtensionsEstimator is a
+              // no-op today (no field in the schema declares a `complexity`
+              // extension) but costs nothing to keep first, in case one is
+              // added later. listArgumentEstimator applies the
+              // first/limit/last multiplier described above. simpleEstimator
+              // is the final fallback, unchanged from before.
+              estimators: [
+                fieldExtensionsEstimator(),
+                listArgumentEstimator(),
+                simpleEstimator({ defaultComplexity: 1 }),
+              ],
               operationName: request.operationName ?? undefined,
               query: document,
               schema,

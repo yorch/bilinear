@@ -4,28 +4,12 @@ import type {
   InitiativeUpdate,
   PrismaClient,
 } from '../../generated/prisma';
+import { assertMaxLength, MAX_RICH_TEXT_LENGTH } from '../lib/limits';
 import {
   applyStatusTransitionTimestamps,
   type StatusTimestampTransition,
 } from '../lib/status-timestamps';
 import { ProjectService } from './project.service';
-
-/**
- * Deps the progress rollup needs to compute each linked project's progress
- * LIVE instead of reading the `Project.progress` column — nothing in the
- * codebase writes that column (see ProjectService.getProgress, the actual
- * source of truth), so every rollup that read it was silently averaging in
- * zeros. Optional + defaulted (not required) because `InitiativeService` is
- * constructed directly (`new InitiativeService(prisma)`, no DI container)
- * from `src/server/graphql/context.ts`. When the caller doesn't inject
- * deps, a real `ProjectService` bound to the same `prisma` client is built
- * here so production is correct without touching that call site. Unit
- * tests inject a fake `{ getProgress }` instead, keeping the progress math
- * isolated from ProjectService's own issue-counting implementation.
- */
-export interface InitiativeServiceDeps {
-  project: Pick<ProjectService, 'getProgress'>;
-}
 
 export interface InitiativeCreateInput {
   color?: string;
@@ -63,16 +47,31 @@ export interface InitiativeUpdateInput {
 }
 
 /**
- * Max nesting depth for sub-initiatives. Past this the breadcrumb in the
- * detail panel becomes unreadable and the recursive progress rollup
+ * Default max nesting depth for sub-initiatives. Past this the breadcrumb in
+ * the detail panel becomes unreadable and the recursive progress rollup
  * starts to dominate the project-update hot path. Matches Linear's
- * Enterprise plan cap.
+ * Enterprise plan cap. The enforced value is read per-org from
+ * `Organization.maxInitiativeDepth` (see `assertParentAcceptsChild`) — this
+ * constant only documents the default and backs the fallback / error message
+ * when the org row can't be read.
  */
 export const MAX_INITIATIVE_DEPTH = 5;
 
 export type InitiativeStatus = 'planned' | 'active' | 'completed' | 'canceled';
 
 const VALID_STATUSES = new Set<InitiativeStatus>(['planned', 'active', 'completed', 'canceled']);
+
+// Server-side cap on initiative description length — shares the app-wide
+// rich-text cap (see ../lib/limits) so a malicious or buggy client can't
+// push a multi-megabyte payload through initiative create/update.
+function assertValidDescription(description: string | null | undefined): void {
+  assertMaxLength(
+    description,
+    MAX_RICH_TEXT_LENGTH,
+    msg => new InitiativeValidationError(msg),
+    'description',
+  );
+}
 
 /**
  * Lifecycle-timestamp patch applied when transitioning into each status.
@@ -100,14 +99,14 @@ const STATUS_TRANSITION_CLEARS: Record<InitiativeStatus, StatusTimestampTransiti
  * recomputed on project add/remove and on demand.
  */
 export class InitiativeService {
-  private readonly deps: InitiativeServiceDeps;
-
   constructor(
     private prisma: PrismaClient,
-    deps?: InitiativeServiceDeps,
-  ) {
-    this.deps = deps ?? { project: new ProjectService(prisma) };
-  }
+    // Defaults to a fresh ProjectService over the same prisma client for
+    // call sites that construct InitiativeService standalone (e.g. test
+    // helpers) — real wiring (src/server/graphql/context.ts) passes its own
+    // already-constructed ProjectService instance explicitly.
+    private project: ProjectService = new ProjectService(prisma),
+  ) {}
 
   async create(
     orgId: string,
@@ -117,6 +116,7 @@ export class InitiativeService {
     if (input.status && !VALID_STATUSES.has(input.status)) {
       throw new InitiativeInvalidStatusError();
     }
+    assertValidDescription(input.description);
 
     // Verify parent exists in this org and that the resulting depth is
     // within the cap. Both checks run before the create so we never end up
@@ -169,10 +169,13 @@ export class InitiativeService {
         // doesn't carry progress=0 even when every linked project is at
         // 100% (and the create-time SyncAction would broadcast that wrong
         // value). `Project.progress` is a dead column — nothing writes
-        // it — so the real value is fetched live via
-        // ProjectService.getProgress() instead of read off the row.
-        const progresses = await Promise.all(
-          eligible.map(p => this.deps.project.getProgress(p.id)),
+        // it — so the real value is fetched live, batched over every
+        // linked project id in one pair of queries (see
+        // `ProjectService.getProgressBatch`) instead of one
+        // `ProjectService.getProgress()` round-trip per project.
+        const progressByProject = await this.project.getProgressBatch(eligible.map(p => p.id));
+        const progresses = eligible.map(
+          p => progressByProject.get(p.id) ?? { progress: 0, scope: 0 },
         );
         const progress =
           progresses.length === 0
@@ -194,6 +197,7 @@ export class InitiativeService {
     if (input.status !== undefined && !VALID_STATUSES.has(input.status)) {
       throw new InitiativeInvalidStatusError();
     }
+    assertValidDescription(input.description);
 
     const data: Parameters<PrismaClient['initiative']['update']>[0]['data'] = {};
     if (input.name !== undefined) {
@@ -537,12 +541,14 @@ export class InitiativeService {
     const eligibleChildren = (children ?? []).filter(c => !c.archivedAt);
 
     // `Project.progress` is a dead column — nothing writes it. The real
-    // value is computed live from issue completion via
-    // ProjectService.getProgress(). Fan the reads out in parallel rather
-    // than serially; still O(N) round-trips in N linked projects, but N is
-    // bounded by how many projects one initiative links.
-    const projectProgresses = await Promise.all(
-      eligible.map(l => this.deps.project.getProgress(l.projectId)),
+    // value is computed live from issue completion, batched over every
+    // linked project id in one pair of groupBy queries (see
+    // `ProjectService.getProgressBatch`) rather than 2 issue.count queries
+    // PER linked project (an N+1 that used to run on every project/issue
+    // mutation via the recompute cascade).
+    const progressByProject = await this.project.getProgressBatch(eligible.map(l => l.projectId));
+    const projectProgresses = eligible.map(
+      l => progressByProject.get(l.projectId) ?? { progress: 0, scope: 0 },
     );
 
     const totalCount = eligible.length + eligibleChildren.length;
@@ -583,6 +589,15 @@ export class InitiativeService {
     if (childId && parentId === childId) {
       throw new InitiativeInvalidParentError();
     }
+    // Fetched once per call (not per recursion level below) — the org's
+    // plan-tier depth cap (Organization.maxInitiativeDepth) doesn't change
+    // mid-walk, so there's no reason to re-read it on every ancestor hop.
+    const org = await this.prisma.organization.findUnique({
+      select: { maxInitiativeDepth: true },
+      where: { id: orgId },
+    });
+    const maxDepth = org?.maxInitiativeDepth ?? MAX_INITIATIVE_DEPTH;
+
     const parent = await this.prisma.initiative.findFirst({
       select: { id: true, parentId: true },
       where: { id: parentId, organizationId: orgId },
@@ -593,6 +608,14 @@ export class InitiativeService {
     // Walk up to root, counting depth and detecting cycles.
     let cursor: { id: string; parentId: string | null } | null = parent;
     let depth = 1;
+    // Baseline check: if the target parent already sits at (or beyond) the
+    // cap, no child can be attached — even when the parent is itself a root
+    // (parentId === null), in which case the loop below never runs. Without
+    // this, a per-org `maxInitiativeDepth = 1` (forbid all nesting) would be
+    // silently ignored for a root parent.
+    if (depth >= maxDepth) {
+      throw new InitiativeMaxDepthError(maxDepth);
+    }
     const seen = new Set<string>([parent.id]);
     while (cursor?.parentId) {
       if (childId && cursor.parentId === childId) {
@@ -605,8 +628,8 @@ export class InitiativeService {
       }
       seen.add(cursor.parentId);
       depth += 1;
-      if (depth >= MAX_INITIATIVE_DEPTH) {
-        throw new InitiativeMaxDepthError();
+      if (depth >= maxDepth) {
+        throw new InitiativeMaxDepthError(maxDepth);
       }
       const next: { id: string; parentId: string | null } | null =
         await this.prisma.initiative.findUnique({
@@ -708,8 +731,16 @@ export class InitiativeInvalidParentError extends Error {
 }
 
 export class InitiativeMaxDepthError extends Error {
-  constructor() {
-    super(`Initiative nesting depth cannot exceed ${MAX_INITIATIVE_DEPTH}`);
+  constructor(maxDepth: number = MAX_INITIATIVE_DEPTH) {
+    super(`Initiative nesting depth cannot exceed ${maxDepth}`);
     this.name = 'InitiativeMaxDepthError';
+  }
+}
+
+/** A description value violates the server-side input length cap. */
+export class InitiativeValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InitiativeValidationError';
   }
 }
