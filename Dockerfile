@@ -7,7 +7,12 @@ WORKDIR /app
 COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn .yarn
 
-RUN yarn install --immutable --mode=skip-build
+# The root `postinstall` runs `prisma generate`, so the schema must be present
+# before install. Copying it here (rather than skipping build scripts) keeps
+# native dependency builds working.
+COPY prisma.config.ts ./
+COPY prisma ./prisma
+RUN yarn install --immutable
 
 # ---- builder stage ----
 FROM node:24-alpine AS builder
