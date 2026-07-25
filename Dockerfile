@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn .yarn
 
-RUN yarn install --immutable
+RUN yarn install --immutable --mode=skip-build
 
 # ---- builder stage ----
 FROM node:24-alpine AS builder
