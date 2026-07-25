@@ -7,6 +7,11 @@ WORKDIR /app
 COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn .yarn
 
+# The root `postinstall` runs `prisma generate`, so the schema must be present
+# before install. Copying it here (rather than skipping build scripts) keeps
+# native dependency builds working.
+COPY prisma.config.ts ./
+COPY prisma ./prisma
 RUN yarn install --immutable
 
 # ---- builder stage ----
