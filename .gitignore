@@ -51,6 +51,9 @@ dist/
 !.vscode/launch.json
 !.vscode/tasks.json
 
+# ── OS ─────────────────────────────────────────────────────────
+.DS_Store
+
 # ── Logs & caches ───────────────────────────────────────────────
 *.log
 npm-debug.log*
@@ -143,6 +146,3 @@ dump.rdb
 # We use yarn.lock
 package-lock.json
 *.pyc
-
-# ── OS ─────────────────────────────────────────────────────────
-.DS_Store
