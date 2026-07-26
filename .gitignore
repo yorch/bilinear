@@ -20,10 +20,10 @@ build/Release
 # TypeScript cache
 *.tsbuildinfo
 # Next.js build output
-.next
+.next/
 # Prisma generated client (run `prisma generate` after checkout)
 src/generated/
-dist
+dist/
 # Sveltekit cache directory
 .svelte-kit/
 
@@ -67,7 +67,7 @@ yarn-error.log*
 
 # ── Testing & coverage ──────────────────────────────────────────
 # Coverage directory used by tools like istanbul
-coverage
+coverage/
 # nyc test coverage
 .nyc_output
 # Playwright
@@ -143,3 +143,6 @@ dump.rdb
 # We use yarn.lock
 package-lock.json
 *.pyc
+
+# ── OS ─────────────────────────────────────────────────────────
+.DS_Store
