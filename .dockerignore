@@ -1,6 +1,18 @@
-.git
-.next
+# ── Dependencies ────────────────────────────────────────────────
 node_modules
-.env
-data
+**/node_modules
 .yarn/install-state.gz
+
+# ── Build output ────────────────────────────────────────────────
+.next
+**/.next
+
+# ── Env files ───────────────────────────────────────────────────
+# Ignore every env file except the committed examples.
+# `.env.*` does not match `.env` itself, hence both lines; the negations come
+# last so they win regardless of what appears above.
+.env
+
+# ── Project-specific ────────────────────────────────────────────
+.git
+data
