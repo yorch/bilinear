@@ -82,7 +82,7 @@ function PasswordForm({ slug }: { slug: string }) {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm rounded-xl border border-border bg-card p-8 shadow-sm">
+      <div className="w-full max-w-sm rounded-xl border border-border bg-card p-8 shadow-e1">
         <h2 className="mb-1 text-lg font-semibold text-foreground">
           {t('roadmap.public.passwordRequired')}
         </h2>

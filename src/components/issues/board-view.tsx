@@ -90,9 +90,11 @@ function BoardCardInner({
         selected
           ? 'border-brand ring-1 ring-brand'
           : multiSelected
-            ? 'border-info/40 ring-2 ring-info'
+            ? 'border-brand ring-2 ring-brand'
             : 'border-border',
-        isDragging && 'rotate-2 shadow-e3',
+        // The accent is allowed to appear here because something is actually
+        // in motion; a card at rest stays neutral.
+        isDragging && 'rotate-2 shadow-e3 ring-1 ring-brand',
       )}
       onClick={onSelect}
       onDoubleClick={onOpen}
@@ -672,8 +674,8 @@ export function BoardView({
       <DragOverlay>
         {activeIssue &&
           (isDraggingMultiple ? (
-            <div className="flex items-center gap-2 rounded-lg border border-info/40 bg-card px-4 py-3 shadow-lg">
-              <span className="text-sm font-medium text-info-subtle-foreground">
+            <div className="flex items-center gap-2 rounded-lg border border-brand bg-card px-4 py-3 shadow-e3">
+              <span className="text-sm font-medium text-brand-subtle-foreground">
                 {t('issues.draggingCount', { count: selectedIds.size })}
               </span>
             </div>

@@ -118,7 +118,7 @@ function SnoozeButton({
       </button>
       {open ? (
         <div
-          className="absolute right-0 z-10 mt-1 min-w-[120px] rounded border border-border bg-card py-1 text-xs shadow-lg"
+          className="absolute right-0 z-10 mt-1 min-w-[120px] rounded border border-border bg-card py-1 text-xs shadow-e2"
           role="menu"
         >
           {SNOOZE_PRESETS.map(p => (

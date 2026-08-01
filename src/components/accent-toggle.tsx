@@ -59,7 +59,7 @@ export function AccentToggle({ className, compact = false }: AccentToggleProps) 
           aria-pressed={accent === definition.id}
           className={cn(
             'flex h-6 w-6 items-center justify-center rounded transition-colors max-md:h-11 max-md:w-11',
-            accent === definition.id ? 'bg-surface-raised shadow-sm' : 'hover:bg-accent',
+            accent === definition.id ? 'bg-surface-raised shadow-e1' : 'hover:bg-accent',
           )}
           key={definition.id}
           onClick={() => setAccent(definition.id)}

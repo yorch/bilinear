@@ -18,6 +18,7 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SyncErrorState } from '@/components/shared/sync-error-state';
 import { Button } from '@/components/ui/button';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
+import { IssueListSkeleton } from '@/components/ui/skeleton';
 import { type SaveViewInput, SaveViewModal } from '@/components/views/save-view-modal';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useHotkeys } from '@/hooks/use-hotkeys';
@@ -340,11 +341,9 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (isLoading) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-        {t('common.loading')}
-      </div>
-    );
+    // A shaped skeleton rather than a centred "Loading…" string: it tells you
+    // what is arriving and keeps the page from jumping when it does.
+    return <IssueListSkeleton />;
   }
 
   if (hasError) {

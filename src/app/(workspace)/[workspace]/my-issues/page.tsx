@@ -11,6 +11,7 @@ import { ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { SyncErrorState } from '@/components/shared/sync-error-state';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
+import { IssueListSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useIssueListPage } from '@/hooks/use-issue-list-page';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
@@ -108,11 +109,9 @@ const MyIssuesPage = observer(function MyIssuesPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (isLoading) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-        {t('common.loading')}
-      </div>
-    );
+    // A shaped skeleton rather than a centred "Loading…" string: it tells you
+    // what is arriving and keeps the page from jumping when it does.
+    return <IssueListSkeleton />;
   }
 
   if (hasError) {

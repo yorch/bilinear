@@ -207,7 +207,7 @@ function AddFilterForm({
   const needsValue = operator !== 'is_set' && operator !== 'is_not_set';
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-border bg-card p-2 shadow-lg">
+    <div className="flex items-center gap-2 rounded-lg border border-border bg-card p-2 shadow-e2">
       <SelectPopover
         triggerChildren={
           <>

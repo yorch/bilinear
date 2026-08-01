@@ -445,9 +445,9 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
                   <div
                     aria-label={t('roadmap.gantt.dragBar', { name: item.name })}
                     className={cn(
-                      'absolute flex h-6 items-center gap-1.5 rounded-md border px-2 text-xs font-medium text-white shadow-sm transition-shadow',
+                      'absolute flex h-6 items-center gap-1.5 rounded-md border px-2 text-xs font-medium text-white shadow-e1 transition-shadow',
                       !isDragging && 'cursor-grab',
-                      isDragging && 'cursor-grabbing shadow-md',
+                      isDragging && 'cursor-grabbing shadow-e2',
                     )}
                     onMouseDown={e => startDrag(item, 'move', e)}
                     role="button"

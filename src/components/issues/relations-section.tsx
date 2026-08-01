@@ -327,7 +327,7 @@ function AddRelationForm({ onSubmit, onClose, issueId }: AddRelationFormProps) {
           <ChevronDown className="h-3 w-3" />
         </button>
         {typeOpen && (
-          <div className="absolute left-0 top-full z-10 mt-1 w-36 rounded-md border border-border bg-card py-1 shadow-lg">
+          <div className="absolute left-0 top-full z-10 mt-1 w-36 rounded-md border border-border bg-card py-1 shadow-e2">
             {RELATION_TYPES.map(t => (
               <button
                 className={cn(

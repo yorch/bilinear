@@ -131,7 +131,7 @@ export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
       role="dialog"
     >
       {/* Card */}
-      <div className="w-full max-w-xl overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
+      <div className="w-full max-w-xl overflow-hidden rounded-xl border border-border bg-card shadow-e3">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <h2 className="text-sm font-semibold text-foreground">

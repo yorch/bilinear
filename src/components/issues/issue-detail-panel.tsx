@@ -211,7 +211,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
       {/* Panel — full-screen sheet below md (no room for a side panel on a
           phone-width viewport); the fixed 480px side panel returns at md+. */}
       <div
-        className="fixed inset-0 z-40 flex h-full w-full flex-col border-l border-border bg-card shadow-xl md:inset-y-0 md:right-0 md:left-auto md:w-[480px]"
+        className="fixed inset-0 z-40 flex h-full w-full flex-col border-l border-border bg-card shadow-e3 md:inset-y-0 md:right-0 md:left-auto md:w-[480px]"
         data-testid="issue-detail-panel"
       >
         {/* Header */}
@@ -268,7 +268,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
           {/* Title */}
           {editingTitle ? (
             <input
-              className="w-full bg-transparent text-xl font-semibold outline-none"
+              className="w-full bg-transparent text-xl font-semibold tracking-tight text-foreground outline-none"
               onBlur={saveTitle}
               onChange={e => setTitleDraft(e.target.value)}
               onKeyDown={e => {
@@ -286,7 +286,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
             />
           ) : (
             <button
-              className="cursor-text text-left text-xl font-semibold text-foreground"
+              className="cursor-text text-left text-xl font-semibold leading-snug tracking-tight text-foreground"
               onClick={() => {
                 setEditingTitle(true);
                 setTimeout(() => titleRef.current?.focus(), 20);

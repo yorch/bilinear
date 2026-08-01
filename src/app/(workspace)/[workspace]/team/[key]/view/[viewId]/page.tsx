@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { IssueListView } from '@/components/issues/issue-list-view';
 import { PageHeader } from '@/components/ui/page-header';
+import { IssueListSkeleton } from '@/components/ui/skeleton';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssueLabel } from '@/lib/db';
@@ -92,11 +93,9 @@ const CustomViewPage = observer(function CustomViewPage() {
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
 
   if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        {t('common.loading')}
-      </div>
-    );
+    // A shaped skeleton rather than a centred "Loading…" string: it tells you
+    // what is arriving and keeps the page from jumping when it does.
+    return <IssueListSkeleton />;
   }
 
   if (!view || !team) {
