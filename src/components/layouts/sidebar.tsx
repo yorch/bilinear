@@ -48,9 +48,15 @@ interface FavoriteMeta {
         slugId: string;
       }
     | { __typename: 'Initiative'; id: string; name: string; color?: string | null }
-    | { __typename: 'CustomView'; id: string; name: string; teamId: string }
-    | { __typename: 'Cycle'; id: string; name: string; teamId: string }
-    | { __typename: 'Document'; id: string; title: string; teamId: string }
+    | { __typename: 'CustomView'; id: string; name: string; customViewTeamId: string | null }
+    | {
+        __typename: 'Cycle';
+        id: string;
+        number: number;
+        cycleName: string | null;
+        teamId: string;
+      }
+    | { __typename: 'Document'; id: string; title: string; documentTeamId: string | null }
     | { __typename: 'Team'; id: string; name: string; key: string; icon?: string | null }
     | null;
   entityType: string;
@@ -79,7 +85,9 @@ function favoriteIcon(entityType: string) {
   }
 }
 
-function favoriteLabel(fav: FavoriteMeta): string {
+type Translate = ReturnType<typeof useTranslations>;
+
+function favoriteLabel(fav: FavoriteMeta, t: Translate): string {
   const e = fav.entity;
   if (!e) {
     return '';
@@ -89,6 +97,10 @@ function favoriteLabel(fav: FavoriteMeta): string {
       return `${e.identifier} ${e.title}`;
     case 'Document':
       return e.title;
+    // Cycles are frequently unnamed — fall back to the numbered label the rest
+    // of the cycle UI uses.
+    case 'Cycle':
+      return e.cycleName || t('cycles.defaultName', { number: e.number });
     default:
       return e.name;
   }
@@ -97,7 +109,7 @@ function favoriteLabel(fav: FavoriteMeta): string {
 function favoriteHref(
   fav: FavoriteMeta,
   base: string,
-  findTeamById: (id: string) => { key: string } | null | undefined,
+  findTeamById: (id: string | null) => { key: string } | null | undefined,
 ): string {
   const e = fav.entity;
   if (!e) {
@@ -110,8 +122,10 @@ function favoriteHref(
       return `${base}/project/${e.slugId}`;
     case 'Initiative':
       return `${base}/initiatives`;
+    // A workspace-scoped custom view has no team, and there is no team-less view
+    // route — fall through to '#' the same way an unresolvable team does.
     case 'CustomView': {
-      const key = findTeamById(e.teamId)?.key;
+      const key = findTeamById(e.customViewTeamId)?.key;
       return key ? `${base}/team/${key}/view/${e.id}` : '#';
     }
     case 'Cycle': {
@@ -185,8 +199,8 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
       </div>
       <ul className="flex flex-col gap-0.5">
         {favorites.map(fav => {
-          const href = favoriteHref(fav, base, id => teamStore.findById(id));
-          const label = favoriteLabel(fav);
+          const href = favoriteHref(fav, base, id => (id ? teamStore.findById(id) : null));
+          const label = favoriteLabel(fav, t);
           const isActive = pathname === href;
           return (
             <li className="group flex items-center" key={fav.id}>
