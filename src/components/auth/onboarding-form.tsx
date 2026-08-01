@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { ORGANIZATION_CREATE_MUTATION } from '@/lib/graphql-queries';
@@ -86,8 +87,7 @@ export function OnboardingForm() {
         <label className="text-sm font-medium text-foreground-secondary" htmlFor="org-name">
           {t('auth.organizationName')}
         </label>
-        <input
-          className="rounded-md border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+        <Input
           id="org-name"
           onChange={e => handleNameChange(e.target.value)}
           placeholder={t('auth.organizationNamePlaceholder')}
@@ -100,10 +100,12 @@ export function OnboardingForm() {
         <label className="text-sm font-medium text-foreground-secondary" htmlFor="url-key">
           {t('auth.workspaceUrl')}
         </label>
-        <div className="flex items-center rounded-md border border-border bg-card focus-within:ring-2 focus-within:ring-ring">
-          <span className="pl-3 text-sm text-muted-foreground select-none">issuetracker.app/</span>
+        <div className="flex items-center rounded-md border border-input transition-[border-color,box-shadow] duration-150 ease-crisp focus-within:border-ring focus-within:shadow-[0_0_0_3px_var(--brand-subtle)]">
+          <span className="select-none pl-3 font-mono text-sm text-muted-foreground">
+            issuetracker.app/
+          </span>
           <input
-            className="flex-1 bg-transparent px-1 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none"
+            className="flex-1 bg-transparent px-1 py-1.5 font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground"
             id="url-key"
             onChange={e => handleUrlKeyChange(e.target.value)}
             placeholder="acme"
@@ -116,7 +118,11 @@ export function OnboardingForm() {
         )}
       </div>
 
-      {error && <p className="text-sm text-danger-subtle-foreground">{error}</p>}
+      {error && (
+        <p className="text-sm text-danger-subtle-foreground" role="alert">
+          {error}
+        </p>
+      )}
 
       <Button
         className="w-full"

@@ -95,6 +95,66 @@
   }
 }
 
+/* ── Sign-in ambient field ────────────────────────────────────────────────
+   The one surface where the accent is the subject rather than the trim:
+   there is no data on screen for it to compete with. Three slowly drifting
+   blurred blobs in the active accent's own colours, so the sign-in page is
+   visibly the same product under Aurora, Ion or Ultraviolet.
+
+   Deliberately CSS rather than canvas/SVG — it is decoration, it must cost
+   nothing, and `prefers-reduced-motion` (below) parks it on its first frame
+   rather than removing it, so the composition survives without the drift. */
+.aurora-field {
+  position: absolute;
+  inset: -35%;
+  pointer-events: none;
+  opacity: 0.42;
+  filter: blur(64px);
+}
+.dark .aurora-field {
+  opacity: 0.5;
+}
+.aurora-field > i {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+}
+.aurora-field > i:nth-child(1) {
+  top: 8%;
+  left: 6%;
+  width: 55%;
+  height: 55%;
+  background: var(--brand);
+  animation: aurora-drift-a 19s var(--ease-crisp) infinite alternate;
+}
+.aurora-field > i:nth-child(2) {
+  top: 30%;
+  right: 4%;
+  width: 48%;
+  height: 48%;
+  background: var(--brand-2);
+  animation: aurora-drift-b 23s var(--ease-crisp) infinite alternate;
+}
+.aurora-field > i:nth-child(3) {
+  bottom: 4%;
+  left: 32%;
+  width: 40%;
+  height: 40%;
+  background: color-mix(in oklab, var(--brand) 50%, var(--brand-2));
+  animation: aurora-drift-a 27s var(--ease-crisp) infinite alternate-reverse;
+}
+
+@keyframes aurora-drift-a {
+  to {
+    transform: translate3d(14%, -12%, 0) scale(1.18);
+  }
+}
+@keyframes aurora-drift-b {
+  to {
+    transform: translate3d(-16%, 10%, 0) scale(0.86);
+  }
+}
+
 /* ───────────────────────────────────────────────────────────────────────────
    ACCENT SYSTEM
    ───────────────────────────────────────────────────────────────────────────

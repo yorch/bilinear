@@ -226,6 +226,16 @@
   },
   "auth": {
     "backToSignIn": "Back to sign in",
+    "canvas": {
+      "headline": "Issues that stay in sync, even when you don’t.",
+      "statLocalesLabel": "languages",
+      "statLocalesValue": "2",
+      "statOfflineLabel": "offline capable",
+      "statOfflineValue": "100%",
+      "statSyncLabel": "optimistic write",
+      "statSyncValue": "<40ms",
+      "subhead": "Offline-first by design. Write while you’re on a plane, land, and find the queue already drained."
+    },
     "checkYourEmail": "Check your email",
     "continueWithEmail": "Continue with email",
     "continueWithGitHub": "Continue with GitHub",

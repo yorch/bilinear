@@ -332,11 +332,17 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
   const activeTeamKey = teams.find(team => pathname.startsWith(`${base}/team/${team.key}`))?.key;
   const [manuallyToggled, setManuallyToggled] = useState<Record<string, boolean>>({});
 
-  // The route's own team is expanded unless the user explicitly collapsed it;
-  // any other team stays closed unless they explicitly opened it. Keeping the
+  // Exactly one team is open by default: the one the route is in, or — on a
+  // non-team route like the workspace root, my-issues or inbox — the first
+  // team, so the sub-nav is never entirely absent and the sub-routes stay
+  // reachable without a click to discover them.
+  const defaultExpandedKey = activeTeamKey ?? teams[0]?.key;
+
+  // The default team is expanded unless the user explicitly collapsed it; any
+  // other team stays closed unless they explicitly opened it. Keeping the
   // override keyed by team (rather than tracking an open set) means navigating
   // to a new team expands it without fighting a previous manual choice.
-  const isExpanded = (key: string) => manuallyToggled[key] ?? key === activeTeamKey;
+  const isExpanded = (key: string) => manuallyToggled[key] ?? key === defaultExpandedKey;
 
   return (
     <>

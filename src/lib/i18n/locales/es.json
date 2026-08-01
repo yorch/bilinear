@@ -226,6 +226,16 @@
   },
   "auth": {
     "backToSignIn": "Volver a iniciar sesión",
+    "canvas": {
+      "headline": "Incidencias siempre sincronizadas, aunque tú no lo estés.",
+      "statLocalesLabel": "idiomas",
+      "statLocalesValue": "2",
+      "statOfflineLabel": "sin conexión",
+      "statOfflineValue": "100%",
+      "statSyncLabel": "escritura optimista",
+      "statSyncValue": "<40 ms",
+      "subhead": "Diseñado para funcionar sin conexión. Escribe en pleno vuelo, aterriza y encuentra la cola ya vacía."
+    },
     "checkYourEmail": "Revisa tu correo",
     "continueWithEmail": "Continuar con correo electrónico",
     "continueWithGitHub": "Continuar con GitHub",

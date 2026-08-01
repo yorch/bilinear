@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import {
@@ -59,8 +60,8 @@ export function LoginForm() {
         <label className="text-sm font-medium text-foreground-secondary" htmlFor="email">
           {t('auth.emailAddress')}
         </label>
-        <input
-          className="rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-invert"
+        <Input
+          autoComplete="email"
           id="email"
           onChange={e => setEmail(e.target.value)}
           placeholder={t('auth.emailPlaceholder')}
@@ -70,7 +71,11 @@ export function LoginForm() {
         />
       </div>
 
-      {error && <p className="text-sm text-danger-subtle-foreground">{error}</p>}
+      {error && (
+        <p className="text-sm text-danger-subtle-foreground" role="alert">
+          {error}
+        </p>
+      )}
 
       <Button className="w-full" data-testid="email-submit" disabled={loading} type="submit">
         {loading ? t('auth.sending') : t('auth.continueWithEmail')}
