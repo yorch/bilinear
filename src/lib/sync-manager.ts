@@ -1,4 +1,5 @@
 import { COMMIT_WATERMARK_LAG_MS, DELTA_PAGE_SIZE } from '@/lib/sync-config';
+import { normalizeIssueRow } from '@/stores/issue-store';
 import type { RootStore } from '@/stores/root-store';
 import { db } from './db';
 import { createClientLogger } from './logger';
@@ -728,7 +729,14 @@ export class SyncManager {
           if (act === 'D') {
             dexieDeletes.push({ id: modelId, table: 'organizations' });
           } else if (data) {
-            dexieUpserts.organizations.push(data);
+            // `getBootstrapData` omits these two settings blobs; the broadcast
+            // path must not put them back. Stripped server-side too — this is
+            // the belt to that braces, since anything already in a client's
+            // IndexedDB would otherwise persist.
+            const { authSettings, securitySettings, ...safe } = data as Record<string, unknown>;
+            void authSettings;
+            void securitySettings;
+            dexieUpserts.organizations.push(safe);
           }
           break;
         case 'Team':
@@ -800,6 +808,9 @@ export class SyncManager {
           const isIssueRow =
             act === 'D' ||
             (payload !== null && Object.keys(payload).some(k => k !== 'customFieldValues'));
+          // Read before the store applies, so the Dexie row is normalized
+          // against the same "what did we have before" value the store used.
+          const previousLabelIds = issueStore.pool.get(modelId)?.labelIds;
           if (isIssueRow) {
             issueStore.applySyncAction(
               act,
@@ -812,7 +823,18 @@ export class SyncManager {
               // Second line of defence: `db.issues` has an inbound `id`
               // keyPath, and a put with no `id` throws inside the shared
               // transaction, rolling back every other entity in the batch.
-              dexieUpserts.issues.push(data as object);
+              //
+              // Persist the SAME normalized row the store just applied. Writing
+              // the raw payload dropped `labelIds` (and wrote relation shapes
+              // Dexie doesn't declare), so the labels survived in memory but
+              // came back empty on the next reload — which hydrates from
+              // IndexedDB and then delta-syncs rather than re-bootstrapping.
+              dexieUpserts.issues.push(
+                normalizeIssueRow(
+                  data as Parameters<typeof normalizeIssueRow>[0],
+                  previousLabelIds,
+                ),
+              );
             }
           }
           if (payload !== null && 'customFieldValues' in payload) {

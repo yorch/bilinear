@@ -148,7 +148,10 @@ export default function SecuritySettingsPage() {
 
   // SCIM state
   const [scimTokens, setScimTokens] = useState<ScimTokenRow[]>([]);
-  const [scimLoadError, setScimLoadError] = useState<string | null>(null);
+  const [scimLoadError, setScimLoadError] = useState<{
+    forbidden: boolean;
+    message: string;
+  } | null>(null);
   const [scimLoading, setScimLoading] = useState(true);
   const [scimCreating, setScimCreating] = useState(false);
   const [scimNewLabel, setScimNewLabel] = useState('');
@@ -205,15 +208,32 @@ export default function SecuritySettingsPage() {
         setLoading(false);
       });
 
-    gqlQuery<ScimTokenRow[] | null>(SCIM_TOKENS_QUERY, {}, 'scimTokens')
-      .then(tokens => {
-        setScimTokens(tokens ?? []);
+    // Same treatment as SAML above: `scimTokens` is org-admin-only, so an
+    // ordinary member visiting this page gets FORBIDDEN on a request they never
+    // asked to make. That is "you can't see this", not a failure — rendering it
+    // in destructive red would alarm every non-admin. A failed read must still
+    // never fall through to "No active tokens.", which would tell an admin
+    // auditing credentials that there are none.
+    gql(SCIM_TOKENS_QUERY)
+      .then(res => {
+        if (res.errors?.length) {
+          const code = (res.errors[0] as { extensions?: { code?: string } })?.extensions?.code;
+          setScimTokens([]);
+          setScimLoadError({
+            forbidden: code === 'FORBIDDEN' || code === 'UNAUTHENTICATED',
+            message: gqlError(res, t('common.somethingWentWrong')),
+          });
+          return;
+        }
+        const data = (res.data ?? {}) as { scimTokens?: ScimTokenRow[] | null };
+        setScimTokens(data.scimTokens ?? []);
       })
       .catch(err => {
-        // A failed read must never render as "No active tokens." — an admin
-        // auditing outstanding credentials would conclude there are none.
         setScimTokens([]);
-        setScimLoadError(getErrorMessage(err, t('common.somethingWentWrong')));
+        setScimLoadError({
+          forbidden: false,
+          message: getErrorMessage(err, t('common.somethingWentWrong')),
+        });
       })
       .finally(() => {
         setScimLoading(false);
@@ -370,7 +390,14 @@ export default function SecuritySettingsPage() {
           {scimLoading ? (
             <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
           ) : scimLoadError ? (
-            <p className="text-sm text-destructive">{scimLoadError}</p>
+            <p
+              className={cn(
+                'text-sm',
+                scimLoadError.forbidden ? 'text-muted-foreground' : 'text-destructive',
+              )}
+            >
+              {scimLoadError.message}
+            </p>
           ) : (
             <>
               {scimTokens.length === 0 ? (

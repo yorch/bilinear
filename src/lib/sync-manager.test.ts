@@ -129,6 +129,9 @@ function createFakeStores() {
       applySyncAction: vi.fn(),
       applyUpdateSyncAction: vi.fn(),
       applyValueSyncAction: vi.fn(),
+      // Real stores expose an entity pool; SyncManager reads `issueStore.pool`
+      // to carry a previously-cached label set onto a bare issue payload.
+      pool: new Map<string, unknown>(),
       upsertMany: vi.fn(),
     };
   }
@@ -441,7 +444,10 @@ describe('SyncManager', () => {
       ]);
 
       expect(stores.issueStore.applySyncAction).toHaveBeenCalledWith('U', 'i-1', data);
-      expect(fakeTables.issues.bulkPut).toHaveBeenCalledWith([data]);
+      // Dexie gets the *normalized* row, not the raw payload — the label shapes
+      // are collapsed to `labelIds` exactly as the MobX pool does it, so a
+      // reload that hydrates from IndexedDB sees the same row the store held.
+      expect(fakeTables.issues.bulkPut).toHaveBeenCalledWith([{ ...data, labelIds: [] }]);
       expect(fakeTables.issues.delete).not.toHaveBeenCalled();
     });
 

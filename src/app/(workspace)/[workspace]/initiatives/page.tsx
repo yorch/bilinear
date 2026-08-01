@@ -6,8 +6,7 @@ import { InitiativeUpdatesSection } from '@/components/initiatives/initiative-up
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBInitiative } from '@/lib/db';
-import { gql } from '@/lib/graphql';
-import { computeProjectProgress } from '@/lib/project-constants';
+import { gql, gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -61,6 +60,15 @@ const INITIATIVE_REMOVE_PROJECT_MUTATION = `
   }
 `;
 
+const INITIATIVE_PROJECT_PROGRESS_QUERY = `
+  query InitiativeProjectProgress($id: ID!) {
+    initiative(id: $id) {
+      id
+      projects { id progress }
+    }
+  }
+`;
+
 const STATUS_ORDER = ['active', 'planned', 'completed', 'canceled'];
 
 function useStatusLabels() {
@@ -76,10 +84,16 @@ function useStatusLabels() {
 function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: DBInitiative }) {
   const t = useTranslations();
   const STATUS_LABELS = useStatusLabels();
-  const { initiativeStore, issueStore, projectStore, userStore } = useStore();
+  const { initiativeStore, projectStore, userStore } = useStore();
   const viewerId = userStore.currentUser?.id ?? '';
   const [expanded, setExpanded] = useState(false);
   const [adding, setAdding] = useState(false);
+  // Progress must come from the server. Computing it from `issueStore` divides
+  // over whatever issues this client happens to hold, and a guest's pool is
+  // scoped to issues they created or are assigned — so one owned issue in a
+  // 50-issue project renders as 100%. `Project.progress` is resolved from the
+  // full issue set server-side.
+  const [progressById, setProgressById] = useState<Record<string, number>>({});
   const children = initiativeStore.getChildren(initiative.id);
   const projectIds = initiativeStore.getProjectIds(initiative.id);
   const projects = projectIds
@@ -87,6 +101,26 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
     .filter((p): p is NonNullable<typeof p> => p !== null);
 
   const allProjects = projectStore.all.filter(p => !projectIds.includes(p.id));
+
+  const projectIdKey = projectIds.join(',');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: projectIdKey is the stable stand-in for the projectIds array
+  useEffect(() => {
+    if (!expanded || projectIds.length === 0) {
+      return;
+    }
+    gqlQuery<{ projects: Array<{ id: string; progress: number }> } | null>(
+      INITIATIVE_PROJECT_PROGRESS_QUERY,
+      { id: initiative.id },
+      'initiative',
+    )
+      .then(data => {
+        setProgressById(Object.fromEntries((data?.projects ?? []).map(p => [p.id, p.progress])));
+      })
+      .catch(() => {
+        // Leave the map empty — the row renders '—' rather than a wrong number.
+        setProgressById({});
+      });
+  }, [expanded, projectIdKey, initiative.id]);
 
   const indentPx = depth * 20;
   return (
@@ -191,7 +225,9 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
                   />
                   <span className="flex-1">{p.name}</span>
                   <span className="text-muted-foreground">
-                    {Math.round(computeProjectProgress(issueStore.findByProjectId(p.id)) * 100)}%
+                    {progressById[p.id] === undefined
+                      ? '—'
+                      : `${Math.round(progressById[p.id] * 100)}%`}
                   </span>
                   <button
                     className="text-muted-foreground hover:text-red-500 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"

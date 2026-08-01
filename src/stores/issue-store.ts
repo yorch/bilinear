@@ -2,6 +2,38 @@ import { action, computed, makeObservable, observable } from 'mobx';
 import type { DBIssue } from '@/lib/db';
 import { fuzzyScore } from '@/lib/fuzzy-search';
 
+/**
+ * Collapse the three label shapes the server can send into the single
+ * `labelIds` form `DBIssue` declares:
+ *
+ * - `labelAssignments` — the Prisma relation, on SyncAction payloads
+ * - `labels`           — on GraphQL mutation responses
+ * - `labelIds`         — already normalized, from bootstrap
+ *
+ * A payload that says nothing about labels is NOT the same as an issue with no
+ * labels: archive/unarchive/snooze/triage/rollover all broadcast a bare issue
+ * row. Falling back to `[]` there wiped the label chips off every client on an
+ * operation that never touched labels — so fall back to `previousLabelIds`.
+ *
+ * Exported because both the MobX pool and the Dexie write need the identical
+ * result. Normalizing in only one of them is what made the loss survive a
+ * reload: `loadFromIndexedDB()` hydrates the persisted row verbatim, and the
+ * cached-data path then takes `deltaSync()` rather than re-bootstrapping, so
+ * nothing ever repaired it.
+ */
+export function normalizeIssueRow(data: DBIssue, previousLabelIds?: string[]): DBIssue {
+  const { labelAssignments, labels, ...issueData } = data as DBIssue & {
+    labelAssignments?: Array<{ labelId: string }>;
+    labels?: Array<{ id: string }>;
+  };
+  const labelIds = labelAssignments
+    ? labelAssignments.map(a => a.labelId)
+    : labels
+      ? labels.map(l => l.id)
+      : (issueData.labelIds ?? (previousLabelIds ? [...previousLabelIds] : []));
+  return { ...issueData, labelIds };
+}
+
 export class IssueStore {
   pool = new Map<string, DBIssue>();
 
@@ -112,25 +144,7 @@ export class IssueStore {
   applySyncAction(action: string, id: string, data: DBIssue | null) {
     if (action === 'I' || action === 'U' || action === 'A') {
       if (data) {
-        // Server data may include labels in different shapes:
-        // - `labelAssignments` from sync actions (Prisma relation)
-        // - `labels` from GraphQL mutation responses
-        // - `labelIds` from bootstrap data
-        const raw = data as DBIssue & {
-          labelAssignments?: Array<{ labelId: string }>;
-          labels?: Array<{ id: string }>;
-        };
-        const { labelAssignments, labels, ...issueData } = raw;
-        // A payload that says nothing about labels is not the same as an issue
-        // with no labels. Archive/unarchive/snooze/triage all broadcast a bare
-        // issue row; falling back to [] there wiped the label chips off every
-        // other client (and persisted the loss to Dexie) on an operation that
-        // never touched labels. Keep what we already have instead.
-        const labelIds = labelAssignments
-          ? labelAssignments.map(a => a.labelId)
-          : labels
-            ? labels.map(l => l.id)
-            : (issueData.labelIds ?? this.pool.get(id)?.labelIds ?? []);
+        const { labelIds, ...issueData } = normalizeIssueRow(data, this.pool.get(id)?.labelIds);
 
         // When a real issue arrives (non-optimistic identifier), atomically
         // remove any optimistic placeholder for the same title/team so the

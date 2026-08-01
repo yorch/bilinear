@@ -26,13 +26,18 @@ export const organizationResolvers = {
         where: { id: ctx.orgId },
       });
       // Organization is part of the synced dataset — broadcast so other
-      // clients pick up the toggle without a refresh.
+      // clients pick up the toggle without a refresh. Strip the two settings
+      // blobs first: this payload goes to every client in the org over the WS
+      // fan-out, and `getBootstrapData` omits them for exactly that reason.
+      const { authSettings, securitySettings, ...broadcastable } = organization;
+      void authSettings;
+      void securitySettings;
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
         'U',
         'Organization',
         organization.id,
-        organization,
+        broadcastable,
       );
       return { lastSyncId: sync.id.toString(), organization, success: true };
     },
