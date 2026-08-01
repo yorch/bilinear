@@ -206,12 +206,19 @@ describe('RoadmapService', () => {
         },
       ]);
 
+      // Progress is computed from the issue set, not read off the (never
+      // written) `Project.progress` column — 1 of 4 issues complete = 0.25,
+      // deliberately different from the stale 0.5 on the row above.
+      prisma.issue.groupBy
+        .mockResolvedValueOnce([{ _count: 4, projectId: 'proj-1' }])
+        .mockResolvedValueOnce([{ _count: 1, projectId: 'proj-1' }]);
+
       const projects = await service.getRoadmapProjects(ORG_ID);
       expect(projects).toHaveLength(1);
       expect(projects[0]).toMatchObject({
         id: 'proj-1',
         name: 'Alpha',
-        progress: 0.5,
+        progress: 0.25,
       });
       expect(prisma.project.findMany).toHaveBeenCalledWith(
         expect.objectContaining({

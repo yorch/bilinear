@@ -1277,6 +1277,7 @@ const { data } = await graphql(ISSUE_COMMENTS_QUERY, { issueId });
 ```
 
 - `CommentThread` component (`src/components/issues/comment-thread.tsx`) handles threading via `parentId`
+- **Threads are exactly one level deep** — `CommentService.create` rejects a reply to a reply, and both the query fragment and `CommentCard`'s recursion mirror that cap. See §76.4 for why (a grandchild has no hydrated `author`, and `Comment.author: User!` nulls the entire response).
 - Reactions use the `commentReactionToggle` mutation — the component maintains optimistic local state
 - Resolution: `commentResolve` / `commentUnresolve` mutations; resolved comments are visually collapsed
 - Rich text in comments uses the same `TipTapEditor` component as issue descriptions
@@ -2215,3 +2216,46 @@ Client-side i18n layer supporting `en` (default) and `es`, modeled after the exi
 - **First-visit locale from `Accept-Language`** — `getServerLocale()` (`src/lib/i18n/server.ts`) still lets an explicit choice win (the `locale` cookie), but a visitor with no cookie yet now falls back to their browser's `Accept-Language` before the app default. Parsing lives in the pure, unit-tested `pickLocaleFromAcceptLanguage(header)` (`src/lib/i18n/index.ts`): it honors `q`-weights (not header order), matches on the base subtag (`es-MX` → `es`), skips `*`, unsupported languages, and `q=0` entries (RFC 7231 — `q=0` means the client explicitly rejects that language), and returns `null` when nothing matches. This reads `headers()` in the root layout, which — like the existing `cookies()` read — keeps every route dynamically rendered; no regression since the app is already dynamic (see §75).
 - **Persisting the choice is fire-and-forget but not silent** — `LocaleProvider.setLocale` still writes `User.locale` via `userUpdateLocale` without awaiting, but it no longer swallows every error: `UNAUTHENTICATED` (expected on the pre-login `login`/`verify` pages) is ignored, while any other GraphQL/network failure is `console.warn`ed so a silently stale locale (→ wrong-language emails) is diagnosable.
 - **Tests** — `src/lib/i18n/index.test.ts` covers plural category selection + fallback, `{count}` number grouping (and non-count passthrough), and the `Accept-Language` ranking/`q=0`/matching edge cases. Extend it when adding a locale with a richer plural rule set.
+
+---
+
+## 76. Client/Server Contract Safety (2026-08-01)
+
+There is no Apollo Client and no GraphQL codegen: every client document is a plain template literal and every response type is hand-written. Nothing structurally prevents a document from drifting away from the schema, so these conventions carry that weight instead.
+
+### 76.1 `gqlQuery` / `gqlMutate` — never read `res.data` unguarded
+
+`/api/graphql` answers **HTTP 200** for every GraphQL-level failure — validation errors, `UNAUTHENTICATED` on an expired session, `FORBIDDEN`, resolver faults. `gql()` therefore does **not** throw; it resolves with `errors` populated and `data` undefined. A call site that only reads `res.data` cannot tell "the request failed" from "there is genuinely nothing here", and one that `await`s and then toasts reports success for a rejected write.
+
+- **Reads** → `gqlQuery<T>(query, variables, key)` (`src/lib/graphql.ts`). Throws on `res.errors`, unwraps `data[key]`. This is what makes an error state (`InlineRetry`, an error banner) reachable at all — `useRetryableFetch` only sets `error` when the fetcher **throws**, so a fetcher that swallows errors and returns `[]` renders a failed load as a legitimate empty state and leaves the retry branch as dead code.
+- **Writes whose outcome is reported to the user** → `gqlMutate(query, variables)`. The success toast, the local state mutation, the form close, and the list removal must all be unreachable when the server rejected the request. **Never clear the user's input before the write is confirmed** — a destroyed comment body or custom-field draft is worse than a failed request.
+- **Plain `gql()`** is still correct where you need the raw envelope: to read `extensions.code` (see 76.2), or for a genuinely fire-and-forget write with no UI consequence. Both cases deserve a comment saying which.
+- A failed read must **never** fall through to an authoritative empty state. "No API tokens yet" / "You're all caught up" / "No completed issues in this range" are read as facts.
+
+### 76.2 Nullable root fields return genuine partial responses
+
+Most root fields are non-null, so an error propagates to the root and `data` comes back null — which is why "check `data` presence" mostly happens to work. The exceptions are `samlConfiguration`, `githubIntegration`, `slackIntegration` and `publicRoadmap`: all nullable, so an error returns `data` populated with that field `null` **alongside** `errors`. Writing `field ?? null` makes a `FORBIDDEN` indistinguishable from "not configured" — on these four security/integration surfaces that means an admin sees a blank form and may overwrite live config, or reconnects an already-connected integration and mints a second webhook secret.
+
+Read `extensions.code` and branch: a permission error is "you can't see this" (muted text, section hidden), anything else is a real failure (destructive styling), and only a clean error-free response with a null field means "not configured". `settings/security/page.tsx` carries the reference implementation for both SAML and SCIM.
+
+### 76.3 SyncAction payload contract
+
+The client's apply is a **whole-object replace**, and the same payload is persisted to Dexie. Two rules follow:
+
+- **Broadcast the full row, never a stub.** `{ completedAt, id }` truncates the cached entity to two fields — it drops out of `findByTeamId`, scrambles date sorts, and is persisted in that state (only a re-bootstrap repairs it, and the cached-data path takes `deltaSync()` instead). Re-fetch the entity after a mutation that only returns a partial result.
+- **Say nothing about a relation rather than saying "empty".** A payload with no label information is not an issue with no labels. `normalizeIssueRow(data, previousLabelIds)` (exported from `src/stores/issue-store.ts`) collapses the three label shapes the server can send — `labelAssignments`, `labels`, `labelIds` — and falls back to the previously-cached ids. **Both** the MobX pool and the Dexie write must use it; normalizing in only one made label loss survive reloads.
+- **Strip anything not meant for every client.** SyncActions fan out org-wide over WebSocket. `Organization` payloads omit `authSettings`/`securitySettings`; `getBootstrapData` omits those plus the credential columns on `User` (`passwordHash`, `googleId`, `githubId`, `calendarFeedToken`, `isPlatformAdmin`). The `DB*` interfaces in `src/lib/db.ts` declare none of them, so a leak is invisible to TypeScript while still landing in IndexedDB in plaintext.
+- **Per-recipient models need a client-side filter.** `Notification` rows belong to one user but broadcast to the whole org, so `SyncManager` drops actions whose `userId` isn't the current user (`NotificationStore` documents its pool as already user-scoped, and `markAllRead()` depends on that). Note there is deliberately no `'I'` SyncAction for notifications — live delivery would broadcast private notifications org-wide and needs a per-user channel first.
+- **A partial payload riding another model's stream must be discriminated.** `issueCustomFieldValuesSet` emits `{ customFieldValues }` on the `Issue` stream with no `id` and no issue columns. `SyncManager` checks for keys beyond `customFieldValues` before treating it as an issue row, and guards the `db.issues` put on `id` being present — a Dexie put that violates the inbound keyPath throws **inside the shared transaction**, rolling back every other entity in the batch including the `lastSyncId` cursor.
+
+### 76.4 Comment threads are exactly one level deep
+
+`CommentService.create` rejects a reply whose parent already has a parent. `COMMENT_INCLUDE` hydrates two levels of relations, so a grandchild would come back with no `author` — and `Comment.author` is `User!`, which nulls the reply, then its parent, then the whole non-null `comments` list, then `data`. The client mirrors the cap: `COMMENTS_FRAGMENT` selects a bare `replies { id }` at the third level, and `CommentCard` only recurses at `depth === 0` so it never mounts a card for a stub. `Comment.author` additionally falls back to `ctx.loaders.user` for rows created before the cap existed. **This is an API contract** — a client that walks the reply tree deeper gets a validation-clean document that returns `data: null`.
+
+### 76.5 Non-null SDL fields over nullable sources
+
+A `!` field resolving to null nulls its whole parent and propagates up until it reaches a nullable field — one bad row takes down an entire response. Before marking a field non-null, check the backing column *and* the lookup: an org-scoped or `archivedAt`-filtered relation lookup returns null for a row that still exists. Where the column can't be tightened because the table is shared (`auth_tokens.label` is null for magic-link and refresh tokens), coalesce in a resolver — see `ApiToken.label` / `ScimToken.label` in `resolvers/index.ts`.
+
+### 76.6 The drift guard
+
+`src/lib/graphql-documents.test.ts` scans the source tree for embedded documents, inlines the shared field-list constants they interpolate, and validates each against the real `typeDefs`. It catches unknown fields, wrong argument types, and union selections whose sibling fragments disagree on nullability. It does **not** catch anything about runtime values — variables objects, response-type lies, or nullability the SDL declares correctly but the hand-written TS type gets wrong. Those need the conventions above.

@@ -129,6 +129,9 @@ function createFakeStores() {
       applySyncAction: vi.fn(),
       applyUpdateSyncAction: vi.fn(),
       applyValueSyncAction: vi.fn(),
+      // Real stores expose an entity pool; SyncManager reads `issueStore.pool`
+      // to carry a previously-cached label set onto a bare issue payload.
+      pool: new Map<string, unknown>(),
       upsertMany: vi.fn(),
     };
   }
@@ -441,7 +444,10 @@ describe('SyncManager', () => {
       ]);
 
       expect(stores.issueStore.applySyncAction).toHaveBeenCalledWith('U', 'i-1', data);
-      expect(fakeTables.issues.bulkPut).toHaveBeenCalledWith([data]);
+      // Dexie gets the *normalized* row, not the raw payload — the label shapes
+      // are collapsed to `labelIds` exactly as the MobX pool does it, so a
+      // reload that hydrates from IndexedDB sees the same row the store held.
+      expect(fakeTables.issues.bulkPut).toHaveBeenCalledWith([{ ...data, labelIds: [] }]);
       expect(fakeTables.issues.delete).not.toHaveBeenCalled();
     });
 
@@ -478,7 +484,9 @@ describe('SyncManager', () => {
       const values = [{ definitionId: 'd-1', issueId: 'i-1', value: '42' }];
       await (manager as Instance).applyActions([
         makeAction({
-          data: { customFieldValues: values, id: 'i-1' },
+          // The exact payload `issueCustomFieldValuesSet` emits: the value set
+          // and nothing else — no `id`, no issue columns.
+          data: { customFieldValues: values },
           id: '1',
           modelId: 'i-1',
           modelName: 'Issue',
@@ -488,6 +496,46 @@ describe('SyncManager', () => {
       expect(stores.customFieldStore.applyValueSyncAction).toHaveBeenCalledTimes(1);
       expect(fakeTables.customFieldValues.where).toHaveBeenCalledWith('issueId');
       expect(fakeTables.customFieldValues.bulkPut).toHaveBeenCalledWith(values);
+    });
+
+    it('does not let a custom-field-value payload reach the issue store or db.issues', async () => {
+      // Regression: this payload carries no issue columns. Routing it into
+      // `issueStore.applySyncAction` (a whole-object replace) erased the issue
+      // on every connected client, and pushing it into `db.issues` — whose
+      // inbound keyPath is `id` — failed the put and aborted the whole
+      // transaction, including the lastSyncId write.
+      const stores = createFakeStores();
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+
+      await (manager as Instance).applyActions([
+        makeAction({
+          data: { customFieldValues: [{ definitionId: 'd-1', issueId: 'i-1', value: '42' }] },
+          id: '1',
+          modelId: 'i-1',
+          modelName: 'Issue',
+        }),
+      ]);
+
+      expect(stores.issueStore.applySyncAction).not.toHaveBeenCalled();
+      expect(fakeTables.issues.bulkPut).not.toHaveBeenCalled();
+    });
+
+    it('still applies a full issue row that happens to carry custom-field values', async () => {
+      const stores = createFakeStores();
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+
+      const row = {
+        customFieldValues: [{ definitionId: 'd-1', issueId: 'i-1', value: '42' }],
+        id: 'i-1',
+        identifier: 'ENG-1',
+        title: 'Real issue row',
+      };
+      await (manager as Instance).applyActions([
+        makeAction({ data: row, id: '1', modelId: 'i-1', modelName: 'Issue' }),
+      ]);
+
+      expect(stores.issueStore.applySyncAction).toHaveBeenCalledTimes(1);
+      expect(stores.customFieldStore.applyValueSyncAction).toHaveBeenCalledTimes(1);
     });
 
     it('does nothing for an empty actions array (no store calls, no transaction)', async () => {

@@ -6,6 +6,7 @@ import { InlineRetry } from '@/components/shared/inline-retry';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
+import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { getErrorMessage } from '@/lib/utils';
 
@@ -22,35 +23,24 @@ interface FileAttachmentsProps {
 }
 
 async function fetchIssueFiles(issueId: string): Promise<Attachment[]> {
-  const res = await fetch('/api/graphql', {
-    body: JSON.stringify({
-      query: `query IssueFiles($issueId: ID!) {
+  // Throws on a GraphQL error so the `InlineRetry` branch is reachable —
+  // returning [] rendered a failed load as "no attachments".
+  return gqlQuery<Attachment[]>(
+    `query IssueFiles($issueId: ID!) {
         issueFiles(issueId: $issueId) { id name size url mimeType }
       }`,
-      variables: { issueId },
-    }),
-    headers: { 'Content-Type': 'application/json' },
-    method: 'POST',
-  });
-  const json = await res.json();
-  return json.data?.issueFiles ?? [];
+    { issueId },
+    'issueFiles',
+  );
 }
 
 async function deleteFile(fileId: string): Promise<void> {
-  const res = await fetch('/api/graphql', {
-    body: JSON.stringify({
-      query: `mutation FileDelete($id: ID!) {
+  await gqlMutate(
+    `mutation FileDelete($id: ID!) {
         fileDelete(id: $id) { success }
       }`,
-      variables: { id: fileId },
-    }),
-    headers: { 'Content-Type': 'application/json' },
-    method: 'POST',
-  });
-  const json = await res.json();
-  if (json.errors?.length) {
-    throw new Error(json.errors[0].message);
-  }
+    { id: fileId },
+  );
 }
 
 export function FileAttachments({ issueId }: FileAttachmentsProps) {

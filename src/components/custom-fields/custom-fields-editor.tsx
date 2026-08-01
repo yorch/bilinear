@@ -2,7 +2,7 @@
 
 import { observer } from 'mobx-react-lite';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gqlMutate } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -32,7 +32,10 @@ export const CustomFieldsEditor = observer(
 
     const handleSave = async (definitionId: string, value: unknown) => {
       try {
-        await gql(VALUES_SET_MUTATION, {
+        // gqlMutate throws on a GraphQL-level rejection (a required-field or
+        // option-validation error, FORBIDDEN); plain gql() resolved with
+        // `errors` set and the value was discarded with no feedback at all.
+        await gqlMutate(VALUES_SET_MUTATION, {
           issueId,
           values: [{ definitionId, value }],
         });

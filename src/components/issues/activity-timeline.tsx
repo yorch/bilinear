@@ -6,7 +6,7 @@ import { InlineRetry } from '@/components/shared/inline-retry';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gqlQuery } from '@/lib/graphql';
 import { ISSUE_ACTIVITIES_QUERY } from '@/lib/graphql-queries';
 import { cn } from '@/lib/utils';
 
@@ -85,10 +85,13 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
     refetch,
   } = useRetryableFetch<IssueActivity[]>(
     async () => {
-      const res = await gql(ISSUE_ACTIVITIES_QUERY, { issueId, limit: 50 });
-      const data = res.data as { issueActivities?: IssueActivity[] } | undefined;
+      const activities = await gqlQuery<IssueActivity[]>(
+        ISSUE_ACTIVITIES_QUERY,
+        { issueId, limit: 50 },
+        'issueActivities',
+      );
       // Newest first
-      return [...(data?.issueActivities ?? [])].sort(
+      return [...(activities ?? [])].sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
     },

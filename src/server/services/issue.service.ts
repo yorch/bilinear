@@ -638,11 +638,23 @@ export class IssueService {
         }
       }
 
+      // Attach the issue's label set so the SyncAction payload carries it.
+      // The client's apply is a whole-object replace that derives `labelIds`
+      // from `labelAssignments`; a payload without them resets the issue's
+      // labels to [] on every connected client — and persists that to Dexie.
+      const withLabels = {
+        ...issue,
+        labelAssignments: await tx.issueLabelAssignment.findMany({
+          select: { labelId: true },
+          where: { issueId: id },
+        }),
+      };
+
       // Persist SyncAction(s) for the issue + any cascaded rows inside this
       // transaction so the markers can't survive a rollback of the writes.
-      await txHook?.(tx, { cascaded, issue });
+      await txHook?.(tx, { cascaded, issue: withLabels });
 
-      return { cascaded, issue };
+      return { cascaded, issue: withLabels };
     });
   }
 

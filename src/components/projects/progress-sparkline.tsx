@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gqlQuery } from '@/lib/graphql';
 import { PROJECT_PROGRESS_HISTORY_QUERY } from '@/lib/graphql-queries';
 
 interface ProgressHistoryPoint {
@@ -23,14 +24,21 @@ export function ProgressSparkline({ projectId, width = 160, height = 28 }: Progr
   const t = useTranslations();
   const [points, setPoints] = useState<ProgressHistoryPoint[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState(false);
 
   const fetchHistory = useCallback(async () => {
+    // `gqlQuery` throws on a GraphQL-level failure so a rejected read can't
+    // render as "Not enough history yet" — a specific, false claim.
+    setError(false);
     try {
-      const res = await gql(PROJECT_PROGRESS_HISTORY_QUERY, { id: projectId });
-      const data = res.data as
-        | { project?: { progressHistory: ProgressHistoryPoint[] } }
-        | undefined;
-      setPoints(data?.project?.progressHistory ?? []);
+      const project = await gqlQuery<{ progressHistory: ProgressHistoryPoint[] } | null>(
+        PROJECT_PROGRESS_HISTORY_QUERY,
+        { id: projectId },
+        'project',
+      );
+      setPoints(project?.progressHistory ?? []);
+    } catch {
+      setError(true);
     } finally {
       setLoaded(true);
     }
@@ -42,6 +50,15 @@ export function ProgressSparkline({ projectId, width = 160, height = 28 }: Progr
 
   if (!loaded) {
     return <div className="h-7 w-40 animate-pulse rounded bg-muted" />;
+  }
+  if (error) {
+    return (
+      <InlineRetry
+        className="py-0"
+        message={t('errors.somethingWentWrong')}
+        onRetry={fetchHistory}
+      />
+    );
   }
   if (points.length < 2) {
     return <span className="text-xs text-muted-foreground">{t('projects.notEnoughHistory')}</span>;

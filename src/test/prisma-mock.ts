@@ -11,6 +11,7 @@ type MockModel = {
   findFirst: ReturnType<typeof vi.fn>;
   findMany: ReturnType<typeof vi.fn>;
   findUnique: ReturnType<typeof vi.fn>;
+  groupBy: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
   updateMany: ReturnType<typeof vi.fn>;
   upsert: ReturnType<typeof vi.fn>;
@@ -27,6 +28,7 @@ function createMockModel(): MockModel {
     findFirst: vi.fn(),
     findMany: vi.fn(),
     findUnique: vi.fn(),
+    groupBy: vi.fn(),
     update: vi.fn(),
     updateMany: vi.fn(),
     upsert: vi.fn(),

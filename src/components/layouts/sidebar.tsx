@@ -23,14 +23,15 @@ import {
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LanguageToggle } from '@/components/language-toggle';
 import { ConnectionStatus } from '@/components/layouts/connection-status';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useAuth } from '@/hooks/use-auth';
 import { useTranslations } from '@/hooks/use-translations';
 import { APP_NAME } from '@/lib/app-config';
-import { gql } from '@/lib/graphql';
+import { gql, gqlQuery } from '@/lib/graphql';
 import { FAVORITE_DELETE_MUTATION, FAVORITES_QUERY } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
@@ -48,9 +49,15 @@ interface FavoriteMeta {
         slugId: string;
       }
     | { __typename: 'Initiative'; id: string; name: string; color?: string | null }
-    | { __typename: 'CustomView'; id: string; name: string; teamId: string }
-    | { __typename: 'Cycle'; id: string; name: string; teamId: string }
-    | { __typename: 'Document'; id: string; title: string; teamId: string }
+    | { __typename: 'CustomView'; id: string; name: string; customViewTeamId: string | null }
+    | {
+        __typename: 'Cycle';
+        id: string;
+        number: number;
+        cycleName: string | null;
+        teamId: string;
+      }
+    | { __typename: 'Document'; id: string; title: string; documentTeamId: string | null }
     | { __typename: 'Team'; id: string; name: string; key: string; icon?: string | null }
     | null;
   entityType: string;
@@ -79,7 +86,9 @@ function favoriteIcon(entityType: string) {
   }
 }
 
-function favoriteLabel(fav: FavoriteMeta): string {
+type Translate = ReturnType<typeof useTranslations>;
+
+function favoriteLabel(fav: FavoriteMeta, t: Translate): string {
   const e = fav.entity;
   if (!e) {
     return '';
@@ -89,6 +98,10 @@ function favoriteLabel(fav: FavoriteMeta): string {
       return `${e.identifier} ${e.title}`;
     case 'Document':
       return e.title;
+    // Cycles are frequently unnamed — fall back to the numbered label the rest
+    // of the cycle UI uses.
+    case 'Cycle':
+      return e.cycleName || t('cycles.defaultName', { number: e.number });
     default:
       return e.name;
   }
@@ -97,7 +110,7 @@ function favoriteLabel(fav: FavoriteMeta): string {
 function favoriteHref(
   fav: FavoriteMeta,
   base: string,
-  findTeamById: (id: string) => { key: string } | null | undefined,
+  findTeamById: (id: string | null) => { key: string } | null | undefined,
 ): string {
   const e = fav.entity;
   if (!e) {
@@ -110,8 +123,10 @@ function favoriteHref(
       return `${base}/project/${e.slugId}`;
     case 'Initiative':
       return `${base}/initiatives`;
+    // A workspace-scoped custom view has no team, and there is no team-less view
+    // route — fall through to '#' the same way an unresolvable team does.
     case 'CustomView': {
-      const key = findTeamById(e.teamId)?.key;
+      const key = findTeamById(e.customViewTeamId)?.key;
       return key ? `${base}/team/${key}/view/${e.id}` : '#';
     }
     case 'Cycle': {
@@ -143,21 +158,30 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
   const { favoriteStore, teamStore } = useStore();
   const t = useTranslations();
   const [favorites, setFavorites] = useState<FavoriteMeta[]>([]);
+  const [loadError, setLoadError] = useState(false);
 
   // Derive a stable string from the MobX store that changes on any insert,
   // delete, or sortOrder update so the sidebar re-fetches full entity data.
   const favStoreKey = favoriteStore.all.map(f => `${f.id}:${f.sortOrder}`).join(',');
 
+  // `gqlQuery` throws on a GraphQL-level failure. The old `.catch(() => {})`
+  // plus `?? []` unmounted the entire Favorites section on a failed read —
+  // exactly the handling that hid a real query bug for a long time.
+  const fetchFavorites = useCallback(() => {
+    setLoadError(false);
+    gqlQuery<FavoriteMeta[] | null>(FAVORITES_QUERY, {}, 'favorites')
+      .then(list => {
+        setFavorites(
+          (list ?? []).filter(f => f.entity !== null).sort((a, b) => a.sortOrder - b.sortOrder),
+        );
+      })
+      .catch(() => setLoadError(true));
+  }, []);
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: favStoreKey is a MobX-derived reactive trigger, not used inside the callback
   useEffect(() => {
-    gql(FAVORITES_QUERY, {})
-      .then(res => {
-        const data = res.data as { favorites?: FavoriteMeta[] } | undefined;
-        const list = data?.favorites ?? [];
-        setFavorites(list.filter(f => f.entity !== null).sort((a, b) => a.sortOrder - b.sortOrder));
-      })
-      .catch(() => {});
-  }, [favStoreKey]);
+    fetchFavorites();
+  }, [favStoreKey, fetchFavorites]);
 
   async function removeFavorite(id: string) {
     try {
@@ -172,7 +196,7 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
     }
   }
 
-  if (collapsed || favorites.length === 0) {
+  if (collapsed || (favorites.length === 0 && !loadError)) {
     return null;
   }
 
@@ -183,10 +207,17 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
           {t('nav.favorites')}
         </span>
       </div>
+      {loadError && (
+        <InlineRetry
+          className="flex-wrap px-2 py-1"
+          message={t('errors.somethingWentWrong')}
+          onRetry={fetchFavorites}
+        />
+      )}
       <ul className="flex flex-col gap-0.5">
         {favorites.map(fav => {
-          const href = favoriteHref(fav, base, id => teamStore.findById(id));
-          const label = favoriteLabel(fav);
+          const href = favoriteHref(fav, base, id => (id ? teamStore.findById(id) : null));
+          const label = favoriteLabel(fav, t);
           const isActive = pathname === href;
           return (
             <li className="group flex items-center" key={fav.id}>

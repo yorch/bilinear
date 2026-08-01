@@ -11,9 +11,9 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 // ---------------------------------------------------------------------------
@@ -178,6 +178,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const [newPlaintext, setNewPlaintext] = useState<string | null>(null);
   const [revokingTokenId, setRevokingTokenId] = useState<string | null>(null);
   const [confirmingRevokeToken, setConfirmingRevokeToken] = useState<ApiToken | null>(null);
+  const [apiTokensError, setApiTokensError] = useState(false);
   const [savingAi, setSavingAi] = useState(false);
 
   async function toggleAi(enabled: boolean) {
@@ -185,7 +186,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
     // Optimistic — revert on error.
     setOrg(prev => (prev ? { ...prev, aiEnabled: enabled } : prev));
     try {
-      await gql(AI_SETTINGS_UPDATE_MUTATION, { enabled });
+      await gqlMutate(AI_SETTINGS_UPDATE_MUTATION, { enabled });
       toast.success(
         enabled ? t('settings.workspace.aiEnabledToast') : t('settings.workspace.aiDisabledToast'),
       );
@@ -199,17 +200,14 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    gql(ORGANIZATION_QUERY)
-      .then(result => {
+    gqlQuery<{
+      organization?: OrgInfo;
+      organizationMembers?: { role: string; userId: string }[];
+    }>(ORGANIZATION_QUERY)
+      .then(data => {
         if (cancelled) {
           return;
         }
-        const data = result.data as
-          | {
-              organization?: OrgInfo;
-              organizationMembers?: { userId: string; role: string }[];
-            }
-          | undefined;
         if (data?.organization) {
           setOrg(data.organization);
         }
@@ -223,8 +221,12 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
           setMemberRoles(roles);
         }
       })
-      .catch(() => {
-        /* keep org null; page degrades gracefully */
+      .catch(err => {
+        if (!cancelled) {
+          // `org` stays null so the section renders its load-error state; the
+          // toast also covers the member roles, which come from this same read.
+          toast.error(getErrorMessage(err, t('settings.workspace.orgLoadError')));
+        }
       })
       .finally(() => {
         if (!cancelled) {
@@ -234,36 +236,40 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
-    gql(VIEWER_QUERY)
-      .then(result => {
-        const data = result.data as
-          | {
-              viewer?: {
-                calendarFeedUrl?: string | null;
-                emailNotificationsEnabled?: boolean;
-                isPlatformAdmin?: boolean;
-              };
-            }
-          | undefined;
+    gqlQuery<{
+      viewer?: {
+        calendarFeedUrl?: string | null;
+        emailNotificationsEnabled?: boolean;
+        isPlatformAdmin?: boolean;
+      };
+    }>(VIEWER_QUERY)
+      .then(data => {
         if (data?.viewer) {
           setCalendarFeedUrl(data.viewer.calendarFeedUrl ?? null);
           setEmailNotificationsEnabled(data.viewer.emailNotificationsEnabled ?? true);
           setIsPlatformAdmin(data.viewer.isPlatformAdmin ?? false);
         }
       })
-      .catch(() => {});
-  }, []);
+      .catch(err => {
+        toast.error(getErrorMessage(err, t('common.somethingWentWrong')));
+      });
+  }, [t]);
 
   useEffect(() => {
-    gql(API_TOKENS_QUERY)
-      .then(result => {
-        const data = result.data as { apiTokens?: ApiToken[] } | undefined;
-        setApiTokens(data?.apiTokens ?? []);
+    gqlQuery<ApiToken[] | null>(API_TOKENS_QUERY, {}, 'apiTokens')
+      .then(tokens => {
+        setApiTokens(tokens ?? []);
+        setApiTokensError(false);
       })
-      .catch(() => {});
+      .catch(() => {
+        // A failed read must never render as "no API tokens yet" — an admin
+        // auditing outstanding credentials would conclude there are none.
+        setApiTokens([]);
+        setApiTokensError(true);
+      });
   }, []);
 
   async function createApiToken() {
@@ -272,21 +278,23 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
     }
     setCreatingToken(true);
     try {
-      const result = await gql(API_TOKEN_CREATE_MUTATION, {
-        expiresInDays: newTokenExpiryDays,
-        label: newTokenLabel.trim(),
-        // Read access is always granted; write is opt-in via the toggle.
-        scopes: newTokenWritable ? ['read', 'write'] : ['read'],
-      });
-      const data = result.data as
-        | { apiTokenCreate?: { plaintext: string; token: ApiToken } }
-        | undefined;
-      if (data?.apiTokenCreate?.token) {
-        const { token, plaintext } = data.apiTokenCreate;
-        setApiTokens(prev => [token as ApiToken, ...prev]);
-        setNewPlaintext(plaintext);
-        setNewTokenLabel('');
+      const created = await gqlQuery<{ plaintext: string; token: ApiToken } | null>(
+        API_TOKEN_CREATE_MUTATION,
+        {
+          expiresInDays: newTokenExpiryDays,
+          label: newTokenLabel.trim(),
+          // Read access is always granted; write is opt-in via the toggle.
+          scopes: newTokenWritable ? ['read', 'write'] : ['read'],
+        },
+        'apiTokenCreate',
+      );
+      if (!created?.token) {
+        toast.error(t('settings.workspace.apiTokenCreateError'));
+        return;
       }
+      setApiTokens(prev => [created.token, ...prev]);
+      setNewPlaintext(created.plaintext);
+      setNewTokenLabel('');
     } catch {
       toast.error(t('settings.workspace.apiTokenCreateError'));
     } finally {
@@ -297,7 +305,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   async function revokeApiToken(id: string) {
     setRevokingTokenId(id);
     try {
-      await gql(API_TOKEN_REVOKE_MUTATION, { id });
+      await gqlMutate(API_TOKEN_REVOKE_MUTATION, { id });
       setApiTokens(prev => prev.filter(tok => tok.id !== id));
       toast.success(t('settings.workspace.tokenRevoked'));
     } catch {
@@ -310,14 +318,12 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   async function rotateCalendarToken() {
     setRotatingToken(true);
     try {
-      const result = await gql(ROTATE_CALENDAR_TOKEN_MUTATION);
-      const url =
-        (
-          result.data as
-            | { userCalendarFeedTokenRotate?: { user?: { calendarFeedUrl?: string } } }
-            | undefined
-        )?.userCalendarFeedTokenRotate?.user?.calendarFeedUrl ?? null;
-      setCalendarFeedUrl(url);
+      const rotated = await gqlQuery<{ user?: { calendarFeedUrl?: string } } | null>(
+        ROTATE_CALENDAR_TOKEN_MUTATION,
+        {},
+        'userCalendarFeedTokenRotate',
+      );
+      setCalendarFeedUrl(rotated?.user?.calendarFeedUrl ?? null);
       toast.success(t('settings.workspace.calendarUrlRotated'));
     } catch {
       toast.error(t('settings.workspace.calendarUrlRotateError'));
@@ -329,7 +335,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   async function toggleEmailNotifications(enabled: boolean) {
     setEmailNotificationsEnabled(enabled);
     try {
-      await gql(UPDATE_NOTIFICATION_PREFS_MUTATION, { emailNotificationsEnabled: enabled });
+      await gqlMutate(UPDATE_NOTIFICATION_PREFS_MUTATION, { emailNotificationsEnabled: enabled });
     } catch {
       setEmailNotificationsEnabled(!enabled);
       toast.error(t('settings.workspace.notificationPrefsError'));
@@ -355,7 +361,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const updateMemberRole = async (userId: string, role: OrgRole) => {
     setUpdatingRole(userId);
     try {
-      await gql(UPDATE_ORG_MEMBER_ROLE_MUTATION, { role, userId });
+      await gqlMutate(UPDATE_ORG_MEMBER_ROLE_MUTATION, { role, userId });
       setMemberRoles(prev => ({ ...prev, [userId]: role }));
       toast.success(t('settings.workspace.memberRoleUpdated'));
     } catch {
@@ -783,7 +789,9 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
             </div>
 
             {/* Token list */}
-            {apiTokens.length === 0 ? (
+            {apiTokensError ? (
+              <p className="px-5 py-4 text-sm text-destructive">{t('common.somethingWentWrong')}</p>
+            ) : apiTokens.length === 0 ? (
               <p className="px-5 py-4 text-sm text-muted-foreground">
                 {t('settings.workspace.noApiTokensYet')}
               </p>

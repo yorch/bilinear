@@ -4,10 +4,11 @@ import { ChevronDown, Plus, Trash2, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { IssuePicker } from '@/components/issues/issue-picker';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue } from '@/lib/db';
-import { gql } from '@/lib/graphql';
+import { gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn } from '@/lib/utils';
@@ -91,26 +92,31 @@ export const RelationsSection = observer(function RelationsSection({
   const RELATION_TYPE_LABELS = useMemo(() => getRelationTypeLabels(t), [t]);
   const [relations, setRelations] = useState<IssueRelation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [showAddForm, setShowAddForm] = useState(false);
 
   const tq = useMemo(() => new TransactionQueue(), []);
 
-  // Fetch relations on mount / when issueId changes
+  // Fetch relations on mount / when issueId changes.
+  // `gqlQuery` throws on a GraphQL-level failure; the old `gql()` +
+  // `Array.isArray(result.data?.issueRelations)` guard silently left `relations`
+  // at [], rendering an issue with real blockers as having none.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is a deliberate refetch trigger, not read inside the effect
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    gql(GET_ISSUE_RELATIONS, { issueId })
-      .then(result => {
+    gqlQuery<IssueRelation[]>(GET_ISSUE_RELATIONS, { issueId }, 'issueRelations')
+      .then(data => {
         if (cancelled) {
           return;
         }
-        const data = result.data?.issueRelations;
-        if (Array.isArray(data)) {
-          setRelations(data as IssueRelation[]);
-        }
+        setRelations(data ?? []);
+        setLoadError(false);
       })
       .catch(() => {
         if (!cancelled) {
+          setLoadError(true);
           toast.error(t('issueDetail.relations.failedToLoad'));
         }
       })
@@ -122,7 +128,7 @@ export const RelationsSection = observer(function RelationsSection({
     return () => {
       cancelled = true;
     };
-  }, [issueId, t]);
+  }, [issueId, t, reloadKey]);
 
   const handleDelete = async (relationId: string) => {
     const prev = relations;
@@ -151,15 +157,25 @@ export const RelationsSection = observer(function RelationsSection({
           { onError: reject, onSuccess: () => resolve() },
         );
       });
-      // Refresh relations from server to get full issue objects
-      const refreshed = await gql(GET_ISSUE_RELATIONS, { issueId });
-      const data = refreshed.data?.issueRelations;
-      if (Array.isArray(data)) {
-        setRelations(data as IssueRelation[]);
-      }
-      setShowAddForm(false);
     } catch {
       toast.error(t('issueDetail.relations.failedToCreate'));
+      return;
+    }
+    setShowAddForm(false);
+    // Refresh relations from server to get full issue objects. Reported
+    // separately from the create above — a failed refresh must not read as
+    // "the relation wasn't created", nor leave the list silently stale.
+    try {
+      const data = await gqlQuery<IssueRelation[]>(
+        GET_ISSUE_RELATIONS,
+        { issueId },
+        'issueRelations',
+      );
+      setRelations(data ?? []);
+      setLoadError(false);
+    } catch {
+      setLoadError(true);
+      toast.error(t('issueDetail.relations.failedToLoad'));
     }
   };
 
@@ -198,7 +214,15 @@ export const RelationsSection = observer(function RelationsSection({
         <p className="mt-2 text-xs text-muted-foreground italic">{t('common.loading')}</p>
       )}
 
-      {!loading && relations.length === 0 && !showAddForm && (
+      {!loading && loadError && (
+        <InlineRetry
+          className="py-2"
+          message={t('issueDetail.relations.failedToLoad')}
+          onRetry={() => setReloadKey(k => k + 1)}
+        />
+      )}
+
+      {!loading && !loadError && relations.length === 0 && !showAddForm && (
         <p className="mt-2 text-xs text-muted-foreground italic">
           {t('issueDetail.relations.empty')}
         </p>

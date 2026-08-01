@@ -95,6 +95,7 @@ export const typeDefs = `
 
   type WorkflowState {
     id: ID!
+    teamId: ID!
     name: String!
     color: String!
     description: String
@@ -147,6 +148,8 @@ export const typeDefs = `
     branchName: String
     snoozedById: ID
     snoozedUntilAt: DateTime
+    "Set when the issue leaves the triage queue (accept / decline / duplicate); null while it is still queued."
+    triagedAt: DateTime
     pullRequests: [GitHubPullRequest!]!
     cycle: Cycle
     startedAt: DateTime

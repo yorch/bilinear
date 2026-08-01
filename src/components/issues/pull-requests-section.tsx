@@ -2,9 +2,10 @@
 
 import { ExternalLink, GitMerge, GitPullRequest, GitPullRequestClosed } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { Badge } from '@/components/ui/badge';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gqlQuery } from '@/lib/graphql';
 import { PULL_REQUESTS_QUERY } from '@/lib/graphql-queries';
 import { cn } from '@/lib/utils';
 
@@ -30,19 +31,59 @@ export function PullRequestsSection({ issueId }: IssuePullRequestsSectionProps) 
   const t = useTranslations();
   const [prs, setPrs] = useState<PullRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
+  // `gqlQuery` throws on a GraphQL-level failure so the error branch below is
+  // reachable — the old `.catch(() => setPrs([]))` unmounted the section, which
+  // read as the authoritative "this issue has no pull requests".
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is a deliberate refetch trigger, not read inside the effect
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
-    gql(PULL_REQUESTS_QUERY, { issueId })
-      .then(res => {
-        const data = (res.data ?? {}) as { issue?: { pullRequests?: PullRequest[] } };
-        setPrs(data.issue?.pullRequests ?? []);
+    gqlQuery<{ pullRequests?: PullRequest[] } | null>(PULL_REQUESTS_QUERY, { issueId }, 'issue')
+      .then(issue => {
+        if (cancelled) {
+          return;
+        }
+        setPrs(issue?.pullRequests ?? []);
+        setLoadError(false);
       })
-      .catch(() => setPrs([]))
-      .finally(() => setLoading(false));
-  }, [issueId]);
+      .catch(() => {
+        if (!cancelled) {
+          setLoadError(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [issueId, reloadKey]);
 
-  if (loading || prs.length === 0) {
+  if (loading) {
+    return null;
+  }
+
+  if (loadError) {
+    return (
+      <div className="space-y-1.5">
+        <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          {t('issueDetail.pullRequests.title')}
+        </h3>
+        <InlineRetry
+          className="py-2"
+          message={t('common.somethingWentWrong')}
+          onRetry={() => setReloadKey(k => k + 1)}
+        />
+      </div>
+    );
+  }
+
+  if (prs.length === 0) {
     return null;
   }
 

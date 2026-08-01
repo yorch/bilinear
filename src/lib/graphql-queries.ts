@@ -119,12 +119,17 @@ export const FAVORITES_QUERY = `
       entityId
       sortOrder
       entity {
+        __typename
+        # Sibling fragments on a union must agree on the shape of any field they
+        # share a response key for — including nullability. teamId is ID! on
+        # Issue/Cycle but ID on CustomView/Document, and name is String! everywhere
+        # except Cycle, so the odd ones out are aliased onto their own keys.
         ... on Issue { id identifier title teamId }
         ... on Project { id name icon color slugId }
         ... on Initiative { id name color }
-        ... on CustomView { id name teamId }
-        ... on Cycle { id name teamId }
-        ... on Document { id title teamId }
+        ... on CustomView { id name customViewTeamId: teamId }
+        ... on Cycle { id number cycleName: name teamId }
+        ... on Document { id title documentTeamId: teamId }
         ... on Team { id name key icon }
       }
     }
@@ -143,7 +148,7 @@ export const FAVORITE_DELETE_MUTATION = `
 // ── Issues — queries ─────────────────────────────────────────────────────────
 
 export const ISSUE_TEMPLATES_QUERY = `
-  query GetIssueTemplates($teamId: ID!) {
+  query GetIssueTemplates($teamId: String!) {
     issueTemplates(teamId: $teamId) { id name templateData isDefault }
   }
 `;
@@ -213,6 +218,7 @@ const ISSUE_FIELDS = `
   teamId organizationId stateId assigneeId creatorId parentId
   projectId cycleId branchName
   startedAt completedAt canceledAt archivedAt createdAt updatedAt
+  snoozedById snoozedUntilAt triagedAt
   labels { id name color }
 `;
 

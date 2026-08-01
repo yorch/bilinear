@@ -608,11 +608,17 @@ export class ProjectService {
       },
     });
 
-    // Also update the project's health when a project update is created
-    await this.prisma.project.update({
-      data: { health: input.health, healthUpdatedAt: new Date() },
-      where: { id: input.projectId },
-    });
+    // Also update the project's health when a project update is created — but
+    // only when the author actually reported one. The form's "None" option
+    // submits an empty string, meaning "I'm not reporting health this time";
+    // writing it through would blank the project's health badge as a side
+    // effect of posting an update.
+    if (input.health) {
+      await this.prisma.project.update({
+        data: { health: input.health, healthUpdatedAt: new Date() },
+        where: { id: input.projectId },
+      });
+    }
 
     return update;
   }

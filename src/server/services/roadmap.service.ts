@@ -1,6 +1,7 @@
 import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import type { PrismaClient, PublicRoadmap } from '../../generated/prisma';
+import { ProjectService } from './project.service';
 
 export interface RoadmapUpsertInput {
   description?: string;
@@ -91,6 +92,13 @@ export class RoadmapService {
       },
     });
 
+    // `Project.progress` is a stored column that nothing ever writes — the real
+    // value is computed from the issue set. Reading the column shipped 0% for
+    // every project on the public roadmap. `ProjectService` owns the rule.
+    const progressById = await new ProjectService(this.prisma).getProgressBatch(
+      projects.map(p => p.id),
+    );
+
     return projects.map(p => ({
       color: p.color,
       completedMilestoneCount: 0,
@@ -99,7 +107,7 @@ export class RoadmapService {
       id: p.id,
       milestoneCount: p.milestones.length,
       name: p.name,
-      progress: p.progress,
+      progress: progressById.get(p.id)?.progress ?? 0,
       statusName: p.statusName,
       statusType: p.statusType,
       targetDate: p.targetDate,

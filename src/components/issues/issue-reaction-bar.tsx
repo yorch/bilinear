@@ -5,7 +5,7 @@ import { InlineRetry } from '@/components/shared/inline-retry';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gql, gqlQuery } from '@/lib/graphql';
 import {
   ISSUE_REACTION_ADD_MUTATION,
   ISSUE_REACTION_REMOVE_MUTATION,
@@ -35,9 +35,12 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
     refetch: fetchReactions,
   } = useRetryableFetch<Reaction[]>(
     async () => {
-      const res = await gql(ISSUE_REACTIONS_QUERY, { id: issueId });
-      const data = res.data as { issue?: { reactions: Reaction[] } } | undefined;
-      return data?.issue?.reactions ?? [];
+      const issue = await gqlQuery<{ reactions: Reaction[] } | null>(
+        ISSUE_REACTIONS_QUERY,
+        { id: issueId },
+        'issue',
+      );
+      return issue?.reactions ?? [];
     },
     [issueId],
     [],

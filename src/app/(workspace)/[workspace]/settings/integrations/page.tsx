@@ -1,11 +1,13 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
+import { getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 interface GitHubIntegration {
@@ -73,26 +75,54 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
   const [showRotate, setShowRotate] = useState(false);
   const [saving, setSaving] = useState(false);
   const [slack, setSlack] = useState<SlackIntegration | null>(null);
+  // `githubIntegration`/`slackIntegration` are nullable roots: a failed query
+  // answers HTTP 200 with the field null *alongside* `errors`. Without these
+  // flags a load failure renders as "not connected", and reconnecting would
+  // mint a second webhook secret for an already-connected integration.
+  const [githubLoadError, setGithubLoadError] = useState(false);
+  const [slackLoadError, setSlackLoadError] = useState(false);
 
   const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const orgKey = typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '';
 
-  useEffect(() => {
-    gql(GITHUB_INTEGRATION_QUERY)
-      .then(res => {
-        const data = (res.data ?? {}) as { githubIntegration?: GitHubIntegration | null };
-        setIntegration(data.githubIntegration ?? null);
-      })
-      .catch(() => toast.error(t('settings.integrations.loadGithubError')))
-      .finally(() => setLoading(false));
-
-    gql(SLACK_INTEGRATION_QUERY)
-      .then(res => {
-        const data = (res.data ?? {}) as { slackIntegration?: SlackIntegration | null };
-        setSlack(data.slackIntegration ?? null);
-      })
-      .catch(() => {});
+  const loadGithub = useCallback(async () => {
+    setLoading(true);
+    setGithubLoadError(false);
+    try {
+      const data = await gqlQuery<GitHubIntegration | null>(
+        GITHUB_INTEGRATION_QUERY,
+        {},
+        'githubIntegration',
+      );
+      setIntegration(data ?? null);
+    } catch {
+      setIntegration(null);
+      setGithubLoadError(true);
+      toast.error(t('settings.integrations.loadGithubError'));
+    } finally {
+      setLoading(false);
+    }
   }, [t]);
+
+  const loadSlack = useCallback(async () => {
+    setSlackLoadError(false);
+    try {
+      const data = await gqlQuery<SlackIntegration | null>(
+        SLACK_INTEGRATION_QUERY,
+        {},
+        'slackIntegration',
+      );
+      setSlack(data ?? null);
+    } catch {
+      setSlack(null);
+      setSlackLoadError(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadGithub();
+    void loadSlack();
+  }, [loadGithub, loadSlack]);
 
   async function handleSlackDisconnect() {
     if (!confirm(t('settings.integrations.disconnectSlackConfirm'))) {
@@ -100,11 +130,11 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
     }
     setSaving(true);
     try {
-      await gql(SLACK_DISCONNECT_MUTATION);
+      await gqlMutate(SLACK_DISCONNECT_MUTATION);
       setSlack(null);
       toast.success(t('settings.integrations.slackDisconnected'));
-    } catch {
-      toast.error(t('settings.integrations.slackDisconnectError'));
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('settings.integrations.slackDisconnectError')));
     } finally {
       setSaving(false);
     }
@@ -112,16 +142,17 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
 
   async function handleSetDefaultTeam(teamId: string) {
     try {
-      const res = await gql(SLACK_SET_DEFAULT_TEAM_MUTATION, { teamId: teamId || null });
-      const data = (res.data ?? {}) as {
+      const data = (await gqlMutate(SLACK_SET_DEFAULT_TEAM_MUTATION, {
+        teamId: teamId || null,
+      })) as {
         slackSetDefaultTeam?: { integration: SlackIntegration | null };
       };
       if (data.slackSetDefaultTeam?.integration) {
         setSlack(data.slackSetDefaultTeam.integration);
       }
       toast.success(t('settings.integrations.defaultTeamUpdated'));
-    } catch {
-      toast.error(t('settings.integrations.defaultTeamUpdateError'));
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('settings.integrations.defaultTeamUpdateError')));
     }
   }
 
@@ -140,11 +171,11 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
     }
     setSaving(true);
     try {
-      await gql(GITHUB_DISCONNECT_MUTATION);
+      await gqlMutate(GITHUB_DISCONNECT_MUTATION);
       setIntegration(null);
       toast.success(t('settings.integrations.githubDisconnected'));
-    } catch {
-      toast.error(t('settings.integrations.githubDisconnectError'));
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('settings.integrations.githubDisconnectError')));
     } finally {
       setSaving(false);
     }
@@ -157,8 +188,12 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
     }
     setSaving(true);
     try {
-      const res = await gql(GITHUB_ROTATE_SECRET_MUTATION, { newSecret: rotateSecret.trim() });
-      const data = (res.data ?? {}) as {
+      // gqlMutate throws on a GraphQL-level failure, so the "updated" toast can
+      // never claim a secret the server never stored (which would silently break
+      // HMAC verification for every inbound webhook).
+      const data = (await gqlMutate(GITHUB_ROTATE_SECRET_MUTATION, {
+        newSecret: rotateSecret.trim(),
+      })) as {
         githubRotateWebhookSecret?: { success: boolean; integration: GitHubIntegration };
       };
       if (data.githubRotateWebhookSecret?.integration) {
@@ -167,8 +202,8 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
       setRotateSecret('');
       setShowRotate(false);
       toast.success(t('settings.integrations.webhookSecretUpdated'));
-    } catch {
-      toast.error(t('settings.integrations.webhookSecretUpdateError'));
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('settings.integrations.webhookSecretUpdateError')));
     } finally {
       setSaving(false);
     }
@@ -207,6 +242,11 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
 
         {loading ? (
           <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+        ) : githubLoadError ? (
+          <InlineRetry
+            message={t('settings.integrations.loadGithubError')}
+            onRetry={() => void loadGithub()}
+          />
         ) : integration ? (
           <div className="space-y-4">
             <div className="rounded-md bg-muted/50 px-4 py-3 text-sm">
@@ -314,7 +354,9 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
           )}
         </div>
 
-        {slack ? (
+        {slackLoadError ? (
+          <InlineRetry message={t('common.somethingWentWrong')} onRetry={() => void loadSlack()} />
+        ) : slack ? (
           <div className="space-y-4">
             <div className="rounded-md bg-muted/50 px-4 py-3 text-sm">
               <p>

@@ -952,7 +952,7 @@ model File {
   key        String   @db.VarChar(1000)
   size       Int
   mimeType   String   @map("mime_type") @db.VarChar(255)
-  url        String?
+  url        String
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   issue   Issue?   @relation(fields: [issueId], references: [id], onDelete: Cascade)

@@ -455,7 +455,10 @@ export class AutomationService {
         // set via the standard Issue SyncAction (the client's label
         // resolver reads from labelAssignments).
         if (this.deps) {
-          const issue = await this.prisma.issue.findUnique({ where: { id: event.issue.id } });
+          const issue = await this.prisma.issue.findUnique({
+            include: { labelAssignments: { select: { labelId: true } } },
+            where: { id: event.issue.id },
+          });
           if (issue) {
             await this.deps.sync.createSyncAction(orgId, 'U', 'Issue', issue.id, issue);
           }
