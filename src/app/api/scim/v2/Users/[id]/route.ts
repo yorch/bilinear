@@ -1,6 +1,11 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/server/lib/prisma';
+import {
+  LastOwnerError,
+  MemberNotFoundError,
+  OrganizationService,
+} from '@/server/services/organization.service';
 import { authenticateScim, scimError, userToScim } from '../../_scim-auth';
 
 /**
@@ -30,13 +35,38 @@ async function resolveUser(orgId: string, userId: string) {
   });
 }
 
-async function deactivateUser(userId: string, orgId: string) {
-  // Remove org + team memberships. Never touch user.active — that is global;
-  // SCIM (de)activation is org-scoped.
-  await prisma.$transaction([
-    prisma.organizationMember.deleteMany({ where: { organizationId: orgId, userId } }),
-    prisma.teamMembership.deleteMany({ where: { team: { organizationId: orgId }, userId } }),
-  ]);
+/**
+ * Deprovision a user from this org, shared by PUT/PATCH (`active: false`)
+ * and DELETE.
+ *
+ * Delegates to the one implementation of "remove a member"
+ * (`OrganizationService.removeMember`) rather than re-issuing the deletes, so
+ * SCIM inherits its invariants — notably the last-owner guard, whose absence
+ * here previously let an IdP strand a workspace by deactivating its sole
+ * owner. `actor: null` marks this a system caller: the self-removal and
+ * owner-manages-owner checks are about people and don't apply, but the
+ * structural guard does. Never touches `user.active` — that is global; SCIM
+ * (de)activation is org-scoped.
+ *
+ * Returns a SCIM error Response the caller should return as-is, or null on
+ * success. Deprovisioning someone already gone is a no-op, not an error:
+ * IdPs retry, and SCIM operations are expected to be idempotent.
+ */
+async function deactivateUser(userId: string, orgId: string): Promise<Response | null> {
+  try {
+    await new OrganizationService(prisma).removeMember(orgId, userId, null);
+  } catch (err) {
+    if (err instanceof MemberNotFoundError) {
+      return null;
+    }
+    if (err instanceof LastOwnerError) {
+      // 400 rather than 500: the IdP asked for something the workspace's own
+      // invariants forbid, and repeating the request won't help.
+      return scimError(400, err.message);
+    }
+    throw err;
+  }
+  return null;
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -77,7 +107,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const active = typeof body.active === 'boolean' ? body.active : undefined;
 
   if (active === false) {
-    await deactivateUser(id, auth.orgId);
+    const failure = await deactivateUser(id, auth.orgId);
+    if (failure) {
+      return failure;
+    }
   }
 
   const updated = await prisma.user.update({
@@ -153,7 +186,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   if (active === false) {
-    await deactivateUser(id, auth.orgId);
+    const failure = await deactivateUser(id, auth.orgId);
+    if (failure) {
+      return failure;
+    }
   } else if (active === true) {
     // Re-provision: restore org membership if it was removed by a prior deactivation.
     await prisma.organizationMember.upsert({
@@ -200,15 +236,12 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return scimError(404, 'User not found');
   }
 
-  // Deprovision from this org only — do not globally deactivate the user account.
-  await prisma.$transaction([
-    prisma.organizationMember.delete({
-      where: { organizationId_userId: { organizationId: auth.orgId, userId: id } },
-    }),
-    prisma.teamMembership.deleteMany({
-      where: { team: { organizationId: auth.orgId }, userId: id },
-    }),
-  ]);
+  // Deprovision from this org only — do not globally deactivate the user
+  // account. Same single writer as `deactivateUser` above.
+  const failure = await deactivateUser(id, auth.orgId);
+  if (failure) {
+    return failure;
+  }
 
   return new Response(null, { status: 204 });
 }

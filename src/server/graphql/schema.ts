@@ -353,7 +353,14 @@ export const typeDefs = `
     urlKey: String!
   }
 
-  type OrganizationCreatePayload {
+  """
+  The session was re-issued into an organization — returned by every
+  mutation that lands the caller in a (possibly different) workspace:
+  creating one, switching to one, or accepting an invitation to one. The
+  client installs the tokens before navigating; the client's enterWorkspace
+  helper already treated these three as one shape.
+  """
+  type EnterOrganizationPayload {
     success: Boolean!
     organization: Organization!
     accessToken: String!
@@ -376,19 +383,6 @@ export const typeDefs = `
     role: String!
     """True for the organization the current session is authenticated to."""
     current: Boolean!
-  }
-
-  """
-  Same shape as OrganizationCreatePayload: switching workspaces re-issues the
-  session, so the client must install the returned tokens (POST
-  /api/auth/session) before navigating.
-  """
-  type OrganizationSwitchPayload {
-    success: Boolean!
-    organization: Organization!
-    accessToken: String!
-    refreshToken: String!
-    expiresIn: Int!
   }
 
   input TeamCreateInput {
@@ -1108,6 +1102,21 @@ export const typeDefs = `
     role: String!
   }
 
+  """An outstanding invitation to join the current organization."""
+  type OrganizationInvite {
+    id: ID!
+    email: String!
+    role: String!
+    invitedById: ID
+    expiresAt: DateTime!
+    createdAt: DateTime!
+  }
+
+  type OrganizationInvitePayload {
+    success: Boolean!
+    invite: OrganizationInvite!
+  }
+
   enum InitiativeStatus {
     planned
     active
@@ -1553,6 +1562,8 @@ export const typeDefs = `
     """
     viewerOrganizations: [ViewerOrganization!]!
     organizationMembers: [OrganizationMemberEntry!]!
+    """Outstanding invitations for the current organization (owner/admin only)."""
+    organizationInvites: [OrganizationInvite!]!
     team(id: ID!): Team!
     teams: [Team!]!
     issue(id: ID!): Issue!
@@ -1719,12 +1730,12 @@ export const typeDefs = `
     tokenRefresh(refreshToken: String!): AuthPayload!
     logout: LogoutPayload!
 
-    organizationCreate(input: OrganizationCreateInput!): OrganizationCreatePayload!
+    organizationCreate(input: OrganizationCreateInput!): EnterOrganizationPayload!
     """
     Re-issue the session against another organization the viewer belongs to.
     Returns fresh tokens the client installs before navigating.
     """
-    organizationSwitch(organizationId: ID!): OrganizationSwitchPayload!
+    organizationSwitch(organizationId: ID!): EnterOrganizationPayload!
 
     teamCreate(input: TeamCreateInput!): TeamPayload!
     teamUpdate(id: ID!, input: TeamUpdateInput!): TeamPayload!
@@ -1828,6 +1839,12 @@ export const typeDefs = `
     commentReactionRemove(commentId: ID!, emoji: String!): DeletePayload!
 
     organizationMemberUpdateRole(userId: ID!, role: String!): DeletePayload!
+    """Remove a member from the current organization, along with their team memberships."""
+    organizationMemberRemove(userId: ID!): DeletePayload!
+    organizationInviteCreate(email: String!, role: String!): OrganizationInvitePayload!
+    organizationInviteRevoke(id: ID!): BasicPayload!
+    """Claim an invitation. Requires a signed-in session whose email matches it."""
+    organizationInviteAccept(token: String!): EnterOrganizationPayload!
 
     fileDelete(id: ID!): DeletePayload!
 

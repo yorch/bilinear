@@ -18,6 +18,7 @@ function makeTokenRow(
     familyId: string | null;
     expiresAt: Date;
     revokedAt: Date | null;
+    organizationId: string | null;
   }> = {},
 ) {
   return {
@@ -28,6 +29,7 @@ function makeTokenRow(
     ipAddress: null,
     label: null,
     lastUsedAt: null,
+    organizationId: null,
     revokedAt: null,
     tokenHash: '',
     type: 'refresh' as const,
@@ -502,3 +504,75 @@ function buildGithubFetchMock(
     throw new Error(`Unexpected fetch in test: ${url}`);
   });
 }
+
+describe('AuthService.refreshTokens — organization continuity', () => {
+  let prisma: MockPrismaClient;
+  let userService: UserService;
+  let service: AuthService;
+  const SWITCHED_ORG = '00000000-0000-0000-0000-0000000000e1';
+  const DEFAULT_ORG = '00000000-0000-0000-0000-0000000000e2';
+
+  beforeEach(() => {
+    prisma = createMockPrisma();
+    userService = new UserService(prisma as never);
+    vi.spyOn(userService, 'getOrganizationForUser').mockResolvedValue({
+      id: DEFAULT_ORG,
+    } as never);
+    service = new AuthService(prisma as never, userService);
+    prisma.authToken.update.mockResolvedValue({});
+    prisma.authToken.create.mockResolvedValue({});
+  });
+
+  it('keeps the session in the org it was switched to', async () => {
+    // The regression this guards: the org used to be re-derived on every
+    // rotation as "oldest usable membership", so a multi-org user was pulled
+    // back to their first workspace whenever the 24h access token expired —
+    // silently undoing a switch they made deliberately.
+    vi.spyOn(userService, 'findUsableMembership').mockResolvedValue({
+      organization: { id: SWITCHED_ORG },
+      role: 'member',
+    } as never);
+    const rawToken = await signValidRefreshToken();
+    prisma.authToken.findFirst.mockResolvedValue(makeTokenRow({ organizationId: SWITCHED_ORG }));
+
+    await service.refreshTokens(rawToken);
+
+    expect(prisma.authToken.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ organizationId: SWITCHED_ORG }),
+      }),
+    );
+    expect(userService.getOrganizationForUser).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the default org when that membership was revoked', async () => {
+    // A rotation is a fresh authorization decision — the stored org is
+    // re-validated, not trusted, so a revoked membership can't be refreshed
+    // back into.
+    vi.spyOn(userService, 'findUsableMembership').mockResolvedValue(null);
+    const rawToken = await signValidRefreshToken();
+    prisma.authToken.findFirst.mockResolvedValue(makeTokenRow({ organizationId: SWITCHED_ORG }));
+
+    await service.refreshTokens(rawToken);
+
+    expect(userService.getOrganizationForUser).toHaveBeenCalled();
+    expect(prisma.authToken.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ organizationId: DEFAULT_ORG }),
+      }),
+    );
+  });
+
+  it('resolves a default for a legacy token that carries no org', async () => {
+    const rawToken = await signValidRefreshToken();
+    prisma.authToken.findFirst.mockResolvedValue(makeTokenRow({ organizationId: null }));
+
+    await service.refreshTokens(rawToken);
+
+    expect(prisma.authToken.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ organizationId: DEFAULT_ORG }),
+      }),
+    );
+  });
+});

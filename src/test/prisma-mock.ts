@@ -64,6 +64,7 @@ export type MockPrismaClient = {
     | 'notification'
     | 'notificationSubscription'
     | 'organization'
+    | 'organizationInvite'
     | 'organizationMember'
     | 'platformAuditLog'
     | 'project'
@@ -134,6 +135,7 @@ export function createMockPrisma(): MockPrismaClient {
     notification: createMockModel(),
     notificationSubscription: createMockModel(),
     organization: createMockModel(),
+    organizationInvite: createMockModel(),
     organizationMember: createMockModel(),
     platformAuditLog: createMockModel(),
     project: createMockModel(),

@@ -1,29 +1,27 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { gql } from '@/lib/graphql';
+import { installSessionCookies } from '@/lib/auth-session';
+import { gqlQuery } from '@/lib/graphql';
 import { ORGANIZATION_SWITCH_MUTATION, VIEWER_ORGANIZATIONS_QUERY } from '@/lib/graphql-queries';
 import { createClientLogger } from '@/lib/logger';
+import { safeRelativePath } from '@/lib/safe-path';
 import { TransactionQueue } from '@/lib/transaction-queue';
-import { gqlError } from '@/lib/utils';
 
 const log = createClientLogger('useOrganizationSwitch');
 
 export interface ViewerOrganization {
   current: boolean;
   id: string;
-  logoUrl: string | null;
   name: string;
   role: string;
-  urlKey: string;
 }
 
 export async function fetchViewerOrganizations(): Promise<ViewerOrganization[]> {
-  const result = await gql(VIEWER_ORGANIZATIONS_QUERY);
-  if (result.errors?.length) {
-    throw new Error(gqlError(result, 'Failed to load workspaces'));
-  }
-  return (result.data?.viewerOrganizations as ViewerOrganization[]) ?? [];
+  // Throws rather than resolving to `[]`: a failed load must not be
+  // indistinguishable from "you belong to one workspace", which is what
+  // decides whether the switcher renders at all.
+  return gqlQuery<ViewerOrganization[]>(VIEWER_ORGANIZATIONS_QUERY, {}, 'viewerOrganizations');
 }
 
 /** Number of queued offline mutations that would be discarded by a switch. */
@@ -60,29 +58,13 @@ export function useOrganizationSwitch() {
   const switchTo = useCallback(async (organizationId: string, path?: string): Promise<void> => {
     setSwitching(organizationId);
     try {
-      const result = await gql(ORGANIZATION_SWITCH_MUTATION, { organizationId });
-      if (result.errors?.length) {
-        throw new Error(gqlError(result, 'Failed to switch workspace'));
-      }
-      const payload = result.data?.organizationSwitch as {
+      const payload = await gqlQuery<{
         accessToken: string;
-        refreshToken: string;
         organization: { urlKey: string };
-      };
+        refreshToken: string;
+      }>(ORGANIZATION_SWITCH_MUTATION, { organizationId }, 'organizationSwitch');
 
-      const session = await fetch('/api/auth/session', {
-        body: JSON.stringify({
-          accessToken: payload.accessToken,
-          refreshToken: payload.refreshToken,
-        }),
-        headers: { 'Content-Type': 'application/json' },
-        method: 'POST',
-      });
-      if (!session.ok) {
-        throw new Error('Failed to establish the new session');
-      }
-
-      window.location.assign(destinationFor(payload.organization.urlKey, path));
+      await enterWorkspace(payload, path);
     } catch (err) {
       // Reset so the trigger is clickable again; the caller surfaces the
       // message. On success we never get here — the document is replaced.
@@ -96,21 +78,48 @@ export function useOrganizationSwitch() {
 }
 
 /**
+ * Install a re-issued token pair and hard-navigate into its workspace.
+ *
+ * Shared by every path that moves a session from one organization to another
+ * — switching workspaces and accepting an invitation — because both have the
+ * identical requirement described above: cookies first, then a full document
+ * load so `SyncProvider` remounts and wipes the previous org's Dexie cache.
+ * Exported so the invitation flow doesn't reimplement it slightly differently.
+ */
+export async function enterWorkspace(
+  payload: {
+    accessToken: string;
+    refreshToken: string;
+    organization: { urlKey: string };
+  },
+  path?: string,
+): Promise<void> {
+  const installed = await installSessionCookies({
+    accessToken: payload.accessToken,
+    refreshToken: payload.refreshToken,
+  });
+  if (!installed) {
+    throw new Error('Failed to establish the new session');
+  }
+  window.location.assign(destinationFor(payload.organization.urlKey, path));
+}
+
+/**
  * Rebase `path` onto `urlKey`'s workspace. Every workspace route is
  * `/<urlKey>/<rest>`, so switching orgs while keeping the same page means
  * swapping the first segment.
  *
- * Anything that isn't a plain absolute in-app path (protocol-relative
- * `//evil.com`, an absolute URL, a bare segment) degrades to the workspace
- * root rather than being pasted into `location.assign` — this value can
- * reach here from a URL the user merely followed, so it is treated as
- * untrusted input.
+ * Anything `safeRelativePath` rejects (protocol-relative `//evil.com`, an
+ * absolute URL, a bare segment) degrades to the workspace root rather than
+ * being pasted into `location.assign` — this value can reach here from a URL
+ * the user merely followed, so it is treated as untrusted input.
  */
 export function destinationFor(urlKey: string, path?: string): string {
   const root = `/${urlKey}`;
-  if (!path?.startsWith('/') || path.startsWith('//')) {
+  const safe = safeRelativePath(path);
+  if (!safe) {
     return root;
   }
-  const rest = path.split('/').slice(2).join('/');
+  const rest = safe.split('/').slice(2).join('/');
   return rest ? `${root}/${rest}` : root;
 }

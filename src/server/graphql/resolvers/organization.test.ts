@@ -1,5 +1,5 @@
 import type { GraphQLError } from 'graphql';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockContext, type MockGraphQLContext } from '@/test/context-mock';
 import { TEST_ORG, TEST_USER } from '@/test/fixtures';
 import { organizationResolvers } from './organization';
@@ -173,5 +173,127 @@ describe('organization query', () => {
       where: { id: TEST_ORG.id },
     });
     expect(ctx.prisma.organizationMember.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+describe('organizationMemberRemove', () => {
+  const TARGET = '00000000-0000-0000-0000-0000000000c1';
+
+  function ctxWithActor(role: string) {
+    const ctx = createMockContext();
+    // requireOrgRole and the service both read organizationMember.findUnique;
+    // the first call resolves the actor's role, the second the target's.
+    ctx.prisma.organizationMember.findUnique
+      .mockResolvedValueOnce({ role })
+      .mockResolvedValue({ id: 'm2', role: 'member' });
+    ctx.prisma.teamMembership.deleteMany.mockResolvedValue({ count: 0 });
+    ctx.prisma.organizationMember.delete.mockResolvedValue({ id: 'm2', role: 'member' });
+    return ctx;
+  }
+
+  it('removes the member and emits a delete SyncAction', async () => {
+    const ctx = ctxWithActor('admin');
+    const sync = vi.spyOn(ctx.services.sync, 'createSyncAction');
+
+    const result = await organizationResolvers.Mutation.organizationMemberRemove(
+      null,
+      { userId: TARGET },
+      ctx as never,
+    );
+
+    expect(result.success).toBe(true);
+    // 'D' so connected clients drop the row rather than keeping a stale one.
+    expect(sync).toHaveBeenCalledWith(
+      TEST_ORG.id,
+      'D',
+      'OrganizationMember',
+      expect.any(String),
+      expect.anything(),
+    );
+  });
+
+  it('rejects a caller who is only a member', async () => {
+    const ctx = createMockContext();
+    ctx.prisma.organizationMember.findUnique.mockResolvedValue({ role: 'member' });
+
+    await expect(
+      organizationResolvers.Mutation.organizationMemberRemove(
+        null,
+        { userId: TARGET },
+        ctx as never,
+      ),
+    ).rejects.toSatisfy(err => codeOf(err) === 'FORBIDDEN');
+  });
+
+  it('maps self-removal to BAD_USER_INPUT', async () => {
+    const ctx = createMockContext();
+    ctx.prisma.organizationMember.findUnique.mockResolvedValue({ role: 'owner' });
+
+    await expect(
+      organizationResolvers.Mutation.organizationMemberRemove(
+        null,
+        { userId: TEST_USER.id },
+        ctx as never,
+      ),
+    ).rejects.toSatisfy(err => codeOf(err) === 'BAD_USER_INPUT');
+  });
+});
+
+describe('organizationInviteAccept', () => {
+  it('joins the org and re-issues the session against it', async () => {
+    const ctx = createMockContext({ orgId: null });
+    ctx.prisma.user.findUnique.mockResolvedValue({ email: 'invited@example.com' });
+    ctx.prisma.organizationInvite.findFirst.mockResolvedValue({
+      email: 'invited@example.com',
+      id: 'invite-1',
+      organization: OTHER_ORG,
+      organizationId: OTHER_ORG.id,
+      role: 'member',
+    });
+    ctx.prisma.organizationInvite.updateMany.mockResolvedValue({ count: 1 });
+    ctx.prisma.organizationMember.upsert.mockResolvedValue({});
+
+    const result = await organizationResolvers.Mutation.organizationInviteAccept(
+      null,
+      { token: 'raw-token' },
+      ctx as never,
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.organization).toEqual(OTHER_ORG);
+    // A brand-new account has no org at all, so the tokens are what actually
+    // land them in the workspace they just joined.
+    expect(result.accessToken).toBeTruthy();
+  });
+
+  it('surfaces an email mismatch as FORBIDDEN', async () => {
+    const ctx = createMockContext({ orgId: null });
+    ctx.prisma.user.findUnique.mockResolvedValue({ email: 'someone-else@example.com' });
+    ctx.prisma.organizationInvite.findFirst.mockResolvedValue({
+      email: 'invited@example.com',
+      id: 'invite-1',
+      organization: OTHER_ORG,
+      organizationId: OTHER_ORG.id,
+      role: 'member',
+    });
+
+    await expect(
+      organizationResolvers.Mutation.organizationInviteAccept(
+        null,
+        { token: 'raw-token' },
+        ctx as never,
+      ),
+    ).rejects.toSatisfy(err => codeOf(err) === 'FORBIDDEN');
+  });
+});
+
+describe('organizationInvites query', () => {
+  it('is owner/admin only', async () => {
+    const ctx = createMockContext();
+    ctx.prisma.organizationMember.findUnique.mockResolvedValue({ role: 'member' });
+
+    await expect(
+      organizationResolvers.Query.organizationInvites(null, {}, ctx as never),
+    ).rejects.toSatisfy(err => codeOf(err) === 'FORBIDDEN');
   });
 });

@@ -3,14 +3,77 @@ import type { Organization, OrganizationMember } from '../../../generated/prisma
 import { childLogger } from '../../lib/logger';
 import { requireAuth, requireOrgRole, requireUserId } from '../../middleware/auth';
 import {
+  CannotRemoveSelfError,
   InvalidRoleError,
   InvalidUrlKeyError,
+  LastOwnerError,
   MemberNotFoundError,
+  OwnerRoleRequiredError,
   UrlKeyTakenError,
 } from '../../services/organization.service';
+import {
+  AlreadyMemberError,
+  InvalidInviteEmailError,
+  InviteEmailFailedError,
+  InviteEmailMismatchError,
+  InviteNotFoundError,
+  InviteRoleNotAllowedError,
+  TooManyInvitesError,
+} from '../../services/organization-invite.service';
 import type { GraphQLContext } from '../context';
 
 const log = childLogger({ module: 'resolver/organization' });
+
+/**
+ * Re-issue the caller's session against `organization` and build the shared
+ * `EnterOrganizationPayload`. Creating a workspace, switching to one, and
+ * accepting an invitation to one all end this way; the tail was written out
+ * three times, which is one place per way for it to drift.
+ */
+async function enterOrganization(
+  ctx: GraphQLContext & { userId: string },
+  organization: Organization,
+) {
+  const tokenPair = await ctx.services.auth.reissueTokens(ctx.userId, organization.id);
+  return {
+    accessToken: tokenPair.accessToken,
+    expiresIn: tokenPair.expiresIn,
+    organization,
+    refreshToken: tokenPair.refreshToken,
+    success: true,
+  };
+}
+
+/**
+ * Map the membership-management service errors onto GraphQL codes. They all
+ * surface through the same members UI, so keeping the mapping in one place
+ * stops the four mutations that raise them from drifting apart.
+ */
+function rethrowMembershipError(err: unknown): never {
+  if (
+    err instanceof InvalidRoleError ||
+    err instanceof InvalidInviteEmailError ||
+    err instanceof AlreadyMemberError ||
+    err instanceof TooManyInvitesError ||
+    err instanceof CannotRemoveSelfError ||
+    err instanceof LastOwnerError
+  ) {
+    throw new GraphQLError(err.message, { extensions: { code: 'BAD_USER_INPUT' } });
+  }
+  if (err instanceof OwnerRoleRequiredError || err instanceof InviteRoleNotAllowedError) {
+    throw new GraphQLError(err.message, { extensions: { code: 'FORBIDDEN' } });
+  }
+  if (err instanceof MemberNotFoundError) {
+    throw new GraphQLError(err.message, { extensions: { code: 'NOT_FOUND' } });
+  }
+  if (err instanceof InviteEmailFailedError) {
+    // The invitation was rolled back, so this is actionable: the admin can
+    // retry. Passed through `formatError` rather than masked — see the
+    // EMAIL_SEND_FAILED entry in CLIENT_ERROR_CODES.
+    throw new GraphQLError(err.message, { extensions: { code: 'EMAIL_SEND_FAILED' } });
+  }
+  throw err;
+}
 
 export const organizationResolvers = {
   Mutation: {
@@ -61,15 +124,167 @@ export const organizationResolvers = {
         throw err;
       }
 
-      const tokenPair = await ctx.services.auth.reissueTokens(ctx.userId, organization.id);
+      return enterOrganization(ctx, organization);
+    },
 
-      return {
-        accessToken: tokenPair.accessToken,
-        expiresIn: tokenPair.expiresIn,
-        organization,
-        refreshToken: tokenPair.refreshToken,
-        success: true,
-      };
+    organizationInviteAccept: async (
+      _parent: unknown,
+      { token }: { token: string },
+      ctx: GraphQLContext,
+    ) => {
+      // `requireUserId`: the accepting session is frequently a brand-new
+      // account with no organization at all, so it has no `orgId` to require.
+      requireUserId(ctx);
+
+      let accepted: Awaited<ReturnType<typeof ctx.services.organizationInvite.accept>>;
+      try {
+        accepted = await ctx.services.organizationInvite.accept(token, ctx.userId);
+      } catch (err) {
+        if (err instanceof InviteNotFoundError) {
+          throw new GraphQLError(err.message, { extensions: { code: 'NOT_FOUND' } });
+        }
+        if (err instanceof InviteEmailMismatchError) {
+          throw new GraphQLError(err.message, {
+            extensions: { code: 'FORBIDDEN', invitedEmail: err.invitedEmail },
+          });
+        }
+        throw err;
+      }
+
+      // Land the user in the workspace they just joined, same handoff as
+      // organizationSwitch — otherwise they'd accept and stay wherever they
+      // were (or nowhere, for a new account).
+      const organization = accepted.organization;
+
+      ctx.services.auditLog
+        .log({
+          action: 'member.invite_accepted',
+          ipAddress: ctx.clientIp,
+          metadata: { role: accepted.role },
+          orgId: organization.id,
+          resourceId: ctx.userId,
+          resourceType: 'OrganizationMember',
+          userId: ctx.userId,
+        })
+        .catch(err => log.warn({ err }, 'audit log failed'));
+
+      return enterOrganization(ctx, organization);
+    },
+
+    organizationInviteCreate: async (
+      _parent: unknown,
+      { email, role }: { email: string; role: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      const actorRole = await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+
+      let invite: Awaited<ReturnType<typeof ctx.services.organizationInvite.create>>;
+      try {
+        invite = await ctx.services.organizationInvite.create({
+          actorRole,
+          email,
+          invitedById: ctx.userId,
+          orgId: ctx.orgId,
+          role,
+        });
+      } catch (err) {
+        rethrowMembershipError(err);
+      }
+
+      ctx.services.auditLog
+        .log({
+          action: 'member.invited',
+          ipAddress: ctx.clientIp,
+          metadata: { email: invite.email, role: invite.role },
+          orgId: ctx.orgId,
+          resourceId: invite.id,
+          resourceType: 'OrganizationInvite',
+          userId: ctx.userId,
+        })
+        .catch(err => log.warn({ err }, 'audit log failed'));
+
+      return { invite, success: true };
+    },
+
+    organizationInviteRevoke: async (
+      _parent: unknown,
+      { id }: { id: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+
+      const revoked = await ctx.services.organizationInvite.revoke(ctx.orgId, id);
+      if (!revoked) {
+        throw new GraphQLError('This invitation is no longer valid', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+
+      ctx.services.auditLog
+        .log({
+          action: 'member.invite_revoked',
+          ipAddress: ctx.clientIp,
+          orgId: ctx.orgId,
+          resourceId: id,
+          resourceType: 'OrganizationInvite',
+          userId: ctx.userId,
+        })
+        .catch(err => log.warn({ err }, 'audit log failed'));
+
+      return { success: true };
+    },
+    organizationMemberRemove: async (
+      _parent: unknown,
+      { userId }: { userId: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      const actorRole = await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+
+      let removed: OrganizationMember;
+      try {
+        removed = await ctx.services.organization.removeMember(ctx.orgId, userId, {
+          role: actorRole,
+          userId: ctx.userId,
+        });
+      } catch (err) {
+        rethrowMembershipError(err);
+      }
+
+      // Emitted for parity with organizationMemberUpdateRole. Be aware that
+      // `sync-manager.ts` has no `OrganizationMember` case yet, so no client
+      // acts on this today — other admins' open tabs keep showing the
+      // removed person until they reload, and the settings page reconciles
+      // its own roster locally instead. Teaching the sync pipeline about an
+      // org roster is the real fix and is deliberately out of scope here;
+      // the row is still recorded so delta-sync history is complete.
+      //
+      // Access itself does not depend on this: the removed user's session
+      // loses the org on its next request (extractAuthContext re-checks
+      // membership) and their WebSocket closes on the next re-auth sweep.
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'D',
+        'OrganizationMember',
+        removed.id,
+        removed,
+      );
+
+      ctx.services.auditLog
+        .log({
+          action: 'member.removed',
+          ipAddress: ctx.clientIp,
+          metadata: { removedRole: removed.role, targetUserId: userId },
+          orgId: ctx.orgId,
+          resourceId: userId,
+          resourceType: 'OrganizationMember',
+          userId: ctx.userId,
+        })
+        .catch(err => log.warn({ err }, 'audit log failed'));
+
+      return { lastSyncId: sync.id.toString(), success: true };
     },
 
     organizationMemberUpdateRole: async (
@@ -78,23 +293,18 @@ export const organizationResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+      const actorRole = await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
 
       let updated: OrganizationMember;
       try {
-        updated = await ctx.services.organization.updateMemberRole(ctx.orgId, userId, role);
+        updated = await ctx.services.organization.updateMemberRole(
+          ctx.orgId,
+          userId,
+          role,
+          actorRole,
+        );
       } catch (err) {
-        if (err instanceof InvalidRoleError) {
-          throw new GraphQLError(err.message, {
-            extensions: { code: 'BAD_USER_INPUT' },
-          });
-        }
-        if (err instanceof MemberNotFoundError) {
-          throw new GraphQLError(err.message, {
-            extensions: { code: 'NOT_FOUND' },
-          });
-        }
-        throw err;
+        rethrowMembershipError(err);
       }
 
       const sync = await ctx.services.sync.createSyncAction(
@@ -120,6 +330,7 @@ export const organizationResolvers = {
 
       return { lastSyncId: sync.id.toString(), success: true };
     },
+
     organizationSwitch: async (
       _parent: unknown,
       { organizationId }: { organizationId: string },
@@ -150,15 +361,7 @@ export const organizationResolvers = {
         });
       }
 
-      const tokenPair = await ctx.services.auth.reissueTokens(ctx.userId, organizationId);
-
-      return {
-        accessToken: tokenPair.accessToken,
-        expiresIn: tokenPair.expiresIn,
-        organization: membership.organization,
-        refreshToken: tokenPair.refreshToken,
-        success: true,
-      };
+      return enterOrganization(ctx, membership.organization);
     },
   },
 
@@ -177,6 +380,14 @@ export const organizationResolvers = {
         });
       }
       return org;
+    },
+
+    organizationInvites: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+      // Pending invitations expose the email addresses an org has reached out
+      // to, so they are admin-only rather than visible to every member.
+      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+      return ctx.services.organizationInvite.listPending(ctx.orgId);
     },
 
     organizationMembers: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {

@@ -554,11 +554,10 @@ export const Sidebar = observer(function Sidebar({
         >
           <PanelLeft className="h-4 w-4" />
         </button>
-        {!effectiveCollapsed && (
-          <WorkspaceSwitcher
-            fallbackLabel={syncStore.organizationName ?? workspaceKey ?? APP_NAME}
-          />
-        )}
+        <WorkspaceSwitcher
+          collapsed={effectiveCollapsed}
+          fallbackLabel={syncStore.organizationName ?? workspaceKey ?? APP_NAME}
+        />
         <button
           aria-label={t('nav.closeMenu')}
           className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground md:hidden"

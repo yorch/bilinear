@@ -66,9 +66,12 @@ describe('requireOrgRole', () => {
       userId: 'user-1',
     });
 
+    // Returns the caller's *actual* role, not just a pass/fail — the
+    // membership-management mutations need to tell an owner from an admin
+    // after both have cleared the same allow-list.
     await expect(
       requireOrgRole(prisma as never, 'org-1', 'user-1', ['owner', 'admin']),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe('admin');
   });
 
   it('throws FORBIDDEN when user has wrong role', async () => {
@@ -322,8 +325,10 @@ describe('extractAuthContext org membership', () => {
   function mockPrismaForSession(membership: { role: string } | null) {
     const prisma = createMockPrisma();
     prisma.user.findUnique.mockResolvedValue({ active: true });
-    prisma.organization.findUnique.mockResolvedValue({ archivedAt: null, suspendedAt: null });
-    prisma.organizationMember.findUnique.mockResolvedValue(membership);
+    // The membership is fetched with its organization in one read.
+    prisma.organizationMember.findUnique.mockResolvedValue(
+      membership && { ...membership, organization: { archivedAt: null, suspendedAt: null } },
+    );
     return prisma;
   }
 
@@ -335,7 +340,10 @@ describe('extractAuthContext org membership', () => {
 
     expect(ctx).toMatchObject({ orgId: ORG_ID, userId: USER_ID });
     expect(prisma.organizationMember.findUnique).toHaveBeenCalledWith({
-      select: { role: true },
+      select: {
+        organization: { select: { archivedAt: true, suspendedAt: true } },
+        role: true,
+      },
       where: { organizationId_userId: { organizationId: ORG_ID, userId: USER_ID } },
     });
   });
@@ -369,8 +377,10 @@ describe('extractAuthContext API keys', () => {
     });
     prisma.authToken.update.mockResolvedValue({});
     prisma.user.findUnique.mockResolvedValue({ active: true });
-    prisma.organization.findUnique.mockResolvedValue({ archivedAt: null, suspendedAt: null });
-    prisma.organizationMember.findUnique.mockResolvedValue({ role: 'member' });
+    prisma.organizationMember.findUnique.mockResolvedValue({
+      organization: { archivedAt: null, suspendedAt: null },
+      role: 'member',
+    });
 
     const ctx = await extractAuthContext(null, 'bil_deadbeef', prisma as never);
 
@@ -395,7 +405,7 @@ describe('extractAuthContext API keys', () => {
     const ctx = await extractAuthContext(null, 'bil_deadbeef', prisma as never);
 
     expect(ctx.orgId).toBeNull();
-    expect(prisma.organization.findUnique).not.toHaveBeenCalled();
+    expect(prisma.organizationMember.findUnique).not.toHaveBeenCalled();
   });
 
   it('disarms a key whose owner was removed from the key’s org', async () => {
@@ -408,7 +418,6 @@ describe('extractAuthContext API keys', () => {
     });
     prisma.authToken.update.mockResolvedValue({});
     prisma.user.findUnique.mockResolvedValue({ active: true });
-    prisma.organization.findUnique.mockResolvedValue({ archivedAt: null, suspendedAt: null });
     prisma.organizationMember.findUnique.mockResolvedValue(null);
 
     const ctx = await extractAuthContext(null, 'bil_deadbeef', prisma as never);

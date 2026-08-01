@@ -188,31 +188,35 @@ export async function extractAuthContext(
   // org is suspended can still reach the /admin console (which needs userId
   // only) while being locked out of the workspace.
   if (prisma && resolved.userId) {
-    // Run the user + org + membership lookups concurrently — they're
-    // independent indexed reads and this is the app's hottest path (every
-    // authenticated request). The membership read is the `(organizationId,
-    // userId)` unique index, so it costs the same as the other two.
+    // Two reads, run concurrently, on the app's hottest path (every
+    // authenticated request). The membership is fetched *with* its org
+    // rather than as a separate lookup: it's one traversal of the
+    // `(organizationId, userId)` unique index plus the FK join, and both
+    // rows feed the same predicate. Adding the membership check as a third
+    // independent query would have been a permanent +50% on this path's
+    // query count for no extra information.
     const orgId = resolved.orgId;
     const userId = resolved.userId;
-    const [user, org, membership] = await Promise.all([
+    const [user, membership] = await Promise.all([
       prisma.user.findUnique({
         select: { active: true },
         where: { id: userId },
       }),
       orgId
-        ? prisma.organization.findUnique({
-            select: { archivedAt: true, suspendedAt: true },
-            where: { id: orgId },
-          })
-        : Promise.resolve(null),
-      orgId
         ? prisma.organizationMember.findUnique({
-            select: { role: true },
+            select: {
+              organization: { select: { archivedAt: true, suspendedAt: true } },
+              role: true,
+            },
             where: { organizationId_userId: { organizationId: orgId, userId } },
           })
         : Promise.resolve(null),
     ]);
-    const validity = checkSessionValidity(user, org, membership);
+    // No membership means no org row either, so `checkSessionValidity`
+    // reports the org arm rather than the membership arm. Both drop `orgId`
+    // and nothing branches on the difference — it only affects which reason
+    // string is available for logging.
+    const validity = checkSessionValidity(user, membership?.organization, membership);
     if (!validity.valid) {
       if (validity.reason === 'user deactivated') {
         return { ...EMPTY_CONTEXT };
@@ -321,23 +325,34 @@ export function requireUserId(ctx: AuthContext): asserts ctx is AuthContext & { 
   }
 }
 
+/**
+ * Assert the caller holds one of `roles` in `orgId`, and return which one.
+ *
+ * The return value matters: an owner and an admin both clear
+ * `['owner', 'admin']`, but only an owner may grant or revoke ownership, so
+ * the membership-management mutations need the *actual* role rather than a
+ * bare pass/fail.
+ */
 export async function requireOrgRole(
   prisma: PrismaClient,
   orgId: string,
   userId: string,
   roles: string[],
-): Promise<void> {
+): Promise<string> {
   const membership = await prisma.organizationMember.findUnique({
+    select: { role: true },
     where: {
       organizationId_userId: { organizationId: orgId, userId },
     },
   });
+  const role = membership?.role ?? null;
 
-  if (!membership || !roles.includes(membership.role)) {
+  if (!role || !roles.includes(role)) {
     throw new GraphQLError('Insufficient permissions', {
       extensions: { code: 'FORBIDDEN' },
     });
   }
+  return role;
 }
 
 /**

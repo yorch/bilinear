@@ -6,7 +6,7 @@ import {
 } from '../../generated/prisma';
 
 const URL_KEY_RE = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
-const VALID_ROLES = ['owner', 'admin', 'member', 'guest'] as const;
+export const VALID_ROLES = ['owner', 'admin', 'member', 'guest'] as const;
 export type OrgRole = (typeof VALID_ROLES)[number];
 
 export interface OrganizationCreateInput {
@@ -39,6 +39,27 @@ export class MemberNotFoundError extends Error {
   constructor() {
     super('Member not found');
     this.name = 'MemberNotFoundError';
+  }
+}
+
+export class OwnerRoleRequiredError extends Error {
+  constructor() {
+    super('Only an owner can manage another owner');
+    this.name = 'OwnerRoleRequiredError';
+  }
+}
+
+export class LastOwnerError extends Error {
+  constructor() {
+    super('An organization must keep at least one owner');
+    this.name = 'LastOwnerError';
+  }
+}
+
+export class CannotRemoveSelfError extends Error {
+  constructor() {
+    super('You cannot remove yourself from a workspace');
+    this.name = 'CannotRemoveSelfError';
   }
 }
 
@@ -86,7 +107,12 @@ export class OrganizationService {
    * "admin"])). Returns the updated membership row so resolvers can emit a
    * SyncAction without re-querying.
    */
-  async updateMemberRole(orgId: string, userId: string, role: string): Promise<OrganizationMember> {
+  async updateMemberRole(
+    orgId: string,
+    userId: string,
+    role: string,
+    actorRole: string,
+  ): Promise<OrganizationMember> {
     if (!VALID_ROLES.includes(role as OrgRole)) {
       throw new InvalidRoleError();
     }
@@ -98,10 +124,93 @@ export class OrganizationService {
       throw new MemberNotFoundError();
     }
 
+    // Only an owner may hand out or take away ownership. The resolver's
+    // `requireOrgRole(['owner', 'admin'])` gate alone let an admin promote
+    // anyone — including themselves via a second account — to owner, and
+    // demote the real owners: a full privilege escalation reachable from
+    // the ordinary members list.
+    if ((role === 'owner' || membership.role === 'owner') && actorRole !== 'owner') {
+      throw new OwnerRoleRequiredError();
+    }
+
+    // Demoting the last owner would leave the workspace with nobody able to
+    // manage ownership at all — the same reasoning as the last-platform-admin
+    // guard in the /admin console.
+    if (membership.role === 'owner' && role !== 'owner') {
+      await this.assertNotLastOwner(orgId, userId);
+    }
+
     return this.prisma.organizationMember.update({
       data: { role },
       where: { organizationId_userId: { organizationId: orgId, userId } },
     });
+  }
+
+  /**
+   * Remove someone from the organization: drop the org membership and every
+   * team membership they hold inside it, atomically.
+   *
+   * The single writer for membership removal — SCIM deprovisioning
+   * (`deactivateUser` / `DELETE /Users/:id`) routes through here too. It
+   * used to hand-roll the same two deletes, which meant the two paths had
+   * already drifted: an IdP deactivating the sole owner stranded the
+   * workspace, because only this side had the last-owner guard.
+   * `user.active` is deliberately untouched: that flag is global, and
+   * removing someone from one workspace must not sign them out of the
+   * others.
+   *
+   * Returns the removed membership row so the resolver can emit a SyncAction
+   * without re-querying a row that no longer exists.
+   */
+  async removeMember(
+    orgId: string,
+    userId: string,
+    actor: { userId: string; role: string } | null,
+  ): Promise<OrganizationMember> {
+    // `actor: null` means a system caller — today SCIM deprovisioning, which
+    // acts on an IdP's instruction rather than a person's. The interpersonal
+    // guards (you can't remove yourself; only an owner manages an owner)
+    // don't apply to it, but the structural one does: the last owner guard
+    // holds for every caller, because an org with no owner is broken however
+    // it got that way.
+    if (actor && userId === actor.userId) {
+      // Leaving is a different operation with different consequences (you
+      // lose your own access, and the last owner leaving strands the
+      // workspace), so it is not silently folded into "remove a member".
+      throw new CannotRemoveSelfError();
+    }
+
+    const membership = await this.prisma.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId: orgId, userId } },
+    });
+    if (!membership) {
+      throw new MemberNotFoundError();
+    }
+
+    if (membership.role === 'owner') {
+      if (actor && actor.role !== 'owner') {
+        throw new OwnerRoleRequiredError();
+      }
+      await this.assertNotLastOwner(orgId, userId);
+    }
+
+    return this.prisma.$transaction(async tx => {
+      await tx.teamMembership.deleteMany({
+        where: { team: { organizationId: orgId }, userId },
+      });
+      return tx.organizationMember.delete({
+        where: { organizationId_userId: { organizationId: orgId, userId } },
+      });
+    });
+  }
+
+  private async assertNotLastOwner(orgId: string, userId: string): Promise<void> {
+    const otherOwners = await this.prisma.organizationMember.count({
+      where: { organizationId: orgId, role: 'owner', userId: { not: userId } },
+    });
+    if (otherOwners === 0) {
+      throw new LastOwnerError();
+    }
   }
 
   async findMembers(orgId: string): Promise<Array<{ userId: string; role: string }>> {

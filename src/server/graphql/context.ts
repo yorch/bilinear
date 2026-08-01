@@ -27,6 +27,7 @@ import { IssueTemplateService } from '../services/issue-template.service';
 import { LabelService } from '../services/label.service';
 import { NotificationService } from '../services/notification.service';
 import { OrganizationService } from '../services/organization.service';
+import { OrganizationInviteService } from '../services/organization-invite.service';
 import { PlatformAdminService } from '../services/platform-admin.service';
 import { ProjectService } from '../services/project.service';
 import { RoadmapService } from '../services/roadmap.service';
@@ -71,6 +72,7 @@ export interface GraphQLContext extends AuthContext {
     label: LabelService;
     notification: NotificationService;
     organization: OrganizationService;
+    organizationInvite: OrganizationInviteService;
     platformAdmin: PlatformAdminService;
     project: ProjectService;
     roadmap: RoadmapService;
@@ -108,6 +110,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const issueActivityService = new IssueActivityService(prisma);
   const notificationService = new NotificationService(prisma);
   const organizationService = new OrganizationService(prisma);
+  const organizationInviteService = new OrganizationInviteService(prisma);
   const platformAdminService = new PlatformAdminService(prisma);
   const teamService = new TeamService(prisma);
   const workflowStateService = new WorkflowStateService(prisma);
@@ -165,6 +168,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
       label: labelService,
       notification: notificationService,
       organization: organizationService,
+      organizationInvite: organizationInviteService,
       platformAdmin: platformAdminService,
       project: projectService,
       roadmap: roadmapService,

@@ -71,6 +71,7 @@ model Organization {
   samlConfiguration      SamlConfiguration?
   scimTokens             ScimToken[]
   authTokens             AuthToken[]
+  invites                OrganizationInvite[]
 
   @@map("organizations")
 }
@@ -150,6 +151,8 @@ model User {
   createdSamlConfigurations SamlConfiguration[]        @relation("SamlConfigCreator")
   createdScimTokens         ScimToken[]                @relation("ScimTokenCreator")
   platformAuditLogs         PlatformAuditLog[]         @relation("PlatformAuditActor")
+  sentInvites               OrganizationInvite[]       @relation("InviteCreator")
+  acceptedInvites           OrganizationInvite[]       @relation("InviteAcceptor")
 
   @@map("users")
 }
@@ -1544,4 +1547,52 @@ model ScimToken {
 
   @@index([organizationId])
   @@map("scim_tokens")
+}
+
+/// A pending invitation to join an organization. The raw token only ever
+/// exists in the invitation email — the row stores SHA-256(token), matching
+/// how `AuthToken` handles magic-link codes and `ScimToken` handles API
+/// tokens, so a database compromise yields no usable invitations.
+///
+/// Deliberately *not* uniquely constrained on `(organizationId, email)`:
+/// re-inviting someone after a revoked or expired invitation is normal, and
+/// a plain unique index would forbid it while a partial one (pending rows
+/// only) is inexpressible in Prisma. `OrganizationInviteService.create`
+/// revokes any outstanding invitation for the pair before issuing a new one
+/// — the same revoke-then-issue pattern `AuthService.sendMagicLink` uses.
+model OrganizationInvite {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  /// Lowercased at write time; acceptance requires the accepting session's
+  /// email to match, so an invitation link is not bearer-usable by whoever
+  /// happens to receive a forwarded email.
+  email String @db.VarChar(255)
+  /// Org role granted on acceptance: owner, admin, member, or guest.
+  role  String @default("member") @db.VarChar(20)
+
+  /// SHA-256(plaintext_token) — 64 hex chars
+  tokenHash   String  @unique @map("token_hash") @db.VarChar(64)
+  invitedById String? @map("invited_by_id") @db.Uuid
+
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz
+  /// Set when claimed. Non-null means spent — invitations are single-use.
+  acceptedAt DateTime? @map("accepted_at") @db.Timestamptz
+  /// Who claimed it. May differ from nothing in practice (acceptance
+  /// requires an email match) but is recorded so the audit trail doesn't
+  /// depend on re-resolving the email later.
+  acceptedById String?   @map("accepted_by_id") @db.Uuid
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy    User?        @relation("InviteCreator", fields: [invitedById], references: [id], onDelete: SetNull)
+  acceptedBy   User?        @relation("InviteAcceptor", fields: [acceptedById], references: [id], onDelete: SetNull)
+
+  // No standalone [organizationId] index: it would be a strict prefix of the
+  // composite below, which Postgres already serves org-only lookups from.
+  @@index([organizationId, email])
+  @@map("organization_invites")
 }

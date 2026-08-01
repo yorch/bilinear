@@ -1,8 +1,7 @@
-import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { WorkspaceMismatch } from '@/components/layouts/workspace-mismatch';
-import { verifyAccessToken } from '@/server/lib/jwt';
 import { prisma } from '@/server/lib/prisma';
+import { readSessionClaim } from '@/server/lib/session-claim';
 import { UserService } from '@/server/services/user.service';
 
 /**
@@ -38,17 +37,8 @@ export default async function WorkspaceGuardLayout({
   params: Promise<{ workspace: string }>;
 }) {
   const { workspace } = await params;
-  const cookieStore = await cookies();
-  const token = cookieStore.get('access_token')?.value;
-
-  if (!token) {
-    redirect('/login');
-  }
-
-  let claim: { orgId: string; userId: string };
-  try {
-    claim = await verifyAccessToken(token);
-  } catch {
+  const claim = await readSessionClaim();
+  if (!claim) {
     redirect('/login');
   }
 

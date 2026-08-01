@@ -9,6 +9,7 @@ import { IssueActivityService } from '../server/services/issue-activity.service'
 import { LabelService } from '../server/services/label.service';
 import { NotificationService } from '../server/services/notification.service';
 import { OrganizationService } from '../server/services/organization.service';
+import { OrganizationInviteService } from '../server/services/organization-invite.service';
 import { PlatformAdminService } from '../server/services/platform-admin.service';
 import { SamlService } from '../server/services/saml.service';
 import { ScimService } from '../server/services/scim.service';
@@ -74,6 +75,7 @@ export interface MockGraphQLContext {
     label: LabelService;
     notification: NotificationService;
     organization: OrganizationService;
+    organizationInvite: OrganizationInviteService;
     platformAdmin: PlatformAdminService;
     saml: SamlService;
     scim: ScimService;
@@ -110,6 +112,7 @@ export function createMockContext(
       label: new LabelService(prisma as never),
       notification: new NotificationService(prisma as never),
       organization: new OrganizationService(prisma as never),
+      organizationInvite: new OrganizationInviteService(prisma as never),
       platformAdmin: new PlatformAdminService(prisma as never),
       saml: new SamlService(prisma as never),
       scim: new ScimService(prisma as never),

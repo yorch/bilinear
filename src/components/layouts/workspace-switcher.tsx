@@ -19,6 +19,12 @@ import { cn, getErrorMessage } from '@/lib/utils';
 const log = createClientLogger('WorkspaceSwitcher');
 
 interface WorkspaceSwitcherProps {
+  /**
+   * Renders nothing when the rail is collapsed. Taken as a prop rather than
+   * letting the sidebar conditionally mount the component, so collapsing and
+   * re-expanding doesn't unmount it and re-run the workspace fetch.
+   */
+  collapsed: boolean;
   /** Label to show before the org list resolves (or when it's a single org). */
   fallbackLabel: string;
 }
@@ -32,15 +38,16 @@ interface WorkspaceSwitcherProps {
  * common path keeps exactly the header it had before, with no dropdown
  * affordance promising a choice that doesn't exist.
  */
-export function WorkspaceSwitcher({ fallbackLabel }: WorkspaceSwitcherProps) {
+export function WorkspaceSwitcher({ collapsed, fallbackLabel }: WorkspaceSwitcherProps) {
   const t = useTranslations();
   const [orgs, setOrgs] = useState<ViewerOrganization[] | null>(null);
   const [confirmingSwitchTo, setConfirmingSwitchTo] = useState<ViewerOrganization | null>(null);
   const { switchTo, switching } = useOrganizationSwitch();
 
-  // Fetched once per document load (the sidebar lives in the app shell, so
-  // client-side navigation doesn't remount it). A failure is non-fatal: the
-  // header falls back to the plain label rather than blocking the sidebar.
+  // Fetched once per document load — the sidebar lives in the app shell, so
+  // neither client-side navigation nor collapsing the rail remounts this. A
+  // failure is non-fatal: the header falls back to the plain label rather
+  // than blocking the sidebar.
   useEffect(() => {
     let cancelled = false;
     fetchViewerOrganizations()
@@ -81,6 +88,10 @@ export function WorkspaceSwitcher({ fallbackLabel }: WorkspaceSwitcherProps) {
       return;
     }
     void performSwitch(org);
+  }
+
+  if (collapsed) {
+    return null;
   }
 
   if (!orgs || orgs.length < 2) {

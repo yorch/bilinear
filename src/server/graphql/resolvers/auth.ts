@@ -1,4 +1,5 @@
 import { GraphQLError } from 'graphql';
+import { isValidEmail } from '../../lib/email-address';
 import { childLogger } from '../../lib/logger';
 import { checkAuthMutationLimit } from '../../middleware/rate-limit';
 import { OAuthError } from '../../services/auth.service';
@@ -10,16 +11,8 @@ const log = childLogger({ module: 'resolver/auth' });
 // the most common abuse shapes (missing @, stray whitespace, overly long
 // local-part or domain, control characters). Full RFC 5322 is not worth the
 // complexity here; the magic link flow validates reachability by email.
-const MAX_EMAIL_LENGTH = 254;
-const EMAIL_RE = /^[^\s@]+@[^\s@.]+\.[^\s@]+$/;
-
 function assertValidEmail(email: string): void {
-  if (
-    typeof email !== 'string' ||
-    email.length === 0 ||
-    email.length > MAX_EMAIL_LENGTH ||
-    !EMAIL_RE.test(email)
-  ) {
+  if (!isValidEmail(email)) {
     throw new GraphQLError('Invalid email address', {
       extensions: { code: 'BAD_USER_INPUT' },
     });

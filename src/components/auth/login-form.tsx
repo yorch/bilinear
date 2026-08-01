@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useTranslations } from '@/hooks/use-translations';
@@ -10,11 +10,16 @@ import {
   GITHUB_AUTH_START_QUERY,
   GOOGLE_AUTH_START_QUERY,
 } from '@/lib/graphql-queries';
+import { rememberPostAuthNext, safeRelativePath } from '@/lib/safe-path';
 import { gqlError } from '@/lib/utils';
 
 export function LoginForm() {
   const router = useRouter();
   const t = useTranslations();
+  // Where to land after signing in — set when the user arrived from a link
+  // that needs a session (today: an invitation). Validated as an in-app path
+  // before it reaches any navigation; see safeRelativePath.
+  const next = safeRelativePath(useSearchParams().get('next'));
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +37,15 @@ export function LoginForm() {
         return;
       }
 
-      router.push(`/verify?email=${encodeURIComponent(email)}`);
+      // Carried in the URL rather than only in sessionStorage so the
+      // verify step keeps the destination even though the two pages are
+      // separate navigations. A magic link opened in a *different* tab has
+      // no `next` and lands on the workspace root — the user can re-open
+      // the original link, now signed in.
+      const verifyUrl = next
+        ? `/verify?email=${encodeURIComponent(email)}&next=${encodeURIComponent(next)}`
+        : `/verify?email=${encodeURIComponent(email)}`;
+      router.push(verifyUrl);
     } catch {
       setError(t('common.somethingWentWrong'));
     } finally {
@@ -116,6 +129,10 @@ export function LoginForm() {
     storageKey: string;
   }) {
     try {
+      // OAuth returns to a server-controlled redirect URI that carries none
+      // of our query params, so the destination has to survive the round
+      // trip out-of-band.
+      rememberPostAuthNext(next);
       const result = await gql(provider.query);
       const payload = (result.data as Record<string, { url: string; state: string } | undefined>)?.[
         provider.field

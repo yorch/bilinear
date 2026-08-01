@@ -132,6 +132,68 @@ export async function sendMagicLinkEmail(
 }
 
 // ---------------------------------------------------------------------------
+// Organization invitation
+// ---------------------------------------------------------------------------
+
+/**
+ * Deliver an invitation link. The raw token reaches the database only as a
+ * SHA-256 hash, so this email is the single place it exists in the clear —
+ * a failure to send means the invitation is unreachable and must be re-issued
+ * rather than looked up.
+ *
+ * Localized to the *organization's* inviter-independent default rather than
+ * the recipient's saved locale: an invitee frequently has no account yet, and
+ * therefore no `User.locale` to read.
+ */
+export async function sendOrganizationInviteEmail(params: {
+  to: string;
+  organizationName: string;
+  inviterName: string | null;
+  inviteUrl: string;
+  locale?: string | null;
+}): Promise<void> {
+  const transport = createTransport();
+  const { locale } = params;
+  const safeOrg = escapeHtml(params.organizationName);
+  const safeInviter = params.inviterName ? escapeHtml(params.inviterName) : null;
+
+  // Two keys rather than an "someone" placeholder: the inviter is unknown
+  // only when their account was deleted since (the FK is SET NULL), and
+  // "Someone invited you" reads like a phishing mail.
+  const bodyKey = safeInviter ? 'email.invite.bodyWithInviter' : 'email.invite.body';
+  const bodyParams: Record<string, string> = { organization: `<strong>${safeOrg}</strong>` };
+  if (safeInviter) {
+    bodyParams.inviter = `<strong>${safeInviter}</strong>`;
+  }
+
+  const info = await transport.sendMail({
+    from: fromAddress(),
+    html: htmlWrap(
+      `
+      <h2 style="font-size:20px;font-weight:600;margin-bottom:8px">${emailT(locale, 'email.invite.heading', { appName: APP_NAME })}</h2>
+      <p style="color:#374151">${emailT(locale, bodyKey, bodyParams)}</p>
+      ${ctaButton(params.inviteUrl, emailT(locale, 'email.invite.cta'))}
+      <p style="color:#6b7280;font-size:13px">${emailT(locale, 'email.invite.expiry')}</p>
+    `,
+      locale,
+    ),
+    subject: emailT(locale, 'email.invite.subject', { organization: params.organizationName }),
+    text: emailT(locale, 'email.invite.textBody', {
+      organization: params.organizationName,
+      url: params.inviteUrl,
+    }),
+    to: params.to,
+  });
+
+  if (process.env.NODE_ENV !== 'production') {
+    log.info({ email: params.to, inviteUrl: params.inviteUrl }, 'Organization invite (dev)');
+    if ((info as { message?: string }).message) {
+      log.info('Organization invite (dev mode — not actually sent)');
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Notification emails
 // ---------------------------------------------------------------------------
 

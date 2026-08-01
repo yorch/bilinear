@@ -521,6 +521,15 @@
       "text": "{actor} commented on {identifier}: {title}\n{excerpt}\n{url}"
     },
     "footer": "You're receiving this because you have notifications enabled. To stop, turn off email notifications in your account settings.",
+    "invite": {
+      "body": "You've been invited to join {organization}.",
+      "bodyWithInviter": "{inviter} invited you to join {organization}.",
+      "cta": "Accept invitation",
+      "expiry": "This invitation expires in 7 days. If you weren't expecting it, you can safely ignore this email.",
+      "heading": "Join a workspace on {appName}",
+      "subject": "You've been invited to join {organization}",
+      "textBody": "You've been invited to join {organization}.\n\nAccept the invitation:\n{url}\n\nThis invitation expires in 7 days."
+    },
     "magicLink": {
       "clickHere": "click here to sign in",
       "codeIntro": "Your sign-in code is:",
@@ -585,6 +594,20 @@
       "loading": "Loading updates…",
       "title": "Updates ({count})"
     }
+  },
+  "invite": {
+    "accept": "Accept invitation",
+    "acceptFailed": "Could not accept this invitation",
+    "accepting": "Joining…",
+    "expiredBody": "This invitation has expired, been revoked, or was already used. Ask an admin of the workspace to send a new one.",
+    "expiredTitle": "Invitation no longer valid",
+    "invitedAs": "You'll join as {role}.",
+    "invitedBy": "{inviter} invited you to join {organization}.",
+    "invitedTo": "You've been invited to join {organization}.",
+    "signInCta": "Sign in",
+    "signInPrompt": "Sign in as {email} to accept this invitation.",
+    "title": "Workspace invitation",
+    "wrongAccount": "This invitation was sent to {email}, but you're signed in as {current}. Sign in with the invited address to accept it."
   },
   "issueDetail": {
     "activity": {
@@ -1519,11 +1542,23 @@
       "inactive": "Inactive",
       "integrations": "Integrations",
       "integrationsDescription": "Connect GitHub and other services",
+      "inviteEmailPlaceholder": "teammate@company.com",
+      "inviteExpires": "Expires {date}",
+      "inviteFailed": "Could not send the invitation",
+      "inviteMember": "Invite member",
+      "invitePending": "Pending invitations",
+      "inviteRevoke": "Revoke",
+      "inviteRevoked": "Invitation revoked",
+      "inviteRevokeFailed": "Could not revoke the invitation",
+      "inviteSend": "Send invitation",
+      "inviteSending": "Sending…",
+      "inviteSent": "Invitation sent to {email}",
       "languageDescription": "Choose your display language",
       "lastUsedOn": "Last used {date}",
       "memberRoleUpdated": "Member role updated",
       "memberRoleUpdateError": "Failed to update member role",
       "members": "Members",
+      "membersLoadError": "Could not load members",
       "myPreferences": "My Preferences",
       "name": "Name",
       "neverUsed": "Never used",
@@ -1542,6 +1577,11 @@
       "readOnly": "Read only",
       "readOnlyKey": "Read-only key",
       "readWrite": "Read/Write",
+      "removeMember": "Remove from workspace",
+      "removeMemberConfirm": "{name} will lose access to this workspace and every team in it. Their account and their other workspaces are unaffected.",
+      "removeMemberConfirmTitle": "Remove member?",
+      "removeMemberFailed": "Could not remove the member",
+      "removeMemberSuccess": "{name} was removed from the workspace",
       "revokeToken": "Revoke token",
       "revokeTokenConfirm": "Revoke token \"{label}\"?",
       "rotate": "Rotate",

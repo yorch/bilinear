@@ -315,8 +315,28 @@ export class AuthService {
       where: { id: token.id },
     });
 
+    // Carry the session's org across the rotation. Passing `undefined` here
+    // fell back to the user's oldest usable membership, so for a multi-org
+    // account every refresh (at least daily, whenever the 24h access token
+    // expired) yanked the session back to whichever workspace they joined
+    // first — undoing a switch without any user action.
+    //
+    // The stored org is re-validated rather than trusted: a rotation is a
+    // fresh authorization decision, and the membership may have been revoked
+    // or the org suspended since the session started. When it no longer
+    // holds, fall through to the default-org selection instead of minting a
+    // token for a workspace the user can't enter.
+    const storedOrgId = token.organizationId;
+    const orgStillValid =
+      storedOrgId !== null &&
+      (await this.userService.findUsableMembership(payload.userId, storedOrgId)) !== null;
+
     // Rotate within the same family so a future replay can be traced back.
-    return this.issueTokenPair(payload.userId, undefined, token.familyId);
+    return this.issueTokenPair(
+      payload.userId,
+      orgStillValid ? storedOrgId : undefined,
+      token.familyId,
+    );
   }
 
   async logout(userId: string, rawRefreshToken?: string): Promise<void> {
@@ -444,6 +464,12 @@ export class AuthService {
         expiresAt,
         familyId,
         id: tokenId,
+        // Remember which org this session is in. A refresh JWT identifies a
+        // *user*, so without this the org had to be re-derived on refresh —
+        // and re-derivation means "oldest usable membership", which silently
+        // dragged a switched session back to the wrong workspace roughly
+        // once a day. See `refreshTokens`.
+        organizationId: orgId || null,
         tokenHash: hashToken(refreshToken),
         type: 'refresh',
         userId,

@@ -1,8 +1,7 @@
-import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { AdminShell } from '@/components/admin/admin-shell';
-import { verifyAccessToken } from '@/server/lib/jwt';
 import { prisma } from '@/server/lib/prisma';
+import { readSessionClaim } from '@/server/lib/session-claim';
 
 export const metadata = { title: 'Platform Admin' };
 
@@ -14,20 +13,7 @@ export const metadata = { title: 'Platform Admin' };
  * app root. This runs before any admin page renders.
  */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('access_token')?.value;
-
-  if (!token) {
-    redirect('/login');
-  }
-
-  let payload: Awaited<ReturnType<typeof verifyAccessToken>> | null = null;
-  try {
-    payload = await verifyAccessToken(token);
-  } catch {
-    payload = null;
-  }
-
+  const payload = await readSessionClaim();
   if (!payload) {
     redirect('/login');
   }

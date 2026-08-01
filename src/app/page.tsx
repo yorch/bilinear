@@ -1,6 +1,5 @@
-import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { verifyAccessToken } from '@/server/lib/jwt';
+import { readSessionClaim } from '@/server/lib/session-claim';
 import { UserService } from '@/server/services/user.service';
 import { prisma } from '../server/lib/prisma';
 
@@ -18,18 +17,8 @@ import { prisma } from '../server/lib/prisma';
  * holds.
  */
 export default async function RootPage() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('access_token')?.value;
-
-  if (!token) {
-    redirect('/login');
-  }
-
-  let claim: { orgId: string; userId: string };
-  try {
-    claim = await verifyAccessToken(token);
-  } catch {
-    // Token invalid — redirect to login
+  const claim = await readSessionClaim();
+  if (!claim) {
     redirect('/login');
   }
 
@@ -37,10 +26,10 @@ export default async function RootPage() {
 
   // Both lookups filter out archived/suspended orgs, so whichever wins is a
   // workspace the session can enter.
-  const org = claim.orgId
-    ? ((await userService.findUsableMembership(claim.userId, claim.orgId))?.organization ??
-      (await userService.getOrganizationForUser(claim.userId)))
-    : await userService.getOrganizationForUser(claim.userId);
+  const org =
+    (claim.orgId
+      ? (await userService.findUsableMembership(claim.userId, claim.orgId))?.organization
+      : null) ?? (await userService.getOrganizationForUser(claim.userId));
 
   if (org) {
     redirect(`/${org.urlKey}`);

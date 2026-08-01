@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { safeRelativePath } from '@/lib/safe-path';
 import { env } from '@/server/lib/env';
 import {
   ACCESS_TOKEN_EXPIRY_SECONDS,
@@ -147,6 +148,11 @@ async function handlePost(req: NextRequest) {
       expiresAt,
       familyId,
       id: tokenId,
+      // Must match what AuthService.issueTokenPair stamps: refresh rows
+      // carry the org their session belongs to, and `refreshTokens` reads it
+      // back. Omitting it here would make an SSO session silently fall back
+      // to the user's default org on its first rotation.
+      organizationId: org.id,
       tokenHash,
       type: 'refresh',
       userId,
@@ -164,9 +170,11 @@ async function handlePost(req: NextRequest) {
     userId,
   });
 
-  // Sanitize redirect: must start with '/' but not '//' (protocol-relative URLs).
-  const safeRedirect =
-    redirectPath.startsWith('/') && !redirectPath.startsWith('//') ? redirectPath : `/${orgKey}`;
+  // Sanitize redirect through the shared guard. The inline check this
+  // replaced covered protocol-relative URLs but not backslashes or control
+  // characters, both of which some browsers normalize into a scheme or an
+  // authority — on an auth callback, of all places.
+  const safeRedirect = safeRelativePath(redirectPath) ?? `/${orgKey}`;
   const destination = `${appUrl}${safeRedirect}`;
 
   const res = NextResponse.redirect(destination, 302);
