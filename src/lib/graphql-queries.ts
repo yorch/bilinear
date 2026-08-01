@@ -218,6 +218,7 @@ const ISSUE_FIELDS = `
   teamId organizationId stateId assigneeId creatorId parentId
   projectId cycleId branchName
   startedAt completedAt canceledAt archivedAt createdAt updatedAt
+  snoozedById snoozedUntilAt triagedAt
   labels { id name color }
 `;
 

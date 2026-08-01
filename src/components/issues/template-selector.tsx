@@ -2,9 +2,10 @@
 
 import { FileText, Star, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 
 // ─── GraphQL ──────────────────────────────────────────────────────────────────
@@ -44,27 +45,43 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
   const t = useTranslations();
   const [templates, setTemplates] = useState<IssueTemplate[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  // Load templates once when dropdown opens (or on mount if teamId is available)
+  // Load templates once when dropdown opens (or on mount if teamId is available).
+  // `gqlQuery` throws on a GraphQL-level failure so it reaches the catch — the
+  // old `Array.isArray(result.data?.issueTemplates)` guard left `templates` at
+  // [], which unmounted the whole picker as if the team simply had none.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is a deliberate refetch trigger, not read inside the effect
   useEffect(() => {
     if (!teamId) {
       return;
     }
+    let cancelled = false;
     setLoading(true);
-    gql(GET_ISSUE_TEMPLATES, { teamId })
-      .then(result => {
-        const data = result.data?.issueTemplates;
-        if (Array.isArray(data)) {
-          setTemplates(data as IssueTemplate[]);
+    gqlQuery<IssueTemplate[]>(GET_ISSUE_TEMPLATES, { teamId }, 'issueTemplates')
+      .then(data => {
+        if (cancelled) {
+          return;
         }
+        setTemplates(data ?? []);
+        setLoadError(false);
       })
       .catch(() => {
-        toast.error(t('issueDetail.templates.failedToLoad'));
+        if (!cancelled) {
+          setLoadError(true);
+          toast.error(t('issueDetail.templates.failedToLoad'));
+        }
       })
       .finally(() => {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       });
-  }, [teamId, t]);
+    return () => {
+      cancelled = true;
+    };
+  }, [teamId, t, reloadKey]);
 
   // Sort: default first, then alphabetical
   const sorted = useMemo(
@@ -78,7 +95,9 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
     [templates],
   );
 
-  if (templates.length === 0 && !loading) {
+  // Keep the trigger mounted on a failed load so the panel can offer a retry
+  // instead of the section disappearing as if there were no templates.
+  if (templates.length === 0 && !loading && !loadError) {
     return null;
   }
 
@@ -116,6 +135,12 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
             <p className="px-3 py-4 text-center text-xs text-muted-foreground">
               {t('issueDetail.templates.loading')}
             </p>
+          ) : loadError ? (
+            <InlineRetry
+              className="px-3"
+              message={t('issueDetail.templates.failedToLoad')}
+              onRetry={() => setReloadKey(k => k + 1)}
+            />
           ) : sorted.length === 0 ? (
             <p className="px-3 py-4 text-center text-xs text-muted-foreground italic">
               {t('issueDetail.templates.noneForTeam')}

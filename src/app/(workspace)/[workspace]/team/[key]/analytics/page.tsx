@@ -2,12 +2,13 @@
 
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CycleVelocitySection } from '@/components/analytics/cycle-velocity-section';
 import { InsightsSection } from '@/components/analytics/insights-section';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gqlQuery } from '@/lib/graphql';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -410,27 +411,39 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
   // ── Team health (fetched from GraphQL, not MobX store) ────────────────────
 
   const [teamHealth, setTeamHealth] = useState<TeamHealthResult | null>(null);
+  const [teamHealthError, setTeamHealthError] = useState(false);
+  const [teamHealthReloadKey, setTeamHealthReloadKey] = useState(0);
 
+  // `gqlQuery` throws on a GraphQL-level failure — the previous `.catch(() => {})`
+  // left `teamHealth` null, which unmounted the whole Team Health panel with no
+  // indication anything had failed.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: teamHealthReloadKey is the retry trigger, not read inside the effect
   useEffect(() => {
     if (!teamId) {
       return;
     }
     let cancelled = false;
-    void gql(TEAM_HEALTH_QUERY, { input: { teamId } })
-      .then(res => {
+    setTeamHealthError(false);
+    gqlQuery<TeamHealthResult>(TEAM_HEALTH_QUERY, { input: { teamId } }, 'analyticsTeamHealth')
+      .then(result => {
         if (cancelled) {
           return;
         }
-        if (res.data) {
-          const d = res.data as unknown as { analyticsTeamHealth: TeamHealthResult };
-          setTeamHealth(d.analyticsTeamHealth);
-        }
+        setTeamHealth(result);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+        setTeamHealth(null);
+        setTeamHealthError(true);
+      });
     return () => {
       cancelled = true;
     };
-  }, [teamId]);
+  }, [teamId, teamHealthReloadKey]);
+
+  const retryTeamHealth = useCallback(() => setTeamHealthReloadKey(k => k + 1), []);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -617,6 +630,17 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
         )}
 
         {/* Team Health */}
+        {teamHealthError && (
+          <div className="mt-5">
+            <h2 className="mb-3 text-sm font-semibold text-foreground">
+              {t('analytics.team.teamHealth')}
+            </h2>
+            <InlineRetry
+              message={t('analytics.workspace.failedToLoad')}
+              onRetry={retryTeamHealth}
+            />
+          </div>
+        )}
         {teamHealth && (
           <div className="mt-5">
             <h2 className="mb-3 text-sm font-semibold text-foreground">

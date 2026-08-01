@@ -220,11 +220,29 @@ export class SyncService {
       initiativeProjects,
       lastSyncAction,
     ] = await Promise.all([
-      this.prisma.organization.findUnique({ where: { id: orgId } }),
+      this.prisma.organization.findUnique({
+        // Both are settings blobs for the admin console (SSO config, security
+        // policy) — they reach every member's IndexedDB from here otherwise.
+        omit: { authSettings: true, securitySettings: true },
+        where: { id: orgId },
+      }),
       this.prisma.team.findMany({
         where: { archivedAt: null, organizationId: orgId },
       }),
       this.prisma.user.findMany({
+        // This payload goes to every member of the org and is persisted in
+        // plaintext in IndexedDB. `DBUser` declares none of these, so they were
+        // invisible in TypeScript while still being shipped. `calendarFeedToken`
+        // is the bearer secret in the per-user iCal feed URL.
+        //
+        // Keep this list in step with any new sensitive column on `User`.
+        omit: {
+          calendarFeedToken: true,
+          githubId: true,
+          googleId: true,
+          isPlatformAdmin: true,
+          passwordHash: true,
+        },
         where: { orgMemberships: { some: { organizationId: orgId } } },
       }),
       this.prisma.issue.findMany({
@@ -276,6 +294,10 @@ export class SyncService {
         orderBy: { createdAt: 'desc' },
         take: 500,
         where: {
+          // Filter the update itself, not just its project. Deleting an update
+          // is a soft delete that broadcasts a 'D' action, so live clients drop
+          // it — but any client bootstrapping afterwards downloaded it again.
+          archivedAt: null,
           project: { archivedAt: null, organizationId: orgId, trashed: false },
         },
       }),

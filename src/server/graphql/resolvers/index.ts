@@ -63,6 +63,16 @@ const DateScalar = {
 };
 
 export const resolvers = {
+  // `ApiToken`/`ScimToken` are projections over `auth_tokens`, whose `label`
+  // column is nullable because the table is shared with magic-link and refresh
+  // tokens that legitimately have none — so it can't be tightened at the DB
+  // level. Both SDL fields are `String!`, and a null there nulls the whole
+  // `apiTokens`/`scimTokens` list (both are `[T!]!`) rather than one field.
+  // Every creation path requires a non-blank label; this only catches a legacy
+  // or hand-inserted row.
+  ApiToken: {
+    label: (token: { label: string | null }) => token.label ?? '',
+  },
   AuditLogEntry: {
     ...auditLogResolvers.AuditLogEntry,
   },
@@ -220,6 +230,10 @@ export const resolvers = {
     ...scimResolvers.Query,
     ...triageResolvers.Query,
     ...webhookResolvers.Query,
+  },
+
+  ScimToken: {
+    label: (token: { label: string | null }) => token.label ?? '',
   },
 
   Team: {

@@ -4,8 +4,9 @@ import { Copy, ExternalLink } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gql, gqlMutate, gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
+import { cn, getErrorMessage, gqlError } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
 // GraphQL
@@ -138,11 +139,16 @@ export default function SecuritySettingsPage() {
   const [config, setConfig] = useState<SamlConfig | null>(null);
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
   const [loading, setLoading] = useState(true);
+  const [samlLoadError, setSamlLoadError] = useState<{
+    forbidden: boolean;
+    message: string;
+  } | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   // SCIM state
   const [scimTokens, setScimTokens] = useState<ScimTokenRow[]>([]);
+  const [scimLoadError, setScimLoadError] = useState<string | null>(null);
   const [scimLoading, setScimLoading] = useState(true);
   const [scimCreating, setScimCreating] = useState(false);
   const [scimNewLabel, setScimNewLabel] = useState('');
@@ -156,8 +162,22 @@ export default function SecuritySettingsPage() {
   const metadataUrl = `${appUrl}/api/auth/saml/metadata?org=${orgKey}`;
 
   useEffect(() => {
+    // `samlConfiguration` is a *nullable* root field, so a FORBIDDEN from
+    // `requireSamlAdmin` comes back as `data: { samlConfiguration: null }`
+    // *alongside* `errors` — a genuine partial response. A null field on its
+    // own therefore can't be read as "SSO is not configured": doing so would
+    // show an empty form to someone who may then overwrite a live IdP config.
+    // Only a clean, error-free response means "not configured".
     gql(SAML_QUERY)
       .then(res => {
+        if (res.errors?.length) {
+          const code = (res.errors[0] as { extensions?: { code?: string } })?.extensions?.code;
+          setSamlLoadError({
+            forbidden: code === 'FORBIDDEN' || code === 'UNAUTHENTICATED',
+            message: gqlError(res, t('common.somethingWentWrong')),
+          });
+          return;
+        }
         const data = (res.data ?? {}) as { samlConfiguration?: SamlConfig | null };
         const cfg = data.samlConfiguration ?? null;
         setConfig(cfg);
@@ -175,25 +195,30 @@ export default function SecuritySettingsPage() {
           });
         }
       })
-      .catch(() => {
-        // Non-admin users get a FORBIDDEN — degrade gracefully
+      .catch(err => {
+        setSamlLoadError({
+          forbidden: false,
+          message: getErrorMessage(err, t('common.somethingWentWrong')),
+        });
       })
       .finally(() => {
         setLoading(false);
       });
 
-    gql(SCIM_TOKENS_QUERY)
-      .then(res => {
-        const data = (res.data ?? {}) as { scimTokens?: ScimTokenRow[] };
-        setScimTokens(data.scimTokens ?? []);
+    gqlQuery<ScimTokenRow[] | null>(SCIM_TOKENS_QUERY, {}, 'scimTokens')
+      .then(tokens => {
+        setScimTokens(tokens ?? []);
       })
-      .catch(() => {
-        // Non-admin — degrade gracefully
+      .catch(err => {
+        // A failed read must never render as "No active tokens." — an admin
+        // auditing outstanding credentials would conclude there are none.
+        setScimTokens([]);
+        setScimLoadError(getErrorMessage(err, t('common.somethingWentWrong')));
       })
       .finally(() => {
         setScimLoading(false);
       });
-  }, []);
+  }, [t]);
 
   async function handleScimCreate() {
     if (!scimNewLabel.trim()) {
@@ -202,17 +227,19 @@ export default function SecuritySettingsPage() {
     }
     setScimCreating(true);
     try {
-      const res = await gql(SCIM_TOKEN_CREATE_MUTATION, { label: scimNewLabel.trim() });
-      const data = (res.data ?? {}) as {
-        scimTokenCreate?: { plaintext?: string; success: boolean; token?: ScimTokenRow };
-      };
-      const created = data.scimTokenCreate;
-      if (created?.token) {
-        setScimTokens(prev => [created.token as ScimTokenRow, ...prev]);
-        setScimNewPlaintext(created.plaintext ?? null);
-        setScimNewLabel('');
-        toast.success(t('settings.security.scimTokenCreated'));
+      const created = await gqlQuery<{
+        plaintext?: string;
+        success: boolean;
+        token?: ScimTokenRow;
+      } | null>(SCIM_TOKEN_CREATE_MUTATION, { label: scimNewLabel.trim() }, 'scimTokenCreate');
+      if (!created?.token) {
+        toast.error(t('settings.security.scimTokenCreateError'));
+        return;
       }
+      setScimTokens(prev => [created.token as ScimTokenRow, ...prev]);
+      setScimNewPlaintext(created.plaintext ?? null);
+      setScimNewLabel('');
+      toast.success(t('settings.security.scimTokenCreated'));
     } catch {
       toast.error(t('settings.security.scimTokenCreateError'));
     } finally {
@@ -225,7 +252,7 @@ export default function SecuritySettingsPage() {
       return;
     }
     try {
-      await gql(SCIM_TOKEN_REVOKE_MUTATION, { id: tokenId });
+      await gqlMutate(SCIM_TOKEN_REVOKE_MUTATION, { id: tokenId });
       setScimTokens(prev => prev.filter(tok => tok.id !== tokenId));
       toast.success(t('settings.security.tokenRevoked'));
     } catch {
@@ -253,27 +280,30 @@ export default function SecuritySettingsPage() {
     }
     setSaving(true);
     try {
-      const res = await gql(SAML_SAVE_MUTATION, {
-        input: {
-          emailAttribute: form.emailAttribute || 'email',
-          enabled: form.enabled,
-          idpCert: form.idpCert.trim() || undefined,
-          idpEntityId: form.idpEntityId.trim(),
-          idpMetadataUrl: form.idpMetadataUrl.trim() || undefined,
-          idpSsoUrl: form.idpSsoUrl.trim(),
-          jitProvisioning: form.jitProvisioning,
-          nameAttribute: form.nameAttribute || 'name',
-          ssoEnforced: form.ssoEnforced,
+      const saved = await gqlQuery<{ configuration?: SamlConfig; success: boolean } | null>(
+        SAML_SAVE_MUTATION,
+        {
+          input: {
+            emailAttribute: form.emailAttribute || 'email',
+            enabled: form.enabled,
+            idpCert: form.idpCert.trim() || undefined,
+            idpEntityId: form.idpEntityId.trim(),
+            idpMetadataUrl: form.idpMetadataUrl.trim() || undefined,
+            idpSsoUrl: form.idpSsoUrl.trim(),
+            jitProvisioning: form.jitProvisioning,
+            nameAttribute: form.nameAttribute || 'name',
+            ssoEnforced: form.ssoEnforced,
+          },
         },
-      });
-      const data = (res.data ?? {}) as {
-        samlConfigurationSave?: { configuration?: SamlConfig; success: boolean };
-      };
-      if (data.samlConfigurationSave?.configuration) {
-        setConfig(data.samlConfigurationSave.configuration);
-        setField('idpCert', '');
-        toast.success(t('settings.security.samlConfigSaved'));
+        'samlConfigurationSave',
+      );
+      if (!saved?.configuration) {
+        toast.error(t('settings.security.samlConfigSaveError'));
+        return;
       }
+      setConfig(saved.configuration);
+      setField('idpCert', '');
+      toast.success(t('settings.security.samlConfigSaved'));
     } catch {
       toast.error(t('settings.security.samlConfigSaveError'));
     } finally {
@@ -287,7 +317,7 @@ export default function SecuritySettingsPage() {
     }
     setDeleting(true);
     try {
-      await gql(SAML_DELETE_MUTATION);
+      await gqlMutate(SAML_DELETE_MUTATION);
       setConfig(null);
       setForm(DEFAULT_FORM);
       toast.success(t('settings.security.samlConfigRemoved'));
@@ -339,6 +369,8 @@ export default function SecuritySettingsPage() {
 
           {scimLoading ? (
             <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+          ) : scimLoadError ? (
+            <p className="text-sm text-destructive">{scimLoadError}</p>
           ) : (
             <>
               {scimTokens.length === 0 ? (
@@ -447,6 +479,18 @@ export default function SecuritySettingsPage() {
 
         {loading ? (
           <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+        ) : samlLoadError ? (
+          // A permission error means "you can't see this"; anything else is a
+          // real failure. Either way the form stays hidden, so a configuration
+          // that could not be read can never be silently overwritten.
+          <p
+            className={cn(
+              'text-sm',
+              samlLoadError.forbidden ? 'text-muted-foreground' : 'text-destructive',
+            )}
+          >
+            {samlLoadError.message}
+          </p>
         ) : (
           <>
             {/* SP (Service Provider) read-only info */}

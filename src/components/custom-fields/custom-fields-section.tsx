@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SimpleSelect } from '@/components/ui/select';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gqlMutate } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -83,7 +83,10 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
     options: Option[];
   }) => {
     try {
-      await gql(CREATE_MUTATION, {
+      // Must throw on rejection: `setIsAdding(false)` unmounts the form and
+      // discards everything the user typed, so a BAD_USER_INPUT cap breach or a
+      // FORBIDDEN owner/admin guard used to toast "Field added" and wipe it.
+      await gqlMutate(CREATE_MUTATION, {
         input: {
           description: input.description || null,
           name: input.name,
@@ -103,7 +106,7 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
   const handleArchive = async (id: string) => {
     setConfirmingArchive(null);
     try {
-      await gql(ARCHIVE_MUTATION, { id });
+      await gqlMutate(ARCHIVE_MUTATION, { id });
       toast.success(t('customFields.archiveSuccess'));
     } catch (err) {
       toast.error(getErrorMessage(err, t('customFields.archiveFailed')));

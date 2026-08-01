@@ -55,7 +55,14 @@ type CommentWithRelations = Comment & {
 
 export const commentResolvers = {
   Comment: {
-    author: (comment: CommentWithRelations) => comment.author,
+    // `author` is `User!`, so a row whose relation was not hydrated would null
+    // the comment and cascade up through the non-null `replies`/`comments`
+    // lists to `data: null`. Nesting is now capped at one level so every row
+    // `COMMENT_INCLUDE` returns carries an author, but fall back to a batched
+    // lookup rather than trusting that — rows created before the cap existed
+    // can still be deeper.
+    author: (comment: CommentWithRelations, _args: unknown, ctx: GraphQLContext) =>
+      comment.author ?? ctx.loaders.user.load(comment.authorId),
     parent: async (comment: Comment, _args: unknown, ctx: GraphQLContext) => {
       if (!comment.parentId) {
         return null;

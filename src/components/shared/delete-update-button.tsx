@@ -3,7 +3,7 @@
 import { Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gqlMutate } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 
 interface DeleteUpdateButtonProps {
@@ -20,7 +20,10 @@ export function DeleteUpdateButton({ updateId, mutation, onDeleted }: DeleteUpda
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      await gql(mutation, { id: updateId });
+      // `gqlMutate` throws on a GraphQL-level failure (author-only delete
+      // answers FORBIDDEN over HTTP 200) so the catch below actually runs
+      // instead of optimistically dropping the row from the list.
+      await gqlMutate(mutation, { id: updateId });
       onDeleted?.();
     } catch {
       toast.error(t('properties.updateForm.failedToDeleteUpdate'));

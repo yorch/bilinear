@@ -7,6 +7,7 @@ import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBInitiative } from '@/lib/db';
 import { gql } from '@/lib/graphql';
+import { computeProjectProgress } from '@/lib/project-constants';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -75,7 +76,7 @@ function useStatusLabels() {
 function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: DBInitiative }) {
   const t = useTranslations();
   const STATUS_LABELS = useStatusLabels();
-  const { initiativeStore, projectStore, userStore } = useStore();
+  const { initiativeStore, issueStore, projectStore, userStore } = useStore();
   const viewerId = userStore.currentUser?.id ?? '';
   const [expanded, setExpanded] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -189,7 +190,9 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
                     style={{ backgroundColor: p.color }}
                   />
                   <span className="flex-1">{p.name}</span>
-                  <span className="text-muted-foreground">{Math.round(p.progress * 100)}%</span>
+                  <span className="text-muted-foreground">
+                    {Math.round(computeProjectProgress(issueStore.findByProjectId(p.id)) * 100)}%
+                  </span>
                   <button
                     className="text-muted-foreground hover:text-red-500 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                     onClick={async () => {

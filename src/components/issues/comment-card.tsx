@@ -6,11 +6,11 @@ import { Badge } from '@/components/ui/badge';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gqlMutate } from '@/lib/graphql';
 import { COMMENT_UPDATE_MUTATION, CONVERT_TO_SUB_ISSUE_MUTATION } from '@/lib/graphql-queries';
 import { QUICK_EMOJIS } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import type { MentionItem } from '../editor/mention-list';
 import { TipTapEditor } from '../editor/tiptap-editor.lazy';
 import { UserAvatar } from '../ui/user-avatar';
@@ -76,7 +76,11 @@ export function CommentCard({
   onToggleReaction: (commentId: string, emoji: string, hasReacted: boolean) => void;
   onReply: (id: string) => void;
   showReplyTo: string | null;
-  onSubmitReply: (body: string, parentId?: string) => void | Promise<void>;
+  /** Resolves `false` when the reply was rejected — the composer then keeps the body. */
+  onSubmitReply: (
+    body: string,
+    parentId?: string,
+  ) => boolean | undefined | Promise<boolean | undefined>;
   onUpdate: (comment: CommentItem) => void;
   onConvertToSubIssue: (id: string) => void;
 }) {
@@ -111,18 +115,19 @@ export function CommentCard({
       return;
     }
     try {
-      const res = await gql(COMMENT_UPDATE_MUTATION, {
+      // gqlMutate throws on a rejected edit, so the editor stays open with the
+      // user's text intact instead of closing and snapping back to the old body.
+      const data = await gqlMutate(COMMENT_UPDATE_MUTATION, {
         id: comment.id,
         input: { body: editBody },
       });
-      const updated = (res.data as { commentUpdate?: { comment: CommentItem } } | undefined)
-        ?.commentUpdate?.comment;
+      const updated = (data as { commentUpdate?: { comment: CommentItem } }).commentUpdate?.comment;
       if (updated) {
         onUpdate(updated);
       }
       setEditing(false);
-    } catch {
-      toast.error(t('issueDetail.comments.failedToUpdate'));
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('issueDetail.comments.failedToUpdate')));
     }
   };
 
@@ -143,7 +148,9 @@ export function CommentCard({
     const text = new DOMParser().parseFromString(comment.body, 'text/html').body.textContent ?? '';
     const title = text.trim().slice(0, 255) || t('issueDetail.comments.subIssueFromComment');
     try {
-      await gql(CONVERT_TO_SUB_ISSUE_MUTATION, {
+      // Must throw on rejection: `onConvertToSubIssue` removes the comment from
+      // the thread, so an unchecked failure made it vanish with no sub-issue.
+      await gqlMutate(CONVERT_TO_SUB_ISSUE_MUTATION, {
         input: {
           description: comment.body,
           parentId: issueId,
@@ -153,8 +160,8 @@ export function CommentCard({
       });
       toast.success(t('issueDetail.comments.convertedToSubIssue'));
       onConvertToSubIssue(comment.id);
-    } catch {
-      toast.error(t('issueDetail.comments.failedToConvert'));
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('issueDetail.comments.failedToConvert')));
     }
   };
 
@@ -370,8 +377,11 @@ export function CommentCard({
         )}
       </div>
 
-      {/* Nested replies */}
-      {comment.replies.length > 0 && (
+      {/* Nested replies. Threads are one level deep (enforced server-side), and
+          `COMMENTS_FRAGMENT` only selects `{ id }` at the third level — so a
+          depth-1 card must not recurse, or it would mount a card for a stub
+          with no `author`/`reactions` and crash on `comment.author.id`. */}
+      {depth === 0 && comment.replies.length > 0 && (
         <div className="ml-4 mt-1 space-y-1 border-l-2 border-border pl-4">
           {comment.replies.map(reply => (
             <CommentCard
@@ -408,10 +418,12 @@ export function CommentCard({
             onSubmit={async body => {
               setReplySubmitting(true);
               try {
-                await onSubmitReply(body, comment.id);
+                const ok = await onSubmitReply(body, comment.id);
+                if (ok !== false) {
+                  setReplyBody('');
+                }
               } finally {
                 setReplySubmitting(false);
-                setReplyBody('');
               }
             }}
             placeholder={t('issueDetail.comments.replyPlaceholder')}

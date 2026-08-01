@@ -218,11 +218,20 @@ export const cycleResolvers = {
       try {
         const result = await ctx.services.cycle.rollover(ctx.orgId, cycleId);
 
-        // Broadcast cycle completion
-        let lastSync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Cycle', cycleId, {
-          completedAt: new Date().toISOString(),
-          id: cycleId,
-        });
+        // Broadcast cycle completion. Re-fetch the full row: the client's
+        // apply is a whole-object replace, so a two-field payload would strip
+        // teamId/number/name/startsAt/endsAt from the cached cycle (dropping it
+        // out of `findByTeamId` and scrambling the date sort) — and it would be
+        // persisted to Dexie in that state. The WS server's auto-rollover path
+        // does the same thing for the same reason.
+        const completed = await ctx.services.cycle.findById(cycleId);
+        let lastSync = await ctx.services.sync.createSyncAction(
+          ctx.orgId,
+          'U',
+          'Cycle',
+          cycleId,
+          completed ?? { completedAt: new Date().toISOString(), id: cycleId },
+        );
         void ctx.services.webhook
           .dispatchEvent(
             ctx.orgId,

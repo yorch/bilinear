@@ -165,11 +165,20 @@ export class CommentService {
 
     if (input.parentId) {
       const parent = await this.prisma.comment.findUnique({
-        select: { archivedAt: true, issueId: true },
+        select: { archivedAt: true, issueId: true, parentId: true },
         where: { id: input.parentId },
       });
       if (!parent || parent.archivedAt || parent.issueId !== input.issueId) {
         throw new CommentNotFoundError();
+      }
+      // Threads are exactly one level deep. `COMMENT_INCLUDE` hydrates two
+      // levels of relations, so a grandchild would come back with no `author`
+      // — and `Comment.author` is `User!`, which nulls the reply, then its
+      // parent, then the whole non-null `comments` list, then `data`. The UI
+      // enforces the same rule (quote-reply is gated on the top level), so
+      // deeper nesting has no client that can render it either.
+      if (parent.parentId) {
+        throw new CommentValidationError('Replies cannot be nested more than one level deep');
       }
     }
 

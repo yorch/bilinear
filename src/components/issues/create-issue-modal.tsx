@@ -4,10 +4,10 @@ import { Users } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gql, gqlQuery } from '@/lib/graphql';
 import { ISSUE_TEMPLATES_QUERY } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 import { TipTapEditor } from '../editor/tiptap-editor.lazy';
 import { AssigneeSelect } from '../properties/assignee-select';
@@ -177,8 +177,8 @@ export function CreateIssueModal({
 
       // Probe AI availability once per open so the "Suggest" affordance only
       // shows when the workspace has AI enabled and a key is configured.
-      gql('query AiAvailable { aiAvailable }')
-        .then(res => setAiAvailable(Boolean((res.data as { aiAvailable?: boolean })?.aiAvailable)))
+      gqlQuery<boolean | null>('query AiAvailable { aiAvailable }', {}, 'aiAvailable')
+        .then(available => setAiAvailable(Boolean(available)))
         .catch(() => setAiAvailable(false));
 
       if (teamId) {
@@ -200,7 +200,12 @@ export function CreateIssueModal({
             }
           })
           .catch(() => {
-            // Silently fail — template auto-apply is best-effort
+            // Silently fail — template auto-apply is best-effort. Deliberately
+            // still plain `gql()`: a GraphQL-level rejection resolves rather
+            // than throws, and the `templates?.find(...)` guard below then just
+            // skips the auto-apply, which is the intended outcome. The user-
+            // facing template *picker* (TemplateSelector) surfaces its own load
+            // failure instead.
           });
       }
       return;
@@ -238,17 +243,19 @@ export function CreateIssueModal({
     }
     setSuggestingTitle(true);
     try {
-      const res = await gql(
+      // gqlQuery throws on a GraphQL-level rejection (rate limit, AI disabled,
+      // provider error); plain gql() resolved with `errors` set and left the
+      // button silently doing nothing.
+      const suggestion = await gqlQuery<{ title?: string } | null>(
         'mutation AiSuggestIssueTitle($description: String!) { aiSuggestIssueTitle(description: $description) { title } }',
         { description: text },
+        'aiSuggestIssueTitle',
       );
-      const title = (res.data as { aiSuggestIssueTitle?: { title?: string } })?.aiSuggestIssueTitle
-        ?.title;
-      if (title) {
-        patchForm({ title });
+      if (suggestion?.title) {
+        patchForm({ title: suggestion.title });
       }
-    } catch {
-      toast.error(t('issueDetail.createModal.couldNotSuggestTitle'));
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('issueDetail.createModal.couldNotSuggestTitle')));
     } finally {
       setSuggestingTitle(false);
     }

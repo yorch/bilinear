@@ -108,6 +108,26 @@ describe('CommentService', () => {
       expect(result.parentId).toBe(TEST_COMMENT.id);
     });
 
+    it('rejects a reply nested more than one level deep', async () => {
+      // COMMENT_INCLUDE hydrates two levels of relations, so a grandchild comes
+      // back with no `author` — and `Comment.author` is `User!`, which nulls the
+      // whole `comments` response rather than just that field.
+      prisma.comment.findUnique.mockResolvedValue({
+        archivedAt: null,
+        issueId: TEST_ISSUE.id,
+        parentId: 'some-top-level-comment',
+      });
+
+      await expect(
+        service.create(TEST_USER.id, {
+          body: 'A reply to a reply',
+          issueId: TEST_ISSUE.id,
+          parentId: TEST_COMMENT.id,
+        }),
+      ).rejects.toThrow(CommentValidationError);
+      expect(prisma.comment.create).not.toHaveBeenCalled();
+    });
+
     it('rejects a reply to a missing parent', async () => {
       prisma.comment.findUnique.mockResolvedValue(null);
 

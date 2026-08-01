@@ -687,6 +687,7 @@ export class SyncManager {
     };
     const dexieDeletes: {
       table:
+        | 'organizations'
         | 'teams'
         | 'users'
         | 'workflowStates'
@@ -719,6 +720,17 @@ export class SyncManager {
       const { action: act, modelName, modelId, data } = action;
 
       switch (modelName) {
+        // There is no organization store — the org row is only read back out of
+        // Dexie at bootstrap (for the workspace name). Persist it so an admin's
+        // settings change survives to the next load; without this case the
+        // action was emitted by the server and silently dropped here.
+        case 'Organization':
+          if (act === 'D') {
+            dexieDeletes.push({ id: modelId, table: 'organizations' });
+          } else if (data) {
+            dexieUpserts.organizations.push(data);
+          }
+          break;
         case 'Team':
           teamStore.applySyncAction(
             act,
@@ -767,32 +779,55 @@ export class SyncManager {
             dexieUpserts.issueLabels.push(data);
           }
           break;
-        case 'Issue':
-          issueStore.applySyncAction(
-            act,
-            modelId,
-            data as Parameters<typeof issueStore.applySyncAction>[2],
-          );
-          if (act === 'D') {
-            dexieDeletes.push({ id: modelId, table: 'issues' });
-          } else if (data) {
-            dexieUpserts.issues.push(data);
+        case 'Issue': {
+          // Two different payload shapes ride the 'Issue' stream:
+          //
+          //   1. A full issue row (every column, always including `identifier`).
+          //   2. `{ customFieldValues: [...] }` and nothing else — emitted by
+          //      `issueCustomFieldValuesSet`, with no `id` and no issue columns.
+          //
+          // Shape 2 must NOT reach the issue store or `db.issues`. The store's
+          // apply is a whole-object replace, so it would erase every column of
+          // the issue; and `db.issues` has an inbound `id` keyPath, so a row
+          // with no `id` fails the put and aborts the entire Dexie transaction
+          // — which is also where the lastSyncId cursor is persisted, so the
+          // poisoned action would replay and re-abort on every reload.
+          //
+          // Discriminate on the payload carrying anything *beyond* the value
+          // set, rather than on a specific column, so a future partial issue
+          // payload still applies.
+          const payload = data as Record<string, unknown> | null;
+          const isIssueRow =
+            act === 'D' ||
+            (payload !== null && Object.keys(payload).some(k => k !== 'customFieldValues'));
+          if (isIssueRow) {
+            issueStore.applySyncAction(
+              act,
+              modelId,
+              data as Parameters<typeof issueStore.applySyncAction>[2],
+            );
+            if (act === 'D') {
+              dexieDeletes.push({ id: modelId, table: 'issues' });
+            } else if (payload?.id) {
+              // Second line of defence: `db.issues` has an inbound `id`
+              // keyPath, and a put with no `id` throws inside the shared
+              // transaction, rolling back every other entity in the batch.
+              dexieUpserts.issues.push(data as object);
+            }
           }
-          // Custom field values ride the 'Issue' stream with shape
-          // { customFieldValues: [...] }. When present, replace the issue's
-          // entire value set on both the MobX store and Dexie.
-          if (data && typeof data === 'object' && 'customFieldValues' in data) {
+          if (payload !== null && 'customFieldValues' in payload) {
             customFieldStore.applyValueSyncAction(
               act,
               modelId,
               data as Parameters<typeof customFieldStore.applyValueSyncAction>[2],
             );
-            const values = (data as { customFieldValues?: object[] }).customFieldValues;
+            const values = payload.customFieldValues as object[] | undefined;
             if (values) {
               customFieldValueReplaces.set(modelId, values);
             }
           }
           break;
+        }
         case 'CustomFieldDefinition':
           customFieldStore.applyDefinitionSyncAction(
             act,
@@ -865,7 +900,15 @@ export class SyncManager {
             dexieUpserts.customViews.push(data);
           }
           break;
-        case 'Notification':
+        case 'Notification': {
+          // SyncActions broadcast org-wide, but a notification belongs to one
+          // recipient. `NotificationStore` documents its pool as "already
+          // scoped to the current user" — and `markAllRead()` relies on that —
+          // so another user's mark-read broadcast must not land in it.
+          const recipientId = (data as { userId?: string } | null)?.userId;
+          if (act !== 'D' && recipientId && recipientId !== userStore.currentUserId) {
+            break;
+          }
           notificationStore.applySyncAction(
             act,
             modelId,
@@ -877,6 +920,7 @@ export class SyncManager {
             dexieUpserts.notifications.push(data);
           }
           break;
+        }
         case 'IssueRelation':
           issueRelationStore.applySyncAction(
             act,
@@ -996,12 +1040,17 @@ export class SyncManager {
         db.customFieldValues,
         db.issueActivities,
         db.favorites,
+        db.organizations,
         db.syncMetadata,
       ],
       async () => {
         await Promise.all([
           dexieUpserts.teams.length > 0 &&
             db.teams.bulkPut(dexieUpserts.teams as Parameters<typeof db.teams.bulkPut>[0]),
+          dexieUpserts.organizations.length > 0 &&
+            db.organizations.bulkPut(
+              dexieUpserts.organizations as Parameters<typeof db.organizations.bulkPut>[0],
+            ),
           dexieUpserts.users.length > 0 &&
             db.users.bulkPut(dexieUpserts.users as Parameters<typeof db.users.bulkPut>[0]),
           dexieUpserts.workflowStates.length > 0 &&

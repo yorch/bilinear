@@ -2,12 +2,13 @@
 
 import { Bell, Check, CheckCheck, Clock, MessageSquare, RefreshCw, User } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBNotification } from '@/lib/db';
-import { gql } from '@/lib/graphql';
+import { gql, gqlQuery } from '@/lib/graphql';
 import {
   GET_NOTIFICATIONS_QUERY,
   NOTIFICATION_MARK_ALL_READ_MUTATION,
@@ -198,28 +199,40 @@ export const NotificationInbox = observer(function NotificationInbox() {
   const t = useTranslations();
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
   const [snoozingId, setSnoozingId] = useState<string | null>(null);
 
-  // Initial fetch — populate the store; subsequent updates arrive via WebSocket
+  // Fetch on mount and whenever the inbox reopens. Note that new notifications
+  // do NOT arrive over WebSocket: `NotificationService` emits no 'I' SyncAction,
+  // and it deliberately shouldn't while SyncActions broadcast org-wide — a
+  // notification belongs to one recipient. Live delivery needs a per-user
+  // channel; until then this fetch is the only path.
+  //
+  // `gqlQuery` throws on a GraphQL-level failure; `gql` resolved with `data`
+  // undefined, so a rejected read fell through to `?? []` and rendered the
+  // "You're all caught up" empty state while assigned issues and @mentions
+  // were silently invisible.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is the retry trigger, not read inside the effect
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setLoadError(false);
 
-    gql(GET_NOTIFICATIONS_QUERY, { limit: 50 })
-      .then(res => {
+    gqlQuery<DBNotification[] | null>(GET_NOTIFICATIONS_QUERY, { limit: 50 }, 'notifications')
+      .then(data => {
         if (cancelled) {
           return;
         }
-        const data =
-          (res.data as { notifications?: DBNotification[] } | undefined)?.notifications ?? [];
-        notificationStore.upsertMany(data);
+        notificationStore.upsertMany(data ?? []);
         setLoading(false);
       })
       .catch(() => {
         if (!cancelled) {
           toast.error(t('notifications.toasts.loadFailed'));
+          setLoadError(true);
           setLoading(false);
         }
       });
@@ -227,7 +240,9 @@ export const NotificationInbox = observer(function NotificationInbox() {
     return () => {
       cancelled = true;
     };
-  }, [notificationStore, t]);
+  }, [notificationStore, t, reloadKey]);
+
+  const retryLoad = useCallback(() => setReloadKey(k => k + 1), []);
 
   // Reactive — re-renders when the store is updated (e.g. via WS sync actions)
   const notifications = notificationStore.all;
@@ -338,8 +353,13 @@ export const NotificationInbox = observer(function NotificationInbox() {
         </div>
       )}
 
+      {/* Load failure — never render the empty state for a rejected read */}
+      {!loading && loadError && (
+        <InlineRetry message={t('notifications.toasts.loadFailed')} onRetry={retryLoad} />
+      )}
+
       {/* Empty state */}
-      {!loading && notifications.length === 0 && (
+      {!loading && !loadError && notifications.length === 0 && (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
             <Bell className="h-6 w-6 text-muted-foreground" />

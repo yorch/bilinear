@@ -3,9 +3,9 @@
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 const PREVIEW_QUERY = `
@@ -93,17 +93,21 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
       return;
     }
     try {
-      const res = await gql(PREVIEW_QUERY, { csv: text });
-      const data = (res.data as { csvImportPreview?: { headers: string[]; rowCount: number } })
-        ?.csvImportPreview;
-      if (data) {
-        setHeaders(data.headers);
-        setRowCount(data.rowCount);
-        setMapping(autoMap(data.headers));
-        setResult(null);
+      const data = await gqlQuery<{ headers: string[]; rowCount: number } | null>(
+        PREVIEW_QUERY,
+        { csv: text },
+        'csvImportPreview',
+      );
+      if (!data) {
+        toast.error(t('settings.import.couldNotParseCsv'));
+        return;
       }
-    } catch {
-      toast.error(t('settings.import.couldNotParseCsv'));
+      setHeaders(data.headers);
+      setRowCount(data.rowCount);
+      setMapping(autoMap(data.headers));
+      setResult(null);
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('settings.import.couldNotParseCsv')));
     }
   }
 
@@ -118,16 +122,19 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
     }
     setImporting(true);
     try {
-      const res = await gql(IMPORT_MUTATION, {
-        input: { csv, mapping, teamId: activeTeamId },
-      });
-      const data = (res.data as { csvImportIssues?: ImportResult })?.csvImportIssues;
-      if (data) {
-        setResult(data);
-        toast.success(t('settings.import.importedCount', { count: data.created }));
+      const data = (
+        (await gqlMutate(IMPORT_MUTATION, {
+          input: { csv, mapping, teamId: activeTeamId },
+        })) as { csvImportIssues?: ImportResult }
+      ).csvImportIssues;
+      if (!data) {
+        toast.error(t('settings.import.importFailed'));
+        return;
       }
+      setResult(data);
+      toast.success(t('settings.import.importedCount', { count: data.created }));
     } catch (err) {
-      toast.error((err as Error).message || t('settings.import.importFailed'));
+      toast.error(getErrorMessage(err, t('settings.import.importFailed')));
     } finally {
       setImporting(false);
     }
@@ -135,9 +142,15 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
 
   async function runExport() {
     try {
-      const res = await gql(EXPORT_QUERY, { teamId: activeTeamId || null });
-      const json = (res.data as { organizationExport?: string })?.organizationExport;
+      // `organizationExport` is org-admin only: a non-admin gets HTTP 200 with a
+      // FORBIDDEN error, which used to bail out silently (no download, no toast).
+      const json = await gqlQuery<string | null>(
+        EXPORT_QUERY,
+        { teamId: activeTeamId || null },
+        'organizationExport',
+      );
       if (!json) {
+        toast.error(t('settings.import.exportFailed'));
         return;
       }
       const blob = new Blob([json], { type: 'application/json' });
@@ -147,8 +160,8 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
       a.href = url;
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      toast.error(t('settings.import.exportFailed'));
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('settings.import.exportFailed')));
     }
   }
 

@@ -3,11 +3,13 @@
 import { ExternalLink, Eye, EyeOff } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
+import { getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 const PUBLIC_ROADMAP_QUERY = `
@@ -64,6 +66,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
 
   const [roadmap, setRoadmap] = useState<RoadmapSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [togglingProjectId, setTogglingProjectId] = useState<string | null>(null);
 
@@ -75,35 +78,33 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [clearPassword, setClearPassword] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    gql(PUBLIC_ROADMAP_QUERY)
-      .then(result => {
-        if (cancelled) {
-          return;
-        }
-        const data = result.data as { publicRoadmap?: RoadmapSettings | null } | undefined;
-        if (data?.publicRoadmap) {
-          const r = data.publicRoadmap;
-          setRoadmap(r);
-          setTitle(r.title);
-          setDescription(r.description ?? '');
-          setSlug(r.slug);
-          setEnabled(r.enabled);
-        }
-      })
-      .catch(() => {
-        /* degrade gracefully */
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
+  const loadRoadmap = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
+    try {
+      // `publicRoadmap` is a nullable root: a failed query answers HTTP 200 with
+      // the field null *alongside* `errors`, which would render the blank
+      // "create a roadmap" form for a roadmap that is already publicly live —
+      // and saving it would overwrite the real settings. gqlQuery throws
+      // instead, so the blank form only shows for a genuine null.
+      const r = await gqlQuery<RoadmapSettings | null>(PUBLIC_ROADMAP_QUERY, {}, 'publicRoadmap');
+      if (r) {
+        setRoadmap(r);
+        setTitle(r.title);
+        setDescription(r.description ?? '');
+        setSlug(r.slug);
+        setEnabled(r.enabled);
+      }
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadRoadmap();
+  }, [loadRoadmap]);
 
   // Plain getter — observer() tracks the read so updates flow through
   // without a memo whose `.size` dep would miss in-place mutations.
@@ -124,28 +125,29 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
       } else if (newPassword) {
         input.password = newPassword;
       }
-      const result = await gql(UPSERT_ROADMAP_MUTATION, { input });
-      const data = result.data as
-        | {
-            publicRoadmapUpsert?: {
-              roadmap?: RoadmapSettings;
-              success: boolean;
-            };
-          }
-        | undefined;
-      if (data?.publicRoadmapUpsert?.roadmap) {
-        const r = data.publicRoadmapUpsert.roadmap;
-        setRoadmap(r);
-        setTitle(r.title);
-        setDescription(r.description ?? '');
-        setSlug(r.slug);
-        setEnabled(r.enabled);
-        setNewPassword('');
-        setClearPassword(false);
+      // gqlMutate throws on a slug collision / BAD_USER_INPUT cap, so neither
+      // the success toast nor the form reset can run for a rejected save.
+      const data = (await gqlMutate(UPSERT_ROADMAP_MUTATION, { input })) as {
+        publicRoadmapUpsert?: {
+          roadmap?: RoadmapSettings;
+          success: boolean;
+        };
+      };
+      const r = data.publicRoadmapUpsert?.roadmap;
+      if (!r) {
+        toast.error(t('roadmap.settings.saveError'));
+        return;
       }
+      setRoadmap(r);
+      setTitle(r.title);
+      setDescription(r.description ?? '');
+      setSlug(r.slug);
+      setEnabled(r.enabled);
+      setNewPassword('');
+      setClearPassword(false);
       toast.success(t('roadmap.settings.saveSuccess'));
-    } catch {
-      toast.error(t('roadmap.settings.saveError'));
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('roadmap.settings.saveError')));
     } finally {
       setSaving(false);
     }
@@ -154,7 +156,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
   const handleToggleProject = async (projectId: string, currentlyVisible: boolean) => {
     setTogglingProjectId(projectId);
     try {
-      await gql(SET_ROADMAP_VISIBLE_MUTATION, {
+      await gqlMutate(SET_ROADMAP_VISIBLE_MUTATION, {
         id: projectId,
         visible: !currentlyVisible,
       });
@@ -163,8 +165,8 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
           ? t('roadmap.settings.projectRemoved')
           : t('roadmap.settings.projectAdded'),
       );
-    } catch {
-      toast.error(t('roadmap.settings.projectUpdateError'));
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('roadmap.settings.projectUpdateError')));
     } finally {
       setTogglingProjectId(null);
     }
@@ -190,6 +192,11 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                 <div className="h-4 w-48 rounded bg-muted" />
                 <div className="h-4 w-64 rounded bg-muted" />
               </div>
+            ) : loadError ? (
+              <InlineRetry
+                message={t('common.somethingWentWrong')}
+                onRetry={() => void loadRoadmap()}
+              />
             ) : (
               <form className="flex flex-col gap-5" onSubmit={handleSave}>
                 {/* Enabled toggle */}

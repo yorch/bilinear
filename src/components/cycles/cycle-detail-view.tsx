@@ -6,10 +6,11 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BurndownChart } from '@/components/cycles/burndown-chart';
 import { BurnupChart } from '@/components/cycles/burnup-chart';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { isActiveCycle } from '@/lib/cycle-utils';
-import { gql } from '@/lib/graphql';
+import { gql, gqlQuery } from '@/lib/graphql';
 import {
   CYCLE_BURNDOWN_QUERY,
   CYCLE_ROLLOVER_MUTATION,
@@ -135,13 +136,16 @@ export const CycleDetailView = observer(function CycleDetailView({
   // Burndown/burnup state
   const [burndown, setBurndown] = useState<BurndownPoint[] | null>(null);
   const [burndownLoading, setBurndownLoading] = useState(false);
+  const [burndownError, setBurndownError] = useState(false);
   const [chartView, setChartView] = useState<'burndown' | 'burnup'>('burndown');
 
   // Scope / carryover metrics
   const [scopeMetrics, setScopeMetrics] = useState<ScopeMetrics | null>(null);
+  const [scopeMetricsError, setScopeMetricsError] = useState(false);
 
   // Velocity state
   const [velocity, setVelocity] = useState<VelocityResult | null>(null);
+  const [velocityError, setVelocityError] = useState(false);
 
   // Focus the name input when editing starts
   useEffect(() => {
@@ -150,51 +154,71 @@ export const CycleDetailView = observer(function CycleDetailView({
     }
   }, [editingName]);
 
-  // Fetch burndown data
-  useEffect(() => {
+  // Fetch burndown data. `gqlQuery` throws on a GraphQL-level failure so a
+  // rejected read renders a retry instead of a blank chart, which reads as
+  // "no work was done this cycle".
+  const fetchBurndown = useCallback(() => {
     if (!cycleId) {
       return;
     }
     setBurndownLoading(true);
-    gql(CYCLE_BURNDOWN_QUERY, { cycleId })
-      .then(res => {
-        const points = (res.data?.cycleBurndown ?? []) as BurndownPoint[];
-        setBurndown(points);
-      })
-      .catch(() => setBurndown([]))
+    setBurndownError(false);
+    gqlQuery<BurndownPoint[] | null>(CYCLE_BURNDOWN_QUERY, { cycleId }, 'cycleBurndown')
+      .then(points => setBurndown(points ?? []))
+      .catch(() => setBurndownError(true))
       .finally(() => setBurndownLoading(false));
   }, [cycleId]);
 
-  // Fetch scope / carryover metrics
   useEffect(() => {
+    fetchBurndown();
+  }, [fetchBurndown]);
+
+  // Fetch scope / carryover metrics
+  const fetchScopeMetrics = useCallback(() => {
     if (!cycleId) {
       return;
     }
-    gql(CYCLE_SCOPE_METRICS_QUERY, { cycleId })
-      .then(res => {
-        const m = res.data?.analyticsCycleScopeMetrics as ScopeMetrics | undefined;
+    setScopeMetricsError(false);
+    gqlQuery<ScopeMetrics | null>(
+      CYCLE_SCOPE_METRICS_QUERY,
+      { cycleId },
+      'analyticsCycleScopeMetrics',
+    )
+      .then(m => {
         if (m) {
           setScopeMetrics(m);
         }
       })
-      .catch(() => {});
+      .catch(() => setScopeMetricsError(true));
   }, [cycleId]);
+
+  useEffect(() => {
+    fetchScopeMetrics();
+  }, [fetchScopeMetrics]);
 
   // Fetch velocity data
   const teamId = cycle?.teamId;
-  useEffect(() => {
+  const fetchVelocity = useCallback(() => {
     if (!teamId) {
       return;
     }
-    gql(CYCLE_VELOCITY_QUERY, { cycleCount: 6, teamId })
-      .then(res => {
-        const result = res.data?.cycleVelocity as VelocityResult | undefined;
+    setVelocityError(false);
+    gqlQuery<VelocityResult | null>(
+      CYCLE_VELOCITY_QUERY,
+      { cycleCount: 6, teamId },
+      'cycleVelocity',
+    )
+      .then(result => {
         if (result) {
           setVelocity(result);
         }
       })
-      .catch(() => {});
+      .catch(() => setVelocityError(true));
   }, [teamId]);
+
+  useEffect(() => {
+    fetchVelocity();
+  }, [fetchVelocity]);
 
   const handleRemoveIssue = useCallback(
     (issueId: string) => {
@@ -407,6 +431,9 @@ export const CycleDetailView = observer(function CycleDetailView({
           </div>
 
           {/* Scope creep / carryover metrics */}
+          {scopeMetricsError && (
+            <InlineRetry message={t('errors.somethingWentWrong')} onRetry={fetchScopeMetrics} />
+          )}
           {scopeMetrics &&
             (scopeMetrics.scopeCreepCount > 0 || scopeMetrics.carryoverCount > 0) && (
               <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -485,6 +512,8 @@ export const CycleDetailView = observer(function CycleDetailView({
               </div>
               {burndownLoading ? (
                 <div className="h-[300px] animate-pulse rounded bg-muted" />
+              ) : burndownError ? (
+                <InlineRetry message={t('errors.somethingWentWrong')} onRetry={fetchBurndown} />
               ) : chartView === 'burndown' ? (
                 <BurndownChart data={burndown ?? []} />
               ) : (
@@ -494,6 +523,14 @@ export const CycleDetailView = observer(function CycleDetailView({
           )}
 
           {/* Velocity / capacity section */}
+          {velocityError && (
+            <div className="mt-6 rounded-lg border border-border p-4">
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {t('cycles.detail.velocity.title')}
+              </h3>
+              <InlineRetry message={t('errors.somethingWentWrong')} onRetry={fetchVelocity} />
+            </div>
+          )}
           {velocity && (
             <div className="mt-6 rounded-lg border border-border p-4">
               <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">

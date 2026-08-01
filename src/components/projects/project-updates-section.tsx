@@ -66,7 +66,12 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
               `mutation ($input: ProjectUpdateCreateInput!) {
                 projectUpdateCreate(input: $input) { success }
               }`,
-              { input: { body, health: health || null, projectId } },
+              // `bodyData` is `JSON!` and `health` is `String!` — the form's
+              // "None" health is the empty string, not null. Both columns are
+              // NOT NULL, so null fails at coercion on create and at the DB on
+              // edit; '' is falsy everywhere health is rendered, so it reads as
+              // "no health reported" exactly as None intends.
+              { input: { body, bodyData: {}, health, projectId } },
             );
             if (res.errors?.length) {
               throw new Error(t('common.somethingWentWrong'));
@@ -99,7 +104,7 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
                       `mutation ($id: ID!, $input: ProjectUpdateUpdateInput!) {
                         projectUpdateUpdate(id: $id, input: $input) { success }
                       }`,
-                      { id: update.id, input: { body, health: health || null } },
+                      { id: update.id, input: { body, health } },
                     );
                     if (res.errors?.length) {
                       throw new Error(t('common.somethingWentWrong'));

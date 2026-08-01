@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import {
   COMMENT_CREATE_MUTATION,
   COMMENT_DELETE_MUTATION,
@@ -15,6 +15,7 @@ import {
   GET_COMMENTS_QUERY,
 } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
+import { getErrorMessage } from '@/lib/utils';
 import type { MentionItem } from '../editor/mention-list';
 import { CommentCard, type CommentItem } from './comment-card';
 import { CommentComposer } from './comment-composer';
@@ -63,28 +64,37 @@ export function CommentThread({
     refetch: fetchComments,
   } = useRetryableFetch<CommentItem[]>(
     async () => {
-      const res = await gql(GET_COMMENTS_QUERY, { issueId });
-      const data = res.data as { comments?: CommentItem[] } | undefined;
-      return data?.comments ?? [];
+      // gqlQuery throws on a GraphQL error, which is what makes the
+      // `InlineRetry` branch below reachable — swallowing it and returning []
+      // rendered a failed load as "no comments".
+      return await gqlQuery<CommentItem[]>(GET_COMMENTS_QUERY, { issueId }, 'comments');
     },
     [issueId],
     [],
   );
 
-  const submitComment = async (body: string, parentId?: string) => {
+  /**
+   * Returns `false` when the post was rejected, so the caller keeps the body the
+   * user typed. `gqlMutate` throws on a GraphQL-level rejection (FORBIDDEN from
+   * the guest guard, a body-length cap) that plain `gql()` resolved with
+   * `errors` set — silently destroying a long comment.
+   */
+  const submitComment = async (body: string, parentId?: string): Promise<boolean> => {
     if (!body.trim() || body === '<p></p>') {
-      return;
+      return false;
     }
     setSubmitting(true);
     try {
-      await gql(COMMENT_CREATE_MUTATION, {
+      await gqlMutate(COMMENT_CREATE_MUTATION, {
         input: { body, issueId, parentId: parentId ?? null },
       });
       setNewComment('');
       setShowReplyTo(null);
       await fetchComments({ silent: true });
-    } catch {
-      toast.error(t('issueDetail.comments.failedToPost'));
+      return true;
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('issueDetail.comments.failedToPost')));
+      return false;
     } finally {
       setSubmitting(false);
     }
@@ -92,15 +102,15 @@ export function CommentThread({
 
   const deleteComment = async (id: string) => {
     try {
-      await gql(COMMENT_DELETE_MUTATION, { id });
+      await gqlMutate(COMMENT_DELETE_MUTATION, { id });
       setComments(prev =>
         prev
           .filter(c => c.id !== id)
           .map(c => ({ ...c, replies: c.replies.filter(r => r.id !== id) })),
       );
       toast.success(t('issueDetail.comments.deleted'));
-    } catch {
-      toast.error(t('issueDetail.comments.failedToDelete'));
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('issueDetail.comments.failedToDelete')));
     }
   };
 
@@ -109,12 +119,11 @@ export function CommentThread({
       const isResolved = !!comment.resolvedAt;
       const mutation = isResolved ? COMMENT_UNRESOLVE_MUTATION : COMMENT_RESOLVE_MUTATION;
       const key = isResolved ? 'commentUnresolve' : 'commentResolve';
-      const res = await gql(mutation, { id: comment.id });
       type ResolvePayload = {
         comment: { id: string; resolvedAt: string | null };
       };
-      const updated = (res.data as Record<string, ResolvePayload | undefined> | undefined)?.[key]
-        ?.comment;
+      const data = await gqlMutate(mutation, { id: comment.id });
+      const updated = (data as Record<string, ResolvePayload | undefined>)[key]?.comment;
       if (updated) {
         setComments(prev =>
           updateCommentInTree(prev, updated.id, c => ({
@@ -123,21 +132,21 @@ export function CommentThread({
           })),
         );
       }
-    } catch {
-      toast.error(t('issueDetail.comments.failedToUpdate'));
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('issueDetail.comments.failedToUpdate')));
     }
   };
 
   const toggleReaction = async (commentId: string, emoji: string, hasReacted: boolean) => {
     try {
       if (hasReacted) {
-        await gql(COMMENT_REACTION_REMOVE_MUTATION, { commentId, emoji });
+        await gqlMutate(COMMENT_REACTION_REMOVE_MUTATION, { commentId, emoji });
       } else {
-        await gql(COMMENT_REACTION_ADD_MUTATION, { commentId, emoji });
+        await gqlMutate(COMMENT_REACTION_ADD_MUTATION, { commentId, emoji });
       }
       await fetchComments({ silent: true });
-    } catch {
-      toast.error(t('issueDetail.comments.failedToUpdateReaction'));
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('issueDetail.comments.failedToUpdateReaction')));
     }
   };
 

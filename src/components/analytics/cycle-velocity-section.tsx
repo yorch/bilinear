@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gqlQuery } from '@/lib/graphql';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -134,33 +135,44 @@ export function CycleVelocitySection({ teamId }: CycleVelocitySectionProps) {
   const t = useTranslations();
   const [data, setData] = useState<CycleVelocityTrendResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [mode, setMode] = useState<MetricMode>('issues');
 
+  // `gqlQuery` throws on a GraphQL-level failure — the previous `.catch` only
+  // cleared the spinner, leaving a rejected read to render as "No completed
+  // cycles yet" plus three em-dash rolling averages.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is the retry trigger, not read inside the effect
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    void gql(CYCLE_VELOCITY_QUERY, { input: { teamId } })
-      .then(res => {
+    setError(false);
+    gqlQuery<CycleVelocityTrendResult>(
+      CYCLE_VELOCITY_QUERY,
+      { input: { teamId } },
+      'analyticsCycleVelocityTrend',
+    )
+      .then(result => {
         if (cancelled) {
           return;
         }
-        if (res.data) {
-          const d = res.data as unknown as {
-            analyticsCycleVelocityTrend: CycleVelocityTrendResult;
-          };
-          setData(d.analyticsCycleVelocityTrend);
-        }
+        setData(result);
         setLoading(false);
       })
       .catch(() => {
-        if (!cancelled) {
-          setLoading(false);
+        if (cancelled) {
+          return;
         }
+        setData(null);
+        setError(true);
+        setLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [teamId]);
+  }, [teamId, reloadKey]);
+
+  const retry = useCallback(() => setReloadKey(k => k + 1), []);
 
   const chartData = useMemo(() => {
     if (!data) {
@@ -201,6 +213,8 @@ export function CycleVelocitySection({ teamId }: CycleVelocitySectionProps) {
 
       {loading ? (
         <p className="text-xs text-muted-foreground">{t('analytics.velocity.loading')}</p>
+      ) : error ? (
+        <InlineRetry message={t('analytics.workspace.failedToLoad')} onRetry={retry} />
       ) : (
         <>
           <div className="mb-3 rounded-lg border border-border bg-card p-5">

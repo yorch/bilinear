@@ -121,11 +121,16 @@ export class IssueStore {
           labels?: Array<{ id: string }>;
         };
         const { labelAssignments, labels, ...issueData } = raw;
+        // A payload that says nothing about labels is not the same as an issue
+        // with no labels. Archive/unarchive/snooze/triage all broadcast a bare
+        // issue row; falling back to [] there wiped the label chips off every
+        // other client (and persisted the loss to Dexie) on an operation that
+        // never touched labels. Keep what we already have instead.
         const labelIds = labelAssignments
           ? labelAssignments.map(a => a.labelId)
           : labels
             ? labels.map(l => l.id)
-            : (issueData.labelIds ?? []);
+            : (issueData.labelIds ?? this.pool.get(id)?.labelIds ?? []);
 
         // When a real issue arrives (non-optimistic identifier), atomically
         // remove any optimistic placeholder for the same title/team so the

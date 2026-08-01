@@ -3,11 +3,12 @@
 import { Pencil, Plus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { DeleteUpdateButton } from '@/components/shared/delete-update-button';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { CreateUpdateForm, EditUpdateForm } from '@/components/shared/update-forms';
 import { Badge } from '@/components/ui/badge';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gql, gqlQuery } from '@/lib/graphql';
 import {
   INITIATIVE_UPDATE_CREATE_MUTATION,
   INITIATIVE_UPDATE_EDIT_MUTATION,
@@ -37,14 +38,24 @@ export function InitiativeUpdatesSection({
   const { formatRelativeTime } = useFormatters();
   const [updates, setUpdates] = useState<InitiativeUpdate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // The create/edit handlers below already reject on `res.errors`; the load
+  // path did not, so a failed read rendered as "Updates (0)" / "No updates
+  // yet". `gqlQuery` throws, and the error surfaces as an inline retry.
   const fetchUpdates = useCallback(async () => {
+    setLoadError(false);
     try {
-      const res = await gql(INITIATIVE_UPDATES_QUERY, { id: initiativeId });
-      const data = res.data as { initiative?: { updates: InitiativeUpdate[] } } | undefined;
-      setUpdates(data?.initiative?.updates ?? []);
+      const initiative = await gqlQuery<{ updates: InitiativeUpdate[] } | null>(
+        INITIATIVE_UPDATES_QUERY,
+        { id: initiativeId },
+        'initiative',
+      );
+      setUpdates(initiative?.updates ?? []);
+    } catch {
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -93,7 +104,9 @@ export function InitiativeUpdatesSection({
           onClose={() => setCreating(false)}
           onSubmit={async (body, health) => {
             const res = await gql(INITIATIVE_UPDATE_CREATE_MUTATION, {
-              input: { body, bodyData: {}, health: health || null, initiativeId },
+              // `health` is `String!` over a NOT NULL column; the form's "None"
+              // is the empty string, and null fails coercion.
+              input: { body, bodyData: {}, health, initiativeId },
             });
             if (res.errors?.length) {
               throw new Error(t('common.somethingWentWrong'));
@@ -104,7 +117,9 @@ export function InitiativeUpdatesSection({
         />
       )}
 
-      {updates.length === 0 && !creating ? (
+      {loadError ? (
+        <InlineRetry message={t('common.somethingWentWrong')} onRetry={fetchUpdates} />
+      ) : updates.length === 0 && !creating ? (
         <p className="py-4 text-center text-xs text-muted-foreground">
           {t('initiatives.updates.empty')}
         </p>
@@ -124,7 +139,7 @@ export function InitiativeUpdatesSection({
                   onSave={async (body, health) => {
                     const res = await gql(INITIATIVE_UPDATE_EDIT_MUTATION, {
                       id: update.id,
-                      input: { body, bodyData: {}, health: health || null },
+                      input: { body, bodyData: {}, health },
                     });
                     if (res.errors?.length) {
                       throw new Error(t('common.somethingWentWrong'));

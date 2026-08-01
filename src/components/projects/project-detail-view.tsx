@@ -10,7 +10,7 @@ import { ProjectUpdatesSection } from '@/components/projects/project-updates-sec
 import { SimpleSelect } from '@/components/ui/select';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gqlMutate } from '@/lib/graphql';
 import { buildIssueHref } from '@/lib/issue-nav';
 import {
   PROJECT_HEALTH_LABEL_KEYS,
@@ -67,7 +67,10 @@ export const ProjectDetailView = observer(function ProjectDetailView({
 
   const handleStatusChange = async (newStatus: string) => {
     try {
-      await gql(
+      // `gqlMutate` throws on a GraphQL-level failure, so a rejected write
+      // reaches the catch instead of leaving the store-backed select to snap
+      // back with no explanation.
+      await gqlMutate(
         `mutation ($id: ID!, $input: ProjectUpdateInput!) {
           projectUpdate(id: $id, input: $input) { success }
         }`,
@@ -80,7 +83,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
 
   const handleHealthChange = async (newHealth: string) => {
     try {
-      await gql(
+      await gqlMutate(
         `mutation ($id: ID!, $input: ProjectUpdateInput!) {
           projectUpdate(id: $id, input: $input) { success }
         }`,
