@@ -103,7 +103,10 @@ describe('resolver coverage', () => {
     const missing: string[] = [];
     for (const rootName of ['Query', 'Mutation'] as const) {
       const rootType = schema.getType(rootName);
-      const wired = (resolvers as Record<string, Record<string, unknown>>)[rootName] ?? {};
+      // `resolvers` also holds scalar types (DateTime, JSON), so it is not a
+      // uniform map of field maps — narrow through `unknown` at the one key
+      // we actually index rather than lying about the whole object's shape.
+      const wired = (resolvers[rootName] ?? {}) as unknown as Record<string, unknown>;
       if (!rootType || !('getFields' in rootType)) {
         continue;
       }

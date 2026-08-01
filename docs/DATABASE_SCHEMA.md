@@ -1788,8 +1788,9 @@ Key properties:
 ### 2.38 Org-scoped API keys ✅
 
 Binds `auth_tokens` rows of type `api_key` to the organization they were
-created in (see PATTERNS.md §77). Migration:
-`00000000000003_auth_token_organization`.
+created in (see PATTERNS.md §77). Part of the consolidated
+`00000000000000_init` — nothing is deployed yet, so this landed by
+regenerating the baseline rather than as a forward migration.
 
 ```sql
 ALTER TABLE auth_tokens ADD COLUMN organization_id UUID;
@@ -1821,8 +1822,8 @@ Key properties:
 
 ### 2.39 Organization Invites ✅
 
-Pending invitations to join an organization (see PATTERNS.md §78). Migration:
-`00000000000004_organization_invites`.
+Pending invitations to join an organization (see PATTERNS.md §78). Part of
+the consolidated `00000000000000_init`, same as §2.38.
 
 ```sql
 CREATE TABLE organization_invites (
