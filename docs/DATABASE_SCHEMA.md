@@ -150,6 +150,17 @@ CREATE TABLE users (
     -- server-side email rendering. See PATTERNS.md §75.1.
     locale          VARCHAR(10),
 
+    -- Persisted accent-colour preference ('aurora' | 'ion' | 'ultraviolet').
+    -- Written by userUpdateAccent; null = never chosen -> the default accent.
+    -- The MIRROR IMAGE of `locale` above: locale exists because transactional
+    -- emails render server-side and never see the cookie, whereas the accent
+    -- has no server-side renderer at all. It is stored purely so the choice
+    -- follows the account to a new browser, and is read in exactly ONE place —
+    -- /api/auth/session, which seeds the `accent` cookie at login. The running
+    -- app always reads the cookie (stamped onto <html> during SSR), so the
+    -- root layout never queries this column. See PATTERNS.md §79.3.
+    accent          VARCHAR(20),
+
     -- iCal cycle feed token (32-byte random hex, rotated via userCalendarFeedTokenRotate)
     calendar_feed_token          VARCHAR(64) UNIQUE,
 

@@ -2449,3 +2449,81 @@ URLs (`//evil.example.com` starts with a slash but navigates off-origin),
 absolute URLs, backslashes, and control characters. Route any new
 redirect-target-from-outside through it rather than checking `startsWith('/')`
 at the call site.
+
+
+---
+
+## 79. Design System — tokens, accent, primitives (2026-08-01)
+
+The UI/UX revamp (L1–L4) turned the styling layer into a system with one rule
+governing it: **in an issue tracker most of the spectrum is already spoken for
+by data.** Red/orange/yellow are priority, green is completed, slate is
+backlog. So the brand gradient lives entirely in the *chrome* — selection
+rails, focus glow, elevation, one primary action — and never touches the data
+layer. That constraint is also why all three accents sit in the cool
+violet–azure arc: it is the only band that cannot be misread as status.
+
+### 79.1 Two colour families, and why they behave differently
+
+| Family | Follows the accent? | Roles |
+| --- | --- | --- |
+| **Brand** | yes | `--brand`, `--brand-2`, `--brand-hover`, `--brand-subtle`, `--brand-subtle-foreground`, `--brand-border`, and `--primary`/`--ring` which alias it |
+| **Status** | **no** | `--danger`, `--success`, `--warning`, `--info`, plus `--merged` (GitHub's merged purple) — each with `-subtle` and `-subtle-foreground` |
+
+Status encodes data: "this failed" must mean the same thing whichever accent
+the user picked, so those bases are literals. Priority swatches (`--priority-*`)
+and collaboration cursors (`--cursor-*`) are fixed for the same reason.
+`src/lib/accent.test.ts` enforces both halves — that every status base is free
+of `--accent-h`/`--brand`, and that every `-subtle`/`-subtle-foreground` derives
+from its own base.
+
+### 79.2 Every accent declares two values; the rest derives
+
+`globals.css` defines only `--brand` and `--brand-2` per accent per theme. Hover,
+subtle fill, subtle foreground and border all come from `color-mix`, and the
+whole neutral ramp is computed in oklch from `--accent-h` — the accent's own
+hue — so the chassis and the accent read as one material rather than dead grey
+plus a saturated colour. **Adding a fourth accent is one entry in
+`ACCENT_DEFINITIONS` plus a four-line CSS block.**
+
+Specificity matters here and is guarded by a test rather than a comment: a light
+`:root[data-accent='ion']` is (0,2,0) and would beat a bare `.dark` at (0,1,0),
+painting dark mode with light-mode brand colours. Every dark block is therefore
+written `:root.dark[data-accent='…']` (0,3,0).
+
+### 79.3 The accent is a cookie preference, not `next-themes`
+
+`data-accent` is stamped on `<html>` by the root layout from the `accent`
+cookie during SSR, so there is no flash and **no `mounted` guard is needed** —
+server and client agree on first render (unlike `ThemeToggle`/`LanguageToggle`,
+which do need one). `User.accent` persists the choice to the account; it is read
+in exactly one place, the session route, which seeds the cookie at login. Never
+read it in the layout — that would put a query on every request for a cosmetic
+preference.
+
+### 79.4 No raw colours, guarded across the whole palette
+
+`yarn lint:tokens` bans every shade-numbered Tailwind hue and every hex literal
+across `src/components`, `src/app`, `src/lib` and `src/hooks`, at a literal-zero
+baseline. A fixed palette that genuinely cannot be a token lives in
+`globals.css` and is referenced from `.ts` as a `var()` string, never inlined.
+
+The guard originally covered only `zinc`/`indigo`, and **that gap is how 330 raw
+red/amber/green/blue status colours accumulated across 49 files while the
+baseline read as a clean zero**. Worth remembering when adding any ratchet: a
+green ratchet only proves the absence of what the ratchet measures.
+
+### 79.5 Primitives — extend, never hand-roll
+
+`PageHeader`/`Toolbar` are the *only* page chrome; every route uses them, which
+is what ended the four different header paddings that used to shift as you
+navigated. `EmptyState` replaces centred strings. Skeletons come in four shapes
+(`IssueListSkeleton`, `PageSkeleton`, `RowsSkeleton`, `DetailPanelSkeleton`) —
+there are no bare "Loading…" strings left. Elevation is a three-step scale
+(`shadow-e1` rows, `shadow-e2` popovers, `shadow-e3` modals); no raw Tailwind
+shadows remain.
+
+**`/design`** renders the whole token layer and every primitive; switching
+accent or theme re-renders every specimen. Open it when changing anything in
+`ui/` or `globals.css` — this repo has no visual-regression suite, so it is the
+manual stand-in.
