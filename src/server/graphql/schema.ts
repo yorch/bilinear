@@ -30,6 +30,8 @@ export const typeDefs = `
     emailNotificationsEnabled: Boolean!
     "Persisted language preference (app locale, e.g. 'en' / 'es'); null if never set."
     locale: String
+    "Persisted accent-colour preference (e.g. 'aurora'); null if never chosen."
+    accent: String
     calendarFeedUrl: String
     createdAt: DateTime!
     updatedAt: DateTime!
@@ -1911,6 +1913,11 @@ export const typeDefs = `
     # Persist the user's language preference (used to localize transactional
     # emails, which have no access to the browser locale cookie).
     userUpdateLocale(locale: String!): UserPayload!
+
+    # Persist the user's accent-colour preference. The running app reads the
+    # accent cookie; this is stored so the choice follows the account to a new
+    # browser or device (the session route seeds the cookie from it at login).
+    userUpdateAccent(accent: String!): UserPayload!
 
     # Rotate the per-user iCal feed token. Returns the updated user so the
     # caller can immediately display the new feed URL.

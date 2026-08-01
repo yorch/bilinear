@@ -634,3 +634,12 @@ export const USER_UPDATE_LOCALE_MUTATION = `
     }
   }
 `;
+
+export const USER_UPDATE_ACCENT_MUTATION = `
+  mutation UserUpdateAccent($accent: String!) {
+    userUpdateAccent(accent: $accent) {
+      success
+      user { id accent }
+    }
+  }
+`;

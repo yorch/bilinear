@@ -2,6 +2,7 @@
 
 import { Copy, ExternalLink } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql, gqlMutate, gqlQuery } from '@/lib/graphql';
@@ -388,7 +389,7 @@ export default function SecuritySettingsPage() {
           <p className="text-sm font-medium">{t('settings.security.bearerTokens')}</p>
 
           {scimLoading ? (
-            <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+            <RowsSkeleton count={3} />
           ) : scimLoadError ? (
             <p
               className={cn(
@@ -505,7 +506,7 @@ export default function SecuritySettingsPage() {
         </div>
 
         {loading ? (
-          <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+          <RowsSkeleton count={3} />
         ) : samlLoadError ? (
           // A permission error means "you can't see this"; anything else is a
           // real failure. Either way the form stays hidden, so a configuration

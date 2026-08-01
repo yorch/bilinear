@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { DocumentList } from '@/components/documents/document-list';
 import { SyncErrorState } from '@/components/shared/sync-error-state';
 import { PageHeader } from '@/components/ui/page-header';
+import { PageSkeleton } from '@/components/ui/skeleton';
 import { useTranslations } from '@/hooks/use-translations';
 import { useStore } from '@/providers/store-provider';
 
@@ -19,11 +20,7 @@ const TeamDocsPage = observer(function TeamDocsPage() {
   const hasError = syncStore.status === 'error';
 
   if (isLoading) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-        {t('common.loading')}
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (hasError) {

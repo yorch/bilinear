@@ -1,6 +1,8 @@
 'use client';
 
+import { ListChecks } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { EmptyState } from '@/components/ui/empty-state';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useTranslations } from '@/hooks/use-translations';
 import type { ColumnKey } from '@/hooks/use-visible-columns';
@@ -141,14 +143,21 @@ export function IssueListView({
 
   if (issues.length === 0) {
     return (
-      <div
-        className="flex flex-1 items-center justify-center py-20 text-sm text-muted-foreground"
-        data-testid="empty-state"
-      >
-        {t('issues.noIssuesFoundPrefix')}{' '}
-        <kbd className="mx-1 rounded border px-1 font-mono text-xs">C</kbd>{' '}
-        {t('issues.noIssuesFoundSuffix')}
-      </div>
+      <EmptyState
+        className="flex-1"
+        description={
+          <>
+            {t('issues.noIssuesFoundPrefix')}{' '}
+            <kbd className="mx-0.5 rounded border border-border bg-surface-sunken px-1 font-mono text-[11px]">
+              C
+            </kbd>{' '}
+            {t('issues.noIssuesFoundSuffix')}
+          </>
+        }
+        icon={<ListChecks className="h-5 w-5" />}
+        testId="empty-state"
+        title={t('issues.noIssues')}
+      />
     );
   }
 

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IssuePicker } from '@/components/issues/issue-picker';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
+import { PageSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useOutsideClick } from '@/hooks/use-outside-click';
@@ -387,11 +388,7 @@ const TriagePage = observer(function TriagePage() {
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
 
   if (isLoading) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-        {t('common.loading')}
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (!team) {

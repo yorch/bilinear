@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
@@ -143,7 +144,7 @@ export default function AutomationsSettingsPage() {
   };
 
   if (loading) {
-    return <div className="p-6 text-sm text-muted-foreground">{t('common.loading')}</div>;
+    return <RowsSkeleton className="p-6" count={5} />;
   }
 
   return (

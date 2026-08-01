@@ -2,6 +2,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { ACCENT_COOKIE, ACCENT_COOKIE_MAX_AGE, type Accent } from '@/lib/accent';
+import { gql } from '@/lib/graphql';
+import { USER_UPDATE_ACCENT_MUTATION } from '@/lib/graphql-queries';
 
 interface AccentContextValue {
   accent: Accent;
@@ -29,12 +31,33 @@ export function AccentProvider({
 
   const setAccent = useCallback((next: Accent) => {
     setAccentState(next);
-    // Unlike the locale, the accent has no server-side consumer — nothing is
-    // rendered off the user's account for it — so the cookie is the whole
-    // persistence story. Promoting it to a `User` column would only buy
-    // cross-device carry-over, and would cost a migration.
+    // The cookie is what the running app reads — the root layout stamps it
+    // onto <html> during SSR, so this is what makes the change survive a
+    // reload with no flash.
     // biome-ignore lint/suspicious/noDocumentCookie: Cookie Store API isn't broadly supported yet; this is a simple, long-lived preference cookie
     document.cookie = `${ACCENT_COOKIE}=${next}; path=/; max-age=${ACCENT_COOKIE_MAX_AGE}; samesite=lax`;
+
+    // Persist to the account as well, so the preference follows the user to a
+    // new browser or device (the session route seeds the cookie from it at
+    // login). Fire-and-forget, and deliberately quiet about UNAUTHENTICATED:
+    // the accent is switchable from the pre-login pages too, where there is no
+    // account to write to yet. Any other failure is logged, since a silently
+    // unsaved preference is otherwise invisible.
+    void gql(USER_UPDATE_ACCENT_MUTATION, { accent: next })
+      .then(res => {
+        const errors = res?.errors;
+        if (!errors?.length) {
+          return;
+        }
+        const onlyUnauthenticated = errors.every(
+          err =>
+            (err as { extensions?: { code?: string } })?.extensions?.code === 'UNAUTHENTICATED',
+        );
+        if (!onlyUnauthenticated) {
+          console.warn('Failed to persist accent preference', errors);
+        }
+      })
+      .catch(err => console.warn('Failed to persist accent preference', err));
   }, []);
 
   return <AccentContext.Provider value={{ accent, setAccent }}>{children}</AccentContext.Provider>;

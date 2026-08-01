@@ -13,6 +13,7 @@ import {
   TeamMemberManagement,
   type TeamRole,
 } from '@/components/teams/team-member-management';
+import { PageHeader } from '@/components/ui/page-header';
 import { SimpleSelect } from '@/components/ui/select';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
@@ -390,19 +391,21 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <div className="flex items-center gap-3 border-b border-border px-6 py-3">
-        <Link
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          href={`/${workspace}/team/${teamKey}`}
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {t('settings.team.back')}
-        </Link>
-        <span className="text-foreground-faint">/</span>
-        <h1 className="text-sm font-semibold text-foreground">
-          {t('settings.team.settingsHeading', { name: team.displayName || team.name })}
-        </h1>
-      </div>
+      <PageHeader
+        leading={
+          <>
+            <Link
+              className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              href={`/${workspace}/team/${teamKey}`}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              {t('settings.team.back')}
+            </Link>
+            <span className="text-foreground-faint">/</span>
+          </>
+        }
+        title={t('settings.team.settingsHeading', { name: team.displayName || team.name })}
+      />
 
       <div className="mx-auto w-full max-w-2xl px-6 py-8 flex flex-col gap-8">
         <section>

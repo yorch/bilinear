@@ -1,10 +1,12 @@
 'use client';
 
+import { Archive } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import { FilterBuilder } from '@/components/issues/filter-builder';
 import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
+import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
 import { IssueListSkeleton } from '@/components/ui/skeleton';
 import { useHotkeys } from '@/hooks/use-hotkeys';
@@ -418,9 +420,7 @@ const BacklogPage = observer(function BacklogPage() {
       {/* Backlog list */}
       <div className="flex-1 overflow-y-auto">
         {priorityGroups.length === 0 ? (
-          <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
-            {t('issues.noBacklogIssues')}
-          </div>
+          <EmptyState icon={<Archive className="h-5 w-5" />} title={t('issues.noBacklogIssues')} />
         ) : (
           priorityGroups.map(({ priority, issues: groupIssues }) => (
             <PriorityGroup

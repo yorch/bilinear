@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { PageSkeleton } from '@/components/ui/skeleton';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -182,11 +183,7 @@ export default function WebhooksSettingsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-        {t('common.loading')}
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   return (

@@ -3,6 +3,7 @@
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { CycleDetailView } from '@/components/cycles/cycle-detail-view';
+import { PageSkeleton } from '@/components/ui/skeleton';
 import { useTranslations } from '@/hooks/use-translations';
 import { useStore } from '@/providers/store-provider';
 
@@ -21,11 +22,7 @@ const CycleDetailPage = observer(function CycleDetailPage() {
 
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
   if (isLoading) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-        {t('common.loading')}
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   const team = teamStore.findByKey(teamKey);

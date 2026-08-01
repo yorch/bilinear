@@ -91,4 +91,44 @@ function DetailPanelSkeleton() {
   );
 }
 
-export { DetailPanelSkeleton, IssueListSkeleton, IssueSkeleton, SidebarSkeleton, Skeleton };
+/**
+ * Generic stacked rows, for a list or table section that is still loading.
+ * Widths vary so it reads as content rather than a progress bar.
+ */
+function RowsSkeleton({ className, count = 5 }: { className?: string; count?: number }) {
+  const widths = ['w-11/12', 'w-9/12', 'w-10/12', 'w-8/12', 'w-11/12', 'w-7/12'];
+  return (
+    <div className={cn('flex flex-col gap-3', className)}>
+      {Array.from({ length: count }).map((_, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton list
+        <Skeleton className={cn('h-4', widths[i % widths.length])} key={i} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Whole-page fallback for routes that gate their entire render on a fetch —
+ * a header bar plus rows, so the chrome doesn't pop in after the body.
+ */
+function PageSkeleton({ count = 6 }: { count?: number }) {
+  return (
+    <div className="flex flex-1 flex-col">
+      <div className="flex min-h-12 items-center gap-3 border-b border-border px-4 py-2">
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="h-4 w-8" />
+      </div>
+      <RowsSkeleton className="p-4" count={count} />
+    </div>
+  );
+}
+
+export {
+  DetailPanelSkeleton,
+  IssueListSkeleton,
+  IssueSkeleton,
+  PageSkeleton,
+  RowsSkeleton,
+  SidebarSkeleton,
+  Skeleton,
+};

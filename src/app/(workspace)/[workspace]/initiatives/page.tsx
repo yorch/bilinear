@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
+import { PageSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBInitiative } from '@/lib/db';
@@ -331,11 +332,7 @@ const InitiativesPage = observer(function InitiativesPage() {
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
 
   if (isLoading) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-        {t('common.loading')}
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   return (

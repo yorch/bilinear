@@ -3,6 +3,7 @@
 import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
@@ -241,7 +242,7 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
         </div>
 
         {loading ? (
-          <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+          <RowsSkeleton count={3} />
         ) : githubLoadError ? (
           <InlineRetry
             message={t('settings.integrations.loadGithubError')}

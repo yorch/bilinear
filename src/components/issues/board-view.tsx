@@ -19,9 +19,10 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Columns3 } from 'lucide-react';
 import { useState } from 'react';
 import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
+import { EmptyState } from '@/components/ui/empty-state';
 import { useFormatters } from '@/hooks/use-formatters';
 import { usePending } from '@/hooks/use-pending-ids';
 import { useTranslations } from '@/hooks/use-translations';
@@ -628,9 +629,11 @@ export function BoardView({
 
   if (issues.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center py-20 text-sm text-muted-foreground">
-        {t('issues.noIssues')}
-      </div>
+      <EmptyState
+        className="flex-1"
+        icon={<Columns3 className="h-5 w-5" />}
+        title={t('issues.noIssues')}
+      />
     );
   }
 

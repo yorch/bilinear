@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { fetchAuditLog, type PlatformAuditEntry } from '@/lib/admin-api';
@@ -66,7 +67,7 @@ export default function AdminAuditPage() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+        <RowsSkeleton count={5} />
       ) : error ? (
         <p className="text-sm text-danger-subtle-foreground">{error}</p>
       ) : entries.length === 0 ? (

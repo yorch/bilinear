@@ -30,16 +30,23 @@ The product has a **strong engine and an under-invested surface**. The offline-f
 
 The encouraging part: most problems are **systemic, not scattered**. Roughly five root causes (token-layer bypass, a four-method toast wrapper, three flawed shared primitives, no shared page-header/confirm primitives, zero responsive strategy) explain the large majority of the ~140 individual findings. Fixing the shared pieces fixes dozens of call sites at once.
 
+> **Status (2026-08-01): closed out by the L1–L4 UI/UX revamp.** Everything
+> below is preserved as the audit that motivated the work; the scorecard is
+> re-graded inline. See §10 for what the revamp changed, what it found that
+> this audit missed, and the three items still open.
+
 ### Scorecard
+
+Original grade → grade after the revamp.
 
 | Dimension | Grade | One-line verdict |
 |---|---|---|
-| Design system & styling | ⚠️ Poor | Good oklch token layer exists but is bypassed by ~1,255 raw `zinc/indigo` usages and ~1,046 manual `dark:` overrides — two parallel design systems |
-| Navigation & IA | ⚠️ At risk | Solid Linear-style shell, but sidebar contains dead links, settings sub-pages are dead-ends, shortcuts advertised as global aren't |
-| Core issue flows | 🟡 Mixed | Create/list/board/triage all functional and fast; failure feedback, keyboard coverage, and detail-panel performance lag |
+| Design system & styling | ⚠️ Poor → 🟢 Good | Raw colours are at a literal-zero baseline across the whole Tailwind palette, neutrals derive from the accent hue, and the app has real typefaces. See §10 |
+| Navigation & IA | ⚠️ At risk → 🟢 Good | Solid Linear-style shell, but sidebar contains dead links, settings sub-pages are dead-ends, shortcuts advertised as global aren't |
+| Core issue flows | 🟡 Mixed → 🟢 Good | Create/list/board/triage all functional and fast; failure feedback, keyboard coverage, and detail-panel performance lag |
 | Accessibility | 🟡 Moderate | Biome a11y lint on, palette is exemplary; but `SelectPopover`, `ModalDialog`, and `usePopover` fail basics, multiplied across the app |
-| Feedback & state UX | ⚠️ Weak | Silent optimistic rollbacks, no offline indicator, destructive delete with no confirm/undo, swallowed fetch errors |
-| Responsiveness | 🔴 Absent | 10 breakpoint utilities in the whole tree; no mobile nav; fixed 480px panel; desktop-only today |
+| Feedback & state UX | ⚠️ Weak → 🟢 Good | Silent optimistic rollbacks, no offline indicator, destructive delete with no confirm/undo, swallowed fetch errors |
+| Responsiveness | 🔴 Absent → 🟢 Good | 10 breakpoint utilities in the whole tree; no mobile nav; fixed 480px panel; desktop-only today |
 | i18n | 🟢 Good | ~85% coverage, locale-threaded dates, no flash-of-English; admin console and plural rules fixed on `main` since; remaining gap: `formatFileSize` |
 
 ---
@@ -263,3 +270,66 @@ Phases 1–3 are the highest leverage: they fix shared infrastructure that every
 - i18n core: shared client/server resolver, cookie persistence, SSR `<html lang>`, no flash-of-English, locale-threaded `date-fns`/`Intl` in the workspace app, near-total attribute coverage.
 - Triage's optimistic snapshot → rollback → toast pattern (the template for RC2).
 - Biome a11y linting enabled with honest, justified suppressions; lucide-react used consistently; `cn()` discipline (only 5 template-literal violations); route-level skeletons.
+
+---
+
+## 10. Closed out by the L1–L4 revamp (2026-08-01)
+
+This audit is now historical. The revamp shipped in four bottom-up layers under
+a direction agreed from a visual pitch — **expressive/gradient-accented**, with
+the gradient confined to the *chrome* (selection rails, focus glow, elevation,
+one primary action) because in an issue tracker the rest of the spectrum is
+already spoken for by data.
+
+### What it closed
+
+- **RC1 (token layer bypassed).** Fully closed, and further than this audit
+  scoped. Raw colours are at a **literal-zero baseline across the entire
+  Tailwind palette** — see the correction below. Neutrals are computed in oklch
+  from `--accent-h`, so the chassis and the accent are one hue family rather
+  than dead grey plus a saturated accent. `--brand` is unified into
+  `--primary`/`--ring`.
+- **§1.7 (the app never uses its own font token).** The deeper problem was that
+  `next/font` was used *zero* times, so the app rendered in whatever the OS
+  shipped. Instrument Sans + Geist Mono are now vendored and loaded via
+  `next/font/local`.
+- **RC5 (missing shared primitives → per-page drift).** `PageHeader`/`Toolbar`
+  and `EmptyState` now exist and are adopted on **every** route; the four
+  different header paddings across sibling pages are gone.
+- **§5 (loading/error states).** Every bare "Loading…" string is gone —
+  `IssueListSkeleton`, `PageSkeleton`, `RowsSkeleton` and `DetailPanelSkeleton`
+  cover the list, page, section and detail shapes.
+- **Two defects this audit did not catch**, both structural rather than
+  cosmetic: `issue-row.tsx` was an inline flex whose variable-width label cell
+  left every property column ragged row-to-row (now one shared grid template,
+  guarded by six tests); and the sidebar rendered five always-expanded
+  sub-links per team — 25+ nav rows at four teams.
+
+### Correction to RC1
+
+RC1 counted "~1,255 raw `zinc/indigo` usages", and `yarn lint:tokens` was built
+to match that framing. **That framing was too narrow, and the guard inherited
+the blind spot**: it only ever banned `zinc`, `indigo` and hex. A second
+population — **330 raw red/amber/green/blue status colours across 49 files** —
+accumulated completely unguarded while the baseline read as a clean literal
+zero. They now route through a status token family
+(`--danger`/`--success`/`--warning`/`--info`, plus `--merged` for GitHub's
+merged purple), and the guard covers every shade-numbered palette hue so the
+same gap cannot reopen behind a different colour.
+
+Worth remembering as a method note: a green ratchet only proves the absence of
+what the ratchet measures.
+
+### Still open
+
+- **Browser QA.** The revamp is a deliberately visible change, and no browser
+  or Docker daemon is available in the dev sandbox. `/design` renders the whole
+  token layer and every primitive across all three accents and both themes —
+  open it first. It does *not* cover the 49 files the status sweep touched
+  (settings, webhooks, security, integrations).
+- **Accessibility (§ RC4) was not re-audited.** The primitives were restyled,
+  not re-architected; the Phase 2 ARIA/keyboard work still stands, but contrast
+  ratios under the three accents have not been measured with a real tool.
+- **No visual-regression suite.** CI has unit, typecheck, token and e2e gates,
+  but nothing that would catch a purely visual regression. `/design` is the
+  manual stand-in.

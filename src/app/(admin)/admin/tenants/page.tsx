@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import {
@@ -142,7 +143,7 @@ function TenantsInner() {
       </form>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+        <RowsSkeleton count={5} />
       ) : error ? (
         <p className="text-sm text-danger-subtle-foreground">{error}</p>
       ) : tenants.length === 0 ? (
@@ -259,9 +260,8 @@ function TenantsInner() {
 }
 
 export default function AdminTenantsPage() {
-  const t = useTranslations();
   return (
-    <Suspense fallback={<p className="text-sm text-muted-foreground">{t('common.loading')}</p>}>
+    <Suspense fallback={<RowsSkeleton count={5} />}>
       <TenantsInner />
     </Suspense>
   );

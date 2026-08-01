@@ -105,6 +105,14 @@ model User {
   // no access to the browser's locale cookie.
   locale String? @db.VarChar(10)
 
+  // Persisted accent-colour preference (see src/lib/accent.ts). Unlike `locale`
+  // this has no server-side renderer that needs it — the running app reads the
+  // `accent` cookie, which the root layout stamps onto <html> during SSR. It is
+  // stored so the preference follows the account to a new browser or device:
+  // the session route seeds the cookie from this column at login, which is the
+  // only place it is read. Null = never chosen -> the default accent.
+  accent String? @db.VarChar(20)
+
   // Cross-tenant platform operator. Grants access to the /admin console
   // (tenant + user management, impersonation, platform metrics). Independent
   // of org/team roles — this is a global privilege, not org-scoped. The first

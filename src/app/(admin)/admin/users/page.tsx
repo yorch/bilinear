@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useTranslations } from '@/hooks/use-translations';
 import {
   fetchUsers,
@@ -140,7 +141,7 @@ export default function AdminUsersPage() {
       </form>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+        <RowsSkeleton count={5} />
       ) : error ? (
         <p className="text-sm text-danger-subtle-foreground">{error}</p>
       ) : users.length === 0 ? (

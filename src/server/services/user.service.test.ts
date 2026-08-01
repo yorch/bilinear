@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { TEST_ORG, TEST_USER, TEST_USER_2 } from '../../test/fixtures';
 import { createMockPrisma } from '../../test/prisma-mock';
-import { UserService } from './user.service';
+import { InvalidAccentError, UserService } from './user.service';
 
 describe('UserService', () => {
   let prisma: ReturnType<typeof createMockPrisma>;
@@ -289,6 +289,36 @@ describe('UserService', () => {
 
       await service.updateLastSeen(TEST_USER.id, recentDate);
 
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+  });
+  describe('updateAccent', () => {
+    it('persists a known accent', async () => {
+      prisma.user.update.mockResolvedValue({ ...TEST_USER, accent: 'ion' });
+
+      const result = await service.updateAccent(TEST_USER.id, 'ion');
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        data: { accent: 'ion' },
+        where: { id: TEST_USER.id },
+      });
+      expect(result.accent).toBe('ion');
+    });
+
+    /**
+     * The value is written back out as `data-accent` on <html>. An accent the
+     * stylesheet has no block for would match nothing and silently fall back
+     * to the bare `:root` defaults, so an unknown value must never be stored.
+     */
+    it('rejects an accent the stylesheet has no block for', async () => {
+      await expect(service.updateAccent(TEST_USER.id, 'chartreuse')).rejects.toThrow(
+        InvalidAccentError,
+      );
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a differently-cased accent rather than coercing it', async () => {
+      await expect(service.updateAccent(TEST_USER.id, 'Ion')).rejects.toThrow(InvalidAccentError);
       expect(prisma.user.update).not.toHaveBeenCalled();
     });
   });
