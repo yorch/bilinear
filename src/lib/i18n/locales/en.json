@@ -1,4 +1,11 @@
 {
+  "accent": {
+    "accent": "Accent",
+    "aurora": "Aurora",
+    "currentAccent": "Current accent: {accent}. Click to cycle.",
+    "ion": "Ion",
+    "ultraviolet": "Ultraviolet"
+  },
   "admin": {
     "audit": {
       "colAction": "Action",
@@ -260,6 +267,7 @@
       "goToMyIssues": "Go to My Issues",
       "goToProjects": "Go to Projects",
       "goToSettings": "Go to Settings",
+      "switchAccent": "Switch to {accent} accent",
       "switchTheme": "Switch to {theme} theme"
     },
     "dialogAriaLabel": "Command palette",
@@ -1519,6 +1527,7 @@
       "webhookCreated": "Webhook created"
     },
     "workspace": {
+      "accentDescription": "The accent colour used for selection, focus and primary actions.",
       "ai": "AI",
       "aiAssistant": "AI assistant",
       "aiAssistantDescription": "Title suggestions, issue summaries, and duplicate detection. Requires an Anthropic API key configured on the server.",

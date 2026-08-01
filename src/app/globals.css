@@ -15,6 +15,7 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-foreground-secondary: var(--foreground-secondary);
   --color-brand: var(--brand);
+  --color-brand-2: var(--brand-2);
   --color-brand-hover: var(--brand-hover);
   --color-brand-subtle: var(--brand-subtle);
   --color-brand-subtle-foreground: var(--brand-subtle-foreground);
@@ -24,6 +25,7 @@
   --color-invert-foreground: var(--invert-foreground);
   --color-avatar-fallback: var(--avatar-fallback);
   --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
@@ -38,89 +40,164 @@
   --color-chart-muted: var(--chart-muted);
   --color-chart-warning: var(--chart-warning);
   --color-state-default: var(--state-default);
-  --font-sans: ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, monospace;
+  /* Per-accent swatches for the accent picker. Unlike --brand these do NOT
+     follow the active accent — the picker has to render every option at once,
+     so each keeps its own fixed value (same pattern as --priority-* and
+     --cursor-*: a fixed palette referenced from .ts via var(), never a raw
+     hex in source). */
+  --color-swatch-aurora-1: var(--swatch-aurora-1);
+  --color-swatch-aurora-2: var(--swatch-aurora-2);
+  --color-swatch-ion-1: var(--swatch-ion-1);
+  --color-swatch-ion-2: var(--swatch-ion-2);
+  --color-swatch-ultraviolet-1: var(--swatch-ultraviolet-1);
+  --color-swatch-ultraviolet-2: var(--swatch-ultraviolet-2);
+
+  --font-sans: var(--font-instrument-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /* Three-step elevation scale, tinted to the active accent's hue so shadows
+     read as part of the same material instead of the neutral grey Tailwind
+     defaults (which go muddy on a dark ground). */
+  --shadow-e1: var(--elevation-1);
+  --shadow-e2: var(--elevation-2);
+  --shadow-e3: var(--elevation-3);
+
+  --ease-crisp: cubic-bezier(0.22, 0.9, 0.3, 1);
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   ACCENT SYSTEM
+   ───────────────────────────────────────────────────────────────────────────
+   The accent is a user preference (see src/lib/accent.ts). `data-accent` is
+   stamped on <html> server-side from the `accent` cookie, so there is no
+   flash of the wrong colour on first paint.
+
+   Two things follow from making it selectable:
+
+   1. Every accent only needs to declare TWO values per theme — `--brand` and
+      its gradient partner `--brand-2`. Every other brand role (hover, subtle
+      fill, subtle foreground, border) is derived from those with color-mix,
+      so a fourth accent is a four-line change and can't drift out of sync.
+
+   2. The neutral ramp is computed in oklch from `--accent-h`, the accent's own
+      hue. Previously every neutral was `oklch(x 0 0)` — literally zero chroma —
+      while the accent sat at 0.23, which is what made the chassis and the
+      accent read as two unrelated systems. Now they share a hue family.
+
+   SPECIFICITY NOTE: the dark blocks must out-rank the light ones. A light
+   `:root[data-accent='ion']` is (0,2,0) and would otherwise beat a bare
+   `.dark` at (0,1,0), leaving dark mode with light-mode brand colours. Every
+   dark block is therefore written as `:root.dark[...]` (0,3,0), and the
+   accent-less `:root.dark` fallback as (0,2,0), which still out-ranks the
+   light accent blocks by source order.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Accent hue — theme-independent, drives the whole neutral ramp. */
+:root {
+  --accent-h: 285;
+}
+:root[data-accent="aurora"] {
+  --accent-h: 285;
+}
+:root[data-accent="ion"] {
+  --accent-h: 250;
+}
+:root[data-accent="ultraviolet"] {
+  --accent-h: 310;
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* Fixed per-accent swatches for the picker (see @theme note above). */
+  --swatch-aurora-1: oklch(0.585 0.233 277.117);
+  --swatch-aurora-2: oklch(0.627 0.233 303.9);
+  --swatch-ion-1: oklch(0.623 0.214 259.815);
+  --swatch-ion-2: oklch(0.789 0.154 211.53);
+  --swatch-ultraviolet-1: oklch(0.541 0.281 293.009);
+  --swatch-ultraviolet-2: oklch(0.74 0.238 322.16);
+
+  --radius: 0.625rem;
+
+  /* ── Neutral ramp (light) — all computed from --accent-h ───────────────── */
+  --background: oklch(0.988 0.004 var(--accent-h));
+  --foreground: oklch(0.17 0.025 var(--accent-h));
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: var(--foreground);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  /* Between --foreground and --muted-foreground — for the codebase's
-     recurring text-zinc-700/dark:text-zinc-300 "secondary text" pair
-     (body/label text a step below full emphasis), which had no existing
-     token match. Calibrated to zinc-700/zinc-300's own lightness so this
-     is a pure token substitution, not a color change. */
-  --foreground-secondary: oklch(0.37 0 0);
-  /* Second accent hue (indigo), used throughout for focus rings, selected
-     states, links, and badges — separate from the neutral --primary/--ring
-     used by ui/ primitives. Consolidates ~15 ad hoc indigo-NNN shade pairs
-     that had accumulated across the app into 5 roles, calibrated to
-     Tailwind v4's own indigo-{100,200,500,700,900} oklch values (see
-     node_modules/tailwindcss/theme.css) so this is a like-for-like swap of
-     the dominant shades already in use, not a new color choice. */
-  --brand: oklch(0.585 0.233 277.117); /* indigo-500 */
-  --brand-hover: oklch(0.457 0.24 277.023); /* indigo-700 */
-  --brand-subtle: oklch(0.93 0.034 272.788); /* indigo-100 */
-  --brand-subtle-foreground: oklch(0.457 0.24 277.023); /* indigo-700 */
-  --brand-border: oklch(0.87 0.065 274.039); /* indigo-200 */
-  /* Remaining zinc roles with no fit in the neutral scale above: extra-faint
-     dash/count text (zinc-300/zinc-600), an inverted-contrast solid button /
-     bold auth-form focus ring (zinc-900+white / zinc-100+zinc-900 — the same
-     zinc-900/zinc-100 pair covers both roles, so the auth focus ring reuses
-     --invert rather than a separate --ring-strong token), an avatar-fallback
-     swatch (zinc-400/zinc-600), and a segmented-control selected pill that
-     must sit above --muted (white/zinc-700). Each is a like-for-like swap of
-     the exact shade already in use, not a new color choice. */
-  --foreground-faint: oklch(0.871 0.006 286.286); /* zinc-300 */
-  --invert: oklch(0.21 0.006 285.885); /* zinc-900 */
-  --invert-foreground: oklch(1 0 0); /* white */
-  --avatar-fallback: oklch(0.705 0.015 286.067); /* zinc-400 */
-  --surface-raised: oklch(1 0 0); /* white */
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --popover-foreground: var(--foreground);
+  --secondary: oklch(0.972 0.007 var(--accent-h));
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.972 0.007 var(--accent-h));
+  --muted-foreground: oklch(0.58 0.015 var(--accent-h));
+  --foreground-secondary: oklch(0.42 0.018 var(--accent-h));
+  --foreground-faint: oklch(0.78 0.012 var(--accent-h));
+  /* --accent is the neutral HOVER surface (shadcn's meaning), not the brand
+     accent. It used to be byte-identical to --muted, which is what made
+     `bg-muted hover:bg-accent` render as no hover at all — a bug class this
+     codebase hit repeatedly. It now sits one deliberate step darker. */
+  --accent: oklch(0.955 0.011 var(--accent-h));
+  --accent-foreground: var(--foreground);
+  --border: oklch(0.3 0.03 var(--accent-h) / 0.11);
+  --input: oklch(0.3 0.03 var(--accent-h) / 0.16);
+  --invert: oklch(0.21 0.02 var(--accent-h));
+  --invert-foreground: oklch(0.99 0 0);
+  --avatar-fallback: oklch(0.7 0.02 var(--accent-h));
+  --surface-raised: oklch(1 0 0);
+  --surface-sunken: oklch(0.962 0.009 var(--accent-h));
+
+  /* Brand roles — everything but --brand/--brand-2 is derived. */
+  --brand: var(--swatch-aurora-1);
+  --brand-2: var(--swatch-aurora-2);
+  --brand-hover: color-mix(in oklab, var(--brand) 80%, black);
+  --brand-subtle: color-mix(in oklab, var(--brand) 12%, transparent);
+  --brand-subtle-foreground: var(--brand-hover);
+  --brand-border: color-mix(in oklab, var(--brand) 38%, transparent);
+  --primary: var(--brand);
+  --primary-foreground: oklch(0.99 0 0);
+  --ring: var(--brand);
+  --gradient-brand: linear-gradient(135deg, var(--brand), var(--brand-2));
+
+  /* Elevation (light) — tinted to the accent hue. */
+  --elevation-1:
+    0 1px 2px oklch(0.2 0.03 var(--accent-h) / 0.06),
+    0 1px 1px oklch(0.2 0.03 var(--accent-h) / 0.04);
+  --elevation-2:
+    0 4px 14px -3px oklch(0.2 0.03 var(--accent-h) / 0.1),
+    0 2px 4px -2px oklch(0.2 0.03 var(--accent-h) / 0.06);
+  --elevation-3:
+    0 18px 44px -10px oklch(0.2 0.03 var(--accent-h) / 0.18),
+    0 6px 14px -6px oklch(0.2 0.03 var(--accent-h) / 0.1);
+
+  /* Semantic — fixed across every accent, because these encode data (issue
+     priority, workflow state, chart series), not brand. Moving them with the
+     accent would make a colour mean two different things. */
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --radius: 0.625rem;
-  /* Burndown chart + workflow-state fallbacks. Kept in sync with the
-     dark-mode block below. zinc-400 / green-500 / indigo-500 / zinc-500. */
   --chart-grid: oklch(0.708 0.012 286);
   --chart-actual: oklch(0.733 0.184 142);
-  --chart-ideal: oklch(0.585 0.233 277);
-  /* Analytics page generic accents — indigo-500 / zinc-400. */
-  --chart-primary: oklch(0.585 0.233 277);
-  --chart-muted: oklch(0.708 0.012 286);
-  --chart-warning: oklch(0.795 0.184 86.047); /* yellow-500 */
-  --state-default: oklch(0.585 0.012 286);
+  --chart-warning: oklch(0.795 0.184 86.047);
+  --chart-ideal: var(--brand);
+  --chart-primary: var(--brand);
+  --chart-muted: oklch(0.708 0.012 var(--accent-h));
+  --state-default: oklch(0.585 0.012 var(--accent-h));
+
   /* Fixed-meaning priority-level swatch. Consumed via inline style
      (style={{ color: 'var(--priority-x)' }}), not a Tailwind utility class,
      so intentionally not registered in @theme inline. Same value in both
-     themes (never adapted historically) — literal hex preserved exactly to
-     avoid any oklch-round-trip color shift. */
+     themes and under every accent. */
   --priority-none: #8b8c91;
   --priority-urgent: #ef4444;
   --priority-high: #f97316;
   --priority-medium: #eab308;
   --priority-low: #6b7280;
+
   /* Deterministic-but-varied per-session collaboration cursor palette (see
      tiptap-editor.tsx's CURSOR_COLORS). Synced to peers via the Yjs
-     awareness protocol as a plain CSS color string — safe as a var()
+     awareness protocol as a plain CSS colour string — safe as a var()
      reference since every client loads this same stylesheet. */
   --cursor-1: #6366f1;
   --cursor-2: #8b5cf6;
@@ -134,53 +211,97 @@
   --cursor-10: #06b6d4;
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --foreground-secondary: oklch(0.871 0 0);
-  --brand: oklch(0.673 0.182 276.935); /* indigo-400 */
-  --brand-hover: oklch(0.785 0.115 274.713); /* indigo-300 */
-  --brand-subtle: oklch(0.359 0.144 278.697 / 30%); /* indigo-900 @ 30% */
-  --brand-subtle-foreground: oklch(0.785 0.115 274.713); /* indigo-300 */
-  --brand-border: oklch(0.398 0.195 277.366); /* indigo-800 */
-  --foreground-faint: oklch(0.442 0.017 285.786); /* zinc-600 */
-  --invert: oklch(0.967 0.001 286.375); /* zinc-100 */
-  --invert-foreground: oklch(0.21 0.006 285.885); /* zinc-900 */
-  --avatar-fallback: oklch(0.442 0.017 285.786); /* zinc-600 */
-  --surface-raised: oklch(0.37 0.013 285.805); /* zinc-700 */
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.985 0 0);
+/* ── Brand stops per accent (light) ──────────────────────────────────────── */
+:root[data-accent="aurora"] {
+  --brand: var(--swatch-aurora-1);
+  --brand-2: var(--swatch-aurora-2);
+}
+:root[data-accent="ion"] {
+  --brand: var(--swatch-ion-1);
+  --brand-2: var(--swatch-ion-2);
+}
+:root[data-accent="ultraviolet"] {
+  --brand: var(--swatch-ultraviolet-1);
+  --brand-2: var(--swatch-ultraviolet-2);
+}
+
+/* ── Neutral ramp (dark) ─────────────────────────────────────────────────── */
+:root.dark {
+  --background: oklch(0.148 0.014 var(--accent-h));
+  --foreground: oklch(0.968 0.006 var(--accent-h));
+  --card: oklch(0.186 0.016 var(--accent-h));
+  --card-foreground: var(--foreground);
+  --popover: oklch(0.2 0.017 var(--accent-h));
+  --popover-foreground: var(--foreground);
+  --secondary: oklch(0.238 0.018 var(--accent-h));
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.238 0.018 var(--accent-h));
+  --muted-foreground: oklch(0.63 0.016 var(--accent-h));
+  --foreground-secondary: oklch(0.79 0.014 var(--accent-h));
+  --foreground-faint: oklch(0.49 0.016 var(--accent-h));
+  --accent: oklch(0.272 0.02 var(--accent-h));
+  --accent-foreground: var(--foreground);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  /* Slightly muted variants for dark mode so chart strokes don't blow out
-     against the near-black background. zinc-500 / green-400 / indigo-400 /
-     zinc-400. */
+  --invert: oklch(0.967 0.006 var(--accent-h));
+  --invert-foreground: oklch(0.21 0.02 var(--accent-h));
+  --avatar-fallback: oklch(0.45 0.02 var(--accent-h));
+  --surface-raised: oklch(0.3 0.02 var(--accent-h));
+  --surface-sunken: oklch(0.126 0.013 var(--accent-h));
+
+  /* Dark inverts the derivation direction: hover goes lighter, not darker,
+     and the subtle fill needs more alpha to register against a dark ground. */
+  --brand: oklch(0.673 0.182 277);
+  --brand-2: oklch(0.72 0.19 303.9);
+  --brand-hover: color-mix(in oklab, var(--brand) 78%, white);
+  --brand-subtle: color-mix(in oklab, var(--brand) 22%, transparent);
+  --brand-subtle-foreground: var(--brand-hover);
+  --brand-border: color-mix(in oklab, var(--brand) 45%, transparent);
+  --primary: var(--brand);
+  --primary-foreground: oklch(0.16 0.02 var(--accent-h));
+
+  --elevation-1: 0 1px 2px oklch(0 0 0 / 0.4);
+  --elevation-2: 0 6px 18px -4px oklch(0 0 0 / 0.5), 0 2px 5px -2px oklch(0 0 0 / 0.4);
+  --elevation-3: 0 24px 56px -12px oklch(0 0 0 / 0.66), 0 8px 18px -8px oklch(0 0 0 / 0.5);
+
+  --destructive: oklch(0.637 0.208 25.331);
+  --destructive-foreground: oklch(0.985 0 0);
   --chart-grid: oklch(0.585 0.012 286);
   --chart-actual: oklch(0.789 0.179 144);
-  --chart-ideal: oklch(0.685 0.193 273);
-  --chart-primary: oklch(0.685 0.193 273);
-  --chart-muted: oklch(0.585 0.012 286);
-  --chart-warning: oklch(0.852 0.199 91.936); /* yellow-400 */
-  --state-default: oklch(0.708 0.012 286);
+  --chart-warning: oklch(0.852 0.199 91.936);
+  --chart-muted: oklch(0.585 0.012 var(--accent-h));
+  --state-default: oklch(0.708 0.012 var(--accent-h));
+}
+
+/* ── Brand stops per accent (dark) ───────────────────────────────────────── */
+:root.dark[data-accent="aurora"] {
+  --brand: oklch(0.673 0.182 277);
+  --brand-2: oklch(0.72 0.19 303.9);
+}
+:root.dark[data-accent="ion"] {
+  --brand: oklch(0.707 0.165 254.624);
+  --brand-2: oklch(0.865 0.127 207.078);
+}
+:root.dark[data-accent="ultraviolet"] {
+  --brand: oklch(0.702 0.183 293.541);
+  --brand-2: oklch(0.8 0.16 322.16);
 }
 
 body {
   font-family: var(--font-sans);
   color: var(--foreground);
   background: var(--background);
+}
+
+/* Geist Mono carries identifiers, counts, estimates and timestamps — all of
+   which sit in columns, so they get tabular figures by default rather than
+   relying on every call site remembering the utility. */
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Collapse animations and transitions for users who ask for less motion. */

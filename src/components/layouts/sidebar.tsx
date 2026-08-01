@@ -24,6 +24,7 @@ import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AccentToggle } from '@/components/accent-toggle';
 import { LanguageToggle } from '@/components/language-toggle';
 import { ConnectionStatus } from '@/components/layouts/connection-status';
 import { WorkspaceSwitcher } from '@/components/layouts/workspace-switcher';
@@ -651,6 +652,7 @@ function SidebarFooter({
             <Settings className="h-4 w-4" />
           </Link>
           <ThemeToggle compact />
+          <AccentToggle compact />
           <LanguageToggle compact />
           <button
             aria-label={t('common.signOut')}
@@ -678,7 +680,12 @@ function SidebarFooter({
               <Settings className="h-4 w-4 shrink-0" />
               <span className="truncate">{t('common.settings')}</span>
             </Link>
+            {/* Compact (cycling) accent swatch here rather than the full
+                three-swatch picker — the expanded rail is only 240px and
+                already carries the language and theme controls. The full
+                picker lives in workspace settings. */}
             <div className="flex shrink-0 items-center gap-1">
+              <AccentToggle compact />
               <LanguageToggle />
               <ThemeToggle />
             </div>

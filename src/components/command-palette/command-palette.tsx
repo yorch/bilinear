@@ -8,10 +8,12 @@ import { useIssueUpdate } from '@/hooks/use-issue-update';
 import type { RecentItem } from '@/hooks/use-recent-items';
 import { type Theme, useTheme } from '@/hooks/use-theme';
 import { useTranslations } from '@/hooks/use-translations';
+import { ACCENT_DEFINITIONS, type AccentDefinition } from '@/lib/accent';
 import type { DBIssue } from '@/lib/db';
 import { IDENTIFIER_RE } from '@/lib/identifiers';
 import { buildIssueHref } from '@/lib/issue-nav';
 import { cn } from '@/lib/utils';
+import { useAccent } from '@/providers/accent-provider';
 import { useStore } from '@/providers/store-provider';
 
 // ---------------------------------------------------------------------------
@@ -78,6 +80,7 @@ const ResultsList = observer(function ResultsList({
   const { issueStore, teamStore, uiStore, workflowStateStore } = useStore();
   const t = useTranslations();
   const { setTheme } = useTheme();
+  const { setAccent } = useAccent();
 
   const trimmed = (query || '').trim().toUpperCase();
   const exactIdentifier = IDENTIFIER_RE.test(trimmed)
@@ -110,6 +113,16 @@ const ResultsList = observer(function ResultsList({
       onSelect: () => {
         uiStore.closeCommandPalette();
         router.push(`/${workspaceKey}${path}`);
+      },
+    });
+    const switchAccent = (definition: AccentDefinition): ActionItem => ({
+      id: `accent-${definition.id}`,
+      keywords: ['accent', 'colour', 'color', 'appearance', 'brand', definition.id],
+      kind: 'action',
+      label: t('commandPalette.actions.switchAccent', { accent: t(definition.labelKey) }),
+      onSelect: () => {
+        uiStore.closeCommandPalette();
+        setAccent(definition.id);
       },
     });
     const switchTheme = (id: string, theme: Theme, themeLabelKey: string): ActionItem => ({
@@ -180,8 +193,9 @@ const ResultsList = observer(function ResultsList({
       switchTheme('theme-light', 'light', 'theme.light'),
       switchTheme('theme-dark', 'dark', 'theme.dark'),
       switchTheme('theme-system', 'system', 'theme.system'),
+      ...ACCENT_DEFINITIONS.map(switchAccent),
     ];
-  }, [router, uiStore, workspaceKey, t, setTheme]);
+  }, [router, uiStore, workspaceKey, t, setTheme, setAccent]);
   const actionItems: ActionItem[] = query
     ? baseActions.filter(a => {
         const q = query.toLowerCase();

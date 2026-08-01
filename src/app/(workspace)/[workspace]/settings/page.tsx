@@ -5,6 +5,7 @@ import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { AccentToggle } from '@/components/accent-toggle';
 import { LanguageToggle } from '@/components/language-toggle';
 import { MembersSection } from '@/components/settings/members-section';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -519,6 +520,20 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   </p>
                 </div>
                 <LanguageToggle />
+              </div>
+            </div>
+
+            {/* Accent — the sidebar footer only has room for the cycling
+                swatch, so the full three-option picker lives here. */}
+            <div className="px-5 py-3">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">{t('accent.accent')}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('settings.workspace.accentDescription')}
+                  </p>
+                </div>
+                <AccentToggle />
               </div>
             </div>
 

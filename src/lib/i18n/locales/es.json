@@ -1,4 +1,11 @@
 {
+  "accent": {
+    "accent": "Acento",
+    "aurora": "Aurora",
+    "currentAccent": "Acento actual: {accent}. Haz clic para cambiar.",
+    "ion": "Ion",
+    "ultraviolet": "Ultravioleta"
+  },
   "admin": {
     "audit": {
       "colAction": "Acción",
@@ -260,6 +267,7 @@
       "goToMyIssues": "Ir a Mis tareas",
       "goToProjects": "Ir a Proyectos",
       "goToSettings": "Ir a Configuración",
+      "switchAccent": "Cambiar al acento {accent}",
       "switchTheme": "Cambiar a tema {theme}"
     },
     "dialogAriaLabel": "Paleta de comandos",
@@ -1519,6 +1527,7 @@
       "webhookCreated": "Webhook creado"
     },
     "workspace": {
+      "accentDescription": "El color de acento usado para la selección, el foco y las acciones principales.",
       "ai": "IA",
       "aiAssistant": "Asistente de IA",
       "aiAssistantDescription": "Sugerencias de títulos, resúmenes de issues y detección de duplicados. Requiere una clave de API de Anthropic configurada en el servidor.",
