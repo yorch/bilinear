@@ -413,8 +413,15 @@ const TriagePage = observer(function TriagePage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      {/* The count keeps its "{n} to triage" label rather than collapsing to a
+          bare number: on a queue page the unit is the point, and five e2e
+          specs read it as the page's ready signal. */}
       <PageHeader
-        count={queue.length}
+        actions={
+          <span className="text-xs text-muted-foreground">
+            {t('settings.triage.toTriageCount', { count: queue.length })}
+          </span>
+        }
         title={t('settings.triage.pageTitle', { name: team.displayName ?? team.name })}
       />
 

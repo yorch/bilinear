@@ -224,6 +224,7 @@ export function IssueRow({
       {/* Title — clicking anywhere in this area opens the issue */}
       <button
         className="cursor-pointer truncate text-left text-sm text-foreground"
+        data-testid="issue-row-title"
         onClick={onOpen}
         type="button"
       >
