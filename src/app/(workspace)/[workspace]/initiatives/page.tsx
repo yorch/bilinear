@@ -1,8 +1,13 @@
 'use client';
+import { Flag } from 'lucide-react';
 
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
 import { InitiativeUpdatesSection } from '@/components/initiatives/initiative-updates-section';
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Input } from '@/components/ui/input';
+import { PageHeader, Toolbar } from '@/components/ui/page-header';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBInitiative } from '@/lib/db';
@@ -230,7 +235,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
                       : `${Math.round(progressById[p.id] * 100)}%`}
                   </span>
                   <button
-                    className="text-muted-foreground hover:text-red-500 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+                    className="text-muted-foreground hover:text-danger-subtle-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                     onClick={async () => {
                       const res = await gql(INITIATIVE_REMOVE_PROJECT_MUTATION, {
                         initiativeId: initiative.id,
@@ -335,21 +340,24 @@ const InitiativesPage = observer(function InitiativesPage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex items-center justify-between border-b border-border px-6 py-3">
-        <h1 className="text-sm font-semibold text-foreground">{t('initiatives.page.title')}</h1>
-        <button
-          className="rounded bg-primary px-2.5 py-1 text-xs text-white hover:bg-primary/90"
-          onClick={() => setCreating(c => !c)}
-          type="button"
-        >
-          {creating ? t('common.cancel') : t('initiatives.page.newInitiative')}
-        </button>
-      </div>
+      <PageHeader
+        actions={
+          <Button
+            onClick={() => setCreating(c => !c)}
+            size="sm"
+            type="button"
+            variant={creating ? 'outline' : 'default'}
+          >
+            {creating ? t('common.cancel') : t('initiatives.page.newInitiative')}
+          </Button>
+        }
+        title={t('initiatives.page.title')}
+      />
 
       {creating ? (
-        <div className="flex items-center gap-2 border-b border-border px-6 py-2">
-          <input
-            className="flex-1 rounded border border-border bg-transparent px-2 py-1 text-sm"
+        <Toolbar>
+          <Input
+            className="flex-1"
             onChange={e => setName(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter') {
@@ -363,21 +371,15 @@ const InitiativesPage = observer(function InitiativesPage() {
             ref={inputRef}
             value={name}
           />
-          <button
-            className="rounded bg-primary px-2.5 py-1 text-xs text-white hover:bg-primary/90"
-            onClick={handleCreate}
-            type="button"
-          >
+          <Button onClick={handleCreate} size="sm" type="button">
             {t('common.create')}
-          </button>
-        </div>
+          </Button>
+        </Toolbar>
       ) : null}
 
       <div className="flex-1 overflow-y-auto">
         {grouped.length === 0 ? (
-          <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
-            {t('initiatives.page.empty')}
-          </div>
+          <EmptyState icon={<Flag className="h-5 w-5" />} title={t('initiatives.page.empty')} />
         ) : (
           grouped.map(({ status, items }) => (
             <div key={status}>

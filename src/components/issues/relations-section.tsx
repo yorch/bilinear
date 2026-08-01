@@ -257,7 +257,7 @@ export const RelationsSection = observer(function RelationsSection({
                         </span>
                         <button
                           aria-label={t('issueDetail.relations.removeRelation')}
-                          className="hidden items-center rounded p-0.5 text-muted-foreground hover:text-red-500 group-hover:flex max-md:flex max-md:h-11 max-md:min-w-11 max-md:justify-center"
+                          className="hidden items-center rounded p-0.5 text-muted-foreground hover:text-danger-subtle-foreground group-hover:flex max-md:flex max-md:h-11 max-md:min-w-11 max-md:justify-center"
                           onClick={() => handleDelete(rel.id)}
                           type="button"
                         >

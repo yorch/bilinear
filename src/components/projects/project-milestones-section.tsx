@@ -175,7 +175,7 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
           <Pencil className="h-3.5 w-3.5" />
         </button>
         <button
-          className="rounded p-1 text-muted-foreground hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950 dark:hover:text-red-400 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+          className="rounded p-1 text-muted-foreground hover:bg-danger-subtle hover:text-danger-subtle-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
           disabled={deleting}
           onClick={() => setConfirmingDelete(true)}
           title={t('projects.deleteMilestone')}

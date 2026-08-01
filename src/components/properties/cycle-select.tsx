@@ -52,7 +52,7 @@ export const CycleSelect = observer(function CycleSelect({
           <RefreshCw className="h-3 w-3 shrink-0 text-muted-foreground" />
           <span className="min-w-0 flex-1 truncate text-left">{getCycleDisplayName(cycle)}</span>
           {isActiveCycle(cycle) && (
-            <Badge className="shrink-0 bg-emerald-100 px-1.5 text-[10px] text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+            <Badge className="shrink-0 bg-success-subtle px-1.5 text-[10px] text-success-subtle-foreground">
               {t('properties.cycle.active')}
             </Badge>
           )}

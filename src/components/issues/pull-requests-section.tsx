@@ -135,14 +135,20 @@ function PrStateIcon({
   className?: string;
 }) {
   if (state === 'merged') {
-    return <GitMerge className={cn('h-4 w-4 text-purple-500', className)} />;
+    return <GitMerge className={cn('h-4 w-4 text-merged-subtle-foreground', className)} />;
   }
   if (state === 'closed') {
-    return <GitPullRequestClosed className={cn('h-4 w-4 text-red-500', className)} />;
+    return (
+      <GitPullRequestClosed className={cn('h-4 w-4 text-danger-subtle-foreground', className)} />
+    );
   }
   return (
     <GitPullRequest
-      className={cn('h-4 w-4', draft ? 'text-muted-foreground' : 'text-green-500', className)}
+      className={cn(
+        'h-4 w-4',
+        draft ? 'text-muted-foreground' : 'text-success-subtle-foreground',
+        className,
+      )}
     />
   );
 }
@@ -151,14 +157,14 @@ function PrStateBadge({ state, draft }: { state: string; draft: boolean }) {
   const t = useTranslations();
   if (state === 'merged') {
     return (
-      <Badge className="shrink-0 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+      <Badge className="shrink-0 bg-merged-subtle text-merged-subtle-foreground">
         {t('issueDetail.pullRequests.merged')}
       </Badge>
     );
   }
   if (state === 'closed') {
     return (
-      <Badge className="shrink-0 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">
+      <Badge className="shrink-0 bg-danger-subtle text-danger-subtle-foreground">
         {t('issueDetail.pullRequests.closed')}
       </Badge>
     );
@@ -171,7 +177,7 @@ function PrStateBadge({ state, draft }: { state: string; draft: boolean }) {
     );
   }
   return (
-    <Badge className="shrink-0 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+    <Badge className="shrink-0 bg-success-subtle text-success-subtle-foreground">
       {t('issueDetail.pullRequests.open')}
     </Badge>
   );

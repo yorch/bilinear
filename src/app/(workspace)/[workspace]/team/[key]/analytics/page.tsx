@@ -538,12 +538,12 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
               value: openCount,
             },
             {
-              color: 'text-blue-500',
+              color: 'text-info-subtle-foreground',
               label: t('analytics.team.statusInProgress'),
               value: inProgressCount,
             },
             {
-              color: 'text-green-500',
+              color: 'text-success-subtle-foreground',
               label: t('analytics.team.statusCompleted'),
               value: completedCount,
             },
@@ -655,11 +655,11 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
                   {teamHealth.openCount}
                 </p>
               </div>
-              <div className="rounded-lg border border-red-100 bg-red-50 p-4 dark:border-red-900/40 dark:bg-red-950/30">
-                <p className="text-xs font-medium uppercase tracking-wider text-red-400">
+              <div className="rounded-lg border border-danger/40 bg-danger-subtle p-4">
+                <p className="text-xs font-medium uppercase tracking-wider text-danger-subtle-foreground">
                   {t('analytics.team.overdue')}
                 </p>
-                <p className="mt-1 text-2xl font-semibold text-red-600 dark:text-red-400">
+                <p className="mt-1 text-2xl font-semibold text-danger-subtle-foreground">
                   {teamHealth.overdueCount}
                 </p>
               </div>

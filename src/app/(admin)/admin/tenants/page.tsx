@@ -29,9 +29,9 @@ function statusOf(t: PlatformTenant): TenantStatus {
 }
 
 const STATUS_STYLES: Record<TenantStatus, string> = {
-  active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
+  active: 'bg-success-subtle text-success-subtle-foreground',
   archived: 'bg-muted text-muted-foreground',
-  suspended: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400',
+  suspended: 'bg-warning-subtle text-warning-subtle-foreground',
 };
 
 function TenantsInner() {
@@ -144,7 +144,7 @@ function TenantsInner() {
       {loading ? (
         <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
       ) : error ? (
-        <p className="text-sm text-red-500">{error}</p>
+        <p className="text-sm text-danger-subtle-foreground">{error}</p>
       ) : tenants.length === 0 ? (
         <p className="rounded border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
           {t('admin.tenants.empty')}
@@ -178,7 +178,7 @@ function TenantsInner() {
                         {tenant.urlKey} · {tenant.dataRegion}
                       </p>
                       {tenant.suspendedReason ? (
-                        <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
+                        <p className="mt-0.5 text-xs text-warning-subtle-foreground">
                           {tenant.suspendedReason}
                         </p>
                       ) : null}
@@ -215,7 +215,7 @@ function TenantsInner() {
                           </button>
                         ) : status === 'active' ? (
                           <button
-                            className="rounded border border-amber-300 px-2 py-1 text-xs text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950"
+                            className="rounded border border-warning/40 px-2 py-1 text-xs text-warning-subtle-foreground hover:bg-warning-subtle disabled:opacity-50"
                             disabled={busyId === tenant.id}
                             onClick={() => handleSuspend(tenant)}
                             type="button"
@@ -225,7 +225,7 @@ function TenantsInner() {
                         ) : null}
                         {status !== 'archived' && (
                           <button
-                            className="rounded border border-red-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
+                            className="rounded border border-danger/40 px-2 py-1 text-xs text-danger-subtle-foreground hover:bg-danger-subtle disabled:opacity-50"
                             disabled={busyId === tenant.id}
                             onClick={() => setConfirmingDelete(tenant)}
                             type="button"

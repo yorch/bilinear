@@ -42,6 +42,8 @@ const SEMANTIC_TOKENS = [
   'state-default',
 ];
 
+const STATUS_ROLES = ['danger', 'warning', 'success', 'info', 'merged'];
+
 const PRIORITIES = [
   { label: 'Urgent', token: '--priority-urgent' },
   { label: 'High', token: '--priority-high' },
@@ -183,6 +185,57 @@ export default function DesignPage() {
                 {priority.label}
               </span>
             ))}
+          </div>
+        </Section>
+
+        <Section
+          note="Four roles plus GitHub's merged purple, each with a solid, a subtle fill and an on-subtle foreground derived by color-mix. This family closed a real gap: the token guard only ever banned zinc/indigo/hex, so 330 raw red/amber/green/blue usages had accumulated across 49 files while the baseline read as a clean zero. The guard now covers the whole palette."
+          title="Status"
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-lg border-separate border-spacing-y-2 text-sm">
+              <tbody>
+                {STATUS_ROLES.map(role => (
+                  <tr key={role}>
+                    <td className="w-28">
+                      <code className="text-[11px] text-muted-foreground">--{role}</code>
+                    </td>
+                    <td className="w-16">
+                      <span
+                        className="block h-7 w-12 rounded-md"
+                        style={{ background: `var(--${role})` }}
+                      />
+                    </td>
+                    <td className="w-16">
+                      <span
+                        className="block h-7 w-12 rounded-md border border-border"
+                        style={{ background: `var(--${role}-subtle)` }}
+                      />
+                    </td>
+                    <td>
+                      <span
+                        className="rounded-full px-2.5 py-1 text-xs font-medium"
+                        style={{
+                          background: `var(--${role}-subtle)`,
+                          color: `var(--${role}-subtle-foreground)`,
+                        }}
+                      >
+                        on-subtle foreground
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone="brand">brand</Badge>
+            <Badge tone="danger">danger</Badge>
+            <Badge tone="warning">warning</Badge>
+            <Badge tone="success">success</Badge>
+            <Badge tone="info">info</Badge>
+            <Badge tone="muted">muted</Badge>
+            <Badge tone="outline">outline</Badge>
           </div>
         </Section>
 

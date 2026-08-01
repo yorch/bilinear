@@ -70,7 +70,7 @@ export function LoginForm() {
         />
       </div>
 
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="text-sm text-danger-subtle-foreground">{error}</p>}
 
       <Button className="w-full" data-testid="email-submit" disabled={loading} type="submit">
         {loading ? t('auth.sending') : t('auth.continueWithEmail')}

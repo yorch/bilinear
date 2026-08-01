@@ -112,11 +112,11 @@ export function OnboardingForm() {
           />
         </div>
         {urlKey.length > 0 && urlKey.length < 3 && (
-          <p className="text-xs text-amber-600 dark:text-amber-400">{t('auth.urlKeyMinLength')}</p>
+          <p className="text-xs text-warning-subtle-foreground">{t('auth.urlKeyMinLength')}</p>
         )}
       </div>
 
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="text-sm text-danger-subtle-foreground">{error}</p>}
 
       <Button
         className="w-full"

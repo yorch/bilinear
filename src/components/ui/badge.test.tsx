@@ -32,12 +32,12 @@ describe('Badge', () => {
 
   it('merges a custom className with the variant classes', () => {
     render(
-      <Badge className="bg-red-500" variant="solid">
+      <Badge className="bg-danger" variant="solid">
         Custom
       </Badge>,
     );
     const badge = screen.getByText('Custom');
-    expect(badge).toHaveClass('bg-red-500');
+    expect(badge).toHaveClass('bg-danger');
     expect(badge).toHaveClass('text-white');
   });
 

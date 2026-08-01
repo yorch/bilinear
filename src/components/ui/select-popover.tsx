@@ -119,7 +119,7 @@ export function SelectPopover({
         // biome-ignore lint/a11y/noStaticElementInteractions: keydown implements roving focus for the option buttons inside; the buttons themselves are the interactive elements
         <div
           className={cn(
-            'absolute z-50 rounded-md border border-border bg-popover shadow-lg',
+            'absolute z-50 rounded-md border border-border bg-popover shadow-e2',
             openUpward ? 'bottom-full mb-1' : 'top-full mt-1',
             align === 'right' ? 'right-0' : 'left-0',
             panelClassName,

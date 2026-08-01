@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { PageHeader } from '@/components/ui/page-header';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { cn } from '@/lib/utils';
@@ -104,19 +105,17 @@ export default function WorkspaceAnalyticsPage() {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       {/* Header */}
-      <div className="border-b border-border px-6 py-4">
-        <h1 className="text-base font-semibold text-foreground">
-          {t('analytics.workspace.title')}
-        </h1>
-        <p className="mt-0.5 text-xs text-muted-foreground">{t('analytics.workspace.subtitle')}</p>
-      </div>
+      <PageHeader
+        description={t('analytics.workspace.subtitle')}
+        title={t('analytics.workspace.title')}
+      />
 
       <div className="flex-1 overflow-y-auto px-6 py-5">
         {loading && (
           <p className="text-sm text-muted-foreground">{t('analytics.workspace.loading')}</p>
         )}
 
-        {error && <p className="text-sm text-red-500">{error}</p>}
+        {error && <p className="text-sm text-danger-subtle-foreground">{error}</p>}
 
         {data && (
           <>
@@ -186,9 +185,9 @@ export default function WorkspaceAnalyticsPage() {
                         className={cn(
                           'col-span-2 text-right text-sm font-medium',
                           team.completionRate >= 70
-                            ? 'text-green-600 dark:text-green-400'
+                            ? 'text-success-subtle-foreground'
                             : team.completionRate >= 40
-                              ? 'text-yellow-600 dark:text-yellow-400'
+                              ? 'text-warning-subtle-foreground'
                               : 'text-muted-foreground',
                         )}
                       >

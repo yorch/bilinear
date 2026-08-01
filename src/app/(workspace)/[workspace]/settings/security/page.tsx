@@ -436,8 +436,8 @@ export default function SecuritySettingsPage() {
 
               {/* New token form */}
               {scimNewPlaintext ? (
-                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 space-y-2 dark:border-amber-700 dark:bg-amber-950/30">
-                  <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+                <div className="rounded-md border border-warning/40 bg-warning-subtle p-3 space-y-2">
+                  <p className="text-xs font-medium text-warning-subtle-foreground">
                     {t('settings.security.copyTokenNowWarning')}
                   </p>
                   <div className="flex items-center gap-2">
@@ -498,7 +498,7 @@ export default function SecuritySettingsPage() {
             {t('settings.security.samlDescription')}
           </p>
           {config && (
-            <span className="inline-block mt-2 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
+            <span className="inline-block mt-2 rounded-full bg-success-subtle px-2.5 py-0.5 text-xs font-medium text-success-subtle-foreground">
               {t('settings.security.configured')}
             </span>
           )}

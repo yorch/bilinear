@@ -89,7 +89,7 @@ function MermaidView({ node, updateAttributes, selected }: NodeViewProps) {
         type="button"
       >
         {error ? (
-          <pre className="whitespace-pre-wrap text-xs text-red-500">{error}</pre>
+          <pre className="whitespace-pre-wrap text-xs text-danger-subtle-foreground">{error}</pre>
         ) : (
           // biome-ignore lint/security/noDangerouslySetInnerHtml: mermaid-generated SVG
           <div dangerouslySetInnerHTML={{ __html: svg }} />

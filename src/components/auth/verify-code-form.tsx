@@ -114,7 +114,7 @@ export function VerifyCodeForm() {
       </div>
 
       {error && (
-        <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+        <p className="text-sm text-danger-subtle-foreground" role="alert">
           {error}
         </p>
       )}

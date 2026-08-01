@@ -68,7 +68,7 @@ export default function AdminAuditPage() {
       {loading ? (
         <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
       ) : error ? (
-        <p className="text-sm text-red-500">{error}</p>
+        <p className="text-sm text-danger-subtle-foreground">{error}</p>
       ) : entries.length === 0 ? (
         <p className="rounded border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
           {t('admin.audit.empty')}

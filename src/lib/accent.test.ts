@@ -99,6 +99,38 @@ describe('globals.css accent blocks', () => {
       expect(match?.[1]).not.toContain('--brand');
     }
   });
+
+  /**
+   * Status colours say "this failed" / "this is fine". If they tracked the
+   * accent, the same red would mean something different depending on a
+   * cosmetic preference — so every base must be a literal, independent of
+   * both `--accent-h` and `--brand`.
+   */
+  it('keeps the status family independent of the accent', () => {
+    for (const role of ['danger', 'success', 'warning', 'info', 'merged']) {
+      const bases = [...GLOBALS_CSS.matchAll(new RegExp(`--${role}:\\s*([^;]+);`, 'g'))];
+      // One declaration in the light block, one in the dark block.
+      expect(bases).toHaveLength(2);
+      for (const [, value] of bases) {
+        expect(value).not.toContain('--accent-h');
+        expect(value).not.toContain('--brand');
+      }
+    }
+  });
+
+  it('derives every status subtle/foreground role from its own base', () => {
+    for (const role of ['danger', 'success', 'warning', 'info', 'merged']) {
+      for (const suffix of ['subtle', 'subtle-foreground']) {
+        const declarations = [
+          ...GLOBALS_CSS.matchAll(new RegExp(`--${role}-${suffix}:\\s*([^;]+);`, 'g')),
+        ];
+        expect(declarations).toHaveLength(2);
+        for (const [, value] of declarations) {
+          expect(value).toContain(`var(--${role})`);
+        }
+      }
+    }
+  });
 });
 
 describe('getServerAccent', () => {

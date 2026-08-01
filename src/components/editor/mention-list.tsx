@@ -72,7 +72,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
 
   if (items.length === 0) {
     return (
-      <div className="mention-popup rounded-md border border-border bg-card p-2 text-xs text-muted-foreground shadow-lg">
+      <div className="mention-popup rounded-md border border-border bg-card p-2 text-xs text-muted-foreground shadow-e2">
         {t('editor.noResults')}
       </div>
     );
@@ -80,7 +80,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
 
   return (
     <ul
-      className="mention-popup max-h-48 w-48 overflow-y-auto rounded-md border border-border bg-card py-1 shadow-lg"
+      className="mention-popup max-h-48 w-48 overflow-y-auto rounded-md border border-border bg-card py-1 shadow-e2"
       ref={listRef}
     >
       {items.map((item, index) => (

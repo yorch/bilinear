@@ -162,7 +162,7 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
                         {template.name}
                       </span>
                       {template.isDefault && (
-                        <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />
+                        <Star className="h-3.5 w-3.5 shrink-0 fill-warning text-warning-subtle-foreground" />
                       )}
                     </div>
                     {template.description && (

@@ -636,7 +636,7 @@ function CommandPaletteContent({ recentItems }: { recentItems: RecentItem[] }) {
       <div
         aria-label={t('commandPalette.dialogAriaLabel')}
         aria-modal="true"
-        className="fixed left-1/2 top-[20%] z-50 w-full max-w-xl -translate-x-1/2 overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
+        className="fixed left-1/2 top-[20%] z-50 w-full max-w-xl -translate-x-1/2 overflow-hidden rounded-xl border border-border bg-card shadow-e3"
         data-testid="command-palette"
         role="dialog"
       >

@@ -16,6 +16,8 @@ import { ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SyncErrorState } from '@/components/shared/sync-error-state';
+import { Button } from '@/components/ui/button';
+import { PageHeader, Toolbar } from '@/components/ui/page-header';
 import { type SaveViewInput, SaveViewModal } from '@/components/views/save-view-modal';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useHotkeys } from '@/hooks/use-hotkeys';
@@ -360,53 +362,49 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Page header */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-6 py-3">
-        <h1 className="text-sm font-semibold text-foreground">
-          {t('issues.teamIssuesTitle', { team: team.displayName ?? team.name })}
-        </h1>
-        <div className="flex flex-wrap items-center gap-2">
-          {viewMode === 'board' && (
-            <>
-              <select
-                className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground-secondary"
-                onChange={e => setBoardGroupBy(e.target.value as BoardGroupBy)}
-                value={boardGroupBy}
-              >
-                <option value="status">{t('issues.groupByStatus')}</option>
-                <option value="assignee">{t('issues.groupByAssignee')}</option>
-                <option value="priority">{t('issues.groupByPriority')}</option>
-              </select>
-              <select
-                className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground-secondary"
-                onChange={e => setSwimlaneBy(e.target.value as BoardSwimlaneBy)}
-                value={swimlaneBy}
-              >
-                <option value="none">{t('issues.noSwimlanes')}</option>
-                <option value="assignee">{t('issues.swimlaneByAssignee')}</option>
-                <option value="priority">{t('issues.swimlaneByPriority')}</option>
-              </select>
-            </>
-          )}
-          <ViewToggle mode={viewMode} onChange={setViewMode} />
-          <Link
-            className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
-            href={`/${workspace}/team/${teamKey}/settings`}
-            title={t('issues.teamSettings')}
-          >
-            <Settings className="h-4 w-4" />
-          </Link>
-          <button
-            className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary/90"
-            onClick={() => uiStore.openCreateIssueModal()}
-            type="button"
-          >
-            {t('issues.newIssue')}
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        actions={
+          <>
+            {viewMode === 'board' && (
+              <>
+                <select
+                  className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground-secondary"
+                  onChange={e => setBoardGroupBy(e.target.value as BoardGroupBy)}
+                  value={boardGroupBy}
+                >
+                  <option value="status">{t('issues.groupByStatus')}</option>
+                  <option value="assignee">{t('issues.groupByAssignee')}</option>
+                  <option value="priority">{t('issues.groupByPriority')}</option>
+                </select>
+                <select
+                  className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground-secondary"
+                  onChange={e => setSwimlaneBy(e.target.value as BoardSwimlaneBy)}
+                  value={swimlaneBy}
+                >
+                  <option value="none">{t('issues.noSwimlanes')}</option>
+                  <option value="assignee">{t('issues.swimlaneByAssignee')}</option>
+                  <option value="priority">{t('issues.swimlaneByPriority')}</option>
+                </select>
+              </>
+            )}
+            <ViewToggle mode={viewMode} onChange={setViewMode} />
+            <Link
+              className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground max-md:h-11 max-md:w-11"
+              href={`/${workspace}/team/${teamKey}/settings`}
+              title={t('issues.teamSettings')}
+            >
+              <Settings className="h-4 w-4" />
+            </Link>
+            <Button onClick={() => uiStore.openCreateIssueModal()} size="sm" type="button">
+              {t('issues.newIssue')}
+            </Button>
+          </>
+        }
+        title={t('issues.teamIssuesTitle', { team: team.displayName ?? team.name })}
+      />
 
       {/* Filter bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
+      <Toolbar className="justify-between">
         <FilterBuilder
           customFields={customFieldDefs}
           filterSet={filterSet}
@@ -454,7 +452,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
             </button>
           </div>
         )}
-      </div>
+      </Toolbar>
 
       {/* Issue list / board / timeline */}
       <div className="flex-1 overflow-y-auto">

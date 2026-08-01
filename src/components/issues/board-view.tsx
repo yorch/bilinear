@@ -86,13 +86,13 @@ function BoardCardInner({
   return (
     <button
       className={cn(
-        'w-full cursor-pointer rounded-lg border bg-card p-3 text-left shadow-sm transition-shadow hover:shadow-md',
+        'w-full cursor-pointer rounded-lg border bg-card p-3 text-left shadow-e1 transition-shadow hover:shadow-e2',
         selected
           ? 'border-brand ring-1 ring-brand'
           : multiSelected
-            ? 'border-blue-500 ring-2 ring-blue-500'
+            ? 'border-info/40 ring-2 ring-info'
             : 'border-border',
-        isDragging && 'rotate-2 shadow-lg',
+        isDragging && 'rotate-2 shadow-e3',
       )}
       onClick={onSelect}
       onDoubleClick={onOpen}
@@ -672,8 +672,8 @@ export function BoardView({
       <DragOverlay>
         {activeIssue &&
           (isDraggingMultiple ? (
-            <div className="flex items-center gap-2 rounded-lg border border-blue-500 bg-card px-4 py-3 shadow-lg">
-              <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+            <div className="flex items-center gap-2 rounded-lg border border-info/40 bg-card px-4 py-3 shadow-lg">
+              <span className="text-sm font-medium text-info-subtle-foreground">
                 {t('issues.draggingCount', { count: selectedIds.size })}
               </span>
             </div>

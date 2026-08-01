@@ -24,12 +24,12 @@ const buttonVariants = cva(
         // chosen accent, so this is the same element in all three palettes.
         default:
           'bg-[image:var(--gradient-brand)] text-primary-foreground shadow-e1 hover:brightness-110 hover:shadow-e2',
-        destructive: 'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90',
+        destructive: 'bg-destructive text-destructive-foreground shadow-e1 hover:bg-destructive/90',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
         outline:
-          'border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground',
-        secondary: 'bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80',
+          'border border-input bg-background shadow-e1 hover:bg-accent hover:text-accent-foreground',
+        secondary: 'bg-secondary text-secondary-foreground shadow-e1 hover:bg-secondary/80',
       },
     },
   },

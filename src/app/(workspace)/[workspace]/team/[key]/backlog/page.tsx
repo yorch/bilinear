@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import { FilterBuilder } from '@/components/issues/filter-builder';
 import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
+import { PageHeader, Toolbar } from '@/components/ui/page-header';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useTranslations } from '@/hooks/use-translations';
@@ -35,9 +36,9 @@ function StalenessIndicator({ updatedAt }: { updatedAt: string }) {
       className={cn(
         'text-[10px] font-medium',
         daysSince >= 30
-          ? 'text-red-500'
+          ? 'text-danger-subtle-foreground'
           : daysSince >= 14
-            ? 'text-amber-500'
+            ? 'text-warning-subtle-foreground'
             : 'text-muted-foreground',
       )}
       title={t('issues.lastUpdatedDaysAgo', { count: daysSince })}
@@ -347,17 +348,13 @@ const BacklogPage = observer(function BacklogPage() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-6 py-3">
-        <h1 className="text-sm font-semibold text-foreground">
-          {t('issues.teamBacklogTitle', { team: team.displayName ?? team.name })}
-        </h1>
-        <span className="text-xs text-muted-foreground">
-          {t('issues.issuesCount', { count: filteredIssues.length })}
-        </span>
-      </div>
+      <PageHeader
+        count={filteredIssues.length}
+        title={t('issues.teamBacklogTitle', { team: team.displayName ?? team.name })}
+      />
 
       {/* Filter bar */}
-      <div className="border-b border-border px-4 py-2">
+      <Toolbar>
         <FilterBuilder
           customFields={customFieldDefs}
           filterSet={filterSet}
@@ -366,7 +363,7 @@ const BacklogPage = observer(function BacklogPage() {
           states={states}
           users={users}
         />
-      </div>
+      </Toolbar>
 
       {/* Bulk actions toolbar */}
       {selectedIds.size > 0 && (
@@ -403,7 +400,7 @@ const BacklogPage = observer(function BacklogPage() {
             {t('issues.estimate')}
           </button>
           <button
-            className="rounded px-2 py-0.5 text-xs text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/30"
+            className="rounded px-2 py-0.5 text-xs text-danger-subtle-foreground hover:bg-danger-subtle dark:hover:bg-danger-subtle/30"
             onClick={handleBulkArchive}
             type="button"
           >

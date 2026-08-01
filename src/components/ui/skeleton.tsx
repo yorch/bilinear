@@ -4,7 +4,15 @@ import { cn } from '@/lib/utils';
  * Base shimmer element. Compose into entity-specific skeletons below.
  */
 function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('animate-pulse rounded-md bg-muted', className)} {...props} />;
+  return (
+    <div
+      className={cn(
+        'animate-shimmer rounded-md bg-[linear-gradient(90deg,var(--muted)_0%,var(--accent)_45%,var(--muted)_90%)] bg-[length:200%_100%]',
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 /**

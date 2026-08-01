@@ -234,7 +234,7 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
             </p>
           </div>
           {integration && (
-            <span className="ml-auto rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
+            <span className="ml-auto rounded-full bg-success-subtle px-2.5 py-0.5 text-xs font-medium text-success-subtle-foreground">
               {t('settings.integrations.connected')}
             </span>
           )}
@@ -348,7 +348,7 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
             </p>
           </div>
           {slack && (
-            <span className="ml-auto rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
+            <span className="ml-auto rounded-full bg-success-subtle px-2.5 py-0.5 text-xs font-medium text-success-subtle-foreground">
               {t('settings.integrations.connected')}
             </span>
           )}

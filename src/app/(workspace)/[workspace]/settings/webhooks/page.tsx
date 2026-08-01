@@ -283,7 +283,7 @@ export default function WebhooksSettingsPage() {
                     <span
                       className={`rounded px-1.5 py-0.5 text-xs ${
                         hook.enabled
-                          ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300'
+                          ? 'bg-success-subtle text-success-subtle-foreground'
                           : 'bg-muted text-muted-foreground'
                       }`}
                     >
@@ -292,7 +292,7 @@ export default function WebhooksSettingsPage() {
                         : t('settings.webhooks.disabled')}
                     </span>
                     {hook.consecutiveFailures > 0 ? (
-                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                      <span className="rounded bg-warning-subtle px-1.5 py-0.5 text-xs text-warning-subtle-foreground">
                         {t('settings.webhooks.consecutiveFailures', {
                           count: hook.consecutiveFailures,
                         })}
@@ -353,7 +353,7 @@ export default function WebhooksSettingsPage() {
                     {t('settings.webhooks.rotate')}
                   </button>
                   <button
-                    className="rounded border border-border px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                    className="rounded border border-border px-2 py-1 text-xs text-danger-subtle-foreground hover:bg-danger-subtle dark:hover:bg-danger-subtle/30"
                     onClick={() => setPendingAction({ hook, type: 'delete' })}
                     type="button"
                   >

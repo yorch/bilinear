@@ -4,6 +4,7 @@ import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { DocumentList } from '@/components/documents/document-list';
 import { SyncErrorState } from '@/components/shared/sync-error-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { useTranslations } from '@/hooks/use-translations';
 import { useStore } from '@/providers/store-provider';
 
@@ -39,11 +40,9 @@ const TeamDocsPage = observer(function TeamDocsPage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex items-center border-b border-border px-6 py-3">
-        <h1 className="text-sm font-semibold text-foreground">
-          {t('documents.teamDocsTitle', { teamName: team.displayName ?? team.name })}
-        </h1>
-      </div>
+      <PageHeader
+        title={t('documents.teamDocsTitle', { teamName: team.displayName ?? team.name })}
+      />
       <div className="flex-1 overflow-y-auto">
         <DocumentList teamId={team.id} />
       </div>

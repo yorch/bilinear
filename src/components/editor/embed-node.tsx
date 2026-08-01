@@ -63,7 +63,9 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
             </button>
           </form>
           {url && !embedUrl && (
-            <p className="mt-1 text-xs text-red-500">{t('editor.embed.unsupportedUrl')}</p>
+            <p className="mt-1 text-xs text-danger-subtle-foreground">
+              {t('editor.embed.unsupportedUrl')}
+            </p>
           )}
         </div>
       </NodeViewWrapper>

@@ -30,6 +30,21 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-danger: var(--danger);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-danger-subtle-foreground: var(--danger-subtle-foreground);
+  --color-success: var(--success);
+  --color-success-subtle: var(--success-subtle);
+  --color-success-subtle-foreground: var(--success-subtle-foreground);
+  --color-warning: var(--warning);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-warning-subtle-foreground: var(--warning-subtle-foreground);
+  --color-info: var(--info);
+  --color-info-subtle: var(--info-subtle);
+  --color-info-subtle-foreground: var(--info-subtle-foreground);
+  --color-merged: var(--merged);
+  --color-merged-subtle: var(--merged-subtle);
+  --color-merged-subtle-foreground: var(--merged-subtle-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -68,6 +83,16 @@
   --shadow-e3: var(--elevation-3);
 
   --ease-crisp: cubic-bezier(0.22, 0.9, 0.3, 1);
+
+  /* Skeletons sweep rather than pulse — a pulse reads as "broken/retrying",
+     a sweep reads as "loading". Collapsed by prefers-reduced-motion below. */
+  --animate-shimmer: shimmer 1.5s linear infinite;
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -175,7 +200,31 @@
   /* Semantic — fixed across every accent, because these encode data (issue
      priority, workflow state, chart series), not brand. Moving them with the
      accent would make a colour mean two different things. */
-  --destructive: oklch(0.577 0.245 27.325);
+  /* Status family. Like the priority swatch these never follow the accent —
+     they say "this failed" / "this is fine", which must mean the same thing
+     whichever accent the user picked. Subtle fills and on-subtle text derive
+     with the same color-mix pattern as the brand roles, so a status pill is
+     one token, not a hand-picked light/dark shade pair at every call site. */
+  --danger: oklch(0.577 0.245 27.325);
+  --success: oklch(0.627 0.194 149.214);
+  --warning: oklch(0.681 0.162 75.834);
+  --info: oklch(0.623 0.214 259.815);
+  --danger-subtle: color-mix(in oklab, var(--danger) 12%, transparent);
+  --success-subtle: color-mix(in oklab, var(--success) 12%, transparent);
+  --warning-subtle: color-mix(in oklab, var(--warning) 14%, transparent);
+  --info-subtle: color-mix(in oklab, var(--info) 12%, transparent);
+  --danger-subtle-foreground: color-mix(in oklab, var(--danger) 82%, black);
+  --success-subtle-foreground: color-mix(in oklab, var(--success) 82%, black);
+  --warning-subtle-foreground: color-mix(in oklab, var(--warning) 82%, black);
+  --info-subtle-foreground: color-mix(in oklab, var(--info) 82%, black);
+  /* GitHub's "merged" purple. A domain colour, not brand — it must keep
+     meaning "merged" even under the Ultraviolet accent, so it is fixed. */
+  --merged: oklch(0.627 0.265 303.9);
+  --merged-subtle: color-mix(in oklab, var(--merged) 12%, transparent);
+  --merged-subtle-foreground: color-mix(in oklab, var(--merged) 82%, black);
+
+  /* Button's solid destructive variant. Aliased so there is one red. */
+  --destructive: var(--danger);
   --destructive-foreground: oklch(0.985 0 0);
   --chart-grid: oklch(0.708 0.012 286);
   --chart-actual: oklch(0.733 0.184 142);
@@ -264,7 +313,25 @@
   --elevation-2: 0 6px 18px -4px oklch(0 0 0 / 0.5), 0 2px 5px -2px oklch(0 0 0 / 0.4);
   --elevation-3: 0 24px 56px -12px oklch(0 0 0 / 0.66), 0 8px 18px -8px oklch(0 0 0 / 0.5);
 
-  --destructive: oklch(0.637 0.208 25.331);
+  /* Dark inverts the on-subtle derivation (lighter, not darker) and needs a
+     denser fill to register, exactly like the brand roles above. */
+  --danger: oklch(0.704 0.191 22.216);
+  --success: oklch(0.792 0.209 151.711);
+  --warning: oklch(0.828 0.189 84.429);
+  --info: oklch(0.707 0.165 254.624);
+  --danger-subtle: color-mix(in oklab, var(--danger) 20%, transparent);
+  --success-subtle: color-mix(in oklab, var(--success) 20%, transparent);
+  --warning-subtle: color-mix(in oklab, var(--warning) 20%, transparent);
+  --info-subtle: color-mix(in oklab, var(--info) 20%, transparent);
+  --danger-subtle-foreground: color-mix(in oklab, var(--danger) 80%, white);
+  --success-subtle-foreground: color-mix(in oklab, var(--success) 80%, white);
+  --warning-subtle-foreground: color-mix(in oklab, var(--warning) 80%, white);
+  --info-subtle-foreground: color-mix(in oklab, var(--info) 80%, white);
+  --merged: oklch(0.714 0.203 305.504);
+  --merged-subtle: color-mix(in oklab, var(--merged) 20%, transparent);
+  --merged-subtle-foreground: color-mix(in oklab, var(--merged) 80%, white);
+
+  --destructive: var(--danger);
   --destructive-foreground: oklch(0.985 0 0);
   --chart-grid: oklch(0.585 0.012 286);
   --chart-actual: oklch(0.789 0.179 144);

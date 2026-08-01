@@ -385,7 +385,7 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
             {todayX >= 0 && todayX <= totalWidth && (
               <div
                 aria-hidden="true"
-                className="absolute top-0 z-0 w-px bg-red-400/60"
+                className="absolute top-0 z-0 w-px bg-danger/60"
                 style={{ height: items.length * rowHeight, left: todayX }}
               />
             )}

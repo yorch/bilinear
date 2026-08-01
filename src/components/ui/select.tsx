@@ -63,7 +63,7 @@ export function SimpleSelect({
       {open && (
         <div
           className={cn(
-            'absolute left-0 z-50 min-w-full rounded-md border border-border bg-popover py-1 shadow-lg',
+            'absolute left-0 z-50 min-w-full rounded-md border border-border bg-popover py-1 shadow-e2',
             placement === 'bottom' ? 'top-full mt-1' : 'bottom-full mb-1',
           )}
         >

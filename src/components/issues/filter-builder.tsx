@@ -400,7 +400,7 @@ export function FilterBuilder({
             'rounded-full px-2 py-0.5 text-xs font-medium transition-colors',
             filterSet.composition === 'and'
               ? 'bg-brand-subtle text-brand-subtle-foreground'
-              : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+              : 'bg-warning-subtle text-warning-subtle-foreground',
           )}
           onClick={toggleComposition}
           type="button"

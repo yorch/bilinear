@@ -303,9 +303,9 @@ export const CycleDetailView = observer(function CycleDetailView({
       ? t('cycles.status.upcoming')
       : t('cycles.status.completed');
   const statusColor = isActive
-    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
+    ? 'bg-success-subtle text-success-subtle-foreground'
     : isUpcoming
-      ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400'
+      ? 'bg-info-subtle text-info-subtle-foreground'
       : 'bg-muted text-muted-foreground';
 
   const displayName = cycle.name || t('cycles.defaultName', { number: cycle.number });
@@ -449,7 +449,7 @@ export const CycleDetailView = observer(function CycleDetailView({
                   <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                     {t('cycles.detail.scope.creep')}
                   </p>
-                  <p className="mt-1 text-xl font-semibold text-orange-500">
+                  <p className="mt-1 text-xl font-semibold text-warning-subtle-foreground">
                     {scopeMetrics.scopeCreepCount}
                   </p>
                   <p className="text-[11px] text-muted-foreground">
@@ -462,7 +462,7 @@ export const CycleDetailView = observer(function CycleDetailView({
                   <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                     {t('cycles.detail.scope.carriedOver')}
                   </p>
-                  <p className="mt-1 text-xl font-semibold text-blue-500">
+                  <p className="mt-1 text-xl font-semibold text-info-subtle-foreground">
                     {scopeMetrics.carryoverCount}
                   </p>
                   <p className="text-[11px] text-muted-foreground">
@@ -475,7 +475,7 @@ export const CycleDetailView = observer(function CycleDetailView({
                   <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                     {t('cycles.detail.scope.completed')}
                   </p>
-                  <p className="mt-1 text-xl font-semibold text-green-500">
+                  <p className="mt-1 text-xl font-semibold text-success-subtle-foreground">
                     {scopeMetrics.completedCount}
                   </p>
                   <p className="text-[11px] text-muted-foreground">

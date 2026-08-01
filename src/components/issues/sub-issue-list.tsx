@@ -101,7 +101,7 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
             </span>
             <div className="h-1 w-20 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full rounded-full bg-green-500 transition-all duration-300"
+                className="h-full rounded-full bg-success transition-all duration-300"
                 style={{ width: `${completionPct}%` }}
               />
             </div>

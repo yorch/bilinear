@@ -251,7 +251,7 @@ export default function AutomationsSettingsPage() {
                   </div>
                 </div>
                 <button
-                  className="text-xs text-red-500 hover:text-red-700"
+                  className="text-xs text-danger-subtle-foreground hover:text-danger-subtle-foreground"
                   onClick={() => handleArchive(rule)}
                   type="button"
                 >

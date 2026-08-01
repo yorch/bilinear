@@ -38,32 +38,32 @@ const STATUS_BADGES: Record<string, { cls: string; labelKey: string }> = {
     labelKey: 'roadmap.public.status.backlog',
   },
   cancelled: {
-    cls: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
+    cls: 'bg-danger-subtle text-danger-subtle-foreground',
     labelKey: 'roadmap.public.status.cancelled',
   },
   completed: {
-    cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    cls: 'bg-success-subtle text-success-subtle-foreground',
     labelKey: 'roadmap.public.status.completed',
   },
   inProgress: {
-    cls: 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand',
+    cls: 'bg-brand-subtle text-brand-subtle-foreground dark:text-brand',
     labelKey: 'roadmap.public.status.inProgress',
   },
   paused: {
-    cls: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+    cls: 'bg-warning-subtle text-warning-subtle-foreground',
     labelKey: 'roadmap.public.status.paused',
   },
   planned: {
-    cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    cls: 'bg-info-subtle text-info-subtle-foreground',
     labelKey: 'roadmap.public.status.planned',
   },
 };
 
 const HEALTH_DOTS: Record<string, string> = {
-  atRisk: 'bg-yellow-400',
-  noUpdate: 'bg-foreground-faint dark:bg-foreground-faint',
-  offTrack: 'bg-red-500',
-  onTrack: 'bg-green-500',
+  atRisk: 'bg-warning',
+  noUpdate: 'bg-foreground-faint',
+  offTrack: 'bg-danger',
+  onTrack: 'bg-success',
 };
 
 function PasswordForm({ slug }: { slug: string }) {

@@ -48,7 +48,11 @@ export default function AdminDashboardPage() {
     return <p className="text-sm text-muted-foreground">{t('admin.dashboard.loading')}</p>;
   }
   if (error || !metrics) {
-    return <p className="text-sm text-red-500">{error ?? t('admin.dashboard.loadError')}</p>;
+    return (
+      <p className="text-sm text-danger-subtle-foreground">
+        {error ?? t('admin.dashboard.loadError')}
+      </p>
+    );
   }
 
   return (
