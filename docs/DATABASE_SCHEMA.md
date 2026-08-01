@@ -1600,23 +1600,63 @@ yarn prisma migrate dev  # applies new migration
 
 ### Migration Files
 
-The incremental history was squashed into a single baseline before open-sourcing;
-new post-review fixes ship as additive migrations on top of it.
+**While the app is unreleased there are exactly two migrations, and that is
+deliberate.** Anything Prisma's schema DSL can express is folded back into a
+regenerated `00000000000000_init` rather than stacking an additive migration on
+top; only DDL Prisma *cannot* express gets its own file. There is no deployed
+database whose history would be invalidated, so a two-file baseline stays far
+easier to read than a growing chain of one-line `ALTER`s.
 
 ```
 prisma/
 ├── schema.prisma
 ├── prisma.config.ts                              -- CLI datasource url (Prisma 7)
 └── migrations/
-    ├── 00000000000000_init/                      -- consolidated baseline: every table,
-    │                                             --   the FTS GIN index, partial unique
-    │                                             --   index on teams(org, key) WHERE
-    │                                             --   archived_at IS NULL, and all
-    │                                             --   pre-review application schema
+    ├── 00000000000000_init/                      -- consolidated baseline, generated
+    │                                             --   verbatim from schema.prisma:
+    │                                             --   every table, column, FK, enum,
+    │                                             --   and schema-expressible index
     └── 00000000000001_custom_constraints_and_triggers/
-                                                  -- custom DDL that Prisma can't express:
-                                                  --   partial indexes, FTS trigger,
-                                                  --   check constraints, enum guards
+                                                  -- hand-written DDL Prisma can't express:
+                                                  --   partial/expression indexes (incl. the
+                                                  --   teams(org, key) WHERE archived_at IS
+                                                  --   NULL unique), the FTS GIN index and
+                                                  --   trigger, the sync_actions committed_at
+                                                  --   trigger, check constraints, and the
+                                                  --   String[] NOT NULL guards
+```
+
+**Regenerating the baseline** (no database required — it diffs an empty
+datamodel against the schema file):
+
+```bash
+yarn prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script \
+  > prisma/migrations/00000000000000_init/migration.sql
+```
+
+> Prisma 7 renamed `--to-schema-datamodel` to `--to-schema`; the old flag now
+> exits non-zero with a usage dump rather than a helpful alias error.
+
+**Verifying the pair** against a throwaway Postgres before merging a schema
+change — this is the check `prisma migrate diff` alone cannot do, because it is
+blind to everything in the custom file:
+
+```bash
+docker run -d --name mig-verify -e POSTGRES_PASSWORD=pg -e POSTGRES_DB=bilinear \
+  -p 55432:5432 postgres:17-alpine
+export DATABASE_URL="postgresql://postgres:pg@127.0.0.1:55432/bilinear?schema=public"
+yarn prisma migrate deploy                     # both migrations apply cleanly
+yarn prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma \
+  --exit-code                                  # must print "empty migration", exit 0
+yarn db:seed                                   # schema is actually usable
+```
+
+Then confirm the custom objects exist, since a no-op custom migration would pass
+every check above:
+
+```sql
+SELECT indexname FROM pg_indexes WHERE schemaname='public' AND indexdef ILIKE '%WHERE%';
+SELECT tgname FROM pg_trigger WHERE NOT tgisinternal;
 ```
 
 > **Note:** `yarn db:push` re-applies schema.prisma but silently drops all custom DDL

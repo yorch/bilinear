@@ -527,7 +527,7 @@ CREATE TABLE "files" (
     "key" VARCHAR(1000) NOT NULL,
     "size" INTEGER NOT NULL,
     "mime_type" VARCHAR(255) NOT NULL,
-    "url" TEXT,
+    "url" TEXT NOT NULL,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "files_pkey" PRIMARY KEY ("id")
