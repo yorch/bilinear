@@ -70,6 +70,7 @@ model Organization {
   auditLogEntries        AuditLogEntry[]
   samlConfiguration      SamlConfiguration?
   scimTokens             ScimToken[]
+  authTokens             AuthToken[]
 
   @@map("organizations")
 }
@@ -200,6 +201,19 @@ model AuthToken {
   userId    String  @map("user_id") @db.Uuid
   // magic_link, refresh, api_key
   type      String  @db.VarChar(20)
+
+  // The organization an `api_key` row acts against, stamped from the session
+  // that created it. Only meaningful for `type = 'api_key'` — magic-link and
+  // refresh tokens identify a *user*, and the org they resolve to is decided
+  // at access-token issue time (see AuthService.issueTokenPair).
+  //
+  // Required for multi-org accounts: without it, API-key auth had to guess an
+  // org, and `extractAuthContext` guessed the user's oldest membership — so a
+  // key created while working in org B silently operated on org A. Nullable
+  // because a key whose org membership is later revoked keeps the row (the
+  // key simply stops resolving an org and fails auth) and because non-api_key
+  // rows never set it.
+  organizationId String? @map("organization_id") @db.Uuid
   // tokenHash carries a partial UNIQUE constraint enforced in SQL (see
   // 20260512100000_db_hardening_constraints) covering `type = 'refresh'`
   // only. Magic-link rows hash a 6-digit code whose 1M-value space
@@ -233,9 +247,11 @@ model AuthToken {
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([organizationId])
   // The single `(token_hash)` index from the init migration was replaced
   // with two type-partitioned indexes in
   // 20260512100000_db_hardening_constraints: a partial UNIQUE for

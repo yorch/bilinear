@@ -30,9 +30,26 @@ import { revalidateAccess, revalidateRoomAccess } from './server';
 
 const ISSUE_DOC = { id: TEST_ISSUE.id, type: 'issue' as const };
 
+/**
+ * `createMockPrisma()` plus a default "everyone in the room still belongs to
+ * the org" stub. The org-membership arm of `checkSessionValidity` is new and
+ * orthogonal to what most of these cases exercise (team roles, guest rules,
+ * missing entities), so it is satisfied by default here and overridden only
+ * by the tests that are specifically about losing membership.
+ */
+function mockPrisma() {
+  const prisma = createMockPrisma();
+  prisma.organizationMember.findUnique.mockResolvedValue({ role: 'member' });
+  prisma.organizationMember.findMany.mockResolvedValue([
+    { role: 'member', userId: TEST_USER.id },
+    { role: 'member', userId: TEST_USER_2.id },
+  ]);
+  return prisma;
+}
+
 describe('revalidateAccess', () => {
   it('is valid for an active user, a live org, and a team member on the issue', async () => {
-    const prisma = createMockPrisma();
+    const prisma = mockPrisma();
     prisma.user.findUnique.mockResolvedValue({ active: true });
     prisma.organization.findUnique.mockResolvedValue({ archivedAt: null, suspendedAt: null });
     prisma.issue.findFirst.mockResolvedValue({
@@ -49,7 +66,7 @@ describe('revalidateAccess', () => {
   });
 
   it('is invalid when the user has been deactivated', async () => {
-    const prisma = createMockPrisma();
+    const prisma = mockPrisma();
     prisma.user.findUnique.mockResolvedValue({ active: false });
 
     const result = await revalidateAccess(prisma as never, ISSUE_DOC, TEST_ORG.id, TEST_USER.id);
@@ -61,7 +78,7 @@ describe('revalidateAccess', () => {
   });
 
   it('is invalid when the user row no longer exists', async () => {
-    const prisma = createMockPrisma();
+    const prisma = mockPrisma();
     prisma.user.findUnique.mockResolvedValue(null);
 
     const result = await revalidateAccess(prisma as never, ISSUE_DOC, TEST_ORG.id, TEST_USER.id);
@@ -70,7 +87,7 @@ describe('revalidateAccess', () => {
   });
 
   it('is invalid when the org is suspended', async () => {
-    const prisma = createMockPrisma();
+    const prisma = mockPrisma();
     prisma.user.findUnique.mockResolvedValue({ active: true });
     prisma.organization.findUnique.mockResolvedValue({
       archivedAt: null,
@@ -84,7 +101,7 @@ describe('revalidateAccess', () => {
   });
 
   it('is invalid when the org is archived', async () => {
-    const prisma = createMockPrisma();
+    const prisma = mockPrisma();
     prisma.user.findUnique.mockResolvedValue({ active: true });
     prisma.organization.findUnique.mockResolvedValue({
       archivedAt: new Date('2026-07-01T00:00:00Z'),
@@ -97,7 +114,7 @@ describe('revalidateAccess', () => {
   });
 
   it('is invalid when the org row no longer exists', async () => {
-    const prisma = createMockPrisma();
+    const prisma = mockPrisma();
     prisma.user.findUnique.mockResolvedValue({ active: true });
     prisma.organization.findUnique.mockResolvedValue(null);
 
@@ -106,8 +123,25 @@ describe('revalidateAccess', () => {
     expect(result.valid).toBe(false);
   });
 
+  it('is invalid when the user has been removed from the org', async () => {
+    // The multi-org case: user active, org live, but the membership behind
+    // the ws_ticket's `orgId` claim is gone. The collab room has to close
+    // on that, not just on suspension.
+    const prisma = mockPrisma();
+    prisma.user.findUnique.mockResolvedValue({ active: true });
+    prisma.organization.findUnique.mockResolvedValue({ archivedAt: null, suspendedAt: null });
+    prisma.organizationMember.findUnique.mockResolvedValue(null);
+
+    const result = await revalidateAccess(prisma as never, ISSUE_DOC, TEST_ORG.id, TEST_USER.id);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/member/);
+    // Short-circuits before touching the issue itself.
+    expect(prisma.issue.findFirst).not.toHaveBeenCalled();
+  });
+
   it('is invalid when the issue is not found (archived or cross-org)', async () => {
-    const prisma = createMockPrisma();
+    const prisma = mockPrisma();
     prisma.user.findUnique.mockResolvedValue({ active: true });
     prisma.organization.findUnique.mockResolvedValue({ archivedAt: null, suspendedAt: null });
     prisma.issue.findFirst.mockResolvedValue(null);
@@ -119,7 +153,7 @@ describe('revalidateAccess', () => {
   });
 
   it('is invalid when the user is no longer a member of the issue team', async () => {
-    const prisma = createMockPrisma();
+    const prisma = mockPrisma();
     prisma.user.findUnique.mockResolvedValue({ active: true });
     prisma.organization.findUnique.mockResolvedValue({ archivedAt: null, suspendedAt: null });
     prisma.issue.findFirst.mockResolvedValue({
@@ -136,7 +170,7 @@ describe('revalidateAccess', () => {
   });
 
   it('is invalid when a guest is neither creator nor assignee of the issue', async () => {
-    const prisma = createMockPrisma();
+    const prisma = mockPrisma();
     prisma.user.findUnique.mockResolvedValue({ active: true });
     prisma.organization.findUnique.mockResolvedValue({ archivedAt: null, suspendedAt: null });
     prisma.issue.findFirst.mockResolvedValue({
@@ -154,7 +188,7 @@ describe('revalidateAccess', () => {
   });
 
   it('is valid for a guest who created the issue', async () => {
-    const prisma = createMockPrisma();
+    const prisma = mockPrisma();
     prisma.user.findUnique.mockResolvedValue({ active: true });
     prisma.organization.findUnique.mockResolvedValue({ archivedAt: null, suspendedAt: null });
     prisma.issue.findFirst.mockResolvedValue({
@@ -174,7 +208,7 @@ describe('revalidateAccess', () => {
     const DOC_DOC = { id: '00000000-0000-0000-0000-000000000900', type: 'document' as const };
 
     it('is invalid when the document is not found', async () => {
-      const prisma = createMockPrisma();
+      const prisma = mockPrisma();
       prisma.user.findUnique.mockResolvedValue({ active: true });
       prisma.organization.findUnique.mockResolvedValue({ archivedAt: null, suspendedAt: null });
       prisma.document.findFirst.mockResolvedValue(null);
@@ -185,7 +219,7 @@ describe('revalidateAccess', () => {
     });
 
     it('is valid for a workspace-level document (null teamId) regardless of team membership', async () => {
-      const prisma = createMockPrisma();
+      const prisma = mockPrisma();
       prisma.user.findUnique.mockResolvedValue({ active: true });
       prisma.organization.findUnique.mockResolvedValue({ archivedAt: null, suspendedAt: null });
       prisma.document.findFirst.mockResolvedValue({ teamId: null });
@@ -197,7 +231,7 @@ describe('revalidateAccess', () => {
     });
 
     it('is invalid when the document is team-scoped and the user is no longer a member', async () => {
-      const prisma = createMockPrisma();
+      const prisma = mockPrisma();
       prisma.user.findUnique.mockResolvedValue({ active: true });
       prisma.organization.findUnique.mockResolvedValue({ archivedAt: null, suspendedAt: null });
       prisma.document.findFirst.mockResolvedValue({ teamId: TEST_TEAM.id });
@@ -209,7 +243,7 @@ describe('revalidateAccess', () => {
     });
 
     it('is valid when the document is team-scoped and the user is still a member', async () => {
-      const prisma = createMockPrisma();
+      const prisma = mockPrisma();
       prisma.user.findUnique.mockResolvedValue({ active: true });
       prisma.organization.findUnique.mockResolvedValue({ archivedAt: null, suspendedAt: null });
       prisma.document.findFirst.mockResolvedValue({ teamId: TEST_TEAM.id });
@@ -227,7 +261,7 @@ describe('revalidateRoomAccess', () => {
   const OTHER_USER_ID = TEST_USER_2.id;
 
   it('returns an empty map for an empty user list without querying anything', async () => {
-    const prisma = createMockPrisma();
+    const prisma = mockPrisma();
 
     const results = await revalidateRoomAccess(prisma as never, ISSUE_DOC, TEST_ORG.id, []);
 
@@ -238,7 +272,7 @@ describe('revalidateRoomAccess', () => {
   });
 
   it('fetches the org and issue row exactly once for a room with multiple users', async () => {
-    const prisma = createMockPrisma();
+    const prisma = mockPrisma();
     prisma.user.findMany.mockResolvedValue([
       { active: true, id: TEST_USER.id },
       { active: true, id: OTHER_USER_ID },
@@ -265,7 +299,7 @@ describe('revalidateRoomAccess', () => {
   });
 
   it('de-dupes repeated user ids into a single query and result entry', async () => {
-    const prisma = createMockPrisma();
+    const prisma = mockPrisma();
     prisma.user.findMany.mockResolvedValue([{ active: true, id: TEST_USER.id }]);
     prisma.organization.findUnique.mockResolvedValue({ archivedAt: null, suspendedAt: null });
     prisma.issue.findFirst.mockResolvedValue({
@@ -288,7 +322,7 @@ describe('revalidateRoomAccess', () => {
   });
 
   it('invalidates only the deactivated user, leaving other room connections valid', async () => {
-    const prisma = createMockPrisma();
+    const prisma = mockPrisma();
     prisma.user.findMany.mockResolvedValue([
       { active: false, id: TEST_USER.id },
       { active: true, id: OTHER_USER_ID },
@@ -312,7 +346,7 @@ describe('revalidateRoomAccess', () => {
   });
 
   it('invalidates every user in the room when the org is suspended', async () => {
-    const prisma = createMockPrisma();
+    const prisma = mockPrisma();
     prisma.user.findMany.mockResolvedValue([
       { active: true, id: TEST_USER.id },
       { active: true, id: OTHER_USER_ID },
@@ -334,7 +368,7 @@ describe('revalidateRoomAccess', () => {
   });
 
   it('invalidates every user in the room when the issue is not found', async () => {
-    const prisma = createMockPrisma();
+    const prisma = mockPrisma();
     prisma.user.findMany.mockResolvedValue([{ active: true, id: TEST_USER.id }]);
     prisma.organization.findUnique.mockResolvedValue({ archivedAt: null, suspendedAt: null });
     prisma.issue.findFirst.mockResolvedValue(null);
@@ -350,7 +384,7 @@ describe('revalidateRoomAccess', () => {
   });
 
   it('matches the per-connection result revalidateAccess would produce for a guest', async () => {
-    const prisma = createMockPrisma();
+    const prisma = mockPrisma();
     prisma.user.findMany.mockResolvedValue([{ active: true, id: TEST_USER.id }]);
     prisma.organization.findUnique.mockResolvedValue({ archivedAt: null, suspendedAt: null });
     prisma.issue.findFirst.mockResolvedValue({

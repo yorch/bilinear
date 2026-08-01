@@ -90,6 +90,35 @@ export const ORGANIZATION_CREATE_MUTATION = `
   }
 `;
 
+export const VIEWER_ORGANIZATIONS_QUERY = `
+  query ViewerOrganizations {
+    viewerOrganizations {
+      id
+      name
+      urlKey
+      logoUrl
+      role
+      current
+    }
+  }
+`;
+
+export const ORGANIZATION_SWITCH_MUTATION = `
+  mutation OrganizationSwitch($organizationId: ID!) {
+    organizationSwitch(organizationId: $organizationId) {
+      success
+      accessToken
+      refreshToken
+      expiresIn
+      organization {
+        id
+        name
+        urlKey
+      }
+    }
+  }
+`;
+
 // ── Teams ─────────────────────────────────────────────────────────────────────
 
 export const TEAM_CREATE_MUTATION = `

@@ -186,7 +186,13 @@ describe('UserService', () => {
       expect(prisma.organizationMember.findFirst).toHaveBeenCalledWith({
         include: { organization: true },
         orderBy: { createdAt: 'asc' },
-        where: { userId: TEST_USER.id },
+        // Archived/suspended orgs are excluded in the query, not filtered
+        // afterwards, so "oldest membership" can't select a workspace the
+        // session would immediately be thrown out of.
+        where: {
+          organization: { archivedAt: null, suspendedAt: null },
+          userId: TEST_USER.id,
+        },
       });
     });
 
@@ -196,6 +202,64 @@ describe('UserService', () => {
       const result = await service.getOrganizationForUser(TEST_USER.id);
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe('listOrganizationsForUser', () => {
+    it('returns every usable membership with its role, ordered by org name', async () => {
+      const OTHER_ORG = { ...TEST_ORG, id: 'org-2', name: 'Beta', urlKey: 'beta' };
+      prisma.organizationMember.findMany.mockResolvedValue([
+        { organization: TEST_ORG, role: 'owner' },
+        { organization: OTHER_ORG, role: 'guest' },
+      ]);
+
+      const result = await service.listOrganizationsForUser(TEST_USER.id);
+
+      expect(result).toEqual([
+        { organization: TEST_ORG, role: 'owner' },
+        { organization: OTHER_ORG, role: 'guest' },
+      ]);
+      expect(prisma.organizationMember.findMany).toHaveBeenCalledWith({
+        include: { organization: true },
+        orderBy: { organization: { name: 'asc' } },
+        where: {
+          organization: { archivedAt: null, suspendedAt: null },
+          userId: TEST_USER.id,
+        },
+      });
+    });
+
+    it('returns an empty list when the user belongs to nothing usable', async () => {
+      prisma.organizationMember.findMany.mockResolvedValue([]);
+
+      expect(await service.listOrganizationsForUser(TEST_USER.id)).toEqual([]);
+    });
+  });
+
+  describe('findUsableMembership', () => {
+    it('scopes the lookup to the org, the user, and an enterable org', async () => {
+      prisma.organizationMember.findFirst.mockResolvedValue({
+        organization: TEST_ORG,
+        role: 'admin',
+      });
+
+      const result = await service.findUsableMembership(TEST_USER.id, TEST_ORG.id);
+
+      expect(result).toEqual({ organization: TEST_ORG, role: 'admin' });
+      expect(prisma.organizationMember.findFirst).toHaveBeenCalledWith({
+        include: { organization: true },
+        where: {
+          organization: { archivedAt: null, suspendedAt: null },
+          organizationId: TEST_ORG.id,
+          userId: TEST_USER.id,
+        },
+      });
+    });
+
+    it('returns null for an org the user does not belong to', async () => {
+      prisma.organizationMember.findFirst.mockResolvedValue(null);
+
+      expect(await service.findUsableMembership(TEST_USER.id, 'someone-elses-org')).toBeNull();
     });
   });
 

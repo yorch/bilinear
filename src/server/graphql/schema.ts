@@ -361,6 +361,36 @@ export const typeDefs = `
     expiresIn: Int!
   }
 
+  """
+  One workspace the signed-in user can enter, as shown in the workspace
+  switcher. Only organizations they still belong to and that are neither
+  archived nor suspended appear — the list is "where can I go", not "where
+  have I ever been".
+  """
+  type ViewerOrganization {
+    id: ID!
+    name: String!
+    urlKey: String!
+    logoUrl: String
+    """The viewer's role in this organization: owner, admin, member, or guest."""
+    role: String!
+    """True for the organization the current session is authenticated to."""
+    current: Boolean!
+  }
+
+  """
+  Same shape as OrganizationCreatePayload: switching workspaces re-issues the
+  session, so the client must install the returned tokens (POST
+  /api/auth/session) before navigating.
+  """
+  type OrganizationSwitchPayload {
+    success: Boolean!
+    organization: Organization!
+    accessToken: String!
+    refreshToken: String!
+    expiresIn: Int!
+  }
+
   input TeamCreateInput {
     id: String
     name: String!
@@ -1516,6 +1546,12 @@ export const typeDefs = `
     slackIntegration: SlackIntegration
     viewer: User!
     organization: Organization!
+    """
+    Every workspace the viewer can switch into. Resolvable without an active
+    organization, so a user whose current workspace was suspended (or whose
+    membership in it was revoked) can still see and reach the others.
+    """
+    viewerOrganizations: [ViewerOrganization!]!
     organizationMembers: [OrganizationMemberEntry!]!
     team(id: ID!): Team!
     teams: [Team!]!
@@ -1684,6 +1720,11 @@ export const typeDefs = `
     logout: LogoutPayload!
 
     organizationCreate(input: OrganizationCreateInput!): OrganizationCreatePayload!
+    """
+    Re-issue the session against another organization the viewer belongs to.
+    Returns fresh tokens the client installs before navigating.
+    """
+    organizationSwitch(organizationId: ID!): OrganizationSwitchPayload!
 
     teamCreate(input: TeamCreateInput!): TeamPayload!
     teamUpdate(id: ID!, input: TeamUpdateInput!): TeamPayload!

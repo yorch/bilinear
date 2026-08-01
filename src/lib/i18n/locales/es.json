@@ -1490,6 +1490,7 @@
       "allowWrite": "Permitir escritura (mutaciones)",
       "apiTokenCreateError": "Error al crear el token de API",
       "apiTokens": "Tokens de API",
+      "apiTokensWorkspaceScoped": "Las claves de API pertenecen al espacio de trabajo en el que se crearon.",
       "auditLog": "Registro de auditoría",
       "auditLogDescription": "Historial de eventos relevantes para la seguridad (solo administradores)",
       "automations": "Automatizaciones",
@@ -1602,5 +1603,17 @@
     "dark": "Oscuro",
     "light": "Claro",
     "system": "Sistema"
+  },
+  "workspaceSwitcher": {
+    "createWorkspace": "Crear espacio de trabajo",
+    "mismatchBody": "Esta página pertenece a {name}. Cambia de espacio de trabajo para abrirla.",
+    "mismatchTitle": "Espacio de trabajo distinto",
+    "pendingWritesTitle": "Cambios sin guardar",
+    "pendingWritesWarning": "Tienes cambios que aún no han llegado al servidor. Cambiar de espacio de trabajo los descarta.",
+    "switchAnyway": "Cambiar de todos modos",
+    "switchFailed": "No se pudo cambiar de espacio de trabajo",
+    "switching": "Cambiando…",
+    "switchTo": "Cambiar a {name}",
+    "title": "Espacios de trabajo"
   }
 }

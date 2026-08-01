@@ -126,7 +126,13 @@ async function checkEntityAccessForUser(
 export async function revalidateAccess(
   prismaClient: Pick<
     PrismaClient,
-    'document' | 'issue' | 'organization' | 'teamMemberRole' | 'teamMembership' | 'user'
+    | 'document'
+    | 'issue'
+    | 'organization'
+    | 'organizationMember'
+    | 'teamMemberRole'
+    | 'teamMembership'
+    | 'user'
   >,
   parsed: { id: string; type: 'document' | 'issue' },
   orgId: string,
@@ -144,14 +150,20 @@ export async function revalidateAccess(
     return { reason: 'user deactivated', valid: false };
   }
 
-  const org = await prismaClient.organization.findUnique({
-    select: { archivedAt: true, suspendedAt: true },
-    where: { id: orgId },
-  });
-  // Shared "user active AND org not suspended/archived" predicate — see its
-  // doc comment in middleware/auth.ts for why this used to be hand-rolled
-  // three times and had drifted between callers.
-  const sessionValidity = checkSessionValidity(user, org);
+  const [org, membership] = await Promise.all([
+    prismaClient.organization.findUnique({
+      select: { archivedAt: true, suspendedAt: true },
+      where: { id: orgId },
+    }),
+    prismaClient.organizationMember.findUnique({
+      select: { role: true },
+      where: { organizationId_userId: { organizationId: orgId, userId } },
+    }),
+  ]);
+  // Shared "user active AND org not suspended/archived AND still a member"
+  // predicate — see its doc comment in middleware/auth.ts for why this used
+  // to be hand-rolled three times and had drifted between callers.
+  const sessionValidity = checkSessionValidity(user, org, membership);
   if (!sessionValidity.valid) {
     return sessionValidity;
   }
@@ -195,7 +207,13 @@ export async function revalidateAccess(
 export async function revalidateRoomAccess(
   prismaClient: Pick<
     PrismaClient,
-    'document' | 'issue' | 'organization' | 'teamMemberRole' | 'teamMembership' | 'user'
+    | 'document'
+    | 'issue'
+    | 'organization'
+    | 'organizationMember'
+    | 'teamMemberRole'
+    | 'teamMembership'
+    | 'user'
   >,
   parsed: { id: string; type: 'document' | 'issue' },
   orgId: string,
@@ -207,7 +225,7 @@ export async function revalidateRoomAccess(
     return results;
   }
 
-  const [users, org, entity] = await Promise.all([
+  const [users, org, entity, memberships] = await Promise.all([
     prismaClient.user.findMany({
       select: { active: true, id: true },
       where: { id: { in: distinctIds } },
@@ -225,11 +243,22 @@ export async function revalidateRoomAccess(
           select: { teamId: true },
           where: { archivedAt: null, id: parsed.id, organizationId: orgId },
         }),
+    // A room is always one org, so the whole room's memberships come back in
+    // one query keyed by that org plus the room's distinct user ids.
+    prismaClient.organizationMember.findMany({
+      select: { role: true, userId: true },
+      where: { organizationId: orgId, userId: { in: distinctIds } },
+    }),
   ]);
   const userById = new Map(users.map(u => [u.id, u]));
+  const membershipByUserId = new Map(memberships.map(m => [m.userId, m]));
 
   for (const userId of distinctIds) {
-    const sessionValidity = checkSessionValidity(userById.get(userId), org);
+    const sessionValidity = checkSessionValidity(
+      userById.get(userId),
+      org,
+      membershipByUserId.get(userId),
+    );
     if (!sessionValidity.valid) {
       results.set(userId, sessionValidity);
       continue;

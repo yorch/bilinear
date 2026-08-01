@@ -1490,6 +1490,7 @@
       "allowWrite": "Allow write (mutations)",
       "apiTokenCreateError": "Failed to create API token",
       "apiTokens": "API Tokens",
+      "apiTokensWorkspaceScoped": "API keys belong to the workspace they were created in.",
       "auditLog": "Audit Log",
       "auditLogDescription": "Security-relevant event history (admins only)",
       "automations": "Automations",
@@ -1602,5 +1603,17 @@
     "dark": "Dark",
     "light": "Light",
     "system": "System"
+  },
+  "workspaceSwitcher": {
+    "createWorkspace": "Create workspace",
+    "mismatchBody": "This page belongs to {name}. Switch workspaces to open it.",
+    "mismatchTitle": "Different workspace",
+    "pendingWritesTitle": "Unsaved changes",
+    "pendingWritesWarning": "You have changes that haven't reached the server yet. Switching workspaces discards them.",
+    "switchAnyway": "Switch anyway",
+    "switchFailed": "Could not switch workspace",
+    "switching": "Switching…",
+    "switchTo": "Switch to {name}",
+    "title": "Workspaces"
   }
 }

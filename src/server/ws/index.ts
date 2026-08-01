@@ -28,6 +28,7 @@ import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import {
   checkSessionValidity,
+  type SessionMembershipRow,
   type SessionOrgRow,
   type SessionUserRow,
 } from '@/server/middleware/auth';
@@ -180,11 +181,12 @@ redisSubscriber.on('ready', () => {
 // connection that's no longer valid.
 
 /**
- * Pure predicate: given freshly re-queried user/org rows for a live
- * connection, decide whether it should be force-closed. Thin wrapper over
- * the shared `checkSessionValidity` (src/server/middleware/auth.ts) — the
- * same "user still active AND org not suspended/archived" check
- * `extractAuthContext` applies per-request, fail-closed on a missing row.
+ * Pure predicate: given freshly re-queried user/org/membership rows for a
+ * live connection, decide whether it should be force-closed. Thin wrapper
+ * over the shared `checkSessionValidity` (src/server/middleware/auth.ts) —
+ * the same "user still active AND org not suspended/archived AND user still
+ * a member of it" check `extractAuthContext` applies per-request,
+ * fail-closed on a missing row.
  *
  * Kept as a standalone, side-effect-free function (no DB/socket access) so
  * it's unit-testable without a live connection or database.
@@ -192,15 +194,17 @@ redisSubscriber.on('ready', () => {
 export function shouldTerminateConnection(
   user: SessionUserRow | null | undefined,
   org: SessionOrgRow | null | undefined,
+  membership: SessionMembershipRow | null | undefined,
 ): boolean {
-  return !checkSessionValidity(user, org).valid;
+  return !checkSessionValidity(user, org, membership).valid;
 }
 
 /**
- * Re-validate every live connection in one pass. Batches the user/org
- * lookups into two `findMany` queries (keyed by the distinct ids currently
- * connected) instead of one query per connection, so the sweep's DB cost is
- * bounded by the number of distinct users/orgs, not the number of sockets.
+ * Re-validate every live connection in one pass. Batches the
+ * user/org/membership lookups into three `findMany` queries (keyed by the
+ * distinct ids currently connected) instead of one query per connection, so
+ * the sweep's DB cost is bounded by the number of distinct users/orgs, not
+ * the number of sockets.
  */
 async function sweepRevokedConnections(): Promise<void> {
   // Snapshot the connections up front — ConnectionManager is the single
@@ -225,7 +229,7 @@ async function sweepRevokedConnections(): Promise<void> {
     orgIds.add(conn.orgId);
   }
 
-  const [users, orgs] = await Promise.all([
+  const [users, orgs, memberships] = await Promise.all([
     prisma.user.findMany({
       select: { active: true, id: true },
       where: { id: { in: [...userIds] } },
@@ -234,15 +238,33 @@ async function sweepRevokedConnections(): Promise<void> {
       select: { archivedAt: true, id: true, suspendedAt: true },
       where: { id: { in: [...orgIds] } },
     }),
+    // Queried as the cross product of the connected users and orgs rather
+    // than as the exact (org, user) pairs — an `OR` of N pair-clauses would
+    // defeat the composite index. Only rows that actually exist come back,
+    // and the map lookup below is keyed by the exact pair, so the extra
+    // breadth costs nothing but a slightly wider index scan.
+    prisma.organizationMember.findMany({
+      select: { organizationId: true, role: true, userId: true },
+      where: { organizationId: { in: [...orgIds] }, userId: { in: [...userIds] } },
+    }),
   ]);
   const userById = new Map(users.map(u => [u.id, u]));
   const orgById = new Map(orgs.map(o => [o.id, o]));
+  const membershipByPair = new Map(
+    memberships.map(m => [`${m.organizationId}:${m.userId}`, m] as const),
+  );
 
   for (const conn of conns) {
     if (conn.ws.readyState !== 1 /* OPEN */) {
       continue;
     }
-    if (shouldTerminateConnection(userById.get(conn.userId), orgById.get(conn.orgId))) {
+    if (
+      shouldTerminateConnection(
+        userById.get(conn.userId),
+        orgById.get(conn.orgId),
+        membershipByPair.get(`${conn.orgId}:${conn.userId}`),
+      )
+    ) {
       log.info(
         { orgId: conn.orgId, userId: conn.userId },
         'Re-auth sweep: connection revoked — closing socket',

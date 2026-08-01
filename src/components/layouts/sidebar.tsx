@@ -26,6 +26,7 @@ import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LanguageToggle } from '@/components/language-toggle';
 import { ConnectionStatus } from '@/components/layouts/connection-status';
+import { WorkspaceSwitcher } from '@/components/layouts/workspace-switcher';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useAuth } from '@/hooks/use-auth';
@@ -554,9 +555,9 @@ export const Sidebar = observer(function Sidebar({
           <PanelLeft className="h-4 w-4" />
         </button>
         {!effectiveCollapsed && (
-          <span className="truncate text-sm font-semibold text-foreground">
-            {syncStore.organizationName ?? workspaceKey ?? APP_NAME}
-          </span>
+          <WorkspaceSwitcher
+            fallbackLabel={syncStore.organizationName ?? workspaceKey ?? APP_NAME}
+          />
         )}
         <button
           aria-label={t('nav.closeMenu')}

@@ -1,8 +1,22 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { verifyAccessToken } from '@/server/lib/jwt';
+import { UserService } from '@/server/services/user.service';
 import { prisma } from '../server/lib/prisma';
 
+/**
+ * Entry point: send an authenticated visitor to a workspace they can
+ * actually open.
+ *
+ * The session's `orgId` claim is a starting guess, not an answer. It is
+ * stamped when the token is issued and lives for 24h, so by the time it is
+ * read here the org may have been suspended or archived, or the user may
+ * have been removed from it — and with multi-org accounts, being removed
+ * from one workspace while still belonging to others is an ordinary event
+ * rather than a dead end. So the claim is verified against a live
+ * membership, and falls back to the user's default org when it no longer
+ * holds.
+ */
 export default async function RootPage() {
   const cookieStore = await cookies();
   const token = cookieStore.get('access_token')?.value;
@@ -11,31 +25,27 @@ export default async function RootPage() {
     redirect('/login');
   }
 
-  let orgId: string | undefined;
-
+  let claim: { orgId: string; userId: string };
   try {
-    const result = await verifyAccessToken(token);
-    orgId = result.orgId || undefined;
+    claim = await verifyAccessToken(token);
   } catch {
     // Token invalid — redirect to login
     redirect('/login');
   }
 
-  if (orgId) {
-    // Look up the org's human-readable URL key so the workspace URL is stable.
-    const org = await prisma.organization.findUnique({
-      select: { urlKey: true },
-      where: { id: orgId },
-    });
+  const userService = new UserService(prisma);
 
-    if (org?.urlKey) {
-      redirect(`/${org.urlKey}`);
-    }
+  // Both lookups filter out archived/suspended orgs, so whichever wins is a
+  // workspace the session can enter.
+  const org = claim.orgId
+    ? ((await userService.findUsableMembership(claim.userId, claim.orgId))?.organization ??
+      (await userService.getOrganizationForUser(claim.userId)))
+    : await userService.getOrganizationForUser(claim.userId);
 
-    // Fallback to raw UUID if urlKey lookup fails
-    redirect(`/${orgId}`);
+  if (org) {
+    redirect(`/${org.urlKey}`);
   }
 
-  // Authenticated but no org — send to onboarding
+  // Authenticated but no workspace they can enter — send to onboarding
   redirect('/onboarding');
 }

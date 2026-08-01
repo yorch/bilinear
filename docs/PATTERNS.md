@@ -2259,3 +2259,85 @@ A `!` field resolving to null nulls its whole parent and propagates up until it 
 ### 76.6 The drift guard
 
 `src/lib/graphql-documents.test.ts` scans the source tree for embedded documents, inlines the shared field-list constants they interpolate, and validates each against the real `typeDefs`. It catches unknown fields, wrong argument types, and union selections whose sibling fragments disagree on nullability. It does **not** catch anything about runtime values — variables objects, response-type lies, or nullability the SDL declares correctly but the hand-written TS type gets wrong. Those need the conventions above.
+## 77. Multiple Organizations Per User (2026-08-01)
+
+The `organization_members` join table has always allowed a user to hold
+memberships in many organizations, but nothing above the schema did. The
+session's tenant lives in the access token's `orgId` claim, and that claim
+was stamped from `UserService.getOrganizationForUser` — a `findFirst`
+ordered by `createdAt: 'asc'`. Every account was therefore pinned to its
+oldest membership for the life of the account, with no way to reach a
+second workspace short of creating another one (which moved you there and
+stranded you, since the next login re-derived the oldest membership again).
+
+**Switching.** `organizationSwitch(organizationId)` re-reads the caller's
+membership server-side — that lookup *is* the authorization; without it any
+authenticated user could mint a session for an arbitrary org id — then
+returns a fresh token pair in the same payload shape as
+`organizationCreate`. The client installs the tokens via
+`POST /api/auth/session` and then does a **full document load**
+(`window.location.assign`, never `router.push`). The hard navigation is
+load-bearing, not stylistic: a client-side transition keeps the running
+`SyncManager`, MobX stores, and IndexedDB cache of the previous org alive,
+and only a fresh document remounts `SyncProvider` → `SyncManager.start()` →
+`invalidateCacheIfOrgChanged`, which wipes Dexie before hydrating. All of
+this lives in `useOrganizationSwitch` (`src/hooks/use-organization-switch.ts`);
+use the hook rather than re-assembling the sequence.
+
+**Listing.** `viewerOrganizations` returns every org the viewer can enter
+(`UserService.listOrganizationsForUser`), each with their role and a
+`current` flag. It requires only `requireUserId`, deliberately: a user whose
+active workspace was suspended — or whose membership in it was revoked —
+carries a session with a null `orgId`, and listing/switching is their only
+way out. `WorkspaceSwitcher` renders a plain label rather than a dropdown
+when the list has fewer than two entries, so single-org accounts keep the
+header they had.
+
+**"Usable" orgs.** `ORG_USABLE_WHERE` in `user.service.ts`
+(`{ archivedAt: null, suspendedAt: null }`) is the Prisma-`where` twin of
+`checkSessionValidity`'s org arm, which evaluates the same rule against an
+already-fetched row. Keep them in agreement — an org one admits and the
+other rejects is a workspace you can switch into and are immediately thrown
+out of. Every membership lookup that feeds a session (`getOrganizationForUser`,
+`listOrganizationsForUser`, `findUsableMembership`, and the impersonation
+target resolver) filters on it.
+
+**The `orgId` claim is now verified, not just signed.** `checkSessionValidity`
+takes a third argument, the caller's `organization_members` row, and fails
+closed when it is missing. `extractAuthContext` fetches it alongside the
+user/org rows (one extra read on the composite unique index, in the same
+`Promise.all`), and both long-lived-connection sweeps — the WS re-auth sweep
+and the Yjs `revalidateAccess`/`revalidateRoomAccess` pair — pass it too. A
+failed membership check drops `orgId` only, never `userId`: losing one
+workspace must not sign you out of the others. Before this, removing someone
+from an org left them full access to it until their 24h token expired, which
+was survivable when losing your only membership was an edge case and is not
+once revocation is routine.
+
+**API keys are org-bound.** `AuthToken.organizationId` is stamped from the
+creating session (`createApiToken(userId, orgId, label, opts)`), and
+API-key auth reads it instead of inferring the user's oldest membership —
+which, for a multi-org account, silently pointed a key created in one
+workspace at another. A key with no org (created before the column) resolves
+to no org rather than guessing. `listApiTokens`/`revokeApiToken` are
+org-scoped for the same reason, so one workspace's settings page never shows
+another's credentials.
+
+**The `[workspace]` URL segment is authorization-bearing.** It used to be
+decorative — every route below it read `ctx.orgId` and ignored the segment,
+so `/other-org/team/ENG` rendered *your* ENG team under someone else's url
+key. `src/app/(workspace)/[workspace]/layout.tsx` now compares the segment
+to the session: match renders, a mismatch the viewer is a member of renders
+`WorkspaceMismatch` (an explicit switch prompt — re-issuing a session
+because someone followed a GET link is how a link logs a user out of what
+they were doing), and anything else redirects to `/`. The prompt is a client
+component specifically so it can read `window.location.pathname` and land
+the user on the page they were linked to; server layouts don't receive the
+request path. `destinationFor` rebases that path onto the target workspace
+and refuses anything that isn't a plain in-app absolute path, since the
+value reaches `location.assign`.
+
+**Not built:** there is still no in-app invite flow. A second membership
+arrives via SCIM provisioning, SAML JIT, the platform admin console, or by
+creating the org yourself — the switcher makes those reachable, it does not
+create new ways to join.

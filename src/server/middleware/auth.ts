@@ -44,6 +44,16 @@ export interface SessionOrgRow {
   suspendedAt: Date | null;
 }
 
+/**
+ * The caller's `organization_members` row for the session's org, or null if
+ * they have none. Only existence is consulted — per-role authorization is
+ * `requireOrgRole`'s job — but the row shape is kept honest so callers fetch
+ * something meaningful rather than a bare boolean.
+ */
+export interface SessionMembershipRow {
+  role: string;
+}
+
 export interface SessionValidityResult {
   /** Present only when `valid` is `false` — for logging, not user-facing. */
   reason?: string;
@@ -58,15 +68,26 @@ export interface SessionValidityResult {
  * server's `revalidateAccess` (`server/yjs/server.ts`).
  *
  * All three re-derive the same "user still active AND org not
- * suspended/archived" check against freshly re-queried rows — previously
- * written three times, and it had drifted: this file's suspension check
- * only invalidated on `org && (org.suspendedAt || org.archivedAt)` (a
- * *missing* org row left the session alone), while the other two
- * fail-closed on a missing org (`!org || org.suspendedAt || org.archivedAt`).
- * This is the single source of truth going forward — fail-closed: invalid
- * whenever the user row is missing/inactive, OR the org row is
- * missing/suspended/archived. A missing row is always treated as invalid,
+ * suspended/archived AND user still belongs to that org" check against
+ * freshly re-queried rows — previously written three times, and it had
+ * drifted: this file's suspension check only invalidated on `org &&
+ * (org.suspendedAt || org.archivedAt)` (a *missing* org row left the
+ * session alone), while the other two fail-closed on a missing org
+ * (`!org || org.suspendedAt || org.archivedAt`). This is the single source
+ * of truth going forward — fail-closed: invalid whenever the user row is
+ * missing/inactive, the org row is missing/suspended/archived, OR the
+ * membership row is missing. A missing row is always treated as invalid,
  * never as "no constraint to check".
+ *
+ * The membership arm is what makes an access token's `orgId` claim
+ * *verified* rather than merely signed. The claim is stamped at issue time
+ * and lives for the token's full 24h, so before this check a user removed
+ * from an org kept full access to it until the token expired. That was
+ * survivable while every account had exactly one org — losing your only
+ * membership is an edge case, and the org itself is usually what goes away.
+ * Once a user can hold several memberships and switch between them,
+ * revocation is an ordinary event ("remove Dana from the contractor org")
+ * and a 24h tail on it is not acceptable.
  *
  * Operates on already-fetched rows (no DB access itself) so it's a pure,
  * trivially unit-testable predicate — callers own the query shape/timing
@@ -76,12 +97,16 @@ export interface SessionValidityResult {
 export function checkSessionValidity(
   user: SessionUserRow | null | undefined,
   org: SessionOrgRow | null | undefined,
+  membership: SessionMembershipRow | null | undefined,
 ): SessionValidityResult {
   if (!user?.active) {
     return { reason: 'user deactivated', valid: false };
   }
   if (!org || org.suspendedAt || org.archivedAt) {
     return { reason: 'org suspended or archived', valid: false };
+  }
+  if (!membership) {
+    return { reason: 'not a member of this org', valid: false };
   }
   return { valid: true };
 }
@@ -116,16 +141,8 @@ export async function extractAuthContext(
     const authToken = await prisma.authToken.findFirst({
       select: {
         id: true,
+        organizationId: true,
         scopes: true,
-        user: {
-          select: {
-            orgMemberships: {
-              orderBy: { createdAt: 'asc' as const },
-              select: { organizationId: true },
-              take: 1,
-            },
-          },
-        },
         userId: true,
       },
       where: {
@@ -136,7 +153,16 @@ export async function extractAuthContext(
       },
     });
     if (authToken) {
-      const orgId = authToken.user.orgMemberships[0]?.organizationId ?? null;
+      // The key's own org, stamped from the session that created it. This
+      // used to be inferred as the user's oldest membership, which for a
+      // multi-org account pointed the key at whichever workspace they
+      // happened to join first rather than the one they were working in
+      // when they created it. Keys predating the `organization_id` column
+      // have none; they resolve to a null org and fail `requireAuth`
+      // rather than silently guessing a tenant. The membership re-check
+      // below then confirms the creator still belongs to that org, so
+      // revoking someone's membership also disarms their API keys.
+      const orgId = authToken.organizationId;
       void prisma.authToken
         .update({
           data: { lastUsedAt: new Date() },
@@ -162,28 +188,43 @@ export async function extractAuthContext(
   // org is suspended can still reach the /admin console (which needs userId
   // only) while being locked out of the workspace.
   if (prisma && resolved.userId) {
-    // Run the user + org lookups concurrently — they're independent PK reads
-    // and this is the app's hottest path (every authenticated request).
-    const [user, org] = await Promise.all([
+    // Run the user + org + membership lookups concurrently — they're
+    // independent indexed reads and this is the app's hottest path (every
+    // authenticated request). The membership read is the `(organizationId,
+    // userId)` unique index, so it costs the same as the other two.
+    const orgId = resolved.orgId;
+    const userId = resolved.userId;
+    const [user, org, membership] = await Promise.all([
       prisma.user.findUnique({
         select: { active: true },
-        where: { id: resolved.userId },
+        where: { id: userId },
       }),
-      resolved.orgId
+      orgId
         ? prisma.organization.findUnique({
             select: { archivedAt: true, suspendedAt: true },
-            where: { id: resolved.orgId },
+            where: { id: orgId },
+          })
+        : Promise.resolve(null),
+      orgId
+        ? prisma.organizationMember.findUnique({
+            select: { role: true },
+            where: { organizationId_userId: { organizationId: orgId, userId } },
           })
         : Promise.resolve(null),
     ]);
-    const validity = checkSessionValidity(user, org);
+    const validity = checkSessionValidity(user, org, membership);
     if (!validity.valid) {
       if (validity.reason === 'user deactivated') {
         return { ...EMPTY_CONTEXT };
       }
-      // Org invalid (suspended, archived, or — see checkSessionValidity's
-      // doc comment — now also a missing row) drops only `orgId`, not the
-      // whole session. NOTE the intentional tightening here: a missing org
+      // Org unusable (suspended, archived, a missing row, or — see
+      // checkSessionValidity's doc comment — the caller no longer being a
+      // member of it) drops only `orgId`, not the whole session. That is
+      // exactly right for multi-org: losing access to one workspace must
+      // not sign you out of the others, and a session with a null `orgId`
+      // still authenticates well enough to list the orgs you *can* reach
+      // (`viewerOrganizations` needs only `requireUserId`) and switch into
+      // one. NOTE the intentional tightening here: a missing org
       // row used to leave `orgId` untouched (only `org && (...)` invalidated,
       // so a null `org` from the lookup above was silently treated as "no
       // constraint"); `checkSessionValidity` fails closed on it instead. This

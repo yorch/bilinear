@@ -340,8 +340,15 @@ export class AuthService {
     return this.issueTokenPair(userId, orgId);
   }
 
+  /**
+   * Mint an API key bound to `orgId` — the workspace the creating session
+   * was in. The binding is what lets `extractAuthContext` resolve an
+   * API-key request's tenant by reading it rather than guessing; see the
+   * `organizationId` comment on the `AuthToken` model.
+   */
   async createApiToken(
     userId: string,
+    orgId: string,
     label: string,
     opts: { scopes?: string[]; expiresInDays?: number } = {},
   ): Promise<{ plaintext: string; token: AuthToken }> {
@@ -366,22 +373,43 @@ export class AuthService {
     const tokenHash = hashToken(plaintext);
     const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
     const token = await this.prisma.authToken.create({
-      data: { expiresAt, label: label.trim(), scopes, tokenHash, type: 'api_key', userId },
+      data: {
+        expiresAt,
+        label: label.trim(),
+        organizationId: orgId,
+        scopes,
+        tokenHash,
+        type: 'api_key',
+        userId,
+      },
     });
     return { plaintext, token };
   }
 
-  async listApiTokens(userId: string) {
+  /**
+   * Keys visible on a workspace's settings page. Scoped to `orgId` as well
+   * as `userId`: a key belongs to one workspace, so listing (and therefore
+   * revoking) it from another workspace's settings would be showing one
+   * tenant's credentials in another's UI.
+   */
+  async listApiTokens(userId: string, orgId: string) {
     return this.prisma.authToken.findMany({
       orderBy: { createdAt: 'desc' },
-      where: { expiresAt: { gt: new Date() }, revokedAt: null, type: 'api_key', userId },
+      where: {
+        expiresAt: { gt: new Date() },
+        organizationId: orgId,
+        revokedAt: null,
+        type: 'api_key',
+        userId,
+      },
     });
   }
 
-  async revokeApiToken(userId: string, id: string): Promise<void> {
+  /** Org-scoped for the same reason as `listApiTokens`. */
+  async revokeApiToken(userId: string, orgId: string, id: string): Promise<void> {
     await this.prisma.authToken.updateMany({
       data: { revokedAt: new Date() },
-      where: { id, type: 'api_key', userId },
+      where: { id, organizationId: orgId, type: 'api_key', userId },
     });
   }
 

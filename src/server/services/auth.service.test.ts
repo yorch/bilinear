@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { TEST_USER } from '../../test/fixtures';
+import { TEST_ORG, TEST_USER } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
   signGithubOAuthState,
@@ -165,7 +165,7 @@ describe('AuthService — API token scopes & expiry', () => {
 
   it('defaults to [read, write] scopes and a 1-year expiry', async () => {
     const before = Date.now();
-    const { token } = await service.createApiToken(TEST_USER.id, 'CI');
+    const { token } = await service.createApiToken(TEST_USER.id, TEST_ORG.id, 'CI');
     const created = prisma.authToken.create.mock.calls[0]?.[0]?.data as {
       scopes: string[];
       expiresAt: Date;
@@ -177,17 +177,20 @@ describe('AuthService — API token scopes & expiry', () => {
   });
 
   it('honours an explicit read-only scope and custom expiry', async () => {
-    await service.createApiToken(TEST_USER.id, 'readonly', { expiresInDays: 30, scopes: ['read'] });
+    await service.createApiToken(TEST_USER.id, TEST_ORG.id, 'readonly', {
+      expiresInDays: 30,
+      scopes: ['read'],
+    });
     const created = prisma.authToken.create.mock.calls[0]?.[0]?.data as { scopes: string[] };
     expect(created.scopes).toEqual(['read']);
   });
 
   it('rejects unrecognised scopes and out-of-range expiry', async () => {
     await expect(
-      service.createApiToken(TEST_USER.id, 'bad', { scopes: ['admin'] }),
+      service.createApiToken(TEST_USER.id, TEST_ORG.id, 'bad', { scopes: ['admin'] }),
     ).rejects.toThrow(/Invalid scope/);
     await expect(
-      service.createApiToken(TEST_USER.id, 'bad', { expiresInDays: 99999 }),
+      service.createApiToken(TEST_USER.id, TEST_ORG.id, 'bad', { expiresInDays: 99999 }),
     ).rejects.toThrow(/expiresInDays/);
   });
 

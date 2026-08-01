@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createMockPrisma } from '../../test/prisma-mock';
 import {
   type AuthContext,
+  checkSessionValidity,
+  extractAuthContext,
   requireAuth,
   requireOrgRole,
   requirePlatformAdmin,
@@ -270,5 +272,147 @@ describe('requirePlatformAdmin', () => {
   it('returns the userId for a genuine platform admin', async () => {
     prisma.user.findUnique.mockResolvedValue({ isPlatformAdmin: true });
     await expect(requirePlatformAdmin(prisma as never, ctx())).resolves.toBe('user-1');
+  });
+});
+
+describe('checkSessionValidity', () => {
+  const activeUser = { active: true };
+  const liveOrg = { archivedAt: null, suspendedAt: null };
+  const member = { role: 'member' };
+
+  it('is valid when the user is active, the org is live, and membership holds', () => {
+    expect(checkSessionValidity(activeUser, liveOrg, member)).toEqual({ valid: true });
+  });
+
+  it('fails closed on a missing user, org, or membership row', () => {
+    expect(checkSessionValidity(null, liveOrg, member).valid).toBe(false);
+    expect(checkSessionValidity(activeUser, null, member).valid).toBe(false);
+    expect(checkSessionValidity(activeUser, liveOrg, null).valid).toBe(false);
+    expect(checkSessionValidity(undefined, undefined, undefined).valid).toBe(false);
+  });
+
+  it('reports membership loss distinctly from suspension', () => {
+    // The reasons are not interchangeable: `extractAuthContext` logs them,
+    // and "org suspended" vs "you were removed" are different operational
+    // events even though both drop the same `orgId`.
+    expect(checkSessionValidity(activeUser, liveOrg, null).reason).toMatch(/member/);
+    expect(
+      checkSessionValidity(activeUser, { archivedAt: null, suspendedAt: new Date() }, member)
+        .reason,
+    ).toMatch(/suspended/);
+  });
+
+  it('checks the user before the org before the membership', () => {
+    // Order matters for the reason string a caller acts on: a deactivated
+    // user is a full sign-out, an unusable org only drops the org.
+    expect(checkSessionValidity({ active: false }, null, null).reason).toMatch(/deactivated/);
+    expect(checkSessionValidity(activeUser, null, null).reason).toMatch(/suspended|archived/);
+  });
+});
+
+describe('extractAuthContext org membership', () => {
+  const ORG_ID = '00000000-0000-0000-0000-0000000000a1';
+  const USER_ID = '00000000-0000-0000-0000-0000000000b1';
+
+  async function accessTokenFor(orgId: string, userId: string) {
+    const { signAccessToken } = await import('../lib/jwt');
+    return signAccessToken({ orgId, userId });
+  }
+
+  function mockPrismaForSession(membership: { role: string } | null) {
+    const prisma = createMockPrisma();
+    prisma.user.findUnique.mockResolvedValue({ active: true });
+    prisma.organization.findUnique.mockResolvedValue({ archivedAt: null, suspendedAt: null });
+    prisma.organizationMember.findUnique.mockResolvedValue(membership);
+    return prisma;
+  }
+
+  it('keeps orgId when the signed claim is backed by a live membership', async () => {
+    const prisma = mockPrismaForSession({ role: 'member' });
+    const token = await accessTokenFor(ORG_ID, USER_ID);
+
+    const ctx = await extractAuthContext(null, token, prisma as never);
+
+    expect(ctx).toMatchObject({ orgId: ORG_ID, userId: USER_ID });
+    expect(prisma.organizationMember.findUnique).toHaveBeenCalledWith({
+      select: { role: true },
+      where: { organizationId_userId: { organizationId: ORG_ID, userId: USER_ID } },
+    });
+  });
+
+  it('drops orgId — but not the session — once the membership is gone', async () => {
+    // The token is still signed, unexpired, and names a healthy org; only
+    // the membership behind it was revoked. Before this check the claim was
+    // taken at face value for the rest of its 24h life. `userId` survives so
+    // the user can still list and switch into their other workspaces.
+    const prisma = mockPrismaForSession(null);
+    const token = await accessTokenFor(ORG_ID, USER_ID);
+
+    const ctx = await extractAuthContext(null, token, prisma as never);
+
+    expect(ctx.orgId).toBeNull();
+    expect(ctx.userId).toBe(USER_ID);
+  });
+});
+
+describe('extractAuthContext API keys', () => {
+  const ORG_ID = '00000000-0000-0000-0000-0000000000a2';
+  const USER_ID = '00000000-0000-0000-0000-0000000000b2';
+
+  it('resolves the org from the key itself, not the user’s oldest membership', async () => {
+    const prisma = createMockPrisma();
+    prisma.authToken.findFirst.mockResolvedValue({
+      id: 'token-1',
+      organizationId: ORG_ID,
+      scopes: ['read'],
+      userId: USER_ID,
+    });
+    prisma.authToken.update.mockResolvedValue({});
+    prisma.user.findUnique.mockResolvedValue({ active: true });
+    prisma.organization.findUnique.mockResolvedValue({ archivedAt: null, suspendedAt: null });
+    prisma.organizationMember.findUnique.mockResolvedValue({ role: 'member' });
+
+    const ctx = await extractAuthContext(null, 'bil_deadbeef', prisma as never);
+
+    expect(ctx).toMatchObject({ apiKeyScopes: ['read'], orgId: ORG_ID, userId: USER_ID });
+  });
+
+  it('refuses to guess an org for a key that carries none', async () => {
+    // Legacy keys (created before the column existed) have a null org. The
+    // old code substituted the user's first membership, which for a
+    // multi-org account silently pointed the key at the wrong tenant —
+    // resolving to no org at all is the safe reading.
+    const prisma = createMockPrisma();
+    prisma.authToken.findFirst.mockResolvedValue({
+      id: 'token-1',
+      organizationId: null,
+      scopes: [],
+      userId: USER_ID,
+    });
+    prisma.authToken.update.mockResolvedValue({});
+    prisma.user.findUnique.mockResolvedValue({ active: true });
+
+    const ctx = await extractAuthContext(null, 'bil_deadbeef', prisma as never);
+
+    expect(ctx.orgId).toBeNull();
+    expect(prisma.organization.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('disarms a key whose owner was removed from the key’s org', async () => {
+    const prisma = createMockPrisma();
+    prisma.authToken.findFirst.mockResolvedValue({
+      id: 'token-1',
+      organizationId: ORG_ID,
+      scopes: ['read', 'write'],
+      userId: USER_ID,
+    });
+    prisma.authToken.update.mockResolvedValue({});
+    prisma.user.findUnique.mockResolvedValue({ active: true });
+    prisma.organization.findUnique.mockResolvedValue({ archivedAt: null, suspendedAt: null });
+    prisma.organizationMember.findUnique.mockResolvedValue(null);
+
+    const ctx = await extractAuthContext(null, 'bil_deadbeef', prisma as never);
+
+    expect(ctx.orgId).toBeNull();
   });
 });

@@ -1784,3 +1784,34 @@ Key properties:
 - `suspended_at` locks members out (enforced in `extractAuthContext`) without deleting data; `archived_at` is the soft-delete used by "delete tenant".
 - `platform_audit_logs` is deliberately org-agnostic — its actor operates above any tenant. Written best-effort by `PlatformAdminService.recordAudit` and the impersonation routes.
 - Service: `PlatformAdminService` in `src/server/services/platform-admin.service.ts`.
+
+### 2.38 Org-scoped API keys ✅
+
+Binds `auth_tokens` rows of type `api_key` to the organization they were
+created in (see PATTERNS.md §76). Migration:
+`00000000000003_auth_token_organization`.
+
+```sql
+ALTER TABLE auth_tokens ADD COLUMN organization_id UUID;
+ALTER TABLE auth_tokens
+  ADD CONSTRAINT auth_tokens_organization_id_fkey
+  FOREIGN KEY (organization_id) REFERENCES organizations(id)
+  ON DELETE CASCADE ON UPDATE CASCADE;
+CREATE INDEX auth_tokens_organization_id_idx ON auth_tokens (organization_id);
+```
+
+Key properties:
+- Only meaningful for `type = 'api_key'`. `magic_link` and `refresh` rows
+  identify a *user*; the org their session resolves to is decided at access-
+  token issue time (`AuthService.issueTokenPair`), not stored here.
+- Nullable by necessity, not by preference: rows predating the column carry
+  no org. `extractAuthContext` resolves those to a null `orgId` and lets
+  `requireAuth` reject them rather than substituting a guess — the previous
+  behavior (the creator's oldest membership) pointed a multi-org user's key
+  at the wrong tenant.
+- `ON DELETE CASCADE` matches every other organization-owned table: dropping
+  an org takes its API keys with it instead of leaving rows that authenticate
+  into nothing.
+- The membership re-check in `extractAuthContext` applies to API-key requests
+  too, so revoking someone's org membership also disarms the keys they
+  created there — without needing to find and revoke each key.

@@ -676,9 +676,16 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
 
         {/* API tokens */}
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.workspace.apiTokens')}
           </h2>
+          {/* Keys are bound to the workspace they were created in, so this
+              list changes when you switch. Said out loud because otherwise
+              a multi-workspace user switches over and reads the empty list
+              as "my keys were deleted". */}
+          <p className="mb-4 text-xs text-muted-foreground">
+            {t('settings.workspace.apiTokensWorkspaceScoped')}
+          </p>
           <div className="rounded-lg border border-border bg-card divide-y divide-border">
             {/* New plaintext banner — shown only once after creation */}
             {newPlaintext && (
