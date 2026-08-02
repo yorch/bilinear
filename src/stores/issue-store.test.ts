@@ -1,3 +1,4 @@
+import { reaction } from 'mobx';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { DBIssue } from '@/lib/db';
 import { IssueStore } from './issue-store';
@@ -169,6 +170,124 @@ describe('IssueStore', () => {
     it('ignores I/U/A with null data', () => {
       store.applySyncAction('U', '1', null);
       expect(store.findById('1')).toBeNull();
+    });
+  });
+
+  // §3.3/§4.1: the byTeam secondary index. Correctness AND reactivity — the
+  // latter is the whole point (fewer re-renders), so it's tested with real
+  // MobX reactions rather than assumed.
+  describe('byTeam secondary index', () => {
+    it('findByTeamId returns active issues for the team, excluding trashed/archived', () => {
+      store.upsertMany([
+        makeIssue({ id: '1', teamId: 'team-1' }),
+        makeIssue({ id: '2', teamId: 'team-1', trashed: true }),
+        makeIssue({ archivedAt: '2026-02-01T00:00:00Z', id: '3', teamId: 'team-1' }),
+        makeIssue({ id: '4', teamId: 'team-2' }),
+      ]);
+      expect(store.findByTeamId('team-1').map(i => i.id)).toEqual(['1']);
+      expect(store.findByTeamId('team-2').map(i => i.id)).toEqual(['4']);
+      expect(store.findByTeamId('team-nope')).toEqual([]);
+    });
+
+    it('moves an issue between team buckets when its teamId changes', () => {
+      store.upsertMany([makeIssue({ id: '1', teamId: 'team-1' })]);
+      expect(store.findByTeamId('team-1').map(i => i.id)).toEqual(['1']);
+
+      store.applySyncAction('U', '1', makeIssue({ id: '1', teamId: 'team-2' }));
+      expect(store.findByTeamId('team-1')).toEqual([]);
+      expect(store.findByTeamId('team-2').map(i => i.id)).toEqual(['1']);
+    });
+
+    it('drops an issue from its bucket on delete', () => {
+      store.upsertMany([makeIssue({ id: '1', teamId: 'team-1' })]);
+      store.applySyncAction('D', '1', null);
+      expect(store.findByTeamId('team-1')).toEqual([]);
+    });
+
+    it('re-runs a findByTeamId reaction when THIS team gains an issue', () => {
+      const fired: number[] = [];
+      const dispose = reaction(
+        () => store.findByTeamId('team-1').length,
+        len => fired.push(len),
+      );
+      store.applySyncAction(
+        'I',
+        '1',
+        makeIssue({ id: '1', identifier: 'ENG-1', teamId: 'team-1' }),
+      );
+      dispose();
+      expect(fired).toEqual([1]);
+    });
+
+    it('does NOT re-run a team-1 reaction when a DIFFERENT team gains an issue', () => {
+      store.upsertMany([makeIssue({ id: '1', teamId: 'team-1' })]);
+      let runs = 0;
+      const dispose = reaction(
+        () => store.findByTeamId('team-1').map(i => i.id),
+        () => {
+          runs += 1;
+        },
+      );
+      // Activity on an unrelated team must not invalidate team-1's selector —
+      // the win the index exists for (the old whole-pool scan re-ran here).
+      store.applySyncAction(
+        'I',
+        '2',
+        makeIssue({ id: '2', identifier: 'DES-1', teamId: 'team-2' }),
+      );
+      dispose();
+      expect(runs).toBe(0);
+    });
+
+    it('re-runs a team-1 reaction when one of its OWN issues is trashed', () => {
+      store.upsertMany([makeIssue({ id: '1', teamId: 'team-1' })]);
+      const fired: number[] = [];
+      const dispose = reaction(
+        () => store.findByTeamId('team-1').length,
+        len => fired.push(len),
+      );
+      store.applySyncAction('U', '1', makeIssue({ id: '1', teamId: 'team-1', trashed: true }));
+      dispose();
+      expect(fired).toEqual([0]);
+    });
+
+    it('preserves a team bucket reference across a same-membership bulk upsert', () => {
+      // A bulk field-only update (a delta page, a bulk status change) must not
+      // swap a touched team's bucket Set when its membership is unchanged —
+      // that would allocate a fresh Set and dirty the `byTeam` observable for
+      // every team in the batch on the hot bootstrap path, for nothing. The
+      // bucket identity is the direct signal; `findByTeamId` selectors re-run on
+      // the pool-entry changes regardless (that's correct — the data changed).
+      store.upsertMany([
+        makeIssue({ id: '1', teamId: 'team-1', title: 'A' }),
+        makeIssue({ id: '2', teamId: 'team-1', title: 'B' }),
+      ]);
+      const bucketBefore = (store as unknown as { byTeam: Map<string, Set<string>> }).byTeam.get(
+        'team-1',
+      );
+      store.upsertMany([
+        makeIssue({ id: '1', teamId: 'team-1', title: 'A2' }),
+        makeIssue({ id: '2', teamId: 'team-1', title: 'B2' }),
+      ]);
+      const bucketAfter = (store as unknown as { byTeam: Map<string, Set<string>> }).byTeam.get(
+        'team-1',
+      );
+      expect(bucketAfter).toBe(bucketBefore);
+    });
+
+    it('re-runs a team-1 reaction on a bulk upsert that adds a new team-1 issue', () => {
+      store.upsertMany([makeIssue({ id: '1', teamId: 'team-1' })]);
+      const fired: string[][] = [];
+      const dispose = reaction(
+        () => store.findByTeamId('team-1').map(i => i.id),
+        ids => fired.push(ids),
+      );
+      store.upsertMany([
+        makeIssue({ id: '1', teamId: 'team-1' }), // unchanged
+        makeIssue({ id: '2', teamId: 'team-1' }), // new member
+      ]);
+      dispose();
+      expect(fired).toEqual([['1', '2']]);
     });
   });
 });
