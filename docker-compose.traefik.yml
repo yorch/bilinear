@@ -53,6 +53,32 @@ services:
       # tie-break against the app's catch-all Host() router.
       - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}-ws.priority=100"
 
+  # Collaborative editing, same treatment as `ws` above. Inert unless the
+  # `collab` profile is active, since the service itself does not start
+  # without it.
+  #
+  # The prefix must NOT be stripped. Hocuspocus sends the document name
+  # in-band rather than in the URL (verified against @hocuspocus/provider:
+  # the socket is opened at exactly the configured URL, and the server takes
+  # the path only as a peer-grouping namespace), so `/collab` is inherited
+  # identically by every client and the document name survives untouched. A
+  # stripPrefix middleware here would be harmless but pointless.
+  yjs:
+    ports: !reset []
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      - "traefik.http.services.${TRAEFIK_NAME:-bilinear}-yjs.loadbalancer.server.port=1234"
+      - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}-yjs.rule=Host(`${DOMAIN_APP:?DOMAIN_APP must be set when using docker-compose.traefik.yml}`) && PathPrefix(`/collab`)"
+      - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}-yjs.entrypoints=websecure"
+      - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}-yjs.tls=true"
+      - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}-yjs.tls.certResolver=webcert"
+      - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}-yjs.service=${TRAEFIK_NAME:-bilinear}-yjs"
+      - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}-yjs.priority=100"
+
   postgres:
     networks:
       - default

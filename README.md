@@ -256,11 +256,11 @@ Two long-running processes are required in production alongside the Next.js app:
 | Process                     | Command           | Wired into compose?  | Responsibilities                                                                                                 |
 | --------------------------- | ----------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | **WebSocket server**        | `yarn ws:server`  | Yes — the `ws` service | Real-time sync fan-out (Redis Pub/Sub → connected clients), webhook retry sweep (every 30s), cycle auto-rollover |
-| **YJS server** *(optional)* | `yarn yjs:server` | No — run it yourself | Collaborative editing — only needed when `NEXT_PUBLIC_COLLAB_ENABLED=true`                                       |
+| **YJS server** *(optional)* | `yarn yjs:server` | Yes — the `yjs` service, under the `collab` profile | Multi-cursor collaborative editing                          |
 
-The `ws` service runs from the same image as the app (which ships the TypeScript
-source and runs it via `tsx`), with the migrating entrypoint overridden so only
-the app container runs `prisma migrate deploy`.
+Both run from the same image as the app (which ships the TypeScript source and
+runs it via `tsx`), with the migrating entrypoint overridden so only the app
+container runs `prisma migrate deploy`.
 
 > **Warning:** The webhook retry sweep and cycle auto-rollover run exclusively inside the WS server process. If it is not running, scheduled webhooks will not be retried and cycles will not roll over automatically.
 
@@ -285,6 +285,30 @@ listener and certificate — a browser on an `https://` page cannot open a plain
 `ws://` socket, and a raw port behind a proxy that only terminates TLS on :443
 has no certificate to present. That mismatch surfaces as
 `WebSocket connection to 'wss://host:3001/?token=…' failed`.
+
+#### Enabling collaborative editing
+
+Off by default. Three settings turn it on, and they must move together —
+enabling the feature without running the server (or the reverse) is the one way
+to get a broken editor:
+
+```bash
+# .env
+COLLAB_ENABLED=true       # activates the feature in the UI
+YJS_PUBLIC_URL=/collab    # where the browser reaches the YJS server
+COMPOSE_PROFILES=collab   # actually starts the `yjs` container
+```
+
+`YJS_PUBLIC_URL` takes the same shapes as `WS_PUBLIC_URL`, and both are read at
+request time — so, again, no rebuild. The `traefik` overlay routes
+`Host(DOMAIN_APP) && PathPrefix('/collab')` to the `yjs` service on the same
+`websecure` entrypoint.
+
+**A proxy routing that path must not strip the prefix.** Hocuspocus sends the
+document name in-band rather than in the URL, and the server reads the path only
+as a peer-grouping namespace — so every client inherits `/collab` identically
+and the document name is unaffected. Stripping it would be harmless but is not
+needed; adding a rewrite that changes the path *per client* would not be.
 
 ---
 

@@ -115,6 +115,22 @@ export const env = Object.freeze({
     return boolEnv('AUTH_RATE_LIMIT_FAIL_CLOSED');
   },
 
+  /**
+   * Multi-cursor collaborative editing (requires the YJS server to be
+   * running). Runtime counterpart to the build-time
+   * `NEXT_PUBLIC_COLLAB_ENABLED`, which a deployment running a prebuilt
+   * image cannot set — meaning collab was previously unreachable for those
+   * deployments no matter how they configured it.
+   *
+   * Deliberately NOT `boolEnv`: every flag that helper covers uses `=== '1'`,
+   * but this one's pre-existing documented spelling is `=== 'true'`. Both are
+   * accepted so neither convention silently fails.
+   */
+  get COLLAB_ENABLED(): boolean {
+    const raw = process.env.COLLAB_ENABLED?.trim().toLowerCase();
+    return raw === 'true' || raw === '1';
+  },
+
   /** Fraction of successful, fast requests to emit an access log for. */
   get LOG_HTTP_SAMPLE_RATE(): number {
     return sampleRateEnv('LOG_HTTP_SAMPLE_RATE');
@@ -155,5 +171,15 @@ export const env = Object.freeze({
   /** Standalone YJS collaborative-editing server port (`yarn yjs:server`). */
   get YJS_PORT(): number {
     return numericEnv('YJS_PORT', { default: 1234, max: 65535, min: 1 });
+  },
+
+  /**
+   * Public endpoint the BROWSER uses to reach the YJS server. Same shapes and
+   * the same runtime-vs-build-time reasoning as `WS_PUBLIC_URL` — see
+   * `src/lib/ws-url.ts`, which resolves both.
+   */
+  get YJS_PUBLIC_URL(): string | null {
+    const raw = process.env.YJS_PUBLIC_URL?.trim();
+    return raw ? raw : null;
   },
 });

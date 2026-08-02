@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { resolveWsUrl, type WsOrigin } from './ws-url';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_YJS_PORT } from './collab';
+import { resolveBrowserWsUrl, resolveWsUrl, type WsOrigin } from './ws-url';
 
 const HTTPS: WsOrigin = {
   host: 'bilinear.brnby.com',
@@ -67,6 +68,33 @@ describe('resolveWsUrl', () => {
     it('adopts the page scheme rather than falling back to the default port', () => {
       expect(resolveWsUrl('rt.example.com', HTTPS)).toBe('wss://rt.example.com');
       expect(resolveWsUrl('rt.example.com:3001', LOCALHOST)).toBe('ws://rt.example.com:3001');
+    });
+  });
+
+  describe('resolveBrowserWsUrl', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('returns empty string with no window, so callers skip connecting', () => {
+      // This suite runs in the node environment — `window` is genuinely absent.
+      expect(resolveBrowserWsUrl('/ws')).toBe('');
+    });
+
+    it('resolves against the live location once a window exists', () => {
+      vi.stubGlobal('window', { location: HTTPS });
+      expect(resolveBrowserWsUrl('/ws')).toBe('wss://bilinear.brnby.com/ws');
+    });
+
+    it('serves the collab socket from the same helper as the sync socket', () => {
+      vi.stubGlobal('window', { location: HTTPS });
+      expect(resolveBrowserWsUrl('/collab', DEFAULT_YJS_PORT)).toBe(
+        'wss://bilinear.brnby.com/collab',
+      );
+      // Unconfigured collab falls back to the YJS port, not the WS one.
+      expect(resolveBrowserWsUrl(undefined, DEFAULT_YJS_PORT)).toBe(
+        'wss://bilinear.brnby.com:1234',
+      );
     });
   });
 

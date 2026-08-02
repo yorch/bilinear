@@ -16,6 +16,10 @@ services:
       # No reverse proxy in this overlay, so point the browser straight at
       # the published `ws` port below rather than at a same-origin path.
       WS_PUBLIC_URL: ${WS_PUBLIC_URL:-ws://localhost:${WS_PORT_PUBLISHED:-3001}}
+      # Same reasoning for collab — no proxy here, so point at the published
+      # `yjs` port. Needs `--profile collab` for that service to run.
+      COLLAB_ENABLED: ${COLLAB_ENABLED:-false}
+      YJS_PUBLIC_URL: ${YJS_PUBLIC_URL:-ws://localhost:${YJS_PORT_PUBLISHED:-1234}}
     depends_on:
       postgres:
         condition: service_healthy
@@ -36,6 +40,28 @@ services:
       - .env
     environment:
       WS_PORT: "3001"
+      DATABASE_URL: ${DATABASE_URL_OVERRIDE:-postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/${POSTGRES_DB:-bilinear}}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # See docker-compose.prod.yml. Only runs under `--profile collab`.
+  yjs:
+    build:
+      context: .
+    init: true
+    restart: unless-stopped
+    profiles: ["collab"]
+    entrypoint: ["node", "./node_modules/tsx/dist/cli.mjs", "src/server/yjs/index.ts"]
+    ports:
+      - ${YJS_PORT_PUBLISHED:-1234}:1234
+    env_file:
+      - .env
+    environment:
+      YJS_PORT: "1234"
       DATABASE_URL: ${DATABASE_URL_OVERRIDE:-postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/${POSTGRES_DB:-bilinear}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
     depends_on:
