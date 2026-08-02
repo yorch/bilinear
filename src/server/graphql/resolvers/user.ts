@@ -34,7 +34,11 @@ export const userResolvers = {
         });
       }
       try {
-        const result = await ctx.services.auth.createApiToken(ctx.userId, label, {
+        // Bind the key to the org this session is currently in. For a
+        // multi-org account that's the only defensible choice — a key is
+        // created from a specific workspace's settings page, and inferring
+        // the org later (as API-key auth used to) picked the wrong one.
+        const result = await ctx.services.auth.createApiToken(ctx.userId, ctx.orgId, label, {
           expiresInDays,
           scopes,
         });
@@ -48,7 +52,7 @@ export const userResolvers = {
 
     apiTokenRevoke: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
-      await ctx.services.auth.revokeApiToken(ctx.userId, id);
+      await ctx.services.auth.revokeApiToken(ctx.userId, ctx.orgId, id);
       return { success: true };
     },
 
@@ -98,7 +102,7 @@ export const userResolvers = {
   Query: {
     apiTokens: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
-      return ctx.services.auth.listApiTokens(ctx.userId);
+      return ctx.services.auth.listApiTokens(ctx.userId, ctx.orgId);
     },
 
     viewer: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {

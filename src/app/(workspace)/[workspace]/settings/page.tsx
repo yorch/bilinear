@@ -2,11 +2,11 @@
 
 import { Calendar, ChevronRight, Copy, Key, Lock, RefreshCw, Trash2, Users } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { LanguageToggle } from '@/components/language-toggle';
+import { MembersSection } from '@/components/settings/members-section';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { useFormatters } from '@/hooks/use-formatters';
@@ -30,10 +30,6 @@ const ORGANIZATION_QUERY = `
       aiEnabled
       createdAt
     }
-    organizationMembers {
-      userId
-      role
-    }
   }
 `;
 
@@ -42,14 +38,6 @@ const AI_SETTINGS_UPDATE_MUTATION = `
     aiSettingsUpdate(enabled: $enabled) {
       success
       organization { id aiEnabled }
-    }
-  }
-`;
-
-const UPDATE_ORG_MEMBER_ROLE_MUTATION = `
-  mutation UpdateOrgMemberRole($userId: ID!, $role: String!) {
-    organizationMemberUpdateRole(userId: $userId, role: $role) {
-      success
     }
   }
 `;
@@ -130,42 +118,18 @@ const TOKEN_EXPIRY_OPTIONS = [
   { days: 730, labelKey: 'settings.tokenExpiry.730' },
 ] as const;
 
-const ORG_ROLES = ['owner', 'admin', 'member', 'guest'] as const;
-type OrgRole = (typeof ORG_ROLES)[number];
-
-const ROLE_BADGES: Record<OrgRole, { labelKey: string; cls: string }> = {
-  admin: {
-    cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-    labelKey: 'settings.roles.admin',
-  },
-  guest: {
-    cls: 'bg-muted text-muted-foreground',
-    labelKey: 'settings.roles.guest',
-  },
-  member: {
-    cls: 'bg-muted text-muted-foreground',
-    labelKey: 'settings.roles.member',
-  },
-  owner: {
-    cls: 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground',
-    labelKey: 'settings.roles.owner',
-  },
-};
-
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
 const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const { workspace } = useParams<{ workspace: string }>();
-  const { userStore, teamStore } = useStore();
+  const { teamStore } = useStore();
   const t = useTranslations();
   const { formatDate } = useFormatters();
 
   const [org, setOrg] = useState<OrgInfo | null>(null);
   const [loading, setLoading] = useState(true);
-  const [updatingRole, setUpdatingRole] = useState<string | null>(null);
-  const [memberRoles, setMemberRoles] = useState<Record<string, OrgRole>>({});
   const [calendarFeedUrl, setCalendarFeedUrl] = useState<string | null>(null);
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
@@ -200,10 +164,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    gqlQuery<{
-      organization?: OrgInfo;
-      organizationMembers?: { role: string; userId: string }[];
-    }>(ORGANIZATION_QUERY)
+    gqlQuery<{ organization?: OrgInfo }>(ORGANIZATION_QUERY)
       .then(data => {
         if (cancelled) {
           return;
@@ -211,20 +172,12 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
         if (data?.organization) {
           setOrg(data.organization);
         }
-        if (data?.organizationMembers) {
-          const roles: Record<string, OrgRole> = {};
-          for (const m of data.organizationMembers) {
-            if (ORG_ROLES.includes(m.role as OrgRole)) {
-              roles[m.userId] = m.role as OrgRole;
-            }
-          }
-          setMemberRoles(roles);
-        }
       })
       .catch(err => {
         if (!cancelled) {
-          // `org` stays null so the section renders its load-error state; the
-          // toast also covers the member roles, which come from this same read.
+          // `org` stays null so the section renders its load-error state.
+          // The members roster used to ride this same document and no longer
+          // does — MembersSection fetches and retries it independently.
           toast.error(getErrorMessage(err, t('settings.workspace.orgLoadError')));
         }
       })
@@ -342,7 +295,6 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
     }
   }
 
-  const members = userStore.all;
   const allTeams = teamStore.all;
   const teams = useMemo(() => {
     const rootTeams = allTeams.filter(t => !t.parentId);
@@ -357,19 +309,6 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
     }, {});
     return rootTeams.flatMap(t => [t, ...(childTeamsByParent[t.id] ?? [])]);
   }, [allTeams]);
-
-  const updateMemberRole = async (userId: string, role: OrgRole) => {
-    setUpdatingRole(userId);
-    try {
-      await gqlMutate(UPDATE_ORG_MEMBER_ROLE_MUTATION, { role, userId });
-      setMemberRoles(prev => ({ ...prev, [userId]: role }));
-      toast.success(t('settings.workspace.memberRoleUpdated'));
-    } catch {
-      toast.error(t('settings.workspace.memberRoleUpdateError'));
-    } finally {
-      setUpdatingRole(null);
-    }
-  };
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
@@ -518,81 +457,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
           </div>
         </section>
 
-        <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {t('settings.workspace.members')}
-            <span className="ml-2 font-normal normal-case text-foreground-faint">
-              {members.length}
-            </span>
-          </h2>
-          <div className="rounded-lg border border-border bg-card overflow-hidden">
-            {members.length === 0 ? (
-              <p className="px-5 py-4 text-sm text-muted-foreground">
-                {t('settings.workspace.noMembersFound')}
-              </p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {members.map(user => {
-                  const currentRole = (memberRoles[user.id] ?? 'member') as OrgRole;
-                  const roleBadge = ROLE_BADGES[currentRole];
-                  const isUpdating = updatingRole === user.id;
-                  return (
-                    <li className="flex items-center gap-3 px-5 py-3" key={user.id}>
-                      {user.avatarUrl ? (
-                        <Image
-                          alt={user.displayName}
-                          className="h-7 w-7 rounded-full object-cover shrink-0"
-                          height={28}
-                          src={user.avatarUrl}
-                          unoptimized
-                          width={28}
-                        />
-                      ) : (
-                        <span
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white"
-                          style={{ backgroundColor: user.avatarBgColor }}
-                        >
-                          {user.initials}
-                        </span>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">
-                          {user.displayName}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                      </div>
-                      {!user.active && (
-                        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                          {t('settings.workspace.inactive')}
-                        </span>
-                      )}
-                      {/* Role badge + dropdown */}
-                      <div className="relative shrink-0">
-                        <select
-                          className={cn(
-                            'appearance-none rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer',
-                            'border border-transparent focus:outline-none focus:ring-1 focus:ring-brand',
-                            'disabled:opacity-50 disabled:cursor-not-allowed',
-                            roleBadge.cls,
-                          )}
-                          disabled={isUpdating}
-                          onChange={e => updateMemberRole(user.id, e.target.value as OrgRole)}
-                          value={currentRole}
-                        >
-                          {ORG_ROLES.map(r => (
-                            <option key={r} value={r}>
-                              {t(ROLE_BADGES[r].labelKey)}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-        </section>
+        <MembersSection />
 
         {/* Personal preferences */}
         <section>
@@ -676,9 +541,16 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
 
         {/* API tokens */}
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.workspace.apiTokens')}
           </h2>
+          {/* Keys are bound to the workspace they were created in, so this
+              list changes when you switch. Said out loud because otherwise
+              a multi-workspace user switches over and reads the empty list
+              as "my keys were deleted". */}
+          <p className="mb-4 text-xs text-muted-foreground">
+            {t('settings.workspace.apiTokensWorkspaceScoped')}
+          </p>
           <div className="rounded-lg border border-border bg-card divide-y divide-border">
             {/* New plaintext banner — shown only once after creation */}
             {newPlaintext && (

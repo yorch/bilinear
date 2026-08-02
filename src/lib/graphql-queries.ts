@@ -90,6 +90,93 @@ export const ORGANIZATION_CREATE_MUTATION = `
   }
 `;
 
+const INVITE_FIELDS = 'id email role expiresAt';
+
+export const ORGANIZATION_MEMBERS_QUERY = `
+  query OrganizationMembers {
+    organizationMembers { userId role }
+  }
+`;
+
+/**
+ * Owner/admin-only, so it is issued separately and only once the roster has
+ * established the viewer can manage. Folding it into the roster document
+ * would save a round trip but relies on a partial response — `data` populated
+ * beside a FORBIDDEN — which PATTERNS §76.1/§76.2 call out as exactly the
+ * shape that makes a real failure indistinguishable from "nothing here".
+ */
+export const ORGANIZATION_INVITES_QUERY = `
+  query OrganizationInvites {
+    organizationInvites { ${INVITE_FIELDS} }
+  }
+`;
+
+export const UPDATE_ORG_MEMBER_ROLE_MUTATION = `
+  mutation OrganizationMemberUpdateRole($userId: ID!, $role: String!) {
+    organizationMemberUpdateRole(userId: $userId, role: $role) { success lastSyncId }
+  }
+`;
+
+export const ORGANIZATION_INVITE_CREATE_MUTATION = `
+  mutation OrganizationInviteCreate($email: String!, $role: String!) {
+    organizationInviteCreate(email: $email, role: $role) {
+      success
+      invite { ${INVITE_FIELDS} }
+    }
+  }
+`;
+
+export const ORGANIZATION_INVITE_REVOKE_MUTATION = `
+  mutation OrganizationInviteRevoke($id: ID!) {
+    organizationInviteRevoke(id: $id) { success }
+  }
+`;
+
+export const ORGANIZATION_INVITE_ACCEPT_MUTATION = `
+  mutation OrganizationInviteAccept($token: String!) {
+    organizationInviteAccept(token: $token) {
+      success
+      accessToken
+      refreshToken
+      expiresIn
+      organization { id name urlKey }
+    }
+  }
+`;
+
+export const ORGANIZATION_MEMBER_REMOVE_MUTATION = `
+  mutation OrganizationMemberRemove($userId: ID!) {
+    organizationMemberRemove(userId: $userId) { success lastSyncId }
+  }
+`;
+
+export const VIEWER_ORGANIZATIONS_QUERY = `
+  query ViewerOrganizations {
+    viewerOrganizations {
+      id
+      name
+      role
+      current
+    }
+  }
+`;
+
+export const ORGANIZATION_SWITCH_MUTATION = `
+  mutation OrganizationSwitch($organizationId: ID!) {
+    organizationSwitch(organizationId: $organizationId) {
+      success
+      accessToken
+      refreshToken
+      expiresIn
+      organization {
+        id
+        name
+        urlKey
+      }
+    }
+  }
+`;
+
 // ── Teams ─────────────────────────────────────────────────────────────────────
 
 export const TEAM_CREATE_MUTATION = `

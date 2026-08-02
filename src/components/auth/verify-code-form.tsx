@@ -7,6 +7,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import { installSessionCookies } from '@/lib/auth-session';
 import { gql } from '@/lib/graphql';
 import { EMAIL_VERIFY_MUTATION } from '@/lib/graphql-queries';
+import { safeRelativePath } from '@/lib/safe-path';
 
 export function VerifyCodeForm() {
   const router = useRouter();
@@ -14,6 +15,10 @@ export function VerifyCodeForm() {
   const searchParams = useSearchParams();
   const email = searchParams.get('email') ?? '';
   const prefillCode = searchParams.get('code') ?? '';
+  // Present when the sign-in was started from a link that needs a session
+  // (an invitation). Absent for a magic link opened in a fresh tab, which
+  // falls back to the root redirect.
+  const next = safeRelativePath(searchParams.get('next')) ?? '/';
 
   const [code, setCode] = useState(prefillCode);
   const [loading, setLoading] = useState(false);
@@ -59,7 +64,7 @@ export function VerifyCodeForm() {
       // Store tokens in httpOnly cookies via the session API
       await installSessionCookies({ accessToken, refreshToken });
 
-      router.push('/');
+      router.push(next);
     } catch {
       setError(t('common.somethingWentWrong'));
     } finally {

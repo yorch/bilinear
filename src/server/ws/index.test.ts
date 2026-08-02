@@ -76,34 +76,44 @@ describe('ws/index shouldTerminateConnection', () => {
   const liveOrg = { archivedAt: null, suspendedAt: null };
   const suspendedOrg = { archivedAt: null, suspendedAt: new Date('2026-07-01T00:00:00Z') };
   const archivedOrg = { archivedAt: new Date('2026-07-01T00:00:00Z'), suspendedAt: null };
+  const member = { role: 'member' };
 
-  it('keeps a connection whose user is active and org is not suspended/archived', () => {
-    expect(shouldTerminateConnection(activeUser, liveOrg)).toBe(false);
+  it('keeps a connection whose user is active, org is live, and membership holds', () => {
+    expect(shouldTerminateConnection(activeUser, liveOrg, member)).toBe(false);
   });
 
   it('terminates when the user has been deactivated', () => {
-    expect(shouldTerminateConnection(deactivatedUser, liveOrg)).toBe(true);
+    expect(shouldTerminateConnection(deactivatedUser, liveOrg, member)).toBe(true);
   });
 
   it('terminates when the user row is missing (deleted)', () => {
-    expect(shouldTerminateConnection(undefined, liveOrg)).toBe(true);
-    expect(shouldTerminateConnection(null, liveOrg)).toBe(true);
+    expect(shouldTerminateConnection(undefined, liveOrg, member)).toBe(true);
+    expect(shouldTerminateConnection(null, liveOrg, member)).toBe(true);
   });
 
   it('terminates when the org is suspended', () => {
-    expect(shouldTerminateConnection(activeUser, suspendedOrg)).toBe(true);
+    expect(shouldTerminateConnection(activeUser, suspendedOrg, member)).toBe(true);
   });
 
   it('terminates when the org is archived', () => {
-    expect(shouldTerminateConnection(activeUser, archivedOrg)).toBe(true);
+    expect(shouldTerminateConnection(activeUser, archivedOrg, member)).toBe(true);
   });
 
   it('terminates when the org row is missing (deleted)', () => {
-    expect(shouldTerminateConnection(activeUser, undefined)).toBe(true);
-    expect(shouldTerminateConnection(activeUser, null)).toBe(true);
+    expect(shouldTerminateConnection(activeUser, undefined, member)).toBe(true);
+    expect(shouldTerminateConnection(activeUser, null, member)).toBe(true);
+  });
+
+  // The multi-org case: the org is fine and the user is fine, but they no
+  // longer belong to it. Before the membership arm existed, this connection
+  // stayed open (and kept receiving the org's SyncActions) until the
+  // 24h access token expired.
+  it('terminates when the user has been removed from the org', () => {
+    expect(shouldTerminateConnection(activeUser, liveOrg, null)).toBe(true);
+    expect(shouldTerminateConnection(activeUser, liveOrg, undefined)).toBe(true);
   });
 
   it('terminates when both user and org checks fail', () => {
-    expect(shouldTerminateConnection(deactivatedUser, suspendedOrg)).toBe(true);
+    expect(shouldTerminateConnection(deactivatedUser, suspendedOrg, member)).toBe(true);
   });
 });

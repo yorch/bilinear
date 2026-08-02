@@ -15,6 +15,8 @@ export type AuditAction =
   | 'issue.bulk_updated'
   | 'issue.created'
   | 'issue.deleted'
+  | 'member.invite_accepted'
+  | 'member.invite_revoked'
   | 'member.invited'
   | 'member.removed'
   | 'member.role_changed'

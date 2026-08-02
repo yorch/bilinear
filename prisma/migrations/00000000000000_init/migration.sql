@@ -92,6 +92,7 @@ CREATE TABLE "auth_tokens" (
     "id" UUID NOT NULL,
     "user_id" UUID NOT NULL,
     "type" VARCHAR(20) NOT NULL,
+    "organization_id" UUID,
     "token_hash" TEXT NOT NULL,
     "code" VARCHAR(6),
     "family_id" UUID,
@@ -857,6 +858,24 @@ CREATE TABLE "scim_tokens" (
     CONSTRAINT "scim_tokens_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "organization_invites" (
+    "id" UUID NOT NULL,
+    "organization_id" UUID NOT NULL,
+    "email" VARCHAR(255) NOT NULL,
+    "role" VARCHAR(20) NOT NULL DEFAULT 'member',
+    "token_hash" VARCHAR(64) NOT NULL,
+    "invited_by_id" UUID,
+    "expires_at" TIMESTAMPTZ NOT NULL,
+    "accepted_at" TIMESTAMPTZ,
+    "accepted_by_id" UUID,
+    "revoked_at" TIMESTAMPTZ,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT "organization_invites_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "organizations_url_key_key" ON "organizations"("url_key");
 
@@ -889,6 +908,9 @@ CREATE INDEX "platform_audit_logs_actor_id_idx" ON "platform_audit_logs"("actor_
 
 -- CreateIndex
 CREATE INDEX "auth_tokens_user_id_idx" ON "auth_tokens"("user_id");
+
+-- CreateIndex
+CREATE INDEX "auth_tokens_organization_id_idx" ON "auth_tokens"("organization_id");
 
 -- CreateIndex
 CREATE INDEX "auth_tokens_family_id_idx" ON "auth_tokens"("family_id");
@@ -1259,6 +1281,12 @@ CREATE UNIQUE INDEX "scim_tokens_token_hash_key" ON "scim_tokens"("token_hash");
 -- CreateIndex
 CREATE INDEX "scim_tokens_organization_id_idx" ON "scim_tokens"("organization_id");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "organization_invites_token_hash_key" ON "organization_invites"("token_hash");
+
+-- CreateIndex
+CREATE INDEX "organization_invites_organization_id_email_idx" ON "organization_invites"("organization_id", "email");
+
 -- AddForeignKey
 ALTER TABLE "organization_members" ADD CONSTRAINT "organization_members_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -1270,6 +1298,9 @@ ALTER TABLE "platform_audit_logs" ADD CONSTRAINT "platform_audit_logs_actor_id_f
 
 -- AddForeignKey
 ALTER TABLE "auth_tokens" ADD CONSTRAINT "auth_tokens_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "auth_tokens" ADD CONSTRAINT "auth_tokens_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "teams" ADD CONSTRAINT "teams_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1573,4 +1604,13 @@ ALTER TABLE "scim_tokens" ADD CONSTRAINT "scim_tokens_organization_id_fkey" FORE
 
 -- AddForeignKey
 ALTER TABLE "scim_tokens" ADD CONSTRAINT "scim_tokens_created_by_id_fkey" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "organization_invites" ADD CONSTRAINT "organization_invites_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "organization_invites" ADD CONSTRAINT "organization_invites_invited_by_id_fkey" FOREIGN KEY ("invited_by_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "organization_invites" ADD CONSTRAINT "organization_invites_accepted_by_id_fkey" FOREIGN KEY ("accepted_by_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 

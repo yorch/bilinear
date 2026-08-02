@@ -1784,3 +1784,82 @@ Key properties:
 - `suspended_at` locks members out (enforced in `extractAuthContext`) without deleting data; `archived_at` is the soft-delete used by "delete tenant".
 - `platform_audit_logs` is deliberately org-agnostic — its actor operates above any tenant. Written best-effort by `PlatformAdminService.recordAudit` and the impersonation routes.
 - Service: `PlatformAdminService` in `src/server/services/platform-admin.service.ts`.
+
+### 2.38 Org-scoped API keys ✅
+
+Binds `auth_tokens` rows of type `api_key` to the organization they were
+created in (see PATTERNS.md §77). Part of the consolidated
+`00000000000000_init` — nothing is deployed yet, so this landed by
+regenerating the baseline rather than as a forward migration.
+
+```sql
+ALTER TABLE auth_tokens ADD COLUMN organization_id UUID;
+ALTER TABLE auth_tokens
+  ADD CONSTRAINT auth_tokens_organization_id_fkey
+  FOREIGN KEY (organization_id) REFERENCES organizations(id)
+  ON DELETE CASCADE ON UPDATE CASCADE;
+CREATE INDEX auth_tokens_organization_id_idx ON auth_tokens (organization_id);
+```
+
+Key properties:
+- Written for `api_key` **and** `refresh` rows — both are credentials bound
+  to one tenant. For an API key it is the workspace the key acts on; for a
+  refresh token it is the workspace the session belongs to, read back on
+  rotation so a switched multi-org session isn't dragged to a different org
+  the next time its access token expires. `magic_link` rows never set it:
+  they identify a user before any org is chosen.
+- Nullable by necessity, not by preference: rows predating the column carry
+  no org. `extractAuthContext` resolves those to a null `orgId` and lets
+  `requireAuth` reject them rather than substituting a guess — the previous
+  behavior (the creator's oldest membership) pointed a multi-org user's key
+  at the wrong tenant.
+- `ON DELETE CASCADE` matches every other organization-owned table: dropping
+  an org takes its API keys with it instead of leaving rows that authenticate
+  into nothing.
+- The membership re-check in `extractAuthContext` applies to API-key requests
+  too, so revoking someone's org membership also disarms the keys they
+  created there — without needing to find and revoke each key.
+
+### 2.39 Organization Invites ✅
+
+Pending invitations to join an organization (see PATTERNS.md §78). Part of
+the consolidated `00000000000000_init`, same as §2.38.
+
+```sql
+CREATE TABLE organization_invites (
+    id              UUID PRIMARY KEY,
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    email           VARCHAR(255) NOT NULL,   -- lowercased at write time
+    role            VARCHAR(20) NOT NULL DEFAULT 'member',
+    token_hash      VARCHAR(64) NOT NULL UNIQUE,  -- SHA-256(raw token)
+    invited_by_id   UUID REFERENCES users(id) ON DELETE SET NULL,
+    expires_at      TIMESTAMPTZ NOT NULL,
+    accepted_at     TIMESTAMPTZ,             -- non-null = spent (single use)
+    accepted_by_id  UUID REFERENCES users(id) ON DELETE SET NULL,
+    revoked_at      TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX ON organization_invites (organization_id);
+CREATE INDEX ON organization_invites (organization_id, email);
+```
+
+Key properties:
+- Only the token *hash* is stored; the raw token exists solely in the
+  invitation email. Same treatment as `auth_tokens` magic-link codes and
+  `scim_tokens`.
+- **No UNIQUE on `(organization_id, email)`** — re-inviting after a revoked
+  or expired invitation is ordinary, and a partial unique index (pending rows
+  only) can't be expressed in Prisma. `OrganizationInviteService.create`
+  revokes any outstanding invitation for the pair in the same transaction
+  instead. The `(organization_id, email)` index serves that lookup; it is not
+  a constraint.
+- `invited_by_id`/`accepted_by_id` are `SET NULL` so deleting a user never
+  erases the invitation record — same reasoning as
+  `platform_audit_logs.actor_id`.
+- Acceptance is single-use and claimed atomically via an `updateMany` scoped
+  to `accepted_at IS NULL`, and requires the accepting session's email to
+  match `email`.
+- 7-day expiry (`INVITE_EXPIRY_DAYS`), 200 outstanding invitations per org
+  (`MAX_PENDING_INVITES`) as a mail-relay blast-radius bound.
+

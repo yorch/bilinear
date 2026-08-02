@@ -6,6 +6,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import { installSessionCookies } from '@/lib/auth-session';
 import { gql } from '@/lib/graphql';
 import { createClientLogger } from '@/lib/logger';
+import { consumePostAuthNext } from '@/lib/safe-path';
 import { gqlError } from '@/lib/utils';
 
 const log = createClientLogger('OAuthCallback');
@@ -87,7 +88,9 @@ export function OAuthCallbackHandler({ provider }: { provider: OAuthProvider }) 
           return;
         }
 
-        router.push('/');
+        // Restores the destination stashed before the OAuth redirect (an
+        // invitation link, typically); falls back to '/' for a plain login.
+        router.push(consumePostAuthNext());
       } catch (err) {
         log.error('OAuth exchange threw', err, { provider: provider.label });
         setError(t('common.somethingWentWrong'));

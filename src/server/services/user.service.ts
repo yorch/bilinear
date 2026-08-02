@@ -12,6 +12,15 @@ export async function isFirstUser(client: Pick<PrismaClient, 'user'>): Promise<b
   return (await client.user.count()) === 0;
 }
 
+/**
+ * "This org can currently be signed into" — the Prisma-`where` twin of
+ * `checkSessionValidity`'s org half (src/server/middleware/auth.ts), which
+ * evaluates the same rule against an already-fetched row. Both must agree:
+ * an org this filter admits but `checkSessionValidity` rejects would let a
+ * user switch into a workspace that immediately drops them back out.
+ */
+const ORG_USABLE_WHERE = { archivedAt: null, suspendedAt: null } as const;
+
 export class UserService {
   constructor(private prisma: PrismaClient) {}
 
@@ -86,14 +95,60 @@ export class UserService {
     });
   }
 
+  /**
+   * The organization a session defaults to when none is specified — the
+   * user's oldest *usable* membership.
+   *
+   * "Usable" is the important qualifier: a membership in an archived or
+   * suspended org can't be authenticated into (`extractAuthContext` drops
+   * `orgId` for those, and `checkSessionValidity` fails closed on them), so
+   * picking one here stranded a multi-org user in a workspace they could
+   * not enter — with no way to reach the orgs they *could* use, because the
+   * only selector was "oldest membership, full stop". Filtering first means
+   * login lands on a workspace that actually opens.
+   *
+   * Returns null when the user has no usable membership at all; callers
+   * treat that as "send to onboarding".
+   */
   async getOrganizationForUser(userId: string) {
     const membership = await this.prisma.organizationMember.findFirst({
       include: { organization: true },
       orderBy: { createdAt: 'asc' },
-      where: { userId },
+      where: { organization: ORG_USABLE_WHERE, userId },
     });
 
     return membership?.organization ?? null;
+  }
+
+  /**
+   * Every organization the user can currently sign into, with their role in
+   * each. Backs the workspace switcher and the `viewerOrganizations` query.
+   *
+   * Ordered by name so the switcher list is stable across reloads (creation
+   * order is meaningless to the reader, and `updatedAt` would make entries
+   * jump around as orgs are edited).
+   */
+  async listOrganizationsForUser(userId: string) {
+    const memberships = await this.prisma.organizationMember.findMany({
+      include: { organization: true },
+      orderBy: { organization: { name: 'asc' } },
+      where: { organization: ORG_USABLE_WHERE, userId },
+    });
+
+    return memberships.map(m => ({ organization: m.organization, role: m.role }));
+  }
+
+  /**
+   * The user's membership row for `orgId`, or null — including null when the
+   * org exists but is archived/suspended, so callers can't switch into (or
+   * stay in) a workspace that is locked. Used by the per-request membership
+   * re-check and by `organizationSwitch`.
+   */
+  async findUsableMembership(userId: string, orgId: string) {
+    return this.prisma.organizationMember.findFirst({
+      include: { organization: true },
+      where: { organization: ORG_USABLE_WHERE, organizationId: orgId, userId },
+    });
   }
 
   // Only write to the DB if lastSeen is stale (>5 min ago or null),

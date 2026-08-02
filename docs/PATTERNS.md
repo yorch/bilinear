@@ -2259,3 +2259,193 @@ A `!` field resolving to null nulls its whole parent and propagates up until it 
 ### 76.6 The drift guard
 
 `src/lib/graphql-documents.test.ts` scans the source tree for embedded documents, inlines the shared field-list constants they interpolate, and validates each against the real `typeDefs`. It catches unknown fields, wrong argument types, and union selections whose sibling fragments disagree on nullability. It does **not** catch anything about runtime values — variables objects, response-type lies, or nullability the SDL declares correctly but the hand-written TS type gets wrong. Those need the conventions above.
+## 77. Multiple Organizations Per User (2026-08-01)
+
+The `organization_members` join table has always allowed a user to hold
+memberships in many organizations, but nothing above the schema did. The
+session's tenant lives in the access token's `orgId` claim, and that claim
+was stamped from `UserService.getOrganizationForUser` — a `findFirst`
+ordered by `createdAt: 'asc'`. Every account was therefore pinned to its
+oldest membership for the life of the account, with no way to reach a
+second workspace short of creating another one (which moved you there and
+stranded you, since the next login re-derived the oldest membership again).
+
+**Switching.** `organizationSwitch(organizationId)` re-reads the caller's
+membership server-side — that lookup *is* the authorization; without it any
+authenticated user could mint a session for an arbitrary org id — then
+returns a fresh token pair in the same payload shape as
+`organizationCreate`. The client installs the tokens via
+`POST /api/auth/session` and then does a **full document load**
+(`window.location.assign`, never `router.push`). The hard navigation is
+load-bearing, not stylistic: a client-side transition keeps the running
+`SyncManager`, MobX stores, and IndexedDB cache of the previous org alive,
+and only a fresh document remounts `SyncProvider` → `SyncManager.start()` →
+`invalidateCacheIfOrgChanged`, which wipes Dexie before hydrating. All of
+this lives in `useOrganizationSwitch` (`src/hooks/use-organization-switch.ts`);
+use the hook rather than re-assembling the sequence.
+
+**Listing.** `viewerOrganizations` returns every org the viewer can enter
+(`UserService.listOrganizationsForUser`), each with their role and a
+`current` flag. It requires only `requireUserId`, deliberately: a user whose
+active workspace was suspended — or whose membership in it was revoked —
+carries a session with a null `orgId`, and listing/switching is their only
+way out. `WorkspaceSwitcher` renders a plain label rather than a dropdown
+when the list has fewer than two entries, so single-org accounts keep the
+header they had.
+
+**"Usable" orgs.** `ORG_USABLE_WHERE` in `user.service.ts`
+(`{ archivedAt: null, suspendedAt: null }`) is the Prisma-`where` twin of
+`checkSessionValidity`'s org arm, which evaluates the same rule against an
+already-fetched row. Keep them in agreement — an org one admits and the
+other rejects is a workspace you can switch into and are immediately thrown
+out of. Every membership lookup that feeds a session (`getOrganizationForUser`,
+`listOrganizationsForUser`, `findUsableMembership`, and the impersonation
+target resolver) filters on it.
+
+**The `orgId` claim is now verified, not just signed.** `checkSessionValidity`
+takes a third argument, the caller's `organization_members` row, and fails
+closed when it is missing. `extractAuthContext` fetches it alongside the
+user/org rows (one extra read on the composite unique index, in the same
+`Promise.all`), and both long-lived-connection sweeps — the WS re-auth sweep
+and the Yjs `revalidateAccess`/`revalidateRoomAccess` pair — pass it too. A
+failed membership check drops `orgId` only, never `userId`: losing one
+workspace must not sign you out of the others. Before this, removing someone
+from an org left them full access to it until their 24h token expired, which
+was survivable when losing your only membership was an edge case and is not
+once revocation is routine.
+
+**API keys are org-bound.** `AuthToken.organizationId` is stamped from the
+creating session (`createApiToken(userId, orgId, label, opts)`), and
+API-key auth reads it instead of inferring the user's oldest membership —
+which, for a multi-org account, silently pointed a key created in one
+workspace at another. A key with no org (created before the column) resolves
+to no org rather than guessing. `listApiTokens`/`revokeApiToken` are
+org-scoped for the same reason, so one workspace's settings page never shows
+another's credentials.
+
+**The `[workspace]` URL segment is authorization-bearing.** It used to be
+decorative — every route below it read `ctx.orgId` and ignored the segment,
+so `/other-org/team/ENG` rendered *your* ENG team under someone else's url
+key. `src/app/(workspace)/[workspace]/layout.tsx` now compares the segment
+to the session: match renders, a mismatch the viewer is a member of renders
+`WorkspaceMismatch` (an explicit switch prompt — re-issuing a session
+because someone followed a GET link is how a link logs a user out of what
+they were doing), and anything else redirects to `/`. The prompt is a client
+component specifically so it can read `window.location.pathname` and land
+the user on the page they were linked to; server layouts don't receive the
+request path. `destinationFor` rebases that path onto the target workspace
+and refuses anything that isn't a plain in-app absolute path, since the
+value reaches `location.assign`.
+
+**Gaining and losing a membership** is §78 — invitations and removal. This
+section is only about holding several and moving between them.
+
+**One payload for "the session was re-issued into an organization."**
+Creating a workspace, switching to one, and accepting an invitation to one
+all return `EnterOrganizationPayload` and all end with the same
+`enterOrganization(ctx, organization)` tail. The client had already unified
+them (`enterWorkspace` accepts all three structurally); three identical
+GraphQL types were three places for the shape to drift.
+
+## 78. Organization Membership Management — Invitations & Removal (2026-08-01)
+
+§77 made it possible to *hold* several memberships and move between them.
+This is how memberships are created and destroyed from inside the app. Before
+it, neither existed: the only way to gain a membership was SCIM provisioning,
+SAML JIT, the platform admin console, or creating the org yourself, and the
+only way to lose one was SCIM deprovisioning — which meant the per-request
+membership check §77 added was guarding a transition the product could not
+actually perform.
+
+**Invitations** (`OrganizationInviteService`, `organization_invites`). The
+raw token is generated once, hashed with SHA-256, and stored as the hash
+only — the same treatment magic-link codes and SCIM tokens get. The
+invitation email is therefore the sole place the token exists in the clear,
+which is why `create()` **sends the mail itself** and revokes the row if the
+send fails (raising `InviteEmailFailedError` → `EMAIL_SEND_FAILED`): a
+silently undelivered invitation would sit in the pending list looking healthy
+while being permanently unusable. Minting and sending belong to one
+transaction, not to a resolver that has to remember to sequence them —
+`AuthService.sendMagicLink` is the same shape.
+
+Three properties are deliberate and worth not undoing:
+
+- **Acceptance requires an email match.** Without it the link is a bearer
+  token and anyone who receives a forwarded copy joins the workspace. The
+  comparison is case-insensitive, and the address is lowercased at write
+  time so both sides agree.
+- **The claim is atomic** — `updateMany` scoped to `acceptedAt: null`, so two
+  concurrent acceptances race in the database and exactly one wins. Same
+  guard as `AuthService.verifyMagicLink`. A find-then-update would let both
+  through.
+- **The membership upsert leaves an existing row alone** (`update: {}`).
+  Someone who joined by another route while the invitation was outstanding
+  must not be silently re-roled by accepting it.
+
+There is no unique constraint on `(organizationId, email)`: re-inviting after
+a revoked or expired invitation is ordinary, and a partial unique index
+(pending rows only) is inexpressible in Prisma. `create` revokes any
+outstanding invitation for the pair inside the same transaction instead, so
+issuing a new link always kills the old one.
+
+**Removal** (`OrganizationService.removeMember`) is the *single writer* for
+membership removal: the GraphQL mutation and SCIM deprovisioning
+(`deactivateUser` / `DELETE /Users/:id`) both route through it. They used to
+be two implementations of one concept and had already drifted — only the
+in-app one had the last-owner guard, so an IdP could strand a workspace by
+deactivating its sole owner. SCIM passes `actor: null`, which means "system
+caller": the interpersonal checks (no self-removal, owner-manages-owner)
+don't apply, but the structural last-owner guard does. It drops the org
+membership and every team membership inside that org, atomically.
+`user.active` is deliberately untouched: it is a *global* flag, and removing
+someone from one workspace must not sign them out of the others. The removed user loses access on their next request
+(`extractAuthContext` re-checks membership) and their WebSocket closes on the
+next re-auth sweep, both from §77.
+
+**Owner guards, applied to both.** `requireOrgRole` now returns the caller's
+actual role rather than just passing or failing, because an owner and an
+admin both clear `['owner', 'admin']` and only one of them may touch
+ownership. On top of that allow-list:
+
+- only an owner may grant or revoke the `owner` role, or remove an owner —
+  previously an admin could promote a second account of their own to owner
+  straight from the members list, a full privilege escalation;
+- the last owner can be neither demoted nor removed;
+- nobody removes themselves (leaving is a different operation with different
+  consequences, and isn't built).
+
+The UI mirrors each guard so it never offers an action the server will
+reject, but the server is the enforcement point — `MembersSection` derives
+`canManage` from the viewer's role in the members query, not from whether an
+admin-only request happened to succeed.
+
+**Caveat on the removal SyncAction.** `organizationMemberRemove` emits a
+`'D' OrganizationMember` action, but `sync-manager.ts` has no
+`OrganizationMember` case, so no client acts on it today — the settings page
+reconciles its own roster locally, and other admins' open tabs stay stale
+until reload. (The pre-existing `'U'` from `organizationMemberUpdateRole` is
+equally inert.) Access is unaffected: the removed user loses the org on their
+next request and their socket closes on the next re-auth sweep. Teaching the
+sync pipeline about an org roster — a bootstrap collection plus a store — is
+the real fix and is not built.
+
+**Client data access follows §76.1.** Every read here goes through
+`gqlQuery` and every user-visible write through `gqlMutate`, so a rejected
+request can't render as an empty roster or toast success. The members roster
+specifically uses `useRetryableFetch` + `InlineRetry`: it is the one list on
+the page whose absence would otherwise read as "this workspace has no
+members". Pending invitations are fetched in their own document, gated on the
+viewer being an owner/admin — folding them into the roster query saves a round
+trip but only works by tolerating a partial response (`data` populated beside
+a FORBIDDEN), which is the shape §76.2 exists to warn about.
+
+**Post-login redirects.** Accepting an invitation usually means signing in
+first, so `safeRelativePath` (`src/lib/safe-path.ts`) is the single guard for
+any externally-supplied path about to be navigated to — a `?next=` param, the
+sessionStorage destination stashed across an OAuth round trip
+(`rememberPostAuthNext`/`consumePostAuthNext`), or a deep link carried
+through a workspace switch (`destinationFor`). It rejects protocol-relative
+URLs (`//evil.example.com` starts with a slash but navigates off-origin),
+absolute URLs, backslashes, and control characters. Route any new
+redirect-target-from-outside through it rather than checking `startsWith('/')`
+at the call site.

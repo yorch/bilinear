@@ -377,11 +377,25 @@ export class PlatformAdminService {
       throw new ImpersonationTargetError('Cannot impersonate a suspended user');
     }
 
-    const membership = await this.prisma.organizationMember.findFirst({
-      include: { organization: true },
-      orderBy: { createdAt: 'asc' },
-      where: orgId ? { organizationId: orgId, userId: targetUserId } : { userId: targetUserId },
-    });
+    // When the admin names an org, resolve exactly that one and report
+    // honestly if it's suspended. When they don't, pick the target's oldest
+    // *enterable* org rather than their oldest org outright: for a multi-org
+    // user whose first workspace happens to be suspended, the unfiltered
+    // pick made "impersonate this user" fail with "target organization is
+    // suspended" even though every other workspace they belong to was fine.
+    const membership = orgId
+      ? await this.prisma.organizationMember.findFirst({
+          include: { organization: true },
+          where: { organizationId: orgId, userId: targetUserId },
+        })
+      : await this.prisma.organizationMember.findFirst({
+          include: { organization: true },
+          orderBy: { createdAt: 'asc' },
+          where: {
+            organization: { archivedAt: null, suspendedAt: null },
+            userId: targetUserId,
+          },
+        });
     if (!membership) {
       throw new ImpersonationTargetError('User is not a member of the target organization');
     }

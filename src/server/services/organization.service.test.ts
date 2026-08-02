@@ -3,10 +3,13 @@ import { Prisma } from '../../generated/prisma';
 import { TEST_ORG, TEST_USER } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
+  CannotRemoveSelfError,
   InvalidRoleError,
   InvalidUrlKeyError,
+  LastOwnerError,
   MemberNotFoundError,
   OrganizationService,
+  OwnerRoleRequiredError,
   UrlKeyTakenError,
 } from './organization.service';
 
@@ -97,14 +100,14 @@ describe('OrganizationService.updateMemberRole', () => {
       userId: TEST_USER.id,
     });
 
-    const result = await svc.updateMemberRole(TEST_ORG.id, TEST_USER.id, 'admin');
+    const result = await svc.updateMemberRole(TEST_ORG.id, TEST_USER.id, 'admin', 'owner');
 
     expect(result.role).toBe('admin');
   });
 
   it('rejects roles outside the documented set', async () => {
     await expect(
-      svc.updateMemberRole(TEST_ORG.id, TEST_USER.id, 'superuser'),
+      svc.updateMemberRole(TEST_ORG.id, TEST_USER.id, 'superuser', 'owner'),
     ).rejects.toBeInstanceOf(InvalidRoleError);
 
     expect(prisma.organizationMember.findUnique).not.toHaveBeenCalled();
@@ -113,9 +116,9 @@ describe('OrganizationService.updateMemberRole', () => {
   it('throws MemberNotFoundError when the user is not in the org', async () => {
     prisma.organizationMember.findUnique.mockResolvedValue(null);
 
-    await expect(svc.updateMemberRole(TEST_ORG.id, 'unknown-user', 'admin')).rejects.toBeInstanceOf(
-      MemberNotFoundError,
-    );
+    await expect(
+      svc.updateMemberRole(TEST_ORG.id, 'unknown-user', 'admin', 'owner'),
+    ).rejects.toBeInstanceOf(MemberNotFoundError);
 
     expect(prisma.organizationMember.update).not.toHaveBeenCalled();
   });
@@ -148,5 +151,119 @@ describe('OrganizationService — small finders', () => {
   it('getMemberRole returns null for a non-member', async () => {
     prisma.organizationMember.findUnique.mockResolvedValue(null);
     await expect(svc.getMemberRole(TEST_ORG.id, 'nobody')).resolves.toBeNull();
+  });
+});
+
+describe('OrganizationService owner guards', () => {
+  let prisma: MockPrismaClient;
+  let svc: OrganizationService;
+  const OTHER_USER = 'user-2';
+
+  beforeEach(() => {
+    prisma = createMockPrisma();
+    svc = new OrganizationService(prisma as never);
+    prisma.organizationMember.update.mockResolvedValue({ role: 'admin' });
+  });
+
+  it('refuses to let an admin grant ownership', async () => {
+    // Privilege escalation: requireOrgRole(['owner','admin']) alone let an
+    // admin promote a second account of theirs to owner.
+    prisma.organizationMember.findUnique.mockResolvedValue({ role: 'member' });
+
+    await expect(
+      svc.updateMemberRole(TEST_ORG.id, OTHER_USER, 'owner', 'admin'),
+    ).rejects.toBeInstanceOf(OwnerRoleRequiredError);
+    expect(prisma.organizationMember.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses to let an admin demote an owner', async () => {
+    prisma.organizationMember.findUnique.mockResolvedValue({ role: 'owner' });
+
+    await expect(
+      svc.updateMemberRole(TEST_ORG.id, OTHER_USER, 'member', 'admin'),
+    ).rejects.toBeInstanceOf(OwnerRoleRequiredError);
+  });
+
+  it('lets an owner grant ownership', async () => {
+    prisma.organizationMember.findUnique.mockResolvedValue({ role: 'member' });
+    prisma.organizationMember.update.mockResolvedValue({ role: 'owner' });
+
+    await expect(svc.updateMemberRole(TEST_ORG.id, OTHER_USER, 'owner', 'owner')).resolves.toEqual({
+      role: 'owner',
+    });
+  });
+
+  it('refuses to demote the last owner', async () => {
+    prisma.organizationMember.findUnique.mockResolvedValue({ role: 'owner' });
+    prisma.organizationMember.count.mockResolvedValue(0); // no other owners
+
+    await expect(
+      svc.updateMemberRole(TEST_ORG.id, OTHER_USER, 'admin', 'owner'),
+    ).rejects.toBeInstanceOf(LastOwnerError);
+  });
+});
+
+describe('OrganizationService.removeMember', () => {
+  let prisma: MockPrismaClient;
+  let svc: OrganizationService;
+  const ACTOR = { role: 'admin', userId: TEST_USER.id };
+  const TARGET = 'user-2';
+
+  beforeEach(() => {
+    prisma = createMockPrisma();
+    svc = new OrganizationService(prisma as never);
+    prisma.organizationMember.findUnique.mockResolvedValue({ id: 'm2', role: 'member' });
+    prisma.teamMembership.deleteMany.mockResolvedValue({ count: 3 });
+    prisma.organizationMember.delete.mockResolvedValue({ id: 'm2', role: 'member' });
+  });
+
+  it('drops the org membership and every team membership inside it', async () => {
+    const removed = await svc.removeMember(TEST_ORG.id, TARGET, ACTOR);
+
+    expect(removed).toEqual({ id: 'm2', role: 'member' });
+    expect(prisma.teamMembership.deleteMany).toHaveBeenCalledWith({
+      where: { team: { organizationId: TEST_ORG.id }, userId: TARGET },
+    });
+    expect(prisma.organizationMember.delete).toHaveBeenCalled();
+  });
+
+  it('never touches the global user.active flag', async () => {
+    // Removing someone from one workspace must not sign them out of their
+    // others — that is what SCIM's org-scoped deprovisioning gets right too.
+    await svc.removeMember(TEST_ORG.id, TARGET, ACTOR);
+
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses self-removal', async () => {
+    await expect(svc.removeMember(TEST_ORG.id, TEST_USER.id, ACTOR)).rejects.toBeInstanceOf(
+      CannotRemoveSelfError,
+    );
+    expect(prisma.organizationMember.delete).not.toHaveBeenCalled();
+  });
+
+  it('reports a target who is not a member', async () => {
+    prisma.organizationMember.findUnique.mockResolvedValue(null);
+
+    await expect(svc.removeMember(TEST_ORG.id, TARGET, ACTOR)).rejects.toBeInstanceOf(
+      MemberNotFoundError,
+    );
+  });
+
+  it('refuses to let an admin remove an owner', async () => {
+    prisma.organizationMember.findUnique.mockResolvedValue({ id: 'm2', role: 'owner' });
+
+    await expect(svc.removeMember(TEST_ORG.id, TARGET, ACTOR)).rejects.toBeInstanceOf(
+      OwnerRoleRequiredError,
+    );
+  });
+
+  it('refuses to remove the last owner even for an owner', async () => {
+    prisma.organizationMember.findUnique.mockResolvedValue({ id: 'm2', role: 'owner' });
+    prisma.organizationMember.count.mockResolvedValue(0);
+
+    await expect(
+      svc.removeMember(TEST_ORG.id, TARGET, { role: 'owner', userId: TEST_USER.id }),
+    ).rejects.toBeInstanceOf(LastOwnerError);
   });
 });

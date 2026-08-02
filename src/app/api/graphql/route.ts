@@ -47,6 +47,11 @@ const CLIENT_ERROR_CODES = new Set([
   // auth-flow codes above (both for formatError passthrough and so it's
   // logged at debug rather than flagged as a server fault).
   'OAUTH_ERROR',
+  // Thrown when an invitation was created but its email could not be
+  // delivered (organizationInviteCreate). The invitation is rolled back and
+  // the admin needs to know to retry — masking it to "Internal server error"
+  // would tell them nothing and log a delivery problem as a code fault.
+  'EMAIL_SEND_FAILED',
 ]);
 
 // Codes that are readable to the client even though they aren't in
