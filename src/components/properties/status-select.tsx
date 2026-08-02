@@ -44,6 +44,7 @@ export function StatusSelect({
     <SelectPopover
       className={className}
       forceOpen={forceOpen}
+      listbox
       onClose={onClose}
       panelClassName="min-w-[160px] py-1"
       panelDataTestId="status-select-popover"
@@ -59,6 +60,7 @@ export function StatusSelect({
       {close =>
         states.map(state => (
           <button
+            aria-selected={state.id === value}
             className={cn(
               'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent',
               state.id === value && 'font-medium',
@@ -69,6 +71,7 @@ export function StatusSelect({
               onChange(state.id);
               close();
             }}
+            role="option"
             type="button"
           >
             <StatusDot color={state.color} />

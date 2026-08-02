@@ -13,6 +13,14 @@ interface SelectPopoverProps {
   className?: string;
   disabled?: boolean;
   forceOpen?: boolean;
+  /**
+   * Opt in to `role="listbox"` on the panel. Only pass this when the panel's
+   * children are ALL `role="option"` elements (the ARIA listbox pattern
+   * requires option/group children) — e.g. the single-select property pickers.
+   * Consumers rendering a calendar, form fields, or an empty-state paragraph
+   * (filter-builder, due-date-picker, label-select) must NOT set it.
+   */
+  listbox?: boolean;
   onClose?: () => void;
   panelClassName?: string;
   panelDataTestId?: string;
@@ -30,6 +38,7 @@ export function SelectPopover({
   className,
   disabled,
   forceOpen,
+  listbox,
   onClose,
   panelClassName,
   panelDataTestId,
@@ -128,6 +137,7 @@ export function SelectPopover({
           id={panelId}
           onKeyDown={handlePanelKeyDown}
           ref={panelRef}
+          role={listbox ? 'listbox' : undefined}
         >
           {children(close)}
         </div>
