@@ -766,17 +766,14 @@ model Cycle {
   completedAt    DateTime? @map("completed_at") @db.Timestamptz
   autoArchivedAt DateTime? @map("auto_archived_at") @db.Timestamptz
 
-  progress Float @default(0)
-  scope    Float @default(0)
+  /// No `progress`/`scope` columns, and no `*_history` columns: nothing ever
+  /// wrote any of them. `Cycle.progress`/`scope` are computed GraphQL fields
+  /// resolved through the `cycleProgress` DataLoader — see DATABASE_SCHEMA.md
+  /// §2.9-pre. `carryoverCount` below is genuinely written, by rollover().
 
   /// Count of issues rolled over INTO this cycle from a previous cycle.
   /// Populated by CycleService.rollover() on the DESTINATION cycle.
   carryoverCount Int @default(0) @map("carryover_count")
-
-  scopeHistory               Json @default("[]") @map("scope_history")
-  completedScopeHistory      Json @default("[]") @map("completed_scope_history")
-  issueCountHistory          Json @default("[]") @map("issue_count_history")
-  completedIssueCountHistory Json @default("[]") @map("completed_issue_count_history")
 
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz

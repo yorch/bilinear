@@ -11,19 +11,13 @@ import {
 const TEST_CYCLE = {
   archivedAt: null,
   completedAt: null,
-  completedIssueCountHistory: [],
-  completedScopeHistory: [],
   createdAt: new Date('2026-03-01T00:00:00Z'),
   description: null,
   endsAt: new Date('2026-03-15T00:00:00Z'),
   id: '00000000-0000-0000-0000-000000000600',
-  issueCountHistory: [],
   name: 'Sprint 1',
   number: 1,
   organizationId: '00000000-0000-0000-0000-000000000001',
-  progress: 0,
-  scope: 0,
-  scopeHistory: [],
   startsAt: new Date('2026-03-01T00:00:00Z'),
   teamId: '00000000-0000-0000-0000-000000000100',
   updatedAt: new Date('2026-03-01T00:00:00Z'),
@@ -365,6 +359,81 @@ describe('CycleService', () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+  });
+
+  describe('getProgressBatch', () => {
+    // `groupBy` isn't part of the shared mock model (see
+    // src/test/prisma-mock.ts) — added ad hoc here, matching the pattern in
+    // project.service.test.ts.
+    let issueGroupBy: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      issueGroupBy = vi.fn().mockResolvedValue([]);
+      (prisma.issue as unknown as { groupBy: typeof issueGroupBy }).groupBy = issueGroupBy;
+    });
+
+    it('returns an empty map without querying when given no ids', async () => {
+      const result = await service.getProgressBatch([]);
+
+      expect(result).toEqual(new Map());
+      expect(issueGroupBy).not.toHaveBeenCalled();
+    });
+
+    it('computes per-cycle progress from two batched groupBy queries', async () => {
+      issueGroupBy
+        .mockResolvedValueOnce([
+          { _count: 4, cycleId: 'c1' },
+          { _count: 2, cycleId: 'c2' },
+        ])
+        .mockResolvedValueOnce([
+          { _count: 1, cycleId: 'c1' },
+          { _count: 2, cycleId: 'c2' },
+        ]);
+
+      const result = await service.getProgressBatch(['c1', 'c2']);
+
+      expect(result).toEqual(
+        new Map([
+          ['c1', { progress: 0.25, scope: 4 }],
+          ['c2', { progress: 1, scope: 2 }],
+        ]),
+      );
+      expect(issueGroupBy).toHaveBeenCalledTimes(2);
+    });
+
+    it('counts canceled issues as done, not just completed ones', async () => {
+      // The distinction that makes this differ from the project path: a
+      // canceled issue is resolved and must leave the remaining work, but it
+      // never gets a `completedAt` stamp.
+      await service.getProgressBatch(['c1']);
+
+      expect(issueGroupBy).toHaveBeenNthCalledWith(1, {
+        _count: true,
+        by: ['cycleId'],
+        where: { archivedAt: null, cycleId: { in: ['c1'] }, trashed: false },
+      });
+      expect(issueGroupBy).toHaveBeenNthCalledWith(2, {
+        _count: true,
+        by: ['cycleId'],
+        where: {
+          archivedAt: null,
+          cycleId: { in: ['c1'] },
+          state: { type: { in: ['completed', 'canceled'] } },
+          trashed: false,
+        },
+      });
+    });
+
+    it('returns a zero entry for a cycle with no issues, so the loader cannot misalign', async () => {
+      issueGroupBy
+        .mockResolvedValueOnce([{ _count: 2, cycleId: 'c1' }])
+        .mockResolvedValueOnce([{ _count: 2, cycleId: 'c1' }]);
+
+      const result = await service.getProgressBatch(['c1', 'empty']);
+
+      expect(result.get('empty')).toEqual({ progress: 0, scope: 0 });
+      expect(result.size).toBe(2);
     });
   });
 

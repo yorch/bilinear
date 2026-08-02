@@ -607,6 +607,24 @@ export const PROJECT_PROGRESS_QUERY = `
 `;
 
 /**
+ * Server-resolved progress for one cycle — the `Project` query's counterpart,
+ * and the same warning applies: never re-derive it from `issueStore`.
+ *
+ * `Cycle.progress` counts an issue as done when its state type is `completed`
+ * **or** `canceled`, which is why it can differ from a naive
+ * `completedAt != null` count taken over the same issues.
+ */
+export const CYCLE_PROGRESS_QUERY = `
+  query CycleProgress($id: ID!) {
+    cycle(id: $id) {
+      id
+      progress
+      scope
+    }
+  }
+`;
+
+/**
  * Server-resolved progress for every live project in the org, in one request.
  * `Project.progress`/`scope` are backed by the `projectProgress` DataLoader, so
  * this costs two queries in total no matter how many projects come back —

@@ -12,13 +12,17 @@ import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
-// State type categories in display order
-const STATE_CATEGORY_ORDER = ['started', 'unstarted', 'backlog', 'completed', 'cancelled'] as const;
+// State type categories in display order. These are `WorkflowState.type`
+// values, so the spelling is `canceled` (one L) — the same string
+// `workflow-state.service.ts` validates and `team.service.ts` seeds. The
+// `cancelled` translation *key* below is a separate namespace and keeps its
+// own spelling.
+const STATE_CATEGORY_ORDER = ['started', 'unstarted', 'backlog', 'completed', 'canceled'] as const;
 
 function getStateCategoryLabels(t: ReturnType<typeof useTranslations>): Record<string, string> {
   return {
     backlog: t('issueDetail.subIssues.categories.backlog'),
-    cancelled: t('issueDetail.subIssues.categories.cancelled'),
+    canceled: t('issueDetail.subIssues.categories.cancelled'),
     completed: t('issueDetail.subIssues.categories.done'),
     started: t('issueDetail.subIssues.categories.inProgress'),
     unstarted: t('issueDetail.subIssues.categories.todo'),
@@ -162,7 +166,7 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
                           className="h-3 w-3 shrink-0 rounded-sm border"
                           style={{
                             backgroundColor:
-                              state?.type === 'completed' || state?.type === 'cancelled'
+                              state?.type === 'completed' || state?.type === 'canceled'
                                 ? (state.color ?? 'var(--state-default)')
                                 : 'transparent',
                             borderColor: state?.color ?? 'var(--state-default)',
@@ -177,7 +181,7 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
                         <span
                           className={cn(
                             'flex-1 truncate text-foreground-secondary',
-                            (state?.type === 'completed' || state?.type === 'cancelled') &&
+                            (state?.type === 'completed' || state?.type === 'canceled') &&
                               'line-through text-muted-foreground',
                           )}
                         >

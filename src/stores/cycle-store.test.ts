@@ -17,8 +17,6 @@ function makeCycle(overrides: Partial<DBCycle> & { id: string }): DBCycle {
     name: 'Sprint 1',
     number: 1,
     organizationId: '00000000-0000-0000-0000-000000000001',
-    progress: 0,
-    scope: 0,
     startsAt: '2026-03-01T00:00:00Z',
     teamId: TEAM_A,
     updatedAt: '2026-03-01T00:00:00Z',

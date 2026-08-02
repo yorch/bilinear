@@ -531,21 +531,63 @@ export class CycleService {
     });
   }
 
-  async getProgress(cycleId: string): Promise<{ progress: number; scope: number }> {
-    const issues = await this.prisma.issue.findMany({
-      include: { state: { select: { type: true } } },
-      where: { archivedAt: null, cycleId, trashed: false },
-    });
+  /**
+   * Live progress for any number of cycles, in two `groupBy` queries.
+   *
+   * `scope` is the live issue count and `progress` the completed fraction of
+   * it — both derived from the issue set on read. There are deliberately no
+   * `cycles.progress`/`scope` columns to cache this into: the ones that used
+   * to exist were never written by anything, so every reader saw 0 (see
+   * DATABASE_SCHEMA.md §2.9-pre).
+   *
+   * "Done" is `state.type` in (`completed`, `canceled`) rather than
+   * `completedAt IS NOT NULL`, which is what the previous per-cycle
+   * implementation used and is the right rule here: a canceled issue is
+   * resolved and must leave the remaining work, but it never gets a
+   * `completedAt` stamp. (`ProjectService.getProgressBatch` differs on
+   * purpose — see the note there.)
+   *
+   * Guarantees an entry for every requested id, including cycles with no
+   * issues at all, so the DataLoader's key-order projection can't misalign.
+   */
+  async getProgressBatch(
+    cycleIds: string[],
+  ): Promise<Map<string, { progress: number; scope: number }>> {
+    const result = new Map<string, { progress: number; scope: number }>();
+    if (cycleIds.length === 0) {
+      return result;
+    }
 
-    const scope = issues.length;
-    const completed = issues.filter(
-      i => i.state.type === 'completed' || i.state.type === 'canceled',
-    ).length;
+    const live = { archivedAt: null, cycleId: { in: cycleIds }, trashed: false } as const;
+    const [totals, completed] = await Promise.all([
+      this.prisma.issue.groupBy({ _count: true, by: ['cycleId'], where: live }),
+      this.prisma.issue.groupBy({
+        _count: true,
+        by: ['cycleId'],
+        where: { ...live, state: { type: { in: ['completed', 'canceled'] } } },
+      }),
+    ]);
 
-    return {
-      progress: scope > 0 ? completed / scope : 0,
-      scope,
-    };
+    const completedByCycle = new Map<string, number>();
+    for (const row of completed) {
+      if (row.cycleId) {
+        completedByCycle.set(row.cycleId, row._count);
+      }
+    }
+    for (const row of totals) {
+      if (!row.cycleId) {
+        continue;
+      }
+      const total = row._count;
+      const done = completedByCycle.get(row.cycleId) ?? 0;
+      result.set(row.cycleId, { progress: total > 0 ? done / total : 0, scope: total });
+    }
+    for (const id of cycleIds) {
+      if (!result.has(id)) {
+        result.set(id, { progress: 0, scope: 0 });
+      }
+    }
+    return result;
   }
 
   /**

@@ -282,7 +282,10 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
 
   const { completedStateIds, canceledStateIds } = useMemo(
     () => ({
-      canceledStateIds: new Set(states.filter(s => s.type === 'cancelled').map(s => s.id)),
+      // `canceled`, one L — the WorkflowState.type value the server writes.
+      // Spelled `cancelled` this set was always empty, so every canceled
+      // issue fell through to the "open" bucket in the completion rate below.
+      canceledStateIds: new Set(states.filter(s => s.type === 'canceled').map(s => s.id)),
       completedStateIds: new Set(states.filter(s => s.type === 'completed').map(s => s.id)),
     }),
     [states],
