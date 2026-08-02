@@ -7,7 +7,12 @@ import {
   signRefreshToken,
   verifyOAuthState,
 } from '../lib/jwt';
-import { AuthService, apiScopesAllowWrite, InvalidTokenError } from './auth.service';
+import {
+  AuthService,
+  apiScopesAllowWrite,
+  InvalidCodeError,
+  InvalidTokenError,
+} from './auth.service';
 import { UserService } from './user.service';
 
 const FAMILY_ID = '00000000-0000-0000-0000-000000000aaa';
@@ -574,5 +579,127 @@ describe('AuthService.refreshTokens — organization continuity', () => {
         data: expect.objectContaining({ organizationId: DEFAULT_ORG }),
       }),
     );
+  });
+});
+
+describe('AuthService.verifyMagicLink', () => {
+  let prisma: MockPrismaClient;
+  let userService: UserService;
+  let service: AuthService;
+
+  beforeEach(() => {
+    prisma = createMockPrisma();
+    userService = new UserService(prisma as never);
+    vi.spyOn(userService, 'getOrganizationForUser').mockResolvedValue(null);
+    service = new AuthService(prisma as never, userService);
+    prisma.authToken.create.mockResolvedValue({});
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('rejects a code whose stored token has expired', async () => {
+    // The claim is atomic: `updateMany` is scoped to `expiresAt: { gt: now }`,
+    // so an expired token simply matches zero rows — count !== 1 is the only
+    // signal the service sees, mirroring how Postgres would filter it out.
+    vi.spyOn(userService, 'findByEmail').mockResolvedValue(TEST_USER as never);
+    prisma.authToken.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(service.verifyMagicLink(TEST_USER.email, '123456')).rejects.toBeInstanceOf(
+      InvalidCodeError,
+    );
+
+    // Confirm the claim really was scoped to non-expired tokens.
+    expect(prisma.authToken.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          expiresAt: expect.objectContaining({ gt: expect.any(Date) }),
+          type: 'magic_link',
+        }),
+      }),
+    );
+    expect(prisma.authToken.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown email and a wrong code with the same error (no user-enumeration leak)', async () => {
+    // Path A: no such user at all.
+    vi.spyOn(userService, 'findByEmail').mockResolvedValueOnce(null);
+    let errA: unknown;
+    try {
+      await service.verifyMagicLink('nobody@example.com', '123456');
+    } catch (e) {
+      errA = e;
+    }
+
+    // Path B: real user, but the submitted code doesn't match any live token.
+    vi.spyOn(userService, 'findByEmail').mockResolvedValueOnce(TEST_USER as never);
+    prisma.authToken.updateMany.mockResolvedValue({ count: 0 });
+    let errB: unknown;
+    try {
+      await service.verifyMagicLink(TEST_USER.email, '999999');
+    } catch (e) {
+      errB = e;
+    }
+
+    expect(errA).toBeInstanceOf(InvalidCodeError);
+    expect(errB).toBeInstanceOf(InvalidCodeError);
+    // Same constructor and same message — nothing distinguishes the two cases.
+    expect((errA as Error).constructor).toBe((errB as Error).constructor);
+    expect((errA as Error).message).toBe((errB as Error).message);
+  });
+
+  it('rejects replay: a second submission of the same code fails once the token is consumed', async () => {
+    vi.spyOn(userService, 'findByEmail').mockResolvedValue(TEST_USER as never);
+    // First claim wins (count 1, revokedAt/lastUsedAt stamped by the atomic
+    // updateMany); the second submission of the identical code no longer
+    // matches `revokedAt: null` so it claims zero rows.
+    prisma.authToken.updateMany.mockResolvedValueOnce({ count: 1 });
+    prisma.authToken.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    const first = await service.verifyMagicLink(TEST_USER.email, '123456');
+    expect(first.success).toBe(true);
+
+    await expect(service.verifyMagicLink(TEST_USER.email, '123456')).rejects.toBeInstanceOf(
+      InvalidCodeError,
+    );
+
+    expect(prisma.authToken.updateMany).toHaveBeenCalledTimes(2);
+    // Only the first (successful) claim issued a new token pair.
+    expect(prisma.authToken.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('honours TEST_AUTH_CODE outside production', async () => {
+    vi.stubEnv('NODE_ENV', 'test');
+    vi.stubEnv('TEST_AUTH_CODE', '000000');
+    const findOrCreate = vi
+      .spyOn(userService, 'findOrCreate')
+      .mockResolvedValue(TEST_USER as never);
+    const findByEmail = vi.spyOn(userService, 'findByEmail');
+
+    const result = await service.verifyMagicLink(TEST_USER.email, '000000');
+
+    expect(result.success).toBe(true);
+    expect(findOrCreate).toHaveBeenCalledWith({
+      email: TEST_USER.email,
+      name: TEST_USER.email.split('@')[0],
+    });
+    // The bypass short-circuits before the real-token lookup path.
+    expect(findByEmail).not.toHaveBeenCalled();
+    expect(prisma.authToken.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects TEST_AUTH_CODE in production (bypass is gated to non-production builds)', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('TEST_AUTH_CODE', '000000');
+    const findOrCreate = vi.spyOn(userService, 'findOrCreate');
+    // Falls through to the real lookup path, which finds no matching user/token.
+    vi.spyOn(userService, 'findByEmail').mockResolvedValue(null);
+
+    await expect(service.verifyMagicLink(TEST_USER.email, '000000')).rejects.toBeInstanceOf(
+      InvalidCodeError,
+    );
+
+    expect(findOrCreate).not.toHaveBeenCalled();
   });
 });
