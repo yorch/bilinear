@@ -64,10 +64,25 @@
       "impersonateOwnerActive": "Sign in as this owner",
       "impersonateOwnerInactive": "Tenant is not active",
       "includeArchived": "Include archived",
+      "limits": {
+        "description": "Per-workspace plan-tier caps. Defaults apply until an admin changes them.",
+        "edit": "Edit limits",
+        "invalid": "Every limit must be a whole number of at least 1.",
+        "save": "Save limits",
+        "savedToast": "Plan limits updated for {name}",
+        "title": "Plan limits"
+      },
       "loadingDetail": "Loading tenant…",
       "noOwners": "No owners.",
       "notFound": "Tenant not found.",
       "owners": "Owners",
+      "planLimits": {
+        "maxCustomFieldsPerOrg": "Custom fields per workspace",
+        "maxCustomFieldsPerTeam": "Custom fields per team",
+        "maxExportRows": "Export row limit",
+        "maxInitiativeDepth": "Initiative nesting depth",
+        "maxLabelGroupChildren": "Labels per group"
+      },
       "restore": "Restore",
       "restoredToast": "Restored {name}",
       "searchPlaceholder": "Search name or URL key",
@@ -1568,6 +1583,15 @@
       "notificationPrefsError": "Failed to update notification preferences",
       "organization": "Organization",
       "orgLoadError": "Could not load organization details.",
+      "planLimits": {
+        "maxCustomFieldsPerOrg": "Custom fields per workspace",
+        "maxCustomFieldsPerTeam": "Custom fields per team",
+        "maxExportRows": "Export row limit",
+        "maxInitiativeDepth": "Initiative nesting depth",
+        "maxLabelGroupChildren": "Labels per group"
+      },
+      "planLimitsDescription": "Your workspace's plan-tier caps, set by your provider.",
+      "planLimitsTitle": "Plan limits",
       "platform": "Platform",
       "platformAdminConsole": "Platform admin console",
       "platformAdminConsoleDescription": "Manage tenants, users, and impersonation across every organization",

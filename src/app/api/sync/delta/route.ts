@@ -12,7 +12,7 @@ import { parseCursor, SyncService, serializeSyncAction } from '@/server/services
  *
  * Returns all SyncActions strictly after `lastSyncId` (exclusive), up to
  * `toSyncId` (inclusive, optional). Cursors are opaque strings encoding
- * a `(committedAt, id)` tuple — see `parseCursor` for the format. The
+ * a `(xactId, id)` tuple — see `parseCursor` for the format. The
  * legacy `<id>` form is accepted for backward-compat with clients that
  * persisted the cursor before the encoding change.
  *

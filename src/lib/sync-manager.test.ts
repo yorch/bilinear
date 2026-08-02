@@ -178,22 +178,22 @@ function createFakeWsClient() {
 function makeAction(overrides: Partial<SerializedSyncAction> = {}): SerializedSyncAction {
   return {
     action: 'U',
-    committedAt: '2026-01-01T00:00:00.000Z',
     createdAt: '2026-01-01T00:00:00.000Z',
     data: { id: 'x' },
     id: '1',
     modelId: 'x',
     modelName: 'Issue',
     organizationId: 'org-1',
+    xactId: '1000',
     ...overrides,
   };
 }
 
 /** Mirrors `sync-manager.ts`'s own `actionCursor` encoding so tests can
- * predict expected cursor values without reaching into the private fn. */
-function expectedCursor(committedAt: string, id: string): string {
-  const micros = BigInt(new Date(committedAt).getTime()) * BigInt(1000);
-  return `${micros.toString()}-${id}`;
+ * predict expected cursor values without reaching into the private fn. The
+ * cursor is the `(xactId, id)` tuple joined by a dash. */
+function expectedCursor(xactId: string, id: string): string {
+  return `${xactId}-${id}`;
 }
 
 function cursorParam(url: string): string {
@@ -227,40 +227,40 @@ describe('SyncManager', () => {
   // ─── Cursor comparison (exercised through the public applyActions path,
   // since compareCursor/splitCursor/actionCursor are not exported) ─────────
   describe('cursor comparison semantics', () => {
-    it('advances the shared cursor to the max (committedAt, id) tuple regardless of array order', async () => {
+    it('advances the shared cursor to the max (xactId, id) tuple regardless of array order', async () => {
       const stores = createFakeStores();
       const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
 
       const earlier = makeAction({
-        committedAt: '2026-01-01T00:00:00.000Z',
         id: '1',
         modelId: 'i-early',
+        xactId: '1000',
       });
       const later = makeAction({
-        committedAt: '2026-01-02T00:00:00.000Z',
         id: '2',
         modelId: 'i-late',
+        xactId: '2000',
       });
 
       // Later action listed FIRST in the array — max-tracking must not just
       // take the last-processed action's cursor.
       await (manager as Instance).applyActions([later, earlier]);
 
-      expect(stores.syncStore.lastSyncId).toBe(expectedCursor(later.committedAt, later.id));
+      expect(stores.syncStore.lastSyncId).toBe(expectedCursor(later.xactId, later.id));
     });
 
-    it('breaks ties on id (numerically, not lexicographically) when committedAt is identical', async () => {
+    it('breaks ties on id (numerically, not lexicographically) when xactId is identical', async () => {
       const stores = createFakeStores();
       const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
 
-      // Same commit timestamp, id '9' vs id '10' — a naive string compare
+      // Same writing transaction, id '9' vs id '10' — a naive string compare
       // would put '10' before '9'; the real comparator must use BigInt.
-      const idNine = makeAction({ committedAt: '2026-01-01T00:00:00.000Z', id: '9' });
-      const idTen = makeAction({ committedAt: '2026-01-01T00:00:00.000Z', id: '10' });
+      const idNine = makeAction({ id: '9', xactId: '1000' });
+      const idTen = makeAction({ id: '10', xactId: '1000' });
 
       await (manager as Instance).applyActions([idNine, idTen]);
 
-      expect(stores.syncStore.lastSyncId).toBe(expectedCursor(idTen.committedAt, idTen.id));
+      expect(stores.syncStore.lastSyncId).toBe(expectedCursor(idTen.xactId, idTen.id));
     });
 
     it('treats a legacy no-dash cursor as (0, id) and only overtakes it once a real cursor exceeds it', async () => {
@@ -268,20 +268,34 @@ describe('SyncManager', () => {
       stores.syncStore.lastSyncId = '9'; // legacy pre-migration format
       const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
 
-      // committedAt at the epoch encodes to micros=0, same as the legacy
-      // cursor's implicit committedAt — so this is purely an id tie-break
-      // against the legacy value, id '3' should NOT overtake legacy '9'.
-      await (manager as Instance).applyActions([
-        makeAction({ committedAt: '1970-01-01T00:00:00.000Z', id: '3' }),
-      ]);
+      // xactId '0' matches the legacy cursor's implicit xactId, so this is
+      // purely an id tie-break against the legacy value — id '3' should NOT
+      // overtake legacy '9'. (Real xid8 values are never 0; this only
+      // exercises the legacy-compat path.)
+      await (manager as Instance).applyActions([makeAction({ id: '3', xactId: '0' })]);
       expect(stores.syncStore.lastSyncId).toBe('9');
 
       // id '10' > legacy '9' numerically — must overtake, and does so by
       // rewriting into the new dash-encoded format.
-      await (manager as Instance).applyActions([
-        makeAction({ committedAt: '1970-01-01T00:00:00.000Z', id: '10' }),
-      ]);
+      await (manager as Instance).applyActions([makeAction({ id: '10', xactId: '0' })]);
       expect(stores.syncStore.lastSyncId).toBe('0-10');
+    });
+
+    it('heals a stale `<committedAtMicros>-<id>` cursor instead of letting its huge value pin max()', async () => {
+      const stores = createFakeStores();
+      // A cursor persisted before the xact_id migration: the first component is
+      // an epoch-microseconds value (~1.7e15) far above any real xid8. Left as
+      // a raw BigInt it would dominate every real (small-xactId) action forever,
+      // so the persisted cursor would never advance and delta would keep
+      // re-reading from a wedged position.
+      stores.syncStore.lastSyncId = '1750000000000000-12345';
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+
+      await (manager as Instance).applyActions([makeAction({ id: '5', xactId: '1001' })]);
+
+      // The stale cursor collapses to (0,0), so the real action overtakes it and
+      // the persisted cursor heals to a real `<xactId>-<id>` value.
+      expect(stores.syncStore.lastSyncId).toBe('1001-5');
     });
   });
 
@@ -291,9 +305,9 @@ describe('SyncManager', () => {
       const stores = createFakeStores();
       const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
 
-      const page1 = makeAction({ committedAt: '2026-01-01T00:00:01.000Z', id: '1' });
-      const page2 = makeAction({ committedAt: '2026-01-01T00:00:02.000Z', id: '2' });
-      const page3 = makeAction({ committedAt: '2026-01-01T00:00:03.000Z', id: '3' });
+      const page1 = makeAction({ id: '1', xactId: '1001' });
+      const page2 = makeAction({ id: '2', xactId: '1002' });
+      const page3 = makeAction({ id: '3', xactId: '1003' });
 
       const fetchMock = vi
         .fn()
@@ -306,13 +320,9 @@ describe('SyncManager', () => {
 
       expect(fetchMock).toHaveBeenCalledTimes(3);
       expect(cursorParam(fetchMock.mock.calls[0][0])).toBe('0');
-      expect(cursorParam(fetchMock.mock.calls[1][0])).toBe(
-        expectedCursor(page1.committedAt, page1.id),
-      );
-      expect(cursorParam(fetchMock.mock.calls[2][0])).toBe(
-        expectedCursor(page2.committedAt, page2.id),
-      );
-      expect(stores.syncStore.lastSyncId).toBe(expectedCursor(page3.committedAt, page3.id));
+      expect(cursorParam(fetchMock.mock.calls[1][0])).toBe(expectedCursor(page1.xactId, page1.id));
+      expect(cursorParam(fetchMock.mock.calls[2][0])).toBe(expectedCursor(page2.xactId, page2.id));
+      expect(stores.syncStore.lastSyncId).toBe(expectedCursor(page3.xactId, page3.id));
       expect(stores.syncStore.setStatus).toHaveBeenCalledWith('connected');
     });
 
@@ -321,23 +331,23 @@ describe('SyncManager', () => {
       const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
 
       const page1 = makeAction({
-        committedAt: '2026-01-01T00:00:01.000Z',
         id: '1',
         modelId: 'i-1',
+        xactId: '1001',
       });
       const page2 = makeAction({
-        committedAt: '2026-01-01T00:00:02.000Z',
         id: '2',
         modelId: 'i-2',
+        xactId: '1002',
       });
       // A "live" WS action arriving mid-backlog, far ahead of the backlog
       // itself — simulates the real-time stream racing ahead of a slow
       // delta-sync catching up an offline client.
       const liveAction = makeAction({
-        committedAt: '2030-01-01T00:00:00.000Z',
         id: '999999',
         modelId: 'live-team',
         modelName: 'Team',
+        xactId: '9999999',
       });
 
       let secondCallCursor: string | null = null;
@@ -361,21 +371,19 @@ describe('SyncManager', () => {
       await (manager as Instance).deltaSync();
 
       // The shared cursor was bumped to the live action's far-future value...
-      expect(stores.syncStore.lastSyncId).toBe(
-        expectedCursor(liveAction.committedAt, liveAction.id),
-      );
+      expect(stores.syncStore.lastSyncId).toBe(expectedCursor(liveAction.xactId, liveAction.id));
 
       // ...but the SECOND page request must have used the LOCAL cursor
       // (derived from page 1's own actions), not the concurrently-bumped
       // shared value. This is the crux of the #92 fix.
-      expect(secondCallCursor).toBe(expectedCursor(page1.committedAt, page1.id));
+      expect(secondCallCursor).toBe(expectedCursor(page1.xactId, page1.id));
       expect(fetchMock).toHaveBeenCalledTimes(2);
 
       // And the final "commit to shared cursor" step must never regress it:
       // the backlog's own max (page2's cursor) is far behind the live value,
       // so the shared cursor must be left at the live value, not overwritten
       // backwards.
-      expect(stores.syncStore.lastSyncId).not.toBe(expectedCursor(page2.committedAt, page2.id));
+      expect(stores.syncStore.lastSyncId).not.toBe(expectedCursor(page2.xactId, page2.id));
     });
 
     it('bails out of the loop immediately once stopped, without requesting further pages', async () => {
@@ -383,7 +391,7 @@ describe('SyncManager', () => {
       const wsClient = createFakeWsClient();
       const manager = new SyncManager(stores, wsClient as unknown as WsClient);
 
-      const page1 = makeAction({ committedAt: '2026-01-01T00:00:01.000Z', id: '1' });
+      const page1 = makeAction({ id: '1', xactId: '1001' });
       const fetchMock = vi.fn(async () => {
         // Simulate stop() racing in while page 1's request is in flight
         // (e.g. the component unmounted mid-fetch).
@@ -553,14 +561,14 @@ describe('SyncManager', () => {
       const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
 
       const first = makeAction({
-        committedAt: '2026-01-05T00:00:00.000Z',
         id: '50',
         modelId: 'a',
+        xactId: '5000',
       });
       const second = makeAction({
-        committedAt: '2026-01-01T00:00:00.000Z',
         id: '10',
         modelId: 'b',
+        xactId: '1000',
       });
 
       await (manager as Instance).applyActions([first, second]);
@@ -568,7 +576,7 @@ describe('SyncManager', () => {
       // Both get applied (order doesn't gate application)...
       expect(stores.issueStore.applySyncAction).toHaveBeenCalledTimes(2);
       // ...but the cursor reflects the max, not "whichever came last in the array".
-      expect(stores.syncStore.lastSyncId).toBe(expectedCursor(first.committedAt, first.id));
+      expect(stores.syncStore.lastSyncId).toBe(expectedCursor(first.xactId, first.id));
     });
   });
 

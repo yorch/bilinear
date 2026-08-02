@@ -14,7 +14,13 @@ import {
   restoreTenant,
   startImpersonation,
   suspendTenant,
+  updateTenantLimits,
 } from '@/lib/admin-api';
+import {
+  type OrganizationPlanLimits,
+  PLAN_LIMIT_FIELDS,
+  type PlanLimitKey,
+} from '@/lib/plan-limits';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 
@@ -55,6 +61,9 @@ export default function AdminTenantDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // null = not editing; otherwise a draft of the five caps as strings (so the
+  // inputs stay controlled while mid-edit, including a transient empty value).
+  const [limitsDraft, setLimitsDraft] = useState<Record<PlanLimitKey, string> | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -125,6 +134,40 @@ export default function AdminTenantDetailPage() {
       await deleteTenant(tenant.id);
       toast.success(t('admin.tenants.archivedToast', { name: tenant.name }));
       router.push('/admin/tenants');
+    });
+  }
+
+  function startEditingLimits() {
+    if (!tenant) {
+      return;
+    }
+    const draft = {} as Record<PlanLimitKey, string>;
+    for (const { key } of PLAN_LIMIT_FIELDS) {
+      draft[key] = String(tenant.limits[key]);
+    }
+    setLimitsDraft(draft);
+  }
+
+  async function handleSaveLimits() {
+    if (!tenant || !limitsDraft) {
+      return;
+    }
+    // Parse every field up front; a non-integer or empty value aborts the save
+    // with a toast rather than sending NaN to the server.
+    const parsed = {} as OrganizationPlanLimits;
+    for (const { key } of PLAN_LIMIT_FIELDS) {
+      const n = Number(limitsDraft[key]);
+      if (!Number.isInteger(n) || n < 1) {
+        toast.error(t('admin.tenants.limits.invalid'));
+        return;
+      }
+      parsed[key] = n;
+    }
+    await withBusy(async () => {
+      const updated = await updateTenantLimits(tenant.id, parsed);
+      setTenant(updated);
+      setLimitsDraft(null);
+      toast.success(t('admin.tenants.limits.savedToast', { name: tenant.name }));
     });
   }
 
@@ -258,6 +301,76 @@ export default function AdminTenantDetailPage() {
             </table>
           </div>
         )}
+      </section>
+      <section>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {t('admin.tenants.limits.title')}
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {t('admin.tenants.limits.description')}
+            </p>
+          </div>
+          {limitsDraft ? (
+            <div className="flex shrink-0 gap-1.5">
+              <button
+                className="rounded border border-border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
+                disabled={busy}
+                onClick={() => setLimitsDraft(null)}
+                type="button"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                className="rounded border border-brand-border bg-brand-subtle px-3 py-1.5 text-xs text-brand-subtle-foreground hover:bg-brand/15 disabled:opacity-50"
+                disabled={busy}
+                onClick={handleSaveLimits}
+                type="button"
+              >
+                {t('admin.tenants.limits.save')}
+              </button>
+            </div>
+          ) : (
+            <button
+              className="shrink-0 rounded border border-border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
+              disabled={busy}
+              onClick={startEditingLimits}
+              type="button"
+            >
+              {t('admin.tenants.limits.edit')}
+            </button>
+          )}
+        </div>
+        <div className="overflow-hidden rounded-lg border border-border">
+          <table className="w-full text-sm">
+            <tbody className="divide-y divide-border">
+              {PLAN_LIMIT_FIELDS.map(({ key, labelKey }) => (
+                <tr className="bg-background" key={key}>
+                  <td className="px-4 py-2 text-foreground">{t(`admin.tenants.${labelKey}`)}</td>
+                  <td className="px-4 py-2 text-right">
+                    {limitsDraft ? (
+                      <input
+                        className="w-28 rounded border border-border bg-background px-2 py-1 text-right text-sm tabular-nums focus:border-brand focus:outline-none"
+                        inputMode="numeric"
+                        min={1}
+                        onChange={e =>
+                          setLimitsDraft(prev => (prev ? { ...prev, [key]: e.target.value } : prev))
+                        }
+                        type="number"
+                        value={limitsDraft[key]}
+                      />
+                    ) : (
+                      <span className="font-medium tabular-nums text-foreground">
+                        {tenant.limits[key].toLocaleString()}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
       <ConfirmDialog
         message={t('admin.tenants.deleteConfirmDetail', { name: tenant.name })}

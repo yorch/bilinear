@@ -1,6 +1,6 @@
 import type { Redis } from 'ioredis';
-import type { PrismaClient, SyncAction } from '../../generated/prisma';
-import { COMMIT_WATERMARK_LAG_MS, DELTA_PAGE_SIZE } from '../../lib/sync-config';
+import { Prisma, type PrismaClient } from '../../generated/prisma';
+import { DELTA_PAGE_SIZE, MAX_PLAUSIBLE_XACT_ID } from '../../lib/sync-config';
 import { childLogger } from '../lib/logger';
 
 const log = childLogger({ module: 'sync' });
@@ -11,41 +11,91 @@ const log = childLogger({ module: 'sync' });
 // silently drift — see `src/lib/sync-config.ts`.
 export { DELTA_PAGE_SIZE };
 
-// Safety window for the committed-at watermark. Rows committed inside this
-// window may have been preceded by a row whose transaction was still
-// in-flight at our last read — wait for it to land before serving the
-// span to a client. 500ms covers typical write tail latency comfortably
-// while keeping real-time sync feel instant. Sourced from the shared
-// `sync-config` module — see `src/lib/sync-config.ts`.
-const COMMITTED_WATERMARK_LAG_MS = COMMIT_WATERMARK_LAG_MS;
-
 export type SyncActionType = 'I' | 'U' | 'D' | 'A';
+
+/**
+ * A persisted SyncAction, augmented with its `xactId` — the writing
+ * transaction's xid8. `xact_id` is an `Unsupported("xid8")` column that the
+ * Prisma client can't select, so every read/write path in this service goes
+ * through raw SQL and returns THIS shape (not the Prisma `SyncAction` model
+ * type, which lacks `xactId`). `xactId` is what the delta cursor and the
+ * client's `lastSyncId` are keyed on — see `getDeltaSyncActions`.
+ */
+export interface SyncActionRow {
+  action: string;
+  createdAt: Date;
+  data: Prisma.JsonValue | null;
+  id: bigint;
+  modelId: string;
+  modelName: string;
+  organizationId: string;
+  xactId: bigint;
+}
+
+/**
+ * Shape returned by the raw `RETURNING`/`SELECT` clauses below. `xact_id` is
+ * cast to text (`xid8::text`) so it survives the driver as a decimal string;
+ * `mapRow` parses it back to a BigInt.
+ */
+interface RawSyncActionRow {
+  action: string;
+  createdAt: Date;
+  data: Prisma.JsonValue | null;
+  id: bigint;
+  modelId: string;
+  modelName: string;
+  organizationId: string;
+  xactId: string;
+}
+
+function mapRow(row: RawSyncActionRow): SyncActionRow {
+  return { ...row, xactId: BigInt(row.xactId) };
+}
+
+// Columns every SyncAction read/write returns, with xact_id rendered as text.
+const SYNC_ACTION_COLUMNS = Prisma.sql`
+  "id",
+  "organization_id" AS "organizationId",
+  "action",
+  "model_name" AS "modelName",
+  "model_id" AS "modelId",
+  "data",
+  "created_at" AS "createdAt",
+  "xact_id"::text AS "xactId"
+`;
 
 /**
  * Minimal Prisma surface needed to persist a SyncAction. Both the singleton
  * client and an interactive `$transaction` client (`Prisma.TransactionClient`)
  * satisfy it structurally, so `recordSyncAction` can write the marker row
  * inside the SAME transaction as the business write — see `recordSyncAction`.
+ * `$queryRaw` (not `syncAction`) because the insert must `RETURNING xact_id`,
+ * a column the Prisma query builder can't select.
  */
-export type SyncWriteClient = Pick<PrismaClient, 'syncAction'>;
+export type SyncWriteClient = Pick<PrismaClient, '$queryRaw'>;
 
 /**
- * Opaque cursor encoding a `(committedAt, id)` tuple as
- * `<committedAtMicros>-<id>`. Tuple ordering is critical: BIGSERIAL `id`
- * values alone can race when transactions commit out of order, so the
- * delta query advances strictly by committed-at, breaking ties by id.
+ * Opaque cursor encoding a `(xactId, id)` tuple as `<xactId>-<id>`. Tuple
+ * ordering is critical: BIGSERIAL `id` values alone race when transactions
+ * commit out of order, so the delta query advances strictly by the writing
+ * transaction's xid8 (`xact_id`), breaking ties by id. `xactId` is a 64-bit
+ * Postgres transaction id — see `getDeltaSyncActions` for the commit-order
+ * fence that makes this never-skip.
  *
- * `parseCursor` is backward-compatible with the legacy `<id>` format —
- * a client persisted with the old encoding will be treated as cursor
- * `(epoch, id)` so the next delta picks up any rows whose committed_at
- * is after epoch (i.e. everything).
+ * `parseCursor` self-heals BOTH older encodings:
+ *   - the original `<id>` (no dash) → `(0, id)`; and
+ *   - the intermediate `<committedAtMicros>-<id>`, whose first component is an
+ *     epoch-microseconds value far above any real xid8 (see
+ *     `MAX_PLAUSIBLE_XACT_ID`) → reset to the zero cursor.
+ * Either way the next delta re-reads from the very beginning (all real xid8
+ * values are > 0), i.e. it picks up everything, instead of stalling.
  */
 export interface DeltaCursor {
-  committedAtMicros: bigint;
   id: bigint;
+  xactId: bigint;
 }
 
-const ZERO_CURSOR: DeltaCursor = { committedAtMicros: BigInt(0), id: BigInt(0) };
+const ZERO_CURSOR: DeltaCursor = { id: BigInt(0), xactId: BigInt(0) };
 
 export function parseCursor(raw: string | null | undefined): DeltaCursor {
   if (!raw) {
@@ -53,27 +103,30 @@ export function parseCursor(raw: string | null | undefined): DeltaCursor {
   }
   const dash = raw.indexOf('-');
   if (dash === -1) {
-    // Legacy `<id>` only — treat the row as if it committed at epoch so
-    // a re-read picks up any rows with non-trivial committed_at.
+    // Legacy `<id>` only — treat xactId as 0 so a re-read starts from the
+    // very beginning (all real xid8 values are > 0).
     try {
-      return { committedAtMicros: BigInt(0), id: BigInt(raw) };
+      return { id: BigInt(raw), xactId: BigInt(0) };
     } catch {
       return ZERO_CURSOR;
     }
   }
   try {
-    return {
-      committedAtMicros: BigInt(raw.slice(0, dash)),
-      id: BigInt(raw.slice(dash + 1)),
-    };
+    const xactId = BigInt(raw.slice(0, dash));
+    // A first component at/above the plausible-xid ceiling is a stale
+    // `<committedAtMicros>-<id>` cursor from before the xact_id migration —
+    // reset so delta re-reads from the start rather than filtering to nothing.
+    if (xactId >= MAX_PLAUSIBLE_XACT_ID) {
+      return ZERO_CURSOR;
+    }
+    return { id: BigInt(raw.slice(dash + 1)), xactId };
   } catch {
     return ZERO_CURSOR;
   }
 }
 
-export function encodeCursor(committedAt: Date, id: bigint): string {
-  const micros = BigInt(committedAt.getTime()) * BigInt(1000);
-  return `${micros.toString()}-${id.toString()}`;
+export function encodeCursor(xactId: bigint, id: bigint): string {
+  return `${xactId.toString()}-${id.toString()}`;
 }
 
 export class SyncService {
@@ -101,16 +154,24 @@ export class SyncService {
     modelName: string,
     modelId: string,
     data: object | null,
-  ): Promise<SyncAction> {
-    return client.syncAction.create({
-      data: {
-        action,
-        data: data ?? undefined,
-        modelId,
-        modelName,
-        organizationId: orgId,
-      },
-    });
+  ): Promise<SyncActionRow> {
+    // Raw INSERT ... RETURNING so we get the DB-assigned `xact_id` back in a
+    // single round-trip — the Prisma query builder can't select the
+    // Unsupported("xid8") column. `data` is bound as a jsonb param (a JSON
+    // string, or NULL for delete markers). `xact_id`/`created_at` fall to
+    // their column DEFAULTs (`pg_current_xact_id()` / now()).
+    const rows = await client.$queryRaw<RawSyncActionRow[]>(Prisma.sql`
+      INSERT INTO "sync_actions" ("organization_id", "action", "model_name", "model_id", "data")
+      VALUES (
+        ${orgId}::uuid,
+        ${action},
+        ${modelName},
+        ${modelId}::uuid,
+        ${data === null ? null : JSON.stringify(data)}::jsonb
+      )
+      RETURNING ${SYNC_ACTION_COLUMNS}
+    `);
+    return mapRow(rows[0]);
   }
 
   /**
@@ -119,7 +180,7 @@ export class SyncService {
    * any gap from a failed publish, so awaiting here would add latency for no
    * correctness benefit. Safe to call after a transaction commits.
    */
-  publish(action: SyncAction): void {
+  publish(action: SyncActionRow): void {
     void this.redis
       .publish(`sync:${action.organizationId}`, JSON.stringify(serializeSyncAction(action)))
       .catch(err => {
@@ -140,7 +201,7 @@ export class SyncService {
     modelName: string,
     modelId: string,
     data: object | null,
-  ): Promise<SyncAction> {
+  ): Promise<SyncActionRow> {
     const syncAction = await this.recordSyncAction(
       this.prisma,
       orgId,
@@ -191,12 +252,18 @@ export class SyncService {
     const withGuestVisibility = <T extends object>(where: T): T =>
       guestVisibilityClause ? ({ ...where, ...guestVisibilityClause } as T) : where;
 
-    // Fetch the watermark ONCE (a single DB-clock round-trip) up front and
-    // thread it through, rather than letting the syncAction.findFirst query
-    // below (or `watermark()` itself) issue its own `SELECT now()` inline —
-    // see `watermark()`'s doc comment for why this must be the DB clock, not
-    // the app server's.
-    const bootstrapWatermark = await this.watermark();
+    // Take the cursor BEFORE the (non-atomic, individually-snapshotted) entity
+    // reads below — never inside their `Promise.all`. Under READ COMMITTED each
+    // query gets its own snapshot, so a transaction that commits DURING
+    // bootstrap could otherwise land in the cursor (settled by the cursor read)
+    // yet be absent from an entity read that snapshotted earlier — and delta,
+    // which reads strictly after the cursor, would never re-fetch it. Reading
+    // the cursor first guarantees it sits at or below every entity snapshot:
+    // any transaction still in flight at cursor time has `xact_id` ABOVE the
+    // cursor (the fence excludes it from the max), so the first delta re-reads
+    // it, closing the bootstrap→delta gap. Costs one sequential round-trip, the
+    // same shape the former `watermark()` pre-fetch had.
+    const bootstrapCursor = await this.latestSettledCursor(orgId);
 
     const [
       organizations,
@@ -218,7 +285,6 @@ export class SyncService {
       customFieldValues,
       initiatives,
       initiativeProjects,
-      lastSyncAction,
     ] = await Promise.all([
       this.prisma.organization.findUnique({
         // Both are settings blobs for the admin console (SSO config, security
@@ -346,19 +412,6 @@ export class SyncService {
       this.prisma.initiativeProject.findMany({
         where: { initiative: { archivedAt: null, organizationId: orgId } },
       }),
-      // Watermarked latest row: order by (committedAt, id) DESC so the
-      // returned cursor is the topmost tuple, NOT just max(id). If we used
-      // max(id) here, a row whose tx is slow but already-inserted-but-
-      // -uncommitted at bootstrap time could later commit with a smaller
-      // committed_at than max(id)'s — and the next delta would skip it.
-      this.prisma.syncAction.findFirst({
-        orderBy: [{ committedAt: 'desc' }, { id: 'desc' }],
-        select: { committedAt: true, id: true },
-        where: {
-          committedAt: { lte: bootstrapWatermark },
-          organizationId: orgId,
-        },
-      }),
     ]);
 
     // Denormalize label IDs onto each issue
@@ -369,9 +422,7 @@ export class SyncService {
       labelIdsByIssue.set(a.issueId, ids);
     }
 
-    const cursor = lastSyncAction
-      ? encodeCursor(lastSyncAction.committedAt, lastSyncAction.id)
-      : '0-0';
+    const cursor = bootstrapCursor;
 
     return {
       customFieldDefinitions,
@@ -400,14 +451,23 @@ export class SyncService {
   }
 
   /**
-   * Fetch up to `limit` SyncActions strictly after the cursor, but only
-   * rows that have committed earlier than `now() - safety window`. The
-   * cursor is a `(committedAt, id)` tuple — using id alone would skip
-   * any row whose transaction committed out of order with its id (e.g.
-   * a slow tx whose statement_timestamp is earlier than a later-id-but-
-   * faster-committing tx). The trigger-populated `committedAt` column
-   * is monotonic at INSERT time, so combined with the safety window we
-   * get a never-skip cursor that advances strictly forward.
+   * Fetch up to `limit` SyncActions strictly after the cursor, fenced to
+   * rows whose writing transaction has SETTLED. The cursor is a
+   * `(xactId, id)` tuple — using id alone would skip any row whose
+   * transaction committed out of order with its BIGSERIAL id (a slow tx
+   * whose id is lower than a later-started-but-faster-committing tx).
+   *
+   * The fence is `xact_id < pg_snapshot_xmin(pg_current_snapshot())`:
+   * `pg_snapshot_xmin` is the oldest transaction id still considered
+   * in-progress at this statement's snapshot, so every row with a smaller
+   * `xact_id` has already committed or aborted — and, crucially, NO
+   * still-running transaction can later insert a row with an `xact_id`
+   * below the cursor. Ordering by `(xact_id, id)` and never serving a row
+   * at or above the fence therefore gives a provably never-skip cursor
+   * that advances strictly forward, with no wall-clock guess. This is the
+   * robust replacement for the former `committed_at = statement_timestamp()`
+   * + 500ms window, which could miss a transaction that inserted early and
+   * took longer than the window to commit.
    *
    * Cap is per-page so a long-offline client cannot request a
    * multi-million-row response that OOMs the server; callers paginate
@@ -432,62 +492,34 @@ export class SyncService {
     toCursor?: DeltaCursor,
     limit = DELTA_PAGE_SIZE,
     guestScope?: { userId: string; guestTeamIds: string[] },
-  ): Promise<{ actions: SyncAction[]; hasMore: boolean }> {
-    const fromCommittedAt = new Date(Number(fromCursor.committedAtMicros / BigInt(1000)));
-    // Single DB-clock round-trip for this operation — see `watermark()`.
-    const watermark = await this.watermark();
-    const toCommittedAt = toCursor
-      ? new Date(Number(toCursor.committedAtMicros / BigInt(1000)))
-      : null;
+  ): Promise<{ actions: SyncActionRow[]; hasMore: boolean }> {
+    const fromXact = fromCursor.xactId.toString();
 
-    // Hard upper-bound on committedAt — applied to BOTH branches of the
-    // tuple-greater filter below. The watermark is the lag floor that
-    // guarantees a row's tx has had time to commit; `toCommittedAt`, when
-    // present, is the bootstrap→delta handoff ceiling. Take the smaller
-    // so we never serve rows past either boundary, even when the
-    // cursor's `committedAt` itself happens to fall inside the lag
-    // window (which would otherwise let the lower-bound's same-time
-    // branch sneak in a too-recent row and advance the cursor past
-    // still-in-flight inserts).
-    const upperCommittedAt = toCommittedAt && toCommittedAt < watermark ? toCommittedAt : watermark;
+    // Lower bound — `(xact_id, id) > (fromXact, fromId)`. xid8 is passed as a
+    // decimal string cast to xid8 (which has the full set of comparison
+    // operators, unlike the legacy `xid` type).
+    const lowerBound = Prisma.sql`("xact_id" > ${fromXact}::xid8 OR ("xact_id" = ${fromXact}::xid8 AND "id" > ${fromCursor.id}))`;
 
-    // Lower bound — `(committedAt, id) > (fromCommittedAt, fromId)`,
-    // expressed as the two OR branches Prisma needs.
-    const lowerBound = {
-      OR: [
-        { committedAt: { gt: fromCommittedAt } },
-        { committedAt: fromCommittedAt, id: { gt: fromCursor.id } },
-      ],
-    };
-
-    // Upper bound (only when toCursor is given) — encoded as a true
-    // tuple `(committedAt, id) <= (toCommittedAt, toId)`. Without the
-    // id-tie-break, rows sharing toCommittedAt could leak past the
-    // intended upper bound on a bootstrap→delta handoff.
-    const upperBound =
-      toCursor && toCommittedAt
-        ? {
-            OR: [
-              { committedAt: { lt: toCommittedAt } },
-              { committedAt: toCommittedAt, id: { lte: toCursor.id } },
-            ],
-          }
-        : null;
+    // Upper bound (only when toCursor is given) — a true tuple
+    // `(xact_id, id) <= (toXact, toId)`. Without the id tie-break, rows
+    // sharing toXact could leak past the intended bootstrap→delta ceiling.
+    const upperBound = toCursor
+      ? Prisma.sql`AND ("xact_id" < ${toCursor.xactId.toString()}::xid8 OR ("xact_id" = ${toCursor.xactId.toString()}::xid8 AND "id" <= ${toCursor.id}))`
+      : Prisma.empty;
 
     // Request one extra row to cheaply detect whether the caller needs
     // another page, without a separate count query.
-    const rows = await this.prisma.syncAction.findMany({
-      orderBy: [{ committedAt: 'asc' }, { id: 'asc' }],
-      take: limit + 1,
-      where: {
-        AND: [
-          { committedAt: { lte: upperCommittedAt } },
-          lowerBound,
-          ...(upperBound ? [upperBound] : []),
-        ],
-        organizationId: orgId,
-      },
-    });
+    const raw = await this.prisma.$queryRaw<RawSyncActionRow[]>(Prisma.sql`
+      SELECT ${SYNC_ACTION_COLUMNS}
+      FROM "sync_actions"
+      WHERE "organization_id" = ${orgId}::uuid
+        AND "xact_id" < pg_snapshot_xmin(pg_current_snapshot())
+        AND ${lowerBound}
+        ${upperBound}
+      ORDER BY "xact_id" ASC, "id" ASC
+      LIMIT ${limit + 1}
+    `);
+    const rows = raw.map(mapRow);
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
 
@@ -531,10 +563,10 @@ export class SyncService {
    * — this is a denylist-by-omission, not a structurally-enforced guarantee.
    */
   private async filterGuestVisibleActions(
-    rows: SyncAction[],
+    rows: SyncActionRow[],
     guestTeamIds: string[],
     guestUserId: string,
-  ): Promise<SyncAction[]> {
+  ): Promise<SyncActionRow[]> {
     const guestTeamSet = new Set(guestTeamIds);
 
     const relatedIssueIds = new Set<string>();
@@ -626,71 +658,52 @@ export class SyncService {
   }
 
   /**
-   * Current high-watermark cursor for an org, encoded as a `(committedAt, id)`
+   * Current high-watermark cursor for an org, encoded as a `(xactId, id)`
    * tuple string. Callers persist this and feed it back to delta-sync.
    * Named `getLastSyncId` for back-compat with the pre-tuple cursor API
    * (return type changed from BigInt to opaque string).
    */
   async getLastSyncId(orgId: string): Promise<string> {
-    // Single DB-clock round-trip for this operation — see `watermark()`.
-    const watermark = await this.watermark();
-    const last = await this.prisma.syncAction.findFirst({
-      orderBy: [{ committedAt: 'desc' }, { id: 'desc' }],
-      select: { committedAt: true, id: true },
-      where: {
-        committedAt: { lte: watermark },
-        organizationId: orgId,
-      },
-    });
-    return last ? encodeCursor(last.committedAt, last.id) : '0-0';
+    return this.latestSettledCursor(orgId);
   }
 
   /**
-   * Safety-window watermark, computed against the SAME clock that stamps
-   * `committed_at` — Postgres's `statement_timestamp()` — rather than the
-   * app server's `Date.now()`. The two clocks can drift: if the app clock
-   * runs ahead of the DB clock by more than `COMMITTED_WATERMARK_LAG_MS`,
-   * an app-clock-derived watermark would treat rows whose transactions are
-   * still in flight as already safe to serve, fully defeating the safety
-   * window documented above `COMMITTED_WATERMARK_LAG_MS`. Fetching the DB's
-   * own `now()` and subtracting the lag from THAT removes cross-clock skew
-   * from the equation entirely — the comparison and the bound it's checked
-   * against now share one clock.
+   * The topmost SETTLED `(xactId, id)` tuple for an org, encoded as a cursor
+   * string (or `'0-0'` when the org has no settled SyncActions yet).
    *
-   * Costs one extra round-trip (`SELECT now()`) per call. Each of this
-   * class's three read paths (`getBootstrapData`, `getDeltaSyncActions`,
-   * `getLastSyncId`) calls this exactly once per invocation and threads the
-   * result through the rest of that call — never call this more than once
-   * within a single operation, or add a second raw query where the already-
-   * fetched value could be reused instead.
-   *
-   * RESIDUAL (not fixed here, needs a live DB to verify against): the row's
-   * `committed_at` is still stamped by `statement_timestamp()` — the start
-   * of the statement, not the moment the transaction actually commits. A
-   * transaction that inserts its SyncAction row early and then takes longer
-   * than the lag window to actually commit can still be missed by a delta
-   * read that has already advanced past that window, even though both
-   * reads now agree on what "now" means. Closing that gap fully needs
-   * commit-ordered reads — e.g. fencing on Postgres's transaction id/xmin,
-   * or stamping `committed_at` from a COMMIT-time trigger instead of
-   * statement start — a larger redesign left as a follow-up.
+   * "Settled" = `xact_id < pg_snapshot_xmin(pg_current_snapshot())`, the same
+   * commit-order fence `getDeltaSyncActions` uses: the returned cursor never
+   * sits above a transaction still in flight, so a client that starts from it
+   * (bootstrap handoff, or `getLastSyncId` on a mutation response) cannot skip
+   * a row whose id is already assigned but whose commit lands later. This is a
+   * single round-trip; unlike the former `watermark()` it needs no separate
+   * `SELECT now()` — the fence is evaluated inline against the statement's own
+   * snapshot, so there is no app-vs-DB clock to reconcile.
    */
-  private async watermark(): Promise<Date> {
-    const [{ now }] = await this.prisma.$queryRaw<[{ now: Date }]>`SELECT now() as now`;
-    return new Date(now.getTime() - COMMITTED_WATERMARK_LAG_MS);
+  private async latestSettledCursor(orgId: string): Promise<string> {
+    const rows = await this.prisma.$queryRaw<Array<{ xactId: string; id: bigint }>>(Prisma.sql`
+      SELECT "xact_id"::text AS "xactId", "id"
+      FROM "sync_actions"
+      WHERE "organization_id" = ${orgId}::uuid
+        AND "xact_id" < pg_snapshot_xmin(pg_current_snapshot())
+      ORDER BY "xact_id" DESC, "id" DESC
+      LIMIT 1
+    `);
+    const last = rows[0];
+    return last ? encodeCursor(BigInt(last.xactId), last.id) : '0-0';
   }
 }
 
 /**
- * Serialize a SyncAction for JSON transport. `id` becomes a string so
- * BigInt survives JSON; `committedAt` is included as an ISO timestamp
- * so the client can carry the full `(committedAt, id)` cursor tuple.
+ * Serialize a SyncAction for JSON transport. `id` and `xactId` become strings
+ * so the 64-bit values survive JSON; `xactId` is what the client uses to
+ * advance its `(xactId, id)` delta cursor from a live-pushed action.
  */
-export function serializeSyncAction(action: SyncAction) {
+export function serializeSyncAction(action: SyncActionRow) {
   return {
     ...action,
-    committedAt: action.committedAt.toISOString(),
     createdAt: action.createdAt.toISOString(),
     id: action.id.toString(),
+    xactId: action.xactId.toString(),
   };
 }

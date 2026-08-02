@@ -34,35 +34,25 @@ CREATE INDEX "auth_tokens_token_hash_magic_link_idx"
   WHERE "type" = 'magic_link';
 
 -- ---------------------------------------------------------------------------
--- sync_actions.committed_at trigger
+-- sync_actions.xact_id covering index (commit-order fence)
 -- ---------------------------------------------------------------------------
--- Stamps committed_at to the statement's start time on every INSERT so
--- ordering by committed_at corresponds to wall-clock order. Combined with
--- the 500ms safety window + (organization_id, committed_at, id) cursor in
--- SyncService.getDeltaSyncActions, this closes the BIGSERIAL ordering hole
--- (ids are assigned at INSERT but transactions commit out of order — a
--- client recording lastSyncId=max(id) could otherwise miss a row whose id
--- is lower but commits later). Load-bearing for delta sync.
+-- The `xact_id xid8 DEFAULT pg_current_xact_id()` column itself is Prisma-
+-- expressible (an `Unsupported` type with a `dbgenerated` default) and lives
+-- in the generated init baseline. This index is the part Prisma cannot declare
+-- — `@@index` rejects an `Unsupported`-typed field — so it lives here.
 --
--- The assignment is UNCONDITIONAL on purpose. The column carries a DB DEFAULT
--- (CURRENT_TIMESTAMP, from `@default(now())` in schema.prisma), and PostgreSQL
--- materializes column DEFAULTs into NEW *before* BEFORE INSERT triggers fire.
--- A guarded `IF NEW.committed_at IS NULL` would therefore never run — NEW
--- always arrives pre-populated with the (wrong, transaction-START) default.
--- Overwriting it here with statement_timestamp() is what makes the watermark
--- correct, and is robust even if a future `prisma migrate`/`db push` re-adds
--- the default.
-CREATE OR REPLACE FUNCTION sync_action_set_committed_at()
-RETURNS TRIGGER LANGUAGE plpgsql AS $$
-BEGIN
-  NEW.committed_at := statement_timestamp();
-  RETURN NEW;
-END;
-$$;
-
-CREATE TRIGGER set_sync_action_committed_at
-  BEFORE INSERT ON sync_actions
-  FOR EACH ROW EXECUTE FUNCTION sync_action_set_committed_at();
+-- It is load-bearing for delta sync: `SyncService.getDeltaSyncActions` orders
+-- by `(xact_id, id)` and reads only rows with
+-- `xact_id < pg_snapshot_xmin(pg_current_snapshot())` — rows whose transaction
+-- has SETTLED and below which no transaction is still in flight. That is a
+-- provably never-skip cursor, replacing the former `committed_at =
+-- statement_timestamp()` + 500ms wall-clock window, which could still miss a
+-- row whose transaction inserted early but committed more than the window later
+-- (BIGSERIAL ids are assigned at INSERT but commit out of order). Fencing on
+-- the transaction id removes the wall-clock guess entirely: an in-flight xid
+-- keeps its rows fenced until it actually commits, however long that takes.
+CREATE INDEX "sync_actions_organization_id_xact_id_id_idx"
+  ON "sync_actions" ("organization_id", "xact_id", "id");
 
 -- ---------------------------------------------------------------------------
 -- Full-text search GIN index on issues

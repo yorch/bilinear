@@ -46,6 +46,25 @@ export const typeDefs = `
     createdAt: DateTime!
     updatedAt: DateTime!
     archivedAt: DateTime
+    "Per-org plan-tier caps. Read-only for org members; edited by platform admins."
+    planLimits: OrganizationPlanLimits!
+  }
+
+  "Per-org plan-tier caps (the Organization.max* columns)."
+  type OrganizationPlanLimits {
+    maxCustomFieldsPerTeam: Int!
+    maxCustomFieldsPerOrg: Int!
+    maxLabelGroupChildren: Int!
+    maxInitiativeDepth: Int!
+    maxExportRows: Int!
+  }
+
+  input OrganizationPlanLimitsInput {
+    maxCustomFieldsPerTeam: Int!
+    maxCustomFieldsPerOrg: Int!
+    maxLabelGroupChildren: Int!
+    maxInitiativeDepth: Int!
+    maxExportRows: Int!
   }
 
   type Team {
@@ -1924,6 +1943,8 @@ export const typeDefs = `
     platformTenantRestore(id: ID!): PlatformTenant!
     """Soft-delete a tenant (sets archivedAt). Members lose access; data is retained."""
     platformTenantDelete(id: ID!): PlatformTenant!
+    """Overwrite a tenant's per-org plan-tier caps. Returns the updated tenant detail."""
+    platformTenantUpdateLimits(id: ID!, limits: OrganizationPlanLimitsInput!): PlatformTenantDetail!
     platformUserSuspend(id: ID!): PlatformUser!
     platformUserReactivate(id: ID!): PlatformUser!
     platformUserSetAdmin(id: ID!, isPlatformAdmin: Boolean!): PlatformUser!
@@ -2169,6 +2190,7 @@ export const typeDefs = `
     teamCount: Int!
     projectCount: Int!
     owners: [PlatformTenantOwner!]!
+    limits: OrganizationPlanLimits!
   }
 
   type PlatformUserOrg {

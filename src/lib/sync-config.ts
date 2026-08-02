@@ -9,13 +9,17 @@
  */
 
 /**
- * Safety window for the server's committed-at watermark. Rows committed
- * inside this window may have been preceded by a row whose transaction was
- * still in-flight at the server's last read, so the server withholds them
- * from delta-sync responses until the window elapses. The client sizes its
- * post-connect / post-drain follow-up delta delays off this value (see
- * `src/lib/sync-manager.ts`'s `scheduleFollowUpDelta`/`handleTransactionDrained`)
- * to guarantee the follow-up lands after the watermark has cleared.
+ * Client-side settle delay for follow-up delta syncs. The server no longer
+ * applies a wall-clock watermark — delta reads are fenced on the writing
+ * transaction's xid8 (`xact_id < pg_snapshot_xmin(...)`), so a row becomes
+ * delta-visible exactly when its transaction settles, however long that
+ * takes. The client still schedules a short follow-up delta after a
+ * (re)connect / queue drain to cover the Redis pub/sub no-replay gap (a
+ * message published before this client's SUBSCRIBE completed is lost); this
+ * value is how long it waits for the just-committed transaction to settle
+ * before re-reading. See `src/lib/sync-manager.ts`'s
+ * `scheduleFollowUpDelta`/`handleTransactionDrained`. Named for the former
+ * server watermark it replaced, kept identical so the timing is unchanged.
  */
 export const COMMIT_WATERMARK_LAG_MS = 500;
 
@@ -26,6 +30,22 @@ export const COMMIT_WATERMARK_LAG_MS = 500;
  * when reasoning about the largest offline backlog it can fully drain.
  */
 export const DELTA_PAGE_SIZE = 5000;
+
+/**
+ * Upper bound distinguishing a real `xact_id` (the current `<xactId>-<id>`
+ * cursor's first component) from a stale first component left by an OLDER
+ * cursor encoding. The delta cursor was briefly `<committedAtMicros>-<id>`
+ * before moving to `<xactId>-<id>`; a client (or IndexedDB `lastSyncId`)
+ * carrying that intermediate form would otherwise be parsed as an astronomically
+ * large `xactId` (epoch-microseconds ≈ 1.7e15), making `xact_id > <that>` match
+ * zero rows and wedging delta sync forever. Real xid8 values grow by one per
+ * write transaction, so they stay far below this ceiling for millennia; any
+ * parsed first component at or above it is treated as a stale/unknown cursor and
+ * reset to the zero cursor, which triggers a one-time full re-read (safe,
+ * idempotent) instead of a silent stall. Shared by `SyncService.parseCursor`
+ * (server) and `sync-manager`'s `splitCursor` (client) so both self-heal.
+ */
+export const MAX_PLAUSIBLE_XACT_ID = BigInt('1000000000000000');
 
 /**
  * Cadence at which the WS server pings each connected client to detect dead

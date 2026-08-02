@@ -1,4 +1,4 @@
-import { COMMIT_WATERMARK_LAG_MS, DELTA_PAGE_SIZE } from '@/lib/sync-config';
+import { COMMIT_WATERMARK_LAG_MS, DELTA_PAGE_SIZE, MAX_PLAUSIBLE_XACT_ID } from '@/lib/sync-config';
 import { normalizeIssueRow } from '@/stores/issue-store';
 import type { RootStore } from '@/stores/root-store';
 import { db } from './db';
@@ -8,19 +8,20 @@ import type { SerializedSyncAction, WsClient } from './ws-client';
 const log = createClientLogger('SyncManager');
 
 /**
- * Cursor for delta-sync is a `(committedAt, id)` tuple encoded as
- * `<committedAtMicros>-<id>`. Using id alone races when transactions
- * commit out of order — a slow-committing earlier-id row would be
- * permanently skipped if we just kept `max(id)`. See
- * `src/server/services/sync.service.ts` for the server-side encoding.
+ * Cursor for delta-sync is a `(xactId, id)` tuple encoded as
+ * `<xactId>-<id>`. Using id alone races when transactions commit out of
+ * order — a slow-committing earlier-id row would be permanently skipped if
+ * we just kept `max(id)`. `xactId` is the writing transaction's Postgres
+ * xid8; the server fences delta reads on it so the tuple never advances past
+ * a still-in-flight transaction. See `src/server/services/sync.service.ts`.
  */
 function compareCursor(a: string, b: string): number {
-  const [aMicros, aId] = splitCursor(a);
-  const [bMicros, bId] = splitCursor(b);
-  if (aMicros < bMicros) {
+  const [aXact, aId] = splitCursor(a);
+  const [bXact, bId] = splitCursor(b);
+  if (aXact < bXact) {
     return -1;
   }
-  if (aMicros > bMicros) {
+  if (aXact > bXact) {
     return 1;
   }
   if (aId < bId) {
@@ -44,17 +45,25 @@ function splitCursor(c: string): [bigint, bigint] {
     }
   }
   try {
-    return [BigInt(c.slice(0, dash)), BigInt(c.slice(dash + 1))];
+    const xact = BigInt(c.slice(0, dash));
+    // A first component above the plausible-xid ceiling is a stale
+    // `<committedAtMicros>-<id>` cursor from before the xact_id migration;
+    // collapse it to the zero cursor so a real incoming action's small xactId
+    // overtakes it (and the persisted cursor heals) instead of the stale huge
+    // value pinning `max()` forever. See MAX_PLAUSIBLE_XACT_ID.
+    if (xact >= MAX_PLAUSIBLE_XACT_ID) {
+      return [BigInt(0), BigInt(0)];
+    }
+    return [xact, BigInt(c.slice(dash + 1))];
   } catch {
     return [BigInt(0), BigInt(0)];
   }
 }
 
 function actionCursor(action: SerializedSyncAction): string {
-  // committedAt is a Date ISO string from the server; convert to
-  // microseconds-since-epoch to match the server-side encoder.
-  const micros = BigInt(new Date(action.committedAt).getTime()) * BigInt(1000);
-  return `${micros.toString()}-${action.id}`;
+  // xactId is the server-assigned xid8 (decimal string); pair it with id to
+  // form the `(xactId, id)` cursor the server-side encoder produces.
+  return `${action.xactId}-${action.id}`;
 }
 
 // Upper bound on delta pages consumed per deltaSync call. Server returns
@@ -86,9 +95,10 @@ export class SyncManager {
   private drainedRetryTimer: ReturnType<typeof setTimeout> | null = null;
   // Follow-up delta scheduled ~800ms after every successful (re)connect and
   // after fullBootstrap — catches actions that land in the gap between the
-  // server's 500ms commit watermark and Redis pub/sub's no-replay semantics
-  // (a message published before this client's SUBSCRIBE completed is gone
-  // forever). Coalesced the same way as drainedRetryTimer.
+  // server's commit-order fence (a row is delta-visible only once its
+  // transaction settles) and Redis pub/sub's no-replay semantics (a message
+  // published before this client's SUBSCRIBE completed is gone forever).
+  // Coalesced the same way as drainedRetryTimer.
   private connectFollowUpTimer: ReturnType<typeof setTimeout> | null = null;
   // The 'resync' WS message's jittered retry timer — tracked so stop() can
   // cancel it instead of leaving a stray deltaSync() to fire after teardown.
@@ -121,7 +131,7 @@ export class SyncManager {
       // No cache — do a full bootstrap
       await this.fullBootstrap();
       // Bootstrap's own lastSyncId comes from the server at request time, so
-      // it has exactly the same commit-watermark/pub-sub-no-replay gap as a
+      // it has exactly the same commit-order-fence/pub-sub-no-replay gap as a
       // post-connect delta (see scheduleFollowUpDelta docstring) — schedule
       // the same catch-up.
       this.scheduleFollowUpDelta();
@@ -144,8 +154,8 @@ export class SyncManager {
     // creates a SyncAction and publishes it to Redis. If our WS connection
     // happened to be mid-handshake at that moment, the broadcast went to
     // an empty subscriber set and pub/sub doesn't replay. Schedule a
-    // delta-sync past the server's watermark to catch it up — this is
-    // the post-reload-hydrate case the offline tests exercise.
+    // delta-sync once the mutation's transaction has settled to catch it up —
+    // this is the post-reload-hydrate case the offline tests exercise.
     window.addEventListener('bilinear:transaction-drained', this.handleTransactionDrained);
   }
 
@@ -1028,7 +1038,7 @@ export class SyncManager {
           break;
       }
 
-      // Update max sync cursor — `(committedAt, id)` tuple comparison.
+      // Update max sync cursor — `(xactId, id)` tuple comparison.
       // Using id alone would skip an earlier-id-later-committed row.
       const incoming = actionCursor(action);
       if (compareCursor(incoming, maxId) > 0) {
@@ -1209,14 +1219,15 @@ export class SyncManager {
    * Schedule one follow-up delta-sync ~800ms after a (re)connect or a
    * fullBootstrap. Redis pub/sub only delivers messages published after
    * this client's SUBSCRIBE completes — it has no replay — and the delta
-   * endpoint itself excludes rows inside the server's `COMMIT_WATERMARK_LAG_MS`
-   * commit watermark. An action that commits right around connect time can
-   * therefore be neither delta'd (still inside the watermark) nor pushed
+   * endpoint's commit-order fence excludes a row until its transaction has
+   * settled. An action committing right around connect time can therefore be
+   * neither delta'd (its tx hadn't settled at the delta read) nor pushed
    * (published before the subscribe), leaving it invisible until the next
-   * reconnect. Waiting past the watermark (a 300ms margin on top of it) and
-   * re-running delta closes that gap. Coalesced like
-   * `handleTransactionDrained` so rapid reconnects collapse to a single
-   * follow-up.
+   * reconnect. Re-running delta a short debounce later (once the tx has
+   * settled) closes that gap. `COMMIT_WATERMARK_LAG_MS` is reused purely as
+   * that client-side settle delay — the server no longer applies a wall-clock
+   * watermark. Coalesced like `handleTransactionDrained` so rapid reconnects
+   * collapse to a single follow-up.
    */
   private scheduleFollowUpDelta = () => {
     if (this.stopped) {
@@ -1235,11 +1246,11 @@ export class SyncManager {
   };
 
   /**
-   * Coalesce drain notifications into a single delta-sync past the server's
-   * `COMMIT_WATERMARK_LAG_MS` watermark. By the time this fires, the server
-   * has had at least a 100ms margin past the watermark to flush the
-   * SyncAction, so the next delta is guaranteed to include it even if the WS
-   * broadcast was lost in a reconnect handshake gap.
+   * Coalesce drain notifications into a single delta-sync a short settle delay
+   * (`COMMIT_WATERMARK_LAG_MS`) after the last drain. By the time this fires
+   * the drained mutation's transaction has settled, so the next delta's
+   * commit-order fence includes its SyncAction even if the WS broadcast was
+   * lost in a reconnect handshake gap.
    */
   private handleTransactionDrained = () => {
     if (this.stopped) {
