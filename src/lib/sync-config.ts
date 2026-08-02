@@ -48,6 +48,14 @@ export const DELTA_PAGE_SIZE = 5000;
 export const MAX_PLAUSIBLE_XACT_ID = BigInt('1000000000000000');
 
 /**
+ * Per-org SyncAction broadcast coalescing window (§3.2). The WS server buffers
+ * incoming SyncActions per org and flushes them as a single `sync` frame after
+ * this many ms, instead of one `ws.send` per action. Adds at most this much
+ * delivery latency; the client already applies `sync` arrays.
+ */
+export const WS_BROADCAST_COALESCE_MS = 50;
+
+/**
  * Cadence at which the WS server pings each connected client to detect dead
  * connections. Server-only value, but kept here alongside its dependent
  * (`WS_PONG_TIMEOUT_MS`) and the client's own heartbeat timeout for a single

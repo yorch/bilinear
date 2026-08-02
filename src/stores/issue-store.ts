@@ -37,14 +37,82 @@ export function normalizeIssueRow(data: DBIssue, previousLabelIds?: string[]): D
 export class IssueStore {
   pool = new Map<string, DBIssue>();
 
+  /**
+   * Secondary index: `teamId → Set<issueId>`. Maintained alongside `pool` so
+   * `findByTeamId` scans only one team's bucket AND — the real win — re-runs in
+   * an observer component ONLY when that team's membership changes, not on
+   * every pool mutation. The old `Array.from(pool.values()).filter` read the
+   * whole pool's key set, so any issue add/remove anywhere re-ran every
+   * team-list selector; on a 10k-issue store that is a lot of wasted work.
+   *
+   * `observable.shallow` so the bucket `Set`s are stored by reference (not
+   * deep-converted to ObservableSets). Membership changes REPLACE a team's
+   * `Set` with a fresh copy — that reference swap is what fires the per-key
+   * observers; a same-team field update leaves the bucket untouched (the row
+   * re-renders via its own `pool.get(id)` subscription instead). See
+   * `indexAdd`/`indexRemove`/`setIssue`. Only `byTeam` is indexed today —
+   * `findByCycleId`/`findByProjectId`/`findByStateId` still scan (lower
+   * traffic); add more buckets here if they become hot.
+   */
+  private byTeam = new Map<string, Set<string>>();
+
   constructor() {
-    makeObservable(this, {
+    makeObservable<IssueStore, 'byTeam'>(this, {
       all: computed,
       applySyncAction: action,
+      byTeam: observable.shallow,
       optimisticUpdate: action,
       pool: observable,
       upsertMany: action,
     });
+  }
+
+  /** Add `issue.id` to its team bucket. No-op (no reference swap, so no
+   * observer fire) when already present — a same-team field update must not
+   * churn the bucket. */
+  private indexAdd(id: string, teamId: string) {
+    const prev = this.byTeam.get(teamId);
+    if (prev?.has(id)) {
+      return;
+    }
+    const next = prev ? new Set(prev) : new Set<string>();
+    next.add(id);
+    this.byTeam.set(teamId, next);
+  }
+
+  /** Remove `id` from `teamId`'s bucket, dropping the bucket when it empties. */
+  private indexRemove(id: string, teamId: string) {
+    const prev = this.byTeam.get(teamId);
+    if (!prev?.has(id)) {
+      return;
+    }
+    const next = new Set(prev);
+    next.delete(id);
+    if (next.size === 0) {
+      this.byTeam.delete(teamId);
+    } else {
+      this.byTeam.set(teamId, next);
+    }
+  }
+
+  /** Single-issue upsert that keeps `byTeam` in sync, moving the id between
+   * buckets when its `teamId` changes. */
+  private setIssue(issue: DBIssue) {
+    const prev = this.pool.get(issue.id);
+    if (prev && prev.teamId !== issue.teamId) {
+      this.indexRemove(issue.id, prev.teamId);
+    }
+    this.pool.set(issue.id, issue);
+    this.indexAdd(issue.id, issue.teamId);
+  }
+
+  /** Single-issue delete that keeps `byTeam` in sync. */
+  private deleteIssue(id: string) {
+    const prev = this.pool.get(id);
+    this.pool.delete(id);
+    if (prev) {
+      this.indexRemove(id, prev.teamId);
+    }
   }
 
   get all(): DBIssue[] {
@@ -71,9 +139,23 @@ export class IssueStore {
   }
 
   findByTeamId(teamId: string): DBIssue[] {
-    return Array.from(this.pool.values()).filter(
-      i => i.teamId === teamId && !i.trashed && !i.archivedAt,
-    );
+    const ids = this.byTeam.get(teamId);
+    if (!ids) {
+      return [];
+    }
+    // The bucket holds every issue on the team (incl. trashed/archived); the
+    // active-only filter is applied on read. An observer here subscribes to
+    // this team's bucket entry + each read `pool.get(id)`, so it re-runs on a
+    // membership change to THIS team or a field change to one of ITS issues —
+    // not on activity in other teams.
+    const result: DBIssue[] = [];
+    for (const id of ids) {
+      const issue = this.pool.get(id);
+      if (issue && !issue.trashed && !issue.archivedAt) {
+        result.push(issue);
+      }
+    }
+    return result;
   }
 
   /**
@@ -131,13 +213,54 @@ export class IssueStore {
   optimisticUpdate(id: string, patch: Partial<DBIssue>) {
     const existing = this.pool.get(id);
     if (existing) {
-      this.pool.set(id, { ...existing, ...patch });
+      // Route through setIssue so a patch that changes `teamId` moves the id
+      // between buckets.
+      this.setIssue({ ...existing, ...patch });
     }
   }
 
   upsertMany(issues: DBIssue[]) {
+    // Bulk path: accumulate each touched team's membership once and replace its
+    // bucket a single time, instead of copying a team's Set per inserted issue
+    // (which is O(n²) when bootstrapping thousands of issues into one team).
+    const touched = new Map<string, Set<string>>();
+    // Only teams whose MEMBERSHIP actually changed (an id added or moved out).
+    // A bulk update of existing same-team issues (a delta page of field-only
+    // edits, a bulk status change) must NOT swap those teams' bucket
+    // references, or every one of their list selectors re-runs for nothing —
+    // the exact wasted work the index exists to avoid. Same no-op-on-unchanged
+    // guarantee the single-issue `indexAdd`/`setIssue` path gives.
+    const changed = new Set<string>();
+    const bucket = (teamId: string): Set<string> => {
+      let b = touched.get(teamId);
+      if (!b) {
+        b = new Set(this.byTeam.get(teamId) ?? []);
+        touched.set(teamId, b);
+      }
+      return b;
+    };
     for (const issue of issues) {
+      const prev = this.pool.get(issue.id);
+      if (prev && prev.teamId !== issue.teamId) {
+        // `Set.delete` returns true only if the id was actually present.
+        if (bucket(prev.teamId).delete(issue.id)) {
+          changed.add(prev.teamId);
+        }
+      }
       this.pool.set(issue.id, issue);
+      const b = bucket(issue.teamId);
+      if (!b.has(issue.id)) {
+        b.add(issue.id);
+        changed.add(issue.teamId);
+      }
+    }
+    for (const teamId of changed) {
+      const ids = touched.get(teamId);
+      if (!ids || ids.size === 0) {
+        this.byTeam.delete(teamId);
+      } else {
+        this.byTeam.set(teamId, ids);
+      }
     }
   }
 
@@ -160,16 +283,16 @@ export class IssueStore {
               existing.title === issueData.title &&
               existing.teamId === issueData.teamId
             ) {
-              this.pool.delete(existingId);
+              this.deleteIssue(existingId);
               break;
             }
           }
         }
 
-        this.pool.set(id, { ...issueData, labelIds });
+        this.setIssue({ ...issueData, labelIds } as DBIssue);
       }
     } else if (action === 'D') {
-      this.pool.delete(id);
+      this.deleteIssue(id);
     }
   }
 }

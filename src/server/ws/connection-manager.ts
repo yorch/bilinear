@@ -6,6 +6,14 @@ export interface ClientInfo {
   ws: WebSocket;
 }
 
+// Back-pressure threshold: a client whose outbound buffer has grown past this
+// (a paused tab, a dead-but-not-yet-reaped socket) is disconnected rather than
+// left to pin memory for the whole org. It reconnects and re-runs delta, so no
+// data is lost. ~1MB — comfortably above a normal batched frame.
+const MAX_BUFFERED_BYTES = 1_000_000;
+// Close code for a slow-client disconnect (application range 4000–4999).
+export const SLOW_CLIENT_CLOSE_CODE = 4002;
+
 /**
  * Tracks all connected WebSocket clients, indexed by organization ID.
  * Provides broadcast methods for sync actions.
@@ -45,9 +53,18 @@ export class ConnectionManager {
       return;
     }
     for (const info of set) {
-      if (info.ws.readyState === 1 /* OPEN */) {
-        info.ws.send(message);
+      if (info.ws.readyState !== 1 /* OPEN */) {
+        continue;
       }
+      // Back-pressure: a client that can't keep up (buffer past the threshold)
+      // is closed rather than sent to — its buffer would otherwise grow
+      // unbounded and a slow client would pin memory / block the event loop for
+      // the whole org. It reconnects and re-runs delta to catch up.
+      if (info.ws.bufferedAmount > MAX_BUFFERED_BYTES) {
+        info.ws.close(SLOW_CLIENT_CLOSE_CODE, 'slow client');
+        continue;
+      }
+      info.ws.send(message);
     }
   }
 

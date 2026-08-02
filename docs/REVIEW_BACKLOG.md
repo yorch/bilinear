@@ -513,7 +513,15 @@ it for issue *list* queries but not for bootstrap.
   truncated for typical orgs). Add the `nextCursor` background-load
   in a follow-up.
 
-### 3.2 WebSocket fan-out batching + back-pressure
+### 3.2 WebSocket fan-out batching + back-pressure — ✅ shipped (2026-08-02)
+
+> Shipped both halves. `SyncBroadcastBatcher` (`src/server/ws/sync-batcher.ts`)
+> coalesces per-org SyncActions over a `WS_BROADCAST_COALESCE_MS` (50ms) window
+> into one `sync` frame; `ws/index.ts` routes the Redis `message` handler
+> through it and `shutdown()` flushes the window. `broadcastToOrgAll` closes any
+> client whose `bufferedAmount` exceeds 1MB with code 4002. Coexists with #112's
+> retention sweep in `ws/index.ts`. The 1000-connection load-test acceptance
+> below still needs a real environment.
 
 **File entry points:**
 - `src/server/ws/connection-manager.ts:42-52` — per-client `ws.send`
@@ -551,7 +559,7 @@ handling.
 | --- | --- | --- |
 | Native `ws.ping()` + pong-driven terminate timer (vs. app-level JSON pings) | `src/server/ws/index.ts:187-215` | Closes dead connections that survived TCP reset |
 | ✅ **shipped (2026-08-02)** — `IssueService.update` skips the team-flag read + cascade when the new state isn't terminal (`completed`/`canceled`); neither cascade can fire otherwise | `src/server/services/issue.service.ts` | -1 DB round-trip on every non-terminal `issueUpdate` |
-| MobX secondary indexes (`Map<teamId, Set<id>>`) on base pool store | `src/stores/issue-store.ts:18-29, 52-79` | Eliminates `Array.from(pool.values()).filter` in observer components — material on 10k-issue stores |
+| ✅ **shipped (2026-08-02)** — `byTeam` MobX secondary index (`Map<teamId, Set<id>>`), replace-Set-on-membership-change so a team selector re-runs only on its own changes; `upsertMany` skips the swap for unchanged-membership bulk updates | `src/stores/issue-store.ts` | Eliminates `Array.from(pool.values()).filter` in observer components — material on 10k-issue stores |
 | TipTap further code-split inside the lazy editor module | `src/components/editor/tiptap-editor.tsx` | Probably a no-op now that the editor is dynamically imported; verify with bundle inspector before doing more work |
 
 - **Acceptance signal:** Each item ships with a before/after measurement
@@ -564,13 +572,19 @@ handling.
 
 ## 4. Frontend polish
 
-### 4.1 MobX secondary indexes
+### 4.1 MobX secondary indexes — ✅ shipped (2026-08-02)
 
 Paired with §3.3 — same code change, same payoff (perf for filter
-selectors). Listed under both because it improves both bundle CPU
-work *and* perceived UI responsiveness.
+selectors). Shipped the `byTeam` index (the hottest); cycle/project/state
+still scan (lower traffic). See §3.3.
 
-### 4.2 `StatusSelect` and combobox a11y audit
+### 4.2 `StatusSelect` and combobox a11y audit — ⚠️ partially shipped (2026-08-02)
+
+> Shipped the listbox/option pattern on the three single-select pickers
+> (status/priority/assignee) via a `SelectPopover` opt-in `listbox` prop +
+> `role="option"`/`aria-selected`. The full combobox restructure across the
+> searchable/multi-section pickers (label/project/cycle) and the axe-core sweep
+> in the checklist below are still open.
 
 **File entry points:**
 - `src/components/properties/status-select.tsx`

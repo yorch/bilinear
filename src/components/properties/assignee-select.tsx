@@ -38,6 +38,7 @@ export function AssigneeSelect({
       align="right"
       className={className}
       forceOpen={forceOpen}
+      listbox
       onClose={onClose}
       panelClassName="min-w-[200px] py-1"
       triggerChildren={
@@ -53,18 +54,21 @@ export function AssigneeSelect({
       {close => (
         <>
           <button
+            aria-selected={value === null || value === undefined}
             className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent"
             onClick={e => {
               e.stopPropagation();
               onChange(null);
               close();
             }}
+            role="option"
             type="button"
           >
             {t('properties.assignee.noAssignee')}
           </button>
           {users.map(user => (
             <button
+              aria-selected={user.id === value}
               className={cn(
                 'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent',
                 user.id === value && 'font-medium',
@@ -75,6 +79,7 @@ export function AssigneeSelect({
                 onChange(user.id);
                 close();
               }}
+              role="option"
               type="button"
             >
               <UserAvatar size="xs" user={user} />

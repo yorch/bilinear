@@ -27,6 +27,7 @@ export function PrioritySelect({
     <SelectPopover
       className={className}
       forceOpen={forceOpen}
+      listbox
       onClose={onClose}
       panelClassName="min-w-[160px] py-1"
       panelDataTestId="priority-select-popover"
@@ -39,6 +40,7 @@ export function PrioritySelect({
           const label = t(priorityLabelKey(p));
           return (
             <button
+              aria-selected={p === value}
               className={cn(
                 'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent',
                 p === value && 'font-medium',
@@ -49,6 +51,7 @@ export function PrioritySelect({
                 onChange(p);
                 close();
               }}
+              role="option"
               type="button"
             >
               <PriorityIcon priority={p} />
