@@ -1,6 +1,6 @@
 # Database Schema Design
 
-## Issue Tracker — Linear Rebuild
+## Bilinear — Linear Rebuild
 
 **Version:** 1.6
 **Date:** 2026-05-21

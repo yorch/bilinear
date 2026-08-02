@@ -13,9 +13,7 @@ export interface RecentItem {
 const MAX_RECENT = 5;
 
 function storageKey(workspaceKey?: string): string {
-  return workspaceKey
-    ? `issue-tracker:${workspaceKey}:recent-issues`
-    : 'issue-tracker:recent-issues';
+  return workspaceKey ? `bilinear:${workspaceKey}:recent-issues` : 'bilinear:recent-issues';
 }
 
 function loadFromStorage(key: string): RecentItem[] {

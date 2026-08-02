@@ -1,6 +1,6 @@
 # Sprint 13-14: Projects
 
-## Issue Tracker — Linear Rebuild
+## Bilinear — Linear Rebuild
 
 **Phase:** 2 (Essential Features)
 **Weeks:** 13-14

@@ -91,7 +91,9 @@ describe('customFieldResolvers', () => {
         ...TEST_DEFINITION,
         teamId: null,
       });
-      ctx.prisma.organizationMember.findUnique.mockResolvedValue({ role: 'member' });
+      // requireOrgRole reads AuthContext.orgRole, resolved once per request by
+      // extractAuthContext — there is no second membership lookup to mock.
+      ctx.orgRole = 'member';
 
       await testAuthGuard(
         customFieldResolvers.Mutation.customFieldDefinitionArchive,
@@ -123,7 +125,9 @@ describe('customFieldResolvers', () => {
     });
 
     it('throws FORBIDDEN when creating a workspace-scoped definition without owner/admin role', async () => {
-      ctx.prisma.organizationMember.findUnique.mockResolvedValue({ role: 'member' });
+      // requireOrgRole reads AuthContext.orgRole, resolved once per request by
+      // extractAuthContext — there is no second membership lookup to mock.
+      ctx.orgRole = 'member';
 
       await testAuthGuard(
         customFieldResolvers.Mutation.customFieldDefinitionCreate,

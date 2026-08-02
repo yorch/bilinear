@@ -14,7 +14,7 @@ export type ColumnKey = BuiltInColumn | `custom:${string}`;
 
 const DEFAULT_BUILT_INS: BuiltInColumn[] = ['labels', 'dueDate', 'assignee', 'cycle', 'estimate'];
 
-const STORAGE_PREFIX = 'issue-tracker:visibleColumns:v1:';
+const STORAGE_PREFIX = 'bilinear:visibleColumns:v1:';
 
 function storageKey(scope: string): string {
   return `${STORAGE_PREFIX}${scope}`;

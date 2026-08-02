@@ -1,6 +1,6 @@
 # Architecture Design Document
 
-## Issue Tracker — Linear Rebuild
+## Bilinear — Linear Rebuild
 
 **Version:** 1.5
 **Date:** 2026-05-24

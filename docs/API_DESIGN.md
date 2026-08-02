@@ -1,6 +1,6 @@
 # API Design Document
 
-## Issue Tracker — Linear Rebuild
+## Bilinear — Linear Rebuild
 
 **Version:** 2.0
 **Date:** 2026-04-17

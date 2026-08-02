@@ -1,6 +1,6 @@
 # Sprint 7-8: Real-Time Sync Engine
 
-## Issue Tracker — Linear Rebuild
+## Bilinear — Linear Rebuild
 
 **Phase:** 1 (Foundation)
 **Weeks:** 7-8
@@ -263,7 +263,7 @@ export class AppDatabase extends Dexie {
   syncMetadata!: Table<{ key: string; value: unknown }>;
 
   constructor() {
-    super('issue-tracker');
+    super('bilinear');
     this.version(1).stores({
       organizations: 'id',
       users: 'id, email',

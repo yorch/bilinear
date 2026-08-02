@@ -220,7 +220,9 @@ describe('projectResolvers', () => {
 
     it('throws FORBIDDEN when the caller lacks an org membership role', async () => {
       ctx.prisma.project.findUnique.mockResolvedValue(TEST_PROJECT);
-      ctx.prisma.organizationMember.findUnique.mockResolvedValue(null);
+      // requireOrgRole reads AuthContext.orgRole, resolved once per request by
+      // extractAuthContext — there is no second membership lookup to mock.
+      ctx.orgRole = null;
 
       await testAuthGuard(
         projectResolvers.Mutation.projectAddMember,
@@ -267,7 +269,9 @@ describe('projectResolvers', () => {
 
     it('throws FORBIDDEN when the caller lacks an org membership role', async () => {
       ctx.prisma.project.findUnique.mockResolvedValue(TEST_PROJECT);
-      ctx.prisma.organizationMember.findUnique.mockResolvedValue(null);
+      // requireOrgRole reads AuthContext.orgRole, resolved once per request by
+      // extractAuthContext — there is no second membership lookup to mock.
+      ctx.orgRole = null;
 
       await testAuthGuard(
         projectResolvers.Mutation.projectAddTeam,
@@ -314,7 +318,9 @@ describe('projectResolvers', () => {
 
     it('throws FORBIDDEN when the caller lacks an org membership role', async () => {
       ctx.prisma.project.findUnique.mockResolvedValue(TEST_PROJECT);
-      ctx.prisma.organizationMember.findUnique.mockResolvedValue(null);
+      // requireOrgRole reads AuthContext.orgRole, resolved once per request by
+      // extractAuthContext — there is no second membership lookup to mock.
+      ctx.orgRole = null;
 
       await testAuthGuard(
         projectResolvers.Mutation.projectRemoveMember,
@@ -348,7 +354,9 @@ describe('projectResolvers', () => {
 
     it('throws FORBIDDEN when the caller lacks an org membership role', async () => {
       ctx.prisma.project.findUnique.mockResolvedValue(TEST_PROJECT);
-      ctx.prisma.organizationMember.findUnique.mockResolvedValue(null);
+      // requireOrgRole reads AuthContext.orgRole, resolved once per request by
+      // extractAuthContext — there is no second membership lookup to mock.
+      ctx.orgRole = null;
 
       await testAuthGuard(
         projectResolvers.Mutation.projectRemoveTeam,

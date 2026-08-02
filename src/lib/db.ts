@@ -411,21 +411,26 @@ export class AppDatabase extends Dexie {
   syncMetadata!: Table<DBSyncMetadata, string>;
 
   constructor() {
-    // The DB name is the migration boundary: bumping it forces every
-    // client to re-bootstrap from the server into a fresh DB and orphans
-    // the old one. Pre-launch we use this in lieu of versioned upgrades —
-    // edit the schema below freely and bump `-vN` when an existing dev
-    // pool would conflict.
-    // TODO(pre-launch): once we have real users, switch to `.version(N)`
-    // blocks with `.upgrade()` migrations and stop bumping the DB name.
+    // Named for the product, with no version suffix.
     //
-    // v3 (2026-05-21): added `favorites` table; widened
-    // `customFieldDefinitions` index to include `organizationId` so
-    // workspace-scoped lookups (teamId IS NULL) are indexable.
-    // v4 (2026-08-02): added `organizationMembers` so the settings roster is
-    // driven by the sync pipeline rather than its own query — without it the
-    // `'D' OrganizationMember` SyncAction had no client-side effect.
-    super('issue-tracker-v4');
+    // It used to be `issue-tracker-vN`, where the name doubled as the
+    // migration boundary: bumping it forced every client to re-bootstrap into
+    // a fresh DB and orphaned the old one. That worked as a stand-in for
+    // versioned upgrades while nothing was deployed, but it conflates two
+    // things — *what this database is* and *which schema generation it holds*
+    // — and only the second is supposed to change.
+    //
+    // Nothing is deployed, so there is no client whose data the rename could
+    // strand: the only cost is that dev browsers holding `issue-tracker-v4`
+    // re-bootstrap once and leave that database orphaned. Clear it by hand if
+    // you care (devtools › Application › IndexedDB).
+    //
+    // TODO(pre-launch): the schema below is still a single `.version(1)`
+    // block, edited in place. Before the first real deployment this needs to
+    // become `.version(N)` + `.upgrade()` migrations — at that point the name
+    // must stay fixed, because renaming it would silently discard a real
+    // user's offline queue.
+    super('bilinear');
     this.version(1).stores({
       customFieldDefinitions: 'id, teamId, organizationId',
       customFieldValues: 'id, issueId, definitionId, [issueId+definitionId]',

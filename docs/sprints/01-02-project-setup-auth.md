@@ -1,6 +1,6 @@
 # Sprint 1-2: Project Setup & Auth
 
-## Issue Tracker — Linear Rebuild
+## Bilinear — Linear Rebuild
 
 **Phase:** 1 (Foundation)
 **Weeks:** 1-2
