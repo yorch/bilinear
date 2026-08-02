@@ -11,6 +11,7 @@ import { MembersSection } from '@/components/settings/members-section';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { PageHeader } from '@/components/ui/page-header';
+import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
@@ -332,10 +333,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
           </h2>
           <div className="rounded-lg border border-border bg-card p-5">
             {loading ? (
-              <div className="flex flex-col gap-4 animate-pulse">
-                <div className="h-4 w-48 rounded bg-muted" />
-                <div className="h-4 w-32 rounded bg-muted" />
-              </div>
+              <RowsSkeleton count={2} />
             ) : org ? (
               <dl className="flex flex-col gap-4">
                 <div className="grid grid-cols-3 gap-4">
@@ -390,10 +388,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
               {t('settings.workspace.planLimitsDescription')}
             </p>
             {loading ? (
-              <div className="flex flex-col gap-4 animate-pulse">
-                <div className="h-4 w-48 rounded bg-muted" />
-                <div className="h-4 w-32 rounded bg-muted" />
-              </div>
+              <RowsSkeleton count={2} />
             ) : org ? (
               <dl className="flex flex-col gap-4">
                 {PLAN_LIMIT_FIELDS.map(({ key, labelKey }) => (

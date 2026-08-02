@@ -353,7 +353,7 @@ export default function AdminTenantDetailPage() {
                   <td className="px-4 py-2 text-right">
                     {limitsDraft ? (
                       <input
-                        className="w-28 rounded border border-border bg-background px-2 py-1 text-right text-sm tabular-nums focus:border-brand focus:outline-none"
+                        className="w-28 rounded border border-input bg-background px-2 py-1 text-right font-mono text-sm tabular-nums focus:border-ring focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-subtle)]"
                         inputMode="numeric"
                         min={1}
                         onChange={e =>

@@ -121,7 +121,7 @@ function TenantsInner() {
         }}
       >
         <input
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+          className="rounded border border-input bg-transparent px-2 py-1 text-sm focus:border-ring focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-subtle)]"
           onChange={e => setQuery(e.target.value)}
           placeholder={t('admin.tenants.searchPlaceholder')}
           value={query}

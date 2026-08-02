@@ -1670,17 +1670,61 @@ docker run -d --name mig-verify -e POSTGRES_PASSWORD=pg -e POSTGRES_DB=bilinear 
 export DATABASE_URL="postgresql://postgres:pg@127.0.0.1:55432/bilinear?schema=public"
 yarn prisma migrate deploy                     # both migrations apply cleanly
 yarn prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma \
-  --exit-code                                  # must print "empty migration", exit 0
+  --script                                     # see "expected residual" below
 yarn db:seed                                   # schema is actually usable
 ```
+
+> **Expected residual in the drift check.** The diff is no longer empty, and
+> `--exit-code` will not return 0. It emits exactly one statement:
+>
+> ```sql
+> DROP INDEX "sync_actions_organization_id_xact_id_id_idx";
+> ```
+>
+> That is structural, not drift. `SyncAction.xactId` is `Unsupported("xid8")`,
+> and Prisma cannot put `@@index` on an `Unsupported` field — so the covering
+> index lives in the custom migration, and a schema-derived diff sees a
+> database object the datamodel doesn't know how to declare and proposes
+> dropping it. **Never apply that statement**: the index is what makes the
+> commit-order fence's `ORDER BY (xact_id, id)` read cheap.
+>
+> The check still has teeth. Treat *any other* statement in the output as real
+> drift. Anything Prisma **can** express — a column, a type, a nullability
+> change — must be folded into the regenerated baseline until this is the only
+> line left.
 
 Then confirm the custom objects exist, since a no-op custom migration would pass
 every check above:
 
 ```sql
-SELECT indexname FROM pg_indexes WHERE schemaname='public' AND indexdef ILIKE '%WHERE%';
-SELECT tgname FROM pg_trigger WHERE NOT tgisinternal;
+-- The three partial indexes, plus the xid8 covering index and the FTS GIN.
+SELECT indexname FROM pg_indexes
+ WHERE schemaname = 'public'
+   AND (indexdef ILIKE '%WHERE%' OR indexname IN (
+         'sync_actions_organization_id_xact_id_id_idx', 'idx_issues_fts'))
+ ORDER BY 1;
+-- Expect exactly:
+--   auth_tokens_token_hash_magic_link_idx
+--   auth_tokens_token_hash_refresh_key
+--   idx_issues_fts
+--   sync_actions_organization_id_xact_id_id_idx
+--   teams_organization_id_key_key
+
+-- NOT NULL survived on the String[] columns (Prisma 7 drops it on regenerate).
+-- Must scope to `public`, or pg_catalog's own array columns swamp the result.
+SELECT table_name, column_name FROM information_schema.columns
+ WHERE table_schema = 'public' AND is_nullable = 'NO' AND data_type = 'ARRAY'
+ ORDER BY 1, 2;
+-- Expect exactly: auth_tokens.scopes, webhooks.events
 ```
+
+> **There are no user triggers any more.** `SELECT tgname FROM pg_trigger WHERE
+> NOT tgisinternal` returns **zero rows**, and that is correct — the only one
+> this project ever had was `set_sync_action_committed_at`, removed when the
+> commit-order fence replaced `committed_at` with `xact_id`. An empty result is
+> no longer evidence that the custom migration failed to apply; use the index
+> query above for that. (The migration file keeps its `_and_triggers` name so
+> the already-applied checksum stays valid.)
 
 > **Note:** `yarn db:push` re-applies schema.prisma but silently drops all custom DDL
 > (partial indexes, FTS triggers, check constraints) that lives in

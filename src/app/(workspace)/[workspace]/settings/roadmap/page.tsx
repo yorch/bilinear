@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { PageHeader } from '@/components/ui/page-header';
+import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -187,10 +188,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
           </h2>
           <div className="rounded-lg border border-border bg-card p-5">
             {loading ? (
-              <div className="flex flex-col gap-4 animate-pulse">
-                <div className="h-4 w-48 rounded bg-muted" />
-                <div className="h-4 w-64 rounded bg-muted" />
-              </div>
+              <RowsSkeleton count={2} />
             ) : loadError ? (
               <InlineRetry
                 message={t('common.somethingWentWrong')}

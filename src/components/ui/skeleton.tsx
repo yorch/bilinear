@@ -159,6 +159,7 @@ export {
   DetailPanelSkeleton,
   IssueListSkeleton,
   IssueSkeleton,
+  LoadingRegion,
   PageSkeleton,
   RowsSkeleton,
   SidebarSkeleton,

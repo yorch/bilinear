@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BurndownChart } from '@/components/cycles/burndown-chart';
 import { BurnupChart } from '@/components/cycles/burnup-chart';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { isActiveCycle } from '@/lib/cycle-utils';
@@ -511,7 +512,9 @@ export const CycleDetailView = observer(function CycleDetailView({
                 </div>
               </div>
               {burndownLoading ? (
-                <div className="h-[300px] animate-pulse rounded bg-muted" />
+                <LoadingRegion>
+                  <Skeleton className="h-[300px]" />
+                </LoadingRegion>
               ) : burndownError ? (
                 <InlineRetry message={t('errors.somethingWentWrong')} onRetry={fetchBurndown} />
               ) : chartView === 'burndown' ? (
