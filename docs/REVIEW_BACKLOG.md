@@ -452,9 +452,31 @@ still its own PR, but no longer blocked on a data-cleanup prerequisite.
 
 > Landed as schema `@@index` additions (folded into the regenerated init)
 > plus the `issues(team_id, state_id) WHERE active` partial in the custom
-> migration; `onDelete: Cascade` on `Issue`/`IssueLabel` org+team FKs. Still
-> needs the shadow-Postgres verification + EXPLAIN ANALYZE benchmark before
-> deploy. §2.3 (enum promotion) and §2.6 (retention) remain deferred.
+> migration; `onDelete: Cascade` on `Issue`/`IssueLabel` org+team FKs.
+>
+> **Benchmarked 2026-08-02** (`yarn db:verify:indexes`, 100k issues / 50k
+> notifications / 200k sync_actions on Postgres 17). All seven hot-path
+> queries are index-served, none falls back to a sequential scan:
+>
+> | Query | Index | Time |
+> | --- | --- | --- |
+> | unread count | `notifications_user_id_read_created_at_idx` | 0.06 ms |
+> | inbox feed | `notifications_user_id_created_at_idx` | 0.08 ms |
+> | org recently-updated | `issues_organization_id_updated_at_idx` | 0.08 ms |
+> | my issues in a state | `issues_assignee_id_state_id_idx` | 1.41 ms |
+> | project progress groupBy | `issues_project_id_archived_at_trashed_idx` | 0.42 ms |
+> | team live set | `issues_team_id_state_id_active_idx` | 0.05 ms |
+> | sync action by model | `sync_actions_organization_id_model_name_model_id_idx` | 0.04 ms |
+>
+> The **data distribution mattered more than the row count**, which is worth
+> knowing before re-running this. A first cut put all 100k issues on one team
+> and one assignee; the team partial index then "failed" with a 31 ms
+> sequential scan and the assignee compound index lost to the plain
+> single-column one — both correct plans for a predicate that matches
+> everything. Spreading rows over 8 teams / 6 states / 20 users is what makes
+> the measurement mean anything. Production distribution will differ again.
+>
+> §2.3 (enum promotion) remains deferred; §2.6 (retention) shipped in #112.
 
 ### 2.4 Misc additive constraints — ✅ shipped
 

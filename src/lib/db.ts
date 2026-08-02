@@ -238,16 +238,6 @@ export interface DBNotification {
   userId: string;
 }
 
-export interface DBIssueActivity {
-  actorId?: string | null;
-  createdAt: string;
-  field: string;
-  id: string;
-  issueId: string;
-  newValue?: string | null;
-  oldValue?: string | null;
-}
-
 export interface DBIssueRelation {
   createdAt: string;
   id: string;
@@ -387,7 +377,6 @@ export class AppDatabase extends Dexie {
   teams!: Table<DBTeam, string>;
   workflowStates!: Table<DBWorkflowState, string>;
   issues!: Table<DBIssue, string>;
-  issueActivities!: Table<DBIssueActivity, string>;
   issueLabels!: Table<DBIssueLabel, string>;
   issueRelations!: Table<DBIssueRelation, string>;
   issueTemplates!: Table<DBIssueTemplate, string>;
@@ -422,20 +411,24 @@ export class AppDatabase extends Dexie {
     // you care (devtools › Application › IndexedDB).
     //
     // TODO(pre-launch): the schema below is still a single `.version(1)`
-    // block, edited in place. Before the first real deployment this needs to
-    // become `.version(N)` + `.upgrade()` migrations — at that point the name
-    // must stay fixed, because renaming it would silently discard a real
-    // user's offline queue.
+    // block, edited in place. That is deliberate while nothing is deployed —
+    // the same reasoning as the migration-consolidation policy in
+    // DATABASE_SCHEMA.md: a version generation only earns its keep once there
+    // is a real client whose data has to survive the change. Editing v1 costs
+    // a dev browser one re-bootstrap, and a *removed* table leaves an orphaned
+    // object store behind until that browser clears the database.
     //
-    // That change also needs a second mechanism, because in-place recreation
-    // is currently doing two jobs. A Dexie upgrade creates a newly *added*
-    // table empty and carries the rest over, so `loadFromIndexedDB` reports a
-    // usable cache and `start` takes the delta path — which carries only rows
-    // that changed. An untouched collection would never backfill, and whatever
-    // reads it renders an empty state forever. Adding a synced collection will
-    // therefore need a "which collections does this cache hold" stamp in
-    // `syncMetadata`: checked by `loadFromIndexedDB`, written by
-    // `fullBootstrap` in the same transaction as the rows it describes.
+    // Before the first real deployment this must become `.version(N)` +
+    // `.upgrade()`, and the database name must then stay fixed — renaming it
+    // to force a fresh database would silently discard a real user's offline
+    // queue (`pendingTransactions` is the one thing in here that exists
+    // nowhere else).
+    //
+    // Adding a *synced* collection additionally needs `CACHED_COLLECTIONS`
+    // updated, whichever scheme is in force. That half is already built: a
+    // Dexie upgrade creates a newly added table empty, the cache still looks
+    // usable, and the delta path only carries rows that changed — so without
+    // the stamp the new table would never backfill. See that constant.
     super('bilinear');
     this.version(1).stores({
       customFieldDefinitions: 'id, teamId, organizationId',
@@ -446,7 +439,6 @@ export class AppDatabase extends Dexie {
       favorites: 'id, userId, organizationId, [userId+entityType+entityId]',
       initiativeProjects: 'id, initiativeId, projectId, [initiativeId+projectId]',
       initiatives: 'id, organizationId, status, ownerId',
-      issueActivities: 'id, issueId',
       issueLabels: 'id, organizationId, teamId, parentId',
       issueRelations: 'id, issueId, relatedIssueId',
       issues: 'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
