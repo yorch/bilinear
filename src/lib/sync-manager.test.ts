@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RootStore } from '@/stores/root-store';
+import { CACHED_COLLECTIONS, COLLECTIONS_STAMP_KEY } from './db-collections';
 import { COMMIT_WATERMARK_LAG_MS } from './sync-config';
 import type { SerializedSyncAction, WsClient, WsMessage } from './ws-client';
 
@@ -43,7 +44,6 @@ const TABLE_NAMES = [
   'initiatives',
   'initiativeProjects',
   'favorites',
-  'issueActivities',
   'organizationMembers',
   'syncMetadata',
   'pendingTransactions',
@@ -87,6 +87,24 @@ function resetFakeDb() {
     table.toArray.mockClear();
   }
   fakeDb.transaction.mockClear();
+}
+
+/**
+ * Make the fake Dexie look like a populated cache: a cursor, at least one
+ * entity row (`loadFromIndexedDB` short-circuits on an empty org+team pair),
+ * and whatever collection stamp the test wants to exercise.
+ */
+function seedWarmCache({ stamp }: { stamp: readonly string[] | undefined }) {
+  fakeTables.organizations.toArray.mockResolvedValue([{ id: 'org-1', name: 'Acme' }]);
+  fakeTables.syncMetadata.get.mockImplementation(async (key: string) => {
+    if (key === 'lastSyncId') {
+      return { key, value: '42-1' };
+    }
+    if (key === COLLECTIONS_STAMP_KEY) {
+      return stamp === undefined ? undefined : { key, value: [...stamp] };
+    }
+    return undefined;
+  });
 }
 
 /** Minimal fake RootStore — every store method is a spy; `syncStore` keeps
@@ -356,6 +374,60 @@ describe('SyncManager', () => {
 
       expect(stores.organizationMemberStore.replaceAll).toHaveBeenCalledWith([row]);
       expect(stores.organizationMemberStore.upsertMany).not.toHaveBeenCalled();
+    });
+
+    it('accepts a warm cache whose stamp covers every required collection', async () => {
+      const stores = createFakeStores();
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+
+      seedWarmCache({ stamp: [...CACHED_COLLECTIONS] });
+
+      expect(await (manager as Instance).loadFromIndexedDB()).toBe(true);
+    });
+
+    it('refuses a warm cache written before the stamp existed', async () => {
+      // The cursor is there and every table has rows, so the old check would
+      // have said "usable" and taken the delta path. Without a stamp we cannot
+      // know which collections that cache was built from, so it costs one
+      // bootstrap rather than risking a permanently empty collection.
+      const stores = createFakeStores();
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+
+      seedWarmCache({ stamp: undefined });
+
+      expect(await (manager as Instance).loadFromIndexedDB()).toBe(false);
+    });
+
+    it('refuses a warm cache whose stamp is missing a collection this build needs', async () => {
+      // This is the shape a Dexie upgrade produces when it *adds* a synced
+      // collection: everything else carries over, the new table is created
+      // empty, and the delta path would never backfill it.
+      const stores = createFakeStores();
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+
+      seedWarmCache({ stamp: CACHED_COLLECTIONS.filter(name => name !== 'issues') });
+
+      expect(await (manager as Instance).loadFromIndexedDB()).toBe(false);
+    });
+
+    it('stamps the collection set during fullBootstrap', async () => {
+      const stores = createFakeStores();
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: async () => `_metadata_=${JSON.stringify({ lastSyncId: '42-1' })}`,
+        }),
+      );
+
+      await (manager as Instance).fullBootstrap();
+
+      expect(fakeTables.syncMetadata.put).toHaveBeenCalledWith({
+        key: COLLECTIONS_STAMP_KEY,
+        value: [...CACHED_COLLECTIONS],
+      });
     });
 
     it('serializes fullBootstrap against a live apply that arrives mid-write', async () => {

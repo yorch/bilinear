@@ -1127,8 +1127,24 @@ CREATE INDEX idx_sync_actions_org_model ON sync_actions(organization_id, model_n
 > window later. Fencing on the transaction id needs no wall clock — an
 > in-flight xid keeps its rows fenced until it actually commits. The client
 > `lastSyncId` cursor is `<xactId>-<id>`. See `SyncService.getDeltaSyncActions`.
-> (The `xid8`/`pg_snapshot_xmin` behavior needs a real-Postgres staging soak
-> to verify end to end.)
+**The never-skip property is verified, not just argued** — `yarn db:verify:fence`
+(`scripts/verify-xid8-fence.mjs`) drives two real concurrent sessions against a
+real Postgres:
+
+1. session A `BEGIN`s and inserts, taking an xid, and does **not** commit;
+2. session B inserts and commits — a later xid, but a **higher** BIGSERIAL id;
+3. a delta read in that window must return **neither** row;
+4. A commits, out of id order;
+5. the same cursor must now yield **both**, A first.
+
+Step 3 is the whole point, and the script asserts the counterfactual on the same
+data: an id-ordered read *does* hand back B, which is exactly how the pre-fence
+cursor would have advanced past A and lost it permanently. This cannot be a unit
+test — the property only exists when a real transaction holds a real xid open.
+
+What that does *not* cover, and still wants a staging soak: behaviour under
+sustained concurrent write load, xid wraparound, and long-running transactions
+holding `xmin` back far enough to stall delta for every client in the org.
 
 ### 2.22b Retention, and the staleness mark it requires
 

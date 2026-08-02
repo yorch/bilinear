@@ -2,6 +2,11 @@ import { COMMIT_WATERMARK_LAG_MS, DELTA_PAGE_SIZE, MAX_PLAUSIBLE_XACT_ID } from 
 import { normalizeIssueRow } from '@/stores/issue-store';
 import type { RootStore } from '@/stores/root-store';
 import { db } from './db';
+import {
+  CACHED_COLLECTIONS,
+  COLLECTIONS_STAMP_KEY,
+  stampCoversRequiredCollections,
+} from './db-collections';
 import { createClientLogger } from './logger';
 import type { SerializedSyncAction, WsClient } from './ws-client';
 
@@ -234,6 +239,7 @@ export class SyncManager {
       favorites,
       organizationMembers,
       meta,
+      collectionsStamp,
     ] = await Promise.all([
       db.organizations.toArray(),
       db.teams.toArray(),
@@ -257,9 +263,26 @@ export class SyncManager {
       db.favorites.toArray(),
       db.organizationMembers.toArray(),
       db.syncMetadata.get('lastSyncId'),
+      db.syncMetadata.get(COLLECTIONS_STAMP_KEY),
     ]);
 
     if (!meta?.value) {
+      return false;
+    }
+
+    // A cursor alone doesn't mean the cache is *complete*. A Dexie upgrade
+    // that adds a collection creates that table empty and carries the rest
+    // over, so `lastSyncId` survives and this would report a usable cache —
+    // after which `start` takes the delta path, which only carries rows that
+    // changed. The new collection would never backfill.
+    //
+    // The stamp is written by `fullBootstrap` in the same transaction as the
+    // rows it describes, so it can only claim what was actually persisted.
+    // Refusing here costs one bootstrap; accepting a cache with a hole in it
+    // renders an empty state for as long as nothing happens to touch those
+    // rows. Caches written before the stamp existed have no stamp and are
+    // correctly refused once.
+    if (!stampCoversRequiredCollections(collectionsStamp?.value)) {
       return false;
     }
 
@@ -502,6 +525,14 @@ export class SyncManager {
                 batches.initiativeProjects as Parameters<typeof db.initiativeProjects.bulkPut>[0],
               ),
               db.syncMetadata.put({ key: 'lastSyncId', value: lastSyncId }),
+              // Stamped here, inside the same transaction as the rows above,
+              // so it can never outlive a write that failed — the claim "this
+              // cache holds these collections" commits or rolls back with the
+              // rows that make it true.
+              db.syncMetadata.put({
+                key: COLLECTIONS_STAMP_KEY,
+                value: [...CACHED_COLLECTIONS],
+              }),
             ]);
           },
         );
