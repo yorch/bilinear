@@ -36,6 +36,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import { APP_NAME } from '@/lib/app-config';
 import { gql, gqlQuery } from '@/lib/graphql';
 import { FAVORITE_DELETE_MUTATION, FAVORITES_QUERY } from '@/lib/graphql-queries';
+import { isPathWithin } from '@/lib/issue-nav';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -329,7 +330,7 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
    * teams, which buried the global nav above it. Only the team you are
    * actually in is expanded now; the rest collapse to a single row.
    */
-  const activeTeamKey = teams.find(team => pathname.startsWith(`${base}/team/${team.key}`))?.key;
+  const activeTeamKey = teams.find(team => isPathWithin(pathname, `${base}/team/${team.key}`))?.key;
   const [manuallyToggled, setManuallyToggled] = useState<Record<string, boolean>>({});
 
   // Exactly one team is open by default: the one the route is in, or — on a
@@ -385,13 +386,12 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                 const viewHrefPrefix = `${href}/view/`;
                 const analyticsHref = `${href}/analytics`;
                 const isActive =
-                  pathname === href ||
-                  (pathname.startsWith(`${href}/`) &&
-                    !pathname.startsWith(cyclesHref) &&
-                    !pathname.startsWith(backlogHref) &&
-                    !pathname.startsWith(docsHref) &&
-                    !pathname.startsWith(analyticsHref) &&
-                    !pathname.startsWith(viewHrefPrefix));
+                  isPathWithin(pathname, href) &&
+                  !pathname.startsWith(cyclesHref) &&
+                  !pathname.startsWith(backlogHref) &&
+                  !pathname.startsWith(docsHref) &&
+                  !pathname.startsWith(analyticsHref) &&
+                  !pathname.startsWith(viewHrefPrefix);
                 const isCyclesActive = pathname.startsWith(cyclesHref);
                 const isBacklogActive = pathname.startsWith(backlogHref);
                 const isDocsActive = pathname.startsWith(docsHref);

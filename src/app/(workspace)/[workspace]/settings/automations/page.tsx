@@ -199,7 +199,7 @@ export default function AutomationsSettingsPage() {
             value={actionConfigText}
           />
           <button
-            className="self-start rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+            className="self-start rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             disabled={creating || !name}
             type="submit"
           >
@@ -252,7 +252,7 @@ export default function AutomationsSettingsPage() {
                   </div>
                 </div>
                 <button
-                  className="text-xs text-danger-subtle-foreground hover:text-danger-subtle-foreground"
+                  className="text-xs text-danger-subtle-foreground hover:underline"
                   onClick={() => handleArchive(rule)}
                   type="button"
                 >

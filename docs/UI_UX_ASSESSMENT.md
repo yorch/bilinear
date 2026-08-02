@@ -410,3 +410,77 @@ a human with a screen reader: focus *order* through the new grid-based issue
 row, whether the sidebar disclosure state is announced usefully, and how the
 detail panel behaves for a keyboard-only user. Static analysis cannot answer
 those.
+
+---
+
+## 12. Code review + simplify pass (2026-08-02)
+
+A full review of the branch diff, then a simplify pass over what it turned up.
+Every finding below was verified against the source before being fixed.
+
+### The one that broke every primitive
+
+`:focus-visible` was added as a **bare, unlayered rule**. Tailwind's utilities
+live in `@layer utilities`, and unlayered CSS out-ranks every layer — so it beat
+`focus-visible:outline-none` on Button, Input, Textarea, Switch, the composed
+onboarding url-key field, the inline issue-title input and the TipTap surface,
+stamping a hard outline on all of them. Confirmed in the built CSS, and the
+rule's own comment claimed the opposite. Now inside `@layer base`, with the
+cascade reasoning written down so it does not get "tidied" back out.
+
+### Colour bugs the codemod left behind
+
+The status-token migration mapped raw hues to roles mechanically, which is why
+these all share a shape: a value that was *tuned to be seen* got used as a
+*ground to stand on*.
+
+| Where | Was | Measured | Now |
+| --- | --- | --- | --- |
+| Team-delete and remove-member buttons | `bg-danger` + `text-white` | ~3.8:1 light / ~2.9:1 dark | `bg-destructive` + its own ink |
+| Impersonation banner | `text-warning-subtle-foreground` on `bg-warning` | ~1.1:1 dark | new `--warning-foreground` |
+| Health badges (`Badge variant="solid"`) | `text-white` on `bg-warning` | ~2.6:1 light / ~1.4:1 dark | `tone` pills |
+| ~20 flat `bg-primary` buttons | `text-white` | fails wherever the brand is light | `text-primary-foreground` |
+| `--primary` itself | `var(--brand)` | 4.45:1 Aurora, 3.65:1 Ion | darkened to the CTA gradient's first stop |
+
+The last row is the one worth remembering: even the *correct* token failed,
+because `--primary` was an alias of a brand that has to stay light enough to
+read as a selection rail. `--ring` and `--brand` stay undarkened — they are
+lines, never a ground for text.
+
+Four more hover states resolved to their own base colour and so did nothing:
+two destructive text buttons, the copy-API-token button, and the invalid-key
+border's `focus:` variant. Found by scanning every class string in the tree for
+`X` + `hover:X`/`focus:X` rather than by fixing the three that were reported.
+Nine `dark:hover:bg-{role}-subtle/20` leftovers compounded alpha on an already
+translucent token — a ~4% fill — and were dropped, since the base hover already
+adapts per theme through the custom property.
+
+### Two real logic bugs
+
+- **Sidebar team matching.** `pathname.startsWith('/w/team/ENG')` is true for
+  `/w/team/ENGX`, so visiting ENGX expanded ENG and left ENGX's own sub-nav
+  hidden. Team keys are free-form, so prefixes are routine. Extracted as
+  `isPathWithin` in `src/lib/issue-nav.ts`, used by both the disclosure and the
+  active-row highlight (which had got it right, independently), and tested.
+- **Accent cookie outlived the session.** It was written only when the incoming
+  user had a stored accent, and never cleared on logout — so on a shared browser
+  the second account silently inherited the first's colour. The cookie is now
+  rewritten on every session install *including the clear*, and a transient DB
+  failure falls through to the default rather than to whoever was here last.
+
+### Simplifications
+
+The security settings page carried its own `Toggle` — a third copy of the
+switch, with a raw `bg-white` knob — replaced by `SettingToggleRow`.
+`Badge`'s `solid` variant is gone rather than fixed: its only job was to force
+`text-white`, which is the bug. The last four raw Tailwind shadows moved onto
+the elevation scale, making PATTERNS §79.5's "no raw Tailwind shadows remain"
+true rather than nearly true. One no-op `hover:border-border` removed.
+
+### Guard coverage added
+
+Three new contrast checks (`--warning-foreground` on `--warning`,
+`--primary-foreground` on `--primary`, and the existing destructive pair), a
+Badge test asserting **no variant may force an ink colour**, and six
+`isPathWithin` cases. The contrast additions were each verified non-vacuous by
+regressing the token and watching them fail.

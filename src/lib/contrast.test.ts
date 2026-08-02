@@ -217,6 +217,15 @@ const CHECKS: ReadonlyArray<readonly [string, string, number, string]> = [
   ['--primary-foreground', '--cta-stop-1', 4.5, 'primary button label (CTA start)'],
   ['--primary-foreground', '--cta-stop-2', 4.5, 'primary button label (CTA end)'],
   ['--destructive-foreground', '--destructive', 4.5, 'destructive button label'],
+  // Solid status fill carrying text. `--warning` is a light amber in BOTH
+  // themes, so its ink must be dark in both — the `-subtle-foreground` role
+  // inverts by theme and rendered light-on-light here.
+  ['--warning-foreground', '--warning', 4.5, 'impersonation banner ink'],
+  // `--primary` aliases the brand, so it moves with the accent AND is light in
+  // dark mode. Every `bg-primary` button that hardcoded `text-white` was
+  // therefore white-on-light-azure under Ion. `--primary-foreground` inverts
+  // with the theme, which is the whole reason it exists.
+  ['--primary-foreground', '--primary', 4.5, 'flat primary button label'],
   ['--brand-subtle-foreground', '--brand-subtle', 4.5, 'brand pill text'],
   ['--danger-subtle-foreground', '--danger-subtle', 4.5, 'danger pill text'],
   ['--success-subtle-foreground', '--success-subtle', 4.5, 'success pill text'],

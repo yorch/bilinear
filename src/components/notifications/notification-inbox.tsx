@@ -327,7 +327,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
           <Bell className="h-5 w-5 text-muted-foreground" />
           <h1 className="text-lg font-semibold text-foreground">{t('notifications.title')}</h1>
           {hasUnread && (
-            <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-white">
+            <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
               {unread.length}
             </span>
           )}

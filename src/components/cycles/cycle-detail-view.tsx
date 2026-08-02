@@ -376,7 +376,7 @@ export const CycleDetailView = observer(function CycleDetailView({
         {/* Roll over button — only for active / past cycles */}
         {showRollover && (
           <button
-            className="ml-auto flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-border hover:bg-accent disabled:opacity-50"
+            className="ml-auto flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"
             disabled={rollingOver}
             onClick={handleRollover}
             type="button"

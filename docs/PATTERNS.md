@@ -2552,7 +2552,9 @@ and the reasoning is load-bearing:
   moved to `--muted-foreground`. If you reach for it for real text, move the
   text instead of relaxing the test.
 
-Two traps this caught, both invisible to every other gate:
+Four traps this caught, all invisible to every other gate, and all the same
+underlying mistake — **a colour tuned to be seen is not a colour that can be
+stood on**:
 
 1. **A gradient has two ends.** The primary button's label cleared 4.5:1 against
    `--brand` and measured **1.76:1** against the far stop. `--gradient-brand-cta`
@@ -2562,6 +2564,35 @@ Two traps this caught, both invisible to every other gate:
    deliberately *not* an alias of the `danger` text role. `danger` is tuned to
    read on a near-black ground in dark mode, so it is light; white on it
    measured **2.77:1**.
+3. **`--primary` is not `--brand`.** A brand light enough to read as a selection
+   rail on a white page cannot carry white text — `--primary-foreground`
+   measured **4.45:1** on a raw brand under Aurora and **3.65:1** under Ion.
+   `--primary` is therefore the *darkened* brand (the CTA gradient's first
+   stop); `--ring` and `--brand` stay undarkened, because they are lines and
+   rails and never a ground for text.
+4. **A `-subtle-foreground` inverts by theme.** It is dark ink in light mode and
+   light ink in dark, because it sits on a near-page-coloured tint. Put it on a
+   *solid* status fill and it breaks in exactly one theme: the impersonation
+   banner rendered light-on-light amber. `--warning-foreground` is the dark ink
+   for that fill, and it does not flip.
+
+Two consequences for how you write a status chip:
+
+- **Never hardcode `text-white` over a caller-supplied fill.** This is why
+  `Badge` has no `solid` variant. White does not clear 4.5:1 on *any* status
+  base — ~2.6:1 on `--warning` in light, ~1.4:1 in dark — because an amber light
+  enough to read as "warning" cannot carry white text. Use a `tone`, whose
+  fill/ink pair is asserted.
+- **The vivid `bg-{status}` fills are for shapes that carry no text**: the
+  health dot in the project list, a progress bar, a connection pip. The moment a
+  label goes on one, it needs the subtle pair (or a dedicated ink like
+  `--warning-foreground`).
+
+One CSS-cascade rule the baseline focus indicator depends on: **`:focus-visible`
+must live inside `@layer base`**. Tailwind's utilities are in `@layer utilities`
+and unlayered CSS beats every layer, so as a bare rule it out-ranked
+`focus-visible:outline-none` and stamped a hard outline on every primitive that
+styles its own focus ring.
 
 Colour is never the only channel: priority is a glyph plus a `title`, status is
 a shape plus a label (WCAG 1.4.1). Loading surfaces announce through

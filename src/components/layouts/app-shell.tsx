@@ -30,7 +30,7 @@ export const AppShell = observer(function AppShell({ children }: AppShellProps) 
   return (
     <div className="flex h-screen overflow-hidden bg-card">
       <a
-        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-3 focus:py-1.5 focus:text-sm focus:text-white"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-3 focus:py-1.5 focus:text-sm focus:text-primary-foreground"
         href="#main-content"
       >
         {t('layout.skipToContent')}

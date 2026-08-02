@@ -401,7 +401,7 @@ const BacklogPage = observer(function BacklogPage() {
             {t('issues.estimate')}
           </button>
           <button
-            className="rounded px-2 py-0.5 text-xs text-danger-subtle-foreground hover:bg-danger-subtle dark:hover:bg-danger-subtle/30"
+            className="rounded px-2 py-0.5 text-xs text-danger-subtle-foreground hover:bg-danger-subtle"
             onClick={handleBulkArchive}
             type="button"
           >

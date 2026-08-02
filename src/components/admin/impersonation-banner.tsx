@@ -64,7 +64,7 @@ export function ImpersonationBanner() {
 
   return (
     <div
-      className="flex items-center justify-center gap-3 bg-warning px-4 py-1.5 text-center text-xs font-medium text-warning-subtle-foreground"
+      className="flex items-center justify-center gap-3 bg-warning px-4 py-1.5 text-center text-xs font-medium text-warning-foreground"
       data-testid="impersonation-banner"
     >
       <span>
@@ -73,7 +73,7 @@ export function ImpersonationBanner() {
           : t('admin.impersonation.banner')}
       </span>
       <button
-        className="rounded bg-warning-subtle/20 px-2 py-0.5 font-semibold hover:bg-warning-subtle/30 disabled:opacity-50"
+        className="rounded bg-warning-foreground/20 px-2 py-0.5 font-semibold hover:bg-warning-foreground/30 disabled:opacity-50"
         data-testid="stop-impersonating"
         disabled={stopping}
         onClick={handleStop}

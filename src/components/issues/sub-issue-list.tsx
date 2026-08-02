@@ -289,7 +289,7 @@ function CreateSubIssueForm({
         {t('common.cancel')}
       </button>
       <button
-        className="rounded bg-primary px-2 py-1 text-xs font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+        className="rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         disabled={!title.trim() || submitting}
         type="submit"
       >

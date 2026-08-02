@@ -243,7 +243,7 @@ export function TeamMemberManagement({
                       {isSelf ? t('teams.leaveConfirm') : t('teams.removeConfirm')}
                     </span>
                     <button
-                      className="rounded bg-danger px-2 py-0.5 text-xs font-medium text-white hover:bg-danger disabled:opacity-50"
+                      className="rounded bg-destructive px-2 py-0.5 text-xs font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
                       disabled={isLoading}
                       onClick={() => {
                         setPendingRemoveId(null);
@@ -268,7 +268,7 @@ export function TeamMemberManagement({
                         className={cn(
                           'flex h-7 w-7 items-center justify-center rounded text-xs transition-colors disabled:opacity-50 max-md:h-11 max-md:w-11',
                           member.isOwner
-                            ? 'text-warning-subtle-foreground hover:bg-warning-subtle dark:hover:bg-warning-subtle/20'
+                            ? 'text-warning-subtle-foreground hover:bg-warning-subtle'
                             : 'text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
                         )}
                         disabled={isLoading}
@@ -281,7 +281,7 @@ export function TeamMemberManagement({
                     )}
                     {(canManageMembers || isSelf) && (
                       <button
-                        className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger-subtle-foreground disabled:opacity-50 dark:hover:bg-danger-subtle/20 max-md:h-11 max-md:w-11"
+                        className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger-subtle-foreground disabled:opacity-50 max-md:h-11 max-md:w-11"
                         disabled={isLoading}
                         onClick={() => setPendingRemoveId(member.membershipId)}
                         title={isSelf ? t('teams.leaveTeam') : t('teams.removeMember')}

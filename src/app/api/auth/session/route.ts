@@ -47,27 +47,29 @@ export async function POST(req: NextRequest) {
   // to a new browser or device. This is the ONLY place the column is read:
   // doing it at login keeps it off the hot path (the root layout resolves the
   // accent from the cookie on every request, and must not hit the database to
-  // do it). Best-effort — a failure here just means the default accent.
+  // do it).
+  //
+  // The cookie is rewritten on EVERY session install, including the clear —
+  // this route is where one account's session replaces another's on a shared
+  // browser, and a cookie that is only ever written when the incoming user has
+  // a stored accent would leave the previous user's choice in place. A user
+  // with no stored accent gets the default, not their predecessor's.
   //
   // Not httpOnly: `AccentProvider.setAccent` rewrites this cookie from the
   // client, and an httpOnly cookie of the same name would shadow that write.
+  let accent: string | null = null;
   try {
     const user = await prisma.user.findUnique({
       select: { accent: true },
       where: { id: accessPayload.userId },
     });
-    if (isAccent(user?.accent)) {
-      res.cookies.set(ACCENT_COOKIE, user.accent, {
-        httpOnly: false,
-        maxAge: ACCENT_COOKIE_MAX_AGE,
-        path: '/',
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-      });
-    }
+    accent = isAccent(user?.accent) ? user.accent : null;
   } catch (err) {
-    logger.warn({ err }, 'Failed to seed accent cookie from the user record');
+    // Best-effort: fall through to the clear, so a transient DB failure lands
+    // on the default rather than on whoever used this browser last.
+    logger.warn({ err }, 'Failed to read the accent preference from the user record');
   }
+  writeAccentCookie(res, accent);
 
   return res;
 }
@@ -76,5 +78,20 @@ export async function DELETE(_req: NextRequest) {
   const res = NextResponse.json({ success: true });
   res.cookies.delete('access_token');
   res.cookies.delete('refresh_token');
+  // The accent is a per-account preference, so it goes with the session. Left
+  // behind, it would style the login screen — and then the next account — in
+  // the departing user's colour.
+  writeAccentCookie(res, null);
   return res;
+}
+
+/** Sets the accent cookie, or clears it when `accent` is null. */
+function writeAccentCookie(res: NextResponse, accent: string | null) {
+  res.cookies.set(ACCENT_COOKIE, accent ?? '', {
+    httpOnly: false,
+    maxAge: accent ? ACCENT_COOKIE_MAX_AGE : 0,
+    path: '/',
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  });
 }

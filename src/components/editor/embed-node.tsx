@@ -56,7 +56,7 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
               type="url"
             />
             <button
-              className="rounded bg-primary px-2 py-1 text-xs text-white hover:bg-primary/90"
+              className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground hover:bg-primary/90"
               type="submit"
             >
               {t('editor.embed.submit')}

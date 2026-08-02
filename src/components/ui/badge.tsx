@@ -22,9 +22,16 @@ const badgeVariants = cva('inline-flex items-center gap-1 text-xs font-medium', 
       success: 'bg-success-subtle text-success-subtle-foreground',
       warning: 'bg-warning-subtle text-warning-subtle-foreground',
     },
+    /**
+     * Shape only. There is deliberately no `solid` variant: it hardcoded
+     * `text-white` over whatever vivid fill the call site passed, and white
+     * does not clear 4.5:1 on any of the status fills — ~2.6:1 on `--warning`
+     * in light, ~1.4:1 in dark. Solid status chips are `tone` pills now, whose
+     * fill/ink pairs src/lib/contrast.test.ts asserts.
+     */
     variant: {
       pill: 'rounded-full px-2 py-0.5',
-      solid: 'rounded px-1.5 py-0.5 text-white',
+      square: 'rounded px-1.5 py-0.5',
     },
   },
 });

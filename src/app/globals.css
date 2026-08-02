@@ -39,6 +39,7 @@
   --color-warning: var(--warning);
   --color-warning-subtle: var(--warning-subtle);
   --color-warning-subtle-foreground: var(--warning-subtle-foreground);
+  --color-warning-foreground: var(--warning-foreground);
   --color-info: var(--info);
   --color-info-subtle: var(--info-subtle);
   --color-info-subtle-foreground: var(--info-subtle-foreground);
@@ -241,7 +242,13 @@
   --brand-subtle: color-mix(in oklab, var(--brand) 12%, transparent);
   --brand-subtle-foreground: var(--brand-hover);
   --brand-border: color-mix(in oklab, var(--brand) 38%, transparent);
-  --primary: var(--brand);
+  /* The FLAT primary fill, and the same value as the CTA gradient's first
+     stop — not `--brand` itself. Same reason `--gradient-brand-cta` exists: a
+     brand light enough to read as a selection rail on a white page cannot
+     carry white text. `--primary-foreground` measured 4.45:1 on a raw
+     `--brand` under Aurora and 3.65:1 under Ion. `--ring` and `--brand` stay
+     undarkened — they are lines and rails, never a ground for text. */
+  --primary: color-mix(in oklab, var(--brand) 88%, black);
   --primary-foreground: oklch(0.99 0 0);
   --ring: var(--brand);
   --gradient-brand: linear-gradient(135deg, var(--brand), var(--brand-2));
@@ -286,6 +293,15 @@
   --success-subtle-foreground: color-mix(in oklab, var(--success) 70%, black);
   --warning-subtle-foreground: color-mix(in oklab, var(--warning) 70%, black);
   --info-subtle-foreground: color-mix(in oklab, var(--info) 70%, black);
+  /* Ink for text sitting ON the solid `--warning` fill — the impersonation
+     banner. Parallel to `--destructive-foreground`, and for the same reason a
+     `-subtle-foreground` cannot serve: that role inverts by theme (dark ink in
+     light mode, light ink in dark) because it sits on a near-page-coloured
+     tint. `--warning` is a light amber in BOTH themes, so its ink must be dark
+     in both. Derived from warning rather than fixed so it stays in family.
+     Not overridden under `.dark` — deliberately. */
+  --warning-foreground: color-mix(in oklab, var(--warning) 22%, black);
+
   /* GitHub's "merged" purple. A domain colour, not brand — it must keep
      meaning "merged" even under the Ultraviolet accent, so it is fixed. */
   --merged: oklch(0.627 0.265 303.9);
@@ -431,17 +447,25 @@
 }
 
 /* Baseline focus indicator for every focusable element.
-   
-   Primitives that style their own focus (Button, Input, Textarea, Switch) all
-   set `outline-none` first, so this does not double up on them — it is the
-   fallback that catches everything else: the accent swatches, the sidebar
-   disclosure chevrons, sub-nav links, and any bare <button> added later.
-   Without it those relied on the UA default, which varies by browser and can
-   be near-invisible on a dark ground. `--ring` is the brand, which
-   src/lib/contrast.test.ts holds at >= 3:1 against both page and card. */
-:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
+
+   It is the fallback that catches what no primitive covers: the accent
+   swatches, the sidebar disclosure chevrons, sub-nav links, and any bare
+   <button> added later. Without it those relied on the UA default, which
+   varies by browser and can be near-invisible on a dark ground. `--ring` is
+   the brand, which src/lib/contrast.test.ts holds at >= 3:1 against both page
+   and card.
+
+   MUST stay inside `@layer base`. Tailwind's utilities live in
+   `@layer utilities`, and unlayered CSS beats every layer — so as a bare rule
+   this outranked `focus-visible:outline-none` and stamped a hard outline on
+   every primitive that styles its own focus ring (Button, Input, Textarea,
+   Switch, the TipTap surface). Layering restores the normal cascade, where a
+   utility opting out wins. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
 }
 
 body {

@@ -14,7 +14,7 @@ export default async function NotFound() {
       <h1 className="text-xl font-semibold text-foreground">{t('errors.notFoundTitle')}</h1>
       <p className="max-w-md text-sm text-muted-foreground">{t('errors.notFoundDetail')}</p>
       <Link
-        className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground shadow hover:bg-primary/90"
+        className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground shadow-e1 hover:bg-primary/90"
         href="/"
       >
         {t('errors.goHome')}

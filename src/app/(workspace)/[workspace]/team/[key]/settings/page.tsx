@@ -565,7 +565,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                 </div>
                 {!deleteConfirm && (
                   <button
-                    className="flex shrink-0 items-center gap-1.5 rounded-md border border-danger/40 px-3 py-1.5 text-sm text-danger-subtle-foreground transition-colors hover:bg-danger-subtle dark:hover:bg-danger-subtle/20"
+                    className="flex shrink-0 items-center gap-1.5 rounded-md border border-danger/40 px-3 py-1.5 text-sm text-danger-subtle-foreground transition-colors hover:bg-danger-subtle"
                     onClick={() => setDeleteConfirm(true)}
                     type="button"
                   >
@@ -652,7 +652,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                       {t('common.cancel')}
                     </button>
                     <button
-                      className="rounded bg-danger px-3 py-1.5 text-xs font-medium text-white hover:bg-danger disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="rounded bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed"
                       disabled={deleting || (issueAction === 'MOVE' && !moveToTeamId)}
                       onClick={handleDelete}
                       type="button"

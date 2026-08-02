@@ -306,7 +306,7 @@ function AddFilterForm({
         ))}
 
       <button
-        className="rounded bg-primary px-2 py-1 text-xs font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+        className="rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         disabled={needsValue && !value}
         onClick={() => {
           let resolvedValue: string | number | boolean = value;

@@ -168,7 +168,7 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
               </div>
               <button
                 aria-label={t('customFields.archive')}
-                className="rounded p-1 text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger-subtle-foreground dark:hover:bg-danger-subtle/20 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+                className="rounded p-1 text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger-subtle-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                 onClick={() => setConfirmingArchive({ id: def.id, name: def.name })}
                 type="button"
               >

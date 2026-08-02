@@ -454,7 +454,7 @@ const TriagePage = observer(function TriagePage() {
                 </div>
                 <div className="flex flex-shrink-0 gap-1">
                   <button
-                    className="rounded bg-primary px-2.5 py-1 text-xs text-white hover:bg-primary/90 disabled:opacity-50"
+                    className="rounded bg-primary px-2.5 py-1 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                     disabled={busy || !defaultTargetStateId}
                     onClick={() => handleAccept(issue.id)}
                     type="button"

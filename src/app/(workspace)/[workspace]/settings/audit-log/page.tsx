@@ -212,7 +212,7 @@ export default function AuditLogPage() {
           value={userIdFilter}
         />
         <button
-          className="rounded bg-primary px-3 py-1 text-xs text-white hover:bg-primary/90"
+          className="rounded bg-primary px-3 py-1 text-xs text-primary-foreground hover:bg-primary/90"
           onClick={handleApplyFilters}
           type="button"
         >

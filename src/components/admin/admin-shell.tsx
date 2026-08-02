@@ -39,7 +39,7 @@ export function AdminShell({
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-6 px-6">
           <div className="flex items-center gap-2">
-            <span className="rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+            <span className="rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-foreground">
               {t('admin.nav.platformBadge')}
             </span>
             <span className="text-sm font-semibold text-foreground">

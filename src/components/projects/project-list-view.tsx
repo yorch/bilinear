@@ -54,7 +54,7 @@ export const ProjectListView = observer(function ProjectListView({
               </p>
             </div>
             <button
-              className="mt-2 flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+              className="mt-2 flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
               onClick={() => uiStore.openCreateProjectModal()}
               type="button"
             >

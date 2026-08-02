@@ -620,7 +620,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                     {newPlaintext}
                   </code>
                   <button
-                    className="shrink-0 text-warning-subtle-foreground hover:text-warning-subtle-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+                    className="shrink-0 rounded p-1 text-warning-subtle-foreground hover:bg-warning/35 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                     onClick={() => {
                       void navigator.clipboard.writeText(newPlaintext);
                       toast.success(t('settings.workspace.copiedToClipboard'));

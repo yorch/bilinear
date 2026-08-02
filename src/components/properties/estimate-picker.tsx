@@ -182,7 +182,7 @@ function NumericInput({
         value={draft}
       />
       <button
-        className="rounded bg-primary px-2 py-1 text-xs font-medium text-white hover:bg-primary/90"
+        className="rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
         onClick={() => {
           const n = Number(draft);
           onSubmit(draft === '' ? null : Number.isFinite(n) ? n : null);

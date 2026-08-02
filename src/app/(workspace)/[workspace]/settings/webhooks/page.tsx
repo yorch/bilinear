@@ -194,7 +194,7 @@ export default function WebhooksSettingsPage() {
           <p className="mt-1 text-xs text-muted-foreground">{t('settings.webhooks.description')}</p>
         </div>
         <button
-          className="rounded bg-primary px-3 py-1.5 text-xs text-white hover:bg-primary/90"
+          className="rounded bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90"
           onClick={() => setCreating(c => !c)}
           type="button"
         >
@@ -256,7 +256,7 @@ export default function WebhooksSettingsPage() {
             </div>
           </div>
           <button
-            className="rounded bg-primary px-3 py-1.5 text-xs text-white hover:bg-primary/90"
+            className="rounded bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90"
             onClick={handleCreate}
             type="button"
           >
@@ -350,7 +350,7 @@ export default function WebhooksSettingsPage() {
                     {t('settings.webhooks.rotate')}
                   </button>
                   <button
-                    className="rounded border border-border px-2 py-1 text-xs text-danger-subtle-foreground hover:bg-danger-subtle dark:hover:bg-danger-subtle/30"
+                    className="rounded border border-border px-2 py-1 text-xs text-danger-subtle-foreground hover:bg-danger-subtle"
                     onClick={() => setPendingAction({ hook, type: 'delete' })}
                     type="button"
                   >

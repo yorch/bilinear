@@ -296,7 +296,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                       <button
                         aria-label={t('issueDetail.templates.deleteTemplate')}
                         className={cn(
-                          'rounded p-1 text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger-subtle-foreground dark:hover:bg-danger-subtle/20 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center',
+                          'rounded p-1 text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger-subtle-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center',
                           isDeleting && 'cursor-not-allowed opacity-50',
                         )}
                         disabled={isDeleting}

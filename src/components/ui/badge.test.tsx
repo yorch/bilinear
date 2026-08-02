@@ -22,23 +22,39 @@ describe('Badge', () => {
     expect(badge).toHaveClass('px-2');
   });
 
-  it('applies the solid variant classes', () => {
-    render(<Badge variant="solid">Solid</Badge>);
-    const badge = screen.getByText('Solid');
+  it('applies the square variant classes', () => {
+    render(<Badge variant="square">Square</Badge>);
+    const badge = screen.getByText('Square');
     expect(badge).toHaveClass('rounded');
-    expect(badge).toHaveClass('text-white');
     expect(badge).not.toHaveClass('rounded-full');
+  });
+
+  // No variant may hardcode an ink colour: white over a caller-supplied vivid
+  // fill is how the health badges ended up at ~1.4:1 in dark mode.
+  it('never forces a text colour', () => {
+    for (const variant of ['pill', 'square'] as const) {
+      const { unmount } = render(<Badge variant={variant}>{variant}</Badge>);
+      expect(screen.getByText(variant)).not.toHaveClass('text-white');
+      unmount();
+    }
+  });
+
+  it('pairs a fill with its own ink for every tone', () => {
+    render(<Badge tone="warning">Warning</Badge>);
+    const badge = screen.getByText('Warning');
+    expect(badge).toHaveClass('bg-warning-subtle');
+    expect(badge).toHaveClass('text-warning-subtle-foreground');
   });
 
   it('merges a custom className with the variant classes', () => {
     render(
-      <Badge className="bg-danger" variant="solid">
+      <Badge className="bg-danger-subtle" variant="square">
         Custom
       </Badge>,
     );
     const badge = screen.getByText('Custom');
-    expect(badge).toHaveClass('bg-danger');
-    expect(badge).toHaveClass('text-white');
+    expect(badge).toHaveClass('bg-danger-subtle');
+    expect(badge).toHaveClass('rounded');
   });
 
   it('forwards arbitrary span props', () => {

@@ -133,7 +133,7 @@ export default function AdminUsersPage() {
           value={query}
         />
         <button
-          className="rounded bg-primary px-3 py-1 text-xs text-white hover:bg-primary/90"
+          className="rounded bg-primary px-3 py-1 text-xs text-primary-foreground hover:bg-primary/90"
           type="submit"
         >
           {t('common.search')}
