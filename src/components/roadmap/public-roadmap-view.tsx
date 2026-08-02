@@ -37,7 +37,10 @@ const STATUS_BADGES: Record<string, { cls: string; labelKey: string }> = {
     cls: 'bg-muted text-muted-foreground',
     labelKey: 'roadmap.public.status.backlog',
   },
-  cancelled: {
+  // Keyed by `Project.status`, whose canceled value is `canceled` (one L) —
+  // see PROJECT_STATUS_CONFIG. Spelled `cancelled` this entry never matched,
+  // so a canceled project rendered with no status badge at all.
+  canceled: {
     cls: 'bg-danger-subtle text-danger-subtle-foreground',
     labelKey: 'roadmap.public.status.cancelled',
   },

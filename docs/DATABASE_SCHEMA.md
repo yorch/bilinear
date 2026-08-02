@@ -1599,20 +1599,27 @@ computed field were authored side by side and never reconciled. Treat any
 proposal to restore them as a proposal to add a *new* cache, and hold it to the
 usual bar: who writes it, on which transitions, and what keeps it honest.
 
-**`cycles` has the same dead columns, and they are still there.** An earlier
-draft of this section claimed they "are written and must stay". That is wrong.
-Verified: the only two `prisma.cycle.update` call sites write
-name/description/dates and `archivedAt`; neither `tx.cycle.create` site (normal
-create, and the rollover loop) writes `progress` or `scope`; nothing selects
-them; and `cycles`' four `*_history` JSONB columns appear only in a test
-fixture. `CycleService.getProgress` computes from the issue set exactly like the
-project path does.
+**`cycles` had the same dead columns, and they are now gone too** — `progress`,
+`scope`, and four `*_history` JSONB columns, none of which anything ever wrote.
+(An earlier draft of this section claimed cycles' "are written and must stay".
+That was wrong: the only two `prisma.cycle.update` call sites write
+name/description/dates and `archivedAt`, and neither `tx.cycle.create` site —
+normal create, and the rollover loop — writes progress or scope.)
 
-They are left in place for now only because no reader renders a stale value from
-them — unlike `projects`, where the dead column was being displayed as 0%. That
-makes removing them a cleanup, not a bug fix. If you do remove them, take all
-six (`progress`, `scope`, and the four `*_history`) and check `Cycle`'s test
-fixtures.
+`Cycle.progress`/`scope` are now computed GraphQL fields resolved through the
+`cycleProgress` DataLoader over `CycleService.getProgressBatch`, mirroring the
+project path. Before those resolvers existed the SDL declared both fields with
+nothing behind them, so the *default* resolver read the dead columns and every
+query answered 0 — the same latent bug the project side had, one step earlier.
+
+**`Cycle` counts "done" differently from `Project`, on purpose.** Cycle progress
+treats `state.type` in (`completed`, `canceled`) as done; project progress uses
+`completedAt IS NOT NULL`. A canceled issue is resolved and must leave a cycle's
+remaining work, but it never gets a `completedAt` stamp. Don't "unify" these
+without deciding which rule each surface actually wants.
+
+`cycles.carryover_count` is **not** in this category — `CycleService.rollover()`
+genuinely writes it on the destination cycle.
 
 **Do not generalise from `Initiative`.** `initiatives.progress` looks identical
 and *is* a genuine cached rollup: `InitiativeService` writes it and the

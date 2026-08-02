@@ -14,6 +14,7 @@ import type {
   User,
   WorkflowState,
 } from '../../generated/prisma';
+import { CycleService } from '../services/cycle.service';
 import { IssueService } from '../services/issue.service';
 import { ProjectService } from '../services/project.service';
 
@@ -45,6 +46,7 @@ export interface Loaders {
   /** CustomView lookup by id (org check left to the caller, as before). */
   customViewById: DataLoader<string, CustomView | null>;
   cycle: DataLoader<string, Cycle | null>;
+  cycleProgress: DataLoader<string, { progress: number; scope: number }>;
   /** Document lookup by id (org check left to the caller, as before). */
   documentById: DataLoader<string, Document | null>;
 
@@ -156,6 +158,20 @@ export function createLoaders(prisma: PrismaClient, orgId: string | null): Loade
         where: { id: { in: ids as string[] } },
       });
       return indexById(rows, ids);
+    }),
+
+    /**
+     * Live `{ progress, scope }` per cycle.
+     *
+     * Batched through `CycleService.getProgressBatch`, which answers the whole
+     * set in two `groupBy` queries and guarantees an entry for every requested
+     * id, so the key-order projection below can never misalign. Mirrors
+     * `projectProgress`; both exist because the columns these used to read
+     * were never written.
+     */
+    cycleProgress: new DataLoader(async (ids: readonly string[]) => {
+      const byId = await new CycleService(prisma).getProgressBatch(ids as string[]);
+      return ids.map(id => byId.get(id) ?? { progress: 0, scope: 0 });
     }),
 
     documentById: new DataLoader(async (ids: readonly string[]) => {

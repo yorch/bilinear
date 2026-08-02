@@ -2804,3 +2804,41 @@ Any component that loads data in an effect uses `useRetryableFetch(fetcher, deps
 Do not hand-roll the equivalent. The recognisable shape — `useState` for data, a `loadError` boolean, a `useState(0)` `reloadKey`, a `let cancelled = false` flag with `if (!cancelled)` guards, and a `biome-ignore useExhaustiveDependencies` for the reload key — was written out fifteen times before being consolidated, and the hand-rolled version is strictly worse: it races on out-of-order responses where the hook discards stale ones via a monotonic request id.
 
 The hook only sets `error` when the fetcher **throws**, which is why the fetcher must use `gqlQuery`/`gqlMutate` (§76.1) rather than swallowing errors and returning `[]`. A fetcher that returns an empty array on failure renders as a legitimate empty state and leaves the retry branch dead — that combination is what hid a real query bug for a long time.
+
+### 77.7 Derived values are computed fields, never columns
+
+Progress, scope and any other value that is a pure function of a related row
+set is exposed as a **GraphQL field backed by a DataLoader**, not stored on the
+parent. `Project.progress`/`scope` and `Cycle.progress`/`scope` both work this
+way, through `projectProgress` / `cycleProgress` over
+`{Project,Cycle}Service.getProgressBatch`.
+
+Both models used to carry real columns for these, and **neither was ever
+written** — see DATABASE_SCHEMA.md §2.9-pre for the archaeology. The two failed
+differently, and the pair is the argument for this rule:
+
+- `projects` had field resolvers, so the columns were merely dead weight — but
+  two server-side readers (`roadmap/[slug]/page.tsx`, the initiatives page)
+  bypassed GraphQL and read the raw column, rendering 0% for every project.
+- `cycles` had **no** field resolvers, so the SDL's `progress: Float!` fell
+  through to the default resolver, which read the dead column. Every query
+  answered 0, silently, for as long as the field had existed.
+
+Three rules follow:
+
+1. **Don't add the column.** If you want a cached rollup, it needs a named
+   single writer, an enumerated set of invalidating transitions, and something
+   that keeps it honest. `Initiative.progress` is the one in this codebase that
+   clears that bar; treat any new one as a proposal to be argued, not a default.
+2. **Every field the SDL declares needs a resolver or a real column.** A
+   non-null scalar with neither is not a compile error and not a validation
+   failure — it is a field that quietly returns a zero value forever.
+3. **Never re-derive it on the client from a MobX pool.** `issueStore` holds
+   only the issues that client happens to have, and a guest is scoped to issues
+   they created or are assigned to, so one owned issue in a 50-issue project
+   renders as 100%. Fetch the server-resolved field. Both the project views and
+   `cycle-detail-view` had this bug and both now fetch it.
+
+Batch it when you add it. `getProgressBatch` answers any number of parents in
+two `groupBy` queries; the per-parent version it replaced issued two `count`s
+each, so a 20-row list cost 40 round-trips.

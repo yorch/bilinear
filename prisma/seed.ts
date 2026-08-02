@@ -152,7 +152,13 @@ async function main() {
     { color: '#e2e8f0', name: 'Todo', position: 1, type: 'unstarted' },
     { color: '#f59e0b', name: 'In Progress', position: 2, type: 'started' },
     { color: '#10b981', name: 'Done', position: 3, type: 'completed' },
-    { color: '#ef4444', name: 'Cancelled', position: 4, type: 'cancelled' },
+    // `canceled`, one L — the canonical spelling everywhere else
+    // (`workflow-state.service.ts` VALID_TYPES/REQUIRED_TYPES,
+    // `team.service.ts` DEFAULT_WORKFLOW_STATES, and every `type: 'canceled'`
+    // lookup). Seeding `cancelled` produced a state no code could match:
+    // triage decline and duplicate auto-cancel both resolve the target state
+    // by `type: 'canceled'` and would throw on a seeded team.
+    { color: '#ef4444', name: 'Canceled', position: 4, type: 'canceled' },
   ];
 
   const states: Record<string, string> = {};

@@ -15,6 +15,7 @@ import { isActiveCycle } from '@/lib/cycle-utils';
 import { gql, gqlQuery } from '@/lib/graphql';
 import {
   CYCLE_BURNDOWN_QUERY,
+  CYCLE_PROGRESS_QUERY,
   CYCLE_ROLLOVER_MUTATION,
   CYCLE_SCOPE_METRICS_QUERY,
   CYCLE_VELOCITY_QUERY,
@@ -38,6 +39,11 @@ interface BurndownPoint {
   completed: number;
   date: string;
   remaining: number;
+  scope: number;
+}
+
+interface ServerProgress {
+  progress: number;
   scope: number;
 }
 
@@ -157,6 +163,16 @@ export const CycleDetailView = observer(function CycleDetailView({
     null,
   );
 
+  // Server-resolved progress. Deliberately not derived from `issueStore`:
+  // that pool holds only the issues this client happens to have, and a guest
+  // is scoped to issues they created or are assigned — so one owned issue in
+  // a 50-issue cycle used to render as 100%.
+  const { data: serverProgress } = useRetryableFetch<ServerProgress | null>(
+    () => gqlQuery<ServerProgress | null>(CYCLE_PROGRESS_QUERY, { id: cycleId }, 'cycle'),
+    [cycleId],
+    null,
+  );
+
   // Scope / carryover metrics
   const {
     data: scopeMetrics,
@@ -255,10 +271,15 @@ export const CycleDetailView = observer(function CycleDetailView({
     );
   }
 
+  // The issue *list* below renders from the local pool — that is the set this
+  // client can actually link to. The progress *stat* must not come from it:
+  // see the `serverProgress` fetch above. Until it lands the bar reads 0,
+  // which is the same thing the (never-written) `cycles.progress` column used
+  // to report forever.
   const cycleIssues = issueStore.findByCycleId(cycle.id);
-  const completedIssues = cycleIssues.filter(i => i.completedAt);
-  const progress =
-    cycleIssues.length > 0 ? Math.round((completedIssues.length / cycleIssues.length) * 100) : 0;
+  const scopeCount = serverProgress?.scope ?? 0;
+  const completedCount = Math.round((serverProgress?.progress ?? 0) * scopeCount);
+  const progress = Math.round((serverProgress?.progress ?? 0) * 100);
 
   const now = Date.now();
   const startsAtMs = new Date(cycle.startsAt).getTime();
@@ -389,9 +410,9 @@ export const CycleDetailView = observer(function CycleDetailView({
               </span>
               <span className="text-xs tabular-nums text-muted-foreground">
                 {t('cycles.detail.progressCount', {
-                  completed: completedIssues.length,
+                  completed: completedCount,
                   progress,
-                  total: cycleIssues.length,
+                  total: scopeCount,
                 })}
               </span>
             </div>

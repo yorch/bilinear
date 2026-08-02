@@ -417,12 +417,36 @@ Document the choice in the schema.
 | `IssueRelation.type` | `String @db.VarChar(20)` | `blocks / blocked_by / related / duplicate` |
 | `Notification.type` | `String @db.VarChar(40)` | `ISSUE_ASSIGNED / ISSUE_STATUS_CHANGED / ISSUE_COMMENT / …` |
 | `WorkflowState.type` | `String @db.VarChar(20)` | `triage / backlog / unstarted / started / completed / canceled` |
-| `Project.statusType` | `String @db.VarChar(20)` | `backlog / planned / started / paused / completed / canceled` |
+| `Project.statusType` | `String @db.VarChar(20)` | `backlog / planned / inProgress / paused / completed / canceled` |
 
 Pattern already exists for `CustomFieldType`. Each promotion is
 `enum + ALTER TABLE … TYPE … USING …` and a Prisma schema swap. Update
 service-layer string literals to typed enum values; update GraphQL
 schema to expose enum types.
+
+**Blocker re-assessed (2026-08-02).** #116 recorded this as ⛔ BLOCKED on
+"inconsistent existing vocabularies (`canceled`/`cancelled`,
+`started`/`inProgress`)". Both halves have since been checked, and
+neither is what it looked like:
+
+- **`canceled`/`cancelled` was real, and its source is now gone.**
+  `prisma/seed.ts` seeded a `cancelled` workflow state while every
+  consumer looks up `canceled`; three client-side comparisons had the
+  same typo. All four are fixed and
+  `src/lib/state-type-spelling.test.ts` keeps them fixed. No migration
+  writes the value either, so the only rows that can still hold it are
+  in databases seeded before that fix — and nothing is deployed, so a
+  re-seed (or a one-line `UPDATE`) clears them. A normalization step
+  is still worth writing for safety, but it is a one-liner, not a PR.
+- **`started`/`inProgress` was a documentation error**, above, not a
+  data inconsistency. `WorkflowState.type` uses `started`;
+  `Project.statusType` uses `inProgress`. They are two different enums
+  over two different columns and were never in conflict — this table
+  simply listed the wrong values for `Project.statusType`.
+
+So the remaining cost is the ordinary one: six `ALTER TYPE` promotions,
+the service-layer literal sweep, and the GraphQL surface. Still Large,
+still its own PR, but no longer blocked on a data-cleanup prerequisite.
 
 ### 2.1–2.2 Compound/partial indexes + Issue/IssueLabel `onDelete` — ✅ shipped (2026-08-02)
 
@@ -451,25 +475,51 @@ Migration `20260512100000_db_hardening_constraints`. See §6 for details.
   description show ≥2× improvement on the inbox-unread query for an
   org with ≥10k notifications.
 
-### 2.6 SyncAction retention (deferred follow-up, not in the hardening PR)
+### 2.6 SyncAction retention — ✅ shipped (2026-08-02, #112)
 
-Once volume warrants, partition `sync_actions` by `created_at` via
-`pg_partman` and add a daily job that drops partitions older than
-~30d. Delta sync won't fetch them (clients past 30d offline get a
-full bootstrap regardless).
+Shipped as a row-level sweep, **not** the `pg_partman` partitioning
+originally sketched here. Two things about that original sketch are now
+obsolete and are recorded so nobody re-derives them: it assumed a
+`committed_at` watermark column, which the xid8 commit-order fence
+deleted; and it treated the sweep as the whole job, which it is not.
 
-- **Effort:** Medium.
-- **Risk:** Medium — partitioning swap requires careful coordination
-  with the BIGSERIAL `id` sequence and the `committed_at` watermark
-  query plan.
-- **Why deferred:** No measurable pressure on `sync_actions` size
-  yet; revisit when the table crosses ~10M rows or delta-page p99 on
-  catch-up reads regresses.
-- **First-touch:** Capture current row count + table size + p99 of
-  the delta query on prod; only proceed if the numbers warrant.
-- **Acceptance signal:** Delta-page p99 unchanged or improved post
-  partition; a 30-day-old row is no longer queryable; full bootstrap
-  still hydrates correctly for a client past the retention window.
+What shipped:
+
+- `SyncService.pruneSyncActions()`, run hourly, deletes past
+  `SYNC_ACTION_RETENTION_DAYS`.
+- **A sweep on its own is a silent data-loss bug** — a client whose
+  cursor predates the pruned span would get a successful-looking,
+  permanently incomplete delta. So the sweep also records
+  `organizations.sync_actions_pruned_through_xact_id`, and
+  `getDeltaSyncActions` answers `staleCursor: true` for a cursor at or
+  below that mark, sending the client to a full bootstrap instead.
+- Prune and mark are **one data-modifying CTE** (`DELETE … RETURNING`
+  → `MAX(xact_id)` per org → `UPDATE organizations`), so a delete
+  cannot land without its mark. `GREATEST(COALESCE(existing, 0), …)`
+  keeps it monotonic, and only orgs that actually lost rows are marked
+  — marking every org combines with a zero bootstrap cursor into a
+  permanent delta → staleCursor → bootstrap loop.
+- Deletion is by `created_at` (wall-clock policy, indexed) while the
+  mark is in `xact_id` space, because that is where the delta cursor
+  lives. A timestamp mark is not comparable to an xid8 cursor at all.
+- The mark column is `NUMERIC(20, 0)`, not `BIGINT`: xid8 is unsigned
+  64-bit and overflows a signed `int8` at the top of its range.
+
+See DATABASE_SCHEMA.md §2.22b and PATTERNS.md §77.3.
+
+**Still open:** partitioning proper. The sweep is a `DELETE`, so it
+leaves bloat a `DROP PARTITION` would not, and it has never been run
+against a large table.
+
+- **Effort:** Medium. **Risk:** Medium — the swap must coordinate with
+  the BIGSERIAL `id` sequence and the `(xact_id, id)` delta query plan.
+- **Why deferred:** No measured pressure yet. Revisit when the table
+  crosses ~10M rows or delta-page p99 on catch-up reads regresses.
+- **First-touch:** Capture row count, table size, and delta-query p99
+  on a real workload; only proceed if the numbers warrant.
+- **Acceptance signal:** Delta-page p99 unchanged or improved; a row
+  past the window is unqueryable; a client past the window still
+  re-bootstraps correctly via the `staleCursor` path above.
 
 ---
 

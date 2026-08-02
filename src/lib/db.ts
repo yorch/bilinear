@@ -198,8 +198,6 @@ export interface DBCycle {
   name?: string | null;
   number: number;
   organizationId: string;
-  progress: number;
-  scope: number;
   startsAt: string;
   teamId: string;
   updatedAt: string;

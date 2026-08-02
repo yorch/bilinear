@@ -37,6 +37,20 @@ export const cycleResolvers = {
       return ctx.services.issue.findActiveByCycleId(cycle.id);
     },
 
+    // `progress`/`scope` are computed, not stored. Until these resolvers
+    // existed the SDL declared both fields with nothing behind them, so the
+    // default resolver read the `cycles.progress`/`scope` columns — which
+    // nothing ever wrote, making every query answer 0.
+    progress: async (cycle: Cycle, _args: unknown, ctx: GraphQLContext) => {
+      const result = await ctx.loaders.cycleProgress.load(cycle.id);
+      return result.progress;
+    },
+
+    scope: async (cycle: Cycle, _args: unknown, ctx: GraphQLContext) => {
+      const result = await ctx.loaders.cycleProgress.load(cycle.id);
+      return result.scope;
+    },
+
     team: async (cycle: Cycle, _args: unknown, ctx: GraphQLContext) =>
       ctx.loaders.team.load(cycle.teamId),
   },

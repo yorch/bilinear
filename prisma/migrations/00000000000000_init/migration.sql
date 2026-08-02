@@ -371,13 +371,7 @@ CREATE TABLE "cycles" (
     "ends_at" TIMESTAMPTZ NOT NULL,
     "completed_at" TIMESTAMPTZ,
     "auto_archived_at" TIMESTAMPTZ,
-    "progress" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "scope" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "carryover_count" INTEGER NOT NULL DEFAULT 0,
-    "scope_history" JSONB NOT NULL DEFAULT '[]',
-    "completed_scope_history" JSONB NOT NULL DEFAULT '[]',
-    "issue_count_history" JSONB NOT NULL DEFAULT '[]',
-    "completed_issue_count_history" JSONB NOT NULL DEFAULT '[]',
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ NOT NULL,
     "archived_at" TIMESTAMPTZ,
@@ -1625,4 +1619,3 @@ ALTER TABLE "organization_invites" ADD CONSTRAINT "organization_invites_invited_
 
 -- AddForeignKey
 ALTER TABLE "organization_invites" ADD CONSTRAINT "organization_invites_accepted_by_id_fkey" FOREIGN KEY ("accepted_by_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
