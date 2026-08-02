@@ -23,6 +23,7 @@ import Redis from 'ioredis';
 import { type WebSocket, WebSocketServer } from 'ws';
 import {
   SYNC_ACTION_PRUNE_INTERVAL_MS,
+  WS_BROADCAST_COALESCE_MS,
   WS_PING_INTERVAL_MS,
   WS_PONG_TIMEOUT_MS,
 } from '@/lib/sync-config';
@@ -40,6 +41,7 @@ import { CycleService } from '@/server/services/cycle.service';
 import { SyncService } from '@/server/services/sync.service';
 import { WebhookService } from '@/server/services/webhook.service';
 import { ConnectionManager } from './connection-manager';
+import { SyncBroadcastBatcher } from './sync-batcher';
 
 const log = childLogger({ module: 'ws' });
 
@@ -135,11 +137,16 @@ async function maybeReleaseOrgSubscription(orgId: string) {
   });
 }
 
+// Coalesce per-org SyncAction broadcasts over a short window (§3.2) so a busy
+// org sends one batched `sync` frame per window instead of one per action.
+const broadcastBatcher = new SyncBroadcastBatcher<unknown>((orgId, actions) => {
+  connectionManager.broadcastToOrgAll(orgId, JSON.stringify({ cmd: 'sync', sync: actions }));
+}, WS_BROADCAST_COALESCE_MS);
+
 redisSubscriber.on('message', (channel: string, message: string) => {
   // channel = "sync:<orgId>"
   const orgId = channel.slice('sync:'.length);
-  const payload = JSON.stringify({ cmd: 'sync', sync: [JSON.parse(message)] });
-  connectionManager.broadcastToOrgAll(orgId, payload);
+  broadcastBatcher.add(orgId, JSON.parse(message));
 });
 
 redisSubscriber.on('error', (err: Error) => {
@@ -441,6 +448,9 @@ function shutdown() {
   clearInterval(cycleRolloverTimer);
   clearInterval(reauthTimer);
   clearInterval(syncPruneTimer);
+  // Flush any SyncActions still buffered in the coalescing window (§3.2) so a
+  // graceful shutdown doesn't silently drop a just-published batch.
+  broadcastBatcher.flushAll();
   wss.close();
   redisSubscriber.disconnect();
   redisPublisher.disconnect();
