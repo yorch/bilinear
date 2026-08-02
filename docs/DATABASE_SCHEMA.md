@@ -1585,9 +1585,25 @@ Do not reintroduce them as a cache. Removing the columns is what turned each
 stale read into a compile error, which is how a second forgotten reader
 (`roadmap/[slug]/page.tsx`, with its own `prisma.project.findMany`) was found.
 
-Note `cycles` has identically-declared `progress`/`scope` columns that **are**
-written and must stay — the removal is scoped to `projects`, and both halves are
-confirmed against Postgres in the verification recipe.
+**`cycles` has the same dead columns, and they are still there.** An earlier
+draft of this section claimed they "are written and must stay". That is wrong.
+Verified: the only two `prisma.cycle.update` call sites write
+name/description/dates and `archivedAt`; neither `tx.cycle.create` site (normal
+create, and the rollover loop) writes `progress` or `scope`; nothing selects
+them; and `cycles`' four `*_history` JSONB columns appear only in a test
+fixture. `CycleService.getProgress` computes from the issue set exactly like the
+project path does.
+
+They are left in place for now only because no reader renders a stale value from
+them — unlike `projects`, where the dead column was being displayed as 0%. That
+makes removing them a cleanup, not a bug fix. If you do remove them, take all
+six (`progress`, `scope`, and the four `*_history`) and check `Cycle`'s test
+fixtures.
+
+**Do not generalise from `Initiative`.** `initiatives.progress` looks identical
+and *is* a genuine cached rollup: `InitiativeService` writes it and the
+recursive parent-chain rollup reads it back. That is the one of the three that
+earns its column.
 
 ### 2.9a Project progress history columns
 
