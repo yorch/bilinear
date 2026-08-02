@@ -7,6 +7,8 @@ import { useCallback, useState } from 'react';
 import { CreateProjectModal } from '@/components/projects/create-project-modal';
 import { ProjectListView } from '@/components/projects/project-list-view';
 import { ProjectRoadmapView } from '@/components/projects/project-roadmap-view';
+import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
@@ -75,47 +77,47 @@ export default observer(function ProjectsPage() {
 
   return (
     <>
-      <div className="flex h-12 items-center gap-2 border-b border-border px-4">
-        <h1 className="flex-1 text-sm font-semibold text-foreground">{t('projects.title')}</h1>
-        <div className="flex rounded-md border border-border p-0.5">
-          <button
-            aria-label={t('projects.listView')}
-            className={cn(
-              'flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors',
-              layout === 'list'
-                ? 'bg-muted text-foreground'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-            onClick={() => setLayoutPersisted('list')}
-            type="button"
-          >
-            <LayoutList className="h-3.5 w-3.5" />
-            {t('projects.list')}
-          </button>
-          <button
-            aria-label={t('projects.roadmapView')}
-            className={cn(
-              'flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors',
-              layout === 'roadmap'
-                ? 'bg-muted text-foreground'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-            onClick={() => setLayoutPersisted('roadmap')}
-            type="button"
-          >
-            <MapIcon className="h-3.5 w-3.5" />
-            {t('projects.roadmap')}
-          </button>
-        </div>
-        <button
-          className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-primary/90"
-          onClick={() => uiStore.openCreateProjectModal()}
-          type="button"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          {t('projects.newProject')}
-        </button>
-      </div>
+      <PageHeader
+        actions={
+          <>
+            <div className="flex rounded-md border border-border p-0.5">
+              <button
+                aria-label={t('projects.listView')}
+                className={cn(
+                  'flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors',
+                  layout === 'list'
+                    ? 'bg-muted text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+                onClick={() => setLayoutPersisted('list')}
+                type="button"
+              >
+                <LayoutList className="h-3.5 w-3.5" />
+                {t('projects.list')}
+              </button>
+              <button
+                aria-label={t('projects.roadmapView')}
+                className={cn(
+                  'flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors',
+                  layout === 'roadmap'
+                    ? 'bg-muted text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+                onClick={() => setLayoutPersisted('roadmap')}
+                type="button"
+              >
+                <MapIcon className="h-3.5 w-3.5" />
+                {t('projects.roadmap')}
+              </button>
+            </div>
+            <Button onClick={() => uiStore.openCreateProjectModal()} size="sm" type="button">
+              <Plus className="h-3.5 w-3.5" />
+              {t('projects.newProject')}
+            </Button>
+          </>
+        }
+        title={t('projects.title')}
+      />
       {layout === 'list' ? (
         <ProjectListView workspaceKey={workspace} />
       ) : (

@@ -15,6 +15,7 @@ import { buildIssueHref } from '@/lib/issue-nav';
 import {
   PROJECT_HEALTH_LABEL_KEYS,
   PROJECT_HEALTH_OPTIONS,
+  PROJECT_HEALTH_SELECTED_CLASSES,
   PROJECT_STATUS_CONFIG,
   PROJECT_STATUS_LABEL_KEYS,
 } from '@/lib/project-constants';
@@ -138,7 +139,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
                     className={cn(
                       'rounded px-2 py-0.5 text-xs font-medium transition-colors',
                       project.health === h.value
-                        ? `${h.color} text-white`
+                        ? PROJECT_HEALTH_SELECTED_CLASSES[h.value]
                         : 'bg-muted text-muted-foreground hover:bg-accent',
                     )}
                     key={h.value}

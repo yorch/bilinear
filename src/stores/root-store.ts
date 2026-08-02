@@ -9,6 +9,7 @@ import { IssueStore } from './issue-store';
 import { IssueTemplateStore } from './issue-template-store';
 import { LabelStore } from './label-store';
 import { NotificationStore } from './notification-store';
+import { OrganizationMemberStore } from './organization-member-store';
 import { ProjectStore } from './project-store';
 import { SyncStore } from './sync-store';
 import { TeamStore } from './team-store';
@@ -30,6 +31,7 @@ export class RootStore {
   notificationStore: NotificationStore;
   projectStore: ProjectStore;
   syncStore: SyncStore;
+  organizationMemberStore: OrganizationMemberStore;
   teamStore: TeamStore;
   uiStore: UIStore;
   userStore: UserStore;
@@ -38,6 +40,7 @@ export class RootStore {
   constructor() {
     this.syncStore = new SyncStore();
     this.userStore = new UserStore();
+    this.organizationMemberStore = new OrganizationMemberStore();
     this.teamStore = new TeamStore();
     this.workflowStateStore = new WorkflowStateStore();
     this.customFieldStore = new CustomFieldStore();

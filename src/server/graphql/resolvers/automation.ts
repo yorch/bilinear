@@ -34,7 +34,7 @@ export const automationResolvers = {
   Mutation: {
     automationRuleArchive: async (_p: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+      requireOrgRole(ctx, ['owner', 'admin']);
       try {
         const rule = await ctx.services.automation.archive(id, ctx.orgId);
         return { lastSyncId: PLACEHOLDER_LAST_SYNC_ID, rule, success: true };
@@ -48,7 +48,7 @@ export const automationResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+      requireOrgRole(ctx, ['owner', 'admin']);
       try {
         const rule = await ctx.services.automation.create({
           ...input,
@@ -66,7 +66,7 @@ export const automationResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+      requireOrgRole(ctx, ['owner', 'admin']);
       try {
         const rule = await ctx.services.automation.update(id, ctx.orgId, input);
         return { lastSyncId: PLACEHOLDER_LAST_SYNC_ID, rule, success: true };

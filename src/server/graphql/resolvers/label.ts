@@ -27,7 +27,7 @@ async function requireLabelWriteAccess(
   if (teamId) {
     await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
   } else {
-    await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+    requireOrgRole(ctx, ['owner', 'admin']);
   }
 }
 

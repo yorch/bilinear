@@ -23,11 +23,48 @@ const ROOT = path.resolve(__dirname, '..');
 const BASELINE_PATH = path.join(__dirname, 'design-tokens-baseline.json');
 const ROOTS = ['src/components', 'src/app', 'src/lib', 'src/hooks'];
 
-// zinc-*/indigo-* utility classes with any (or no) property prefix
+// Every shade-numbered Tailwind palette hue, with any (or no) property prefix
 // (bg-, text-, border-, hover:text-, dark:bg-, etc.), plus 3/6-digit hex
-// literals — the two raw-color forms the token migration replaces.
-const VIOLATION_RE =
-  /(?:^|[\s"'`:])[\w-]*(?:zinc|indigo)-\d{2,3}(?:\/\d{1,3})?\b|#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b(?![0-9a-fA-F])/g;
+// literals.
+//
+// This originally covered only `zinc` and `indigo` — the greys and the brand —
+// which left a second population of raw colours completely unguarded: 330
+// red/amber/green/blue status usages had accumulated across 49 files while the
+// baseline read as a clean literal zero. Those now route through the status
+// token family (--danger/--success/--warning/--info, plus --merged for
+// GitHub's merged purple), and the guard covers the whole palette so the same
+// blind spot can't reopen behind a different hue.
+const PALETTE_HUES = [
+  'slate',
+  'gray',
+  'zinc',
+  'neutral',
+  'stone',
+  'red',
+  'orange',
+  'amber',
+  'yellow',
+  'lime',
+  'green',
+  'emerald',
+  'teal',
+  'cyan',
+  'sky',
+  'blue',
+  'indigo',
+  'violet',
+  'purple',
+  'fuchsia',
+  'pink',
+  'rose',
+].join('|');
+
+const VIOLATION_RE = new RegExp(
+  `(?:^|[\\s"'\`:])[\\w-]*(?:${PALETTE_HUES})-\\d{2,3}(?:\\/\\d{1,3})?\\b` +
+    '|#[0-9a-fA-F]{6}\\b' +
+    '|#[0-9a-fA-F]{3}\\b(?![0-9a-fA-F])',
+  'g',
+);
 
 function countViolations(text) {
   const matches = text.match(VIOLATION_RE);
@@ -97,9 +134,11 @@ function main() {
   }
 
   if (regressions.length > 0) {
-    console.error('Design-token regression: raw zinc-/indigo-/hex color usage increased.');
+    console.error('Design-token regression: raw Tailwind-palette/hex color usage increased.');
     console.error(
-      'Use semantic tokens (bg-card, text-muted-foreground, border-border, bg-primary, ...) instead.',
+      'Use semantic tokens instead — surfaces (bg-card, bg-muted, border-border), ink ' +
+        '(text-foreground, text-muted-foreground), brand (bg-brand, text-brand-subtle-foreground), ' +
+        'or status (text-danger-subtle-foreground, bg-success-subtle, border-warning/40).',
     );
     console.error('See docs/UI_UX_ASSESSMENT.md §2 RC1 for the token reference.\n');
     for (const { file, count, allowed } of regressions) {

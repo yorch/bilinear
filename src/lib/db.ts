@@ -15,6 +15,24 @@ export interface DBOrganization {
   urlKey: string;
 }
 
+/**
+ * A row of `organization_members`: who is in this workspace and as what.
+ *
+ * Deliberately separate from `DBUser`. A User row is never deleted when
+ * someone is removed from an org, so "is this person still a member" can only
+ * be answered by the membership's presence — which is what makes the roster
+ * reactive to a `'D' OrganizationMember` SyncAction instead of stale until
+ * reload.
+ */
+export interface DBOrganizationMember {
+  createdAt: string;
+  id: string;
+  organizationId: string;
+  role: string;
+  updatedAt: string;
+  userId: string;
+}
+
 export interface DBUser {
   active: boolean;
   avatarBgColor: string;
@@ -368,6 +386,7 @@ export interface DBPendingTransaction {
 
 export class AppDatabase extends Dexie {
   organizations!: Table<DBOrganization, string>;
+  organizationMembers!: Table<DBOrganizationMember, string>;
   users!: Table<DBUser, string>;
   teams!: Table<DBTeam, string>;
   workflowStates!: Table<DBWorkflowState, string>;
@@ -403,7 +422,10 @@ export class AppDatabase extends Dexie {
     // v3 (2026-05-21): added `favorites` table; widened
     // `customFieldDefinitions` index to include `organizationId` so
     // workspace-scoped lookups (teamId IS NULL) are indexable.
-    super('issue-tracker-v3');
+    // v4 (2026-08-02): added `organizationMembers` so the settings roster is
+    // driven by the sync pipeline rather than its own query — without it the
+    // `'D' OrganizationMember` SyncAction had no client-side effect.
+    super('issue-tracker-v4');
     this.version(1).stores({
       customFieldDefinitions: 'id, teamId, organizationId',
       customFieldValues: 'id, issueId, definitionId, [issueId+definitionId]',
@@ -419,6 +441,7 @@ export class AppDatabase extends Dexie {
       issues: 'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
       issueTemplates: 'id, teamId, creatorId',
       notifications: 'id, userId, organizationId, issueId, read',
+      organizationMembers: 'id, organizationId, userId, [organizationId+userId]',
       organizations: 'id',
       pendingTransactions: 'id, createdAt, [orgId+userId]',
       projectMilestones: 'id, projectId',

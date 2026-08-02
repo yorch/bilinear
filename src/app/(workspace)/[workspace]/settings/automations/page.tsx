@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
@@ -143,7 +144,7 @@ export default function AutomationsSettingsPage() {
   };
 
   if (loading) {
-    return <div className="p-6 text-sm text-muted-foreground">{t('common.loading')}</div>;
+    return <RowsSkeleton className="p-6" count={5} />;
   }
 
   return (
@@ -198,7 +199,7 @@ export default function AutomationsSettingsPage() {
             value={actionConfigText}
           />
           <button
-            className="self-start rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+            className="self-start rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             disabled={creating || !name}
             type="submit"
           >
@@ -251,7 +252,7 @@ export default function AutomationsSettingsPage() {
                   </div>
                 </div>
                 <button
-                  className="text-xs text-red-500 hover:text-red-700"
+                  className="text-xs text-danger-subtle-foreground hover:underline"
                   onClick={() => handleArchive(rule)}
                   type="button"
                 >

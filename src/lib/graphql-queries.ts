@@ -92,12 +92,6 @@ export const ORGANIZATION_CREATE_MUTATION = `
 
 const INVITE_FIELDS = 'id email role expiresAt';
 
-export const ORGANIZATION_MEMBERS_QUERY = `
-  query OrganizationMembers {
-    organizationMembers { userId role }
-  }
-`;
-
 /**
  * Owner/admin-only, so it is issued separately and only once the roster has
  * established the viewer can manage. Folding it into the roster document
@@ -165,6 +159,28 @@ export const ORGANIZATION_SWITCH_MUTATION = `
   mutation OrganizationSwitch($organizationId: ID!) {
     organizationSwitch(organizationId: $organizationId) {
       success
+      accessToken
+      refreshToken
+      expiresIn
+      organization {
+        id
+        name
+        urlKey
+      }
+    }
+  }
+`;
+
+/**
+ * `organization` is nullable here and non-null on the switch above: leaving
+ * your last workspace legitimately lands you nowhere, so the client must be
+ * able to tell "moved to another workspace" from "no workspace left".
+ */
+export const ORGANIZATION_LEAVE_MUTATION = `
+  mutation OrganizationLeave {
+    organizationLeave {
+      success
+      lastSyncId
       accessToken
       refreshToken
       expiresIn
@@ -631,6 +647,15 @@ export const USER_UPDATE_LOCALE_MUTATION = `
     userUpdateLocale(locale: $locale) {
       success
       user { id locale }
+    }
+  }
+`;
+
+export const USER_UPDATE_ACCENT_MUTATION = `
+  mutation UserUpdateAccent($accent: String!) {
+    userUpdateAccent(accent: $accent) {
+      success
+      user { id accent }
     }
   }
 `;

@@ -1,3 +1,17 @@
+/**
+ * Does `pathname` sit at or below `href`, respecting path-segment boundaries?
+ *
+ * The boundary is the whole point. A bare `pathname.startsWith(href)` makes
+ * `/w/team/ENGX` match team `ENG`, because team keys are free-form and one is
+ * routinely a prefix of another. The sidebar used it twice — once to pick the
+ * expanded team and once for the active-row highlight — and only one of the
+ * two got it right, so visiting ENGX expanded ENG and left ENGX's sub-nav
+ * hidden.
+ */
+export function isPathWithin(pathname: string, href: string): boolean {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export interface IssueReturnTo {
   label: string;
   path: string;

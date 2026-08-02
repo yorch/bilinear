@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
@@ -152,17 +153,17 @@ export function CommentThread({
 
   if (loading) {
     return (
-      <div className="space-y-3 py-2">
+      <LoadingRegion className="space-y-3 py-2">
         {[1, 2].map(i => (
           <div className="flex gap-3" key={i}>
-            <div className="h-7 w-7 shrink-0 animate-pulse rounded-full bg-muted" />
+            <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
             <div className="flex-1 space-y-2">
-              <div className="h-3 w-32 animate-pulse rounded bg-muted" />
-              <div className="h-12 animate-pulse rounded bg-muted" />
+              <Skeleton className="h-3 w-32" />
+              <Skeleton className="h-12" />
             </div>
           </div>
         ))}
-      </div>
+      </LoadingRegion>
     );
   }
 

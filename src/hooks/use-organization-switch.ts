@@ -2,8 +2,12 @@
 
 import { useCallback, useState } from 'react';
 import { installSessionCookies } from '@/lib/auth-session';
-import { gqlQuery } from '@/lib/graphql';
-import { ORGANIZATION_SWITCH_MUTATION, VIEWER_ORGANIZATIONS_QUERY } from '@/lib/graphql-queries';
+import { gqlMutate, gqlQuery } from '@/lib/graphql';
+import {
+  ORGANIZATION_LEAVE_MUTATION,
+  ORGANIZATION_SWITCH_MUTATION,
+  VIEWER_ORGANIZATIONS_QUERY,
+} from '@/lib/graphql-queries';
 import { createClientLogger } from '@/lib/logger';
 import { safeRelativePath } from '@/lib/safe-path';
 import { TransactionQueue } from '@/lib/transaction-queue';
@@ -75,6 +79,58 @@ export function useOrganizationSwitch() {
   }, []);
 
   return { switching, switchTo };
+}
+
+/**
+ * Give up membership in the current workspace.
+ *
+ * Ends in the same handoff as a switch — install the re-issued cookies, then a
+ * **full document load** — for the same reason spelled out on `switchTo`: only
+ * a fresh document remounts `SyncProvider`, and without that the departed
+ * workspace's rows stay live in the MobX stores and Dexie. That matters more
+ * here than when switching: those rows belong to an org the user can no longer
+ * read.
+ *
+ * The destination differs, though. `organization` is null when nothing
+ * remains, and there is no workspace route to land on — so this goes to `/`,
+ * which re-derives the redirect from a live membership (onboarding when there
+ * are none).
+ */
+export function useOrganizationLeave() {
+  const [leaving, setLeaving] = useState(false);
+
+  const leave = useCallback(async (): Promise<void> => {
+    setLeaving(true);
+    try {
+      const payload = (await gqlMutate(ORGANIZATION_LEAVE_MUTATION)) as {
+        organizationLeave?: {
+          accessToken: string;
+          organization: { urlKey: string } | null;
+          refreshToken: string;
+        };
+      };
+      const result = payload.organizationLeave;
+      if (!result) {
+        throw new Error('Failed to leave the workspace');
+      }
+
+      const installed = await installSessionCookies({
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+      });
+      if (!installed) {
+        throw new Error('Failed to establish the new session');
+      }
+      window.location.assign(result.organization ? `/${result.organization.urlKey}` : '/');
+    } catch (err) {
+      // Only reachable on failure — on success the document is replaced.
+      setLeaving(false);
+      log.error('Leave failed', err);
+      throw err;
+    }
+  }, []);
+
+  return { leave, leaving };
 }
 
 /**

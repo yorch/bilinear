@@ -78,7 +78,7 @@ export const SlashCommandList = forwardRef<SlashCommandListHandle, SlashCommandL
 
     if (items.length === 0) {
       return (
-        <div className="slash-popup rounded-md border border-border bg-card p-2 text-xs text-muted-foreground shadow-lg">
+        <div className="slash-popup rounded-md border border-border bg-card p-2 text-xs text-muted-foreground shadow-e2">
           {t('editor.noResults')}
         </div>
       );
@@ -86,7 +86,7 @@ export const SlashCommandList = forwardRef<SlashCommandListHandle, SlashCommandL
 
     return (
       <ul
-        className="slash-popup max-h-72 w-64 overflow-y-auto rounded-md border border-border bg-card py-1 shadow-lg"
+        className="slash-popup max-h-72 w-64 overflow-y-auto rounded-md border border-border bg-card py-1 shadow-e2"
         ref={listRef}
       >
         {items.map((item, index) => {

@@ -101,7 +101,7 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
             </span>
             <div className="h-1 w-20 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full rounded-full bg-green-500 transition-all duration-300"
+                className="h-full rounded-full bg-success transition-all duration-300"
                 style={{ width: `${completionPct}%` }}
               />
             </div>
@@ -289,7 +289,7 @@ function CreateSubIssueForm({
         {t('common.cancel')}
       </button>
       <button
-        className="rounded bg-primary px-2 py-1 text-xs font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+        className="rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         disabled={!title.trim() || submitting}
         type="submit"
       >

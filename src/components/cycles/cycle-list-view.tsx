@@ -26,7 +26,7 @@ function getCycleStatusBadge(status: CycleStatus, t: ReturnType<typeof useTransl
   switch (status) {
     case 'active':
       return {
-        className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
+        className: 'bg-success-subtle text-success-subtle-foreground',
         label: t('cycles.status.active'),
       };
     case 'completed':
@@ -36,7 +36,7 @@ function getCycleStatusBadge(status: CycleStatus, t: ReturnType<typeof useTransl
       };
     case 'upcoming':
       return {
-        className: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400',
+        className: 'bg-info-subtle text-info-subtle-foreground',
         label: t('cycles.status.upcoming'),
       };
   }

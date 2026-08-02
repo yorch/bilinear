@@ -39,7 +39,7 @@ export function DeleteUpdateButton({ updateId, mutation, onDeleted }: DeleteUpda
           {t('properties.updateForm.deleteConfirm')}
         </span>
         <button
-          className="rounded px-1.5 py-0.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+          className="rounded px-1.5 py-0.5 text-xs font-medium text-danger-subtle-foreground hover:bg-danger-subtle"
           disabled={deleting}
           onClick={handleDelete}
           type="button"
@@ -59,7 +59,7 @@ export function DeleteUpdateButton({ updateId, mutation, onDeleted }: DeleteUpda
 
   return (
     <button
-      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-red-500 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-danger-subtle-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
       onClick={() => setConfirming(true)}
       title={t('common.delete')}
       type="button"

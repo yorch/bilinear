@@ -37,9 +37,9 @@ function statusOf(t: { archivedAt: string | null; suspendedAt: string | null }):
 }
 
 const STATUS_STYLES: Record<TenantStatus, string> = {
-  active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
+  active: 'bg-success-subtle text-success-subtle-foreground',
   archived: 'bg-muted text-muted-foreground',
-  suspended: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400',
+  suspended: 'bg-warning-subtle text-warning-subtle-foreground',
 };
 
 function Stat({ label, value }: { label: string; value: number }) {
@@ -187,7 +187,9 @@ export default function AdminTenantDetailPage() {
   if (error || !tenant) {
     return (
       <div className="flex flex-col gap-4">
-        <p className="text-sm text-red-500">{error ?? t('admin.tenants.notFound')}</p>
+        <p className="text-sm text-danger-subtle-foreground">
+          {error ?? t('admin.tenants.notFound')}
+        </p>
         <Link className="text-sm text-brand hover:underline" href="/admin/tenants">
           {t('admin.tenants.backToTenants')}
         </Link>
@@ -219,7 +221,7 @@ export default function AdminTenantDetailPage() {
           </span>
         </div>
         {tenant.suspendedReason ? (
-          <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+          <p className="mt-1 text-xs text-warning-subtle-foreground">
             {t('admin.tenants.suspendedReasonLabel', { reason: tenant.suspendedReason })}
           </p>
         ) : null}
@@ -237,7 +239,7 @@ export default function AdminTenantDetailPage() {
           </button>
         ) : status === 'active' ? (
           <button
-            className="rounded border border-amber-300 px-3 py-1.5 text-xs text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950"
+            className="rounded border border-warning/40 px-3 py-1.5 text-xs text-warning-subtle-foreground hover:bg-warning-subtle disabled:opacity-50"
             disabled={busy}
             onClick={handleSuspend}
             type="button"
@@ -247,7 +249,7 @@ export default function AdminTenantDetailPage() {
         ) : null}
         {status !== 'archived' && (
           <button
-            className="rounded border border-red-300 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
+            className="rounded border border-danger/40 px-3 py-1.5 text-xs text-danger-subtle-foreground hover:bg-danger-subtle disabled:opacity-50"
             disabled={busy}
             onClick={() => setConfirmingDelete(true)}
             type="button"
@@ -351,7 +353,7 @@ export default function AdminTenantDetailPage() {
                   <td className="px-4 py-2 text-right">
                     {limitsDraft ? (
                       <input
-                        className="w-28 rounded border border-border bg-background px-2 py-1 text-right text-sm tabular-nums focus:border-brand focus:outline-none"
+                        className="w-28 rounded border border-input bg-background px-2 py-1 text-right font-mono text-sm tabular-nums focus:border-ring focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-subtle)]"
                         inputMode="numeric"
                         min={1}
                         onChange={e =>

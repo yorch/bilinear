@@ -151,7 +151,7 @@ function NotificationItem({
           <SelectPopover
             align="right"
             disabled={isSnoozingThis}
-            panelClassName="w-44 py-1 shadow-xl"
+            panelClassName="w-44 py-1 shadow-e3"
             triggerChildren={<Clock className="h-3.5 w-3.5" />}
             triggerClassName="p-1 text-muted-foreground hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
             triggerTitle={t('notifications.snooze.buttonTitle')}
@@ -327,7 +327,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
           <Bell className="h-5 w-5 text-muted-foreground" />
           <h1 className="text-lg font-semibold text-foreground">{t('notifications.title')}</h1>
           {hasUnread && (
-            <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-white">
+            <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
               {unread.length}
             </span>
           )}

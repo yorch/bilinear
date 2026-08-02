@@ -149,7 +149,7 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
               className={cn(
                 'rounded-md border bg-transparent px-3 py-1.5 font-mono text-sm text-foreground placeholder:text-muted-foreground outline-none',
                 keyError
-                  ? 'border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-500'
+                  ? 'border-danger focus:ring-1 focus:ring-danger'
                   : 'border-border focus:border-brand focus:ring-1 focus:ring-brand',
               )}
               id="team-key"
@@ -159,7 +159,7 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
               type="text"
               value={key}
             />
-            {keyError && <p className="text-xs text-red-500">{keyError}</p>}
+            {keyError && <p className="text-xs text-danger-subtle-foreground">{keyError}</p>}
           </div>
 
           <div className="flex flex-col gap-1">

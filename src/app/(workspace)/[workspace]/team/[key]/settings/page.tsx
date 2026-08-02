@@ -13,6 +13,7 @@ import {
   TeamMemberManagement,
   type TeamRole,
 } from '@/components/teams/team-member-management';
+import { PageHeader } from '@/components/ui/page-header';
 import { SimpleSelect } from '@/components/ui/select';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
@@ -390,19 +391,21 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <div className="flex items-center gap-3 border-b border-border px-6 py-3">
-        <Link
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          href={`/${workspace}/team/${teamKey}`}
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {t('settings.team.back')}
-        </Link>
-        <span className="text-foreground-faint">/</span>
-        <h1 className="text-sm font-semibold text-foreground">
-          {t('settings.team.settingsHeading', { name: team.displayName || team.name })}
-        </h1>
-      </div>
+      <PageHeader
+        leading={
+          <>
+            <Link
+              className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              href={`/${workspace}/team/${teamKey}`}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              {t('settings.team.back')}
+            </Link>
+            <span className="text-foreground-faint">/</span>
+          </>
+        }
+        title={t('settings.team.settingsHeading', { name: team.displayName || team.name })}
+      />
 
       <div className="mx-auto w-full max-w-2xl px-6 py-8 flex flex-col gap-8">
         <section>
@@ -515,7 +518,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
           >
             {saving ? t('common.saving') : t('settings.team.saveChanges')}
           </button>
-          {saveError && <p className="text-sm text-red-500">{saveError}</p>}
+          {saveError && <p className="text-sm text-danger-subtle-foreground">{saveError}</p>}
         </div>
 
         <section>
@@ -546,10 +549,10 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         <IssueTemplatesSection teamId={team.id} />
 
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-red-400">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-danger-subtle-foreground">
             {t('settings.team.dangerZone')}
           </h2>
-          <div className="rounded-lg border border-red-200 bg-card p-5 dark:border-red-900/50">
+          <div className="rounded-lg border border-danger/40 bg-card p-5">
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
@@ -562,7 +565,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                 </div>
                 {!deleteConfirm && (
                   <button
-                    className="flex shrink-0 items-center gap-1.5 rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+                    className="flex shrink-0 items-center gap-1.5 rounded-md border border-danger/40 px-3 py-1.5 text-sm text-danger-subtle-foreground transition-colors hover:bg-danger-subtle"
                     onClick={() => setDeleteConfirm(true)}
                     type="button"
                   >
@@ -573,7 +576,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
               </div>
 
               {deleteConfirm && (
-                <div className="flex flex-col gap-3 rounded-md border border-red-100 bg-red-50/50 p-4 dark:border-red-900/30 dark:bg-red-900/10">
+                <div className="flex flex-col gap-3 rounded-md border border-danger/40 bg-danger-subtle/50 p-4">
                   <p className="text-xs font-medium text-muted-foreground">
                     {t('settings.team.whatShouldHappenToIssues')}
                   </p>
@@ -581,7 +584,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                   <label className="flex items-start gap-2 cursor-pointer">
                     <input
                       checked={issueAction === 'DELETE'}
-                      className="mt-0.5 accent-red-600"
+                      className="mt-0.5 accent-danger"
                       name="issueAction"
                       onChange={() => setIssueAction('DELETE')}
                       type="radio"
@@ -605,7 +608,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                   >
                     <input
                       checked={issueAction === 'MOVE'}
-                      className="mt-0.5 accent-red-600"
+                      className="mt-0.5 accent-danger"
                       disabled={otherTeams.length === 0}
                       name="issueAction"
                       onChange={() => setIssueAction('MOVE')}
@@ -649,7 +652,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
                       {t('common.cancel')}
                     </button>
                     <button
-                      className="rounded bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="rounded bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed"
                       disabled={deleting || (issueAction === 'MOVE' && !moveToTeamId)}
                       onClick={handleDelete}
                       type="button"

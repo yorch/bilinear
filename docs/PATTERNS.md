@@ -240,7 +240,7 @@ Every domain with a GraphQL resolver has a matching service in
 `createContext` — resolvers never `new` a service on the fly and never call
 `ctx.prisma` for business logic (auth guards are the exception).
 
-The `prisma` instance is exposed on context so authorization guards can perform queries without going through a service (e.g., `requireOrgRole` checks `organizationMember` directly).
+The `prisma` instance is exposed on context so authorization guards can perform queries without going through a service (e.g. `requireTeamMember` checks `teamMembership` directly). `requireOrgRole` no longer needs it — the caller's org role rides `AuthContext`; see below.
 
 ---
 
@@ -470,21 +470,40 @@ const handleUpdate = useCallback((id, patch) => {
 
 ## 14. Authorization Pattern (Sprint 3-4)
 
-Role-based guards are standalone async functions that take the Prisma client and throw `GraphQLError` with `FORBIDDEN` code:
+Role-based guards throw `GraphQLError` with a `FORBIDDEN` code. The team guards
+query; the org guard does not:
 
 ```typescript
 // src/server/middleware/auth.ts — role-based guards
-export async function requireOrgRole(prisma, orgId, userId, roles: string[]): Promise<void>
-export async function requireTeamMember(prisma, teamId, userId): Promise<void>
-export async function requireTeamOwner(prisma, teamId, userId): Promise<void>
+export function requireOrgRole(ctx: AuthContext, roles: string[]): string  // sync
+export async function requireTeamMember(prisma, teamId, orgId, userId): Promise<void>
+export async function requireTeamOwner(prisma, teamId, orgId, userId): Promise<void>
 ```
+
+`requireOrgRole` reads `ctx.orgRole`, which `extractAuthContext` resolved from
+the membership row it must load anyway for the session-validity check. It used
+to take `(prisma, orgId, userId, roles)` and re-query that row at each of its
+~25 call sites — a second traversal of the same unique index, per mutation, for
+a value the request already had. Two invariants keep that safe:
+
+- **`orgId` and `orgRole` are cleared together.** Anything that drops `orgId`
+  must drop the role in the same assignment, or an authorization check could
+  pass against a workspace the session no longer holds. `requireOrgRole` also
+  fails closed on a role without an org, as defence in depth.
+- **Every call site runs before its resolver's first write**, so nothing
+  observes a role it changed itself. Per-request freshness is exactly what the
+  extra read gave.
+
+It returns the caller's *actual* role rather than a bare pass/fail, because an
+owner and an admin both clear `['owner', 'admin']` and only one of them may
+touch ownership.
 
 Usage in resolvers:
 
 ```typescript
 teamCreate: async (_parent, { input }, ctx) => {
-  requireAuth(ctx);                                         // sync — throws UNAUTHENTICATED
-  await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);  // async — throws FORBIDDEN
+  requireAuth(ctx);                              // sync — throws UNAUTHENTICATED
+  requireOrgRole(ctx, ['owner', 'admin']);       // sync — throws FORBIDDEN
   const team = await ctx.services.team.create(ctx.orgId, ctx.userId, input);
   return { success: true, team, lastSyncId: 0 };
 },
@@ -2411,23 +2430,58 @@ ownership. On top of that allow-list:
   previously an admin could promote a second account of their own to owner
   straight from the members list, a full privilege escalation;
 - the last owner can be neither demoted nor removed;
-- nobody removes themselves (leaving is a different operation with different
-  consequences, and isn't built).
+- nobody removes themselves — leaving is a different operation (see below).
 
 The UI mirrors each guard so it never offers an action the server will
 reject, but the server is the enforcement point — `MembersSection` derives
 `canManage` from the viewer's role in the members query, not from whether an
 admin-only request happened to succeed.
 
-**Caveat on the removal SyncAction.** `organizationMemberRemove` emits a
-`'D' OrganizationMember` action, but `sync-manager.ts` has no
-`OrganizationMember` case, so no client acts on it today — the settings page
-reconciles its own roster locally, and other admins' open tabs stay stale
-until reload. (The pre-existing `'U'` from `organizationMemberUpdateRole` is
-equally inert.) Access is unaffected: the removed user loses the org on their
-next request and their socket closes on the next re-auth sweep. Teaching the
-sync pipeline about an org roster — a bootstrap collection plus a store — is
-the real fix and is not built.
+**The roster is in the sync pipeline (2026-08-02).** `organizationMemberRemove`
+and `organizationMemberUpdateRole` emit `'D'`/`'U' OrganizationMember` actions.
+Those were inert for a while — `sync-manager.ts` had no case for the model, so
+the settings page reconciled its own copy locally and a second admin's open tab
+kept listing someone who had been removed until they reloaded. Closed by
+carrying the roster the whole way: `getBootstrapData` ships
+`organizationMembers`, Dexie has the table, `OrganizationMemberStore` holds it,
+and `applyActions` routes the live actions into it.
+
+It is deliberately a **separate collection from `users`**, because the two
+answer different questions. `users` is "who can I see" and is populated for
+anyone with a membership; the roster is "who is in this workspace, and as
+what". Nothing ever deletes a `User` row, so after a removal the person is
+still in `userStore` — membership presence is the only thing that can tell a
+current member from a departed one. `MembersSection` now derives its roster,
+`canManage` and last-owner check from the store, which deleted its own query,
+its optimistic apply, and that apply's rollback branch.
+
+Access never depended on any of this: a removed user loses the org on their
+next request and their socket closes on the next re-auth sweep.
+
+**Leaving is its own operation (2026-08-02).** `organizationLeave` exists
+separately from `organizationMemberRemove`, which still refuses self-removal,
+because the two differ in who bears the consequence: removal is done *to*
+someone by an admin, leaving is done *by* you and costs you your own access.
+Folding them together would have meant either dropping the self-guard — so a
+mis-click on your own row in the members list ejects you — or giving "leave" an
+admin-only permission check it should not have.
+
+They share the write. Both route through one private `deleteMembership`, so
+leaving cascades team memberships in the same transaction and inherits the
+last-owner guard: an owner may leave only once another owner exists, otherwise
+the workspace is stranded with nobody able to manage it and — unlike a removal
+— there is no second party in the room to notice.
+
+It returns a **`LeaveOrganizationPayload`, not `EnterOrganizationPayload`**.
+That type's `organization` is non-null because you always land somewhere;
+leaving your last workspace legitimately lands you nowhere, and a null
+organization means an org-less session, which still authenticates for
+`viewerOrganizations` and workspace creation. The destination is resolved
+*after* the delete and through the same usable-org filter login uses, so it can
+neither pick the org just left nor land on a suspended one. Client-side it ends
+in the same handoff as a switch — install cookies, then a **full document
+load** — for the reason spelled out on `useOrganizationSwitch`: only a fresh
+document remounts `SyncProvider` and wipes the departed org's Dexie cache.
 
 **Client data access follows §76.1.** Every read here goes through
 `gqlQuery` and every user-visible write through `gqlMutate`, so a rejected
@@ -2449,3 +2503,153 @@ URLs (`//evil.example.com` starts with a slash but navigates off-origin),
 absolute URLs, backslashes, and control characters. Route any new
 redirect-target-from-outside through it rather than checking `startsWith('/')`
 at the call site.
+
+
+---
+
+## 79. Design System — tokens, accent, primitives (2026-08-01)
+
+The UI/UX revamp (L1–L4) turned the styling layer into a system with one rule
+governing it: **in an issue tracker most of the spectrum is already spoken for
+by data.** Red/orange/yellow are priority, green is completed, slate is
+backlog. So the brand gradient lives entirely in the *chrome* — selection
+rails, focus glow, elevation, one primary action — and never touches the data
+layer. That constraint is also why all three accents sit in the cool
+violet–azure arc: it is the only band that cannot be misread as status.
+
+### 79.1 Two colour families, and why they behave differently
+
+| Family | Follows the accent? | Roles |
+| --- | --- | --- |
+| **Brand** | yes | `--brand`, `--brand-2`, `--brand-hover`, `--brand-subtle`, `--brand-subtle-foreground`, `--brand-border`, and `--primary`/`--ring` which alias it |
+| **Status** | **no** | `--danger`, `--success`, `--warning`, `--info`, plus `--merged` (GitHub's merged purple) — each with `-subtle` and `-subtle-foreground` |
+
+Status encodes data: "this failed" must mean the same thing whichever accent
+the user picked, so those bases are literals. Priority swatches (`--priority-*`)
+and collaboration cursors (`--cursor-*`) are fixed for the same reason.
+`src/lib/accent.test.ts` enforces both halves — that every status base is free
+of `--accent-h`/`--brand`, and that every `-subtle`/`-subtle-foreground` derives
+from its own base.
+
+### 79.2 Every accent declares two values; the rest derives
+
+`globals.css` defines only `--brand` and `--brand-2` per accent per theme. Hover,
+subtle fill, subtle foreground and border all come from `color-mix`, and the
+whole neutral ramp is computed in oklch from `--accent-h` — the accent's own
+hue — so the chassis and the accent read as one material rather than dead grey
+plus a saturated colour. **Adding a fourth accent is one entry in
+`ACCENT_DEFINITIONS` plus a four-line CSS block.**
+
+Specificity matters here and is guarded by a test rather than a comment: a light
+`:root[data-accent='ion']` is (0,2,0) and would beat a bare `.dark` at (0,1,0),
+painting dark mode with light-mode brand colours. Every dark block is therefore
+written `:root.dark[data-accent='…']` (0,3,0).
+
+### 79.3 The accent is a cookie preference, not `next-themes`
+
+`data-accent` is stamped on `<html>` by the root layout from the `accent`
+cookie during SSR, so there is no flash and **no `mounted` guard is needed** —
+server and client agree on first render (unlike `ThemeToggle`/`LanguageToggle`,
+which do need one). `User.accent` persists the choice to the account; it is read
+in exactly one place, the session route, which seeds the cookie at login. Never
+read it in the layout — that would put a query on every request for a cosmetic
+preference.
+
+### 79.4 No raw colours, guarded across the whole palette
+
+`yarn lint:tokens` bans every shade-numbered Tailwind hue and every hex literal
+across `src/components`, `src/app`, `src/lib` and `src/hooks`, at a literal-zero
+baseline. A fixed palette that genuinely cannot be a token lives in
+`globals.css` and is referenced from `.ts` as a `var()` string, never inlined.
+
+The guard originally covered only `zinc`/`indigo`, and **that gap is how 330 raw
+red/amber/green/blue status colours accumulated across 49 files while the
+baseline read as a clean zero**. Worth remembering when adding any ratchet: a
+green ratchet only proves the absence of what the ratchet measures.
+
+### 79.5 Primitives — extend, never hand-roll
+
+`PageHeader`/`Toolbar` are the *only* page chrome; every route uses them, which
+is what ended the four different header paddings that used to shift as you
+navigated. `EmptyState` replaces centred strings. Skeletons come in four shapes
+(`IssueListSkeleton`, `PageSkeleton`, `RowsSkeleton`, `DetailPanelSkeleton`) —
+there are no bare "Loading…" strings left. Elevation is a three-step scale
+(`shadow-e1` rows, `shadow-e2` popovers, `shadow-e3` modals); no raw Tailwind
+shadows remain.
+
+**`/design`** renders the whole token layer and every primitive; switching
+accent or theme re-renders every specimen. Open it when changing anything in
+`ui/` or `globals.css` — this repo has no visual-regression suite, so it is the
+manual stand-in.
+
+### 79.6 The contrast contract (`src/lib/contrast.test.ts`)
+
+Computed tokens are what makes the system coherent and also what makes contrast
+easy to break by accident: nudging one base lightness silently moves a dozen
+derived pairs across three accents and two themes, and **lint, typecheck and
+build do not look at colour at all**. `src/lib/contrast.test.ts` is the only
+gate that does. It parses `globals.css`, resolves each token through the real
+cascade (`:root` → accent block → `:root.dark[data-accent]`), converts oklch to
+sRGB, composites translucent fills over their backdrop, and asserts 25 pairs
+across all six accent/theme combinations. A final test proves the harness is
+non-vacuous by feeding it a deliberately regressed token.
+
+Thresholds are WCAG 1.4.3 (4.5:1 for body text, 3:1 for large) and 1.4.11 (3:1
+for the boundary of a control). Two tokens are deliberately **not** asserted,
+and the reasoning is load-bearing:
+
+- **`--border`** separates surfaces (row dividers, section rules). It is not a
+  control boundary and carries no state, so 1.4.11 does not apply. `--input`
+  *is* the control boundary and is asserted.
+- **`--foreground-faint`** is reserved for decorative marks — the em-dash
+  standing in for "no value", background swatches. Every informational use was
+  moved to `--muted-foreground`. If you reach for it for real text, move the
+  text instead of relaxing the test.
+
+Four traps this caught, all invisible to every other gate, and all the same
+underlying mistake — **a colour tuned to be seen is not a colour that can be
+stood on**:
+
+1. **A gradient has two ends.** The primary button's label cleared 4.5:1 against
+   `--brand` and measured **1.76:1** against the far stop. `--gradient-brand-cta`
+   exists for exactly this — a darkened variant of the display gradient, used
+   only where text sits on top.
+2. **A text role is not a fill role.** `--destructive` (solid button fill) is
+   deliberately *not* an alias of the `danger` text role. `danger` is tuned to
+   read on a near-black ground in dark mode, so it is light; white on it
+   measured **2.77:1**.
+3. **`--primary` is not `--brand`.** A brand light enough to read as a selection
+   rail on a white page cannot carry white text — `--primary-foreground`
+   measured **4.45:1** on a raw brand under Aurora and **3.65:1** under Ion.
+   `--primary` is therefore the *darkened* brand (the CTA gradient's first
+   stop); `--ring` and `--brand` stay undarkened, because they are lines and
+   rails and never a ground for text.
+4. **A `-subtle-foreground` inverts by theme.** It is dark ink in light mode and
+   light ink in dark, because it sits on a near-page-coloured tint. Put it on a
+   *solid* status fill and it breaks in exactly one theme: the impersonation
+   banner rendered light-on-light amber. `--warning-foreground` is the dark ink
+   for that fill, and it does not flip.
+
+Two consequences for how you write a status chip:
+
+- **Never hardcode `text-white` over a caller-supplied fill.** This is why
+  `Badge` has no `solid` variant. White does not clear 4.5:1 on *any* status
+  base — ~2.6:1 on `--warning` in light, ~1.4:1 in dark — because an amber light
+  enough to read as "warning" cannot carry white text. Use a `tone`, whose
+  fill/ink pair is asserted.
+- **The vivid `bg-{status}` fills are for shapes that carry no text**: the
+  health dot in the project list, a progress bar, a connection pip. The moment a
+  label goes on one, it needs the subtle pair (or a dedicated ink like
+  `--warning-foreground`).
+
+One CSS-cascade rule the baseline focus indicator depends on: **`:focus-visible`
+must live inside `@layer base`**. Tailwind's utilities are in `@layer utilities`
+and unlayered CSS beats every layer, so as a bare rule it out-ranked
+`focus-visible:outline-none` and stamped a hard outline on every primitive that
+styles its own focus ring.
+
+Colour is never the only channel: priority is a glyph plus a `title`, status is
+a shape plus a label (WCAG 1.4.1). Loading surfaces announce through
+`LoadingRegion` (`role="status"` + `aria-busy` + sr-only text) — the shimmer
+itself is `aria-hidden`, since replacing the old literal "Loading…" strings with
+silent divs is exactly the kind of regression a visual redesign introduces.

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useTranslations } from '@/hooks/use-translations';
 import {
   fetchUsers,
@@ -126,13 +127,13 @@ export default function AdminUsersPage() {
         }}
       >
         <input
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+          className="rounded border border-input bg-transparent px-2 py-1 text-sm focus:border-ring focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-subtle)]"
           onChange={e => setQuery(e.target.value)}
           placeholder={t('admin.users.searchPlaceholder')}
           value={query}
         />
         <button
-          className="rounded bg-primary px-3 py-1 text-xs text-white hover:bg-primary/90"
+          className="rounded bg-primary px-3 py-1 text-xs text-primary-foreground hover:bg-primary/90"
           type="submit"
         >
           {t('common.search')}
@@ -140,9 +141,9 @@ export default function AdminUsersPage() {
       </form>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+        <RowsSkeleton count={5} />
       ) : error ? (
-        <p className="text-sm text-red-500">{error}</p>
+        <p className="text-sm text-danger-subtle-foreground">{error}</p>
       ) : users.length === 0 ? (
         <p className="rounded border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
           {t('admin.users.empty')}
@@ -194,8 +195,8 @@ export default function AdminUsersPage() {
                       className={cn(
                         'rounded px-1.5 py-0.5 text-xs font-medium',
                         u.active
-                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
-                          : 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400',
+                          ? 'bg-success-subtle text-success-subtle-foreground'
+                          : 'bg-danger-subtle text-danger-subtle-foreground',
                       )}
                     >
                       {u.active ? t('admin.users.statusActive') : t('admin.users.statusSuspended')}
@@ -232,8 +233,8 @@ export default function AdminUsersPage() {
                         className={cn(
                           'rounded border px-2 py-1 text-xs disabled:opacity-50',
                           u.active
-                            ? 'border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950'
-                            : 'border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950',
+                            ? 'border-warning/40 text-warning-subtle-foreground hover:bg-warning-subtle'
+                            : 'border-success/40 text-success-subtle-foreground hover:bg-success-subtle',
                         )}
                         disabled={busyId === u.id}
                         onClick={() => handleToggleActive(u)}

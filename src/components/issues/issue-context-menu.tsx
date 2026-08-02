@@ -170,7 +170,7 @@ export function IssueContextMenu({
   return (
     <div
       aria-label={t('issues.actionsFor', { title })}
-      className="min-w-[200px] overflow-hidden rounded-lg border border-border bg-card py-1 shadow-lg"
+      className="min-w-[200px] overflow-hidden rounded-lg border border-border bg-card py-1 shadow-e2"
       ref={menuRef}
       role="menu"
       style={{
@@ -196,7 +196,7 @@ export function IssueContextMenu({
             <button
               className={cn(
                 'flex w-full items-center justify-between px-3 py-1.5 text-sm hover:bg-accent',
-                item.danger && 'text-red-600 dark:text-red-400',
+                item.danger && 'text-danger-subtle-foreground',
               )}
               key={item.label}
               onClick={item.onClick}

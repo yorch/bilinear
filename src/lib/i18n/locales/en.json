@@ -1,4 +1,11 @@
 {
+  "accent": {
+    "accent": "Accent",
+    "aurora": "Aurora",
+    "currentAccent": "Current accent: {accent}. Click to cycle.",
+    "ion": "Ion",
+    "ultraviolet": "Ultraviolet"
+  },
   "admin": {
     "audit": {
       "colAction": "Action",
@@ -219,6 +226,16 @@
   },
   "auth": {
     "backToSignIn": "Back to sign in",
+    "canvas": {
+      "headline": "Issues that stay in sync, even when you don’t.",
+      "statLocalesLabel": "languages",
+      "statLocalesValue": "2",
+      "statOfflineLabel": "offline capable",
+      "statOfflineValue": "100%",
+      "statSyncLabel": "optimistic write",
+      "statSyncValue": "<40ms",
+      "subhead": "Offline-first by design. Write while you’re on a plane, land, and find the queue already drained."
+    },
     "checkYourEmail": "Check your email",
     "continueWithEmail": "Continue with email",
     "continueWithGitHub": "Continue with GitHub",
@@ -260,6 +277,7 @@
       "goToMyIssues": "Go to My Issues",
       "goToProjects": "Go to Projects",
       "goToSettings": "Go to Settings",
+      "switchAccent": "Switch to {accent} accent",
       "switchTheme": "Switch to {theme} theme"
     },
     "dialogAriaLabel": "Command palette",
@@ -989,10 +1007,12 @@
     "backlog": "Backlog",
     "closeMenu": "Close menu",
     "collapseSidebar": "Collapse sidebar (⌘B)",
+    "collapseTeam": "Collapse {team}",
     "createTeam": "Create a team",
     "cycles": "Cycles",
     "docs": "Docs",
     "expandSidebar": "Expand sidebar (⌘B)",
+    "expandTeam": "Expand {team}",
     "failedToRemoveFavorite": "Failed to remove favorite",
     "favorites": "Favorites",
     "inbox": "Inbox",
@@ -1519,6 +1539,7 @@
       "webhookCreated": "Webhook created"
     },
     "workspace": {
+      "accentDescription": "The accent colour used for selection, focus and primary actions.",
       "ai": "AI",
       "aiAssistant": "AI assistant",
       "aiAssistantDescription": "Title suggestions, issue summaries, and duplicate detection. Requires an Anthropic API key configured on the server.",
@@ -1570,6 +1591,13 @@
       "inviteSent": "Invitation sent to {email}",
       "languageDescription": "Choose your display language",
       "lastUsedOn": "Last used {date}",
+      "leave": "Leave workspace",
+      "leaveConfirm": "You'll immediately lose access to {name}, including every team inside it. You can only rejoin if someone invites you again.",
+      "leaveConfirmTitle": "Leave this workspace?",
+      "leaveDescription": "You'll lose access to this workspace and all its teams. Other members are unaffected, and your account stays active in any other workspaces you belong to.",
+      "leaveError": "Could not leave the workspace",
+      "leaveTitle": "Leave workspace",
+      "leaving": "Leaving…",
       "memberRoleUpdated": "Member role updated",
       "memberRoleUpdateError": "Failed to update member role",
       "members": "Members",

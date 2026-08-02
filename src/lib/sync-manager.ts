@@ -232,6 +232,7 @@ export class SyncManager {
       initiatives,
       initiativeProjects,
       favorites,
+      organizationMembers,
       meta,
     ] = await Promise.all([
       db.organizations.toArray(),
@@ -254,6 +255,7 @@ export class SyncManager {
       db.initiatives.toArray(),
       db.initiativeProjects.toArray(),
       db.favorites.toArray(),
+      db.organizationMembers.toArray(),
       db.syncMetadata.get('lastSyncId'),
     ]);
 
@@ -277,6 +279,7 @@ export class SyncManager {
       notificationStore,
       issueRelationStore,
       issueTemplateStore,
+      organizationMemberStore,
       syncStore,
     } = this.stores;
 
@@ -286,6 +289,7 @@ export class SyncManager {
       }
       teamStore.upsertMany(teams);
       userStore.upsertMany(users);
+      organizationMemberStore.upsertMany(organizationMembers);
       workflowStateStore.upsertMany(states);
       labelStore.upsertMany(labels);
       issueStore.upsertMany(issues);
@@ -331,6 +335,7 @@ export class SyncManager {
       notificationStore,
       issueRelationStore,
       issueTemplateStore,
+      organizationMemberStore,
     } = this.stores;
 
     try {
@@ -361,6 +366,7 @@ export class SyncManager {
         issues: [] as object[],
         issueTemplates: [] as object[],
         notifications: [] as object[],
+        organizationMembers: [] as object[],
         organizations: [] as object[],
         projectMilestones: [] as object[],
         projects: [] as object[],
@@ -397,6 +403,7 @@ export class SyncManager {
         'rw',
         [
           db.organizations,
+          db.organizationMembers,
           db.teams,
           db.users,
           db.workflowStates,
@@ -420,6 +427,7 @@ export class SyncManager {
         async () => {
           await Promise.all([
             db.organizations.clear(),
+            db.organizationMembers.clear(),
             db.teams.clear(),
             db.users.clear(),
             db.workflowStates.clear(),
@@ -442,6 +450,9 @@ export class SyncManager {
           await Promise.all([
             db.organizations.bulkPut(
               batches.organizations as Parameters<typeof db.organizations.bulkPut>[0],
+            ),
+            db.organizationMembers.bulkPut(
+              batches.organizationMembers as Parameters<typeof db.organizationMembers.bulkPut>[0],
             ),
             db.teams.bulkPut(batches.teams as Parameters<typeof db.teams.bulkPut>[0]),
             db.users.bulkPut(batches.users as Parameters<typeof db.users.bulkPut>[0]),
@@ -497,6 +508,9 @@ export class SyncManager {
       if (firstOrg?.name) {
         syncStore.setOrganizationName(firstOrg.name);
       }
+      organizationMemberStore.upsertMany(
+        batches.organizationMembers as Parameters<typeof organizationMemberStore.upsertMany>[0],
+      );
       teamStore.upsertMany(batches.teams as Parameters<typeof teamStore.upsertMany>[0]);
       userStore.upsertMany(batches.users as Parameters<typeof userStore.upsertMany>[0]);
       workflowStateStore.upsertMany(
@@ -666,6 +680,7 @@ export class SyncManager {
       notificationStore,
       issueRelationStore,
       issueTemplateStore,
+      organizationMemberStore,
       syncStore,
     } = this.stores;
 
@@ -694,6 +709,7 @@ export class SyncManager {
       customFieldValues: object[];
       issueActivities: object[];
       favorites: object[];
+      organizationMembers: object[];
     } = {
       customFieldDefinitions: [],
       customFieldValues: [],
@@ -709,6 +725,7 @@ export class SyncManager {
       issues: [],
       issueTemplates: [],
       notifications: [],
+      organizationMembers: [],
       organizations: [],
       projectMilestones: [],
       projects: [],
@@ -738,7 +755,8 @@ export class SyncManager {
         | 'issueTemplates'
         | 'customFieldDefinitions'
         | 'issueActivities'
-        | 'favorites';
+        | 'favorites'
+        | 'organizationMembers';
       id: string;
     }[] = [];
     /**
@@ -768,6 +786,24 @@ export class SyncManager {
             void authSettings;
             void securitySettings;
             dexieUpserts.organizations.push(safe);
+          }
+          break;
+        // The roster. Before this case existed, `organizationMemberRemove`
+        // and `organizationMemberUpdateRole` emitted SyncActions that every
+        // client dropped on the floor: a second admin's open tab kept showing
+        // someone who had been removed until they reloaded. Access was never
+        // affected — the removed user's own session loses the org on its next
+        // request — but the UI lied about who was in the workspace.
+        case 'OrganizationMember':
+          organizationMemberStore.applySyncAction(
+            act,
+            modelId,
+            data as Parameters<typeof organizationMemberStore.applySyncAction>[2],
+          );
+          if (act === 'D') {
+            dexieDeletes.push({ id: modelId, table: 'organizationMembers' });
+          } else if (data) {
+            dexieUpserts.organizationMembers.push(data);
           }
           break;
         case 'Team':
@@ -1094,6 +1130,7 @@ export class SyncManager {
         db.issueActivities,
         db.favorites,
         db.organizations,
+        db.organizationMembers,
         db.syncMetadata,
       ],
       async () => {
@@ -1103,6 +1140,12 @@ export class SyncManager {
           dexieUpserts.organizations.length > 0 &&
             db.organizations.bulkPut(
               dexieUpserts.organizations as Parameters<typeof db.organizations.bulkPut>[0],
+            ),
+          dexieUpserts.organizationMembers.length > 0 &&
+            db.organizationMembers.bulkPut(
+              dexieUpserts.organizationMembers as Parameters<
+                typeof db.organizationMembers.bulkPut
+              >[0],
             ),
           dexieUpserts.users.length > 0 &&
             db.users.bulkPut(dexieUpserts.users as Parameters<typeof db.users.bulkPut>[0]),

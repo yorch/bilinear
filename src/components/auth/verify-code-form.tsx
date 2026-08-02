@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useTranslations } from '@/hooks/use-translations';
 import { installSessionCookies } from '@/lib/auth-session';
 import { gql } from '@/lib/graphql';
@@ -90,7 +91,7 @@ export function VerifyCodeForm() {
   return (
     <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
       {email && (
-        <p className="text-center text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {t('auth.weSentCodeTo')} <span className="font-medium text-foreground">{email}</span>
         </p>
       )}
@@ -99,8 +100,13 @@ export function VerifyCodeForm() {
         <label className="text-sm font-medium text-foreground-secondary" htmlFor="code">
           {t('auth.verificationCode')}
         </label>
-        <input
-          className="rounded-md border border-border bg-card px-3 py-2 text-center text-2xl font-mono tracking-[0.5em] text-foreground placeholder:text-foreground-faint focus:outline-none focus:ring-2 focus:ring-invert"
+        <Input
+          // The code is six digits read off a screen and typed back, so it
+          // gets the mono face, tabular figures and wide tracking — the one
+          // input in the app where character-by-character legibility beats
+          // compactness.
+          autoComplete="one-time-code"
+          className="py-2 text-center font-mono text-2xl tracking-[0.4em] tabular-nums placeholder:text-muted-foreground"
           id="code"
           inputMode="numeric"
           maxLength={6}
@@ -114,7 +120,7 @@ export function VerifyCodeForm() {
       </div>
 
       {error && (
-        <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+        <p className="text-sm text-danger-subtle-foreground" role="alert">
           {error}
         </p>
       )}
@@ -123,13 +129,9 @@ export function VerifyCodeForm() {
         {loading ? t('auth.verifying') : t('auth.verifyCode')}
       </Button>
 
-      <button
-        className="text-sm text-muted-foreground hover:text-foreground"
-        onClick={() => router.push(`/login`)}
-        type="button"
-      >
+      <Button onClick={() => router.push('/login')} type="button" variant="link">
         {t('auth.useDifferentEmail')}
-      </button>
+      </Button>
     </form>
   );
 }

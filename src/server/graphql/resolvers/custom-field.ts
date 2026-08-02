@@ -54,7 +54,7 @@ async function loadDefinitionForMutation(
   }
   if (existing.teamId === null) {
     // Workspace-scoped: only owners/admins can manage.
-    await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+    requireOrgRole(ctx, ['owner', 'admin']);
   } else {
     await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
   }
@@ -123,7 +123,7 @@ export const customFieldResolvers = {
       }
       if (input.teamId === null) {
         // Workspace-scoped: owner/admin only — these fields show on every team.
-        await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+        requireOrgRole(ctx, ['owner', 'admin']);
       } else {
         await requireTeamMember(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
         const team = await ctx.services.team.findById(input.teamId);

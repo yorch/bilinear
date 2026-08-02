@@ -1,9 +1,13 @@
 'use client';
+import { Inbox } from 'lucide-react';
 
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IssuePicker } from '@/components/issues/issue-picker';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
+import { PageSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useOutsideClick } from '@/hooks/use-outside-click';
@@ -115,7 +119,7 @@ function SnoozeButton({
       </button>
       {open ? (
         <div
-          className="absolute right-0 z-10 mt-1 min-w-[120px] rounded border border-border bg-card py-1 text-xs shadow-lg"
+          className="absolute right-0 z-10 mt-1 min-w-[120px] rounded border border-border bg-card py-1 text-xs shadow-e2"
           role="menu"
         >
           {SNOOZE_PRESETS.map(p => (
@@ -384,11 +388,7 @@ const TriagePage = observer(function TriagePage() {
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
 
   if (isLoading) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-        {t('common.loading')}
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (!team) {
@@ -410,20 +410,21 @@ const TriagePage = observer(function TriagePage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex items-center justify-between border-b border-border px-6 py-3">
-        <h1 className="text-sm font-semibold text-foreground">
-          {t('settings.triage.pageTitle', { name: team.displayName ?? team.name })}
-        </h1>
-        <span className="text-xs text-muted-foreground">
-          {t('settings.triage.toTriageCount', { count: queue.length })}
-        </span>
-      </div>
+      {/* The count keeps its "{n} to triage" label rather than collapsing to a
+          bare number: on a queue page the unit is the point, and five e2e
+          specs read it as the page's ready signal. */}
+      <PageHeader
+        actions={
+          <span className="text-xs text-muted-foreground">
+            {t('settings.triage.toTriageCount', { count: queue.length })}
+          </span>
+        }
+        title={t('settings.triage.pageTitle', { name: team.displayName ?? team.name })}
+      />
 
       <div className="flex-1 overflow-y-auto">
         {queue.length === 0 ? (
-          <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
-            {t('settings.triage.allClear')}
-          </div>
+          <EmptyState icon={<Inbox className="h-5 w-5" />} title={t('settings.triage.allClear')} />
         ) : (
           queue.map(issue => {
             const creator = issue.creatorId ? userStore.findById(issue.creatorId) : null;
@@ -453,7 +454,7 @@ const TriagePage = observer(function TriagePage() {
                 </div>
                 <div className="flex flex-shrink-0 gap-1">
                   <button
-                    className="rounded bg-primary px-2.5 py-1 text-xs text-white hover:bg-primary/90 disabled:opacity-50"
+                    className="rounded bg-primary px-2.5 py-1 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                     disabled={busy || !defaultTargetStateId}
                     onClick={() => handleAccept(issue.id)}
                     type="button"

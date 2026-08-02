@@ -143,12 +143,10 @@ describe('teamResolvers', () => {
     });
 
     it('throws FORBIDDEN when user is not admin', async () => {
-      ctx.prisma.organizationMember.findUnique.mockResolvedValue({
-        id: 'mem-1',
-        organizationId: TEST_ORG.id,
-        role: 'member',
-        userId: TEST_USER.id,
-      });
+      // requireOrgRole reads AuthContext.orgRole, which extractAuthContext
+      // resolves once per request — there is no second membership lookup to
+      // mock any more.
+      ctx.orgRole = 'member';
 
       try {
         await teamResolvers.Mutation.teamCreate(

@@ -30,16 +30,23 @@ The product has a **strong engine and an under-invested surface**. The offline-f
 
 The encouraging part: most problems are **systemic, not scattered**. Roughly five root causes (token-layer bypass, a four-method toast wrapper, three flawed shared primitives, no shared page-header/confirm primitives, zero responsive strategy) explain the large majority of the ~140 individual findings. Fixing the shared pieces fixes dozens of call sites at once.
 
+> **Status (2026-08-01): closed out by the L1–L4 UI/UX revamp.** Everything
+> below is preserved as the audit that motivated the work; the scorecard is
+> re-graded inline. See §10 for what the revamp changed, what it found that
+> this audit missed, and the three items still open.
+
 ### Scorecard
+
+Original grade → grade after the revamp.
 
 | Dimension | Grade | One-line verdict |
 |---|---|---|
-| Design system & styling | ⚠️ Poor | Good oklch token layer exists but is bypassed by ~1,255 raw `zinc/indigo` usages and ~1,046 manual `dark:` overrides — two parallel design systems |
-| Navigation & IA | ⚠️ At risk | Solid Linear-style shell, but sidebar contains dead links, settings sub-pages are dead-ends, shortcuts advertised as global aren't |
-| Core issue flows | 🟡 Mixed | Create/list/board/triage all functional and fast; failure feedback, keyboard coverage, and detail-panel performance lag |
+| Design system & styling | ⚠️ Poor → 🟢 Good | Raw colours are at a literal-zero baseline across the whole Tailwind palette, neutrals derive from the accent hue, and the app has real typefaces. See §10 |
+| Navigation & IA | ⚠️ At risk → 🟢 Good | Solid Linear-style shell, but sidebar contains dead links, settings sub-pages are dead-ends, shortcuts advertised as global aren't |
+| Core issue flows | 🟡 Mixed → 🟢 Good | Create/list/board/triage all functional and fast; failure feedback, keyboard coverage, and detail-panel performance lag |
 | Accessibility | 🟡 Moderate | Biome a11y lint on, palette is exemplary; but `SelectPopover`, `ModalDialog`, and `usePopover` fail basics, multiplied across the app |
-| Feedback & state UX | ⚠️ Weak | Silent optimistic rollbacks, no offline indicator, destructive delete with no confirm/undo, swallowed fetch errors |
-| Responsiveness | 🔴 Absent | 10 breakpoint utilities in the whole tree; no mobile nav; fixed 480px panel; desktop-only today |
+| Feedback & state UX | ⚠️ Weak → 🟢 Good | Silent optimistic rollbacks, no offline indicator, destructive delete with no confirm/undo, swallowed fetch errors |
+| Responsiveness | 🔴 Absent → 🟢 Good | 10 breakpoint utilities in the whole tree; no mobile nav; fixed 480px panel; desktop-only today |
 | i18n | 🟢 Good | ~85% coverage, locale-threaded dates, no flash-of-English; admin console and plural rules fixed on `main` since; remaining gap: `formatFileSize` |
 
 ---
@@ -263,3 +270,217 @@ Phases 1–3 are the highest leverage: they fix shared infrastructure that every
 - i18n core: shared client/server resolver, cookie persistence, SSR `<html lang>`, no flash-of-English, locale-threaded `date-fns`/`Intl` in the workspace app, near-total attribute coverage.
 - Triage's optimistic snapshot → rollback → toast pattern (the template for RC2).
 - Biome a11y linting enabled with honest, justified suppressions; lucide-react used consistently; `cn()` discipline (only 5 template-literal violations); route-level skeletons.
+
+---
+
+## 10. Closed out by the L1–L4 revamp (2026-08-01)
+
+This audit is now historical. The revamp shipped in four bottom-up layers under
+a direction agreed from a visual pitch — **expressive/gradient-accented**, with
+the gradient confined to the *chrome* (selection rails, focus glow, elevation,
+one primary action) because in an issue tracker the rest of the spectrum is
+already spoken for by data.
+
+### What it closed
+
+- **RC1 (token layer bypassed).** Fully closed, and further than this audit
+  scoped. Raw colours are at a **literal-zero baseline across the entire
+  Tailwind palette** — see the correction below. Neutrals are computed in oklch
+  from `--accent-h`, so the chassis and the accent are one hue family rather
+  than dead grey plus a saturated accent. `--brand` is unified into
+  `--primary`/`--ring`.
+- **§1.7 (the app never uses its own font token).** The deeper problem was that
+  `next/font` was used *zero* times, so the app rendered in whatever the OS
+  shipped. Instrument Sans + Geist Mono are now vendored and loaded via
+  `next/font/local`.
+- **RC5 (missing shared primitives → per-page drift).** `PageHeader`/`Toolbar`
+  and `EmptyState` now exist and are adopted on **every** route; the four
+  different header paddings across sibling pages are gone.
+- **§5 (loading/error states).** Every bare "Loading…" string is gone —
+  `IssueListSkeleton`, `PageSkeleton`, `RowsSkeleton` and `DetailPanelSkeleton`
+  cover the list, page, section and detail shapes.
+- **Two defects this audit did not catch**, both structural rather than
+  cosmetic: `issue-row.tsx` was an inline flex whose variable-width label cell
+  left every property column ragged row-to-row (now one shared grid template,
+  guarded by six tests); and the sidebar rendered five always-expanded
+  sub-links per team — 25+ nav rows at four teams.
+
+### Correction to RC1
+
+RC1 counted "~1,255 raw `zinc/indigo` usages", and `yarn lint:tokens` was built
+to match that framing. **That framing was too narrow, and the guard inherited
+the blind spot**: it only ever banned `zinc`, `indigo` and hex. A second
+population — **330 raw red/amber/green/blue status colours across 49 files** —
+accumulated completely unguarded while the baseline read as a clean literal
+zero. They now route through a status token family
+(`--danger`/`--success`/`--warning`/`--info`, plus `--merged` for GitHub's
+merged purple), and the guard covers every shade-numbered palette hue so the
+same gap cannot reopen behind a different colour.
+
+Worth remembering as a method note: a green ratchet only proves the absence of
+what the ratchet measures.
+
+### Still open
+
+- **Browser QA.** The revamp is a deliberately visible change, and no browser
+  or Docker daemon is available in the dev sandbox. `/design` renders the whole
+  token layer and every primitive across all three accents and both themes —
+  open it first. It does *not* cover the 49 files the status sweep touched
+  (settings, webhooks, security, integrations).
+- ~~**Accessibility was not re-audited.**~~ **Done (2026-08-02).** See §11.
+- **No visual-regression suite.** CI has unit, typecheck, token and e2e gates,
+  but nothing that would catch a purely visual regression. `/design` is the
+  manual stand-in.
+
+
+---
+
+## 11. Accessibility re-audit (2026-08-02)
+
+The revamp's own note said contrast under the three accents had never been
+measured. It has now — by computing it, not by eyeballing it: every token is
+resolved through the real cascade, converted oklch → sRGB, composited where
+translucent, and checked against WCAG. **156 checks across three accents and
+two themes.**
+
+### What it found
+
+Four contrast regressions the revamp introduced, none visible to any existing
+gate:
+
+| Pair | Before revamp | After revamp | Now |
+| --- | --- | --- | --- |
+| Muted text on page | 4.73 | **4.13** | 4.99 |
+| Primary button label | 4.38 | **3.65** | 4.95 |
+| Primary button label, gradient far end | n/a | **1.76** | 5.79 |
+| Destructive button label (dark) | 4.56 | **2.77** | 5.31 |
+
+The gradient one is the instructive failure. `--brand-2` is a deliberately
+*light* partner stop — cyan under Ion — and white button text over it measured
+**1.76:1**. The decorative gradient and the one behind white text cannot be the
+same value, so `--gradient-brand-cta` now darkens both stops in light mode and
+falls back to the light stops in dark mode (where the label is dark). The
+destructive one came from aliasing `--destructive` to `--danger`: correct for
+text, wrong for a solid fill with a white label.
+
+It also confirmed the revamp *improved* two things: the focus ring went from
+2.59:1 (a genuine WCAG 1.4.11 failure on `main`, since the ring was neutral
+grey) to 3.64:1 by becoming the brand, and the `--accent`/`--muted` split made
+hover states measurably distinguishable for the first time.
+
+### Beyond contrast
+
+- **Loading announcements were silently removed.** The pages that used to
+  render the literal string "Loading…" — which a screen reader reads out — were
+  changed to render a shimmer. That is a picture, and it announces nothing, so
+  non-sighted users got silence. The composite skeletons now wrap in a
+  `role="status" aria-busy` region with sr-only text; the shimmer bars
+  themselves are `aria-hidden`, since a stack of empty divs is noise.
+- **Baseline focus indicator.** Bare controls added by the revamp (accent
+  swatches, sidebar disclosure chevrons, sub-nav links) had no app-defined
+  focus style and fell back to the UA default. `globals.css` now sets a
+  `:focus-visible` outline in the brand for everything; the primitives that
+  style their own focus already set `outline-none`, so it does not double up.
+- **Informational text on `--foreground-faint`.** The faint role is for
+  decorative marks, but the sidebar team key, two entity counts, the audit-log
+  "System" actor and two input placeholders had drifted onto it at ~2:1. All
+  moved to `--muted-foreground` (4.99:1). What remains on faint is em-dashes
+  and background swatches.
+- **Control borders** (`--input`) were at 1.35:1 — below the 3:1 that WCAG
+  1.4.11 requires for a control's boundary. Raised to ≥3:1 in both themes.
+  This one was inherited from `main`, not introduced here.
+- **Verified sound, unchanged:** priority is encoded by glyph + `title`, not
+  colour alone (1.4.1); `prefers-reduced-motion` covers both new animations;
+  the new controls carry `max-md` 44px touch targets; `PageHeader` renders a
+  real `<h1>`; the aurora field is `aria-hidden`.
+
+### The guard
+
+`src/lib/contrast.test.ts` now runs the whole computation in CI, including a
+non-vacuity case. It is the only gate in the repo that can see colour at all —
+lint, typecheck, build and the token ratchet are all blind to it, which is
+exactly why four regressions got in. Deliberate exclusions are named in that
+file: `--border` (separates surfaces, not a control boundary) and
+`--foreground-faint` (decorative marks only).
+
+### Still open
+
+Contrast and the mechanics above are covered. **Not** covered, and still needing
+a human with a screen reader: focus *order* through the new grid-based issue
+row, whether the sidebar disclosure state is announced usefully, and how the
+detail panel behaves for a keyboard-only user. Static analysis cannot answer
+those.
+
+---
+
+## 12. Code review + simplify pass (2026-08-02)
+
+A full review of the branch diff, then a simplify pass over what it turned up.
+Every finding below was verified against the source before being fixed.
+
+### The one that broke every primitive
+
+`:focus-visible` was added as a **bare, unlayered rule**. Tailwind's utilities
+live in `@layer utilities`, and unlayered CSS out-ranks every layer — so it beat
+`focus-visible:outline-none` on Button, Input, Textarea, Switch, the composed
+onboarding url-key field, the inline issue-title input and the TipTap surface,
+stamping a hard outline on all of them. Confirmed in the built CSS, and the
+rule's own comment claimed the opposite. Now inside `@layer base`, with the
+cascade reasoning written down so it does not get "tidied" back out.
+
+### Colour bugs the codemod left behind
+
+The status-token migration mapped raw hues to roles mechanically, which is why
+these all share a shape: a value that was *tuned to be seen* got used as a
+*ground to stand on*.
+
+| Where | Was | Measured | Now |
+| --- | --- | --- | --- |
+| Team-delete and remove-member buttons | `bg-danger` + `text-white` | ~3.8:1 light / ~2.9:1 dark | `bg-destructive` + its own ink |
+| Impersonation banner | `text-warning-subtle-foreground` on `bg-warning` | ~1.1:1 dark | new `--warning-foreground` |
+| Health badges (`Badge variant="solid"`) | `text-white` on `bg-warning` | ~2.6:1 light / ~1.4:1 dark | `tone` pills |
+| ~20 flat `bg-primary` buttons | `text-white` | fails wherever the brand is light | `text-primary-foreground` |
+| `--primary` itself | `var(--brand)` | 4.45:1 Aurora, 3.65:1 Ion | darkened to the CTA gradient's first stop |
+
+The last row is the one worth remembering: even the *correct* token failed,
+because `--primary` was an alias of a brand that has to stay light enough to
+read as a selection rail. `--ring` and `--brand` stay undarkened — they are
+lines, never a ground for text.
+
+Four more hover states resolved to their own base colour and so did nothing:
+two destructive text buttons, the copy-API-token button, and the invalid-key
+border's `focus:` variant. Found by scanning every class string in the tree for
+`X` + `hover:X`/`focus:X` rather than by fixing the three that were reported.
+Nine `dark:hover:bg-{role}-subtle/20` leftovers compounded alpha on an already
+translucent token — a ~4% fill — and were dropped, since the base hover already
+adapts per theme through the custom property.
+
+### Two real logic bugs
+
+- **Sidebar team matching.** `pathname.startsWith('/w/team/ENG')` is true for
+  `/w/team/ENGX`, so visiting ENGX expanded ENG and left ENGX's own sub-nav
+  hidden. Team keys are free-form, so prefixes are routine. Extracted as
+  `isPathWithin` in `src/lib/issue-nav.ts`, used by both the disclosure and the
+  active-row highlight (which had got it right, independently), and tested.
+- **Accent cookie outlived the session.** It was written only when the incoming
+  user had a stored accent, and never cleared on logout — so on a shared browser
+  the second account silently inherited the first's colour. The cookie is now
+  rewritten on every session install *including the clear*, and a transient DB
+  failure falls through to the default rather than to whoever was here last.
+
+### Simplifications
+
+The security settings page carried its own `Toggle` — a third copy of the
+switch, with a raw `bg-white` knob — replaced by `SettingToggleRow`.
+`Badge`'s `solid` variant is gone rather than fixed: its only job was to force
+`text-white`, which is the bug. The last four raw Tailwind shadows moved onto
+the elevation scale, making PATTERNS §79.5's "no raw Tailwind shadows remain"
+true rather than nearly true. One no-op `hover:border-border` removed.
+
+### Guard coverage added
+
+Three new contrast checks (`--warning-foreground` on `--warning`,
+`--primary-foreground` on `--primary`, and the existing destructive pair), a
+Badge test asserting **no variant may force an ink colour**, and six
+`isPathWithin` cases. The contrast additions were each verified non-vacuous by
+regressing the token and watching them fail.

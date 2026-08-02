@@ -38,7 +38,7 @@ export const teamResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+      requireOrgRole(ctx, ['owner', 'admin']);
 
       try {
         const result = await ctx.services.team.create(ctx.orgId, ctx.userId, input);
@@ -100,7 +100,7 @@ export const teamResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+      requireOrgRole(ctx, ['owner', 'admin']);
 
       const team = await ctx.services.team.findById(id);
       if (!team || team.organizationId !== ctx.orgId) {

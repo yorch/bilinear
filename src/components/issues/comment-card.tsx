@@ -191,7 +191,7 @@ export function CommentCard({
               </span>
             )}
             {isResolved && (
-              <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+              <Badge className="bg-success-subtle text-success-subtle-foreground">
                 <CheckCircle className="h-3 w-3" />
                 {t('issueDetail.comments.resolved')}
               </Badge>
@@ -254,7 +254,7 @@ export function CommentCard({
               className={cn(
                 'rounded p-1 transition-colors max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center',
                 isResolved
-                  ? 'text-green-600 hover:bg-green-100 dark:hover:bg-green-900/20'
+                  ? 'text-success-subtle-foreground hover:bg-success-subtle'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
               onClick={() => onToggleResolve(comment)}
@@ -302,7 +302,7 @@ export function CommentCard({
                   )}
                   {isOwn && (
                     <button
-                      className="w-full px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                      className="w-full px-3 py-1.5 text-left text-xs text-danger-subtle-foreground hover:bg-danger-subtle"
                       onClick={() => {
                         onDelete(comment.id);
                         close();
@@ -331,7 +331,7 @@ export function CommentCard({
             />
             <div className="flex gap-2">
               <button
-                className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-white hover:bg-primary/90"
+                className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
                 onClick={saveEdit}
                 type="button"
               >

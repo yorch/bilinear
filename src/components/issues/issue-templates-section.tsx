@@ -248,7 +248,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-foreground">{tmpl.name}</span>
                         {tmpl.isDefault && (
-                          <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />
+                          <Star className="h-3.5 w-3.5 shrink-0 fill-warning text-warning-subtle-foreground" />
                         )}
                       </div>
                       {tmpl.description && (
@@ -296,7 +296,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                       <button
                         aria-label={t('issueDetail.templates.deleteTemplate')}
                         className={cn(
-                          'rounded p-1 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center',
+                          'rounded p-1 text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger-subtle-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center',
                           isDeleting && 'cursor-not-allowed opacity-50',
                         )}
                         disabled={isDeleting}
@@ -431,7 +431,8 @@ function TemplateForm({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-muted-foreground" htmlFor="tmpl-name">
-            {t('issueDetail.templates.form.name')} <span className="text-red-500">*</span>
+            {t('issueDetail.templates.form.name')}{' '}
+            <span className="text-danger-subtle-foreground">*</span>
           </label>
           <input
             className={inputCls}

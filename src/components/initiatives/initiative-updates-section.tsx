@@ -159,7 +159,7 @@ export function InitiativeUpdatesSection({
                       {update.user.displayName}
                     </span>
                     {health && (
-                      <Badge className={health.color} variant="solid">
+                      <Badge tone={health.tone}>
                         {t(PROJECT_HEALTH_LABEL_KEYS[update.health ?? ''])}
                       </Badge>
                     )}

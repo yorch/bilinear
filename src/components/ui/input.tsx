@@ -11,7 +11,10 @@ const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLI
   ({ className, type = 'text', ...props }, ref) => (
     <input
       className={cn(
-        'w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+        // Focus is a brand ring plus a soft glow rather than a 1px outline —
+        // the accent's main job in the chrome, and the same treatment the
+        // selection rail uses so focus and selection read as one language.
+        'w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm text-foreground outline-none transition-[border-color,box-shadow] duration-150 ease-crisp placeholder:text-muted-foreground focus:border-ring focus:shadow-[0_0_0_3px_var(--brand-subtle)] disabled:cursor-not-allowed disabled:opacity-50',
         className,
       )}
       ref={ref}

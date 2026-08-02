@@ -30,6 +30,8 @@ export const typeDefs = `
     emailNotificationsEnabled: Boolean!
     "Persisted language preference (app locale, e.g. 'en' / 'es'); null if never set."
     locale: String
+    "Persisted accent-colour preference (e.g. 'aurora'); null if never chosen."
+    accent: String
     calendarFeedUrl: String
     createdAt: DateTime!
     updatedAt: DateTime!
@@ -382,6 +384,24 @@ export const typeDefs = `
   type EnterOrganizationPayload {
     success: Boolean!
     organization: Organization!
+    accessToken: String!
+    refreshToken: String!
+    expiresIn: Int!
+  }
+
+  """
+  The session after the caller left a workspace.
+
+  Deliberately not EnterOrganizationPayload: that type's organization is
+  non-null because you always land somewhere, whereas leaving your last
+  workspace legitimately lands you nowhere. A null organization here means an
+  org-less session, which still authenticates for viewerOrganizations and the
+  create-workspace flow.
+  """
+  type LeaveOrganizationPayload {
+    success: Boolean!
+    lastSyncId: String!
+    organization: Organization
     accessToken: String!
     refreshToken: String!
     expiresIn: Int!
@@ -1860,6 +1880,13 @@ export const typeDefs = `
     organizationMemberUpdateRole(userId: ID!, role: String!): DeletePayload!
     """Remove a member from the current organization, along with their team memberships."""
     organizationMemberRemove(userId: ID!): DeletePayload!
+    """
+    Give up your own membership in the current organization, along with your
+    team memberships inside it. Any member may leave; the last owner may not,
+    since that strands the workspace with nobody able to manage it. Separate
+    from organizationMemberRemove, which refuses self-removal on purpose.
+    """
+    organizationLeave: LeaveOrganizationPayload!
     organizationInviteCreate(email: String!, role: String!): OrganizationInvitePayload!
     organizationInviteRevoke(id: ID!): BasicPayload!
     """Claim an invitation. Requires a signed-in session whose email matches it."""
@@ -1911,6 +1938,11 @@ export const typeDefs = `
     # Persist the user's language preference (used to localize transactional
     # emails, which have no access to the browser locale cookie).
     userUpdateLocale(locale: String!): UserPayload!
+
+    # Persist the user's accent-colour preference. The running app reads the
+    # accent cookie; this is stored so the choice follows the account to a new
+    # browser or device (the session route seeds the cookie from it at login).
+    userUpdateAccent(accent: String!): UserPayload!
 
     # Rotate the per-user iCal feed token. Returns the updated user so the
     # caller can immediately display the new feed URL.

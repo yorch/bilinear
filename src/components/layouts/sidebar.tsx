@@ -4,6 +4,7 @@ import {
   Archive,
   BarChart2,
   BookOpen,
+  ChevronRight,
   Eye,
   FileText,
   Flag,
@@ -24,6 +25,7 @@ import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AccentToggle } from '@/components/accent-toggle';
 import { LanguageToggle } from '@/components/language-toggle';
 import { ConnectionStatus } from '@/components/layouts/connection-status';
 import { WorkspaceSwitcher } from '@/components/layouts/workspace-switcher';
@@ -34,6 +36,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import { APP_NAME } from '@/lib/app-config';
 import { gql, gqlQuery } from '@/lib/graphql';
 import { FAVORITE_DELETE_MUTATION, FAVORITES_QUERY } from '@/lib/graphql-queries';
+import { isPathWithin } from '@/lib/issue-nav';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -226,8 +229,8 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
                 className={cn(
                   'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
                   isActive
-                    ? 'bg-muted text-foreground'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    ? 'bg-brand-subtle text-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
                 )}
                 href={href}
                 onClick={onNavigate}
@@ -256,6 +259,38 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
 });
 
 // ─── Teams section ────────────────────────────────────────────────────────────
+
+/** One row under an expanded team. Was copy-pasted five times inline. */
+function TeamSubLink({
+  active,
+  href,
+  icon,
+  label,
+  onNavigate,
+}: {
+  active: boolean;
+  href: string;
+  icon: React.ReactNode;
+  label: string;
+  onNavigate?: () => void;
+}) {
+  return (
+    <Link
+      className={cn(
+        'flex items-center gap-2 rounded-md py-1 pl-8 pr-2 text-xs transition-colors',
+        active
+          ? 'bg-brand-subtle text-foreground'
+          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+      )}
+      href={href}
+      onClick={onNavigate}
+      title={label}
+    >
+      {icon}
+      <span className="truncate">{label}</span>
+    </Link>
+  );
+}
 
 const SidebarTeamsSection = observer(function SidebarTeamsSection({
   base,
@@ -287,6 +322,29 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
     return rootTeams.flatMap(t => [t, ...(childTeamsByParent[t.id] ?? [])]);
   }, [teamStore.pool.size]);
 
+  /**
+   * Which teams show their sub-links.
+   *
+   * Every team used to render all five (backlog, cycles, analytics, docs, plus
+   * each saved view) permanently — 25+ nav rows before favourites at four
+   * teams, which buried the global nav above it. Only the team you are
+   * actually in is expanded now; the rest collapse to a single row.
+   */
+  const activeTeamKey = teams.find(team => isPathWithin(pathname, `${base}/team/${team.key}`))?.key;
+  const [manuallyToggled, setManuallyToggled] = useState<Record<string, boolean>>({});
+
+  // Exactly one team is open by default: the one the route is in, or — on a
+  // non-team route like the workspace root, my-issues or inbox — the first
+  // team, so the sub-nav is never entirely absent and the sub-routes stay
+  // reachable without a click to discover them.
+  const defaultExpandedKey = activeTeamKey ?? teams[0]?.key;
+
+  // The default team is expanded unless the user explicitly collapsed it; any
+  // other team stays closed unless they explicitly opened it. Keeping the
+  // override keyed by team (rather than tracking an open set) means navigating
+  // to a new team expands it without fighting a previous manual choice.
+  const isExpanded = (key: string) => manuallyToggled[key] ?? key === defaultExpandedKey;
+
   return (
     <>
       {/* Expanded teams list */}
@@ -298,7 +356,7 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
             </span>
             <button
               aria-label={t('nav.newTeam')}
-              className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground-secondary"
+              className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               onClick={() => uiStore.openCreateTeamModal()}
               title={t('nav.newTeam')}
               type="button"
@@ -310,7 +368,7 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
             {teams.length === 0 ? (
               <li>
                 <button
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
                   onClick={() => uiStore.openCreateTeamModal()}
                   type="button"
                 >
@@ -328,118 +386,105 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                 const viewHrefPrefix = `${href}/view/`;
                 const analyticsHref = `${href}/analytics`;
                 const isActive =
-                  pathname === href ||
-                  (pathname.startsWith(`${href}/`) &&
-                    !pathname.startsWith(cyclesHref) &&
-                    !pathname.startsWith(backlogHref) &&
-                    !pathname.startsWith(docsHref) &&
-                    !pathname.startsWith(analyticsHref) &&
-                    !pathname.startsWith(viewHrefPrefix));
+                  isPathWithin(pathname, href) &&
+                  !pathname.startsWith(cyclesHref) &&
+                  !pathname.startsWith(backlogHref) &&
+                  !pathname.startsWith(docsHref) &&
+                  !pathname.startsWith(analyticsHref) &&
+                  !pathname.startsWith(viewHrefPrefix);
                 const isCyclesActive = pathname.startsWith(cyclesHref);
                 const isBacklogActive = pathname.startsWith(backlogHref);
                 const isDocsActive = pathname.startsWith(docsHref);
                 const isAnalyticsActive = pathname.startsWith(analyticsHref);
+                const expanded = isExpanded(team.key);
                 return (
                   <li className={cn('flex flex-col gap-0.5', isChild && 'ml-3')} key={team.id}>
-                    <Link
-                      className={cn(
-                        'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
-                        isActive
-                          ? 'bg-muted text-foreground'
-                          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                      )}
-                      href={href}
-                      onClick={onNavigate}
-                      title={team.displayName || team.name}
-                    >
-                      <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-                        {team.icon ? (
-                          <span className="text-xs">{team.icon}</span>
-                        ) : (
-                          <Users className={cn(isChild ? 'h-3 w-3' : 'h-3.5 w-3.5')} />
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        aria-expanded={expanded}
+                        aria-label={t(expanded ? 'nav.collapseTeam' : 'nav.expandTeam', {
+                          team: team.displayName || team.name,
+                        })}
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground max-md:h-11 max-md:w-11"
+                        onClick={() =>
+                          setManuallyToggled(prev => ({ ...prev, [team.key]: !expanded }))
+                        }
+                        type="button"
+                      >
+                        <ChevronRight
+                          className={cn('h-3 w-3 transition-transform', expanded && 'rotate-90')}
+                        />
+                      </button>
+                      <Link
+                        className={cn(
+                          'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+                          isActive
+                            ? 'bg-brand-subtle text-foreground'
+                            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
                         )}
-                      </span>
-                      <span className={cn('truncate', isChild && 'text-xs')}>
-                        {team.displayName || team.name}
-                      </span>
-                    </Link>
-                    <Link
-                      className={cn(
-                        'flex items-center gap-2 rounded-md py-1 pl-8 pr-2 text-xs transition-colors',
-                        isBacklogActive
-                          ? 'bg-muted text-foreground'
-                          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                      )}
-                      href={backlogHref}
-                      onClick={onNavigate}
-                      title={t('nav.backlog')}
-                    >
-                      <Archive className="h-3 w-3" />
-                      {t('nav.backlog')}
-                    </Link>
-                    <Link
-                      className={cn(
-                        'flex items-center gap-2 rounded-md py-1 pl-8 pr-2 text-xs transition-colors',
-                        isCyclesActive
-                          ? 'bg-muted text-foreground'
-                          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                      )}
-                      href={cyclesHref}
-                      onClick={onNavigate}
-                      title={t('nav.cycles')}
-                    >
-                      <RefreshCw className="h-3 w-3" />
-                      {t('nav.cycles')}
-                    </Link>
-                    <Link
-                      className={cn(
-                        'flex items-center gap-2 rounded-md py-1 pl-8 pr-2 text-xs transition-colors',
-                        isAnalyticsActive
-                          ? 'bg-muted text-foreground'
-                          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                      )}
-                      href={analyticsHref}
-                      onClick={onNavigate}
-                      title={t('nav.analytics')}
-                    >
-                      <BarChart2 className="h-3 w-3" />
-                      {t('nav.analytics')}
-                    </Link>
-                    <Link
-                      className={cn(
-                        'flex items-center gap-2 rounded-md py-1 pl-8 pr-2 text-xs transition-colors',
-                        isDocsActive
-                          ? 'bg-muted text-foreground'
-                          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                      )}
-                      href={docsHref}
-                      onClick={onNavigate}
-                      title={t('nav.docs')}
-                    >
-                      <FileText className="h-3 w-3" />
-                      {t('nav.docs')}
-                    </Link>
-                    {customViewStore.getByTeamId(team.id).map(view => {
-                      const viewHref = `${href}/view/${view.id}`;
-                      const isViewActive = pathname === viewHref;
-                      return (
-                        <Link
-                          className={cn(
-                            'flex items-center gap-2 rounded-md py-1 pl-8 pr-2 text-xs transition-colors',
-                            isViewActive
-                              ? 'bg-muted text-foreground'
-                              : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                        href={href}
+                        onClick={onNavigate}
+                        title={team.displayName || team.name}
+                      >
+                        <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                          {team.icon ? (
+                            <span className="text-xs">{team.icon}</span>
+                          ) : (
+                            <Users className={cn(isChild ? 'h-3 w-3' : 'h-3.5 w-3.5')} />
                           )}
-                          href={viewHref}
-                          key={view.id}
-                          onClick={onNavigate}
-                          title={view.name}
-                        >
-                          <Eye className="h-3 w-3" />
-                          <span className="truncate">{view.name}</span>
-                        </Link>
-                      );
-                    })}
+                        </span>
+                        <span className={cn('truncate', isChild && 'text-xs')}>
+                          {team.displayName || team.name}
+                        </span>
+                        {/* The team key is what people actually type in search
+                            and read in identifiers, so it earns its place. */}
+                        <span className="ml-auto shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
+                          {team.key}
+                        </span>
+                      </Link>
+                    </div>
+                    {expanded && (
+                      <>
+                        <TeamSubLink
+                          active={isBacklogActive}
+                          href={backlogHref}
+                          icon={<Archive className="h-3 w-3" />}
+                          label={t('nav.backlog')}
+                          onNavigate={onNavigate}
+                        />
+                        <TeamSubLink
+                          active={isCyclesActive}
+                          href={cyclesHref}
+                          icon={<RefreshCw className="h-3 w-3" />}
+                          label={t('nav.cycles')}
+                          onNavigate={onNavigate}
+                        />
+                        <TeamSubLink
+                          active={isAnalyticsActive}
+                          href={analyticsHref}
+                          icon={<BarChart2 className="h-3 w-3" />}
+                          label={t('nav.analytics')}
+                          onNavigate={onNavigate}
+                        />
+                        <TeamSubLink
+                          active={isDocsActive}
+                          href={docsHref}
+                          icon={<FileText className="h-3 w-3" />}
+                          label={t('nav.docs')}
+                          onNavigate={onNavigate}
+                        />
+                        {customViewStore.getByTeamId(team.id).map(view => (
+                          <TeamSubLink
+                            active={pathname === `${href}/view/${view.id}`}
+                            href={`${href}/view/${view.id}`}
+                            icon={<Eye className="h-3 w-3" />}
+                            key={view.id}
+                            label={view.name}
+                            onNavigate={onNavigate}
+                          />
+                        ))}
+                      </>
+                    )}
                   </li>
                 );
               })
@@ -460,8 +505,8 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                   className={cn(
                     'flex items-center justify-center rounded-md py-1.5 text-sm transition-colors',
                     isActive
-                      ? 'bg-muted text-foreground'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                      ? 'bg-brand-subtle text-foreground'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground',
                   )}
                   href={href}
                   onClick={onNavigate}
@@ -547,7 +592,7 @@ export const Sidebar = observer(function Sidebar({
       <div className="flex h-12 items-center gap-2 border-b border-border px-2">
         <button
           aria-label={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
-          className="hidden h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:flex"
+          className="hidden h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:flex"
           onClick={onToggle}
           title={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
           type="button"
@@ -580,8 +625,8 @@ export const Sidebar = observer(function Sidebar({
                   'flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
                   effectiveCollapsed && 'justify-center px-0',
                   pathname === item.href
-                    ? 'bg-muted text-foreground'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    ? 'bg-brand-subtle text-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
                 )}
                 href={item.href}
                 onClick={onMobileClose}
@@ -641,7 +686,7 @@ function SidebarFooter({
           <ConnectionStatus compact />
           <Link
             className={cn(
-              'flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+              'flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
               pathname.startsWith(`${base}/settings`) && 'bg-muted text-foreground',
             )}
             href={`${base}/settings`}
@@ -651,10 +696,11 @@ function SidebarFooter({
             <Settings className="h-4 w-4" />
           </Link>
           <ThemeToggle compact />
+          <AccentToggle compact />
           <LanguageToggle compact />
           <button
             aria-label={t('common.signOut')}
-            className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             onClick={() => void logout()}
             title={t('common.signOut')}
             type="button"
@@ -668,7 +714,7 @@ function SidebarFooter({
           <div className="flex items-center justify-between gap-1">
             <Link
               className={cn(
-                'flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+                'flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
                 pathname.startsWith(`${base}/settings`) && 'bg-muted text-foreground',
               )}
               href={`${base}/settings`}
@@ -678,7 +724,12 @@ function SidebarFooter({
               <Settings className="h-4 w-4 shrink-0" />
               <span className="truncate">{t('common.settings')}</span>
             </Link>
+            {/* Compact (cycling) accent swatch here rather than the full
+                three-swatch picker — the expanded rail is only 240px and
+                already carries the language and theme controls. The full
+                picker lives in workspace settings. */}
             <div className="flex shrink-0 items-center gap-1">
+              <AccentToggle compact />
               <LanguageToggle />
               <ThemeToggle />
             </div>
@@ -690,7 +741,7 @@ function SidebarFooter({
               </span>
               <button
                 aria-label={t('common.signOut')}
-                className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 onClick={() => void logout()}
                 title={t('common.signOut')}
                 type="button"

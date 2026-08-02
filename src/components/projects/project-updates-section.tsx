@@ -134,7 +134,7 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
                       {author?.displayName ?? t('projects.unknownAuthor')}
                     </span>
                     {health && (
-                      <Badge className={health.color} variant="solid">
+                      <Badge tone={health.tone}>
                         {t(PROJECT_HEALTH_LABEL_KEYS[update.health ?? ''])}
                       </Badge>
                     )}

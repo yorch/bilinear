@@ -1,3 +1,4 @@
+import { isAccent } from '@/lib/accent';
 import { isLocale } from '@/lib/i18n';
 import type { PrismaClient, User } from '../../generated/prisma';
 
@@ -174,12 +175,31 @@ export class UserService {
     }
     return this.prisma.user.update({ data: { locale }, where: { id: userId } });
   }
+
+  /**
+   * Persist the accent preference so it follows the account to a new device.
+   * Validated against the registry for the same reason the locale is: a value
+   * the CSS has no block for would leave `data-accent` matching nothing.
+   */
+  async updateAccent(userId: string, accent: string): Promise<User> {
+    if (!isAccent(accent)) {
+      throw new InvalidAccentError(accent);
+    }
+    return this.prisma.user.update({ data: { accent }, where: { id: userId } });
+  }
 }
 
 export class InvalidLocaleError extends Error {
   constructor(locale: string) {
     super(`Unsupported locale: ${locale}`);
     this.name = 'InvalidLocaleError';
+  }
+}
+
+export class InvalidAccentError extends Error {
+  constructor(accent: string) {
+    super(`Unsupported accent: ${accent}`);
+    this.name = 'InvalidAccentError';
   }
 }
 

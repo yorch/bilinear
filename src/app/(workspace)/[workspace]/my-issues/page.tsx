@@ -10,6 +10,8 @@ import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-pane
 import { ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { SyncErrorState } from '@/components/shared/sync-error-state';
+import { PageHeader, Toolbar } from '@/components/ui/page-header';
+import { IssueListSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useIssueListPage } from '@/hooks/use-issue-list-page';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
@@ -107,11 +109,9 @@ const MyIssuesPage = observer(function MyIssuesPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (isLoading) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-        {t('common.loading')}
-      </div>
-    );
+    // A shaped skeleton rather than a centred "Loading…" string: it tells you
+    // what is arriving and keeps the page from jumping when it does.
+    return <IssueListSkeleton />;
   }
 
   if (hasError) {
@@ -121,42 +121,39 @@ const MyIssuesPage = observer(function MyIssuesPage() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Page header */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-6 py-3">
-        <div className="flex items-center gap-2">
-          <h1 className="text-sm font-semibold text-foreground">{t('issues.myIssues')}</h1>
-          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-            {issues.length}
-          </span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {viewMode === 'board' && (
-            <>
-              <select
-                className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground-secondary"
-                onChange={e => setBoardGroupBy(e.target.value as BoardGroupBy)}
-                value={boardGroupBy}
-              >
-                <option value="status">{t('issues.groupByStatus')}</option>
-                <option value="assignee">{t('issues.groupByAssignee')}</option>
-                <option value="priority">{t('issues.groupByPriority')}</option>
-              </select>
-              <select
-                className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground-secondary"
-                onChange={e => setSwimlaneBy(e.target.value as BoardSwimlaneBy)}
-                value={swimlaneBy}
-              >
-                <option value="none">{t('issues.noSwimlanes')}</option>
-                <option value="assignee">{t('issues.swimlaneByAssignee')}</option>
-                <option value="priority">{t('issues.swimlaneByPriority')}</option>
-              </select>
-            </>
-          )}
-          <ViewToggle mode={viewMode} onChange={setViewMode} />
-        </div>
-      </div>
+      <PageHeader
+        actions={
+          <>
+            {viewMode === 'board' && (
+              <>
+                <select
+                  className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground-secondary"
+                  onChange={e => setBoardGroupBy(e.target.value as BoardGroupBy)}
+                  value={boardGroupBy}
+                >
+                  <option value="status">{t('issues.groupByStatus')}</option>
+                  <option value="assignee">{t('issues.groupByAssignee')}</option>
+                  <option value="priority">{t('issues.groupByPriority')}</option>
+                </select>
+                <select
+                  className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground-secondary"
+                  onChange={e => setSwimlaneBy(e.target.value as BoardSwimlaneBy)}
+                  value={swimlaneBy}
+                >
+                  <option value="none">{t('issues.noSwimlanes')}</option>
+                  <option value="assignee">{t('issues.swimlaneByAssignee')}</option>
+                  <option value="priority">{t('issues.swimlaneByPriority')}</option>
+                </select>
+              </>
+            )}
+            <ViewToggle mode={viewMode} onChange={setViewMode} />
+          </>
+        }
+        count={issues.length}
+        title={t('issues.myIssues')}
+      />
 
-      {/* Filter bar */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
+      <Toolbar>
         <FilterBuilder
           filterSet={filterSet}
           labels={labels}
@@ -164,7 +161,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
           states={states}
           users={users}
         />
-      </div>
+      </Toolbar>
 
       {/* Issue list / board / timeline */}
       <div className="flex-1 overflow-y-auto">

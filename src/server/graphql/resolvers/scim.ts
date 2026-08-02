@@ -11,7 +11,7 @@ async function requireOrgAdmin(
   ctx: GraphQLContext,
 ): Promise<GraphQLContext & { orgId: string; userId: string }> {
   requireAuth(ctx);
-  await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+  requireOrgRole(ctx, ['owner', 'admin']);
   return ctx as GraphQLContext & { orgId: string; userId: string };
 }
 

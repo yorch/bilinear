@@ -61,8 +61,17 @@ class MockWebhookService {
 }
 
 export interface MockGraphQLContext {
+  /** Set to exercise the "refuse while impersonating" guards. */
+  impersonatorId?: string | null;
   loaders: Loaders;
   orgId: string | null;
+  /**
+   * The caller's org role, which `requireOrgRole` reads straight off the
+   * context (see AuthContext.orgRole). Defaults to `owner` so a resolver test
+   * exercises the resolver rather than the permission gate; pass a narrower
+   * role to test the gate itself.
+   */
+  orgRole: string | null;
   prisma: MockPrismaClient;
   services: {
     analytics: AnalyticsService;
@@ -91,15 +100,17 @@ export interface MockGraphQLContext {
 }
 
 export function createMockContext(
-  overrides: Partial<{ orgId: string | null; userId: string | null }> = {},
+  overrides: Partial<{ orgId: string | null; orgRole: string | null; userId: string | null }> = {},
 ): MockGraphQLContext {
   const prisma = createMockPrisma();
   const userService = new UserService(prisma as never);
 
   const orgId = overrides.orgId !== undefined ? overrides.orgId : TEST_ORG.id;
   return {
+    impersonatorId: null,
     loaders: createLoaders(prisma as never, orgId),
     orgId,
+    orgRole: overrides.orgRole !== undefined ? overrides.orgRole : 'owner',
     prisma,
     services: {
       analytics: new AnalyticsService(prisma as never),

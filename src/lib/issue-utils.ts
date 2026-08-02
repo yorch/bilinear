@@ -38,14 +38,18 @@ export function getDueDateColor(dueDate: string | null | undefined): string {
   const date = new Date(dueDate);
   const daysUntil = differenceInCalendarDays(date, new Date());
 
+  // Four distinct urgency levels. The status-token migration briefly collapsed
+  // "due today" and "due within 3 days" onto one class (orange and yellow both
+  // map to the warning role), which silently erased a level — they use the
+  // high-contrast and the vivid warning token respectively to stay apart.
   if (daysUntil < 0) {
-    return 'text-red-500';
+    return 'text-danger-subtle-foreground';
   }
   if (isToday(date)) {
-    return 'text-orange-500';
+    return 'text-warning-subtle-foreground';
   }
   if (daysUntil <= 3) {
-    return 'text-yellow-500';
+    return 'text-warning';
   }
   return 'text-muted-foreground';
 }

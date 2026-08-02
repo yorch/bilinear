@@ -207,7 +207,7 @@ function AddFilterForm({
   const needsValue = operator !== 'is_set' && operator !== 'is_not_set';
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-border bg-card p-2 shadow-lg">
+    <div className="flex items-center gap-2 rounded-lg border border-border bg-card p-2 shadow-e2">
       <SelectPopover
         triggerChildren={
           <>
@@ -306,7 +306,7 @@ function AddFilterForm({
         ))}
 
       <button
-        className="rounded bg-primary px-2 py-1 text-xs font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+        className="rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         disabled={needsValue && !value}
         onClick={() => {
           let resolvedValue: string | number | boolean = value;
@@ -400,7 +400,7 @@ export function FilterBuilder({
             'rounded-full px-2 py-0.5 text-xs font-medium transition-colors',
             filterSet.composition === 'and'
               ? 'bg-brand-subtle text-brand-subtle-foreground'
-              : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+              : 'bg-warning-subtle text-warning-subtle-foreground',
           )}
           onClick={toggleComposition}
           type="button"

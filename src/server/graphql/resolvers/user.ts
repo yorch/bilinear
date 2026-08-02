@@ -66,6 +66,25 @@ export const userResolvers = {
       return { success: true, user };
     },
 
+    userUpdateAccent: async (
+      _parent: unknown,
+      { accent }: { accent: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      try {
+        const user = await ctx.services.user.updateAccent(ctx.userId, accent);
+        return { success: true, user };
+      } catch (err) {
+        if ((err as Error).name === 'InvalidAccentError') {
+          throw new GraphQLError((err as Error).message, {
+            extensions: { code: 'BAD_USER_INPUT' },
+          });
+        }
+        throw err;
+      }
+    },
+
     userUpdateLocale: async (
       _parent: unknown,
       { locale }: { locale: string },

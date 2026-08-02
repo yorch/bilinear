@@ -59,7 +59,7 @@ export const DocumentList = observer(function DocumentList({
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold text-foreground">{t('documents.title')}</h2>
         <button
-          className="flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           disabled={creating}
           onClick={handleNewDocument}
           type="button"

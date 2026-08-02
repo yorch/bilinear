@@ -28,6 +28,7 @@ export const TEST_ORG = {
 };
 
 export const TEST_USER = {
+  accent: null,
   active: true,
   avatarBgColor: '#6366f1',
   avatarUrl: null,

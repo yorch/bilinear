@@ -84,7 +84,11 @@ test.describe('Optimistic Update Rollback', () => {
     // and current group rather than hardcoding the seed.
     const firstRow = page.locator('[data-testid="issue-row"]').first();
     await expect(firstRow).toBeVisible({ timeout: 10_000 });
-    const targetTitle = (await firstRow.locator('button.flex-1').textContent())?.trim() ?? '';
+    // Addressed by test id, not by layout class: the row moved from flex to a
+    // grid template so the properties line up between rows, and `button.flex-1`
+    // silently stopped matching.
+    const targetTitle =
+      (await firstRow.locator('[data-testid="issue-row-title"]').textContent())?.trim() ?? '';
     expect(targetTitle.length).toBeGreaterThan(0);
 
     // Discover the row's starting group section by walking up to the

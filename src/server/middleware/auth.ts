@@ -25,6 +25,22 @@ export interface AuthContext {
    */
   impersonatorId?: string | null;
   orgId: string | null;
+  /**
+   * The caller's role in `orgId` (`owner` / `admin` / `member`), resolved once
+   * per request by `extractAuthContext` from the membership row it already
+   * reads for the session-validity check. `requireOrgRole` consults this
+   * instead of issuing its own lookup — the row was already in hand, and the
+   * second read was pure duplication on a path that runs for most mutations.
+   *
+   * Invariant: this is non-null exactly when `orgId` is. Anything that clears
+   * `orgId` must clear this in the same assignment, or an authorization check
+   * could pass against a workspace the session no longer holds.
+   *
+   * Freshness is per-request, which is the same guarantee the extra read gave:
+   * every `requireOrgRole` call site runs before its resolver's first write,
+   * so nothing observes a role it changed itself.
+   */
+  orgRole?: string | null;
   userId: string | null;
 }
 
@@ -32,6 +48,7 @@ const EMPTY_CONTEXT: AuthContext = {
   apiKeyScopes: null,
   impersonatorId: null,
   orgId: null,
+  orgRole: null,
   userId: null,
 };
 
@@ -238,7 +255,11 @@ export async function extractAuthContext(
       // can't really happen is strictly more correct than the old
       // "practically impossible, and also would have silently kept working"
       // behavior.
-      resolved = { ...resolved, orgId: null };
+      resolved = { ...resolved, orgId: null, orgRole: null };
+    } else {
+      // Carry the role the validity check already read, so `requireOrgRole`
+      // doesn't re-fetch the same row. Cleared together with `orgId` above.
+      resolved = { ...resolved, orgRole: membership?.role ?? null };
     }
   }
 
@@ -326,26 +347,25 @@ export function requireUserId(ctx: AuthContext): asserts ctx is AuthContext & { 
 }
 
 /**
- * Assert the caller holds one of `roles` in `orgId`, and return which one.
+ * Assert the caller holds one of `roles` in their session's org, and return
+ * which one.
  *
  * The return value matters: an owner and an admin both clear
  * `['owner', 'admin']`, but only an owner may grant or revoke ownership, so
  * the membership-management mutations need the *actual* role rather than a
  * bare pass/fail.
+ *
+ * Reads `ctx.orgRole`, which `extractAuthContext` resolved from the membership
+ * row it must load anyway. It used to take `(prisma, orgId, userId, roles)`
+ * and re-query that row at each of its ~25 call sites — a second traversal of
+ * the same unique index, per mutation, for a value the request already had.
+ * Synchronous now, because there is nothing left to await.
+ *
+ * Fails closed: a session with no `orgRole` (unauthenticated, or an org whose
+ * membership failed revalidation) never satisfies any role list.
  */
-export async function requireOrgRole(
-  prisma: PrismaClient,
-  orgId: string,
-  userId: string,
-  roles: string[],
-): Promise<string> {
-  const membership = await prisma.organizationMember.findUnique({
-    select: { role: true },
-    where: {
-      organizationId_userId: { organizationId: orgId, userId },
-    },
-  });
-  const role = membership?.role ?? null;
+export function requireOrgRole(ctx: AuthContext, roles: string[]): string {
+  const role = ctx.orgId ? (ctx.orgRole ?? null) : null;
 
   if (!role || !roles.includes(role)) {
     throw new GraphQLError('Insufficient permissions', {

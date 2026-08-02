@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
+import { PageHeader } from '@/components/ui/page-header';
+import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -176,9 +178,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <div className="flex items-center border-b border-border px-6 py-3">
-        <h1 className="text-sm font-semibold text-foreground">{t('roadmap.settings.title')}</h1>
-      </div>
+      <PageHeader title={t('roadmap.settings.title')} />
 
       <div className="mx-auto w-full max-w-2xl px-6 py-8 flex flex-col gap-8">
         {/* Settings form */}
@@ -188,10 +188,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
           </h2>
           <div className="rounded-lg border border-border bg-card p-5">
             {loading ? (
-              <div className="flex flex-col gap-4 animate-pulse">
-                <div className="h-4 w-48 rounded bg-muted" />
-                <div className="h-4 w-64 rounded bg-muted" />
-              </div>
+              <RowsSkeleton count={2} />
             ) : loadError ? (
               <InlineRetry
                 message={t('common.somethingWentWrong')}
@@ -289,7 +286,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                         {t('roadmap.settings.passwordIsSet')}
                       </span>
                       <button
-                        className="text-xs text-red-500 hover:text-red-600 dark:text-red-400"
+                        className="text-xs text-danger-subtle-foreground hover:underline"
                         onClick={() => {
                           setNewPassword('');
                           setClearPassword(true);
@@ -302,7 +299,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                   ) : (
                     <>
                       {clearPassword && (
-                        <p className="text-xs text-amber-600 dark:text-amber-400">
+                        <p className="text-xs text-warning-subtle-foreground">
                           {t('roadmap.settings.passwordWillBeRemoved')}{' '}
                           <button
                             className="underline"
@@ -334,7 +331,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
 
                 <div className="flex justify-end">
                   <button
-                    className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-background"
+                    className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-background"
                     disabled={saving}
                     type="submit"
                   >

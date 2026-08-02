@@ -99,7 +99,7 @@ const ValueRow = observer(
       <>
         <span className="text-muted-foreground">
           {label}
-          {required && <span className="ml-0.5 text-amber-500">*</span>}
+          {required && <span className="ml-0.5 text-warning-subtle-foreground">*</span>}
         </span>
         <div className="flex items-center">
           <CustomFieldValueInput definition={def} onSave={onSave} value={currentValue} />

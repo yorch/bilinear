@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery } from '@/lib/graphql';
 import { PROJECT_PROGRESS_HISTORY_QUERY } from '@/lib/graphql-queries';
@@ -49,7 +50,7 @@ export function ProgressSparkline({ projectId, width = 160, height = 28 }: Progr
   }, [fetchHistory]);
 
   if (!loaded) {
-    return <div className="h-7 w-40 animate-pulse rounded bg-muted" />;
+    return <Skeleton className="h-7 w-40" />;
   }
   if (error) {
     return (

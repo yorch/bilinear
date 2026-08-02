@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
@@ -211,7 +212,7 @@ export default function AuditLogPage() {
           value={userIdFilter}
         />
         <button
-          className="rounded bg-primary px-3 py-1 text-xs text-white hover:bg-primary/90"
+          className="rounded bg-primary px-3 py-1 text-xs text-primary-foreground hover:bg-primary/90"
           onClick={handleApplyFilters}
           type="button"
         >
@@ -229,9 +230,7 @@ export default function AuditLogPage() {
       </div>
 
       {loading ? (
-        <div className="flex flex-1 items-center justify-center py-16 text-sm text-muted-foreground">
-          {t('common.loading')}
-        </div>
+        <RowsSkeleton className="p-6" count={6} />
       ) : entries.length === 0 ? (
         <div className="rounded border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
           {t('settings.auditLog.noEntriesFound')}
@@ -279,7 +278,7 @@ export default function AuditLogPage() {
                         {entry.userId}
                       </span>
                     ) : (
-                      <span className="text-xs text-foreground-faint">
+                      <span className="text-xs text-muted-foreground">
                         {t('settings.auditLog.system')}
                       </span>
                     )}

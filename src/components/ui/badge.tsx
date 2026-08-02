@@ -4,11 +4,34 @@ import type * as React from 'react';
 import { cn } from '@/lib/utils';
 
 const badgeVariants = cva('inline-flex items-center gap-1 text-xs font-medium', {
-  defaultVariants: { variant: 'pill' },
+  defaultVariants: { tone: 'none', variant: 'pill' },
   variants: {
+    /**
+     * Colour. Defaults to `none` so the many call sites that pass their own
+     * colours through `className` (label chips carrying a user-chosen colour,
+     * status pills driven by workflow state) keep working untouched — this is
+     * additive, not a re-skin.
+     */
+    tone: {
+      brand: 'bg-brand-subtle text-brand-subtle-foreground',
+      danger: 'bg-danger-subtle text-danger-subtle-foreground',
+      info: 'bg-info-subtle text-info-subtle-foreground',
+      muted: 'bg-muted text-muted-foreground',
+      none: '',
+      outline: 'border border-border text-foreground-secondary',
+      success: 'bg-success-subtle text-success-subtle-foreground',
+      warning: 'bg-warning-subtle text-warning-subtle-foreground',
+    },
+    /**
+     * Shape only. There is deliberately no `solid` variant: it hardcoded
+     * `text-white` over whatever vivid fill the call site passed, and white
+     * does not clear 4.5:1 on any of the status fills — ~2.6:1 on `--warning`
+     * in light, ~1.4:1 in dark. Solid status chips are `tone` pills now, whose
+     * fill/ink pairs src/lib/contrast.test.ts asserts.
+     */
     variant: {
       pill: 'rounded-full px-2 py-0.5',
-      solid: 'rounded px-1.5 py-0.5 text-white',
+      square: 'rounded px-1.5 py-0.5',
     },
   },
 });
@@ -17,8 +40,8 @@ export interface BadgeProps
   extends React.HTMLAttributes<HTMLSpanElement>,
     VariantProps<typeof badgeVariants> {}
 
-export function Badge({ className, variant, ...props }: BadgeProps) {
-  return <span className={cn(badgeVariants({ variant }), className)} {...props} />;
+export function Badge({ className, tone, variant, ...props }: BadgeProps) {
+  return <span className={cn(badgeVariants({ tone, variant }), className)} {...props} />;
 }
 
 export { badgeVariants };

@@ -4,6 +4,7 @@ import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { CycleListView } from '@/components/cycles/cycle-list-view';
 import { SyncErrorState } from '@/components/shared/sync-error-state';
+import { PageSkeleton } from '@/components/ui/skeleton';
 import { useTranslations } from '@/hooks/use-translations';
 import { useStore } from '@/providers/store-provider';
 
@@ -21,11 +22,7 @@ const TeamCyclesPage = observer(function TeamCyclesPage() {
   const hasError = syncStore.status === 'error';
 
   if (isLoading) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-        {t('common.loading')}
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (hasError) {

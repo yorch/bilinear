@@ -42,7 +42,7 @@ interface TeamMemberManagementProps {
 }
 
 const ROLE_COLORS: Record<TeamRole, string> = {
-  admin: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+  admin: 'bg-info-subtle text-info-subtle-foreground',
   guest: 'bg-muted text-muted-foreground',
   member: 'bg-muted text-muted-foreground',
 };
@@ -195,7 +195,7 @@ export function TeamMemberManagement({
                     )}
                   </span>
                   {member.isOwner && (
-                    <span className="flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                    <span className="flex items-center gap-0.5 rounded-full bg-warning-subtle px-1.5 py-0.5 text-xs font-medium text-warning-subtle-foreground">
                       <Crown className="h-2.5 w-2.5" />
                       {t('teams.owner')}
                     </span>
@@ -243,7 +243,7 @@ export function TeamMemberManagement({
                       {isSelf ? t('teams.leaveConfirm') : t('teams.removeConfirm')}
                     </span>
                     <button
-                      className="rounded bg-red-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                      className="rounded bg-destructive px-2 py-0.5 text-xs font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
                       disabled={isLoading}
                       onClick={() => {
                         setPendingRemoveId(null);
@@ -268,7 +268,7 @@ export function TeamMemberManagement({
                         className={cn(
                           'flex h-7 w-7 items-center justify-center rounded text-xs transition-colors disabled:opacity-50 max-md:h-11 max-md:w-11',
                           member.isOwner
-                            ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                            ? 'text-warning-subtle-foreground hover:bg-warning-subtle'
                             : 'text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
                         )}
                         disabled={isLoading}
@@ -281,7 +281,7 @@ export function TeamMemberManagement({
                     )}
                     {(canManageMembers || isSelf) && (
                       <button
-                        className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-900/20 dark:hover:text-red-400 max-md:h-11 max-md:w-11"
+                        className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger-subtle-foreground disabled:opacity-50 max-md:h-11 max-md:w-11"
                         disabled={isLoading}
                         onClick={() => setPendingRemoveId(member.membershipId)}
                         title={isSelf ? t('teams.leaveTeam') : t('teams.removeMember')}

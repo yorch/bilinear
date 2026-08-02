@@ -19,9 +19,10 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Columns3 } from 'lucide-react';
 import { useState } from 'react';
 import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
+import { EmptyState } from '@/components/ui/empty-state';
 import { useFormatters } from '@/hooks/use-formatters';
 import { usePending } from '@/hooks/use-pending-ids';
 import { useTranslations } from '@/hooks/use-translations';
@@ -86,13 +87,15 @@ function BoardCardInner({
   return (
     <button
       className={cn(
-        'w-full cursor-pointer rounded-lg border bg-card p-3 text-left shadow-sm transition-shadow hover:shadow-md',
+        'w-full cursor-pointer rounded-lg border bg-card p-3 text-left shadow-e1 transition-shadow hover:shadow-e2',
         selected
           ? 'border-brand ring-1 ring-brand'
           : multiSelected
-            ? 'border-blue-500 ring-2 ring-blue-500'
+            ? 'border-brand ring-2 ring-brand'
             : 'border-border',
-        isDragging && 'rotate-2 shadow-lg',
+        // The accent is allowed to appear here because something is actually
+        // in motion; a card at rest stays neutral.
+        isDragging && 'rotate-2 shadow-e3 ring-1 ring-brand',
       )}
       onClick={onSelect}
       onDoubleClick={onOpen}
@@ -626,9 +629,11 @@ export function BoardView({
 
   if (issues.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center py-20 text-sm text-muted-foreground">
-        {t('issues.noIssues')}
-      </div>
+      <EmptyState
+        className="flex-1"
+        icon={<Columns3 className="h-5 w-5" />}
+        title={t('issues.noIssues')}
+      />
     );
   }
 
@@ -672,8 +677,8 @@ export function BoardView({
       <DragOverlay>
         {activeIssue &&
           (isDraggingMultiple ? (
-            <div className="flex items-center gap-2 rounded-lg border border-blue-500 bg-card px-4 py-3 shadow-lg">
-              <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+            <div className="flex items-center gap-2 rounded-lg border border-brand bg-card px-4 py-3 shadow-e3">
+              <span className="text-sm font-medium text-brand-subtle-foreground">
                 {t('issues.draggingCount', { count: selectedIds.size })}
               </span>
             </div>

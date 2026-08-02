@@ -1,7 +1,11 @@
 'use client';
 
 import { useTranslations } from '@/hooks/use-translations';
-import { PROJECT_HEALTH_LABEL_KEYS, PROJECT_HEALTH_OPTIONS } from '@/lib/project-constants';
+import {
+  PROJECT_HEALTH_LABEL_KEYS,
+  PROJECT_HEALTH_OPTIONS,
+  PROJECT_HEALTH_SELECTED_CLASSES,
+} from '@/lib/project-constants';
 import { cn } from '@/lib/utils';
 
 interface UpdateFormFieldsProps {
@@ -47,7 +51,7 @@ export function UpdateFormFields({
             className={cn(
               'rounded px-2 py-0.5 text-xs font-medium transition-colors',
               health === h.value
-                ? `${h.color} text-white`
+                ? PROJECT_HEALTH_SELECTED_CLASSES[h.value]
                 : 'bg-muted text-muted-foreground hover:bg-accent',
             )}
             key={h.value}

@@ -5,10 +5,13 @@ import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { AccentToggle } from '@/components/accent-toggle';
 import { LanguageToggle } from '@/components/language-toggle';
 import { MembersSection } from '@/components/settings/members-section';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
+import { PageHeader } from '@/components/ui/page-header';
+import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
@@ -321,9 +324,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <div className="flex items-center border-b border-border px-6 py-3">
-        <h1 className="text-sm font-semibold text-foreground">{t('settings.workspace.title')}</h1>
-      </div>
+      <PageHeader title={t('settings.workspace.title')} />
 
       <div className="mx-auto w-full max-w-2xl px-6 py-8 flex flex-col gap-8">
         <section>
@@ -332,10 +333,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
           </h2>
           <div className="rounded-lg border border-border bg-card p-5">
             {loading ? (
-              <div className="flex flex-col gap-4 animate-pulse">
-                <div className="h-4 w-48 rounded bg-muted" />
-                <div className="h-4 w-32 rounded bg-muted" />
-              </div>
+              <RowsSkeleton count={2} />
             ) : org ? (
               <dl className="flex flex-col gap-4">
                 <div className="grid grid-cols-3 gap-4">
@@ -390,10 +388,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
               {t('settings.workspace.planLimitsDescription')}
             </p>
             {loading ? (
-              <div className="flex flex-col gap-4 animate-pulse">
-                <div className="h-4 w-48 rounded bg-muted" />
-                <div className="h-4 w-32 rounded bg-muted" />
-              </div>
+              <RowsSkeleton count={2} />
             ) : org ? (
               <dl className="flex flex-col gap-4">
                 {PLAN_LIMIT_FIELDS.map(({ key, labelKey }) => (
@@ -440,7 +435,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.workspace.teams')}
-            <span className="ml-2 font-normal normal-case text-foreground-faint">
+            <span className="ml-2 font-normal normal-case text-muted-foreground">
               {teams.length}
             </span>
           </h2>
@@ -500,7 +495,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
           </div>
         </section>
 
-        <MembersSection />
+        <MembersSection orgName={org?.name ?? ''} />
 
         {/* Personal preferences */}
         <section>
@@ -519,6 +514,20 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   </p>
                 </div>
                 <LanguageToggle />
+              </div>
+            </div>
+
+            {/* Accent — the sidebar footer only has room for the cycling
+                swatch, so the full three-option picker lives here. */}
+            <div className="px-5 py-3">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">{t('accent.accent')}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('settings.workspace.accentDescription')}
+                  </p>
+                </div>
+                <AccentToggle />
               </div>
             </div>
 
@@ -597,16 +606,16 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
           <div className="rounded-lg border border-border bg-card divide-y divide-border">
             {/* New plaintext banner — shown only once after creation */}
             {newPlaintext && (
-              <div className="px-5 py-3 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800">
-                <p className="text-xs font-medium text-amber-700 dark:text-amber-400 mb-1.5">
+              <div className="px-5 py-3 bg-warning-subtle border-b border-warning/40">
+                <p className="text-xs font-medium text-warning-subtle-foreground mb-1.5">
                   {t('settings.workspace.copyTokenNowWarning')}
                 </p>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 truncate text-xs bg-card border border-amber-200 dark:border-amber-700 px-2 py-1 rounded text-foreground-secondary font-mono">
+                  <code className="flex-1 truncate text-xs bg-card border border-warning/40 px-2 py-1 rounded text-foreground-secondary font-mono">
                     {newPlaintext}
                   </code>
                   <button
-                    className="shrink-0 text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-200 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+                    className="shrink-0 rounded p-1 text-warning-subtle-foreground hover:bg-warning/35 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                     onClick={() => {
                       void navigator.clipboard.writeText(newPlaintext);
                       toast.success(t('settings.workspace.copiedToClipboard'));
@@ -618,7 +627,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   </button>
                 </div>
                 <button
-                  className="mt-2 text-xs text-amber-600 dark:text-amber-400 hover:underline"
+                  className="mt-2 text-xs text-warning-subtle-foreground hover:underline"
                   onClick={() => setNewPlaintext(null)}
                   type="button"
                 >
@@ -696,7 +705,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   </select>
                 </label>
                 {!newTokenWritable && (
-                  <span className="text-amber-600 dark:text-amber-400">
+                  <span className="text-warning-subtle-foreground">
                     {t('settings.workspace.readOnlyKey')}
                   </span>
                 )}
@@ -722,7 +731,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                           className={cn(
                             'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
                             token.scopes.length === 0 || token.scopes.includes('write')
-                              ? 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground'
+                              ? 'bg-brand-subtle text-brand-subtle-foreground'
                               : 'bg-muted text-muted-foreground',
                           )}
                         >
@@ -758,7 +767,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                       </p>
                     </div>
                     <button
-                      className="shrink-0 text-muted-foreground hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+                      className="shrink-0 text-muted-foreground hover:text-danger-subtle-foreground disabled:opacity-40 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
                       disabled={revokingTokenId === token.id}
                       onClick={() => setConfirmingRevokeToken(token)}
                       title={t('settings.workspace.revokeToken')}

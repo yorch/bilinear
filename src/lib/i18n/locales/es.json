@@ -1,4 +1,11 @@
 {
+  "accent": {
+    "accent": "Acento",
+    "aurora": "Aurora",
+    "currentAccent": "Acento actual: {accent}. Haz clic para cambiar.",
+    "ion": "Ion",
+    "ultraviolet": "Ultravioleta"
+  },
   "admin": {
     "audit": {
       "colAction": "Acción",
@@ -219,6 +226,16 @@
   },
   "auth": {
     "backToSignIn": "Volver a iniciar sesión",
+    "canvas": {
+      "headline": "Incidencias siempre sincronizadas, aunque tú no lo estés.",
+      "statLocalesLabel": "idiomas",
+      "statLocalesValue": "2",
+      "statOfflineLabel": "sin conexión",
+      "statOfflineValue": "100%",
+      "statSyncLabel": "escritura optimista",
+      "statSyncValue": "<40 ms",
+      "subhead": "Diseñado para funcionar sin conexión. Escribe en pleno vuelo, aterriza y encuentra la cola ya vacía."
+    },
     "checkYourEmail": "Revisa tu correo",
     "continueWithEmail": "Continuar con correo electrónico",
     "continueWithGitHub": "Continuar con GitHub",
@@ -260,6 +277,7 @@
       "goToMyIssues": "Ir a Mis tareas",
       "goToProjects": "Ir a Proyectos",
       "goToSettings": "Ir a Configuración",
+      "switchAccent": "Cambiar al acento {accent}",
       "switchTheme": "Cambiar a tema {theme}"
     },
     "dialogAriaLabel": "Paleta de comandos",
@@ -989,10 +1007,12 @@
     "backlog": "Pendientes",
     "closeMenu": "Cerrar menú",
     "collapseSidebar": "Contraer barra lateral (⌘B)",
+    "collapseTeam": "Contraer {team}",
     "createTeam": "Crear un equipo",
     "cycles": "Ciclos",
     "docs": "Documentos",
     "expandSidebar": "Expandir barra lateral (⌘B)",
+    "expandTeam": "Expandir {team}",
     "failedToRemoveFavorite": "No se pudo quitar el favorito",
     "favorites": "Favoritos",
     "inbox": "Bandeja de entrada",
@@ -1519,6 +1539,7 @@
       "webhookCreated": "Webhook creado"
     },
     "workspace": {
+      "accentDescription": "El color de acento usado para la selección, el foco y las acciones principales.",
       "ai": "IA",
       "aiAssistant": "Asistente de IA",
       "aiAssistantDescription": "Sugerencias de títulos, resúmenes de issues y detección de duplicados. Requiere una clave de API de Anthropic configurada en el servidor.",
@@ -1570,6 +1591,13 @@
       "inviteSent": "Invitación enviada a {email}",
       "languageDescription": "Elige tu idioma de visualización",
       "lastUsedOn": "Usado por última vez el {date}",
+      "leave": "Salir del espacio",
+      "leaveConfirm": "Perderás el acceso a {name} de inmediato, incluidos todos sus equipos. Solo podrás volver si alguien te vuelve a invitar.",
+      "leaveConfirmTitle": "¿Salir de este espacio de trabajo?",
+      "leaveDescription": "Perderás el acceso a este espacio de trabajo y a todos sus equipos. Los demás miembros no se ven afectados y tu cuenta sigue activa en los demás espacios a los que pertenezcas.",
+      "leaveError": "No se pudo salir del espacio de trabajo",
+      "leaveTitle": "Salir del espacio de trabajo",
+      "leaving": "Saliendo…",
       "memberRoleUpdated": "Rol del miembro actualizado",
       "memberRoleUpdateError": "Error al actualizar el rol del miembro",
       "members": "Miembros",

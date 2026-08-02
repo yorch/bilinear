@@ -58,15 +58,17 @@ describe('getDueDateColor', () => {
   });
 
   it('returns red for an overdue date', () => {
-    expect(getDueDateColor('2026-06-10T12:00:00')).toBe('text-red-500');
+    expect(getDueDateColor('2026-06-10T12:00:00')).toBe('text-danger-subtle-foreground');
   });
 
-  it('returns orange when due today', () => {
-    expect(getDueDateColor('2026-06-15T12:00:00')).toBe('text-orange-500');
+  it('returns the high-contrast warning when due today', () => {
+    expect(getDueDateColor('2026-06-15T12:00:00')).toBe('text-warning-subtle-foreground');
   });
 
-  it('returns yellow when due within three days', () => {
-    expect(getDueDateColor('2026-06-17T12:00:00')).toBe('text-yellow-500');
+  it('returns a distinct, less urgent warning when due within three days', () => {
+    // Must not equal the "due today" class — these are separate urgency levels.
+    expect(getDueDateColor('2026-06-17T12:00:00')).toBe('text-warning');
+    expect(getDueDateColor('2026-06-17T12:00:00')).not.toBe(getDueDateColor('2026-06-15T12:00:00'));
   });
 
   it('returns neutral when due more than three days out', () => {

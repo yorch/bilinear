@@ -5,6 +5,8 @@ import { observer } from 'mobx-react-lite';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { IssueListView } from '@/components/issues/issue-list-view';
+import { PageHeader } from '@/components/ui/page-header';
+import { IssueListSkeleton } from '@/components/ui/skeleton';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssueLabel } from '@/lib/db';
@@ -91,11 +93,9 @@ const CustomViewPage = observer(function CustomViewPage() {
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
 
   if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        {t('common.loading')}
-      </div>
-    );
+    // A shaped skeleton rather than a centred "Loading…" string: it tells you
+    // what is arriving and keeps the page from jumping when it does.
+    return <IssueListSkeleton />;
   }
 
   if (!view || !team) {
@@ -109,16 +109,12 @@ const CustomViewPage = observer(function CustomViewPage() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <header className="flex items-center gap-2 border-b border-border px-6 py-3">
-        <Eye className="h-4 w-4 text-muted-foreground" />
-        <h1 className="text-sm font-semibold text-foreground">{view.name}</h1>
-        <span className="text-xs text-muted-foreground">
-          {t('issues.issuesCount', { count: issues.length })}
-        </span>
-        {view.description && (
-          <span className="truncate text-xs text-muted-foreground">{view.description}</span>
-        )}
-      </header>
+      <PageHeader
+        count={issues.length}
+        description={view.description ?? undefined}
+        leading={<Eye className="h-4 w-4 shrink-0 text-muted-foreground" />}
+        title={view.name}
+      />
 
       {/* Filtered list */}
       <div className="flex-1 overflow-y-auto">

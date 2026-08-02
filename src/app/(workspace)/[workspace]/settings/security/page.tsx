@@ -2,6 +2,8 @@
 
 import { Copy, ExternalLink } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
+import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql, gqlMutate, gqlQuery } from '@/lib/graphql';
@@ -388,7 +390,7 @@ export default function SecuritySettingsPage() {
           <p className="text-sm font-medium">{t('settings.security.bearerTokens')}</p>
 
           {scimLoading ? (
-            <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+            <RowsSkeleton count={3} />
           ) : scimLoadError ? (
             <p
               className={cn(
@@ -436,8 +438,8 @@ export default function SecuritySettingsPage() {
 
               {/* New token form */}
               {scimNewPlaintext ? (
-                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 space-y-2 dark:border-amber-700 dark:bg-amber-950/30">
-                  <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+                <div className="rounded-md border border-warning/40 bg-warning-subtle p-3 space-y-2">
+                  <p className="text-xs font-medium text-warning-subtle-foreground">
                     {t('settings.security.copyTokenNowWarning')}
                   </p>
                   <div className="flex items-center gap-2">
@@ -498,14 +500,14 @@ export default function SecuritySettingsPage() {
             {t('settings.security.samlDescription')}
           </p>
           {config && (
-            <span className="inline-block mt-2 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
+            <span className="inline-block mt-2 rounded-full bg-success-subtle px-2.5 py-0.5 text-xs font-medium text-success-subtle-foreground">
               {t('settings.security.configured')}
             </span>
           )}
         </div>
 
         {loading ? (
-          <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+          <RowsSkeleton count={3} />
         ) : samlLoadError ? (
           // A permission error means "you can't see this"; anything else is a
           // real failure. Either way the form stays hidden, so a configuration
@@ -629,23 +631,23 @@ export default function SecuritySettingsPage() {
 
               {/* Toggles */}
               <div className="space-y-3 pt-1">
-                <Toggle
+                <SettingToggleRow
                   checked={form.enabled}
                   description={t('settings.security.enableSamlSsoDescription')}
                   label={t('settings.security.enableSamlSso')}
-                  onChange={v => setField('enabled', v)}
+                  onCheckedChange={v => setField('enabled', v)}
                 />
-                <Toggle
+                <SettingToggleRow
                   checked={form.jitProvisioning}
                   description={t('settings.security.jitProvisioningDescription')}
                   label={t('settings.security.jitProvisioning')}
-                  onChange={v => setField('jitProvisioning', v)}
+                  onCheckedChange={v => setField('jitProvisioning', v)}
                 />
-                <Toggle
+                <SettingToggleRow
                   checked={form.ssoEnforced}
                   description={t('settings.security.enforceSsoDescription')}
                   label={t('settings.security.enforceSso')}
-                  onChange={v => setField('ssoEnforced', v)}
+                  onCheckedChange={v => setField('ssoEnforced', v)}
                 />
               </div>
 
@@ -722,46 +724,6 @@ function ReadOnlyField({
           <Copy className="h-3.5 w-3.5" />
         </button>
       </div>
-    </div>
-  );
-}
-
-function Toggle({
-  checked,
-  description,
-  label,
-  onChange,
-}: {
-  checked: boolean;
-  description: string;
-  label: string;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between">
-      <div>
-        <p className="text-sm font-medium">{label}</p>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
-      <button
-        aria-checked={checked}
-        aria-label={label}
-        className={[
-          'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors',
-          'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
-          checked ? 'bg-primary' : 'bg-muted-foreground/30',
-        ].join(' ')}
-        onClick={() => onChange(!checked)}
-        role="switch"
-        type="button"
-      >
-        <span
-          className={[
-            'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform',
-            checked ? 'translate-x-4' : 'translate-x-0',
-          ].join(' ')}
-        />
-      </button>
     </div>
   );
 }
