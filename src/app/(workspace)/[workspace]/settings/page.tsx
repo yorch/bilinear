@@ -440,7 +440,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.workspace.teams')}
-            <span className="ml-2 font-normal normal-case text-foreground-faint">
+            <span className="ml-2 font-normal normal-case text-muted-foreground">
               {teams.length}
             </span>
           </h2>

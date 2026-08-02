@@ -106,7 +106,7 @@ export function VerifyCodeForm() {
           // input in the app where character-by-character legibility beats
           // compactness.
           autoComplete="one-time-code"
-          className="py-2 text-center font-mono text-2xl tracking-[0.4em] tabular-nums placeholder:text-foreground-faint"
+          className="py-2 text-center font-mono text-2xl tracking-[0.4em] tabular-nums placeholder:text-muted-foreground"
           id="code"
           inputMode="numeric"
           maxLength={6}

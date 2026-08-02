@@ -217,9 +217,9 @@
   --secondary: oklch(0.972 0.007 var(--accent-h));
   --secondary-foreground: var(--foreground);
   --muted: oklch(0.972 0.007 var(--accent-h));
-  --muted-foreground: oklch(0.58 0.015 var(--accent-h));
+  --muted-foreground: oklch(0.535 0.016 var(--accent-h));
   --foreground-secondary: oklch(0.42 0.018 var(--accent-h));
-  --foreground-faint: oklch(0.78 0.012 var(--accent-h));
+  --foreground-faint: oklch(0.68 0.014 var(--accent-h));
   /* --accent is the neutral HOVER surface (shadcn's meaning), not the brand
      accent. It used to be byte-identical to --muted, which is what made
      `bg-muted hover:bg-accent` render as no hover at all — a bug class this
@@ -227,7 +227,7 @@
   --accent: oklch(0.955 0.011 var(--accent-h));
   --accent-foreground: var(--foreground);
   --border: oklch(0.3 0.03 var(--accent-h) / 0.11);
-  --input: oklch(0.3 0.03 var(--accent-h) / 0.16);
+  --input: oklch(0.3 0.03 var(--accent-h) / 0.62);
   --invert: oklch(0.21 0.02 var(--accent-h));
   --invert-foreground: oklch(0.99 0 0);
   --avatar-fallback: oklch(0.7 0.02 var(--accent-h));
@@ -245,6 +245,15 @@
   --primary-foreground: oklch(0.99 0 0);
   --ring: var(--brand);
   --gradient-brand: linear-gradient(135deg, var(--brand), var(--brand-2));
+  /* Decorative gradient (rails, marks, glyph tiles) vs the one used behind
+     white button text. They must differ: --brand-2 is a light partner by
+     design, and white over it measures 1.76:1 under Ion. The CTA gradient
+     darkens both stops so the label clears 4.5:1 under every accent. */
+  --gradient-brand-cta: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--brand) 88%, black),
+    color-mix(in oklab, var(--brand-2) 62%, black)
+  );
 
   /* Elevation (light) — tinted to the accent hue. */
   --elevation-1:
@@ -267,24 +276,27 @@
      one token, not a hand-picked light/dark shade pair at every call site. */
   --danger: oklch(0.577 0.245 27.325);
   --success: oklch(0.627 0.194 149.214);
-  --warning: oklch(0.681 0.162 75.834);
+  --warning: oklch(0.635 0.155 75.834);
   --info: oklch(0.623 0.214 259.815);
   --danger-subtle: color-mix(in oklab, var(--danger) 12%, transparent);
   --success-subtle: color-mix(in oklab, var(--success) 12%, transparent);
   --warning-subtle: color-mix(in oklab, var(--warning) 14%, transparent);
   --info-subtle: color-mix(in oklab, var(--info) 12%, transparent);
-  --danger-subtle-foreground: color-mix(in oklab, var(--danger) 82%, black);
-  --success-subtle-foreground: color-mix(in oklab, var(--success) 82%, black);
-  --warning-subtle-foreground: color-mix(in oklab, var(--warning) 82%, black);
-  --info-subtle-foreground: color-mix(in oklab, var(--info) 82%, black);
+  --danger-subtle-foreground: color-mix(in oklab, var(--danger) 70%, black);
+  --success-subtle-foreground: color-mix(in oklab, var(--success) 70%, black);
+  --warning-subtle-foreground: color-mix(in oklab, var(--warning) 70%, black);
+  --info-subtle-foreground: color-mix(in oklab, var(--info) 70%, black);
   /* GitHub's "merged" purple. A domain colour, not brand — it must keep
      meaning "merged" even under the Ultraviolet accent, so it is fixed. */
   --merged: oklch(0.627 0.265 303.9);
   --merged-subtle: color-mix(in oklab, var(--merged) 12%, transparent);
-  --merged-subtle-foreground: color-mix(in oklab, var(--merged) 82%, black);
+  --merged-subtle-foreground: color-mix(in oklab, var(--merged) 70%, black);
 
-  /* Button's solid destructive variant. Aliased so there is one red. */
-  --destructive: var(--danger);
+  /* Button's solid destructive variant. Deliberately NOT an alias of the
+     danger role, which is tuned for TEXT (light in dark mode so it reads on a
+     near-black ground) — white on that measured 2.77:1. This is the
+     solid-fill red, tuned so the button label clears 4.5:1 on it. */
+  --destructive: oklch(0.545 0.223 27.325);
   --destructive-foreground: oklch(0.985 0 0);
   --chart-grid: oklch(0.708 0.012 286);
   --chart-actual: oklch(0.733 0.184 142);
@@ -351,7 +363,7 @@
   --accent: oklch(0.272 0.02 var(--accent-h));
   --accent-foreground: var(--foreground);
   --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
+  --input: oklch(1 0 0 / 34%);
   --invert: oklch(0.967 0.006 var(--accent-h));
   --invert-foreground: oklch(0.21 0.02 var(--accent-h));
   --avatar-fallback: oklch(0.45 0.02 var(--accent-h));
@@ -391,7 +403,11 @@
   --merged-subtle: color-mix(in oklab, var(--merged) 20%, transparent);
   --merged-subtle-foreground: color-mix(in oklab, var(--merged) 80%, white);
 
-  --destructive: var(--danger);
+  /* Dark inverts the problem: --primary-foreground is dark here, so the CTA
+     wants the LIGHT stops. Inheriting the light-mode darkened gradient would
+     put dark text on a dark fill. */
+  --gradient-brand-cta: var(--gradient-brand);
+  --destructive: oklch(0.505 0.19 25.5);
   --destructive-foreground: oklch(0.985 0 0);
   --chart-grid: oklch(0.585 0.012 286);
   --chart-actual: oklch(0.789 0.179 144);
@@ -412,6 +428,20 @@
 :root.dark[data-accent="ultraviolet"] {
   --brand: oklch(0.702 0.183 293.541);
   --brand-2: oklch(0.8 0.16 322.16);
+}
+
+/* Baseline focus indicator for every focusable element.
+   
+   Primitives that style their own focus (Button, Input, Textarea, Switch) all
+   set `outline-none` first, so this does not double up on them — it is the
+   fallback that catches everything else: the accent swatches, the sidebar
+   disclosure chevrons, sub-nav links, and any bare <button> added later.
+   Without it those relied on the UA default, which varies by browser and can
+   be near-invisible on a dark ground. `--ring` is the brand, which
+   src/lib/contrast.test.ts holds at >= 3:1 against both page and card. */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 body {

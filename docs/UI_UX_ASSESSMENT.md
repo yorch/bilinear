@@ -327,9 +327,86 @@ what the ratchet measures.
   token layer and every primitive across all three accents and both themes —
   open it first. It does *not* cover the 49 files the status sweep touched
   (settings, webhooks, security, integrations).
-- **Accessibility (§ RC4) was not re-audited.** The primitives were restyled,
-  not re-architected; the Phase 2 ARIA/keyboard work still stands, but contrast
-  ratios under the three accents have not been measured with a real tool.
+- ~~**Accessibility was not re-audited.**~~ **Done (2026-08-02).** See §11.
 - **No visual-regression suite.** CI has unit, typecheck, token and e2e gates,
   but nothing that would catch a purely visual regression. `/design` is the
   manual stand-in.
+
+
+---
+
+## 11. Accessibility re-audit (2026-08-02)
+
+The revamp's own note said contrast under the three accents had never been
+measured. It has now — by computing it, not by eyeballing it: every token is
+resolved through the real cascade, converted oklch → sRGB, composited where
+translucent, and checked against WCAG. **156 checks across three accents and
+two themes.**
+
+### What it found
+
+Four contrast regressions the revamp introduced, none visible to any existing
+gate:
+
+| Pair | Before revamp | After revamp | Now |
+| --- | --- | --- | --- |
+| Muted text on page | 4.73 | **4.13** | 4.99 |
+| Primary button label | 4.38 | **3.65** | 4.95 |
+| Primary button label, gradient far end | n/a | **1.76** | 5.79 |
+| Destructive button label (dark) | 4.56 | **2.77** | 5.31 |
+
+The gradient one is the instructive failure. `--brand-2` is a deliberately
+*light* partner stop — cyan under Ion — and white button text over it measured
+**1.76:1**. The decorative gradient and the one behind white text cannot be the
+same value, so `--gradient-brand-cta` now darkens both stops in light mode and
+falls back to the light stops in dark mode (where the label is dark). The
+destructive one came from aliasing `--destructive` to `--danger`: correct for
+text, wrong for a solid fill with a white label.
+
+It also confirmed the revamp *improved* two things: the focus ring went from
+2.59:1 (a genuine WCAG 1.4.11 failure on `main`, since the ring was neutral
+grey) to 3.64:1 by becoming the brand, and the `--accent`/`--muted` split made
+hover states measurably distinguishable for the first time.
+
+### Beyond contrast
+
+- **Loading announcements were silently removed.** The pages that used to
+  render the literal string "Loading…" — which a screen reader reads out — were
+  changed to render a shimmer. That is a picture, and it announces nothing, so
+  non-sighted users got silence. The composite skeletons now wrap in a
+  `role="status" aria-busy` region with sr-only text; the shimmer bars
+  themselves are `aria-hidden`, since a stack of empty divs is noise.
+- **Baseline focus indicator.** Bare controls added by the revamp (accent
+  swatches, sidebar disclosure chevrons, sub-nav links) had no app-defined
+  focus style and fell back to the UA default. `globals.css` now sets a
+  `:focus-visible` outline in the brand for everything; the primitives that
+  style their own focus already set `outline-none`, so it does not double up.
+- **Informational text on `--foreground-faint`.** The faint role is for
+  decorative marks, but the sidebar team key, two entity counts, the audit-log
+  "System" actor and two input placeholders had drifted onto it at ~2:1. All
+  moved to `--muted-foreground` (4.99:1). What remains on faint is em-dashes
+  and background swatches.
+- **Control borders** (`--input`) were at 1.35:1 — below the 3:1 that WCAG
+  1.4.11 requires for a control's boundary. Raised to ≥3:1 in both themes.
+  This one was inherited from `main`, not introduced here.
+- **Verified sound, unchanged:** priority is encoded by glyph + `title`, not
+  colour alone (1.4.1); `prefers-reduced-motion` covers both new animations;
+  the new controls carry `max-md` 44px touch targets; `PageHeader` renders a
+  real `<h1>`; the aurora field is `aria-hidden`.
+
+### The guard
+
+`src/lib/contrast.test.ts` now runs the whole computation in CI, including a
+non-vacuity case. It is the only gate in the repo that can see colour at all —
+lint, typecheck, build and the token ratchet are all blind to it, which is
+exactly why four regressions got in. Deliberate exclusions are named in that
+file: `--border` (separates surfaces, not a control boundary) and
+`--foreground-faint` (decorative marks only).
+
+### Still open
+
+Contrast and the mechanics above are covered. **Not** covered, and still needing
+a human with a screen reader: focus *order* through the new grid-based issue
+row, whether the sidebar disclosure state is announced usefully, and how the
+detail panel behaves for a keyboard-only user. Static analysis cannot answer
+those.

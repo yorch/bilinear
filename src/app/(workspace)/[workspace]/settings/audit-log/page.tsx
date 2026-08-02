@@ -278,7 +278,7 @@ export default function AuditLogPage() {
                         {entry.userId}
                       </span>
                     ) : (
-                      <span className="text-xs text-foreground-faint">
+                      <span className="text-xs text-muted-foreground">
                         {t('settings.auditLog.system')}
                       </span>
                     )}

@@ -2527,3 +2527,44 @@ shadows remain.
 accent or theme re-renders every specimen. Open it when changing anything in
 `ui/` or `globals.css` — this repo has no visual-regression suite, so it is the
 manual stand-in.
+
+### 79.6 The contrast contract (`src/lib/contrast.test.ts`)
+
+Computed tokens are what makes the system coherent and also what makes contrast
+easy to break by accident: nudging one base lightness silently moves a dozen
+derived pairs across three accents and two themes, and **lint, typecheck and
+build do not look at colour at all**. `src/lib/contrast.test.ts` is the only
+gate that does. It parses `globals.css`, resolves each token through the real
+cascade (`:root` → accent block → `:root.dark[data-accent]`), converts oklch to
+sRGB, composites translucent fills over their backdrop, and asserts 25 pairs
+across all six accent/theme combinations. A final test proves the harness is
+non-vacuous by feeding it a deliberately regressed token.
+
+Thresholds are WCAG 1.4.3 (4.5:1 for body text, 3:1 for large) and 1.4.11 (3:1
+for the boundary of a control). Two tokens are deliberately **not** asserted,
+and the reasoning is load-bearing:
+
+- **`--border`** separates surfaces (row dividers, section rules). It is not a
+  control boundary and carries no state, so 1.4.11 does not apply. `--input`
+  *is* the control boundary and is asserted.
+- **`--foreground-faint`** is reserved for decorative marks — the em-dash
+  standing in for "no value", background swatches. Every informational use was
+  moved to `--muted-foreground`. If you reach for it for real text, move the
+  text instead of relaxing the test.
+
+Two traps this caught, both invisible to every other gate:
+
+1. **A gradient has two ends.** The primary button's label cleared 4.5:1 against
+   `--brand` and measured **1.76:1** against the far stop. `--gradient-brand-cta`
+   exists for exactly this — a darkened variant of the display gradient, used
+   only where text sits on top.
+2. **A text role is not a fill role.** `--destructive` (solid button fill) is
+   deliberately *not* an alias of the `danger` text role. `danger` is tuned to
+   read on a near-black ground in dark mode, so it is light; white on it
+   measured **2.77:1**.
+
+Colour is never the only channel: priority is a glyph plus a `title`, status is
+a shape plus a label (WCAG 1.4.1). Loading surfaces announce through
+`LoadingRegion` (`role="status"` + `aria-busy` + sr-only text) — the shimmer
+itself is `aria-hidden`, since replacing the old literal "Loading…" strings with
+silent divs is exactly the kind of regression a visual redesign introduces.

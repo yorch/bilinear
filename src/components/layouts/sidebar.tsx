@@ -438,7 +438,7 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                         </span>
                         {/* The team key is what people actually type in search
                             and read in identifiers, so it earns its place. */}
-                        <span className="ml-auto shrink-0 font-mono text-[10px] tabular-nums text-foreground-faint">
+                        <span className="ml-auto shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
                           {team.key}
                         </span>
                       </Link>

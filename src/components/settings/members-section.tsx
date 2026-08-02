@@ -225,7 +225,7 @@ export const MembersSection = observer(function MembersSection() {
       <section>
         <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {t('settings.workspace.members')}
-          <span className="ml-2 font-normal normal-case text-foreground-faint">
+          <span className="ml-2 font-normal normal-case text-muted-foreground">
             {members.length}
           </span>
         </h2>

@@ -20,10 +20,11 @@ const buttonVariants = cva(
       },
       variant: {
         // The one gradient fill in the product surface, reserved for the single
-        // primary action on a surface. `--gradient-brand` follows the user's
-        // chosen accent, so this is the same element in all three palettes.
+        // primary action on a surface. Uses `--gradient-brand-cta`, not the
+        // decorative `--gradient-brand`: the label sits ON this fill, so the
+        // stops are tuned per theme to clear 4.5:1 under every accent.
         default:
-          'bg-[image:var(--gradient-brand)] text-primary-foreground shadow-e1 hover:brightness-110 hover:shadow-e2',
+          'bg-[image:var(--gradient-brand-cta)] text-primary-foreground shadow-e1 hover:brightness-110 hover:shadow-e2',
         destructive: 'bg-destructive text-destructive-foreground shadow-e1 hover:bg-destructive/90',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
