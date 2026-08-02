@@ -14,6 +14,27 @@ export { DELTA_PAGE_SIZE };
 export type SyncActionType = 'I' | 'U' | 'D' | 'A';
 
 /**
+ * Columns on `User` that must never leave the server.
+ *
+ * A user payload goes to every member of the org and is persisted in
+ * plaintext in IndexedDB. `DBUser` declares none of these, so they were
+ * invisible in TypeScript while still being shipped; `calendarFeedToken` is
+ * the bearer secret in the per-user iCal feed URL.
+ *
+ * Exported because the bootstrap is not the only sender: `announceJoin`
+ * broadcasts a `User` row on the live path too, and two hand-maintained
+ * copies of this list means a new sensitive column leaks from whichever one
+ * the author forgot. Add a column here and both paths are covered.
+ */
+export const USER_SYNC_OMIT = {
+  calendarFeedToken: true,
+  githubId: true,
+  googleId: true,
+  isPlatformAdmin: true,
+  passwordHash: true,
+} as const;
+
+/**
  * A persisted SyncAction, augmented with its `xactId` — the writing
  * transaction's xid8. `xact_id` is an `Unsupported("xid8")` column that the
  * Prisma client can't select, so every read/write path in this service goes
@@ -308,19 +329,7 @@ export class SyncService {
         where: { archivedAt: null, organizationId: orgId },
       }),
       this.prisma.user.findMany({
-        // This payload goes to every member of the org and is persisted in
-        // plaintext in IndexedDB. `DBUser` declares none of these, so they were
-        // invisible in TypeScript while still being shipped. `calendarFeedToken`
-        // is the bearer secret in the per-user iCal feed URL.
-        //
-        // Keep this list in step with any new sensitive column on `User`.
-        omit: {
-          calendarFeedToken: true,
-          githubId: true,
-          googleId: true,
-          isPlatformAdmin: true,
-          passwordHash: true,
-        },
+        omit: USER_SYNC_OMIT,
         where: { orgMemberships: { some: { organizationId: orgId } } },
       }),
       this.prisma.issue.findMany({

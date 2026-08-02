@@ -8,7 +8,7 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFormatters } from '@/hooks/use-formatters';
-import { useOrganizationLeave } from '@/hooks/use-organization-switch';
+import { pendingWriteCount, useOrganizationLeave } from '@/hooks/use-organization-switch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import {
@@ -110,7 +110,7 @@ export const MembersSection = observer(function MembersSection({ orgName }: Memb
   // it — mirroring the guard rather than discovering it from a rejection.
   const isLastOwner = isOwner && organizationMemberStore.countByRole('owner') === 1;
 
-  const [confirmingLeave, setConfirmingLeave] = useState(false);
+  const [confirmingLeave, setConfirmingLeave] = useState<{ pendingWrites: number } | null>(null);
   const { leave, leaving } = useOrganizationLeave();
 
   async function leaveWorkspace() {
@@ -407,7 +407,9 @@ export const MembersSection = observer(function MembersSection({ orgName }: Memb
             <button
               className="shrink-0 rounded-md border border-destructive/50 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10 disabled:opacity-50"
               disabled={leaving}
-              onClick={() => setConfirmingLeave(true)}
+              // The count is read when the dialog opens, not when it is
+              // confirmed, so the warning matches what the user was shown.
+              onClick={() => setConfirmingLeave({ pendingWrites: pendingWriteCount() })}
               type="button"
             >
               {leaving ? t('settings.workspace.leaving') : t('settings.workspace.leave')}
@@ -418,13 +420,23 @@ export const MembersSection = observer(function MembersSection({ orgName }: Memb
 
       <ConfirmDialog
         confirmLabel={t('settings.workspace.leave')}
-        message={t('settings.workspace.leaveConfirm', { name: orgName })}
-        onCancel={() => setConfirmingLeave(false)}
+        message={
+          // Queued offline writes are scoped to the session that enqueued
+          // them and are deleted, not replayed, once a different session
+          // hydrates the queue (TransactionQueue.hydrate) — the same reason
+          // WorkspaceSwitcher warns before a switch. Leaving is worse: the
+          // workspace those edits belong to is one the user can no longer
+          // reach, so they are unrecoverable rather than merely dropped.
+          confirmingLeave && confirmingLeave.pendingWrites > 0
+            ? `${t('settings.workspace.leaveConfirm', { name: orgName })} ${t('settings.workspace.leavePendingWritesWarning')}`
+            : t('settings.workspace.leaveConfirm', { name: orgName })
+        }
+        onCancel={() => setConfirmingLeave(null)}
         onConfirm={() => {
-          setConfirmingLeave(false);
+          setConfirmingLeave(null);
           void leaveWorkspace();
         }}
-        open={confirmingLeave}
+        open={confirmingLeave !== null}
         title={t('settings.workspace.leaveConfirmTitle')}
       />
 

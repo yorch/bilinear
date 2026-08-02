@@ -1,9 +1,15 @@
 import crypto from 'node:crypto';
-import type { Organization, OrganizationInvite, PrismaClient } from '../../generated/prisma';
+import type {
+  Organization,
+  OrganizationInvite,
+  OrganizationMember,
+  PrismaClient,
+} from '../../generated/prisma';
 import { sendOrganizationInviteEmail } from '../lib/email';
 import { isValidEmail } from '../lib/email-address';
 import { env } from '../lib/env';
 import { childLogger } from '../lib/logger';
+import { ensureMembership } from '../lib/membership-sync';
 import { InvalidRoleError, type OrgRole, VALID_ROLES } from './organization.service';
 
 /** How long an invitation link stays usable. */
@@ -278,7 +284,12 @@ export class OrganizationInviteService {
   async accept(
     token: string,
     userId: string,
-  ): Promise<{ organization: Organization; role: string }> {
+  ): Promise<{
+    created: boolean;
+    membership: OrganizationMember;
+    organization: Organization;
+    role: string;
+  }> {
     // Both reads are needed before anything is decided, and neither informs
     // the other.
     const [invite, user] = await Promise.all([
@@ -306,20 +317,20 @@ export class OrganizationInviteService {
       throw new InviteNotFoundError();
     }
 
-    // Upsert rather than create: the claim above is the single-use guard, but
-    // a membership may already exist (invited someone who joined by another
-    // route in the meantime). Keeping their existing row untouched avoids an
-    // invitation silently demoting an established member.
-    await this.prisma.organizationMember.upsert({
-      create: { organizationId: invite.organizationId, role: invite.role, userId },
-      update: {},
-      where: {
-        organizationId_userId: { organizationId: invite.organizationId, userId },
-      },
-    });
+    // The claim above is the single-use guard; this is idempotent on purpose,
+    // because a membership may already exist (invited someone who joined by
+    // another route in the meantime) and an invitation must not silently
+    // demote an established member. `created` is what tells the caller
+    // whether there is a join to broadcast.
+    const { created, membership } = await ensureMembership(
+      this.prisma,
+      invite.organizationId,
+      userId,
+      invite.role,
+    );
 
     // The organization comes from the row `findLiveByToken` already joined —
     // returning only its id would force every caller into a second read.
-    return { organization: invite.organization, role: invite.role };
+    return { created, membership, organization: invite.organization, role: invite.role };
   }
 }

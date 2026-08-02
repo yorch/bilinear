@@ -78,4 +78,23 @@ describe('OrganizationMemberStore', () => {
 
     expect(store.rolesByUserId).toEqual({ u1: 'owner' });
   });
+
+  describe('replaceAll', () => {
+    it('drops rows the new payload omits', () => {
+      // Membership is hard-deleted, so a row missing from a fresh bootstrap
+      // means the person left — merging would keep a removed member in the
+      // roster across the delta-failure re-bootstrap, with controls the
+      // server answers with NOT_FOUND.
+      const store = new OrganizationMemberStore();
+      store.upsertMany([
+        member({ id: 'mem-1', userId: 'user-1' }),
+        member({ id: 'mem-2', userId: 'user-2' }),
+      ]);
+
+      store.replaceAll([member({ id: 'mem-1', userId: 'user-1' })]);
+
+      expect(store.findByUserId('user-1')).not.toBeNull();
+      expect(store.findByUserId('user-2')).toBeNull();
+    });
+  });
 });

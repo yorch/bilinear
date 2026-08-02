@@ -1,7 +1,8 @@
 import { GraphQLError } from 'graphql';
 import type { Organization, OrganizationMember } from '../../../generated/prisma';
 import { childLogger } from '../../lib/logger';
-import { requireAuth, requireOrgRole, requireUserId } from '../../middleware/auth';
+import { announceJoin, broadcastMembership } from '../../lib/membership-sync';
+import { clearOrgSession, requireAuth, requireOrgRole, requireUserId } from '../../middleware/auth';
 import {
   CannotRemoveSelfError,
   InvalidRoleError,
@@ -156,6 +157,16 @@ export const organizationResolvers = {
       // were (or nowhere, for a new account).
       const organization = accepted.organization;
 
+      // Tell the workspace it has a new member. Only on an actual join: a
+      // re-clicked link that found an existing membership changed nothing,
+      // and broadcasting an 'I' for it would claim otherwise. `announceJoin`
+      // rather than a bare membership action because the bootstrap scopes
+      // `users` to current members — a client already running has never heard
+      // of this person, so the membership alone would be inert.
+      if (accepted.created) {
+        await announceJoin(ctx.prisma, ctx.services.sync, organization.id, accepted.membership);
+      }
+
       ctx.services.auditLog
         .log({
           action: 'member.invite_accepted',
@@ -272,13 +283,13 @@ export const organizationResolvers = {
         rethrowMembershipError(err);
       }
 
-      const sync = await ctx.services.sync.createSyncAction(
-        orgId,
-        'D',
-        'OrganizationMember',
-        left.id,
-        left,
-      );
+      // Both the role and the org itself are now claims about a membership
+      // that no longer exists — see `clearOrgSession` for why they have to go
+      // together. `orgId` was captured above, so the rest of this resolver is
+      // unaffected.
+      clearOrgSession(ctx);
+
+      const sync = await broadcastMembership(ctx.services.sync, orgId, 'D', left);
 
       ctx.services.auditLog
         .log({
@@ -326,24 +337,14 @@ export const organizationResolvers = {
         rethrowMembershipError(err);
       }
 
-      // Emitted for parity with organizationMemberUpdateRole. Be aware that
-      // `sync-manager.ts` has no `OrganizationMember` case yet, so no client
-      // acts on this today — other admins' open tabs keep showing the
-      // removed person until they reload, and the settings page reconciles
-      // its own roster locally instead. Teaching the sync pipeline about an
-      // org roster is the real fix and is deliberately out of scope here;
-      // the row is still recorded so delta-sync history is complete.
+      // The roster is part of the synced dataset, so this lands: every open
+      // client drops the row from `organizationMemberStore` and the members
+      // list updates without a refetch.
       //
-      // Access itself does not depend on this: the removed user's session
-      // loses the org on its next request (extractAuthContext re-checks
-      // membership) and their WebSocket closes on the next re-auth sweep.
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'D',
-        'OrganizationMember',
-        removed.id,
-        removed,
-      );
+      // Access itself does not depend on it: the removed user's session loses
+      // the org on its next request (extractAuthContext re-checks membership)
+      // and their WebSocket closes on the next re-auth sweep.
+      const sync = await broadcastMembership(ctx.services.sync, ctx.orgId, 'D', removed);
 
       ctx.services.auditLog
         .log({
@@ -380,13 +381,14 @@ export const organizationResolvers = {
         rethrowMembershipError(err);
       }
 
-      const sync = await ctx.services.sync.createSyncAction(
-        ctx.orgId,
-        'U',
-        'OrganizationMember',
-        updated.id,
-        updated,
-      );
+      // Same reasoning as `clearOrgSession` on leave: an admin is allowed to
+      // demote themselves to `member`, and every later field in the same
+      // document must see that, not the role cached before the mutation ran.
+      if (userId === ctx.userId) {
+        ctx.orgRole = updated.role;
+      }
+
+      const sync = await broadcastMembership(ctx.services.sync, ctx.orgId, 'U', updated);
 
       // Fire-and-forget audit log — errors are non-fatal
       ctx.services.auditLog
@@ -473,11 +475,6 @@ export const organizationResolvers = {
       // to, so they are admin-only rather than visible to every member.
       requireOrgRole(ctx, ['owner', 'admin']);
       return ctx.services.organizationInvite.listPending(ctx.orgId);
-    },
-
-    organizationMembers: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
-      requireAuth(ctx);
-      return ctx.services.organization.findMembers(ctx.orgId);
     },
 
     viewerOrganizations: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {

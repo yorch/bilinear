@@ -36,9 +36,12 @@ export interface AuthContext {
    * `orgId` must clear this in the same assignment, or an authorization check
    * could pass against a workspace the session no longer holds.
    *
-   * Freshness is per-request, which is the same guarantee the extra read gave:
-   * every `requireOrgRole` call site runs before its resolver's first write,
-   * so nothing observes a role it changed itself.
+   * Freshness is per-request, with one exception the caching creates: GraphQL
+   * runs root mutation fields serially against one context, so a field that
+   * invalidates the caller's own membership must write the new answer back —
+   * see `clearOrgSession`, and `organizationMemberUpdateRole` for the
+   * demote-yourself case. Without that, a later field in the same document
+   * authorizes against a membership an earlier field already deleted.
    */
   orgRole?: string | null;
   userId: string | null;
@@ -335,6 +338,30 @@ export function requireAuth(ctx: AuthContext): asserts ctx is { userId: string; 
       extensions: { code: 'UNAUTHENTICATED' },
     });
   }
+}
+
+/**
+ * Drop the request's organization after a field has invalidated the caller's
+ * membership in it.
+ *
+ * GraphQL executes root mutation fields **serially against a single context**,
+ * which is what the "nothing observes a role it changed itself" reasoning on
+ * `orgRole` misses. A document selecting `organizationLeave` and then
+ * `organizationInviteCreate` runs the second field after the first deleted
+ * the membership, and its `requireOrgRole` reads the role resolved before the
+ * operation began — mailing an admin invitation into a workspace the caller
+ * provably no longer belongs to. Both fields have to go and they have to go
+ * together: nulling `orgRole` alone still lets every
+ * `requireAuth`-only mutation write into the workspace the caller just left,
+ * and nulling `orgId` alone leaves a role string attached to no organization
+ * (breaking the invariant documented on `orgRole`). Afterwards `requireAuth`
+ * fails closed with UNAUTHENTICATED for the rest of the document, which is
+ * the honest answer: the session names no workspace until its tokens are
+ * re-issued.
+ */
+export function clearOrgSession(ctx: AuthContext): void {
+  ctx.orgId = null;
+  ctx.orgRole = null;
 }
 
 /** Like requireAuth but only checks userId — for mutations before org exists (e.g. onboarding). */

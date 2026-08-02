@@ -262,6 +262,28 @@ describe('organizationLeave', () => {
     ).rejects.toSatisfy(err => codeOf(err) === 'FORBIDDEN');
     expect(ctx.prisma.organizationMember.delete).not.toHaveBeenCalled();
   });
+  it('drops the org from the context so later fields in the document cannot use it', async () => {
+    // GraphQL runs root mutation fields serially against ONE context, which
+    // is what the "nothing observes a role it changed itself" reasoning on
+    // `orgRole` misses. Leaving and then doing anything else in the same
+    // document would otherwise keep operating inside the workspace the first
+    // field just walked out of — `orgRole` covers the role-gated fields,
+    // `orgId` covers every `requireAuth`-only one.
+    const ctx = ctxLeaving('admin');
+    ctx.prisma.organizationMember.findFirst.mockResolvedValue(null);
+
+    await organizationResolvers.Mutation.organizationLeave(null, {}, ctx as never);
+
+    expect(ctx.orgId).toBeNull();
+    expect(ctx.orgRole).toBeNull();
+    await expect(
+      organizationResolvers.Mutation.organizationInviteRevoke(
+        null,
+        { id: 'invite-1' },
+        ctx as never,
+      ),
+    ).rejects.toSatisfy(err => codeOf(err) === 'UNAUTHENTICATED');
+  });
 });
 
 describe('organizationMemberRemove', () => {
@@ -339,7 +361,14 @@ describe('organizationInviteAccept', () => {
       role: 'member',
     });
     ctx.prisma.organizationInvite.updateMany.mockResolvedValue({ count: 1 });
-    ctx.prisma.organizationMember.upsert.mockResolvedValue({});
+    ctx.prisma.organizationMember.findUnique.mockResolvedValue(null);
+    ctx.prisma.organizationMember.create.mockResolvedValue({
+      id: 'mem-1',
+      organizationId: OTHER_ORG.id,
+      role: 'member',
+      userId: TEST_USER.id,
+    });
+    const createSyncAction = vi.spyOn(ctx.services.sync, 'createSyncAction');
 
     const result = await organizationResolvers.Mutation.organizationInviteAccept(
       null,
@@ -352,6 +381,45 @@ describe('organizationInviteAccept', () => {
     // A brand-new account has no org at all, so the tokens are what actually
     // land them in the workspace they just joined.
     expect(result.accessToken).toBeTruthy();
+    // The workspace being joined has to hear about it — the roster its
+    // members hold is synced, not refetched — and the `User` row has to
+    // travel with the membership, since bootstrap only ships users who were
+    // already members.
+    expect(createSyncAction.mock.calls.map(c => [c[1], c[2]])).toEqual([
+      ['I', 'User'],
+      ['I', 'OrganizationMember'],
+    ]);
+  });
+
+  it('does not announce a join when the invitation found an existing member', async () => {
+    // A re-clicked link spends the invitation but changes no membership;
+    // broadcasting an 'I' for it would tell every client otherwise.
+    const ctx = createMockContext({ orgId: null });
+    ctx.prisma.user.findUnique.mockResolvedValue({ email: 'invited@example.com' });
+    ctx.prisma.organizationInvite.findFirst.mockResolvedValue({
+      email: 'invited@example.com',
+      id: 'invite-1',
+      organization: OTHER_ORG,
+      organizationId: OTHER_ORG.id,
+      role: 'member',
+    });
+    ctx.prisma.organizationInvite.updateMany.mockResolvedValue({ count: 1 });
+    ctx.prisma.organizationMember.findUnique.mockResolvedValue({
+      id: 'mem-1',
+      organizationId: OTHER_ORG.id,
+      role: 'admin',
+      userId: TEST_USER.id,
+    });
+    const createSyncAction = vi.spyOn(ctx.services.sync, 'createSyncAction');
+
+    await organizationResolvers.Mutation.organizationInviteAccept(
+      null,
+      { token: 'raw-token' },
+      ctx as never,
+    );
+
+    expect(ctx.prisma.organizationMember.create).not.toHaveBeenCalled();
+    expect(createSyncAction).not.toHaveBeenCalled();
   });
 
   it('surfaces an email mismatch as FORBIDDEN', async () => {

@@ -24,6 +24,7 @@ export class OrganizationMemberStore {
       all: computed,
       applySyncAction: action,
       pool: observable,
+      replaceAll: action,
       rolesByUserId: computed,
       upsertMany: action,
     });
@@ -70,6 +71,22 @@ export class OrganizationMemberStore {
     for (const member of members) {
       this.pool.set(member.id, member);
     }
+  }
+
+  /**
+   * Replace the pool wholesale — what an authoritative load (a bootstrap)
+   * has to do, as opposed to the merge `upsertMany` performs for cache
+   * hydration and deltas.
+   *
+   * `fullBootstrap` is not only the cold-start path; it is also the
+   * delta-failure fallback, which runs *after* `loadFromIndexedDB` has
+   * already filled the pool from a warm cache. Merging there means a row the
+   * server omitted survives, and for membership omission is the whole
+   * signal: nobody archives a membership, they stop existing.
+   */
+  replaceAll(members: DBOrganizationMember[]) {
+    this.pool.clear();
+    this.upsertMany(members);
   }
 
   applySyncAction(syncAction: string, id: string, data: DBOrganizationMember | null) {

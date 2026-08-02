@@ -150,24 +150,35 @@ describe('OrganizationInviteService.accept', () => {
     role: 'admin',
   };
 
+  const newMembership = {
+    id: 'mem-1',
+    organizationId: TEST_ORG.id,
+    role: 'admin',
+    userId: TEST_USER.id,
+  };
+
   beforeEach(() => {
     prisma = createMockPrisma();
     svc = new OrganizationInviteService(prisma as never);
     prisma.organizationInvite.findFirst.mockResolvedValue(liveInvite);
     prisma.organizationInvite.updateMany.mockResolvedValue({ count: 1 });
-    prisma.organizationMember.upsert.mockResolvedValue({});
+    prisma.organizationMember.findUnique.mockResolvedValue(null);
+    prisma.organizationMember.create.mockResolvedValue(newMembership);
     prisma.user.findUnique.mockResolvedValue({ email: 'invited@example.com' });
   });
 
   it('grants the invited role and marks the invitation spent', async () => {
     const result = await svc.accept('raw-token', TEST_USER.id);
 
-    expect(result).toEqual({ organization: liveInvite.organization, role: 'admin' });
-    expect(prisma.organizationMember.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: { organizationId: TEST_ORG.id, role: 'admin', userId: TEST_USER.id },
-      }),
-    );
+    expect(result).toEqual({
+      created: true,
+      membership: newMembership,
+      organization: liveInvite.organization,
+      role: 'admin',
+    });
+    expect(prisma.organizationMember.create).toHaveBeenCalledWith({
+      data: { organizationId: TEST_ORG.id, role: 'admin', userId: TEST_USER.id },
+    });
   });
 
   it('claims atomically so two concurrent acceptances cannot both win', async () => {
@@ -176,7 +187,7 @@ describe('OrganizationInviteService.accept', () => {
     prisma.organizationInvite.updateMany.mockResolvedValue({ count: 0 });
 
     await expect(svc.accept('raw-token', TEST_USER.id)).rejects.toBeInstanceOf(InviteNotFoundError);
-    expect(prisma.organizationMember.upsert).not.toHaveBeenCalled();
+    expect(prisma.organizationMember.create).not.toHaveBeenCalled();
   });
 
   it('refuses a session whose email does not match the invitation', async () => {
@@ -203,11 +214,16 @@ describe('OrganizationInviteService.accept', () => {
   it('leaves an existing membership untouched rather than re-roling it', async () => {
     // Accepting an invitation must not silently demote someone who already
     // joined by another route while the invitation was outstanding.
-    await svc.accept('raw-token', TEST_USER.id);
+    const existing = { ...newMembership, role: 'owner' };
+    prisma.organizationMember.findUnique.mockResolvedValue(existing);
 
-    expect(prisma.organizationMember.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ update: {} }),
-    );
+    const result = await svc.accept('raw-token', TEST_USER.id);
+
+    expect(prisma.organizationMember.create).not.toHaveBeenCalled();
+    expect(result.membership).toEqual(existing);
+    // `created: false` is what stops the caller broadcasting a join that
+    // did not happen.
+    expect(result.created).toBe(false);
   });
 });
 

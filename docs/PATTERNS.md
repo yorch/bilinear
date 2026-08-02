@@ -2458,6 +2458,77 @@ its optimistic apply, and that apply's rollback branch.
 Access never depended on any of this: a removed user loses the org on their
 next request and their socket closes on the next re-auth sweep.
 
+**Every writer of `organization_members` owes a SyncAction, and there are
+six.** Making the roster synced moved the correctness burden onto the write
+side. Two of the six are the GraphQL mutations above; the other four —
+invitation acceptance, SCIM provisioning, SCIM re-activation, SAML JIT
+provisioning — have no resolver to carry the emit and originally shipped
+without one. That is not stale-until-reload: `MembersSection` no longer
+refetches, and a warm Dexie cache takes the **delta** path, which carries only
+rows that changed. An IdP deprovisioning someone left them in every admin's
+members list indefinitely, with a role dropdown and a remove button the server
+answers with `NOT_FOUND`.
+
+All six go through `src/server/lib/membership-sync.ts`:
+
+- `joinOrganization(prisma, sync, orgId, userId, role)` — the whole of "they
+  joined", write and broadcast together. What SCIM provisioning, SCIM
+  re-activation and SAML JIT call. Invitation acceptance is the one path that
+  stays split, because its write happens in a service and only the resolver
+  holds a `SyncService`.
+- `ensureMembership` — the write half. Deliberately **not** an upsert: an
+  upsert cannot report which branch it took, and only a real join may be
+  broadcast. The unique constraint still settles a concurrent race, and the
+  loser re-reads rather than claiming a creation it did not make.
+- `announceJoin(prisma, sync, orgId, membership)` — the join broadcast, and
+  the reason a bare membership `'I'` is not enough. The bootstrap scopes
+  `users` to `orgMemberships: { some: { organizationId } }`, so a client
+  already running has no `UserStore` row for someone who joined afterwards —
+  and the members list is the intersection of the two pools, so they simply
+  never appear. `announceJoin` ships the `User` row first, under
+  `USER_SYNC_OMIT` (one constant, shared with the bootstrap query, because two
+  hand-maintained redaction lists means a new sensitive column leaks from
+  whichever one the author forgot).
+- `broadcastMembership` — role changes and removals. Its `action` is typed
+  `Exclude<SyncActionType, 'I'>` on purpose: this module exists because
+  "remember to also do X" is what four of six writers forgot, so leaving a bare
+  `'I'` reachable would rebuild that failure one level up with no type error to
+  catch it.
+
+`createWithOwner` is the deliberate exception — the founding owner is the only
+member, and their client reaches the workspace through a full document load
+that bootstraps the roster anyway.
+
+**Bootstrap uses `replaceAll`, not `upsertMany`.** A bootstrap is an
+authoritative load, and `fullBootstrap` is not only the cold-start path — it is
+also the delta-failure fallback, which runs *after* `loadFromIndexedDB` has
+already filled the pool from a warm cache. Merging there lets a row the server
+omitted survive, and for membership omission is the entire signal: nobody
+archives a membership, they stop existing.
+
+**The bootstrap write runs on the apply lock.** `SyncManager.runExclusive`
+(the single-slot chain `applyActions` uses) also wraps `fullBootstrap`'s Dexie
+transaction and store population, because that authoritative load clears Dexie
+and clears the roster pool. The fallback reaches it with the WebSocket already
+live, so without the lock an action landing between the clear and the
+repopulate is erased rather than merely overwritten. That fallback also
+schedules the follow-up delta the cold-start path already had — `fullBootstrap`
+regresses `lastSyncId` to the snapshot's cursor, so an action that applied
+while the snapshot was in flight is re-delivered.
+
+**Adding a synced collection will need more than a Dexie version bump**, once
+the pre-launch `.version(N)` + `.upgrade()` work in `src/lib/db.ts` lands. A
+Dexie upgrade creates the new object store *empty* and leaves every other
+table in place, so `loadFromIndexedDB` reports a usable cache and `start`
+takes the delta path — which carries only rows that *changed*. An untouched
+collection never backfills, and the surface reading it renders an empty state
+forever. Today the whole database is recreated whenever the schema moves, so
+the cache is always cold and the problem cannot arise; the moment it stops
+being recreated, a "which collections does this cache hold" stamp in
+`syncMetadata` (checked by `loadFromIndexedDB`, written by `fullBootstrap` in
+the same transaction as the rows) is what carries that invariant. See the TODO
+above the `AppDatabase` constructor.
+
 **Leaving is its own operation (2026-08-02).** `organizationLeave` exists
 separately from `organizationMemberRemove`, which still refuses self-removal,
 because the two differ in who bears the consequence: removal is done *to*
@@ -2472,6 +2543,20 @@ last-owner guard: an owner may leave only once another owner exists, otherwise
 the workspace is stranded with nobody able to manage it and — unlike a removal
 — there is no second party in the room to notice.
 
+**Leaving clears the org from the request context.** `organizationLeave` calls
+`clearOrgSession(ctx)`, which nulls `orgId` *and* `orgRole` together. GraphQL
+executes root mutation fields **serially against a single context**, which is
+what the "nothing observes a role it changed itself" reasoning on `orgRole`
+misses: a document selecting `organizationLeave` and then
+`organizationInviteCreate` runs the second field after the first deleted the
+membership, and its `requireOrgRole` reads the role resolved before the
+operation began — mailing an admin invitation into a workspace the caller
+provably no longer belongs to. Nulling the role alone is not enough either;
+every `requireAuth`-only mutation reads `ctx.orgId` and would keep writing into
+the workspace just left. `organizationMemberUpdateRole` owes the same when the
+target is the caller (an admin demoting themselves is permitted). Any future
+mutation that invalidates the caller's own membership owes it too.
+
 It returns a **`LeaveOrganizationPayload`, not `EnterOrganizationPayload`**.
 That type's `organization` is non-null because you always land somewhere;
 leaving your last workspace legitimately lands you nowhere, and a null
@@ -2485,10 +2570,7 @@ document remounts `SyncProvider` and wipes the departed org's Dexie cache.
 
 **Client data access follows §76.1.** Every read here goes through
 `gqlQuery` and every user-visible write through `gqlMutate`, so a rejected
-request can't render as an empty roster or toast success. The members roster
-specifically uses `useRetryableFetch` + `InlineRetry`: it is the one list on
-the page whose absence would otherwise read as "this workspace has no
-members". Pending invitations are fetched in their own document, gated on the
+request can't render as an empty roster or toast success. Pending invitations are fetched in their own document, gated on the
 viewer being an owner/admin — folding them into the roster query saves a round
 trip but only works by tolerating a partial response (`data` populated beside
 a FORBIDDEN), which is the shape §76.2 exists to warn about.

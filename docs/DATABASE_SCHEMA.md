@@ -191,9 +191,13 @@ is the only thing that distinguishes a current member from a departed one.
 That is why the roster ships as its own bootstrap collection and its own
 client store rather than being folded into `users`; see PATTERNS §78.
 
-Rows are synced: `organizationMemberRemove`, `organizationMemberUpdateRole` and
-`organizationLeave` all emit `OrganizationMember` SyncActions, and the client
-applies `'D'` as a pool delete. `'A'` has no distinct meaning for this table.
+Rows are synced, and **every writer owes a SyncAction — there are six**, four
+of which (invitation acceptance, SCIM provisioning, SCIM re-activation, SAML
+JIT) have no resolver to carry it, so they all go through
+`src/server/lib/membership-sync.ts`. A **join** owes two: the `users` bootstrap
+query is scoped to current members, so a client already running has never heard
+of the person a new membership points at (`announceJoin`). The client applies
+`'D'` as a pool delete; `'A'` has no distinct meaning for this table.
 
 ### 2.2 Teams
 

@@ -1,11 +1,14 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { broadcastMembership, joinOrganization } from '@/server/lib/membership-sync';
 import { prisma } from '@/server/lib/prisma';
+import { redis } from '@/server/lib/redis';
 import {
   LastOwnerError,
   MemberNotFoundError,
   OrganizationService,
 } from '@/server/services/organization.service';
+import { SyncService } from '@/server/services/sync.service';
 import { authenticateScim, scimError, userToScim } from '../../_scim-auth';
 
 /**
@@ -54,7 +57,11 @@ async function resolveUser(orgId: string, userId: string) {
  */
 async function deactivateUser(userId: string, orgId: string): Promise<Response | null> {
   try {
-    await new OrganizationService(prisma).removeMember(orgId, userId, null);
+    const removed = await new OrganizationService(prisma).removeMember(orgId, userId, null);
+    // The roster is synced, so the removal has to be announced or it never
+    // reaches an open client: the deprovisioned member would keep appearing
+    // in every admin's members list, with actions that all return NOT_FOUND.
+    await broadcastMembership(new SyncService(prisma, redis), orgId, 'D', removed);
   } catch (err) {
     if (err instanceof MemberNotFoundError) {
       return null;
@@ -67,6 +74,70 @@ async function deactivateUser(userId: string, orgId: string): Promise<Response |
     throw err;
   }
   return null;
+}
+
+/**
+ * Apply an `active` change from PUT or PATCH, having first decided whether
+ * this org may act on the target at all.
+ *
+ * The membership lookup happens here rather than at the top of each handler
+ * because `active: true` is the one operation that legitimately names someone
+ * with **no** membership row — deprovisioning deletes it outright, and
+ * re-activation is how it comes back. Resolving org-scoped and 404'ing up
+ * front is what made re-activation unreachable: every attempt failed on the
+ * very row the deactivation had removed, so SCIM could deprovision but never
+ * undo it.
+ *
+ * Re-provisioning is not a new privilege — `POST /Users` already lets an
+ * org's SCIM token add an arbitrary address to that org, and this reaches the
+ * same set of people by id instead of by email.
+ *
+ * Returns a SCIM error Response the caller should return as-is, or null to
+ * carry on. An `active: true` for someone already a member — the routine
+ * attribute sync an IdP sends constantly — costs no extra queries.
+ */
+async function applyActiveChange(
+  userId: string,
+  orgId: string,
+  active: boolean | undefined,
+): Promise<Response | null> {
+  const membership = await resolveUser(orgId, userId);
+
+  if (!membership) {
+    if (active !== true) {
+      return scimError(404, 'User not found');
+    }
+    // Genuinely re-provisioning: the org has no record of this person, so the
+    // user has to be resolved globally before they can be re-admitted.
+    const user = await prisma.user.findUnique({ select: { id: true }, where: { id: userId } });
+    if (!user) {
+      return scimError(404, 'User not found');
+    }
+    await joinOrganization(prisma, new SyncService(prisma, redis), orgId, userId, 'member');
+    return null;
+  }
+
+  if (active === false) {
+    return deactivateUser(userId, orgId);
+  }
+  return null;
+}
+
+/** The identical tail of PUT and PATCH: write the name through, answer SCIM. */
+async function respondWithUpdatedUser(userId: string, displayName: string | undefined) {
+  const updated = await prisma.user.update({
+    data: { displayName, updatedAt: new Date() },
+    select: {
+      active: true,
+      createdAt: true,
+      displayName: true,
+      email: true,
+      id: true,
+      updatedAt: true,
+    },
+    where: { id: userId },
+  });
+  return NextResponse.json(userToScim(updated), { status: 200 });
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -90,10 +161,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   const { id } = await params;
-  const membership = await resolveUser(auth.orgId, id);
-  if (!membership) {
-    return scimError(404, 'User not found');
-  }
 
   let body: Record<string, unknown>;
   try {
@@ -106,30 +173,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const displayName = nameObj?.formatted?.trim() ?? undefined;
   const active = typeof body.active === 'boolean' ? body.active : undefined;
 
-  if (active === false) {
-    const failure = await deactivateUser(id, auth.orgId);
-    if (failure) {
-      return failure;
-    }
+  // After the body, deliberately: see `applyActiveChange`.
+  const failure = await applyActiveChange(id, auth.orgId, active);
+  if (failure) {
+    return failure;
   }
 
-  const updated = await prisma.user.update({
-    data: {
-      displayName,
-      updatedAt: new Date(),
-    },
-    select: {
-      active: true,
-      createdAt: true,
-      displayName: true,
-      email: true,
-      id: true,
-      updatedAt: true,
-    },
-    where: { id },
-  });
-
-  return NextResponse.json(userToScim(updated), { status: 200 });
+  return respondWithUpdatedUser(id, displayName);
 }
 
 interface ScimOperation {
@@ -145,10 +195,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const { id } = await params;
-  const membership = await resolveUser(auth.orgId, id);
-  if (!membership) {
-    return scimError(404, 'User not found');
-  }
 
   let body: { Operations?: ScimOperation[] };
   try {
@@ -185,43 +231,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
-  if (active === false) {
-    const failure = await deactivateUser(id, auth.orgId);
-    if (failure) {
-      return failure;
-    }
-  } else if (active === true) {
-    // Re-provision: restore org membership if it was removed by a prior deactivation.
-    await prisma.organizationMember.upsert({
-      create: {
-        createdAt: new Date(),
-        organizationId: auth.orgId,
-        role: 'member',
-        updatedAt: new Date(),
-        userId: id,
-      },
-      update: {},
-      where: { organizationId_userId: { organizationId: auth.orgId, userId: id } },
-    });
+  // After the Operations are parsed, deliberately: see `applyActiveChange`.
+  const failure = await applyActiveChange(id, auth.orgId, active);
+  if (failure) {
+    return failure;
   }
 
-  const updated = await prisma.user.update({
-    data: {
-      displayName,
-      updatedAt: new Date(),
-    },
-    select: {
-      active: true,
-      createdAt: true,
-      displayName: true,
-      email: true,
-      id: true,
-      updatedAt: true,
-    },
-    where: { id },
-  });
-
-  return NextResponse.json(userToScim(updated), { status: 200 });
+  return respondWithUpdatedUser(id, displayName);
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -231,11 +247,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   }
 
   const { id } = await params;
-  const membership = await resolveUser(auth.orgId, id);
-  if (!membership) {
-    return scimError(404, 'User not found');
-  }
 
+  // No membership pre-check: `deactivateUser` already treats "already gone"
+  // as success, and a 404 here made that documented idempotency unreachable
+  // from the endpoint IdPs retry the most.
+  //
   // Deprovision from this org only — do not globally deactivate the user
   // account. Same single writer as `deactivateUser` above.
   const failure = await deactivateUser(id, auth.orgId);

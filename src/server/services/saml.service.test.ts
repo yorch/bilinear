@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SignedXml } from 'xml-crypto';
 import { TEST_ORG, TEST_USER } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
+import { mockSyncActionInserts, readSyncActionInserts } from '../../test/sync-action-mock';
 import {
   resetSamlReplayCacheForTests,
   type SamlConfig,
@@ -11,6 +12,13 @@ import {
   SamlParseError,
   SamlService,
 } from './saml.service';
+
+// JIT provisioning announces the new membership over a real SyncService bound
+// to the redis singleton, so the roster reaches clients already connected to
+// the workspace. Mock the module so that publish is a no-op here.
+vi.mock('../lib/redis', () => ({
+  redis: { publish: vi.fn().mockResolvedValue(1) },
+}));
 
 // ---------------------------------------------------------------------------
 // Signed-XML test helpers
@@ -824,29 +832,43 @@ describe('SamlService', () => {
   describe('jitProvisionUser', () => {
     const claims = { email: 'new@example.com', name: 'New Person', nameId: 'nid' };
 
+    function membershipRow(userId: string) {
+      return { id: `mem-${userId}`, organizationId: TEST_ORG.id, role: 'member', userId };
+    }
+
+    beforeEach(() => {
+      mockSyncActionInserts(prisma);
+    });
+
     it('returns the existing user and ensures org membership without creating', async () => {
       prisma.user.findUnique.mockResolvedValue({ ...TEST_USER, email: claims.email });
-      prisma.organizationMember.upsert.mockResolvedValue({});
+      prisma.organizationMember.findUnique.mockResolvedValue(membershipRow(TEST_USER.id));
 
       const result = await service.jitProvisionUser(prisma as never, TEST_ORG.id, claims);
 
       expect(result).toEqual({ isNew: false, userId: TEST_USER.id });
       expect(prisma.user.create).not.toHaveBeenCalled();
-      expect(prisma.organizationMember.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: {
-            organizationId_userId: { organizationId: TEST_ORG.id, userId: TEST_USER.id },
-          },
-        }),
-      );
+      expect(prisma.organizationMember.findUnique).toHaveBeenCalledWith({
+        where: {
+          organizationId_userId: { organizationId: TEST_ORG.id, userId: TEST_USER.id },
+        },
+      });
+      // Already a member: nothing changed, so nothing is broadcast.
+      expect(prisma.organizationMember.create).not.toHaveBeenCalled();
+      expect(readSyncActionInserts(prisma)).toEqual([]);
     });
 
     it('creates a new user with derived initials and ensures membership', async () => {
-      prisma.user.findUnique.mockResolvedValue(null);
+      // Two lookups: the JIT "do we know this email" (null → create), then
+      // `announceJoin` fetching the row it ships alongside the membership.
+      prisma.user.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValue({ ...TEST_USER, email: claims.email, id: 'new-id' });
       // Non-empty users table → this JIT user is not the bootstrap admin.
       prisma.user.count.mockResolvedValue(3);
       prisma.user.create.mockResolvedValue({ ...TEST_USER, email: claims.email, id: 'new-id' });
-      prisma.organizationMember.upsert.mockResolvedValue({});
+      prisma.organizationMember.findUnique.mockResolvedValue(null);
+      prisma.organizationMember.create.mockResolvedValue(membershipRow('new-id'));
 
       const result = await service.jitProvisionUser(prisma as never, TEST_ORG.id, claims);
 
@@ -860,11 +882,17 @@ describe('SamlService', () => {
           name: 'New Person',
         },
       });
-      expect(prisma.organizationMember.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          create: { organizationId: TEST_ORG.id, role: 'member', userId: 'new-id' },
-        }),
-      );
+      expect(prisma.organizationMember.create).toHaveBeenCalledWith({
+        data: { organizationId: TEST_ORG.id, role: 'member', userId: 'new-id' },
+      });
+      // A JIT join is a roster change, and the roster is synced. Both halves
+      // have to go out: the membership alone is inert on a client that has
+      // never heard of this person, because bootstrap only ships `users` for
+      // people who were already members.
+      expect(readSyncActionInserts(prisma).map(a => [a.action, a.modelName])).toEqual([
+        ['I', 'User'],
+        ['I', 'OrganizationMember'],
+      ]);
     });
 
     it('bootstraps the first-ever user as platform admin', async () => {
@@ -872,7 +900,8 @@ describe('SamlService', () => {
       // Empty users table → this SSO login is the deployment's first account.
       prisma.user.count.mockResolvedValue(0);
       prisma.user.create.mockResolvedValue({ ...TEST_USER, email: claims.email, id: 'first-id' });
-      prisma.organizationMember.upsert.mockResolvedValue({});
+      prisma.organizationMember.findUnique.mockResolvedValue(null);
+      prisma.organizationMember.create.mockResolvedValue(membershipRow('first-id'));
 
       await service.jitProvisionUser(prisma as never, TEST_ORG.id, claims);
 
@@ -884,7 +913,8 @@ describe('SamlService', () => {
     it('derives two-letter initials from a single-word name', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
       prisma.user.create.mockResolvedValue({ ...TEST_USER, id: 'solo-id' });
-      prisma.organizationMember.upsert.mockResolvedValue({});
+      prisma.organizationMember.findUnique.mockResolvedValue(null);
+      prisma.organizationMember.create.mockResolvedValue(membershipRow('solo-id'));
 
       await service.jitProvisionUser(prisma as never, TEST_ORG.id, {
         email: 'solo@example.com',

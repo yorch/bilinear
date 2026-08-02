@@ -256,13 +256,6 @@ export class OrganizationService {
     }
   }
 
-  async findMembers(orgId: string): Promise<Array<{ userId: string; role: string }>> {
-    return this.prisma.organizationMember.findMany({
-      select: { role: true, userId: true },
-      where: { organizationId: orgId },
-    });
-  }
-
   async findById(orgId: string): Promise<Organization | null> {
     return this.prisma.organization.findUnique({ where: { id: orgId } });
   }

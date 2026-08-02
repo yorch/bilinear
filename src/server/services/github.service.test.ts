@@ -8,6 +8,7 @@ import {
   TEST_USER,
 } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
+import { mockSyncActionInserts, readSyncActionInserts } from '../../test/sync-action-mock';
 import { redis } from '../lib/redis';
 import {
   GitHubIntegrationAlreadyConnectedError,
@@ -24,28 +25,6 @@ import {
 vi.mock('../lib/redis', () => ({
   redis: { publish: vi.fn().mockResolvedValue(1) },
 }));
-
-/**
- * Extract the `{ orgId, action, modelName, modelId, data }` of every raw
- * `INSERT INTO "sync_actions"` issued through the mocked `$queryRaw` — the
- * shape `recordSyncAction` binds (see the beforeEach mock). Lets these tests
- * assert on recorded SyncActions without depending on the raw SQL text.
- */
-function readSyncActionInserts(prisma: MockPrismaClient) {
-  return prisma.$queryRaw.mock.calls
-    .map(([query]) => query as { sql?: string; values?: unknown[] })
-    .filter(q => typeof q?.sql === 'string' && q.sql.includes('INSERT INTO "sync_actions"'))
-    .map(q => {
-      const v = q.values ?? [];
-      return {
-        action: v[1],
-        data: typeof v[4] === 'string' ? JSON.parse(v[4] as string) : null,
-        modelId: v[3],
-        modelName: v[2],
-        organizationId: v[0],
-      };
-    });
-}
 
 const TEST_INTEGRATION = {
   accessToken: 'gho_testtoken',
@@ -103,32 +82,8 @@ describe('GitHubService', () => {
     prisma.webhook.findMany.mockResolvedValue([]);
 
     // recordSyncAction (called via the txHook during auto-close) persists
-    // through a raw `INSERT INTO "sync_actions" ... RETURNING` (it needs the
-    // DB-assigned xact_id back). Echo the write back with an incrementing id
-    // + xact_id so multiple SyncActions in one test are distinguishable. The
-    // INSERT's bound params are, in order: orgId, action, modelName, modelId,
-    // data (a JSON string or null) — see `readSyncActionInsert`.
-    let syncActionIdCounter = 0;
-    prisma.$queryRaw.mockImplementation((query: { sql?: string; values?: unknown[] }) => {
-      const values = query?.values ?? [];
-      if (typeof query?.sql === 'string' && query.sql.includes('INSERT INTO "sync_actions"')) {
-        const n = ++syncActionIdCounter;
-        const rawData = values[4];
-        return Promise.resolve([
-          {
-            action: values[1],
-            createdAt: new Date(),
-            data: typeof rawData === 'string' ? JSON.parse(rawData) : null,
-            id: BigInt(n),
-            modelId: values[3],
-            modelName: values[2],
-            organizationId: values[0],
-            xactId: String(1000 + n),
-          },
-        ]) as never;
-      }
-      return Promise.resolve([]) as never;
-    });
+    // through a raw INSERT ... RETURNING rather than `syncAction.create`.
+    mockSyncActionInserts(prisma);
 
     vi.mocked(redis.publish).mockClear();
   });

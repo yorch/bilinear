@@ -398,160 +398,174 @@ export class SyncManager {
         }
       }
 
-      // Clear and write in a single Dexie transaction to prevent data loss if a write fails
-      await db.transaction(
-        'rw',
-        [
-          db.organizations,
-          db.organizationMembers,
-          db.teams,
-          db.users,
-          db.workflowStates,
-          db.issueLabels,
-          db.issues,
-          db.cycles,
-          db.documents,
-          db.initiatives,
-          db.initiativeProjects,
-          db.projects,
-          db.projectMilestones,
-          db.projectUpdates,
-          db.customViews,
-          db.notifications,
-          db.issueRelations,
-          db.issueTemplates,
-          db.customFieldDefinitions,
-          db.customFieldValues,
-          db.syncMetadata,
-        ],
-        async () => {
-          await Promise.all([
-            db.organizations.clear(),
-            db.organizationMembers.clear(),
-            db.teams.clear(),
-            db.users.clear(),
-            db.workflowStates.clear(),
-            db.issueLabels.clear(),
-            db.issues.clear(),
-            db.cycles.clear(),
-            db.documents.clear(),
-            db.initiatives.clear(),
-            db.initiativeProjects.clear(),
-            db.projects.clear(),
-            db.projectMilestones.clear(),
-            db.projectUpdates.clear(),
-            db.customViews.clear(),
-            db.notifications.clear(),
-            db.issueRelations.clear(),
-            db.issueTemplates.clear(),
-            db.customFieldDefinitions.clear(),
-            db.customFieldValues.clear(),
-          ]);
-          await Promise.all([
-            db.organizations.bulkPut(
-              batches.organizations as Parameters<typeof db.organizations.bulkPut>[0],
-            ),
-            db.organizationMembers.bulkPut(
-              batches.organizationMembers as Parameters<typeof db.organizationMembers.bulkPut>[0],
-            ),
-            db.teams.bulkPut(batches.teams as Parameters<typeof db.teams.bulkPut>[0]),
-            db.users.bulkPut(batches.users as Parameters<typeof db.users.bulkPut>[0]),
-            db.workflowStates.bulkPut(
-              batches.workflowStates as Parameters<typeof db.workflowStates.bulkPut>[0],
-            ),
-            db.issueLabels.bulkPut(
-              batches.issueLabels as Parameters<typeof db.issueLabels.bulkPut>[0],
-            ),
-            db.issues.bulkPut(batches.issues as Parameters<typeof db.issues.bulkPut>[0]),
-            db.cycles.bulkPut(batches.cycles as Parameters<typeof db.cycles.bulkPut>[0]),
-            db.documents.bulkPut(batches.documents as Parameters<typeof db.documents.bulkPut>[0]),
-            db.projects.bulkPut(batches.projects as Parameters<typeof db.projects.bulkPut>[0]),
-            db.projectMilestones.bulkPut(
-              batches.projectMilestones as Parameters<typeof db.projectMilestones.bulkPut>[0],
-            ),
-            db.projectUpdates.bulkPut(
-              batches.projectUpdates as Parameters<typeof db.projectUpdates.bulkPut>[0],
-            ),
-            db.customViews.bulkPut(
-              batches.customViews as Parameters<typeof db.customViews.bulkPut>[0],
-            ),
-            db.notifications.bulkPut(
-              batches.notifications as Parameters<typeof db.notifications.bulkPut>[0],
-            ),
-            db.issueRelations.bulkPut(
-              batches.issueRelations as Parameters<typeof db.issueRelations.bulkPut>[0],
-            ),
-            db.issueTemplates.bulkPut(
-              batches.issueTemplates as Parameters<typeof db.issueTemplates.bulkPut>[0],
-            ),
-            db.customFieldDefinitions.bulkPut(
-              batches.customFieldDefinitions as Parameters<
-                typeof db.customFieldDefinitions.bulkPut
-              >[0],
-            ),
-            db.customFieldValues.bulkPut(
-              batches.customFieldValues as Parameters<typeof db.customFieldValues.bulkPut>[0],
-            ),
-            db.initiatives.bulkPut(
-              batches.initiatives as Parameters<typeof db.initiatives.bulkPut>[0],
-            ),
-            db.initiativeProjects.bulkPut(
-              batches.initiativeProjects as Parameters<typeof db.initiativeProjects.bulkPut>[0],
-            ),
-            db.syncMetadata.put({ key: 'lastSyncId', value: lastSyncId }),
-          ]);
-        },
-      );
+      // Clear and write in a single Dexie transaction to prevent data loss if
+      // a write fails — and on the apply chain, so a live WS action cannot
+      // interleave with (or be erased by) this authoritative load.
+      await this.runExclusive(async () => {
+        await db.transaction(
+          'rw',
+          [
+            db.organizations,
+            db.organizationMembers,
+            db.teams,
+            db.users,
+            db.workflowStates,
+            db.issueLabels,
+            db.issues,
+            db.cycles,
+            db.documents,
+            db.initiatives,
+            db.initiativeProjects,
+            db.projects,
+            db.projectMilestones,
+            db.projectUpdates,
+            db.customViews,
+            db.notifications,
+            db.issueRelations,
+            db.issueTemplates,
+            db.customFieldDefinitions,
+            db.customFieldValues,
+            db.syncMetadata,
+          ],
+          async () => {
+            await Promise.all([
+              db.organizations.clear(),
+              db.organizationMembers.clear(),
+              db.teams.clear(),
+              db.users.clear(),
+              db.workflowStates.clear(),
+              db.issueLabels.clear(),
+              db.issues.clear(),
+              db.cycles.clear(),
+              db.documents.clear(),
+              db.initiatives.clear(),
+              db.initiativeProjects.clear(),
+              db.projects.clear(),
+              db.projectMilestones.clear(),
+              db.projectUpdates.clear(),
+              db.customViews.clear(),
+              db.notifications.clear(),
+              db.issueRelations.clear(),
+              db.issueTemplates.clear(),
+              db.customFieldDefinitions.clear(),
+              db.customFieldValues.clear(),
+            ]);
+            await Promise.all([
+              db.organizations.bulkPut(
+                batches.organizations as Parameters<typeof db.organizations.bulkPut>[0],
+              ),
+              db.organizationMembers.bulkPut(
+                batches.organizationMembers as Parameters<typeof db.organizationMembers.bulkPut>[0],
+              ),
+              db.teams.bulkPut(batches.teams as Parameters<typeof db.teams.bulkPut>[0]),
+              db.users.bulkPut(batches.users as Parameters<typeof db.users.bulkPut>[0]),
+              db.workflowStates.bulkPut(
+                batches.workflowStates as Parameters<typeof db.workflowStates.bulkPut>[0],
+              ),
+              db.issueLabels.bulkPut(
+                batches.issueLabels as Parameters<typeof db.issueLabels.bulkPut>[0],
+              ),
+              db.issues.bulkPut(batches.issues as Parameters<typeof db.issues.bulkPut>[0]),
+              db.cycles.bulkPut(batches.cycles as Parameters<typeof db.cycles.bulkPut>[0]),
+              db.documents.bulkPut(batches.documents as Parameters<typeof db.documents.bulkPut>[0]),
+              db.projects.bulkPut(batches.projects as Parameters<typeof db.projects.bulkPut>[0]),
+              db.projectMilestones.bulkPut(
+                batches.projectMilestones as Parameters<typeof db.projectMilestones.bulkPut>[0],
+              ),
+              db.projectUpdates.bulkPut(
+                batches.projectUpdates as Parameters<typeof db.projectUpdates.bulkPut>[0],
+              ),
+              db.customViews.bulkPut(
+                batches.customViews as Parameters<typeof db.customViews.bulkPut>[0],
+              ),
+              db.notifications.bulkPut(
+                batches.notifications as Parameters<typeof db.notifications.bulkPut>[0],
+              ),
+              db.issueRelations.bulkPut(
+                batches.issueRelations as Parameters<typeof db.issueRelations.bulkPut>[0],
+              ),
+              db.issueTemplates.bulkPut(
+                batches.issueTemplates as Parameters<typeof db.issueTemplates.bulkPut>[0],
+              ),
+              db.customFieldDefinitions.bulkPut(
+                batches.customFieldDefinitions as Parameters<
+                  typeof db.customFieldDefinitions.bulkPut
+                >[0],
+              ),
+              db.customFieldValues.bulkPut(
+                batches.customFieldValues as Parameters<typeof db.customFieldValues.bulkPut>[0],
+              ),
+              db.initiatives.bulkPut(
+                batches.initiatives as Parameters<typeof db.initiatives.bulkPut>[0],
+              ),
+              db.initiativeProjects.bulkPut(
+                batches.initiativeProjects as Parameters<typeof db.initiativeProjects.bulkPut>[0],
+              ),
+              db.syncMetadata.put({ key: 'lastSyncId', value: lastSyncId }),
+            ]);
+          },
+        );
 
-      // Populate MobX stores
-      const firstOrg = batches.organizations[0] as { name?: string } | undefined;
-      if (firstOrg?.name) {
-        syncStore.setOrganizationName(firstOrg.name);
-      }
-      organizationMemberStore.upsertMany(
-        batches.organizationMembers as Parameters<typeof organizationMemberStore.upsertMany>[0],
-      );
-      teamStore.upsertMany(batches.teams as Parameters<typeof teamStore.upsertMany>[0]);
-      userStore.upsertMany(batches.users as Parameters<typeof userStore.upsertMany>[0]);
-      workflowStateStore.upsertMany(
-        batches.workflowStates as Parameters<typeof workflowStateStore.upsertMany>[0],
-      );
-      labelStore.upsertMany(batches.issueLabels as Parameters<typeof labelStore.upsertMany>[0]);
-      issueStore.upsertMany(batches.issues as Parameters<typeof issueStore.upsertMany>[0]);
-      cycleStore.upsertMany(batches.cycles as Parameters<typeof cycleStore.upsertMany>[0]);
-      documentStore.upsertMany(batches.documents as Parameters<typeof documentStore.upsertMany>[0]);
-      projectStore.upsertMany(batches.projects as Parameters<typeof projectStore.upsertMany>[0]);
-      projectStore.upsertMilestones(
-        batches.projectMilestones as Parameters<typeof projectStore.upsertMilestones>[0],
-      );
-      projectStore.upsertUpdates(
-        batches.projectUpdates as Parameters<typeof projectStore.upsertUpdates>[0],
-      );
-      customViewStore.upsertMany(
-        batches.customViews as Parameters<typeof customViewStore.upsertMany>[0],
-      );
-      notificationStore.upsertMany(
-        batches.notifications as Parameters<typeof notificationStore.upsertMany>[0],
-      );
-      issueRelationStore.upsertMany(
-        batches.issueRelations as Parameters<typeof issueRelationStore.upsertMany>[0],
-      );
-      issueTemplateStore.upsertMany(
-        batches.issueTemplates as Parameters<typeof issueTemplateStore.upsertMany>[0],
-      );
-      customFieldStore.upsertDefinitions(
-        batches.customFieldDefinitions as Parameters<typeof customFieldStore.upsertDefinitions>[0],
-      );
-      customFieldStore.upsertValues(
-        batches.customFieldValues as Parameters<typeof customFieldStore.upsertValues>[0],
-      );
-      initiativeStore.upsertMany(
-        batches.initiatives as Parameters<typeof initiativeStore.upsertMany>[0],
-      );
-      initiativeStore.upsertProjectLinks(
-        batches.initiativeProjects as Parameters<typeof initiativeStore.upsertProjectLinks>[0],
-      );
-      syncStore.setLastSyncId(lastSyncId);
+        // Populate MobX stores
+        const firstOrg = batches.organizations[0] as { name?: string } | undefined;
+        if (firstOrg?.name) {
+          syncStore.setOrganizationName(firstOrg.name);
+        }
+        // `replaceAll`, not `upsertMany`: a bootstrap is an authoritative load,
+        // and `fullBootstrap` is also the delta-failure fallback — it runs
+        // *after* `loadFromIndexedDB` filled the pool from a warm cache.
+        // Membership is hard-deleted, so a row the server omitted means the
+        // person left; merging would keep them in the roster with a role
+        // dropdown and a remove button the server answers with NOT_FOUND.
+        organizationMemberStore.replaceAll(
+          batches.organizationMembers as Parameters<typeof organizationMemberStore.replaceAll>[0],
+        );
+        teamStore.upsertMany(batches.teams as Parameters<typeof teamStore.upsertMany>[0]);
+        userStore.upsertMany(batches.users as Parameters<typeof userStore.upsertMany>[0]);
+        workflowStateStore.upsertMany(
+          batches.workflowStates as Parameters<typeof workflowStateStore.upsertMany>[0],
+        );
+        labelStore.upsertMany(batches.issueLabels as Parameters<typeof labelStore.upsertMany>[0]);
+        issueStore.upsertMany(batches.issues as Parameters<typeof issueStore.upsertMany>[0]);
+        cycleStore.upsertMany(batches.cycles as Parameters<typeof cycleStore.upsertMany>[0]);
+        documentStore.upsertMany(
+          batches.documents as Parameters<typeof documentStore.upsertMany>[0],
+        );
+        projectStore.upsertMany(batches.projects as Parameters<typeof projectStore.upsertMany>[0]);
+        projectStore.upsertMilestones(
+          batches.projectMilestones as Parameters<typeof projectStore.upsertMilestones>[0],
+        );
+        projectStore.upsertUpdates(
+          batches.projectUpdates as Parameters<typeof projectStore.upsertUpdates>[0],
+        );
+        customViewStore.upsertMany(
+          batches.customViews as Parameters<typeof customViewStore.upsertMany>[0],
+        );
+        notificationStore.upsertMany(
+          batches.notifications as Parameters<typeof notificationStore.upsertMany>[0],
+        );
+        issueRelationStore.upsertMany(
+          batches.issueRelations as Parameters<typeof issueRelationStore.upsertMany>[0],
+        );
+        issueTemplateStore.upsertMany(
+          batches.issueTemplates as Parameters<typeof issueTemplateStore.upsertMany>[0],
+        );
+        customFieldStore.upsertDefinitions(
+          batches.customFieldDefinitions as Parameters<
+            typeof customFieldStore.upsertDefinitions
+          >[0],
+        );
+        customFieldStore.upsertValues(
+          batches.customFieldValues as Parameters<typeof customFieldStore.upsertValues>[0],
+        );
+        initiativeStore.upsertMany(
+          batches.initiatives as Parameters<typeof initiativeStore.upsertMany>[0],
+        );
+        initiativeStore.upsertProjectLinks(
+          batches.initiativeProjects as Parameters<typeof initiativeStore.upsertProjectLinks>[0],
+        );
+        syncStore.setLastSyncId(lastSyncId);
+      });
       syncStore.setStatus('connected');
     } catch (err) {
       log.error('Bootstrap error', err);
@@ -596,6 +610,12 @@ export class SyncManager {
           // Delta failed — fall back to full bootstrap
           this.isDeltaSyncing = false;
           await this.fullBootstrap();
+          // Same catch-up the cold-start bootstrap schedules, and needed more
+          // here: this path runs with the WebSocket already live, so an action
+          // that applied while the snapshot was in flight is erased by the
+          // authoritative write. `fullBootstrap` regresses `lastSyncId` to the
+          // snapshot's cursor, so the follow-up re-delivers it.
+          this.scheduleFollowUpDelta();
           return;
         }
 
@@ -652,15 +672,31 @@ export class SyncManager {
    */
   private applyLock: Promise<void> = Promise.resolve();
 
+  /**
+   * Queue `task` on the apply chain. Also used by `fullBootstrap`, whose
+   * write phase is an *authoritative* load and so must not interleave with an
+   * incremental one either: it clears Dexie and (for the roster, the one
+   * hard-deleted model) clears the MobX pool, so a live action landing
+   * mid-bootstrap would be dropped rather than merely overwritten. Reached
+   * from `deltaSync`'s failure fallback while the WebSocket is live, which is
+   * exactly when that overlap is possible.
+   */
+  private runExclusive<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.applyLock.then(task);
+    // Keep the chain alive if one task throws — a rejected lock would wedge
+    // every subsequent apply. Callers still see the real rejection via `run`.
+    this.applyLock = run.then(
+      () => {},
+      () => {},
+    );
+    return run;
+  }
+
   private applyActions(actions: SerializedSyncAction[]): Promise<void> {
     if (actions.length === 0) {
       return Promise.resolve();
     }
-    const run = this.applyLock.then(() => this.doApplyActions(actions));
-    // Keep the chain alive if one apply throws — a rejected lock would wedge
-    // every subsequent apply. Callers still see the real rejection via `run`.
-    this.applyLock = run.catch(() => {});
-    return run;
+    return this.runExclusive(() => this.doApplyActions(actions));
   }
 
   private async doApplyActions(actions: SerializedSyncAction[]) {

@@ -1,6 +1,9 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { joinOrganization } from '@/server/lib/membership-sync';
 import { prisma } from '@/server/lib/prisma';
+import { redis } from '@/server/lib/redis';
+import { SyncService } from '@/server/services/sync.service';
 import { isFirstUser } from '@/server/services/user.service';
 import { authenticateScim, listResponse, scimError, userToScim } from '../_scim-auth';
 
@@ -122,20 +125,11 @@ export async function POST(req: NextRequest) {
     where: { email },
   });
 
-  // Add to org as member (ignore if already a member).
-  await prisma.organizationMember.upsert({
-    create: {
-      createdAt: new Date(),
-      organizationId: auth.orgId,
-      role: 'member',
-      updatedAt: new Date(),
-      userId: user.id,
-    },
-    update: {},
-    where: {
-      organizationId_userId: { organizationId: auth.orgId, userId: user.id },
-    },
-  });
+  // Add to org as member (no-op if already a member). The roster is part of
+  // the synced dataset, so a provisioning that skipped the broadcast would
+  // leave every open client — indefinitely, since a warm Dexie cache never
+  // re-bootstraps — showing a workspace the new member is missing from.
+  await joinOrganization(prisma, new SyncService(prisma, redis), auth.orgId, user.id, 'member');
 
   return NextResponse.json(userToScim(user), { status: 201 });
 }
