@@ -92,7 +92,7 @@ export function SelectPopover({
       <button
         aria-controls={open ? panelId : undefined}
         aria-expanded={open}
-        aria-haspopup="true"
+        aria-haspopup="listbox"
         className={cn(
           'flex items-center rounded hover:bg-accent',
           'disabled:cursor-not-allowed disabled:opacity-50',

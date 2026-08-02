@@ -199,4 +199,66 @@ describe('TransactionQueue', () => {
     expect(onSuccess).toHaveBeenCalledWith({ ok: true });
     expect(gqlMock).toHaveBeenCalledTimes(3);
   });
+
+  // §1.5: a RATELIMITED GraphQL error is the one application error the server
+  // explicitly says to retry. Unlike FORBIDDEN/NOT_FOUND/BAD_USER_INPUT (which
+  // stay permanent and drop immediately), it must go through the bounded retry
+  // path — otherwise the mutation silently vanishes with its optimistic state
+  // never confirmed nor rolled back.
+  it('retries a RATELIMITED error instead of dropping it, and succeeds on retry', async () => {
+    vi.useFakeTimers();
+    gqlMock
+      .mockResolvedValueOnce({
+        errors: [{ extensions: { code: 'RATELIMITED' }, message: 'slow down' }],
+      })
+      .mockResolvedValueOnce({
+        errors: [{ extensions: { code: 'RATELIMITED' }, message: 'slow down' }],
+      })
+      .mockResolvedValueOnce({ data: { ok: true } });
+    const onSuccess = vi.fn();
+    const onError = vi.fn();
+
+    const queue = new TransactionQueue();
+    queue.enqueue('mutation X { x }', {}, { onError, onSuccess });
+
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(onSuccess).toHaveBeenCalledWith({ ok: true });
+    expect(gqlMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('gives up on a persistently RATELIMITED mutation after MAX_RETRIES', async () => {
+    vi.useFakeTimers();
+    gqlMock.mockResolvedValue({
+      errors: [{ extensions: { code: 'RATELIMITED' }, message: 'slow down' }],
+    });
+    const onError = vi.fn();
+
+    const queue = new TransactionQueue();
+    queue.enqueue('mutation X { x }', {}, { onError });
+
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    // Initial attempt + 3 retries, then permanent.
+    expect(gqlMock).toHaveBeenCalledTimes(4);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(TransactionQueue.getPendingIds().size).toBe(0);
+  });
+
+  it('drops a FORBIDDEN error immediately with no retry', async () => {
+    vi.useFakeTimers();
+    gqlMock.mockResolvedValue({
+      errors: [{ extensions: { code: 'FORBIDDEN' }, message: 'nope' }],
+    });
+    const onError = vi.fn();
+
+    const queue = new TransactionQueue();
+    queue.enqueue('mutation X { x }', {}, { onError });
+
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(gqlMock).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
 });

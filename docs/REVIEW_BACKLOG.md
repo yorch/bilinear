@@ -266,7 +266,14 @@ by `clientId` instead of `(title, teamId)`. Couples nicely with the
   identical titles in <100ms; both end up in the list with their
   server-assigned ids.
 
-### 1.5 — TransactionQueue head-of-line blocking + `RATELIMITED` misclassification
+### 1.5 — TransactionQueue head-of-line blocking + `RATELIMITED` misclassification — ⚠️ partially shipped
+
+> **Shipped (2026-08-02):** the `RATELIMITED` reclassification — a
+> `RATELIMITED` GraphQL error now routes through the bounded
+> `RETRY_DELAYS_MS` path instead of being dropped as permanent, and still
+> ends in `onError` after `MAX_RETRIES` (`transaction-queue.ts`, with
+> `transaction-queue.test.ts` cases). The `canUnblock` head-of-line change
+> is still deferred — it alters the queue contract and needs caller opt-in.
 
 **File entry points:**
 - `src/lib/transaction-queue.ts:190-235` — the retry / dequeue logic
@@ -309,7 +316,12 @@ by `clientId` instead of `(title, teamId)`. Couples nicely with the
   `RATELIMITED` mock triggers exactly `MAX_RETRIES` retries then calls
   `onError`; a `FORBIDDEN` mock calls `onError` immediately.
 
-### 1.6 — `applyActions` concurrency (no mutex between delta and WS paths)
+### 1.6 — `applyActions` concurrency (no mutex between delta and WS paths) — ✅ shipped (2026-08-02)
+
+> A single-slot promise chain (`applyLock`) now serializes every
+> `applyActions` — delta pages and live WS messages — so a WS apply can't
+> interleave its MobX/Dexie writes or its `lastSyncId` advance with a
+> delta's. See `sync-manager.ts` and the mutex test in `sync-manager.test.ts`.
 
 **File entry points:**
 - `src/lib/sync-manager.ts:562` — `private async applyActions(...)`
@@ -411,6 +423,14 @@ Pattern already exists for `CustomFieldType`. Each promotion is
 `enum + ALTER TABLE … TYPE … USING …` and a Prisma schema swap. Update
 service-layer string literals to typed enum values; update GraphQL
 schema to expose enum types.
+
+### 2.1–2.2 Compound/partial indexes + Issue/IssueLabel `onDelete` — ✅ shipped (2026-08-02)
+
+> Landed as schema `@@index` additions (folded into the regenerated init)
+> plus the `issues(team_id, state_id) WHERE active` partial in the custom
+> migration; `onDelete: Cascade` on `Issue`/`IssueLabel` org+team FKs. Still
+> needs the shadow-Postgres verification + EXPLAIN ANALYZE benchmark before
+> deploy. §2.3 (enum promotion) and §2.6 (retention) remain deferred.
 
 ### 2.4 Misc additive constraints — ✅ shipped
 
@@ -530,7 +550,7 @@ handling.
 | Item | File / line | Estimated impact |
 | --- | --- | --- |
 | Native `ws.ping()` + pong-driven terminate timer (vs. app-level JSON pings) | `src/server/ws/index.ts:187-215` | Closes dead connections that survived TCP reset |
-| `IssueService.maybeCloseParentTx` / `maybeCloseChildrenTx` skip the team-flag read when the issue's state change can't trigger an auto-close | `src/server/services/issue.service.ts:362-378, 436-547` | -5–30ms on every `issueUpdate` with state change |
+| ✅ **shipped (2026-08-02)** — `IssueService.update` skips the team-flag read + cascade when the new state isn't terminal (`completed`/`canceled`); neither cascade can fire otherwise | `src/server/services/issue.service.ts` | -1 DB round-trip on every non-terminal `issueUpdate` |
 | MobX secondary indexes (`Map<teamId, Set<id>>`) on base pool store | `src/stores/issue-store.ts:18-29, 52-79` | Eliminates `Array.from(pool.values()).filter` in observer components — material on 10k-issue stores |
 | TipTap further code-split inside the lazy editor module | `src/components/editor/tiptap-editor.tsx` | Probably a no-op now that the editor is dynamically imported; verify with bundle inspector before doing more work |
 

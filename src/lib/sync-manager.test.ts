@@ -386,6 +386,46 @@ describe('SyncManager', () => {
       expect(stores.syncStore.lastSyncId).not.toBe(expectedCursor(page2.xactId, page2.id));
     });
 
+    it('serializes concurrent applyActions calls (delta + live WS) through the mutex (#1.6)', async () => {
+      const stores = createFakeStores();
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+
+      // Gate the FIRST apply's Dexie flush on a manual deferred so we can prove
+      // the SECOND apply doesn't start its store writes until the first fully
+      // completes — the whole point of the single-slot lock.
+      let releaseFirst: () => void = () => {};
+      const firstFlush = new Promise<void>(resolve => {
+        releaseFirst = resolve;
+      });
+      let flushCall = 0;
+      fakeDb.transaction.mockImplementation(async (_m: string, _t: unknown, cb: () => unknown) => {
+        flushCall += 1;
+        if (flushCall === 1) {
+          await firstFlush;
+        }
+        return cb();
+      });
+
+      const a1 = makeAction({ id: '1', modelId: 'i-1', xactId: '100' });
+      const a2 = makeAction({ id: '2', modelId: 'i-2', xactId: '200' });
+
+      const p1 = (manager as Instance).applyActions([a1]);
+      const p2 = (manager as Instance).applyActions([a2]);
+
+      // Let p1 run up to its gated Dexie flush. p2 is queued behind the lock,
+      // so only the first batch's store apply has happened so far.
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(stores.issueStore.applySyncAction).toHaveBeenCalledTimes(1);
+
+      releaseFirst();
+      await Promise.all([p1, p2]);
+
+      // Both applied, strictly ordered; the final cursor is the batch max, never
+      // regressed by the second flush completing after the first.
+      expect(stores.issueStore.applySyncAction).toHaveBeenCalledTimes(2);
+      expect(stores.syncStore.lastSyncId).toBe(expectedCursor(a2.xactId, a2.id));
+    });
+
     it('bails out of the loop immediately once stopped, without requesting further pages', async () => {
       const stores = createFakeStores();
       const wsClient = createFakeWsClient();

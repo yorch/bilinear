@@ -958,9 +958,6 @@ CREATE INDEX "issues_state_id_idx" ON "issues"("state_id");
 CREATE INDEX "issues_assignee_id_idx" ON "issues"("assignee_id");
 
 -- CreateIndex
-CREATE INDEX "issues_project_id_idx" ON "issues"("project_id");
-
--- CreateIndex
 CREATE INDEX "issues_cycle_id_idx" ON "issues"("cycle_id");
 
 -- CreateIndex
@@ -976,7 +973,13 @@ CREATE INDEX "issues_team_id_priority_idx" ON "issues"("team_id", "priority");
 CREATE INDEX "issues_team_id_created_at_idx" ON "issues"("team_id", "created_at");
 
 -- CreateIndex
-CREATE INDEX "issues_updated_at_idx" ON "issues"("updated_at");
+CREATE INDEX "issues_organization_id_updated_at_idx" ON "issues"("organization_id", "updated_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "issues_assignee_id_state_id_idx" ON "issues"("assignee_id", "state_id");
+
+-- CreateIndex
+CREATE INDEX "issues_project_id_archived_at_trashed_idx" ON "issues"("project_id", "archived_at", "trashed");
 
 -- CreateIndex
 CREATE INDEX "issues_previous_identifiers_idx" ON "issues" USING GIN ("previous_identifiers");
@@ -998,6 +1001,9 @@ CREATE INDEX "sync_actions_organization_id_id_idx" ON "sync_actions"("organizati
 
 -- CreateIndex
 CREATE INDEX "sync_actions_created_at_idx" ON "sync_actions"("created_at");
+
+-- CreateIndex
+CREATE INDEX "sync_actions_organization_id_model_name_model_id_idx" ON "sync_actions"("organization_id", "model_name", "model_id");
 
 -- CreateIndex
 CREATE INDEX "projects_organization_id_idx" ON "projects"("organization_id");
@@ -1066,7 +1072,7 @@ CREATE INDEX "issue_label_assignments_label_id_idx" ON "issue_label_assignments"
 CREATE UNIQUE INDEX "issue_label_assignments_issue_id_label_id_key" ON "issue_label_assignments"("issue_id", "label_id");
 
 -- CreateIndex
-CREATE INDEX "notifications_user_id_read_idx" ON "notifications"("user_id", "read");
+CREATE INDEX "notifications_user_id_read_created_at_idx" ON "notifications"("user_id", "read", "created_at" DESC);
 
 -- CreateIndex
 CREATE INDEX "notifications_user_id_created_at_idx" ON "notifications"("user_id", "created_at");
@@ -1321,10 +1327,10 @@ ALTER TABLE "team_memberships" ADD CONSTRAINT "team_memberships_user_id_fkey" FO
 ALTER TABLE "workflow_states" ADD CONSTRAINT "workflow_states_team_id_fkey" FOREIGN KEY ("team_id") REFERENCES "teams"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "issues" ADD CONSTRAINT "issues_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "issues" ADD CONSTRAINT "issues_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "issues" ADD CONSTRAINT "issues_team_id_fkey" FOREIGN KEY ("team_id") REFERENCES "teams"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "issues" ADD CONSTRAINT "issues_team_id_fkey" FOREIGN KEY ("team_id") REFERENCES "teams"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "issues" ADD CONSTRAINT "issues_state_id_fkey" FOREIGN KEY ("state_id") REFERENCES "workflow_states"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -1351,10 +1357,10 @@ ALTER TABLE "issues" ADD CONSTRAINT "issues_project_id_fkey" FOREIGN KEY ("proje
 ALTER TABLE "issues" ADD CONSTRAINT "issues_project_milestone_id_fkey" FOREIGN KEY ("project_milestone_id") REFERENCES "project_milestones"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "issue_labels" ADD CONSTRAINT "issue_labels_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "issue_labels" ADD CONSTRAINT "issue_labels_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "issue_labels" ADD CONSTRAINT "issue_labels_team_id_fkey" FOREIGN KEY ("team_id") REFERENCES "teams"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "issue_labels" ADD CONSTRAINT "issue_labels_team_id_fkey" FOREIGN KEY ("team_id") REFERENCES "teams"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "issue_labels" ADD CONSTRAINT "issue_labels_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "issue_labels"("id") ON DELETE SET NULL ON UPDATE CASCADE;
