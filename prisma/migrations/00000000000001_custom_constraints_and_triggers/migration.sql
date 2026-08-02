@@ -34,31 +34,23 @@ CREATE INDEX "auth_tokens_token_hash_magic_link_idx"
   WHERE "type" = 'magic_link';
 
 -- ---------------------------------------------------------------------------
--- sync_actions.xact_id commit-order fence
+-- sync_actions.xact_id covering index (commit-order fence)
 -- ---------------------------------------------------------------------------
--- Stamps every insert with the writing transaction's 64-bit transaction id
--- (`pg_current_xact_id()` → xid8, no wraparound). Delta sync
--- (SyncService.getDeltaSyncActions) orders by `(xact_id, id)` and reads only
--- rows with `xact_id < pg_snapshot_xmin(pg_current_snapshot())` — i.e. rows
--- whose transaction has SETTLED and below which no transaction is still in
--- flight. This is a provably never-skip cursor: it replaces the former
--- `committed_at = statement_timestamp()` + 500ms wall-clock safety window,
--- which could still miss a row whose transaction inserted early but committed
--- more than the window later (BIGSERIAL ids are assigned at INSERT but commit
--- out of order — a client recording lastSyncId=max(id) could skip a
--- lower-id-but-later-commit row). Fencing on the transaction id instead of a
--- timestamp removes the wall-clock guess entirely: an in-flight xid keeps its
--- rows fenced until it actually commits, regardless of how long that takes.
--- Load-bearing for delta sync.
+-- The `xact_id xid8 DEFAULT pg_current_xact_id()` column itself is Prisma-
+-- expressible (an `Unsupported` type with a `dbgenerated` default) and lives
+-- in the generated init baseline. This index is the part Prisma cannot declare
+-- — `@@index` rejects an `Unsupported`-typed field — so it lives here.
 --
--- Prisma's DSL cannot express the `xid8` type, the `pg_current_xact_id()`
--- default, or an index on an Unsupported-typed column, so the column and its
--- covering index live here rather than in the generated init. `pg_current_xact_id()`
--- returns the xid the INSERT already assigns, so this consumes no extra xids
--- beyond what the write itself does.
-ALTER TABLE "sync_actions"
-  ADD COLUMN "xact_id" xid8 NOT NULL DEFAULT pg_current_xact_id();
-
+-- It is load-bearing for delta sync: `SyncService.getDeltaSyncActions` orders
+-- by `(xact_id, id)` and reads only rows with
+-- `xact_id < pg_snapshot_xmin(pg_current_snapshot())` — rows whose transaction
+-- has SETTLED and below which no transaction is still in flight. That is a
+-- provably never-skip cursor, replacing the former `committed_at =
+-- statement_timestamp()` + 500ms wall-clock window, which could still miss a
+-- row whose transaction inserted early but committed more than the window later
+-- (BIGSERIAL ids are assigned at INSERT but commit out of order). Fencing on
+-- the transaction id removes the wall-clock guess entirely: an in-flight xid
+-- keeps its rows fenced until it actually commits, however long that takes.
 CREATE INDEX "sync_actions_organization_id_xact_id_id_idx"
   ON "sync_actions" ("organization_id", "xact_id", "id");
 

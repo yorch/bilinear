@@ -1,8 +1,4 @@
-import {
-  COMMIT_WATERMARK_LAG_MS,
-  DELTA_PAGE_SIZE,
-  MAX_PLAUSIBLE_XACT_ID,
-} from '@/lib/sync-config';
+import { COMMIT_WATERMARK_LAG_MS, DELTA_PAGE_SIZE, MAX_PLAUSIBLE_XACT_ID } from '@/lib/sync-config';
 import { normalizeIssueRow } from '@/stores/issue-store';
 import type { RootStore } from '@/stores/root-store';
 import { db } from './db';

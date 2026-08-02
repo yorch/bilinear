@@ -563,13 +563,17 @@ model SyncAction {
   // former `committed_at = statement_timestamp()` + wall-clock safety window,
   // a transaction that inserts early and commits arbitrarily later can no
   // longer be missed — its xid keeps it fenced until it actually commits,
-  // regardless of elapsed time. The `xid8` type, the `pg_current_xact_id()`
-  // default, and the `(organization_id, xact_id, id)` index all live in
-  // migration 00000000000001_custom_constraints_and_triggers (Prisma's DSL
-  // can't express any of them). Unsupported here means the field is not
-  // selectable through the Prisma client — it is read only via the raw SQL
-  // in `SyncService` (see `getDeltaSyncActions`).
-  xactId Unsupported("xid8")? @default(dbgenerated("pg_current_xact_id()")) @map("xact_id")
+  // regardless of elapsed time. The `xid8` column + `pg_current_xact_id()`
+  // default are Prisma-expressible (an `Unsupported` type with a
+  // `dbgenerated` default), so they live in the generated `00000000000000_init`
+  // baseline; only the `(organization_id, xact_id, id)` covering index — which
+  // Prisma can't declare on an `Unsupported` field — lives in the custom
+  // migration `00000000000001_custom_constraints_and_triggers`. `Unsupported`
+  // means the field is not selectable through the Prisma client — it is read
+  // only via the raw SQL in `SyncService` (see `getDeltaSyncActions`). Required
+  // (not `?`) so it matches the NOT NULL column; the `dbgenerated` default keeps
+  // it out of the Prisma create input.
+  xactId Unsupported("xid8") @default(dbgenerated("pg_current_xact_id()")) @map("xact_id")
 
   organization Organization @relation(fields: [organizationId], references: [id])
 

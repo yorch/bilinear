@@ -259,6 +259,7 @@ CREATE TABLE "sync_actions" (
     "model_id" UUID NOT NULL,
     "data" JSONB,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "xact_id" xid8 NOT NULL DEFAULT pg_current_xact_id(),
 
     CONSTRAINT "sync_actions_pkey" PRIMARY KEY ("id")
 );

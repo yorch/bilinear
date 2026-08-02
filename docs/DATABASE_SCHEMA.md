@@ -1067,9 +1067,10 @@ CREATE TABLE sync_actions (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     -- The writing transaction's 64-bit transaction id (no wraparound),
     -- stamped by the column DEFAULT. THE commit-order fence for delta sync
-    -- (see the ordering invariant below). Added by the custom migration
-    -- (Prisma's DSL can't express the xid8 type / pg_current_xact_id()
-    -- default / index on an Unsupported column).
+    -- (see the ordering invariant below). The column is Prisma-expressible (an
+    -- `Unsupported("xid8")` field with a `dbgenerated` default), so it lives in
+    -- the generated init baseline; only its covering index below is hand-written
+    -- in the custom migration (Prisma can't @@index an Unsupported field).
     xact_id         xid8 NOT NULL DEFAULT pg_current_xact_id()
 );
 CREATE INDEX idx_sync_actions_org ON sync_actions(organization_id, id);
@@ -1630,9 +1631,9 @@ prisma/
                                                   --   partial/expression indexes (incl. the
                                                   --   teams(org, key) WHERE archived_at IS
                                                   --   NULL unique), the FTS GIN index and
-                                                  --   trigger, the sync_actions.xact_id xid8
-                                                  --   column + pg_current_xact_id() default +
-                                                  --   (org, xact_id, id) index, check
+                                                  --   trigger, the sync_actions
+                                                  --   (org, xact_id, id) index (the xact_id
+                                                  --   column itself is in init), check
                                                   --   constraints, and the String[] NOT NULL
                                                   --   guards
 ```
