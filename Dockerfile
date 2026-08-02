@@ -14,6 +14,22 @@ COPY prisma.config.ts ./
 COPY prisma ./prisma
 RUN yarn install --immutable
 
+# ---- production dependencies ----
+# The runner needs a real node_modules (see the runner stage: Prisma CLI for
+# migrate-on-boot, tsx for the WS server), but it does not need the dev tree —
+# playwright, vitest, jsdom, typescript, biome and friends. Building that tree
+# separately lets the runner copy production deps only instead of overlaying the
+# builder's full install.
+FROM node:24-alpine AS prod-deps
+WORKDIR /app
+
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn .yarn
+# `postinstall` runs `prisma generate`, so the schema must be present first.
+COPY prisma.config.ts ./
+COPY prisma ./prisma
+RUN yarn workspaces focus --production
+
 # ---- builder stage ----
 FROM node:24-alpine AS builder
 WORKDIR /app
@@ -50,12 +66,17 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Prisma needs the schema, prisma.config.ts (datasource URL lives there in
-# Prisma 7), and the full node_modules (CLI + engines) to run `migrate deploy`
-# on boot. This intentionally overlays the slimmer node_modules that
-# .next/standalone bundles, trading image size for a working migrate step.
+# Prisma 7), and a real node_modules (CLI + engines) to run `migrate deploy` on
+# boot. This overlays the slimmer node_modules that .next/standalone bundles —
+# deliberately, because the standalone trace only covers the Next app and this
+# image also runs the WS server (see below).
+#
+# It comes from `prod-deps`, not `builder`: the runtime needs `prisma` and `tsx`
+# (both now declared as dependencies rather than devDependencies, which is what
+# they actually are for this image), but nothing from the dev tree.
 COPY --from=builder --chown=node:node /app/prisma ./prisma
 COPY --from=builder --chown=node:node /app/prisma.config.ts ./prisma.config.ts
-COPY --from=builder --chown=node:node /app/node_modules ./node_modules
+COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 
 COPY --from=builder /app/public ./public
