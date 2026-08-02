@@ -32,6 +32,8 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v7
 
+      # Kept (a no-op for an amd64-only build) so restoring arm64 is a
+      # one-line change to `platforms` below.
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
 
@@ -42,7 +44,9 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          # arm64 is disabled: the emulated QEMU build dominates CI wall-clock.
+          # Re-enable by restoring `linux/amd64,linux/arm64` here and in `publish`.
+          platforms: linux/amd64
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -62,6 +66,8 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Kept (a no-op for an amd64-only build) so restoring arm64 is a
+      # one-line change to `platforms` below.
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
 
@@ -132,7 +138,10 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          # arm64 is disabled: the emulated QEMU build dominates CI wall-clock.
+          # Re-enable by restoring `linux/amd64,linux/arm64` here and in `build`.
+          # Note the published manifest becomes amd64-only while this stands.
+          platforms: linux/amd64
           # The publish job only runs on main / v* tag refs (see job `if`), so always push.
           push: true
           tags: ${{ steps.meta.outputs.tags }}
