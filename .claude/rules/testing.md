@@ -30,6 +30,16 @@ happily when both sides drifted together, and a timing trigger test proved
 nothing because `psql -c` sends multiple statements as one batch, so
 `statement_timestamp()` never advanced between them.
 
+## Run the gates on the pinned Node
+
+`.node-version` pins **Node 24** and that is what CI uses. A sandbox or laptop
+on an older Node runs a different runtime, and the difference is not always
+cosmetic — Node 24's undici keeps `Request`/`Response` internals in private
+class fields, so a hand-built stand-in for one of them (`Object.create(request,
+…)`, a partial object literal) throws `Cannot read private member #state` there
+while passing happily on Node 22. Check `node --version` before trusting a green
+local run.
+
 ## E2E tests (Playwright)
 
 - Specs live in `tests/e2e/`. Use the `loginAs(page, email)` helper.

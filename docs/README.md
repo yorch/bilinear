@@ -13,7 +13,7 @@ them in the same PR.
 
 | Document                                        | Use it for                                                                     |
 | ----------------------------------------------- | ------------------------------------------------------------------------------ |
-| [`PATTERNS.md`](PATTERNS.md)                     | The mandated conventions. 79 numbered sections; start from the TOC             |
+| [`PATTERNS.md`](PATTERNS.md)                     | The mandated conventions. 80 numbered sections; start from the TOC             |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md)             | How the pieces fit — request flow, sync engine, process boundaries             |
 | [`DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md)       | Schema, the migration-consolidation policy, real-Postgres verification recipe  |
 | [`API_DESIGN.md`](API_DESIGN.md)                 | GraphQL contracts — types, queries, mutations, error codes                     |

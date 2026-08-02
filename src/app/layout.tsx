@@ -1,10 +1,12 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import localFont from 'next/font/local';
 import { ThemeProvider } from 'next-themes';
+import { ServiceWorkerRegistrar } from '@/components/pwa/service-worker-registrar';
 import { getServerAccent } from '@/lib/accent-server';
 import { APP_NAME } from '@/lib/app-config';
 import { getServerCollabConfig } from '@/lib/collab-server';
 import { getServerTranslations } from '@/lib/i18n/server';
+import { PWA_BACKGROUND_DARK, PWA_BACKGROUND_LIGHT } from '@/lib/pwa';
 import { Toaster } from '@/lib/toast';
 import { AccentProvider } from '@/providers/accent-provider';
 import { CollabProvider } from '@/providers/collab-provider';
@@ -37,10 +39,36 @@ const geistMono = localFont({
   weight: '400 600',
 });
 
+/**
+ * The installed app's title bar follows the system theme rather than the
+ * manifest's single `theme_color`, which is why both values are declared here
+ * as well. `viewport` is a static export: it can't read the theme (that lives
+ * in a class on `<html>`, resolved client-side by next-themes), so the media
+ * query is what does the choosing.
+ */
+export const viewport: Viewport = {
+  themeColor: [
+    { color: PWA_BACKGROUND_LIGHT, media: '(prefers-color-scheme: light)' },
+    { color: PWA_BACKGROUND_DARK, media: '(prefers-color-scheme: dark)' },
+  ],
+};
+
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getServerTranslations();
   return {
+    // `manifest` is injected automatically from src/app/manifest.ts.
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: 'default',
+      title: APP_NAME,
+    },
+    applicationName: APP_NAME,
     description: t('meta.description'),
+    icons: {
+      // iOS has no maskable-icon concept and composites transparency onto
+      // black, so it gets its own full-bleed icon.
+      apple: '/icons/apple-touch-icon-180.png',
+    },
     title: APP_NAME,
   };
 }
@@ -79,6 +107,7 @@ export default async function RootLayout({
             <LocaleProvider initialLocale={initialLocale}>
               <CollabProvider config={collabConfig}>
                 {children}
+                <ServiceWorkerRegistrar />
                 <Toaster closeButton position="bottom-right" richColors />
               </CollabProvider>
             </LocaleProvider>
