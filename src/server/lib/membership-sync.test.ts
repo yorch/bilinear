@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Prisma } from '../../generated/prisma';
+import { type OrganizationRole, Prisma } from '../../generated/prisma';
 import { TEST_ORG, TEST_USER } from '../../test/fixtures';
 import { createMockPrisma } from '../../test/prisma-mock';
 import {
@@ -13,7 +13,7 @@ const MEMBERSHIP = {
   createdAt: new Date('2026-08-02T00:00:00Z'),
   id: 'mem-1',
   organizationId: TEST_ORG.id,
-  role: 'member',
+  role: 'member' as OrganizationRole,
   updatedAt: new Date('2026-08-02T00:00:00Z'),
   userId: TEST_USER.id,
 };
@@ -47,7 +47,7 @@ describe('ensureMembership', () => {
     // The callers all mean "make sure they are in", never "set their role" —
     // an invitation must not demote someone who is already an owner.
     const prisma = createMockPrisma();
-    const owner = { ...MEMBERSHIP, role: 'owner' };
+    const owner = { ...MEMBERSHIP, role: 'owner' as OrganizationRole };
     prisma.organizationMember.findUnique.mockResolvedValue(owner);
 
     const result = await ensureMembership(prisma as never, TEST_ORG.id, TEST_USER.id, 'member');

@@ -1,5 +1,5 @@
 import { GraphQLError } from 'graphql';
-import type { Project, ProjectUpdate } from '../../../generated/prisma';
+import type { Project, ProjectStatusType, ProjectUpdate } from '../../../generated/prisma';
 import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../../lib/limits';
 import { logger } from '../../lib/logger';
 import { clampLimit } from '../../lib/pagination';
@@ -675,7 +675,7 @@ export const projectResolvers = {
     projects: async (
       _parent: unknown,
       args: {
-        filter?: { statusType?: string; health?: string; leadId?: string };
+        filter?: { statusType?: ProjectStatusType; health?: string; leadId?: string };
         first?: number;
         after?: string;
         includeArchived?: boolean;

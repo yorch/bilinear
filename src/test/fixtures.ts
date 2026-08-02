@@ -2,6 +2,8 @@
  * Shared test fixtures for consistent test data across the test suite.
  */
 
+import type { WorkflowState } from '../generated/prisma';
+
 export const TEST_ORG = {
   archivedAt: null,
   authSettings: {},
@@ -119,7 +121,7 @@ export const TEST_TEAM = {
   updatedAt: new Date('2026-01-15T00:00:00Z'),
 };
 
-export const DEFAULT_WORKFLOW_STATES = [
+export const DEFAULT_WORKFLOW_STATES: WorkflowState[] = [
   {
     archivedAt: null,
     color: '#bec2c8',

@@ -1,4 +1,4 @@
-import type { PrismaClient, WorkflowState } from '../../generated/prisma';
+import type { PrismaClient, WorkflowState, WorkflowStateType } from '../../generated/prisma';
 
 const VALID_TYPES = ['triage', 'backlog', 'unstarted', 'started', 'completed', 'canceled'];
 
@@ -11,7 +11,7 @@ export interface WorkflowStateCreateInput {
   name: string;
   position?: number;
   teamId: string;
-  type: string;
+  type: WorkflowStateType;
 }
 
 export interface WorkflowStateUpdateInput {

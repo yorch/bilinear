@@ -3,6 +3,7 @@ import type {
   PrismaClient,
   Project,
   ProjectMilestone,
+  ProjectStatusType,
   ProjectUpdate,
 } from '../../generated/prisma';
 import { assertMaxLength, MAX_RICH_TEXT_LENGTH } from '../lib/limits';
@@ -73,7 +74,7 @@ export interface ProjectCreateInput {
   name: string;
   startDate?: string;
   startDateResolution?: string;
-  statusType?: string;
+  statusType?: ProjectStatusType;
   targetDate?: string;
   targetDateResolution?: string;
   teamIds: string[];
@@ -90,7 +91,7 @@ export interface ProjectUpdateInput {
   priority?: number;
   startDate?: string | null;
   startDateResolution?: string | null;
-  statusType?: string;
+  statusType?: ProjectStatusType;
   targetDate?: string | null;
   targetDateResolution?: string | null;
 }
@@ -200,7 +201,7 @@ export class ProjectService {
   async findByOrgId(
     orgId: string,
     includeArchived = false,
-    filter?: { statusType?: string; health?: string; leadId?: string },
+    filter?: { statusType?: ProjectStatusType; health?: string; leadId?: string },
   ): Promise<Project[]> {
     return this.prisma.project.findMany({
       orderBy: [{ prioritySortOrder: 'desc' }, { createdAt: 'desc' }],

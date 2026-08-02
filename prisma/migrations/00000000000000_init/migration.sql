@@ -2,6 +2,24 @@
 CREATE SCHEMA IF NOT EXISTS "public";
 
 -- CreateEnum
+CREATE TYPE "organization_role" AS ENUM ('owner', 'admin', 'member', 'guest');
+
+-- CreateEnum
+CREATE TYPE "issue_estimation_type" AS ENUM ('notUsed', 'exponential', 'fibonacci', 'linear', 'tShirt');
+
+-- CreateEnum
+CREATE TYPE "workflow_state_type" AS ENUM ('triage', 'backlog', 'unstarted', 'started', 'completed', 'canceled');
+
+-- CreateEnum
+CREATE TYPE "project_status_type" AS ENUM ('backlog', 'planned', 'inProgress', 'paused', 'completed', 'canceled');
+
+-- CreateEnum
+CREATE TYPE "notification_type" AS ENUM ('ISSUE_ASSIGNED', 'ISSUE_STATUS_CHANGED', 'ISSUE_MENTIONED', 'ISSUE_COMMENTED');
+
+-- CreateEnum
+CREATE TYPE "issue_relation_type" AS ENUM ('related', 'blocks', 'blocked_by', 'duplicate');
+
+-- CreateEnum
 CREATE TYPE "custom_field_type" AS ENUM ('text', 'number', 'date', 'select', 'multi_select', 'url', 'checkbox');
 
 -- CreateTable
@@ -68,7 +86,7 @@ CREATE TABLE "organization_members" (
     "id" UUID NOT NULL,
     "organization_id" UUID NOT NULL,
     "user_id" UUID NOT NULL,
-    "role" VARCHAR(20) NOT NULL DEFAULT 'member',
+    "role" "organization_role" NOT NULL DEFAULT 'member',
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ NOT NULL,
 
@@ -136,7 +154,7 @@ CREATE TABLE "teams" (
     "auto_archive_period" INTEGER,
     "auto_close_child_issues" BOOLEAN NOT NULL DEFAULT false,
     "auto_close_parent_issues" BOOLEAN NOT NULL DEFAULT false,
-    "issue_estimation_type" VARCHAR(20) NOT NULL DEFAULT 'notUsed',
+    "issue_estimation_type" "issue_estimation_type" NOT NULL DEFAULT 'notUsed',
     "issue_estimation_extended" BOOLEAN NOT NULL DEFAULT false,
     "issue_estimation_allow_zero" BOOLEAN NOT NULL DEFAULT false,
     "default_issue_estimate" DOUBLE PRECISION,
@@ -172,7 +190,7 @@ CREATE TABLE "workflow_states" (
     "name" VARCHAR(255) NOT NULL,
     "color" VARCHAR(7) NOT NULL,
     "description" TEXT,
-    "type" VARCHAR(20) NOT NULL,
+    "type" "workflow_state_type" NOT NULL,
     "position" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ NOT NULL,
@@ -276,7 +294,7 @@ CREATE TABLE "projects" (
     "content" TEXT,
     "icon" VARCHAR(255),
     "color" VARCHAR(7) NOT NULL DEFAULT '#6366f1',
-    "status_type" VARCHAR(20) NOT NULL DEFAULT 'planned',
+    "status_type" "project_status_type" NOT NULL DEFAULT 'planned',
     "status_name" VARCHAR(255),
     "health" VARCHAR(20),
     "health_updated_at" TIMESTAMPTZ,
@@ -419,7 +437,7 @@ CREATE TABLE "notifications" (
     "user_id" UUID NOT NULL,
     "issue_id" UUID,
     "actor_id" UUID,
-    "type" VARCHAR(50) NOT NULL,
+    "type" "notification_type" NOT NULL,
     "data" JSONB NOT NULL DEFAULT '{}',
     "read" BOOLEAN NOT NULL DEFAULT false,
     "read_at" TIMESTAMPTZ,
@@ -460,7 +478,7 @@ CREATE TABLE "issue_relations" (
     "id" UUID NOT NULL,
     "issue_id" UUID NOT NULL,
     "related_issue_id" UUID NOT NULL,
-    "type" VARCHAR(20) NOT NULL,
+    "type" "issue_relation_type" NOT NULL,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "issue_relations_pkey" PRIMARY KEY ("id")
@@ -857,7 +875,7 @@ CREATE TABLE "organization_invites" (
     "id" UUID NOT NULL,
     "organization_id" UUID NOT NULL,
     "email" VARCHAR(255) NOT NULL,
-    "role" VARCHAR(20) NOT NULL DEFAULT 'member',
+    "role" "organization_role" NOT NULL DEFAULT 'member',
     "token_hash" VARCHAR(64) NOT NULL,
     "invited_by_id" UUID,
     "expires_at" TIMESTAMPTZ NOT NULL,
@@ -1619,3 +1637,4 @@ ALTER TABLE "organization_invites" ADD CONSTRAINT "organization_invites_invited_
 
 -- AddForeignKey
 ALTER TABLE "organization_invites" ADD CONSTRAINT "organization_invites_accepted_by_id_fkey" FOREIGN KEY ("accepted_by_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+

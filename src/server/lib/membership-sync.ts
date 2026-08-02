@@ -1,4 +1,4 @@
-import type { OrganizationMember, PrismaClient } from '../../generated/prisma';
+import type { OrganizationMember, OrganizationRole, PrismaClient } from '../../generated/prisma';
 import { Prisma } from '../../generated/prisma';
 import type { SyncActionType, SyncService } from '../services/sync.service';
 import { USER_SYNC_OMIT } from '../services/sync.service';
@@ -35,7 +35,7 @@ export async function ensureMembership(
   prisma: Pick<PrismaClient, 'organizationMember'>,
   orgId: string,
   userId: string,
-  role: string,
+  role: OrganizationRole,
 ): Promise<{ created: boolean; membership: OrganizationMember }> {
   const existing = await prisma.organizationMember.findUnique({
     where: { organizationId_userId: { organizationId: orgId, userId } },
@@ -139,7 +139,7 @@ export async function joinOrganization(
   sync: MembershipSyncEmitter,
   orgId: string,
   userId: string,
-  role: string,
+  role: OrganizationRole,
 ): Promise<{ created: boolean; membership: OrganizationMember }> {
   const result = await ensureMembership(prisma, orgId, userId, role);
   if (result.created) {

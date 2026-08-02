@@ -3,6 +3,7 @@ import type {
   Organization,
   OrganizationInvite,
   OrganizationMember,
+  OrganizationRole,
   PrismaClient,
 } from '../../generated/prisma';
 import { sendOrganizationInviteEmail } from '../lib/email';
@@ -125,7 +126,7 @@ export class OrganizationInviteService {
   async create(params: {
     orgId: string;
     email: string;
-    role: string;
+    role: OrganizationRole;
     invitedById: string;
     actorRole: string;
   }): Promise<OrganizationInvite> {

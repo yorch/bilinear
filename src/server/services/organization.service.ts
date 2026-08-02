@@ -1,6 +1,7 @@
 import {
   type Organization,
   type OrganizationMember,
+  type OrganizationRole,
   Prisma,
   type PrismaClient,
 } from '../../generated/prisma';
@@ -110,7 +111,7 @@ export class OrganizationService {
   async updateMemberRole(
     orgId: string,
     userId: string,
-    role: string,
+    role: OrganizationRole,
     actorRole: string,
   ): Promise<OrganizationMember> {
     if (!VALID_ROLES.includes(role as OrgRole)) {

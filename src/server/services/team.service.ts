@@ -1,9 +1,11 @@
 import type {
   Issue,
+  IssueEstimationType,
   PrismaClient,
   Team,
   TeamMembership,
   WorkflowState,
+  WorkflowStateType,
 } from '../../generated/prisma';
 
 // Prisma's $transaction callback receives a lighter client (without $connect, etc.)
@@ -12,7 +14,12 @@ type PrismaLike = Pick<PrismaClient, 'issue' | 'team' | 'teamMembership' | 'work
 
 const TEAM_KEY_PATTERN = /^[A-Z]{1,10}$/;
 
-const DEFAULT_WORKFLOW_STATES = [
+const DEFAULT_WORKFLOW_STATES: Array<{
+  color: string;
+  name: string;
+  position: number;
+  type: WorkflowStateType;
+}> = [
   { color: '#bec2c8', name: 'Backlog', position: 0, type: 'backlog' },
   { color: '#e2e2e2', name: 'Todo', position: 1, type: 'unstarted' },
   { color: '#f2c94c', name: 'In Progress', position: 2, type: 'started' },
@@ -20,7 +27,7 @@ const DEFAULT_WORKFLOW_STATES = [
   { color: '#95a2b3', name: 'Canceled', position: 4, type: 'canceled' },
 ];
 
-const TRIAGE_STATE = {
+const TRIAGE_STATE: { color: string; name: string; position: number; type: WorkflowStateType } = {
   color: '#e2e2e2',
   name: 'Triage',
   position: 0,
@@ -48,7 +55,7 @@ export interface TeamUpdateInput {
   cyclesEnabled?: boolean;
   description?: string;
   icon?: string;
-  issueEstimationType?: string;
+  issueEstimationType?: IssueEstimationType;
   name?: string;
   parentId?: string | null;
   private?: boolean;
