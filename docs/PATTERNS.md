@@ -100,6 +100,7 @@ hand-maintained stamp here only ever drifts.
 - [78. Organization Membership Management — Invitations & Removal (2026-08-01)](#78-organization-membership-management--invitations--removal-2026-08-01)
 - [79. Design System — tokens, accent, primitives (2026-08-01)](#79-design-system--tokens-accent-primitives-2026-08-01)
 - [80. Schema and Sync Residuals (2026-08-02)](#80-schema-and-sync-residuals-2026-08-02)
+- [81. Installable Web App (PWA) (2026-08-02)](#81-installable-web-app-pwa-2026-08-02)
 
 ---
 
@@ -2962,3 +2963,112 @@ Three rules follow:
 Batch it when you add it. `getProgressBatch` answers any number of parents in
 two `groupBy` queries; the per-parent version it replaced issued two `count`s
 each, so a 20-row list cost 40 round-trips.
+
+## 81. Installable Web App (PWA) (2026-08-02)
+
+The app installs from Chrome's omnibox (and every other Chromium browser, plus
+Safari's "Add to Dock"). Three pieces, and each is only as interesting as the
+constraint that shaped it.
+
+### 81.1 The manifest is a route, not a static file
+
+`src/app/manifest.ts` is a Next metadata route served at
+`/manifest.webmanifest`; Next injects the `<link rel="manifest">` itself. Being
+a route is what lets it read `APP_NAME` (per-deployment brandable) and the same
+`meta.description` translation `generateMetadata` uses.
+
+Two fields are load-bearing beyond the obvious:
+
+- **`id: '/'`.** Without it the browser derives the app's identity from
+  `start_url`, so changing `start_url` later would register as a *different*
+  app rather than an update to the installed one.
+- **`start_url: '/'`,** never a workspace path. Which workspace a session can
+  enter is decided server-side and can change between launches (an org gets
+  suspended, a membership is revoked), so the root route's redirect is the only
+  entry point that is still correct months after install.
+
+The manifest is fetched **without credentials** unless the link carries
+`crossorigin="use-credentials"`, so the `locale` cookie usually isn't sent and
+`getServerLocale` falls through to `Accept-Language`. That is the right answer
+for a value the OS caches at install time anyway — don't "fix" it by making the
+manifest depend on the session.
+
+### 81.2 The service worker deliberately caches nothing but the offline page
+
+`public/sw.js` exists for two reasons: Chrome's installability criteria want a
+worker with a `fetch` handler, and a navigation that can't reach the network
+should show something better than the browser's error screen.
+
+It does **not** precache the app shell, and that is not an omission. Every HTML
+response here is rendered per user and per workspace — it carries the viewer's
+org, teams and role — so a cached copy is a staleness problem and, on a shared
+machine, a disclosure one. The app's offline story already lives a layer up:
+the workspace is mirrored into IndexedDB and writes queue in `TransactionQueue`
+(§12, §18). Caching the shell safely needs a *user-independent* shell route to
+cache, which does not exist today; that is the work to do if this is ever
+revisited, not "add the HTML to the precache list".
+
+It doesn't cache `/_next/static` either — those URLs are content-hashed and
+already served `immutable` for a year, so an SW cache in front of the HTTP
+cache buys nothing and adds a second, unbounded copy that only a version bump
+evicts.
+
+Two properties worth keeping when editing it:
+
+- **Only navigations are intercepted.** `/api/graphql`, `/api/sync/*`, uploads
+  and the realtime endpoints must reach the network untouched — a worker that
+  intercepts them is a sync bug that survives the deploy that fixed it. This
+  matters more since `WS_PUBLIC_URL`/`YJS_PUBLIC_URL` grew their same-origin
+  `/ws` and `/collab` forms (see the README's deployment section): both now sit
+  inside the worker's scope. A WebSocket handshake is never dispatched to
+  `fetch` handlers, so the worker could not intercept the upgrade itself even
+  if the guard were wrong — but the guard is what keeps everything around it
+  (the `/api/auth/ws-ticket` fetch, any same-origin polling fallback) on the
+  network, and `src/lib/pwa.test.ts` asserts both paths pass through.
+- **A server error is not "offline".** `fetch` rejects only when the network is
+  unreachable; a 4xx/5xx resolves normally and is passed straight through, so a
+  real error page is never replaced by the offline one.
+
+Because the file lives in `public/`, Biome doesn't lint it, TypeScript doesn't
+see it and the build just copies it. `src/lib/pwa.test.ts` therefore *executes*
+it in a stand-in worker scope and drives its handlers with synthetic events —
+that test is the only gate it has.
+
+### 81.3 Registration is production-only, and dev unregisters
+
+`ServiceWorkerRegistrar` (mounted in the root layout, so the sign-in page can
+be installed from too) registers only when `NODE_ENV === 'production'` and
+actively unregisters otherwise. A worker installed by a production build
+outlives the page that registered it and would go on intercepting navigations
+against the dev server on the same localhost origin. It also keeps the worker
+out of the e2e suite, which runs against `next dev`.
+
+Registration failures are swallowed: a non-secure origin or a browser that
+blocks workers costs installability and nothing else, and must never surface to
+the user.
+
+### 81.4 The two colours that can't be tokens
+
+`src/lib/pwa.ts` holds the manifest's `theme_color`/`background_color` and the
+`<meta name="theme-color">` pair as literal `rgb()` values — the only colours
+in the app that aren't a `var()`. A manifest is JSON handed to the OS and the
+meta tag is read before any stylesheet is parsed; neither can dereference a
+custom property.
+
+`yarn lint:tokens` can't guard them, so `src/app/manifest.test.ts` does: it
+resolves `--background` out of `globals.css` for both themes, converts oklch to
+sRGB, and asserts the literals still match. Same idea for the icons — the test
+reads each PNG's IHDR chunk and checks the file exists and is the size the
+manifest claims.
+
+The icons themselves are generated by `scripts/generate-pwa-icons.mjs` (headless
+Chromium, the brand gradient in the same `oklch()` values as `globals.css`, the
+glyph in the same vendored Instrument Sans). They're committed; re-run the
+script and commit the PNGs when the mark changes. The maskable icon is a
+separate file from the `any` ones on purpose: maskable is full-bleed and cropped
+to the platform's shape inside an 80% safe zone, so one icon declared as both
+purposes is wrong for one of them.
+
+The icon and splash screen can't follow the user's selected accent — they're
+baked into the launcher entry at install time — so they use the default accent
+(Aurora).

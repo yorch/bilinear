@@ -131,6 +131,7 @@ In development, magic link codes are printed to the server console instead of be
 | `yarn test:e2e`              | Run Playwright E2E tests (requires running dev server) |
 | `yarn test:e2e:ui`           | Open Playwright UI for interactive E2E debugging       |
 | `yarn analyze`               | Build with bundle analyzer (`ANALYZE=true`)            |
+| `node scripts/generate-pwa-icons.mjs` | Regenerate the committed PWA icons in `public/icons` |
 
 CI runs `lint`, `lint:tokens`, `typecheck`, `test` and `build` on every PR
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) — run all five locally
@@ -309,6 +310,17 @@ document name in-band rather than in the URL, and the server reads the path only
 as a peer-grouping namespace — so every client inherits `/collab` identically
 and the document name is unaffected. Stripping it would be harmless but is not
 needed; adding a rewrite that changes the path *per client* would not be.
+### Installable app (PWA)
+
+The app ships a web app manifest (`/manifest.webmanifest`) and a service worker
+(`/sw.js`), so Chrome and other Chromium browsers offer to install it from the
+omnibox, and Safari can add it to the Dock. **Installation requires HTTPS** —
+`localhost` is the only exception — so deploy behind Traefik (or any TLS
+terminator) for the install affordance to appear.
+
+The service worker is registered only in production builds; `yarn dev`
+unregisters it instead, so it never intercepts navigations against the dev
+server. It caches nothing but the offline fallback page — see PATTERNS.md §81.
 
 ---
 

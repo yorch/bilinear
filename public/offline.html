@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Offline</title>
+    <!--
+      Fallback served by public/sw.js when a navigation can't reach the
+      network. It is deliberately self-contained: it has to render with no
+      network at all, so it can't pull the app's stylesheet (whose filename is
+      content-hashed and therefore unknowable from here), its fonts, or any
+      image. That is also why the colours are literals rather than the design
+      tokens the rest of the app uses — there is no globals.css to read them
+      from. Each is the sRGB value of the corresponding token under the default
+      accent (`--background`, `--foreground`, `--muted-foreground`, and
+      `--border` composited over its background), and used nowhere else.
+
+      No product name appears in the copy on purpose: the brand is
+      configurable per deployment (NEXT_PUBLIC_APP_NAME) and a static file
+      can't know it.
+    -->
+    <style>
+      :root {
+        --bg: rgb(251, 251, 254);
+        --fg: rgb(14, 14, 26);
+        --muted: rgb(108, 108, 118);
+        --line: rgb(228, 228, 233);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: rgb(10, 10, 16);
+          --fg: rgb(244, 244, 248);
+          --muted: rgb(136, 136, 147);
+          --line: rgb(35, 35, 40);
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      main {
+        max-width: 26rem;
+        text-align: center;
+      }
+      svg {
+        color: var(--muted);
+      }
+      h1 {
+        margin: 20px 0 8px;
+        font-size: 1.5rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+      p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+      button {
+        margin-top: 24px;
+        padding: 9px 18px;
+        font: inherit;
+        font-weight: 500;
+        color: var(--fg);
+        background: transparent;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      button:hover {
+        border-color: var(--muted);
+      }
+      button:focus-visible {
+        outline: 2px solid var(--muted);
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <svg
+        aria-hidden="true"
+        width="40"
+        height="40"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <!-- lucide `cloud-off`, inlined: the icon set the app already uses,
+             but the page can't load a bundle to get it from. -->
+        <path d="M10.94 5.274A7 7 0 0 1 15.71 10h1.79a4.5 4.5 0 0 1 4.222 6.057" />
+        <path d="M18.796 18.81A4.5 4.5 0 0 1 17.5 19H9A7 7 0 0 1 5.79 5.78" />
+        <path d="m2 2 20 20" />
+      </svg>
+      <h1 data-i18n="title">You're offline</h1>
+      <p data-i18n="body">
+        This device can't reach the server right now. Any changes you've already made are saved on
+        this device and will sync once you're back online.
+      </p>
+      <button type="button" onclick="location.reload()" data-i18n="retry">Try again</button>
+    </main>
+    <script>
+      // Same two locales the app ships, resolved the same way: the `locale`
+      // cookie the app writes wins, then the browser's own preference.
+      (function () {
+        var STRINGS = {
+          es: {
+            body: 'Este dispositivo no puede conectarse al servidor en este momento. Los cambios que ya hiciste están guardados en este dispositivo y se sincronizarán cuando vuelvas a estar en línea.',
+            retry: 'Reintentar',
+            title: 'Estás sin conexión'
+          }
+        };
+        var cookie = document.cookie.match(/(?:^|;\s*)locale=([^;]+)/);
+        var locale = cookie ? decodeURIComponent(cookie[1]) : navigator.language || 'en';
+        var strings = STRINGS[locale.slice(0, 2)];
+        if (!strings) {
+          return;
+        }
+        document.documentElement.lang = locale.slice(0, 2);
+        document.title = strings.title;
+        document.querySelectorAll('[data-i18n]').forEach(function (el) {
+          var value = strings[el.dataset.i18n];
+          if (value) {
+            el.textContent = value;
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>
