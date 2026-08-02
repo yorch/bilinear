@@ -633,6 +633,24 @@ describe('IssueService', () => {
       );
     });
 
+    it('skips the team-flag read and cascade for a non-terminal transition (§3.3)', async () => {
+      // Moving to a `started` state can never satisfy either cascade
+      // (`maybeCloseParentTx` needs the child to have just become done;
+      // `maybeCloseChildrenTx` needs the issue itself to be completed/canceled),
+      // so the team-flag read must be skipped entirely.
+      prisma.workflowState.findFirst.mockResolvedValue(IN_PROGRESS_STATE);
+      prisma.issue.update.mockResolvedValueOnce({
+        ...CHILD_ISSUE,
+        stateId: IN_PROGRESS_STATE.id,
+      });
+      prisma.issueLabelAssignment.deleteMany.mockResolvedValue({ count: 0 });
+
+      const result = await service.update(CHILD_ISSUE.id, { stateId: IN_PROGRESS_STATE.id });
+
+      expect(prisma.team.findUnique).not.toHaveBeenCalled();
+      expect(result.cascaded).toEqual([]);
+    });
+
     it('counts canceled children as done for parent-close check', async () => {
       mockTeamWithAutoCloseParent();
       const updatedChild = {

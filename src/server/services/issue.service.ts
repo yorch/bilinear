@@ -561,6 +561,9 @@ export class IssueService {
       // throughput) and the project progress rollup stay accurate
       // regardless of how the state transition is initiated (user,
       // automation, GitHub PR merge).
+      // Captured from the new-state read below so the auto-close cascade can
+      // gate on it without a second workflowState fetch — see the cascade block.
+      let newStateType: string | null = null;
       if (input.stateId !== undefined) {
         const state = await tx.workflowState.findFirst({
           select: { teamId: true, type: true },
@@ -569,6 +572,7 @@ export class IssueService {
         if (!state || state.teamId !== existing.teamId) {
           throw new IssueInvalidStateError();
         }
+        newStateType = state.type;
         if (input.stateId !== existing.stateId) {
           const now = new Date();
           // First-set semantics for startedAt/completedAt/canceledAt:
@@ -611,7 +615,14 @@ export class IssueService {
       }
 
       const cascaded: Issue[] = [];
-      if (input.stateId !== undefined) {
+      // Both cascades can only fire when the issue's NEW state is terminal:
+      // `maybeCloseParentTx` needs this child to have just become done (a
+      // non-terminal move leaves `allDone` false), and `maybeCloseChildrenTx`
+      // only acts when the parent itself moved to completed/canceled. So skip
+      // the team-flag read entirely for the common non-terminal transition
+      // (e.g. → started) — it can't cascade regardless of the team flags.
+      const isTerminalTransition = newStateType === 'completed' || newStateType === 'canceled';
+      if (isTerminalTransition) {
         const team = await tx.team.findUnique({
           select: {
             autoCloseChildIssues: true,
