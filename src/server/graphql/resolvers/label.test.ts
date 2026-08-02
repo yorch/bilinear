@@ -51,7 +51,9 @@ describe('labelResolvers', () => {
 
     it('throws FORBIDDEN when the caller is not owner/admin for a workspace-scoped label', async () => {
       ctx.prisma.issueLabel.findUnique.mockResolvedValue({ ...TEST_LABEL, teamId: null });
-      ctx.prisma.organizationMember.findUnique.mockResolvedValue({ role: 'member' });
+      // requireOrgRole reads AuthContext.orgRole, resolved once per request by
+      // extractAuthContext — there is no second membership lookup to mock.
+      ctx.orgRole = 'member';
 
       await testAuthGuard(
         labelResolvers.Mutation.issueLabelArchive,
@@ -73,7 +75,9 @@ describe('labelResolvers', () => {
     });
 
     it('throws FORBIDDEN when creating a workspace-scoped label without owner/admin role', async () => {
-      ctx.prisma.organizationMember.findUnique.mockResolvedValue({ role: 'member' });
+      // requireOrgRole reads AuthContext.orgRole, resolved once per request by
+      // extractAuthContext — there is no second membership lookup to mock.
+      ctx.orgRole = 'member';
 
       await testAuthGuard(
         labelResolvers.Mutation.issueLabelCreate,
