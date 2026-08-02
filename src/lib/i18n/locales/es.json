@@ -1596,6 +1596,7 @@
       "leaveConfirmTitle": "¿Salir de este espacio de trabajo?",
       "leaveDescription": "Perderás el acceso a este espacio de trabajo y a todos sus equipos. Los demás miembros no se ven afectados y tu cuenta sigue activa en los demás espacios a los que pertenezcas.",
       "leaveError": "No se pudo salir del espacio de trabajo",
+      "leavePendingWritesWarning": "Los cambios que aún no han llegado al servidor se descartarán y no podrás recuperarlos.",
       "leaveTitle": "Salir del espacio de trabajo",
       "leaving": "Saliendo…",
       "memberRoleUpdated": "Rol del miembro actualizado",

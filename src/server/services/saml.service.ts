@@ -12,6 +12,9 @@ import { DOMParser } from '@xmldom/xmldom';
 import { SignedXml } from 'xml-crypto';
 import type { PrismaClient, SamlConfiguration } from '../../generated/prisma';
 import { childLogger } from '../lib/logger';
+import { joinOrganization } from '../lib/membership-sync';
+import { redis } from '../lib/redis';
+import { SyncService } from './sync.service';
 import { isFirstUser } from './user.service';
 
 const log = childLogger({ module: 'saml', service: 'SamlService' });
@@ -734,11 +737,10 @@ async function ensureOrgMembership(
   orgId: string,
   userId: string,
 ): Promise<void> {
-  await prisma.organizationMember.upsert({
-    create: { organizationId: orgId, role: 'member', userId },
-    update: {},
-    where: { organizationId_userId: { organizationId: orgId, userId } },
-  });
+  // JIT provisioning is a real join, and the roster is synced — without the
+  // broadcast the new member is invisible to every client already running,
+  // which for a warm Dexie cache means invisible permanently.
+  await joinOrganization(prisma, new SyncService(prisma, redis), orgId, userId, 'member');
 }
 
 function deriveInitials(name: string): string {

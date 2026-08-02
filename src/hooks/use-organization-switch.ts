@@ -119,7 +119,15 @@ export function useOrganizationLeave() {
         refreshToken: result.refreshToken,
       });
       if (!installed) {
-        throw new Error('Failed to establish the new session');
+        // The membership is already gone — this mutation is not retryable,
+        // and a second attempt returns NOT_FOUND. Reporting failure here
+        // would tell the user the opposite of what happened and leave them
+        // sitting on a cookie for a workspace they are no longer in. Reload
+        // through `/` instead: the stale session loses its `orgId` on the
+        // next request and the root page re-derives where to go.
+        log.error('Left the workspace but could not install the new session');
+        window.location.assign('/');
+        return;
       }
       window.location.assign(result.organization ? `/${result.organization.urlKey}` : '/');
     } catch (err) {

@@ -1136,11 +1136,6 @@ export const typeDefs = `
     bodyData: JSON
   }
 
-  type OrganizationMemberEntry {
-    userId: ID!
-    role: String!
-  }
-
   """An outstanding invitation to join the current organization."""
   type OrganizationInvite {
     id: ID!
@@ -1600,7 +1595,6 @@ export const typeDefs = `
     membership in it was revoked) can still see and reach the others.
     """
     viewerOrganizations: [ViewerOrganization!]!
-    organizationMembers: [OrganizationMemberEntry!]!
     """Outstanding invitations for the current organization (owner/admin only)."""
     organizationInvites: [OrganizationInvite!]!
     team(id: ID!): Team!

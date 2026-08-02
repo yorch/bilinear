@@ -1596,6 +1596,7 @@
       "leaveConfirmTitle": "Leave this workspace?",
       "leaveDescription": "You'll lose access to this workspace and all its teams. Other members are unaffected, and your account stays active in any other workspaces you belong to.",
       "leaveError": "Could not leave the workspace",
+      "leavePendingWritesWarning": "Changes that haven't reached the server yet will be discarded, and you won't be able to get them back.",
       "leaveTitle": "Leave workspace",
       "leaving": "Leaving…",
       "memberRoleUpdated": "Member role updated",

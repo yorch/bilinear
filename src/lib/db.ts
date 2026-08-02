@@ -430,6 +430,16 @@ export class AppDatabase extends Dexie {
     // become `.version(N)` + `.upgrade()` migrations — at that point the name
     // must stay fixed, because renaming it would silently discard a real
     // user's offline queue.
+    //
+    // That change also needs a second mechanism, because in-place recreation
+    // is currently doing two jobs. A Dexie upgrade creates a newly *added*
+    // table empty and carries the rest over, so `loadFromIndexedDB` reports a
+    // usable cache and `start` takes the delta path — which carries only rows
+    // that changed. An untouched collection would never backfill, and whatever
+    // reads it renders an empty state forever. Adding a synced collection will
+    // therefore need a "which collections does this cache hold" stamp in
+    // `syncMetadata`: checked by `loadFromIndexedDB`, written by
+    // `fullBootstrap` in the same transaction as the rows it describes.
     super('bilinear');
     this.version(1).stores({
       customFieldDefinitions: 'id, teamId, organizationId',

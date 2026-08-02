@@ -134,7 +134,13 @@ function createFakeStores() {
       // Real stores expose an entity pool; SyncManager reads `issueStore.pool`
       // to carry a previously-cached label set onto a bare issue payload.
       pool: new Map<string, unknown>(),
+      replaceAll: vi.fn(),
+      upsertDefinitions: vi.fn(),
       upsertMany: vi.fn(),
+      upsertMilestones: vi.fn(),
+      upsertProjectLinks: vi.fn(),
+      upsertUpdates: vi.fn(),
+      upsertValues: vi.fn(),
     };
   }
   return stores as unknown as RootStore & { syncStore: typeof syncStore };
@@ -318,6 +324,84 @@ describe('SyncManager', () => {
         'D',
         'mem-1',
         null,
+      );
+    });
+
+    it('replaces the roster on bootstrap rather than merging into it', async () => {
+      // Membership is hard-deleted, so a bootstrap is authoritative about
+      // absence: merging would leave someone who has been removed in the
+      // roster of any client that re-bootstrapped (the delta-failure
+      // fallback), showing controls the server answers with NOT_FOUND.
+      const stores = createFakeStores();
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+
+      const row = { id: 'mem-1', organizationId: 'org-1', role: 'owner', userId: 'user-1' };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: async () =>
+            [
+              `OrganizationMember=${JSON.stringify(row)}`,
+              `_metadata_=${JSON.stringify({ lastSyncId: '42-1' })}`,
+            ].join('\n'),
+        }),
+      );
+
+      await (manager as Instance).fullBootstrap();
+
+      expect(stores.organizationMemberStore.replaceAll).toHaveBeenCalledWith([row]);
+      expect(stores.organizationMemberStore.upsertMany).not.toHaveBeenCalled();
+    });
+
+    it('serializes fullBootstrap against a live apply that arrives mid-write', async () => {
+      // The bootstrap write is an authoritative load: it clears Dexie and
+      // clears the roster pool outright. It is reached from deltaSync's
+      // failure fallback while the WebSocket is live, so without the lock a
+      // live action could land between the clear and the repopulate.
+      const stores = createFakeStores();
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+
+      let releaseBootstrap: () => void = () => {};
+      const bootstrapFlush = new Promise<void>(resolve => {
+        releaseBootstrap = resolve;
+      });
+      let flushCall = 0;
+      fakeDb.transaction.mockImplementation(async (_m: string, _t: unknown, cb: () => unknown) => {
+        flushCall += 1;
+        if (flushCall === 1) {
+          await bootstrapFlush;
+        }
+        return cb();
+      });
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: async () => `_metadata_=${JSON.stringify({ lastSyncId: '42-1' })}`,
+        }),
+      );
+
+      const bootstrap = (manager as Instance).fullBootstrap();
+      // Let the bootstrap get past its fetch and into the exclusive section,
+      // where it parks on the gated flush.
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      const live = (manager as Instance).applyActions([
+        makeAction({ action: 'U', data: null, modelId: 'mem-1', modelName: 'OrganizationMember' }),
+      ]);
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      // Queued behind the bootstrap rather than racing its clear/repopulate.
+      expect(stores.organizationMemberStore.applySyncAction).not.toHaveBeenCalled();
+
+      releaseBootstrap();
+      await Promise.all([bootstrap, live]);
+
+      expect(
+        vi.mocked(stores.organizationMemberStore.replaceAll).mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        vi.mocked(stores.organizationMemberStore.applySyncAction).mock.invocationCallOrder[0],
       );
     });
 
