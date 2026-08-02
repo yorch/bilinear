@@ -124,7 +124,7 @@ Two knock-on effects:
 4. Surface a "some changes couldn't be saved" notice for dropped rehydrated transactions.
 
 ### RC3. Offline-first product with zero connection UI
-`syncStore.status`/`wsConnected` are tracked (`sync-store.ts:9,31`) and flipped on WS disconnect and browser online/offline events (`sync-manager.ts:1062-1105`) — but **never rendered**. No indicator, no "reconnecting…", no "back online" (PATTERNS.md §865 documents a toast that was never implemented). Queued/pending writes are pixel-identical to synced ones. Bootstrap failure sets an error string that is never displayed and has no retry path (`sync-manager.ts:307-311,508-514`).
+`syncStore.status`/`wsConnected` are tracked (`sync-store.ts:9,31`) and flipped on WS disconnect and browser online/offline events (`sync-manager.ts:1062-1105`) — but **never rendered**. No indicator, no "reconnecting…", no "back online" (PATTERNS.md §24 documents an offline/back-online toast that was never implemented). Queued/pending writes are pixel-identical to synced ones. Bootstrap failure sets an error string that is never displayed and has no retry path (`sync-manager.ts:307-311,508-514`).
 
 **Fix:** a connection-status pill in the sidebar footer bound to `syncStore`, offline→online transition toasts, a subtle "syncing" dot on rows with in-flight transactions, and a retry button on the bootstrap-error state. This is the single most differentiating polish item for an offline-first tracker.
 

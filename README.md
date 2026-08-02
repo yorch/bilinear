@@ -79,14 +79,18 @@ yarn prisma generate
 yarn prisma migrate dev
 ```
 
-### 6. Start the development server and WebSocket server
+### 6. Start the development servers
 
-In two separate terminals:
+In three separate terminals:
 
 ```bash
 yarn dev         # Next.js app on port 3000
 yarn ws:server   # Standalone WebSocket sync server on port 3001
+yarn yjs:server  # Yjs collaborative-editing server on port 1234
 ```
+
+The app boots without `yarn yjs:server`, but every rich-text editor (issue
+descriptions, documents, comments) silently stops syncing between clients.
 
 Open [http://localhost:3000](http://localhost:3000). Unauthenticated visits redirect to `/login`.
 
@@ -100,24 +104,37 @@ In development, magic link codes are printed to the server console instead of be
 | ---------------------------- | ------------------------------------------------------ |
 | `yarn dev`                   | Start the Next.js development server (port 3000)       |
 | `yarn ws:server`             | Start the standalone WebSocket sync server (port 3001) |
+| `yarn yjs:server`            | Start the Yjs collaborative-editing server (port 1234) |
 | `yarn build`                 | Build for production                                   |
 | `yarn start`                 | Start the production server                            |
+| `yarn lint`                  | Run Biome checks                                       |
+| `yarn lint:fix`              | Run Biome checks and apply fixes                       |
+| `yarn lint:tokens`           | Design-token check — bans raw colours (CI gate)        |
+| `yarn typecheck`             | TypeScript check (CI gate)                             |
 | `yarn test`                  | Run all tests                                          |
 | `yarn test:watch`            | Run tests in watch mode                                |
 | `yarn test:coverage`         | Run tests with coverage report                         |
-| `yarn lint`                  | Run Biome checks                                       |
 | `yarn format`                | Format code with Biome                                 |
 | `yarn docker:infra`          | Start local infra (foreground)                         |
 | `yarn docker:infra:up`       | Start local infra in background                        |
 | `yarn docker:infra:down`     | Stop local infra                                       |
-| `yarn prisma generate`       | Regenerate Prisma client after schema changes          |
-| `yarn prisma migrate dev`    | Apply pending migrations (dev)                         |
-| `yarn prisma migrate deploy` | Apply pending migrations (production)                  |
-| `yarn prisma studio`         | Open Prisma Studio (database browser)                  |
+| `yarn db:generate`           | Regenerate Prisma client after schema changes          |
+| `yarn db:migrate`            | Apply pending migrations (dev)                         |
+| `yarn db:deploy`             | Apply pending migrations (production)                  |
+| `yarn db:push`               | Push schema to the database without a migration        |
+| `yarn db:reset`              | Drop, re-migrate and re-seed the database              |
+| `yarn db:studio`             | Open Prisma Studio (database browser)                  |
 | `yarn db:seed`               | Seed the database with demo data and E2E test fixtures |
+| `yarn db:verify:fence`       | Prove the xid8 delta fence never skips (live Postgres) |
+| `yarn db:verify:indexes`     | EXPLAIN-benchmark the hot paths (live Postgres)        |
+| `yarn admin:grant`           | Grant a user the platform-admin flag                   |
 | `yarn test:e2e`              | Run Playwright E2E tests (requires running dev server) |
 | `yarn test:e2e:ui`           | Open Playwright UI for interactive E2E debugging       |
 | `yarn analyze`               | Build with bundle analyzer (`ANALYZE=true`)            |
+
+CI runs `lint`, `lint:tokens`, `typecheck`, `test` and `build` on every PR
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) — run all five locally
+before pushing.
 
 ---
 
@@ -257,12 +274,22 @@ npx shadcn@latest add <component>
 
 ## Documentation
 
-| Document                      | Description                                     |
-| ----------------------------- | ----------------------------------------------- |
-| `docs/PRD.md`                 | Product requirements                            |
-| `docs/IMPLEMENTATION_PLAN.md` | Phase-by-phase roadmap                          |
-| `docs/ARCHITECTURE.md`        | System architecture                             |
-| `docs/DATABASE_SCHEMA.md`     | Full PostgreSQL schema                          |
-| `docs/API_DESIGN.md`          | GraphQL API contracts                           |
-| `docs/PATTERNS.md`            | Code patterns and conventions (read this first) |
-| `docs/sprints/`               | Per-sprint implementation specs                 |
+[`docs/README.md`](docs/README.md) is the full index, including which documents
+are living and which are frozen point-in-time snapshots.
+
+| Document                        | Description                                       |
+| ------------------------------- | ------------------------------------------------- |
+| `docs/PATTERNS.md`              | Code patterns and conventions (read this first)   |
+| `docs/ARCHITECTURE.md`          | System architecture                               |
+| `docs/DATABASE_SCHEMA.md`       | Full PostgreSQL schema and migration policy       |
+| `docs/API_DESIGN.md`            | GraphQL API contracts                             |
+| `docs/PRD.md`                   | Product requirements                              |
+| `docs/IMPLEMENTATION_PLAN.md`   | Phase-by-phase roadmap and canonical status       |
+| `docs/REVIEW_BACKLOG.md`        | Open review findings — the active work queue      |
+| `docs/CHANGELOG.md`             | What shipped when, and why it was done that way   |
+| `docs/UI_UX_ASSESSMENT.md`      | UI/UX audit and the design-system rationale       |
+| `docs/LINEAR_FEATURE_GAPS.md`   | Feature parity gaps against Linear                |
+| `docs/LINEAR_RESEARCH.md`       | Competitive research (frozen, April 2026)         |
+| `docs/LINEAR_RESEARCH_2.md`     | Competitive research, round 2 (frozen)            |
+| `docs/E2E_TEST_GAP_ANALYSIS.md` | E2E coverage analysis (frozen, May 2026)          |
+| `docs/sprints/`                 | Per-sprint implementation specs (frozen)          |

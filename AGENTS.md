@@ -44,9 +44,9 @@ A Linear-style issue tracker built with Next.js 16 (App Router), Apollo Server G
   - `prisma/seed.ts` seeded a `cancelled` workflow state, so no seeded team had the `canceled` state that triage-decline and duplicate-auto-cancel both resolve by type — each would have thrown on seeded data.
   - `sub-issue-list.tsx` never categorised or struck through a canceled sub-issue.
   - `public-roadmap-view.tsx` rendered a canceled project with no status badge.
-- **`src/lib/state-type-spelling.test.ts` makes it self-enforcing**, per §77.1's argument — scanning `src/` and `prisma/` for the bare token as a string literal or object key. It deliberately does **not** match `\bcancelled\b`: `let cancelled = false` is a common effect-teardown flag, and the `…status.cancelled` translation keys are a separate namespace that keeps its own spelling. Verified non-vacuous twice — by its own fixture assertions, and by injecting a regression into `triage.service.ts` and watching it fail.
+- **`src/lib/state-type-spelling.test.ts` makes it self-enforcing**, per §80.1's argument — scanning `src/` and `prisma/` for the bare token as a string literal or object key. It deliberately does **not** match `\bcancelled\b`: `let cancelled = false` is a common effect-teardown flag, and the `…status.cancelled` translation keys are a separate namespace that keeps its own spelling. Verified non-vacuous twice — by its own fixture assertions, and by injecting a regression into `triage.service.ts` and watching it fail.
 - **This unblocks half of §2.3, and the other half was never blocked.** #116 recorded enum promotion as ⛔ BLOCKED on "inconsistent existing vocabularies (`canceled`/`cancelled`, `started`/`inProgress`)". Checked both on rebase: the first was real and its *source* is what this branch removes (no migration writes `cancelled` either, so only pre-fix dev databases can still hold it, and nothing is deployed). The second is a documentation error in REVIEW_BACKLOG's own table — `WorkflowState.type` uses `started` and `Project.statusType` uses `inProgress`; they are two different enums over two different columns and were never in conflict. The table listed the wrong values for `Project.statusType`. §2.3 now records the re-assessment.
-- **Docs:** new PATTERNS §77.7 (derived values are computed fields, never columns — with the two failure modes as the argument), DATABASE_SCHEMA §2.9-pre extended to cycles, and REVIEW_BACKLOG §2.6 rewritten. That entry still described retention as unstarted `pg_partman` work against `committed_at`, a column the xid8 fence deleted — it now records what shipped and scopes what genuinely remains (partitioning proper, since a `DELETE` sweep leaves bloat a `DROP PARTITION` would not).
+- **Docs:** new PATTERNS §80.7 (derived values are computed fields, never columns — with the two failure modes as the argument), DATABASE_SCHEMA §2.9-pre extended to cycles, and REVIEW_BACKLOG §2.6 rewritten. That entry still described retention as unstarted `pg_partman` work against `committed_at`, a column the xid8 fence deleted — it now records what shipped and scopes what genuinely remains (partitioning proper, since a `DELETE` sweep leaves bloat a `DROP PARTITION` would not).
 
 
 ### Recently shipped (2026-08-02, review-backlog wave 2 — MobX perf, a11y, WS fan-out)
@@ -60,15 +60,15 @@ A Linear-style issue tracker built with Next.js 16 (App Router), Apollo Server G
 ### Recently shipped (2026-08-02, client/server contract gaps + schema/sync residuals)
 
 - **Closed out every residual carried in this file plus the audit backlog.** Full gate suite green (`yarn lint`, `yarn lint:tokens`, `yarn typecheck`, `yarn test` — 1635, `yarn build`), and the DB half verified against a real Postgres 17 per the DATABASE_SCHEMA.md recipe: both migrations apply, `migrate diff --from-config-datasource --to-schema` reports **only** the one inherent xid8-index drift (see the rebase notes below) and nothing else, `yarn db:seed` runs green, and every custom object plus the new FKs/column are confirmed via `pg_indexes`/`pg_constraint`/`information_schema`. See PATTERNS.md §77.
-- **The recurring-bug root cause is gone.** 72 SDL positions normalized: every entity-reference argument and input field is now `ID`/`ID!` rather than a `String!`/`ID!`/`String`/`ID` grab-bag across 24 `teamId` positions and six other id names. GraphQL compares the *declared* variable type against the argument type, so the inconsistency made `$teamId: String!` vs `teamId: ID!` a coin flip — the exact failure that started this whole line of work. Deliberately excluded: `lastSyncId` (opaque BIGSERIAL cursor, already uniform), `slugId`, `idpEntityId`. Only two client documents broke, and they were the duplicate pair — the same one-line fix needed twice, which is the argument for §77.1 in miniature.
+- **The recurring-bug root cause is gone.** 72 SDL positions normalized: every entity-reference argument and input field is now `ID`/`ID!` rather than a `String!`/`ID!`/`String`/`ID` grab-bag across 24 `teamId` positions and six other id names. GraphQL compares the *declared* variable type against the argument type, so the inconsistency made `$teamId: String!` vs `teamId: ID!` a coin flip — the exact failure that started this whole line of work. Deliberately excluded: `lastSyncId` (opaque BIGSERIAL cursor, already uniform), `slugId`, `idpEntityId`. Only two client documents broke, and they were the duplicate pair — the same one-line fix needed twice, which is the argument for §80.1 in miniature.
 - **`sync_actions` retention, done safely.** An hourly sweep prunes past `SYNC_ACTION_RETENTION_DAYS`, but a sweep alone silently loses data for a long-offline client. The sweep records `Organization.syncActionsPrunedThroughXactId`, and `getDeltaSyncActions` answers `staleCursor: true` for a cursor at or below it so the client re-bootstraps instead of carrying a permanently-incomplete pool. The check is against the recorded mark, **not** a computed `now - retention` horizon — a horizon can't tell "pruned" from "org is younger than the window", and would have forced a needless bootstrap on every client holding a legacy id-only cursor (which `parseCursor` maps to the zero cursor precisely so delta *can* catch it up).
 - **Yjs blobs no longer ride SyncAction payloads.** Stripped in `recordSyncAction` — the one choke point all ~20 emitters and 7 row-producers pass through, including raw `prisma.issue.findUnique` calls in `automation.service.ts` and `ws/index.ts` that a per-service fix would have missed. Verified empirically that a `Bytes` column in a `Json` argument does **not** throw: Prisma base64-encodes it, so this was silently shipping ~1.33× the blob to every client in the org and into their IndexedDB.
 - **Three missing FKs**, each with delete semantics chosen from what null *means*: `File.uploaderId → User` SetNull, `Webhook.teamId → Team` Cascade (null means org-wide, so SetNull would silently broaden a team webhook), `SlackIntegration.defaultTeamId → Team` SetNull. All three confirmed against Postgres via `pg_constraint.confdeltype`.
 - **Bootstrap's ProjectUpdate cap** was org-wide (`take: 500`) while shipping every issue uncapped — now a nested per-project `take` of 50 under a global ceiling of 1000, with an `id` tiebreak so *which* rows land is deterministic across bootstraps.
 - **Dead code and name collisions:** the `IssueActivity` sync case was dead on both ends (no server emitter, nothing reads the table) and is removed; `CREATE_MUTATION` and `CYCLE_VELOCITY_QUERY` each named two different documents in two files — note `CYCLE_VELOCITY_QUERY` turned out to be genuinely *different* documents (root `cycleVelocity` vs `analyticsCycleVelocityTrend`), so they were renamed rather than merged; the duplicated issue-templates document is consolidated onto the shared export.
 - **Post-review hardening.** A code review caught that the retention sweep marked *every* org, not just those whose rows were pruned — combined with bootstrap returning a zero cursor for an org with no surviving actions, that produced a permanent delta → staleCursor → bootstrap loop re-downloading the workspace on every reconnect. Both halves fixed. Same review found an e2e document still declaring `$teamId: String!` — the guard only scanned `src/`, so it now scans `tests/` too, bringing 12 further documents under validation.
-- **§77.1 is now actually enforced.** PATTERNS claimed the document-validation suite guarded the ID convention. It did not — that suite checks documents *against* the SDL, so a new `teamId: String!` field paired with a matching document passes. There is now a schema assertion walking every input field and argument; verified non-vacuous by injecting a violation. It ignores output fields on purpose (variables are never compared against those).
-- **Fetch-on-mount consolidated onto `useRetryableFetch`** across 15 components — the error-handling sweep had hand-rolled the same `reloadKey`/`cancelled`-flag state machine fifteen times, ~160 net lines removed. Documented as the required pattern in PATTERNS.md §77.6 so the next sweep doesn't re-derive it.
+- **§80.1 is now actually enforced.** PATTERNS claimed the document-validation suite guarded the ID convention. It did not — that suite checks documents *against* the SDL, so a new `teamId: String!` field paired with a matching document passes. There is now a schema assertion walking every input field and argument; verified non-vacuous by injecting a violation. It ignores output fields on purpose (variables are never compared against those).
+- **Fetch-on-mount consolidated onto `useRetryableFetch`** across 15 components — the error-handling sweep had hand-rolled the same `reloadKey`/`cancelled`-flag state machine fifteen times, ~160 net lines removed. Documented as the required pattern in PATTERNS.md §80.6 so the next sweep doesn't re-derive it.
 - **`Project.progress`/`scope` columns deleted.** Nothing ever wrote them — the server computes progress from the issue set on read — so every reader silently rendered 0%. Removing the columns turned each stale read into a compile error, which surfaced one nobody had found: `roadmap/[slug]/page.tsx` had its *own* `prisma.project.findMany` reading the raw column, separate from the roadmap service already fixed. Also caught a dead `progress: true` select in `initiative.service.getProjects()` whose only consumer uses `link.id`. Both fields survive as **computed GraphQL fields** (`Project.progress`/`scope`, resolved through the DataLoader) — only the columns went, which is what `IMPLEMENTATION_PLAN.md` always described (`[x] … computed from completed vs total issues (project.service.ts#getProgress)`).
 - **`Cycle` carries the same six dead columns, and they are *not* removed here.** An earlier revision of this entry claimed cycles' `progress`/`scope` "are written" — that is **wrong**, and worth recording because it was asserted without checking. The only two `prisma.cycle.update` sites write name/description/dates and `archivedAt`; neither `tx.cycle.create` site writes progress or scope; nothing reads them; and `Cycle`'s four `*History` JSONB columns appear only in a test fixture. `CycleService.getProgress` computes from the issue set exactly like the project path. `Initiative.progress` is the genuine cached rollup — it *is* written (`initiative.service.ts`) and read back by the recursive rollup, which is the case the wrong claim was probably confused with. Cycle's six are left for a follow-up: no reader renders a stale value from them, so unlike `Project` there is no user-visible bug forcing the change.
 - **Progress now resolves through a `projectProgress` DataLoader** backed by `getProgressBatch` (two `groupBy` queries for any number of projects). The previous per-request memo still issued two `issue.count` queries *per project*, so a 20-project list cost 40 round-trips. That's what makes fetching progress for a whole list viable, which in turn let the project list/detail views stop computing it from `issueStore` — a guest's pool is scoped to their own issues, so one owned issue in a 50-issue project rendered 100%.
@@ -363,29 +363,39 @@ This branch was rebased twice while in flight, and adapted to what it landed on 
 
 ## Commands
 
-| Task                           | Command                                                    |
-| ------------------------------ | ---------------------------------------------------------- |
-| Dev server (Next.js)           | `yarn dev`                                                 |
-| WebSocket server               | `yarn ws:server`                                           |
-| Build                          | `yarn build`                                               |
-| Lint                           | `yarn lint`                                                |
-| Lint + fix                     | `yarn lint:fix`                                            |
-| Format                         | `yarn format`                                              |
-| Typecheck                      | `yarn typecheck`                                           |
-| All unit tests                 | `yarn test`                                                |
-| Single test file               | `yarn vitest run src/server/services/auth.service.test.ts` |
-| Test watch mode                | `yarn test:watch`                                          |
-| Coverage                       | `yarn test:coverage`                                       |
-| E2E tests                      | `yarn test:e2e` (needs both dev + ws:server running)       |
-| E2E with UI                    | `yarn test:e2e:ui`                                         |
-| Generate Prisma client         | `yarn db:generate` (aka `yarn prisma generate`)            |
-| Push schema to DB              | `yarn db:push`                                             |
-| Run migrations                 | `yarn db:migrate`                                          |
-| Reset DB                       | `yarn db:reset`                                            |
-| Seed DB                        | `yarn db:seed`                                             |
-| Start infra (Postgres + Redis) | `yarn docker:infra:up`                                     |
+| Task                            | Command                                                    |
+| ------------------------------- | ---------------------------------------------------------- |
+| Dev server (Next.js)            | `yarn dev`                                                 |
+| WebSocket sync server           | `yarn ws:server`                                           |
+| Yjs collab-editing server       | `yarn yjs:server`                                          |
+| Build                           | `yarn build`                                               |
+| Build + bundle analyzer         | `yarn analyze`                                             |
+| Lint                            | `yarn lint`                                                |
+| Lint + fix                      | `yarn lint:fix`                                            |
+| Design-token check              | `yarn lint:tokens`                                         |
+| Format                          | `yarn format`                                              |
+| Typecheck                       | `yarn typecheck`                                           |
+| All unit tests                  | `yarn test`                                                |
+| Single test file                | `yarn vitest run src/server/services/auth.service.test.ts` |
+| Test watch mode                 | `yarn test:watch`                                          |
+| Coverage                        | `yarn test:coverage`                                       |
+| E2E tests                       | `yarn test:e2e` (needs dev + ws:server running)            |
+| E2E with UI                     | `yarn test:e2e:ui`                                         |
+| Generate Prisma client          | `yarn db:generate` (aka `yarn prisma generate`)            |
+| Push schema to DB               | `yarn db:push`                                             |
+| Run migrations (dev)            | `yarn db:migrate`                                          |
+| Apply migrations (prod)         | `yarn db:deploy`                                           |
+| Reset DB                        | `yarn db:reset`                                            |
+| Seed DB                         | `yarn db:seed`                                             |
+| Database browser                | `yarn db:studio`                                           |
+| Verify xid8 delta fence         | `yarn db:verify:fence` (needs a live Postgres)             |
+| Benchmark hot-path indexes      | `yarn db:verify:indexes` (needs a live Postgres)           |
+| Grant platform admin            | `yarn admin:grant`                                         |
+| Start infra (Postgres + Redis)  | `yarn docker:infra:up`                                     |
 
-**Dev requires both** `yarn dev` (port 3000) and `yarn ws:server` (port 3001) running.
+**The CI gate suite is `yarn lint`, `yarn lint:tokens`, `yarn typecheck`, `yarn test`, `yarn build`** (`.github/workflows/ci.yml`) — run all five before pushing.
+
+**Dev needs three processes:** `yarn dev` (port 3000), `yarn ws:server` (port 3001, sync), and `yarn yjs:server` (port 1234, collaborative editing). The app boots without the Yjs server, but every TipTap editor silently stops syncing — set `NEXT_PUBLIC_YJS_SERVER_URL` if you move it off the default port.
 
 ## Architecture
 
@@ -459,10 +469,12 @@ Resolvers are thin: `requireAuth(ctx)` → `ctx.services.<domain>.method()` → 
 - Large client-only widgets use `dynamic(..., { ssr: false })` with a `.lazy.tsx` suffix (e.g. `tiptap-editor.lazy.tsx`, `issue-detail-panel.lazy.tsx`).
 - Toast notifications: use `@/lib/toast` wrapper, never import sonner directly. It exposes `error/info/success/warning` plus `undo(message, label, onUndo)`, `loading`, `promise`, and `dismiss(id)`. `TransactionQueue` permanent failures with no per-call `onError` fall through to a default toast registered by `SyncProvider` — never rely on that as the primary UX for a known failure path.
 - Logging: use `logger`/`childLogger` from `@/server/lib/logger` (pino). No `console.log` in server code.
-- UI primitives in `src/components/ui/`: `Button` (CVA), `Badge` (CVA, variants: `pill`/`solid`), `UserAvatar`, `Select`, `Skeleton`, `SelectPopover`, `SearchableSelectPopover` (generic searchable dropdown — see `CycleSelect`/`ProjectSelect` for usage), `ModalDialog` (native `showModal()` — real focus trap; Escape arrives as the `cancel` event), `Input`, `Textarea`, `Switch`, `PageHeader`/`Toolbar` (the single page-chrome header + its control strip — never hand-roll a page header), `EmptyState`. Extend here, not inline — don't hand-roll form fields, toggles, page headers or empty states.
+- UI primitives in `src/components/ui/`: `Button` (CVA), `Badge` (CVA — shape via `variant`: `pill`/`square`, colour via `tone`: `brand`/`danger`/`info`/`muted`/`none`/`outline`/`success`/`warning`; **there is deliberately no `solid` variant** — it hardcoded `text-white` over caller-supplied status fills and failed contrast, so solid status chips are `tone` pills whose pairs `src/lib/contrast.test.ts` asserts), `UserAvatar`, `SimpleSelect` (from `ui/select`), `Skeleton` + `LoadingRegion`/`RowsSkeleton`/`PageSkeleton`/`IssueListSkeleton`/`IssueSkeleton`/`DetailPanelSkeleton`/`SidebarSkeleton` (from `ui/skeleton`), `SelectPopover`, `SearchableSelectPopover` (generic searchable dropdown — see `CycleSelect`/`ProjectSelect` for usage), `ModalDialog` + `ModalHeader`/`ModalFooter` (native `showModal()` — real focus trap; Escape arrives as the `cancel` event), `Input`, `Textarea`, `Switch`, `PageHeader`/`Toolbar` (the single page-chrome header + its control strip — never hand-roll a page header), `EmptyState`. Extend here, not inline — don't hand-roll form fields, toggles, page headers or empty states.
+- Loading states shimmer **and** announce: a `Skeleton` is `aria-hidden`, so wrap it in `LoadingRegion` (`role="status"` + `aria-busy` + sr-only text). Never hand-roll an `animate-pulse` block. A pulsing *dot* is the exception — there a pulse means "live" (connection status, pending write), not "loading".
 - `/design` renders the whole token layer and every primitive across all three accents and both themes. Open it when changing anything in `ui/` or `globals.css`; this repo's CI has no visual regression suite.
 - Full design-system reference — the two colour families and why status never follows the accent, the two-values-per-accent derivation, the specificity trap, and the primitive inventory — is **PATTERNS.md §79**.
-- Shared sub-components in `src/components/shared/`: `UpdateFormFields`, `DeleteUpdateButton`, `ConfirmDialog` (destructive confirmations — prefer over `window.confirm`). Add cross-feature building blocks here.
+- Shared sub-components in `src/components/shared/`: `ConfirmDialog` (destructive confirmations — always prefer over `window.confirm`), `InlineRetry` (a failed fetch must offer a retry, never render as an authoritative empty state), `SettingToggleRow`, `SyncErrorState`, `UpdateFormFields`, `CreateUpdateForm`/`EditUpdateForm`, `DeleteUpdateButton`. Add cross-feature building blocks here.
+- Fetch-on-mount goes through `useRetryableFetch` (`src/hooks/`) — it owns the `reloadKey`/cancelled-flag state machine and pairs with `InlineRetry`. Pass `{ silent: true }` for post-mutation background refreshes so they don't re-flash the skeleton. See PATTERNS.md §80.6.
 - Escape contract: whichever surface consumes an Escape must claim it (`preventDefault` + `stopPropagation` — `useOutsideClick` does this for popovers, capture-phase). Window-level Escape listeners on parent surfaces must ignore handled events (`if (e.defaultPrevented) return`). One Escape closes exactly one surface.
 - Issue mutations from components: use `useIssueCreate(team, states)` and `useIssueUpdate()` from `src/hooks/` — they own the optimistic apply, TransactionQueue enqueue, rollback, and failure toast. Map store models for issue components with `toIssueUsers`/`toIssueLabels` from `@/lib/issue-mappers`; don't hand-roll the mapping.
 - Issue creation UI: there is exactly one create modal — `GlobalCreateIssueModal`, mounted in `WorkspaceClient` and driven by `uiStore.openCreateIssueModal()`. Open it from buttons/shortcuts/palette actions via the store; never mount a second `CreateIssueModal`.
@@ -485,4 +497,16 @@ Copy `.env.example`. Required: `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `JWT_R
 
 ## Documentation
 
-Detailed docs live in `docs/`: `PATTERNS.md` (primary conventions reference), `ARCHITECTURE.md`, `DATABASE_SCHEMA.md`, `API_DESIGN.md`, `PRD.md`, `IMPLEMENTATION_PLAN.md`.
+`docs/README.md` is the index. The ones you'll want most:
+
+| Doc                            | Use it for                                                              |
+| ------------------------------ | ----------------------------------------------------------------------- |
+| `docs/PATTERNS.md`             | **Primary conventions reference** — 80 sections, start from its TOC      |
+| `docs/ARCHITECTURE.md`         | System architecture                                                     |
+| `docs/DATABASE_SCHEMA.md`      | Schema, migration policy, the real-Postgres verification recipe         |
+| `docs/API_DESIGN.md`           | GraphQL contracts                                                       |
+| `docs/REVIEW_BACKLOG.md`       | **The active work queue** — open findings, what's shipped, what's deferred |
+| `docs/CHANGELOG.md`            | What shipped when, and why it was done that way                         |
+| `docs/IMPLEMENTATION_PLAN.md`  | Canonical per-sprint status                                             |
+
+`PATTERNS.md` is 2,800+ lines — read the section you need via its table of contents, not the whole file.
