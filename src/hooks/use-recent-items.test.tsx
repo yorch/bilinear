@@ -34,7 +34,7 @@ describe('useRecentItems', () => {
     expect(result.current.items).toHaveLength(1);
     expect(result.current.items[0]?.id).toBe('1');
 
-    const raw = localStorage.getItem('issue-tracker:acme:recent-issues');
+    const raw = localStorage.getItem('bilinear:acme:recent-issues');
     expect(raw).toBeTruthy();
     const parsed = JSON.parse(raw ?? '[]');
     expect(parsed).toHaveLength(1);
@@ -87,7 +87,7 @@ describe('useRecentItems', () => {
 
   it('loads existing items from localStorage on mount', () => {
     const existing = [makeItem('1'), makeItem('2')].map(i => ({ ...i, visitedAt: Date.now() }));
-    localStorage.setItem('issue-tracker:acme:recent-issues', JSON.stringify(existing));
+    localStorage.setItem('bilinear:acme:recent-issues', JSON.stringify(existing));
 
     const { result } = renderHook(() => useRecentItems('acme'));
 
@@ -105,14 +105,14 @@ describe('useRecentItems', () => {
       beta.result.current.addRecent(makeItem('beta-1'));
     });
 
-    expect(localStorage.getItem('issue-tracker:acme:recent-issues')).toContain('acme-1');
-    expect(localStorage.getItem('issue-tracker:beta:recent-issues')).toContain('beta-1');
-    expect(localStorage.getItem('issue-tracker:acme:recent-issues')).not.toContain('beta-1');
+    expect(localStorage.getItem('bilinear:acme:recent-issues')).toContain('acme-1');
+    expect(localStorage.getItem('bilinear:beta:recent-issues')).toContain('beta-1');
+    expect(localStorage.getItem('bilinear:acme:recent-issues')).not.toContain('beta-1');
   });
 
   it('reloads the list when workspaceKey changes on an existing hook instance', () => {
     localStorage.setItem(
-      'issue-tracker:beta:recent-issues',
+      'bilinear:beta:recent-issues',
       JSON.stringify([{ ...makeItem('beta-item'), visitedAt: Date.now() }]),
     );
 
@@ -129,7 +129,7 @@ describe('useRecentItems', () => {
 
     expect(result.current.items.map(i => i.id)).toEqual(['beta-item']);
     // Switching workspaces must not have clobbered acme's storage.
-    const acmeRaw = localStorage.getItem('issue-tracker:acme:recent-issues');
+    const acmeRaw = localStorage.getItem('bilinear:acme:recent-issues');
     expect(acmeRaw).toContain('acme-item');
   });
 
@@ -140,7 +140,7 @@ describe('useRecentItems', () => {
       result.current.addRecent(makeItem('1'));
     });
 
-    const raw = localStorage.getItem('issue-tracker:recent-issues');
+    const raw = localStorage.getItem('bilinear:recent-issues');
     expect(raw).toContain('"id":"1"');
   });
 });
