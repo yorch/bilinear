@@ -20,6 +20,14 @@ services:
       # — docker-compose.traefik.yml does; a bare `prod` deploy without a
       # proxy should set WS_PUBLIC_URL to the published host:port instead.
       WS_PUBLIC_URL: ${WS_PUBLIC_URL:-/ws}
+      # Collaborative editing. Both are read at request time (the root layout
+      # passes them to CollabProvider), so the feature can be turned on by
+      # restarting this container — the NEXT_PUBLIC_* spellings could not,
+      # since `next build` inlines those into the published image.
+      # Turn on with COLLAB_ENABLED=true AND `--profile collab` (or
+      # COMPOSE_PROFILES=collab in .env) so the `yjs` service below runs too.
+      COLLAB_ENABLED: ${COLLAB_ENABLED:-false}
+      YJS_PUBLIC_URL: ${YJS_PUBLIC_URL:-/collab}
 
   # Real-time sync fan-out (Redis Pub/Sub -> connected browsers), the webhook
   # retry sweep (every 30s) and cycle auto-rollover all live in this process,
@@ -39,5 +47,28 @@ services:
       - .env
     environment:
       WS_PORT: "3001"
+      DATABASE_URL: ${DATABASE_URL_OVERRIDE:-postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/${POSTGRES_DB:-bilinear}}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+
+  # Multi-cursor collaborative editing (Hocuspocus/YJS). Optional and OFF by
+  # default — it only runs under the `collab` profile:
+  #     docker compose --profile collab -f docker-compose.prod.yml … up -d
+  # or COMPOSE_PROFILES=collab in .env. Pair it with COLLAB_ENABLED=true on
+  # the app; enabling one without the other is the one way to get a broken
+  # editor, so they are documented together in .env.example and the README.
+  yjs:
+    image: ${APP_IMAGE:-ghcr.io/yorch/bilinear:main}
+    pull_policy: always
+    restart: unless-stopped
+    init: true
+    profiles: ["collab"]
+    # As with `ws`: the app container owns `prisma migrate deploy`.
+    entrypoint: ["node", "./node_modules/tsx/dist/cli.mjs", "src/server/yjs/index.ts"]
+    ports:
+      - ${YJS_PORT_PUBLISHED:-1234}:1234
+    env_file:
+      - .env
+    environment:
+      YJS_PORT: "1234"
       DATABASE_URL: ${DATABASE_URL_OVERRIDE:-postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/${POSTGRES_DB:-bilinear}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}

@@ -16,7 +16,7 @@
  */
 
 import { WS_HEARTBEAT_CLIENT_TIMEOUT_MS } from '@/lib/sync-config';
-import { resolveWsUrl } from '@/lib/ws-url';
+import { resolveBrowserWsUrl } from '@/lib/ws-url';
 
 export type WsMessage =
   | { cmd: 'connected'; orgId: string }
@@ -85,12 +85,8 @@ export class WsClient {
     if (this.wsUrlOverride) {
       return this.wsUrlOverride;
     }
-    if (typeof window === 'undefined') {
-      return '';
-    }
-    return resolveWsUrl(
+    return resolveBrowserWsUrl(
       serverProvided ?? process.env.NEXT_PUBLIC_WS_URL,
-      window.location,
       process.env.NEXT_PUBLIC_WS_PORT,
     );
   }

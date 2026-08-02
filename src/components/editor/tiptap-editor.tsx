@@ -31,7 +31,10 @@ import { ImageIcon, Link2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import * as Y from 'yjs';
 import { useTranslations } from '@/hooks/use-translations';
+import { DEFAULT_YJS_PORT } from '@/lib/collab';
 import { cn } from '@/lib/utils';
+import { resolveBrowserWsUrl } from '@/lib/ws-url';
+import { useCollabConfig } from '@/providers/collab-provider';
 import { Details, DetailsSummary } from './details-node';
 import { EmbedNode } from './embed-node';
 import type { MentionItem, MentionListHandle } from './mention-list';
@@ -42,10 +45,14 @@ import './tiptap-editor.css';
 
 const lowlight = createLowlight(common);
 
-// Collaborative editing feature flag — set NEXT_PUBLIC_COLLAB_ENABLED=true to
-// activate. Also requires NEXT_PUBLIC_YJS_SERVER_URL and yarn yjs:server.
-const COLLAB_ENABLED = process.env.NEXT_PUBLIC_COLLAB_ENABLED === 'true';
-const YJS_SERVER_URL = process.env.NEXT_PUBLIC_YJS_SERVER_URL ?? 'ws://localhost:1234';
+// Build-time fallbacks. These used to be the ONLY way to configure collab,
+// which meant a deployment running a prebuilt image could not enable it at
+// all — `next build` inlines NEXT_PUBLIC_* values. The live config now comes
+// from `useCollabConfig()` (server-resolved per request, see
+// src/lib/collab.ts); these are consulted only when it is unset, so
+// build-from-source setups keep working exactly as before.
+const BUILD_TIME_COLLAB_ENABLED = process.env.NEXT_PUBLIC_COLLAB_ENABLED === 'true';
+const BUILD_TIME_YJS_SERVER_URL = process.env.NEXT_PUBLIC_YJS_SERVER_URL;
 
 // Fetch a short-lived ws_ticket from the Next.js API. The ticket is a 60s
 // scoped JWT that the YJS server accepts without needing the long-lived access
@@ -510,7 +517,9 @@ export function TipTapEditor({
   //
   // The collabEnabled check includes readOnly because read-only views don't
   // need a live YJS session (they show the saved description, not the YJS doc).
-  const collabEnabled = COLLAB_ENABLED && !!collabDocId && !readOnly;
+  const collabConfig = useCollabConfig();
+  const collabEnabled =
+    (collabConfig.enabled || BUILD_TIME_COLLAB_ENABLED) && !!collabDocId && !readOnly;
 
   const ydocRef = useRef<Y.Doc | null>(null);
   const providerRef = useRef<HocuspocusProvider | null>(null);
@@ -566,7 +575,15 @@ export function TipTapEditor({
       // Async token provider: fetches a fresh 60s ws_ticket on every
       // (re)connection, same rotation pattern as the sync WebSocket.
       token: fetchWsTicket,
-      url: YJS_SERVER_URL,
+      // Resolved through the same helper as the sync socket, so a path like
+      // `/collab` becomes a same-origin `wss://` URL behind a TLS proxy. The
+      // document name is NOT part of this URL — Hocuspocus sends it in-band
+      // (verified against @hocuspocus/provider) — so a proxy routing this
+      // path must NOT strip the prefix for the name to survive.
+      url: resolveBrowserWsUrl(
+        collabConfig.serverUrl ?? BUILD_TIME_YJS_SERVER_URL,
+        DEFAULT_YJS_PORT,
+      ),
     });
 
     // Stamp cursor awareness with user identity for CollaborationCaret.

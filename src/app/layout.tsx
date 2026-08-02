@@ -3,9 +3,11 @@ import localFont from 'next/font/local';
 import { ThemeProvider } from 'next-themes';
 import { getServerAccent } from '@/lib/accent-server';
 import { APP_NAME } from '@/lib/app-config';
+import { getServerCollabConfig } from '@/lib/collab-server';
 import { getServerTranslations } from '@/lib/i18n/server';
 import { Toaster } from '@/lib/toast';
 import { AccentProvider } from '@/providers/accent-provider';
+import { CollabProvider } from '@/providers/collab-provider';
 import { LocaleProvider } from '@/providers/locale-provider';
 import './globals.css';
 
@@ -52,6 +54,9 @@ export default async function RootLayout({
     getServerTranslations(),
     getServerAccent(),
   ]);
+  // Read from the environment at request time (no I/O), so collab can be
+  // enabled or repointed by restarting the container rather than rebuilding.
+  const collabConfig = getServerCollabConfig();
 
   return (
     // `data-accent` is resolved from the cookie server-side so the accent is
@@ -72,8 +77,10 @@ export default async function RootLayout({
         >
           <AccentProvider initialAccent={initialAccent}>
             <LocaleProvider initialLocale={initialLocale}>
-              {children}
-              <Toaster closeButton position="bottom-right" richColors />
+              <CollabProvider config={collabConfig}>
+                {children}
+                <Toaster closeButton position="bottom-right" richColors />
+              </CollabProvider>
             </LocaleProvider>
           </AccentProvider>
         </ThemeProvider>

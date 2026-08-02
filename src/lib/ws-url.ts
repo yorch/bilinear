@@ -89,3 +89,21 @@ export function resolveWsUrl(
   const port = fallbackPort.trim() || DEFAULT_WS_PORT;
   return `${wsScheme(origin)}//${origin.hostname}:${port}`;
 }
+
+/**
+ * `resolveWsUrl` against the live `window.location`, returning `''` when
+ * there is no window (SSR / prerender) so callers can skip connecting.
+ *
+ * Shared by the sync socket (`ws-client.ts`) and the collaborative-editing
+ * socket (`tiptap-editor.tsx`) — both face the same reverse-proxy problem and
+ * must not resolve it two different ways.
+ */
+export function resolveBrowserWsUrl(
+  configured: string | null | undefined,
+  fallbackPort?: string,
+): string {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+  return resolveWsUrl(configured, window.location, fallbackPort);
+}
