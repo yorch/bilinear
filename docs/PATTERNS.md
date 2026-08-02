@@ -3,10 +3,103 @@
 ## Bilinear — Linear Rebuild
 
 **Established:** Sprint 1-2
-**Last updated:** 2026-04-17 (Sprints 35-36 + Public Roadmaps)
-**Status:** Living document — updated each sprint
+**Status:** Living document — updated every time a convention changes. For the
+date of the last change run `git log -1 --format=%ad -- docs/PATTERNS.md`; a
+hand-maintained stamp here only ever drifts.
 
 > This is the primary onboarding document for new contributors. All patterns here are the mandated conventions for the codebase. If you deviate from a pattern, document why.
+
+> **This file is ~2,900 lines.** Read the section you need from the table of
+> contents below — don't read it end to end. Sections are append-only and
+> numbered in the order they were established, so a higher number means newer,
+> not more important.
+
+---
+
+## Table of Contents
+
+<!-- Numbers are append-only and never reused, so they can be cited from other
+     docs. §13 was never assigned; §80 was briefly a second §77. -->
+
+- [1. Project Structure](#1-project-structure)
+- [2. Prisma Pattern (Prisma 7)](#2-prisma-pattern-prisma-7)
+- [3. GraphQL Resolver Pattern](#3-graphql-resolver-pattern)
+- [4. Service Layer Pattern](#4-service-layer-pattern)
+- [5. GraphQL Context Pattern](#5-graphql-context-pattern)
+- [6. Error Handling Pattern](#6-error-handling-pattern)
+- [7. Token Security Pattern](#7-token-security-pattern)
+- [8. Authentication Middleware Pattern](#8-authentication-middleware-pattern)
+- [9. Session Cookie Pattern](#9-session-cookie-pattern)
+- [10. Environment Variable Pattern](#10-environment-variable-pattern)
+- [11. Performance Patterns](#11-performance-patterns)
+- [12. Frontend Data Pattern (Sprint 7-8+)](#12-frontend-data-pattern-sprint-7-8)
+- [14. Authorization Pattern (Sprint 3-4)](#14-authorization-pattern-sprint-3-4)
+- [15. Entity CRUD Pattern (Sprint 3-4)](#15-entity-crud-pattern-sprint-3-4)
+- [16. Testing Pattern (Sprint 3-4)](#16-testing-pattern-sprint-3-4)
+- [17. MobX Store Pattern (Sprint 7-8)](#17-mobx-store-pattern-sprint-7-8)
+- [18. Sync Provider Pattern (Sprint 7-8)](#18-sync-provider-pattern-sprint-7-8)
+- [19. SyncAction Generation Pattern (Sprint 7-8)](#19-syncaction-generation-pattern-sprint-7-8)
+- [20. Search Pattern (Sprint 9-10)](#20-search-pattern-sprint-9-10)
+- [21. Command Palette Pattern (Sprint 9-10)](#21-command-palette-pattern-sprint-9-10)
+- [22. Keyboard Shortcut Pattern (Sprint 9-10)](#22-keyboard-shortcut-pattern-sprint-9-10)
+- [23. Theme System Pattern (Sprint 11-12)](#23-theme-system-pattern-sprint-11-12)
+- [24. Toast Notification Pattern (Sprint 11-12)](#24-toast-notification-pattern-sprint-11-12)
+- [25. Skeleton / Loading State Pattern (Sprint 11-12)](#25-skeleton--loading-state-pattern-sprint-11-12)
+- [26. Error Boundary Pattern (Sprint 11-12)](#26-error-boundary-pattern-sprint-11-12)
+- [27. Code Splitting Pattern (Sprint 11-12)](#27-code-splitting-pattern-sprint-11-12)
+- [28. Rate Limiting Pattern (Sprint 11-12)](#28-rate-limiting-pattern-sprint-11-12)
+- [29. Structured Logging Pattern (Sprint 11-12)](#29-structured-logging-pattern-sprint-11-12)
+- [30. Sidebar Collapse Pattern (Sprint 11-12)](#30-sidebar-collapse-pattern-sprint-11-12)
+- [31. E2E Testing Pattern (Sprint 11-12)](#31-e2e-testing-pattern-sprint-11-12)
+- [32. Adding a New Sync Entity (Sprint 13-14)](#32-adding-a-new-sync-entity-sprint-13-14)
+- [33. Board View / Drag-and-Drop Pattern (Sprint 17-18)](#33-board-view--drag-and-drop-pattern-sprint-17-18)
+- [34. Filter Builder Pattern (Sprint 19-20)](#34-filter-builder-pattern-sprint-19-20)
+- [35. Notification Pattern (Sprint 21-22)](#35-notification-pattern-sprint-21-22)
+- [36. Comment Thread Pattern (Sprint 29-30)](#36-comment-thread-pattern-sprint-29-30)
+- [37. TipTap Rich Text Editor Pattern (Sprint 27-28)](#37-tiptap-rich-text-editor-pattern-sprint-27-28)
+- [38. Triage Workflow Pattern (2026-05-05)](#38-triage-workflow-pattern-2026-05-05)
+- [39. Initiative Roll-up Pattern (2026-05-05)](#39-initiative-roll-up-pattern-2026-05-05)
+- [40. Webhook Dispatch Pattern (2026-05-05)](#40-webhook-dispatch-pattern-2026-05-05)
+- [41. GitHub Integration Pattern (2026-05-17)](#41-github-integration-pattern-2026-05-17)
+- [42. Issue Reaction Pattern (2026-05-18)](#42-issue-reaction-pattern-2026-05-18)
+- [43. Initiative Updates Pattern (2026-05-18)](#43-initiative-updates-pattern-2026-05-18)
+- [44. Lazy Daily Snapshot Pattern — Project Progress History (2026-05-18)](#44-lazy-daily-snapshot-pattern--project-progress-history-2026-05-18)
+- [45. Editor Image Paste Pattern (2026-05-18)](#45-editor-image-paste-pattern-2026-05-18)
+- [46. Sub-Initiative Hierarchy Pattern (2026-05-21, hardened post-review)](#46-sub-initiative-hierarchy-pattern-2026-05-21-hardened-post-review)
+- [47. Sidebar Favorites Pattern (2026-05-21)](#47-sidebar-favorites-pattern-2026-05-21)
+- [48. Guest Role Enforcement Pattern (2026-05-21, hardened post-review)](#48-guest-role-enforcement-pattern-2026-05-21-hardened-post-review)
+- [49. Issue Snooze Pattern (2026-05-21)](#49-issue-snooze-pattern-2026-05-21)
+- [50. Bulk Update Pattern (2026-05-21)](#50-bulk-update-pattern-2026-05-21)
+- [51. YJS Collaborative Editing (2026-05-22)](#51-yjs-collaborative-editing-2026-05-22)
+- [52. Favorites Sidebar (2026-05-22)](#52-favorites-sidebar-2026-05-22)
+- [53. Sub-Initiatives Tree (2026-05-22)](#53-sub-initiatives-tree-2026-05-22)
+- [54. Issue Timeline View (2026-05-22)](#54-issue-timeline-view-2026-05-22)
+- [55. Issue Mentions in Editor (2026-05-22)](#55-issue-mentions-in-editor-2026-05-22)
+- [56. Project Mentions in Editor (2026-05-24)](#56-project-mentions-in-editor-2026-05-24)
+- [57. Label Group Enforcement Pattern (2026-05-24)](#57-label-group-enforcement-pattern-2026-05-24)
+- [58. Duplicate Relation Auto-Cancel Pattern (2026-05-24)](#58-duplicate-relation-auto-cancel-pattern-2026-05-24)
+- [59. iCal Cycle Feed Pattern (2026-05-24)](#59-ical-cycle-feed-pattern-2026-05-24)
+- [60. Initiative Health Badge Pattern (2026-05-24)](#60-initiative-health-badge-pattern-2026-05-24)
+- [61. Audit Log Pattern (2026-06-06)](#61-audit-log-pattern-2026-06-06)
+- [62. SAML SSO Pattern (2026-06-06)](#62-saml-sso-pattern-2026-06-06)
+- [63. SCIM 2.0 Provisioning Pattern (2026-06-06)](#63-scim-20-provisioning-pattern-2026-06-06)
+- [64. Analytics Extension Pattern (2026-06-06)](#64-analytics-extension-pattern-2026-06-06)
+- [65. My Issues Cross-Team View (2026-06-07)](#65-my-issues-cross-team-view-2026-06-07)
+- [66. Sub-Issue Progress Rollup UI (2026-06-07)](#66-sub-issue-progress-rollup-ui-2026-06-07)
+- [67. Personal API Tokens (2026-06-07)](#67-personal-api-tokens-2026-06-07)
+- [68. Keyboard Shortcut Help Modal (2026-06-07)](#68-keyboard-shortcut-help-modal-2026-06-07)
+- [69. Bulk Actions Toolbar (2026-06-07)](#69-bulk-actions-toolbar-2026-06-07)
+- [70. Cycle Burndown Chart (2026-06-07)](#70-cycle-burndown-chart-2026-06-07)
+- [71. Issue Templates CRUD UI (2026-06-07)](#71-issue-templates-crud-ui-2026-06-07)
+- [72. Project Milestones UI (2026-06-07)](#72-project-milestones-ui-2026-06-07)
+- [73. GraphQL Mutation Centralization (2026-06-08)](#73-graphql-mutation-centralization-2026-06-08)
+- [74. Platform Admin Console (2026-07-03)](#74-platform-admin-console-2026-07-03)
+- [75. Internationalization (i18n) — English/Spanish (2026-07-03)](#75-internationalization-i18n--englishspanish-2026-07-03)
+- [76. Client/Server Contract Safety (2026-08-01)](#76-clientserver-contract-safety-2026-08-01)
+- [77. Multiple Organizations Per User (2026-08-01)](#77-multiple-organizations-per-user-2026-08-01)
+- [78. Organization Membership Management — Invitations & Removal (2026-08-01)](#78-organization-membership-management--invitations--removal-2026-08-01)
+- [79. Design System — tokens, accent, primitives (2026-08-01)](#79-design-system--tokens-accent-primitives-2026-08-01)
+- [80. Schema and Sync Residuals (2026-08-02)](#80-schema-and-sync-residuals-2026-08-02)
 
 ---
 
@@ -2761,9 +2854,10 @@ a shape plus a label (WCAG 1.4.1). Loading surfaces announce through
 `LoadingRegion` (`role="status"` + `aria-busy` + sr-only text) — the shimmer
 itself is `aria-hidden`, since replacing the old literal "Loading…" strings with
 silent divs is exactly the kind of regression a visual redesign introduces.
-## 77. Schema and Sync Residuals (2026-08-02)
 
-### 77.1 Entity references are `ID`, uniformly
+## 80. Schema and Sync Residuals (2026-08-02)
+
+### 80.1 Entity references are `ID`, uniformly
 
 Every **argument and input field** that names an entity — `id`, `teamId`, `issueId`, `projectId`, `cycleId`, `initiativeId`, `userId`, `parentId`, `assigneeId`, `stateId`, `leadId`, `ownerId`, `definitionId`, `relatedIssueId`, `projectMilestoneId`, `moveToTeamId`, and the `[ID!]` list forms — is typed `ID`/`ID!`, never `String`/`String!`.
 
@@ -2790,13 +2884,13 @@ the actual root cause this section exists to prevent. It deliberately ignores
 output fields — variables are never compared against those, so they carry no
 drift hazard.
 
-### 77.2 SyncAction payloads are stripped centrally
+### 80.2 SyncAction payloads are stripped centrally
 
 `SyncService.recordSyncAction` is the single choke point every SyncAction passes through, and it strips `Issue.descriptionState` / `Document.contentState` (`SYNC_PAYLOAD_OMITTED_FIELDS`). Strip **there**, not at the row producers: there are ~20 emitters fed by at least 7 different producers, including raw `prisma.issue.findUnique` calls in `automation.service.ts` and `ws/index.ts`, so a per-producer fix is neither exhaustive nor future-proof.
 
 Worth knowing: a Prisma `Bytes` column inside a `Json` argument does **not** throw — `serializeJsonQuery` base64-encodes it (`{"descriptionState":"AQIDBA=="}`) because the `ArrayBuffer.isView` branch precedes `toJSON`. So this was silently writing ~1.33× the blob into `sync_actions.data`, publishing it to every client in the org, and having each persist it under a key `DBIssue`/`DBDocument` never declared.
 
-### 77.3 `sync_actions` retention needs a staleness signal, not just a sweep
+### 80.3 `sync_actions` retention needs a staleness signal, not just a sweep
 
 The table is append-only — one row per mutation — so it has an hourly retention sweep (`SYNC_ACTION_RETENTION_DAYS`, `pruneSyncActions`). **A sweep alone is a data-loss bug:** a client whose cursor predates the deleted span would get a successful-looking delta that silently omits everything pruned.
 
@@ -2808,13 +2902,13 @@ So the sweep records `Organization.syncActionsPrunedThroughXactId`, and `getDelt
 
 Test against the **recorded high-water mark**, never a computed `now - retention` horizon. A horizon cannot distinguish "these rows were pruned" from "this org has no history that old", so it forces a needless full bootstrap on every young org — and on every client still holding a legacy id-only cursor, which `parseCursor` deliberately maps to the zero cursor *so that it can be caught up by delta*. Null (nothing pruned yet) is the common case and is never stale.
 
-### 77.4 Soft-delete filters want partial indexes
+### 80.4 Soft-delete filters want partial indexes
 
 Every list/board/bootstrap read filters `archived_at IS NULL AND trashed = false`. A plain `@@index([team_id])` also covers the archived set, which grows without bound while the live set does not — so the live-set predicate gets a partial index, `issues_team_id_state_id_active_idx`, in the custom migration file. Prisma's `@@index` takes no `WHERE`, which is why it lives there rather than in the schema.
 
 Add one only for a predicate you have actually measured. This branch originally carried two more (`idx_issues_live_team`, `idx_issues_live_org`), derived from reading the query shapes rather than from a profile; they were dropped when the measured index above landed and covered the same reads. Every index is a write-path cost paid on every insert and update, so a speculative one is a regression with no upside.
 
-### 77.5 Delete semantics are a decision, not a default
+### 80.5 Delete semantics are a decision, not a default
 
 When adding a missing FK, pick `onDelete` from what the null state *means*:
 
@@ -2823,7 +2917,7 @@ When adding a missing FK, pick `onDelete` from what the null state *means*:
 - `SlackIntegration.defaultTeamId → Team` is **SetNull** — losing the default team must not uninstall the integration.
 
 
-### 77.6 Fetch-on-mount goes through `useRetryableFetch`
+### 80.6 Fetch-on-mount goes through `useRetryableFetch`
 
 Any component that loads data in an effect uses `useRetryableFetch(fetcher, deps, initialValue)` (`src/hooks/use-retryable-fetch.ts`). It returns `{ data, setData, loading, error, refetch }`, and `refetch` **is** the retry handler you hand to `InlineRetry`.
 
@@ -2831,7 +2925,7 @@ Do not hand-roll the equivalent. The recognisable shape — `useState` for data,
 
 The hook only sets `error` when the fetcher **throws**, which is why the fetcher must use `gqlQuery`/`gqlMutate` (§76.1) rather than swallowing errors and returning `[]`. A fetcher that returns an empty array on failure renders as a legitimate empty state and leaves the retry branch dead — that combination is what hid a real query bug for a long time.
 
-### 77.7 Derived values are computed fields, never columns
+### 80.7 Derived values are computed fields, never columns
 
 Progress, scope and any other value that is a pure function of a related row
 set is exposed as a **GraphQL field backed by a DataLoader**, not stored on the

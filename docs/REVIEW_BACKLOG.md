@@ -492,7 +492,9 @@ still its own PR, but no longer blocked on a data-cleanup prerequisite.
 > everything. Spreading rows over 8 teams / 6 states / 20 users is what makes
 > the measurement mean anything. Production distribution will differ again.
 >
-> §2.3 (enum promotion) remains deferred; §2.6 (retention) shipped in #112.
+> §2.6 (retention) shipped in #112; §2.3 (enum promotion) shipped in #118 —
+> see §2.3 above for why the "blocked on inconsistent vocabularies" call that
+> originally deferred it was wrong.
 
 ### 2.4 Misc additive constraints — ✅ shipped
 
@@ -543,7 +545,7 @@ What shipped:
 - The mark column is `NUMERIC(20, 0)`, not `BIGINT`: xid8 is unsigned
   64-bit and overflows a signed `int8` at the top of its range.
 
-See DATABASE_SCHEMA.md §2.22b and PATTERNS.md §77.3.
+See DATABASE_SCHEMA.md §2.22b and PATTERNS.md §80.3.
 
 **Still open:** partitioning proper. The sweep is a `DELETE`, so it
 leaves bloat a `DROP PARTITION` would not, and it has never been run
