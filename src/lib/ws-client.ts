@@ -8,9 +8,15 @@
  * access token never reaches client JavaScript. A fresh ticket is
  * fetched on every (re)connect, so reconnects after the 60s ticket
  * lifetime still authenticate.
+ *
+ * That same response carries the endpoint URL (`wsUrl`), because it is the
+ * one channel that can deliver a RUNTIME-configured value: `NEXT_PUBLIC_*`
+ * is inlined by `next build`, so a deployment running the published image
+ * has no way to set it. See `src/lib/ws-url.ts` for the resolution rules.
  */
 
 import { WS_HEARTBEAT_CLIENT_TIMEOUT_MS } from '@/lib/sync-config';
+import { resolveWsUrl } from '@/lib/ws-url';
 
 export type WsMessage =
   | { cmd: 'connected'; orgId: string }
@@ -60,19 +66,33 @@ export class WsClient {
   private messageHandlers: Set<MessageHandler> = new Set();
   private statusHandlers: Set<StatusHandler> = new Set();
 
-  private wsUrl: string;
+  /**
+   * Explicit override (tests, or an embedder that already knows the URL).
+   * When set it wins over both the server-provided and build-time values.
+   */
+  private wsUrlOverride: string | null;
 
   constructor(wsUrl?: string) {
-    this.wsUrl = wsUrl ?? this.resolveWsUrl();
+    this.wsUrlOverride = wsUrl ?? null;
   }
 
-  private resolveWsUrl(): string {
+  /**
+   * Resolved per connect rather than once in the constructor, so a change to
+   * the server-side `WS_PUBLIC_URL` takes effect on the next reconnect
+   * instead of requiring a page reload.
+   */
+  private resolveUrl(serverProvided: string | null): string {
+    if (this.wsUrlOverride) {
+      return this.wsUrlOverride;
+    }
     if (typeof window === 'undefined') {
       return '';
     }
-    const wsPort = process.env.NEXT_PUBLIC_WS_PORT ?? '3001';
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${proto}//${window.location.hostname}:${wsPort}`;
+    return resolveWsUrl(
+      serverProvided ?? process.env.NEXT_PUBLIC_WS_URL,
+      window.location,
+      process.env.NEXT_PUBLIC_WS_PORT,
+    );
   }
 
   onMessage(handler: MessageHandler): () => void {
@@ -98,7 +118,7 @@ export class WsClient {
     this.ws = null;
   }
 
-  private async fetchTicket(): Promise<string | null> {
+  private async fetchTicket(): Promise<{ ticket: string; wsUrl: string | null } | null> {
     try {
       const res = await fetch('/api/auth/ws-ticket', {
         credentials: 'include',
@@ -107,23 +127,23 @@ export class WsClient {
       if (!res.ok) {
         return null;
       }
-      const data = (await res.json()) as { ticket?: string };
-      return data.ticket ?? null;
+      const data = (await res.json()) as { ticket?: string; wsUrl?: string | null };
+      return data.ticket ? { ticket: data.ticket, wsUrl: data.wsUrl ?? null } : null;
     } catch {
       return null;
     }
   }
 
   private async openSocket() {
-    if (this.destroyed || !this.wsUrl) {
-      return;
-    }
-
-    const ticket = await this.fetchTicket();
     if (this.destroyed) {
       return;
     }
-    if (!ticket) {
+
+    const session = await this.fetchTicket();
+    if (this.destroyed) {
+      return;
+    }
+    if (!session) {
       // Authentication failed (no session, or token rejected). Schedule a
       // retry — the user may sign in again shortly, or this is a transient
       // network blip on the ticket endpoint.
@@ -131,7 +151,12 @@ export class WsClient {
       return;
     }
 
-    const url = `${this.wsUrl}?token=${encodeURIComponent(ticket)}`;
+    const base = this.resolveUrl(session.wsUrl);
+    if (!base) {
+      return;
+    }
+
+    const url = `${base}?token=${encodeURIComponent(session.ticket)}`;
     const ws = new WebSocket(url);
     this.ws = ws;
 

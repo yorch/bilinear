@@ -24,6 +24,35 @@ services:
       - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}.tls.certResolver=webcert"
       - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}.service=${TRAEFIK_NAME:-bilinear}"
 
+  # The WS server is routed on the SAME host and the SAME TLS entrypoint as
+  # the app, under the `/ws` path, rather than being published on its own
+  # port. A browser on an https page can only open `wss://`, and `wss://` to
+  # a raw port means that port needs its own TLS listener and certificate —
+  # which Traefik's `websecure` entrypoint does not provide. Reusing :443
+  # needs neither, and keeps the WS endpoint same-origin.
+  #
+  # The path is NOT stripped, and does not need to be: the WS server reads
+  # only the `token` query parameter and ignores the request path (see
+  # src/server/ws/index.ts). `WS_PUBLIC_URL=/ws` on the app service is what
+  # tells the browser to connect here.
+  ws:
+    ports: !reset []
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      - "traefik.http.services.${TRAEFIK_NAME:-bilinear}-ws.loadbalancer.server.port=3001"
+      - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}-ws.rule=Host(`${DOMAIN_APP:?DOMAIN_APP must be set when using docker-compose.traefik.yml}`) && PathPrefix(`/ws`)"
+      - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}-ws.entrypoints=websecure"
+      - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}-ws.tls=true"
+      - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}-ws.tls.certResolver=webcert"
+      - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}-ws.service=${TRAEFIK_NAME:-bilinear}-ws"
+      # Explicit, so this never depends on Traefik's default rule-length
+      # tie-break against the app's catch-all Host() router.
+      - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}-ws.priority=100"
+
   postgres:
     networks:
       - default
