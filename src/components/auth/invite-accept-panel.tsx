@@ -59,8 +59,10 @@ export function InviteAcceptPanel({
   }
 
   return (
-    <div className="flex flex-col gap-4 text-center">
-      <h1 className="text-lg font-semibold text-foreground">{t('invite.title')}</h1>
+    <div className="flex flex-col gap-4">
+      <h1 className="text-balance text-2xl font-semibold tracking-tight text-foreground">
+        {t('invite.title')}
+      </h1>
       <p className="text-sm text-foreground-secondary">
         {inviterName
           ? t('invite.invitedBy', { inviter: inviterName, organization: organizationName })
@@ -89,7 +91,7 @@ export function InviteAcceptPanel({
         </div>
       )}
 
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="text-sm text-danger-subtle-foreground">{error}</p>}
     </div>
   );
 }

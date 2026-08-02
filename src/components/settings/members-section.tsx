@@ -29,7 +29,7 @@ type OrgRole = (typeof ORG_ROLES)[number];
 
 const ROLE_BADGES: Record<OrgRole, { labelKey: string; cls: string }> = {
   admin: {
-    cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+    cls: 'bg-info-subtle text-info-subtle-foreground',
     labelKey: 'settings.roles.admin',
   },
   guest: {
@@ -41,7 +41,7 @@ const ROLE_BADGES: Record<OrgRole, { labelKey: string; cls: string }> = {
     labelKey: 'settings.roles.member',
   },
   owner: {
-    cls: 'bg-brand-subtle text-brand-subtle-foreground dark:bg-brand-subtle dark:text-brand-subtle-foreground',
+    cls: 'bg-brand-subtle text-brand-subtle-foreground',
     labelKey: 'settings.roles.owner',
   },
 };

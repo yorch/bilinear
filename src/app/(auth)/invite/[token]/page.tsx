@@ -33,8 +33,10 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
 
   if (!invite) {
     return (
-      <div className="flex flex-col gap-2 text-center">
-        <h1 className="text-lg font-semibold text-foreground">{t('invite.expiredTitle')}</h1>
+      <div className="flex flex-col gap-1">
+        <h1 className="text-balance text-2xl font-semibold tracking-tight text-foreground">
+          {t('invite.expiredTitle')}
+        </h1>
         <p className="text-sm text-muted-foreground">{t('invite.expiredBody')}</p>
       </div>
     );
