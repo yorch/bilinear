@@ -1,6 +1,14 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
-import { buildSchema, type GraphQLSchema, parse, validate } from 'graphql';
+import {
+  buildSchema,
+  type GraphQLSchema,
+  getNamedType,
+  isInputObjectType,
+  isObjectType,
+  parse,
+  validate,
+} from 'graphql';
 import { describe, expect, it } from 'vitest';
 import { typeDefs } from '@/server/graphql/schema';
 
@@ -16,7 +24,11 @@ import { typeDefs } from '@/server/graphql/schema';
  * fragments disagree on nullability) fails in CI instead of in the browser.
  */
 
-const SRC_DIR = resolve(__dirname, '..');
+const REPO_ROOT = resolve(__dirname, '..', '..');
+// `src/` is the bulk of it, but Playwright specs under `tests/` issue GraphQL
+// too — and a document that only lives there is exactly the one that drifts
+// unnoticed, because no unit test exercises it.
+const SCAN_DIRS = ['src', 'tests'].map(d => join(REPO_ROOT, d));
 const SOURCE_EXTENSIONS = ['.ts', '.tsx'];
 const SKIP_DIRS = new Set(['generated', 'node_modules']);
 
@@ -85,7 +97,7 @@ function inlineFragmentConstants(body: string, constants: Map<string, string>): 
 function collectDocuments(): FoundDocument[] {
   const documents: FoundDocument[] = [];
 
-  for (const file of listSourceFiles(SRC_DIR)) {
+  for (const file of SCAN_DIRS.flatMap(listSourceFiles)) {
     const source = readFileSync(file, 'utf8');
     if (!source.includes('`')) {
       continue;
@@ -117,7 +129,7 @@ function collectDocuments(): FoundDocument[] {
       }
       documents.push({
         body: inlineFragmentConstants(literal.body, constants),
-        file: relative(SRC_DIR, file),
+        file: relative(REPO_ROOT, file),
         line: source.slice(0, literal.index).split('\n').length,
       });
     }
@@ -134,7 +146,7 @@ describe('client GraphQL documents', () => {
     // A guard on the scanner itself: if a refactor moves documents somewhere the
     // regex no longer matches, this suite would silently validate nothing.
     expect(documents.length).toBeGreaterThan(50);
-    expect(documents.map(d => d.file)).toContain('lib/graphql-queries.ts');
+    expect(documents.map(d => d.file)).toContain('src/lib/graphql-queries.ts');
   });
 
   it('leaves no interpolation unresolved', () => {
@@ -152,4 +164,54 @@ describe('client GraphQL documents', () => {
       expect(errors.map(e => e.message)).toEqual([]);
     },
   );
+});
+
+/**
+ * Entity-reference arguments and input fields must be `ID`, never `String` —
+ * see PATTERNS.md §77.1. GraphQL compares a variable's *declared* type against
+ * the argument type, so a `teamId` spelled `String!` on one field and `ID!` on
+ * its sibling makes `$teamId: String!` a coin flip that rejects the whole
+ * request.
+ *
+ * The document validation above cannot catch this: a new field declared
+ * `teamId: String!` with a document that also says `String!` validates
+ * perfectly. This is the schema↔convention check, not the document↔schema one.
+ */
+describe('SDL entity-reference scalars', () => {
+  const schema = buildSchema(typeDefs);
+
+  /** Not entity references, despite the name shape. */
+  const EXEMPT = new Set([
+    'lastSyncId', // opaque BIGSERIAL delta cursor
+    'slugId', // human-readable project slug
+    'idpEntityId', // SAML entity URI
+  ]);
+
+  const isReferenceName = (name: string) => /^id$|Id$|Ids$/.test(name) && !EXEMPT.has(name);
+
+  const offenders: string[] = [];
+  for (const type of Object.values(schema.getTypeMap())) {
+    if (type.name.startsWith('__')) {
+      continue;
+    }
+    if (isInputObjectType(type)) {
+      for (const field of Object.values(type.getFields())) {
+        if (isReferenceName(field.name) && getNamedType(field.type).name === 'String') {
+          offenders.push(`input ${type.name}.${field.name}`);
+        }
+      }
+    } else if (isObjectType(type)) {
+      for (const field of Object.values(type.getFields())) {
+        for (const arg of field.args) {
+          if (isReferenceName(arg.name) && getNamedType(arg.type).name === 'String') {
+            offenders.push(`${type.name}.${field.name}(${arg.name}:)`);
+          }
+        }
+      }
+    }
+  }
+
+  it('types every entity-reference argument and input field as ID', () => {
+    expect(offenders).toEqual([]);
+  });
 });

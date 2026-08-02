@@ -250,47 +250,47 @@ export const typeDefs = `
   }
 
   input IssueCreateInput {
-    id: String
+    id: ID
     title: String!
     description: String
-    teamId: String!
-    stateId: String
-    assigneeId: String
+    teamId: ID!
+    stateId: ID
+    assigneeId: ID
     priority: Int
     estimate: Float
     startDate: Date
     dueDate: Date
-    labelIds: [String!]
-    parentId: String
+    labelIds: [ID!]
+    parentId: ID
     sortOrder: Float
-    projectId: String
-    projectMilestoneId: String
-    cycleId: String
+    projectId: ID
+    projectMilestoneId: ID
+    cycleId: ID
   }
 
   input IssueUpdateInput {
     title: String
     description: String
-    stateId: String
-    assigneeId: String
+    stateId: ID
+    assigneeId: ID
     priority: Int
     estimate: Float
     startDate: Date
     dueDate: Date
-    labelIds: [String!]
-    parentId: String
+    labelIds: [ID!]
+    parentId: ID
     sortOrder: Float
     prioritySortOrder: Float
     trashed: Boolean
-    projectId: String
-    projectMilestoneId: String
-    cycleId: String
+    projectId: ID
+    projectMilestoneId: ID
+    cycleId: ID
   }
 
   input IssueFilter {
-    teamId: String
-    stateId: String
-    assigneeId: String
+    teamId: ID
+    stateId: ID
+    assigneeId: ID
     priority: Int
     trashed: Boolean
     """
@@ -301,12 +301,12 @@ export const typeDefs = `
   }
 
   input IssueLabelCreateInput {
-    id: String
+    id: ID
     name: String!
     color: String!
     description: String
-    teamId: String
-    parentId: String
+    teamId: ID
+    parentId: ID
     isGroup: Boolean
   }
 
@@ -314,7 +314,7 @@ export const typeDefs = `
     name: String
     color: String
     description: String
-    parentId: String
+    parentId: ID
   }
 
   type TeamPayload {
@@ -425,7 +425,7 @@ export const typeDefs = `
   }
 
   input TeamCreateInput {
-    id: String
+    id: ID
     name: String!
     key: String!
     description: String
@@ -434,7 +434,7 @@ export const typeDefs = `
     private: Boolean
     timezone: String
     triageEnabled: Boolean
-    parentId: String
+    parentId: ID
   }
 
   input TeamUpdateInput {
@@ -450,7 +450,7 @@ export const typeDefs = `
     triageEnabled: Boolean
     autoClosePeriod: Int
     autoArchivePeriod: Int
-    parentId: String
+    parentId: ID
   }
 
   enum TeamDeleteIssueAction {
@@ -460,12 +460,12 @@ export const typeDefs = `
 
   input TeamDeleteInput {
     issueAction: TeamDeleteIssueAction!
-    moveToTeamId: String
+    moveToTeamId: ID
   }
 
   input TeamMembershipCreateInput {
-    teamId: String!
-    userId: String!
+    teamId: ID!
+    userId: ID!
     isOwner: Boolean
     role: TeamMemberRole
   }
@@ -477,8 +477,8 @@ export const typeDefs = `
   }
 
   input WorkflowStateCreateInput {
-    id: String
-    teamId: String!
+    id: ID
+    teamId: ID!
     name: String!
     color: String!
     type: String!
@@ -650,19 +650,19 @@ export const typeDefs = `
   }
 
   input ProjectCreateInput {
-    id: String
+    id: ID
     name: String!
     description: String
     icon: String
     color: String
     statusType: String
-    leadId: String
+    leadId: ID
     startDate: Date
     targetDate: Date
     startDateResolution: String
     targetDateResolution: String
-    teamIds: [String!]!
-    memberIds: [String!]
+    teamIds: [ID!]!
+    memberIds: [ID!]
   }
 
   input ProjectUpdateInput {
@@ -673,7 +673,7 @@ export const typeDefs = `
     color: String
     statusType: String
     health: String
-    leadId: String
+    leadId: ID
     startDate: Date
     targetDate: Date
     startDateResolution: String
@@ -682,8 +682,8 @@ export const typeDefs = `
   }
 
   input ProjectMilestoneCreateInput {
-    id: String
-    projectId: String!
+    id: ID
+    projectId: ID!
     name: String!
     description: String
     targetDate: Date
@@ -698,8 +698,8 @@ export const typeDefs = `
   }
 
   input ProjectUpdateCreateInput {
-    id: String
-    projectId: String!
+    id: ID
+    projectId: ID!
     body: String!
     bodyData: JSON!
     health: String!
@@ -714,7 +714,7 @@ export const typeDefs = `
   input ProjectFilter {
     statusType: String
     health: String
-    leadId: String
+    leadId: ID
   }
 
   type Cycle {
@@ -804,8 +804,8 @@ export const typeDefs = `
   }
 
   input CycleCreateInput {
-    id: String
-    teamId: String!
+    id: ID
+    teamId: ID!
     name: String
     description: String
     startsAt: DateTime!
@@ -888,7 +888,7 @@ export const typeDefs = `
   }
 
   input CustomViewCreateInput {
-    id: String
+    id: ID
     name: String!
     description: String
     icon: String
@@ -898,7 +898,7 @@ export const typeDefs = `
     groupBy: String
     layout: String
     shared: Boolean
-    teamId: String
+    teamId: ID
     sortOrder: Float
   }
 
@@ -939,8 +939,8 @@ export const typeDefs = `
   }
 
   input IssueRelationCreateInput {
-    issueId: String!
-    relatedIssueId: String!
+    issueId: ID!
+    relatedIssueId: ID!
     type: IssueRelationType!
   }
 
@@ -966,7 +966,7 @@ export const typeDefs = `
   }
 
   input IssueTemplateCreateInput {
-    teamId: String!
+    teamId: ID!
     name: String!
     description: String
     templateData: JSON
@@ -1044,7 +1044,7 @@ export const typeDefs = `
     Team to attach the definition to. Pass null to create a workspace-scoped
     definition that shows on every team (owner/admin only).
     """
-    teamId: String
+    teamId: ID
     name: String!
     type: CustomFieldType!
     description: String
@@ -1062,7 +1062,7 @@ export const typeDefs = `
   }
 
   input CustomFieldValueInput {
-    definitionId: String!
+    definitionId: ID!
     value: JSON
   }
 
@@ -1124,11 +1124,11 @@ export const typeDefs = `
   }
 
   input CommentCreateInput {
-    id: String
-    issueId: String!
+    id: ID
+    issueId: ID!
     body: String!
     bodyData: JSON
-    parentId: String
+    parentId: ID
   }
 
   input CommentUpdateInput {
@@ -1211,8 +1211,8 @@ export const typeDefs = `
   }
 
   input InitiativeUpdateCreateInput {
-    id: String
-    initiativeId: String!
+    id: ID
+    initiativeId: ID!
     body: String!
     bodyData: JSON!
     health: String!
@@ -1231,7 +1231,7 @@ export const typeDefs = `
   }
 
   input InitiativeCreateInput {
-    id: String
+    id: ID
     name: String!
     description: String
     icon: String
@@ -1243,9 +1243,9 @@ export const typeDefs = `
     startDate: Date
     startDateResolution: String
     targetDateResolution: String
-    ownerId: String
-    parentId: String
-    projectIds: [String!]
+    ownerId: ID
+    parentId: ID
+    projectIds: [ID!]
   }
 
   input InitiativeUpdateInput {
@@ -1261,8 +1261,8 @@ export const typeDefs = `
     startDate: Date
     startDateResolution: String
     targetDateResolution: String
-    ownerId: String
-    parentId: String
+    ownerId: ID
+    parentId: ID
   }
 
   type Webhook {
@@ -1322,7 +1322,7 @@ export const typeDefs = `
     url: String!
     events: [String!]!
     enabled: Boolean
-    teamId: String
+    teamId: ID
   }
 
   input WebhookUpdateInput {
@@ -1330,7 +1330,7 @@ export const typeDefs = `
     url: String
     events: [String!]
     enabled: Boolean
-    teamId: String
+    teamId: ID
   }
 
   # ------------------------------------------------------------------
@@ -1367,10 +1367,10 @@ export const typeDefs = `
   }
 
   input IssueTriageAcceptInput {
-    stateId: String!
-    assigneeId: String
+    stateId: ID!
+    assigneeId: ID
     priority: Int
-    cycleId: String
+    cycleId: ID
   }
 
   # ------------------------------------------------------------------
@@ -1381,7 +1381,7 @@ export const typeDefs = `
     # set. Without this, an unbounded org-wide aggregate scan over millions
     # of issues costs the GraphQL complexity estimator only 1 — leaving a
     # cheap DoS vector for any authenticated caller. See PRD §2.24.
-    teamId: String!
+    teamId: ID!
     from: Date
     to: Date
   }
@@ -1488,7 +1488,7 @@ export const typeDefs = `
   input AutomationRuleCreateInput {
     name: String!
     description: String
-    teamId: String
+    teamId: ID
     triggerType: String!
     triggerConfig: JSON
     conditions: JSON
@@ -1613,13 +1613,13 @@ export const typeDefs = `
       first: Int
       includeArchived: Boolean
     ): IssueConnection!
-    labels(teamId: String): IssueLabelConnection!
+    labels(teamId: ID): IssueLabelConnection!
     cycle(id: ID!): Cycle!
-    cycles(teamId: String!, includeArchived: Boolean): [Cycle!]!
+    cycles(teamId: ID!, includeArchived: Boolean): [Cycle!]!
     cycleVelocity(teamId: ID!, cycleCount: Int): CycleVelocityResult!
     cycleBurndown(cycleId: ID!): [CycleBurndownPoint!]!
     customView(id: ID!): CustomView!
-    customViews(teamId: String): [CustomView!]!
+    customViews(teamId: ID): [CustomView!]!
     documents(teamId: ID, projectId: ID): [Document!]!
     document(id: ID!): Document
     project(id: ID!): Project!
@@ -1634,9 +1634,9 @@ export const typeDefs = `
     notificationIsSubscribed(issueId: ID!): Boolean!
     issueActivities(issueId: ID!, limit: Int): [IssueActivity!]!
     issueRelations(issueId: ID!): [IssueRelation!]!
-    issueTemplates(teamId: String!, includeArchived: Boolean): [IssueTemplate!]!
+    issueTemplates(teamId: ID!, includeArchived: Boolean): [IssueTemplate!]!
     issueTemplate(id: ID!): IssueTemplate!
-    customFieldDefinitions(teamId: String!, includeArchived: Boolean): [CustomFieldDefinition!]!
+    customFieldDefinitions(teamId: ID!, includeArchived: Boolean): [CustomFieldDefinition!]!
     """Workspace-scoped custom fields (teamId IS NULL) — apply to every team."""
     workspaceCustomFieldDefinitions(includeArchived: Boolean): [CustomFieldDefinition!]!
     customFieldDefinition(id: ID!): CustomFieldDefinition!

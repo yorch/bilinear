@@ -411,13 +411,11 @@ export class InitiativeService {
   /** Linked projects ordered by sortOrder. */
   async getProjects(
     initiativeId: string,
-  ): Promise<
-    Array<InitiativeProject & { project: { id: string; name: string; progress: number } }>
-  > {
+  ): Promise<Array<InitiativeProject & { project: { id: string; name: string } }>> {
     return this.prisma.initiativeProject.findMany({
       include: {
         project: {
-          select: { id: true, name: true, progress: true },
+          select: { id: true, name: true },
         },
       },
       orderBy: { sortOrder: 'asc' },

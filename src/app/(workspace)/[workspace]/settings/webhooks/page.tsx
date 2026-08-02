@@ -170,8 +170,13 @@ export default function WebhooksSettingsPage() {
   const handleRotate = async (hook: Webhook) => {
     const res = await gql(WEBHOOK_ROTATE_SECRET_MUTATION, { id: hook.id });
     if (!res.errors?.length) {
-      const updated = (res.data as { webhookRotateSecret?: { webhook?: Webhook } } | undefined)
-        ?.webhookRotateSecret?.webhook;
+      // The document selects only `{ id signingSecret }` — narrow the cast to
+      // what is actually there rather than the full `Webhook` shape.
+      const updated = (
+        res.data as
+          | { webhookRotateSecret?: { webhook?: Pick<Webhook, 'id' | 'signingSecret'> | null } }
+          | undefined
+      )?.webhookRotateSecret?.webhook;
       if (updated) {
         setWebhooks(w =>
           w.map(h => (h.id === hook.id ? { ...h, signingSecret: updated.signingSecret } : h)),

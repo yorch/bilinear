@@ -62,6 +62,9 @@ const DateScalar = {
   },
 };
 
+/** Shared by the `ApiToken`/`ScimToken` projections — see the note on their map entries. */
+const labelOrEmpty = (token: { label: string | null }) => token.label ?? '';
+
 export const resolvers = {
   // `ApiToken`/`ScimToken` are projections over `auth_tokens`, whose `label`
   // column is nullable because the table is shared with magic-link and refresh
@@ -71,7 +74,7 @@ export const resolvers = {
   // Every creation path requires a non-blank label; this only catches a legacy
   // or hand-inserted row.
   ApiToken: {
-    label: (token: { label: string | null }) => token.label ?? '',
+    label: labelOrEmpty,
   },
   AuditLogEntry: {
     ...auditLogResolvers.AuditLogEntry,
@@ -237,7 +240,7 @@ export const resolvers = {
   },
 
   ScimToken: {
-    label: (token: { label: string | null }) => token.label ?? '',
+    label: labelOrEmpty,
   },
 
   Team: {

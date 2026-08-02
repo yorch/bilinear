@@ -11,7 +11,8 @@ import { ISSUE_ACTIVITIES_QUERY } from '@/lib/graphql-queries';
 import { cn } from '@/lib/utils';
 
 interface ActivityActor {
-  avatarBgColor: string | null;
+  /** Aliased from `User.avatarBackgroundColor`, which is `String!`. */
+  avatarBgColor: string;
   displayName: string;
   id: string;
   initials: string;

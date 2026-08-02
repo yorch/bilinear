@@ -2,12 +2,13 @@
 
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { CycleVelocitySection } from '@/components/analytics/cycle-velocity-section';
 import { InsightsSection } from '@/components/analytics/insights-section';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { PageHeader } from '@/components/ui/page-header';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery } from '@/lib/graphql';
 import { cn } from '@/lib/utils';
@@ -411,40 +412,24 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
 
   // ── Team health (fetched from GraphQL, not MobX store) ────────────────────
 
-  const [teamHealth, setTeamHealth] = useState<TeamHealthResult | null>(null);
-  const [teamHealthError, setTeamHealthError] = useState(false);
-  const [teamHealthReloadKey, setTeamHealthReloadKey] = useState(0);
-
-  // `gqlQuery` throws on a GraphQL-level failure — the previous `.catch(() => {})`
-  // left `teamHealth` null, which unmounted the whole Team Health panel with no
-  // indication anything had failed.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: teamHealthReloadKey is the retry trigger, not read inside the effect
-  useEffect(() => {
-    if (!teamId) {
-      return;
-    }
-    let cancelled = false;
-    setTeamHealthError(false);
-    gqlQuery<TeamHealthResult>(TEAM_HEALTH_QUERY, { input: { teamId } }, 'analyticsTeamHealth')
-      .then(result => {
-        if (cancelled) {
-          return;
-        }
-        setTeamHealth(result);
-      })
-      .catch(() => {
-        if (cancelled) {
-          return;
-        }
-        setTeamHealth(null);
-        setTeamHealthError(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [teamId, teamHealthReloadKey]);
-
-  const retryTeamHealth = useCallback(() => setTeamHealthReloadKey(k => k + 1), []);
+  // A failed read must not leave `teamHealth` null, silently unmounting the
+  // whole Team Health panel with no indication anything had failed.
+  const {
+    data: teamHealth,
+    error: teamHealthError,
+    refetch: retryTeamHealth,
+  } = useRetryableFetch<TeamHealthResult | null>(
+    () =>
+      teamId
+        ? gqlQuery<TeamHealthResult>(
+            TEAM_HEALTH_QUERY,
+            { input: { teamId } },
+            'analyticsTeamHealth',
+          )
+        : Promise.resolve(null),
+    [teamId],
+    null,
+  );
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -639,7 +624,8 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
             />
           </div>
         )}
-        {teamHealth && (
+        {/* `teamHealth` survives a failed refetch, so the error branch wins. */}
+        {!teamHealthError && teamHealth && (
           <div className="mt-5">
             <h2 className="mb-3 text-sm font-semibold text-foreground">
               {t('analytics.team.teamHealth')}

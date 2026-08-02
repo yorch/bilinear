@@ -170,7 +170,7 @@ export default function AutomationsSettingsPage() {
               onChange={e => setTriggerType(e.target.value)}
               value={triggerType}
             >
-              {data?.automationTriggerTypes.map(t => (
+              {data?.automationTriggerTypes?.map(t => (
                 <option key={t} value={t}>
                   {t}
                 </option>
@@ -184,7 +184,7 @@ export default function AutomationsSettingsPage() {
               onChange={e => setActionType(e.target.value)}
               value={actionType}
             >
-              {data?.automationActionTypes.map(t => (
+              {data?.automationActionTypes?.map(t => (
                 <option key={t} value={t}>
                   {t}
                 </option>

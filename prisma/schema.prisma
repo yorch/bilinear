@@ -44,6 +44,18 @@ model Organization {
   suspendedAt     DateTime? @map("suspended_at") @db.Timestamptz
   suspendedReason String?   @map("suspended_reason")
 
+  // High-water mark of the sync_actions retention sweep: the highest `xact_id`
+  // the sweep has deleted for this org. A delta cursor at or below it provably
+  // cannot be caught up (the rows between are gone), so the client is told to
+  // re-bootstrap instead of being served a silently incomplete page.
+  //
+  // Kept in xid8 space, not wall-clock, because that is what the delta cursor
+  // is keyed on — the sweep itself prunes by `created_at`, but the *mark* has
+  // to be comparable against a cursor. Numeric rather than BigInt because xid8
+  // is unsigned 64-bit and would overflow a signed int8 at the top of its
+  // range. Null means nothing has ever been pruned — the common case.
+  syncActionsPrunedThroughXactId Decimal? @map("sync_actions_pruned_through_xact_id") @db.Decimal(20, 0)
+
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   archivedAt DateTime? @map("archived_at") @db.Timestamptz
@@ -161,6 +173,7 @@ model User {
   platformAuditLogs         PlatformAuditLog[]         @relation("PlatformAuditActor")
   sentInvites               OrganizationInvite[]       @relation("InviteCreator")
   acceptedInvites           OrganizationInvite[]       @relation("InviteAcceptor")
+  uploadedFiles             File[]                     @relation("UploadedFiles")
 
   @@map("users")
 }
@@ -347,6 +360,8 @@ model Team {
   customFieldDefinitions CustomFieldDefinition[]
   documents              Document[]
   automationRules        AutomationRule[]
+  webhooks               Webhook[]
+  slackDefaultFor        SlackIntegration[]     @relation("SlackDefaultTeam")
 
   // Unique on (organizationId, key) is enforced via a partial index in the DB
   // (WHERE archived_at IS NULL) so archived teams don't block key reuse.
@@ -621,8 +636,6 @@ model Project {
   priority          Int   @default(0) @db.SmallInt
   prioritySortOrder Float @default(0) @map("priority_sort_order")
 
-  progress Float @default(0)
-  scope    Float @default(0)
 
   startDate            DateTime? @map("start_date") @db.Date
   targetDate           DateTime? @map("target_date") @db.Date
@@ -1008,6 +1021,9 @@ model File {
 
   issue   Issue?   @relation(fields: [issueId], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  // SetNull, not Cascade: deleting a user must not delete the attachments they
+  // uploaded — the file still belongs to the issue or project it was attached to.
+  uploader User? @relation("UploadedFiles", fields: [uploaderId], references: [id], onDelete: SetNull)
 
   @@index([issueId])
   @@index([projectId])
@@ -1270,6 +1286,10 @@ model Webhook {
   createdBy    User?             @relation("WebhookCreator", fields: [createdById], references: [id], onDelete: SetNull)
   deliveries   WebhookDelivery[]
 
+  // Cascade, not SetNull: `teamId = null` means "org-wide", so nulling it when a
+  // team is deleted would silently broaden a team-scoped webhook to the whole org.
+  team Team? @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
   @@index([organizationId])
   @@index([organizationId, enabled])
   @@map("webhooks")
@@ -1425,6 +1445,10 @@ model SlackIntegration {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // SetNull: losing the default team must not uninstall the integration; the
+  // slash command falls back to prompting for a team.
+  defaultTeam Team? @relation("SlackDefaultTeam", fields: [defaultTeamId], references: [id], onDelete: SetNull)
 
   @@map("slack_integrations")
 }

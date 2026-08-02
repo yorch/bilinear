@@ -17,6 +17,33 @@ export async function gql(query: string, variables: Record<string, unknown> = {}
   }>;
 }
 
+export class GqlError extends Error {
+  /**
+   * The server's `extensions.code` discriminator (`UNAUTHENTICATED`,
+   * `FORBIDDEN`, `NOT_FOUND`, `BAD_USER_INPUT`, …). Carried on the error so a
+   * call site can branch on *why* a request failed without dropping back to raw
+   * `gql()` — dropping the code is what previously forced every code-aware
+   * caller to hand-roll its own guard.
+   */
+  readonly code?: string;
+
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = 'GqlError';
+    this.code = code;
+  }
+}
+
+/** True when `err` is a `GqlError` carrying one of `codes`. */
+export function isGqlErrorCode(err: unknown, ...codes: string[]): boolean {
+  return err instanceof GqlError && err.code !== undefined && codes.includes(err.code);
+}
+
+/** A permission failure — the caller may see this simply because of who they are. */
+export function isPermissionError(err: unknown): boolean {
+  return isGqlErrorCode(err, 'FORBIDDEN', 'UNAUTHENTICATED');
+}
+
 /**
  * `gql()` that throws on a GraphQL-level failure instead of returning it.
  *
@@ -38,7 +65,8 @@ export async function gqlMutate(
 ): Promise<Record<string, unknown>> {
   const res = await gql(query, variables);
   if (res.errors?.length) {
-    throw new Error((res.errors[0] as { message?: string })?.message ?? 'Request failed');
+    const first = res.errors[0] as { extensions?: { code?: string }; message?: string };
+    throw new GqlError(first?.message ?? 'Request failed', first?.extensions?.code);
   }
   return res.data ?? {};
 }

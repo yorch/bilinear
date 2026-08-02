@@ -21,7 +21,11 @@
 import { createServer } from 'node:http';
 import Redis from 'ioredis';
 import { type WebSocket, WebSocketServer } from 'ws';
-import { WS_PING_INTERVAL_MS, WS_PONG_TIMEOUT_MS } from '@/lib/sync-config';
+import {
+  SYNC_ACTION_PRUNE_INTERVAL_MS,
+  WS_PING_INTERVAL_MS,
+  WS_PONG_TIMEOUT_MS,
+} from '@/lib/sync-config';
 import { env } from '@/server/lib/env';
 import { verifyWsTicket } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
@@ -387,6 +391,18 @@ const webhookTimer = setInterval(() => {
 // mutation, but triggered by time rather than user action.
 const redisPublisher = new Redis(REDIS_URL, { lazyConnect: false });
 const syncService = new SyncService(prisma, redisPublisher);
+
+// ─── SyncAction retention scheduler ─────────────────────────────────────────
+// `sync_actions` is append-only — one row per mutation in the workspace — so
+// it needs an eviction policy or it grows forever and drags the delta query's
+// (committed_at, id) scan down with it. Co-located with the other sweeps for
+// the same reason the webhook retry loop is: it must run between requests.
+const syncPruneTimer = setInterval(() => {
+  syncService.pruneSyncActions().catch((err: unknown) => {
+    log.error({ err }, 'SyncAction retention sweep failed');
+  });
+}, SYNC_ACTION_PRUNE_INTERVAL_MS);
+
 const cycleService = new CycleService(prisma);
 const cycleRolloverTimer = setInterval(() => {
   cycleService
@@ -424,6 +440,7 @@ function shutdown() {
   clearInterval(webhookTimer);
   clearInterval(cycleRolloverTimer);
   clearInterval(reauthTimer);
+  clearInterval(syncPruneTimer);
   wss.close();
   redisSubscriber.disconnect();
   redisPublisher.disconnect();

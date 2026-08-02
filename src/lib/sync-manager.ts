@@ -506,6 +506,13 @@ export class SyncManager {
           },
         );
 
+        // Replace, don't merge. IndexedDB was just wiped and refilled above; the
+        // MobX pools have to be too, or an entity deleted while this client was
+        // offline lingers in memory until a page reload — which is exactly the
+        // state a `staleCursor` re-bootstrap exists to repair. `replaceAll` on
+        // the membership store below is the same rule, applied per-store.
+        this.stores.clearEntityPools();
+
         // Populate MobX stores
         const firstOrg = batches.organizations[0] as { name?: string } | undefined;
         if (firstOrg?.name) {
@@ -622,7 +629,18 @@ export class SyncManager {
         const body = (await res.json()) as {
           actions: SerializedSyncAction[];
           hasMore: boolean;
+          staleCursor?: boolean;
         };
+        // Our cursor predates the server's `sync_actions` retention window, so
+        // the actions needed to catch up have been pruned. Continuing would
+        // look like a successful sync while leaving the cache permanently
+        // missing whatever was deleted — discard it and re-bootstrap instead.
+        if (body.staleCursor) {
+          log.warn('Delta cursor older than server retention window — re-bootstrapping');
+          this.isDeltaSyncing = false;
+          await this.fullBootstrap();
+          return;
+        }
         if (body.actions.length === 0) {
           break;
         }
@@ -743,7 +761,6 @@ export class SyncManager {
       issueTemplates: object[];
       customFieldDefinitions: object[];
       customFieldValues: object[];
-      issueActivities: object[];
       favorites: object[];
       organizationMembers: object[];
     } = {
@@ -755,7 +772,6 @@ export class SyncManager {
       favorites: [],
       initiativeProjects: [],
       initiatives: [],
-      issueActivities: [],
       issueLabels: [],
       issueRelations: [],
       issues: [],
@@ -790,7 +806,6 @@ export class SyncManager {
         | 'issueRelations'
         | 'issueTemplates'
         | 'customFieldDefinitions'
-        | 'issueActivities'
         | 'favorites'
         | 'organizationMembers';
       id: string;
@@ -911,33 +926,29 @@ export class SyncManager {
           const isIssueRow =
             act === 'D' ||
             (payload !== null && Object.keys(payload).some(k => k !== 'customFieldValues'));
-          // Read before the store applies, so the Dexie row is normalized
-          // against the same "what did we have before" value the store used.
-          const previousLabelIds = issueStore.pool.get(modelId)?.labelIds;
           if (isIssueRow) {
+            // Normalize ONCE and hand the same object to both sinks. Computing
+            // it separately for the store and for Dexie made "they agree" a
+            // prose claim rather than something the code enforces.
+            const normalized =
+              act === 'D'
+                ? null
+                : normalizeIssueRow(
+                    data as Parameters<typeof normalizeIssueRow>[0],
+                    issueStore.pool.get(modelId)?.labelIds,
+                  );
             issueStore.applySyncAction(
               act,
               modelId,
-              data as Parameters<typeof issueStore.applySyncAction>[2],
+              normalized as Parameters<typeof issueStore.applySyncAction>[2],
             );
             if (act === 'D') {
               dexieDeletes.push({ id: modelId, table: 'issues' });
-            } else if (payload?.id) {
-              // Second line of defence: `db.issues` has an inbound `id`
-              // keyPath, and a put with no `id` throws inside the shared
-              // transaction, rolling back every other entity in the batch.
-              //
-              // Persist the SAME normalized row the store just applied. Writing
-              // the raw payload dropped `labelIds` (and wrote relation shapes
-              // Dexie doesn't declare), so the labels survived in memory but
-              // came back empty on the next reload — which hydrates from
-              // IndexedDB and then delta-syncs rather than re-bootstrapping.
-              dexieUpserts.issues.push(
-                normalizeIssueRow(
-                  data as Parameters<typeof normalizeIssueRow>[0],
-                  previousLabelIds,
-                ),
-              );
+            } else if (normalized?.id) {
+              // `db.issues` has an inbound `id` keyPath, and a put with no `id`
+              // throws inside the shared transaction, rolling back every other
+              // entity in the batch.
+              dexieUpserts.issues.push(normalized);
             }
           }
           if (payload !== null && 'customFieldValues' in payload) {
@@ -1082,17 +1093,6 @@ export class SyncManager {
             dexieUpserts.documents.push(data);
           }
           break;
-        case 'IssueActivity':
-          // IssueActivity is queried per-issue via GraphQL when the detail panel opens;
-          // we only persist it to Dexie for offline reads, no MobX store needed.
-          // Batched into the closing transaction below — the prior per-row
-          // awaits issued one round-trip per row on activity-heavy deltas.
-          if (act === 'D') {
-            dexieDeletes.push({ id: modelId, table: 'issueActivities' });
-          } else if (data) {
-            dexieUpserts.issueActivities.push(data);
-          }
-          break;
         case 'Initiative':
           initiativeStore.applySyncAction(
             act,
@@ -1129,6 +1129,19 @@ export class SyncManager {
             dexieUpserts.favorites.push(data);
           }
           break;
+        // Models the server emits that this client deliberately does not cache
+        // — Comment, CommentReaction, TeamMembership, InitiativeUpdate,
+        // OrganizationMember, File. Those surfaces fetch over GraphQL on mount,
+        // so dropping the action costs only a live update.
+        //
+        // The warn exists because a MISSING case looks exactly like an
+        // intentional one: `Organization` was emitted and silently dropped for
+        // months precisely because nothing said so out loud.
+        default:
+          log.warn('Unhandled SyncAction model — not cached', undefined, {
+            modelName: action.modelName,
+          });
+          break;
       }
 
       // Update max sync cursor — `(xactId, id)` tuple comparison.
@@ -1163,7 +1176,6 @@ export class SyncManager {
         db.issueTemplates,
         db.customFieldDefinitions,
         db.customFieldValues,
-        db.issueActivities,
         db.favorites,
         db.organizations,
         db.organizationMembers,
@@ -1242,10 +1254,6 @@ export class SyncManager {
               dexieUpserts.initiativeProjects as Parameters<
                 typeof db.initiativeProjects.bulkPut
               >[0],
-            ),
-          dexieUpserts.issueActivities.length > 0 &&
-            db.issueActivities.bulkPut(
-              dexieUpserts.issueActivities as Parameters<typeof db.issueActivities.bulkPut>[0],
             ),
           dexieUpserts.favorites.length > 0 &&
             db.favorites.bulkPut(

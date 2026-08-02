@@ -24,7 +24,7 @@ import {
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AccentToggle } from '@/components/accent-toggle';
 import { LanguageToggle } from '@/components/language-toggle';
 import { ConnectionStatus } from '@/components/layouts/connection-status';
@@ -32,6 +32,7 @@ import { WorkspaceSwitcher } from '@/components/layouts/workspace-switcher';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useAuth } from '@/hooks/use-auth';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { APP_NAME } from '@/lib/app-config';
 import { gql, gqlQuery } from '@/lib/graphql';
@@ -161,31 +162,25 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
 }) {
   const { favoriteStore, teamStore } = useStore();
   const t = useTranslations();
-  const [favorites, setFavorites] = useState<FavoriteMeta[]>([]);
-  const [loadError, setLoadError] = useState(false);
-
   // Derive a stable string from the MobX store that changes on any insert,
   // delete, or sortOrder update so the sidebar re-fetches full entity data.
   const favStoreKey = favoriteStore.all.map(f => `${f.id}:${f.sortOrder}`).join(',');
 
-  // `gqlQuery` throws on a GraphQL-level failure. The old `.catch(() => {})`
-  // plus `?? []` unmounted the entire Favorites section on a failed read —
-  // exactly the handling that hid a real query bug for a long time.
-  const fetchFavorites = useCallback(() => {
-    setLoadError(false);
-    gqlQuery<FavoriteMeta[] | null>(FAVORITES_QUERY, {}, 'favorites')
-      .then(list => {
-        setFavorites(
-          (list ?? []).filter(f => f.entity !== null).sort((a, b) => a.sortOrder - b.sortOrder),
-        );
-      })
-      .catch(() => setLoadError(true));
-  }, []);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: favStoreKey is a MobX-derived reactive trigger, not used inside the callback
-  useEffect(() => {
-    fetchFavorites();
-  }, [favStoreKey, fetchFavorites]);
+  // A failed read must not unmount the entire Favorites section — exactly the
+  // handling that hid a real query bug for a long time.
+  const {
+    data: favorites,
+    error: loadError,
+    refetch: fetchFavorites,
+    setData: setFavorites,
+  } = useRetryableFetch<FavoriteMeta[]>(
+    async () => {
+      const list = await gqlQuery<FavoriteMeta[] | null>(FAVORITES_QUERY, {}, 'favorites');
+      return (list ?? []).filter(f => f.entity !== null).sort((a, b) => a.sortOrder - b.sortOrder);
+    },
+    [favStoreKey],
+    [],
+  );
 
   async function removeFavorite(id: string) {
     try {
@@ -214,7 +209,7 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
       {loadError && (
         <InlineRetry
           className="flex-wrap px-2 py-1"
-          message={t('errors.somethingWentWrong')}
+          message={t('common.somethingWentWrong')}
           onRetry={fetchFavorites}
         />
       )}

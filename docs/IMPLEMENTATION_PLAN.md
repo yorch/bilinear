@@ -169,9 +169,9 @@ This is the **high-level roadmap**. For Phase 1, each sprint has a detailed impl
 - [x] Project list and detail views
 - [x] Project milestones CRUD (backend + store; UI in detail view)
 - [x] Project updates CRUD with health selection (create, edit, delete, real-time sync)
-- [x] Progress tracking: `Project.progress` / `Project.scope` computed from completed vs total issues, exposed via GraphQL and rendered as bar in list + detail views (`project.service.ts#getProgress`)
+- [x] Progress tracking: `Project.progress` / `Project.scope` computed from completed vs total issues, exposed via GraphQL and rendered as bar in list + detail views (`project.service.ts#getProgressBatch`, behind the `projectProgress` DataLoader). Note these are **computed GraphQL fields, not columns** — the `projects.progress`/`scope` columns existed, were never written, and were deleted; see DATABASE_SCHEMA.md §2.9-pre before adding them back
 - [x] Assign issues to projects via Shift+P shortcut (`src/app/(workspace)/[workspace]/team/[key]/page.tsx`)
-- [ ] Progress _charts_ over time (scope history, completion trend) — schema has history fields but they are unpopulated and not exposed via GraphQL; tracked under Sprint 33-34
+- [x] Progress _charts_ over time — the four `*History` JSONB columns on `projects` **are** populated (`ProjectService.recordProgressSnapshotIfStale`, lazily stamped once per UTC day on read) and exposed as `Project.progressHistory`, rendered by `ProgressSparkline`. Day-resolution completion trend only; a full scope-history/burnup chart is still open (see Sprint 33-34)
 
 **Deliverable:** Project list + detail views with updates feed, milestones, progress bars, real-time sync via WebSocket ✅
 
@@ -319,7 +319,7 @@ editor enhancements). Remaining items are small.
 - [x] Average cycle-time stat (days, started→completed) — partial implementation of the planned lead-time / cycle-time / time-in-state histograms
 - [x] Assignee workload bar chart — partial team health panel (workload only; no overdue or unestimated breakdowns)
 - [x] Cycle detail burndown chart (`BurndownChart` SVG with ideal line + actual remaining issues; burnup not yet implemented)
-- [ ] Project progress charts over time — schema has `scopeHistory` / `completedScopeHistory` / `issueCountHistory` / `completedIssueCountHistory` JSON fields on `Project`, but they are never populated or exposed via GraphQL
+- [x] Project progress charts over time — `scopeHistory` / `completedScopeHistory` / `issueCountHistory` / `completedIssueCountHistory` on `Project` are populated by `recordProgressSnapshotIfStale` and exposed as `Project.progressHistory`, rendered by `ProgressSparkline` (day-resolution completion trend). The identically-named columns on `Cycle` remain unpopulated and unexposed — see DATABASE_SCHEMA.md §2.9-pre
 - [ ] Live completion predictions
 - [ ] Cycle-based velocity chart with rolling averages (3/6/12 cycles) and story-point velocity
 - [ ] Throughput trend chart (weekly / monthly, separate from velocity)

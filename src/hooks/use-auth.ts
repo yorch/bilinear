@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { gql } from '@/lib/graphql';
+import { GqlError, gql, gqlQuery, isGqlErrorCode } from '@/lib/graphql';
 import { TransactionQueue } from '@/lib/transaction-queue';
 
 interface AuthUser {
@@ -37,28 +37,21 @@ export function useAuth() {
 
   const fetchViewer = useCallback(async () => {
     try {
-      const data = await gql(VIEWER_QUERY);
-
-      if (data.errors?.length) {
-        const err = data.errors[0] as {
-          message: string;
-          extensions?: { code: string };
-        };
-        if (err.extensions?.code === 'UNAUTHENTICATED') {
-          setState({ error: null, loading: false, user: null });
-          return;
-        }
-        setState({ error: err.message, loading: false, user: null });
+      const viewer = await gqlQuery<AuthUser>(VIEWER_QUERY, {}, 'viewer');
+      setState({ error: null, loading: false, user: viewer });
+    } catch (err) {
+      // Not signed in is a state, not a failure: no error copy, no user.
+      if (isGqlErrorCode(err, 'UNAUTHENTICATED')) {
+        setState({ error: null, loading: false, user: null });
         return;
       }
-
+      // A GraphQL-level failure surfaces the server's own message; a transport
+      // failure has none worth showing, so it keeps the stringified throw.
       setState({
-        error: null,
+        error: err instanceof GqlError ? err.message : String(err),
         loading: false,
-        user: (data.data as { viewer: AuthUser }).viewer,
+        user: null,
       });
-    } catch (err) {
-      setState({ error: String(err), loading: false, user: null });
     }
   }, []);
 

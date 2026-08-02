@@ -15,6 +15,7 @@ import type {
   WorkflowState,
 } from '../../generated/prisma';
 import { IssueService } from '../services/issue.service';
+import { ProjectService } from '../services/project.service';
 
 /**
  * Per-request DataLoader bundle.
@@ -55,6 +56,7 @@ export interface Loaders {
   /** Resolves to the IssueLabel[] currently assigned to the given issue. */
   labelsByIssueId: DataLoader<string, IssueLabel[]>;
   project: DataLoader<string, Project | null>;
+  projectProgress: DataLoader<string, { progress: number; scope: number }>;
   /** IssueReaction rows (with `user` included) for a given issue, oldest first. */
   reactionsByIssueId: DataLoader<string, Array<IssueReaction & { user: User }>>;
 
@@ -193,6 +195,22 @@ export function createLoaders(prisma: PrismaClient, orgId: string | null): Loade
         where: { id: { in: ids as string[] } },
       });
       return indexById(rows, ids);
+    }),
+
+    /**
+     * Live completion ratio per project. `Project.progress`/`scope` are NOT
+     * columns — the stored ones were removed precisely because nothing wrote
+     * them and every reader silently rendered 0%.
+     *
+     * Batched through `ProjectService.getProgressBatch`, which answers the
+     * whole set in two `groupBy` queries. The previous per-request memo still
+     * issued two `issue.count` queries per project, so a 20-project list cost
+     * 40 round-trips; `getProgressBatch` guarantees an entry for every
+     * requested id, so the key-order projection below can never misalign.
+     */
+    projectProgress: new DataLoader(async (ids: readonly string[]) => {
+      const byId = await new ProjectService(prisma).getProgressBatch(ids as string[]);
+      return ids.map(id => byId.get(id) ?? { progress: 0, scope: 0 });
     }),
 
     reactionsByIssueId: new DataLoader(async (issueIds: readonly string[]) => {

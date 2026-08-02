@@ -2735,3 +2735,72 @@ a shape plus a label (WCAG 1.4.1). Loading surfaces announce through
 `LoadingRegion` (`role="status"` + `aria-busy` + sr-only text) — the shimmer
 itself is `aria-hidden`, since replacing the old literal "Loading…" strings with
 silent divs is exactly the kind of regression a visual redesign introduces.
+## 77. Schema and Sync Residuals (2026-08-02)
+
+### 77.1 Entity references are `ID`, uniformly
+
+Every **argument and input field** that names an entity — `id`, `teamId`, `issueId`, `projectId`, `cycleId`, `initiativeId`, `userId`, `parentId`, `assigneeId`, `stateId`, `leadId`, `ownerId`, `definitionId`, `relatedIssueId`, `projectMilestoneId`, `moveToTeamId`, and the `[ID!]` list forms — is typed `ID`/`ID!`, never `String`/`String!`.
+
+This is not cosmetic. GraphQL's variable-usage rule compares the *declared* variable type against the argument type, so `$teamId: String!` against a `teamId: ID!` argument is a hard `GRAPHQL_VALIDATION_FAILED` — the entire request is rejected. When the same logical argument was spelled four different ways across 24 positions, writing a document from memory was a coin flip. Three deliberate exceptions:
+
+- `lastSyncId: String!` — an opaque BIGSERIAL cursor, not an entity reference, and already consistent across all 31 occurrences.
+- `slugId: String!` — a human-readable slug.
+- `idpEntityId: String!` — a SAML entity URI.
+
+Two separate checks in `src/lib/graphql-documents.test.ts` keep this true, and
+the distinction matters:
+
+- **document → schema.** Every embedded document is validated against the real
+  `typeDefs`. This catches a document whose declared variable type no longer
+  matches the argument.
+- **schema → convention.** A second assertion walks every input-object field and
+  field argument in the built schema and fails any entity-reference name typed
+  `String`, with the three exceptions above as an explicit allow-list.
+
+The first cannot substitute for the second: a new field declared
+`teamId: String!` paired with a document that *also* says `String!` validates
+perfectly. Only the schema assertion catches the convention drifting, which is
+the actual root cause this section exists to prevent. It deliberately ignores
+output fields — variables are never compared against those, so they carry no
+drift hazard.
+
+### 77.2 SyncAction payloads are stripped centrally
+
+`SyncService.recordSyncAction` is the single choke point every SyncAction passes through, and it strips `Issue.descriptionState` / `Document.contentState` (`SYNC_PAYLOAD_OMITTED_FIELDS`). Strip **there**, not at the row producers: there are ~20 emitters fed by at least 7 different producers, including raw `prisma.issue.findUnique` calls in `automation.service.ts` and `ws/index.ts`, so a per-producer fix is neither exhaustive nor future-proof.
+
+Worth knowing: a Prisma `Bytes` column inside a `Json` argument does **not** throw — `serializeJsonQuery` base64-encodes it (`{"descriptionState":"AQIDBA=="}`) because the `ArrayBuffer.isView` branch precedes `toJSON`. So this was silently writing ~1.33× the blob into `sync_actions.data`, publishing it to every client in the org, and having each persist it under a key `DBIssue`/`DBDocument` never declared.
+
+### 77.3 `sync_actions` retention needs a staleness signal, not just a sweep
+
+The table is append-only — one row per mutation — so it has an hourly retention sweep (`SYNC_ACTION_RETENTION_DAYS`, `pruneSyncActions`). **A sweep alone is a data-loss bug:** a client whose cursor predates the deleted span would get a successful-looking delta that silently omits everything pruned.
+
+So the sweep records `Organization.syncActionsPrunedThroughXactId`, and `getDeltaSyncActions` returns `staleCursor: true` for any cursor at or below it; the client discards its cache and re-bootstraps.
+
+**Prune and mark are deliberately in different clocks.** The sweep deletes by `created_at` — retention is a wall-clock policy, and that column is indexed — but the mark records the highest `xact_id` deleted, because `(xactId, id)` is the space the delta cursor lives in (§ the commit-order fence). A timestamp mark cannot be compared against an xid8 cursor at all. The column is `Decimal(20, 0)`, not `BigInt`: xid8 is unsigned 64-bit and overflows a signed `int8` at the top of its range.
+
+**Prune and mark are also one statement.** A data-modifying CTE does `DELETE … RETURNING` → `MAX(xact_id)` per org → `UPDATE organizations`, so there is no ordering hazard to reason about — it is structurally impossible for the delete to land without its mark. `GREATEST(COALESCE(existing, 0), …)` keeps the mark monotonic, so a sweep that deletes only low-xid rows can never walk the mark backwards. Only orgs that actually lost rows are marked; marking every org combines with a zero bootstrap cursor into a permanent delta → `staleCursor` → bootstrap loop.
+
+Test against the **recorded high-water mark**, never a computed `now - retention` horizon. A horizon cannot distinguish "these rows were pruned" from "this org has no history that old", so it forces a needless full bootstrap on every young org — and on every client still holding a legacy id-only cursor, which `parseCursor` deliberately maps to the zero cursor *so that it can be caught up by delta*. Null (nothing pruned yet) is the common case and is never stale.
+
+### 77.4 Soft-delete filters want partial indexes
+
+Every list/board/bootstrap read filters `archived_at IS NULL AND trashed = false`. A plain `@@index([team_id])` also covers the archived set, which grows without bound while the live set does not — so the live-set predicate gets a partial index, `issues_team_id_state_id_active_idx`, in the custom migration file. Prisma's `@@index` takes no `WHERE`, which is why it lives there rather than in the schema.
+
+Add one only for a predicate you have actually measured. This branch originally carried two more (`idx_issues_live_team`, `idx_issues_live_org`), derived from reading the query shapes rather than from a profile; they were dropped when the measured index above landed and covered the same reads. Every index is a write-path cost paid on every insert and update, so a speculative one is a regression with no upside.
+
+### 77.5 Delete semantics are a decision, not a default
+
+When adding a missing FK, pick `onDelete` from what the null state *means*:
+
+- `File.uploaderId → User` is **SetNull** — deleting a user must not delete the attachments they uploaded.
+- `Webhook.teamId → Team` is **Cascade** — `null` means "org-wide", so SetNull would silently broaden a team-scoped webhook to the entire organization.
+- `SlackIntegration.defaultTeamId → Team` is **SetNull** — losing the default team must not uninstall the integration.
+
+
+### 77.6 Fetch-on-mount goes through `useRetryableFetch`
+
+Any component that loads data in an effect uses `useRetryableFetch(fetcher, deps, initialValue)` (`src/hooks/use-retryable-fetch.ts`). It returns `{ data, setData, loading, error, refetch }`, and `refetch` **is** the retry handler you hand to `InlineRetry`.
+
+Do not hand-roll the equivalent. The recognisable shape — `useState` for data, a `loadError` boolean, a `useState(0)` `reloadKey`, a `let cancelled = false` flag with `if (!cancelled)` guards, and a `biome-ignore useExhaustiveDependencies` for the reload key — was written out fifteen times before being consolidated, and the hand-rolled version is strictly worse: it races on out-of-order responses where the hook discards stale ones via a monotonic request id.
+
+The hook only sets `error` when the fetcher **throws**, which is why the fetcher must use `gqlQuery`/`gqlMutate` (§76.1) rather than swallowing errors and returning `[]`. A fetcher that returns an empty array on failure renders as a legitimate empty state and leaves the retry branch dead — that combination is what hid a real query bug for a long time.

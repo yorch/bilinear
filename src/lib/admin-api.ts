@@ -3,9 +3,8 @@
  * `gql` fetch helper plus the two impersonation API routes. Each function
  * throws on GraphQL errors so callers can `try/catch` and toast.
  */
-import { gql } from './graphql';
+import { gqlQuery } from './graphql';
 import type { OrganizationPlanLimits } from './plan-limits';
-import { gqlError } from './utils';
 
 export type { OrganizationPlanLimits };
 
@@ -101,17 +100,8 @@ const USER_FIELDS = `
   organizations { id name urlKey role }
 `;
 
-/** Run a GraphQL op and unwrap `data[key]`, throwing on any error. */
-async function run<T>(query: string, variables: Record<string, unknown>, key: string): Promise<T> {
-  const res = await gql(query, variables);
-  if (res.errors?.length) {
-    throw new Error(gqlError(res, 'Request failed'));
-  }
-  return (res.data as Record<string, T>)[key];
-}
-
 export function fetchMetrics(): Promise<PlatformMetrics> {
-  return run(
+  return gqlQuery(
     `query PlatformMetrics {
       platformMetrics {
         totalOrgs activeOrgs suspendedOrgs
@@ -126,7 +116,7 @@ export function fetchMetrics(): Promise<PlatformMetrics> {
 }
 
 export function fetchTenants(query: string, includeArchived: boolean): Promise<PlatformTenant[]> {
-  return run(
+  return gqlQuery(
     `query PlatformTenants($query: String, $includeArchived: Boolean) {
       platformTenants(query: $query, includeArchived: $includeArchived) { ${TENANT_FIELDS} }
     }`,
@@ -136,7 +126,7 @@ export function fetchTenants(query: string, includeArchived: boolean): Promise<P
 }
 
 export function fetchTenant(id: string): Promise<PlatformTenantDetail | null> {
-  return run(
+  return gqlQuery(
     `query PlatformTenant($id: ID!) {
       platformTenant(id: $id) {
         ${TENANT_FIELDS}
@@ -154,7 +144,7 @@ export function updateTenantLimits(
   id: string,
   limits: OrganizationPlanLimits,
 ): Promise<PlatformTenantDetail> {
-  return run(
+  return gqlQuery(
     `mutation UpdateTenantLimits($id: ID!, $limits: OrganizationPlanLimitsInput!) {
       platformTenantUpdateLimits(id: $id, limits: $limits) {
         ${TENANT_FIELDS}
@@ -169,7 +159,7 @@ export function updateTenantLimits(
 }
 
 export function suspendTenant(id: string, reason: string | null): Promise<PlatformTenant> {
-  return run(
+  return gqlQuery(
     `mutation Suspend($id: ID!, $reason: String) {
       platformTenantSuspend(id: $id, reason: $reason) { ${TENANT_FIELDS} }
     }`,
@@ -179,7 +169,7 @@ export function suspendTenant(id: string, reason: string | null): Promise<Platfo
 }
 
 export function restoreTenant(id: string): Promise<PlatformTenant> {
-  return run(
+  return gqlQuery(
     `mutation Restore($id: ID!) {
       platformTenantRestore(id: $id) { ${TENANT_FIELDS} }
     }`,
@@ -189,7 +179,7 @@ export function restoreTenant(id: string): Promise<PlatformTenant> {
 }
 
 export function deleteTenant(id: string): Promise<PlatformTenant> {
-  return run(
+  return gqlQuery(
     `mutation DeleteTenant($id: ID!) {
       platformTenantDelete(id: $id) { ${TENANT_FIELDS} }
     }`,
@@ -199,7 +189,7 @@ export function deleteTenant(id: string): Promise<PlatformTenant> {
 }
 
 export function fetchUsers(query: string): Promise<PlatformUser[]> {
-  return run(
+  return gqlQuery(
     `query PlatformUsers($query: String) {
       platformUsers(query: $query) { ${USER_FIELDS} }
     }`,
@@ -209,7 +199,7 @@ export function fetchUsers(query: string): Promise<PlatformUser[]> {
 }
 
 export function suspendUser(id: string): Promise<PlatformUser> {
-  return run(
+  return gqlQuery(
     `mutation SuspendUser($id: ID!) { platformUserSuspend(id: $id) { ${USER_FIELDS} } }`,
     { id },
     'platformUserSuspend',
@@ -217,7 +207,7 @@ export function suspendUser(id: string): Promise<PlatformUser> {
 }
 
 export function reactivateUser(id: string): Promise<PlatformUser> {
-  return run(
+  return gqlQuery(
     `mutation ReactivateUser($id: ID!) { platformUserReactivate(id: $id) { ${USER_FIELDS} } }`,
     { id },
     'platformUserReactivate',
@@ -225,7 +215,7 @@ export function reactivateUser(id: string): Promise<PlatformUser> {
 }
 
 export function setUserAdmin(id: string, isPlatformAdmin: boolean): Promise<PlatformUser> {
-  return run(
+  return gqlQuery(
     `mutation SetAdmin($id: ID!, $isPlatformAdmin: Boolean!) {
       platformUserSetAdmin(id: $id, isPlatformAdmin: $isPlatformAdmin) { ${USER_FIELDS} }
     }`,
@@ -237,7 +227,7 @@ export function setUserAdmin(id: string, isPlatformAdmin: boolean): Promise<Plat
 export function fetchAuditLog(
   cursor: string | null,
 ): Promise<{ entries: PlatformAuditEntry[]; hasMore: boolean; nextCursor: string | null }> {
-  return run(
+  return gqlQuery(
     `query PlatformAudit($cursor: String) {
       platformAuditLog(cursor: $cursor) {
         entries {

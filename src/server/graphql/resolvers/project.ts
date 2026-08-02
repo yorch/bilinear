@@ -29,28 +29,6 @@ function mapProjectError(err: unknown): never {
 }
 
 // Per-request cache to avoid duplicate getProgress calls when both progress and scope are queried
-const progressCacheKey = Symbol('projectProgress');
-
-function getProgressCached(
-  ctx: GraphQLContext,
-  projectId: string,
-): Promise<{ progress: number; scope: number }> {
-  const ctxRecord = ctx as unknown as Record<symbol, unknown>;
-  if (!ctxRecord[progressCacheKey]) {
-    ctxRecord[progressCacheKey] = new Map<string, Promise<{ progress: number; scope: number }>>();
-  }
-  const cache = ctxRecord[progressCacheKey] as Map<
-    string,
-    Promise<{ progress: number; scope: number }>
-  >;
-
-  let promise = cache.get(projectId);
-  if (!promise) {
-    promise = ctx.services.project.getProgress(projectId);
-    cache.set(projectId, promise);
-  }
-  return promise;
-}
 
 export const projectResolvers = {
   Mutation: {
@@ -605,7 +583,7 @@ export const projectResolvers = {
       ctx.services.project.getMilestones(project.id),
 
     progress: async (project: Project, _args: unknown, ctx: GraphQLContext) => {
-      const result = await getProgressCached(ctx, project.id);
+      const result = await ctx.loaders.projectProgress.load(project.id);
       return result.progress;
     },
 
@@ -663,7 +641,7 @@ export const projectResolvers = {
     },
 
     scope: async (project: Project, _args: unknown, ctx: GraphQLContext) => {
-      const result = await getProgressCached(ctx, project.id);
+      const result = await ctx.loaders.projectProgress.load(project.id);
       return result.scope;
     },
 

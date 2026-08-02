@@ -72,3 +72,23 @@ export const WS_PONG_TIMEOUT_MS = WS_PING_INTERVAL_MS * 2 + 5_000;
  * to fire first.
  */
 export const WS_HEARTBEAT_CLIENT_TIMEOUT_MS = 75_000;
+
+/**
+ * How long `sync_actions` rows are retained. The table is append-only and
+ * grows without bound otherwise — every mutation in the workspace writes one.
+ *
+ * The window has to exceed the longest realistic offline gap, because a client
+ * whose cursor predates the oldest retained row cannot be caught up by delta
+ * sync: the actions it missed are gone. `getDeltaSyncActions` detects exactly
+ * that case and returns `staleCursor`, which makes the client discard its cache
+ * and re-bootstrap instead of silently carrying a permanently-stale pool.
+ */
+export const SYNC_ACTION_RETENTION_DAYS = 30;
+
+/**
+ * Cadence of the retention sweep that enforces `SYNC_ACTION_RETENTION_DAYS`.
+ * Hourly is far more often than necessary for a 30-day window; it keeps each
+ * individual delete small rather than accumulating a day's worth of rows into
+ * one long-running statement.
+ */
+export const SYNC_ACTION_PRUNE_INTERVAL_MS = 60 * 60_000;

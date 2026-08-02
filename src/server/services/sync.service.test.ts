@@ -55,7 +55,6 @@ function mockEmptyBootstrap(prisma: MockPrismaClient) {
     'document',
     'project',
     'projectMilestone',
-    'projectUpdate',
     'customView',
     'issueRelation',
     'issueTemplate',
@@ -76,6 +75,83 @@ describe('SyncService.getDeltaSyncActions — pagination', () => {
   beforeEach(() => {
     prisma = createMockPrisma();
     svc = new SyncService(prisma as never, mockRedis);
+  });
+
+  it('deletes and marks in one statement, so a concurrent delta cannot see a half-applied prune', async () => {
+    // An earlier version marked and deleted in two round-trips, which left a
+    // window where a delta read the old mark and was served a silently
+    // incomplete page — advancing its cursor past rows that no longer exist.
+    // A data-modifying CTE makes both halves atomic.
+    prisma.$queryRaw.mockResolvedValue([{ deleted: 4, orgs: 1 }]);
+
+    const pruned = await svc.pruneSyncActions();
+
+    expect(pruned).toBe(4);
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    const [[query]] = prisma.$queryRaw.mock.calls as Array<[{ sql: string }]>;
+    expect(query.sql).toContain('DELETE FROM "sync_actions"');
+    expect(query.sql).toContain('UPDATE "organizations"');
+    // The mark must never move backwards — under-reporting staleness corrupts
+    // a cache, over-reporting costs one bootstrap.
+    expect(query.sql).toContain('GREATEST');
+    // Pruned by wall-clock age, but marked in xact_id space, because that is
+    // what the delta cursor is keyed on.
+    expect(query.sql).toContain('"created_at" <');
+    expect(query.sql).toContain('MAX("xact_num")');
+  });
+
+  it('reports nothing pruned when no rows fall inside the retention cutoff', async () => {
+    prisma.$queryRaw.mockResolvedValue([{ deleted: 0, orgs: 0 }]);
+
+    expect(await svc.pruneSyncActions()).toBe(0);
+  });
+
+  it('reports staleCursor when the cursor sits below what the retention sweep deleted', async () => {
+    // The mark is the highest xact_id the sweep deleted; a cursor below it
+    // needs rows that no longer exist, so serving a partial page would leave
+    // the client's cache silently and permanently wrong.
+    prisma.organization.findUnique.mockResolvedValue({
+      syncActionsPrunedThroughXactId: '5000',
+    });
+
+    const cursor = parseCursor(encodeCursor(BigInt(4000), BigInt(7)));
+    const result = await svc.getDeltaSyncActions(TEST_ORG.id, cursor, undefined, 5);
+
+    expect(result.staleCursor).toBe(true);
+    expect(result.actions).toEqual([]);
+    expect(result.hasMore).toBe(false);
+    // Never even ran the page query — there is nothing useful to return.
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('does not report staleCursor for a cursor exactly at the mark', async () => {
+    // Boundary: everything up to and including the mark was deleted, and the
+    // cursor is exclusive — a client already past it missed nothing.
+    prisma.organization.findUnique.mockResolvedValue({
+      syncActionsPrunedThroughXactId: '5000',
+    });
+    prisma.$queryRaw.mockResolvedValue([makeRawRow(BigInt(1), '5001')]);
+
+    const cursor = parseCursor(encodeCursor(BigInt(5000), BigInt(7)));
+    const result = await svc.getDeltaSyncActions(TEST_ORG.id, cursor, undefined, 5);
+
+    expect(result.staleCursor).toBe(false);
+  });
+
+  it('does not report staleCursor when nothing has ever been pruned', async () => {
+    // `parseCursor` maps a legacy id-only cursor to 0 on purpose so delta can
+    // catch it up. Testing against a computed `now - retention` horizon rather
+    // than a recorded mark would have flagged every such client as stale and
+    // forced a needless full bootstrap.
+    prisma.organization.findUnique.mockResolvedValue({
+      syncActionsPrunedThroughXactId: null,
+    });
+    prisma.$queryRaw.mockResolvedValue([makeRawRow(BigInt(1), '100')]);
+
+    const result = await svc.getDeltaSyncActions(TEST_ORG.id, parseCursor('0'), undefined, 5);
+
+    expect(result.staleCursor).toBe(false);
+    expect(result.actions).toHaveLength(1);
   });
 
   it('returns the page and reports hasMore=false when fewer than the cap exist', async () => {
@@ -341,12 +417,20 @@ describe('SyncService — commit-order fence (xact_id / snapshot xmin)', () => {
     expect(data.lastSyncId).toBe('4242-7');
   });
 
-  it('returns 0-0 when the org has no settled SyncActions yet', async () => {
+  it('anchors at the settled frontier, not 0-0, when the org has no settled SyncActions', async () => {
+    // '0-0' reads as "infinitely far behind". Once an org has had anything
+    // pruned, a cursor there fails the retention staleness test, so the client
+    // is sent back to bootstrap — which hands it '0-0' again. Anchoring at the
+    // current snapshot frontier instead breaks that loop.
+    //
+    // `xmin - 1` because the cursor is exclusive (`xact_id >`) and a row
+    // sitting exactly at xmin belongs to a still-in-flight transaction; it
+    // stays deliverable once it settles.
     mockEmptyBootstrap(prisma);
-    prisma.$queryRaw.mockResolvedValue([]);
+    prisma.$queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([{ xmin: '7000' }]);
 
     const data = await svc.getBootstrapData(TEST_ORG.id, 'user-1');
-    expect(data.lastSyncId).toBe('0-0');
+    expect(data.lastSyncId).toBe('6999-0');
   });
 
   it('getLastSyncId encodes the fenced latest settled tuple', async () => {
@@ -388,6 +472,65 @@ describe('SyncService — atomic write helpers', () => {
     // xact_id::text is parsed back to a BigInt.
     expect(result.xactId).toBe(BigInt(700));
     expect(result.id).toBe(BigInt(7));
+  });
+
+  it('strips the Yjs binary blob from Issue and Document payloads', async () => {
+    // The insert goes through raw SQL (the xid8 default isn't expressible in
+    // the Prisma query builder), so assert on the bound jsonb param.
+    const raw = vi.fn().mockResolvedValue([makeRawRow(BigInt(13), '1300')]);
+    const tx = { $queryRaw: raw } as never;
+    const modelId = '00000000-0000-0000-0000-0000000aaaaa';
+
+    await svc.recordSyncAction(tx, TEST_ORG.id, 'U', 'Issue', modelId, {
+      descriptionState: Buffer.from([1, 2, 3]),
+      id: modelId,
+      title: 'x',
+    });
+    await svc.recordSyncAction(tx, TEST_ORG.id, 'U', 'Document', modelId, {
+      contentState: Buffer.from([1, 2, 3]),
+      id: modelId,
+      title: 'y',
+    });
+
+    // A Buffer nested in a jsonb param is base64-encoded rather than rejected,
+    // so without the strip these payloads would silently carry the whole
+    // collaborative-editing blob to every client in the org.
+    const payloads = raw.mock.calls.map(([q]) =>
+      JSON.parse((q as { values: unknown[] }).values[4] as string),
+    );
+    expect(payloads[0]).toEqual({ id: modelId, title: 'x' });
+    expect(payloads[1]).toEqual({ id: modelId, title: 'y' });
+  });
+
+  it('strips the settings blobs from an Organization payload', async () => {
+    const raw = vi.fn().mockResolvedValue([makeRawRow(BigInt(14), '1400')]);
+    const tx = { $queryRaw: raw } as never;
+
+    await svc.recordSyncAction(tx, TEST_ORG.id, 'U', 'Organization', TEST_ORG.id, {
+      aiEnabled: true,
+      authSettings: { sso: 'secret' },
+      id: TEST_ORG.id,
+      securitySettings: { policy: 'secret' },
+    });
+
+    const [[q]] = raw.mock.calls;
+    expect(JSON.parse((q as { values: unknown[] }).values[4] as string)).toEqual({
+      aiEnabled: true,
+      id: TEST_ORG.id,
+    });
+  });
+
+  it('leaves payloads for other models untouched', async () => {
+    const raw = vi.fn().mockResolvedValue([makeRawRow(BigInt(15), '1500')]);
+    const tx = { $queryRaw: raw } as never;
+    const modelId = '00000000-0000-0000-0000-0000000aaaaa';
+    // Same field name, different model — the strip is keyed on modelName.
+    const payload = { descriptionState: 'not-a-blob', id: modelId };
+
+    await svc.recordSyncAction(tx, TEST_ORG.id, 'U', 'Project', modelId, payload);
+
+    const [[q]] = raw.mock.calls;
+    expect(JSON.parse((q as { values: unknown[] }).values[4] as string)).toEqual(payload);
   });
 
   it('publish broadcasts the action on the org channel as serialized JSON (id + xactId as strings)', () => {

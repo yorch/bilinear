@@ -30,7 +30,7 @@ const DEF_FIELDS = `
   createdAt updatedAt archivedAt
 `;
 
-const CREATE_MUTATION = `
+const CUSTOM_FIELD_CREATE_MUTATION = `
   mutation CustomFieldDefinitionCreate($input: CustomFieldDefinitionCreateInput!) {
     customFieldDefinitionCreate(input: $input) {
       success
@@ -40,7 +40,7 @@ const CREATE_MUTATION = `
   }
 `;
 
-const ARCHIVE_MUTATION = `
+const CUSTOM_FIELD_ARCHIVE_MUTATION = `
   mutation CustomFieldDefinitionArchive($id: ID!) {
     customFieldDefinitionArchive(id: $id) {
       success
@@ -86,7 +86,7 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
       // Must throw on rejection: `setIsAdding(false)` unmounts the form and
       // discards everything the user typed, so a BAD_USER_INPUT cap breach or a
       // FORBIDDEN owner/admin guard used to toast "Field added" and wipe it.
-      await gqlMutate(CREATE_MUTATION, {
+      await gqlMutate(CUSTOM_FIELD_CREATE_MUTATION, {
         input: {
           description: input.description || null,
           name: input.name,
@@ -106,7 +106,7 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
   const handleArchive = async (id: string) => {
     setConfirmingArchive(null);
     try {
-      await gqlMutate(ARCHIVE_MUTATION, { id });
+      await gqlMutate(CUSTOM_FIELD_ARCHIVE_MUTATION, { id });
       toast.success(t('customFields.archiveSuccess'));
     } catch (err) {
       toast.error(getErrorMessage(err, t('customFields.archiveFailed')));

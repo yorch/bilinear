@@ -143,6 +143,10 @@ function createFakeStores() {
       upsertValues: vi.fn(),
     };
   }
+  // `fullBootstrap` clears every entity pool before repopulating, so the fake
+  // RootStore needs the method too — without it the bootstrap throws before it
+  // reaches the store writes these tests assert on.
+  stores.clearEntityPools = vi.fn();
   return stores as unknown as RootStore & { syncStore: typeof syncStore };
 }
 
@@ -613,11 +617,11 @@ describe('SyncManager', () => {
         makeAction({ action: 'U', data, id: '1', modelId: 'i-1', modelName: 'Issue' }),
       ]);
 
-      expect(stores.issueStore.applySyncAction).toHaveBeenCalledWith('U', 'i-1', data);
-      // Dexie gets the *normalized* row, not the raw payload — the label shapes
-      // are collapsed to `labelIds` exactly as the MobX pool does it, so a
-      // reload that hydrates from IndexedDB sees the same row the store held.
-      expect(fakeTables.issues.bulkPut).toHaveBeenCalledWith([{ ...data, labelIds: [] }]);
+      // The row is normalized ONCE and the same object goes to both sinks, so
+      // the store and Dexie cannot disagree about an issue's labels.
+      const normalized = { ...data, labelIds: [] };
+      expect(stores.issueStore.applySyncAction).toHaveBeenCalledWith('U', 'i-1', normalized);
+      expect(fakeTables.issues.bulkPut).toHaveBeenCalledWith([normalized]);
       expect(fakeTables.issues.delete).not.toHaveBeenCalled();
     });
 

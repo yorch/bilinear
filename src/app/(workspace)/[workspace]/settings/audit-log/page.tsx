@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gqlQuery, isPermissionError } from '@/lib/graphql';
+import { toast } from '@/lib/toast';
+import { getErrorMessage } from '@/lib/utils';
 
 /**
  * Audit log page (admins only).
@@ -88,6 +90,7 @@ export default function AuditLogPage() {
   const [entries, setEntries] = useState<AuditLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -111,23 +114,30 @@ export default function AuditLogPage() {
       filter.userId = appliedUserId;
     }
 
-    gql(AUDIT_LOGS_QUERY, { filter: Object.keys(filter).length ? filter : null })
-      .then(res => {
+    gqlQuery<AuditLogPage | null>(
+      AUDIT_LOGS_QUERY,
+      { filter: Object.keys(filter).length ? filter : null },
+      'auditLogs',
+    )
+      .then(page => {
+        if (cancelled || !page) {
+          return;
+        }
+        setEntries(page.entries);
+        setHasMore(page.hasMore);
+        setNextCursor(page.nextCursor);
+      })
+      .catch((err: unknown) => {
         if (cancelled) {
           return;
         }
-        if (res.errors?.length) {
-          const code = (res.errors[0] as { extensions?: { code?: string } })?.extensions?.code;
-          if (code === 'FORBIDDEN') {
-            setForbidden(true);
-          }
-          return;
-        }
-        const page = (res.data as { auditLogs?: AuditLogPage } | undefined)?.auditLogs;
-        if (page) {
-          setEntries(page.entries);
-          setHasMore(page.hasMore);
-          setNextCursor(page.nextCursor);
+        // A non-admin simply can't see the audit log — that's "not for you",
+        // not a failure. Anything else is a real error and must not render as
+        // an empty log.
+        if (isPermissionError(err)) {
+          setForbidden(true);
+        } else {
+          setLoadError(getErrorMessage(err, t('common.somethingWentWrong')));
         }
       })
       .finally(() => {
@@ -138,7 +148,7 @@ export default function AuditLogPage() {
     return () => {
       cancelled = true;
     };
-  }, [appliedAction, appliedUserId]);
+  }, [appliedAction, appliedUserId, t]);
 
   async function handleLoadMore() {
     if (!nextCursor || loadingMore) {
@@ -152,15 +162,18 @@ export default function AuditLogPage() {
     if (appliedUserId) {
       filter.userId = appliedUserId;
     }
-    const res = await gql(AUDIT_LOGS_QUERY, { filter });
-    setLoadingMore(false);
-    if (!res.errors?.length) {
-      const page = (res.data as { auditLogs?: AuditLogPage } | undefined)?.auditLogs;
+    try {
+      const page = await gqlQuery<AuditLogPage | null>(AUDIT_LOGS_QUERY, { filter }, 'auditLogs');
       if (page) {
         setEntries(prev => [...prev, ...page.entries]);
         setHasMore(page.hasMore);
         setNextCursor(page.nextCursor);
       }
+    } catch (err) {
+      // Previously swallowed: "Load more" simply did nothing on failure.
+      toast.error(getErrorMessage(err, t('common.somethingWentWrong')));
+    } finally {
+      setLoadingMore(false);
     }
   }
 
@@ -174,6 +187,14 @@ export default function AuditLogPage() {
     setUserIdFilter('');
     setAppliedAction('');
     setAppliedUserId('');
+  }
+
+  if (loadError) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-destructive">{loadError}</p>
+      </div>
+    );
   }
 
   if (forbidden) {

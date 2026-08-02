@@ -251,8 +251,8 @@ export const FAVORITE_DELETE_MUTATION = `
 // ── Issues — queries ─────────────────────────────────────────────────────────
 
 export const ISSUE_TEMPLATES_QUERY = `
-  query GetIssueTemplates($teamId: String!) {
-    issueTemplates(teamId: $teamId) { id name templateData isDefault }
+  query GetIssueTemplates($teamId: ID!) {
+    issueTemplates(teamId: $teamId) { id name description templateData isDefault }
   }
 `;
 
@@ -582,6 +582,47 @@ export const PROJECT_UPDATE_MUTATION = `
         id
         startDate
         targetDate
+      }
+    }
+  }
+`;
+
+/**
+ * Server-resolved progress for one project.
+ *
+ * `Project.progress` is a 0..1 fraction and `Project.scope` is the live issue
+ * count, both computed from the *full* issue set. Never re-derive either from
+ * `issueStore`: that pool holds only the issues this client happens to have,
+ * and a guest is scoped to issues they created or are assigned — so one owned
+ * issue in a 50-issue project renders as 100%.
+ */
+export const PROJECT_PROGRESS_QUERY = `
+  query ProjectProgress($id: ID!) {
+    project(id: $id) {
+      id
+      progress
+      scope
+    }
+  }
+`;
+
+/**
+ * Server-resolved progress for every live project in the org, in one request.
+ * `Project.progress`/`scope` are backed by the `projectProgress` DataLoader, so
+ * this costs two queries in total no matter how many projects come back —
+ * fetch it once for a whole list, never per project in a loop.
+ *
+ * 200 is the server's `MAX_LIST_LIMIT`; a workspace with more live projects
+ * than that renders the overflow with no progress bar at all, which is honest,
+ * rather than a number derived from a partial issue set.
+ */
+export const PROJECTS_PROGRESS_QUERY = `
+  query ProjectsProgress {
+    projects(first: 200) {
+      nodes {
+        id
+        progress
+        scope
       }
     }
   }

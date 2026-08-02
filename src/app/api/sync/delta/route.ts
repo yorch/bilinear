@@ -44,7 +44,7 @@ async function handleGet(req: NextRequest) {
   const guestTeamIds = await getGuestTeamIds(prisma, userId, orgId);
 
   try {
-    const { actions, hasMore } = await syncService.getDeltaSyncActions(
+    const { actions, hasMore, staleCursor } = await syncService.getDeltaSyncActions(
       orgId,
       fromCursor,
       toCursor,
@@ -52,7 +52,7 @@ async function handleGet(req: NextRequest) {
       guestTeamIds.length > 0 ? { guestTeamIds, userId } : undefined,
     );
     return NextResponse.json(
-      { actions: actions.map(serializeSyncAction), hasMore },
+      { actions: actions.map(serializeSyncAction), hasMore, staleCursor },
       { headers: { 'Cache-Control': 'no-store' } },
     );
   } catch (err) {

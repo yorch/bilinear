@@ -561,9 +561,7 @@ CREATE TABLE projects (
     priority        SMALLINT NOT NULL DEFAULT 0,
     priority_sort_order FLOAT NOT NULL DEFAULT 0,
 
-    -- Progress
-    progress        FLOAT NOT NULL DEFAULT 0,
-    scope           FLOAT NOT NULL DEFAULT 0,
+    -- (No progress/scope columns — see the note below.)
 
     -- Dates
     start_date      DATE,
@@ -1027,7 +1025,7 @@ CREATE TABLE webhooks (
     events               TEXT[] NOT NULL DEFAULT ARRAY[]::text[],
     signing_secret       TEXT NOT NULL,
     enabled              BOOLEAN NOT NULL DEFAULT true,
-    team_id              UUID,  -- null = org-wide; otherwise scoped to one team
+    team_id              UUID REFERENCES teams(id) ON DELETE CASCADE,  -- null = org-wide; otherwise scoped to one team (CASCADE, not SET NULL: nulling would silently broaden it org-wide)
 
     last_delivery_at     TIMESTAMPTZ,
     last_success_at      TIMESTAMPTZ,
@@ -1132,6 +1130,36 @@ CREATE INDEX idx_sync_actions_org_model ON sync_actions(organization_id, model_n
 > (The `xid8`/`pg_snapshot_xmin` behavior needs a real-Postgres staging soak
 > to verify end to end.)
 
+### 2.22b Retention, and the staleness mark it requires
+
+`sync_actions` is append-only — one row per mutation — so an hourly sweep
+(`SyncService.pruneSyncActions`, `SYNC_ACTION_RETENTION_DAYS`) prunes it.
+
+**A sweep on its own is a silent data-loss bug.** A client whose cursor predates
+the pruned span would receive a successful-looking, permanently incomplete
+delta. So the sweep also records a high-water mark on the org:
+
+```sql
+organizations.sync_actions_pruned_through_xact_id  NUMERIC(20, 0)
+```
+
+`getDeltaSyncActions` answers `staleCursor: true` for any cursor at or below the
+mark, and the client re-bootstraps instead of carrying a hole.
+
+Three properties worth not relearning:
+
+- **`NUMERIC(20, 0)`, not `BIGINT`.** `xid8` is unsigned 64-bit; the top of its
+  range overflows a signed `int8`. (Prisma: `Decimal @db.Decimal(20, 0)`.)
+- **Two clocks, deliberately.** The delete is by `created_at` (retention is a
+  wall-clock policy, and that column is indexed); the mark is the highest
+  `xact_id` deleted, because `(xact_id, id)` is the space the cursor lives in. A
+  timestamp mark is not comparable to an xid8 cursor at all.
+- **One statement.** A data-modifying CTE does `DELETE … RETURNING` →
+  `MAX(xact_id)` per org → `UPDATE organizations`, so a delete cannot land
+  without its mark. `GREATEST(COALESCE(existing, 0), …)` keeps it monotonic, and
+  only orgs that actually lost rows are touched — marking every org combines
+  with a zero bootstrap cursor into a permanent re-bootstrap loop.
+
 ### 2.22a Action codes
 
 | Code | Meaning  | Notes                                                              |
@@ -1204,7 +1232,7 @@ CREATE TABLE files (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     issue_id    UUID REFERENCES issues(id) ON DELETE CASCADE,
     project_id  UUID,  -- FK to projects (not yet enforced via constraint)
-    uploader_id UUID,  -- FK to users
+    uploader_id UUID REFERENCES users(id) ON DELETE SET NULL,  -- deleting a user must not delete their uploads
     name        VARCHAR(500) NOT NULL,
     key         VARCHAR(1000) NOT NULL,  -- storage key / path
     size        INT NOT NULL,            -- bytes
@@ -1544,6 +1572,53 @@ CREATE INDEX automation_rules_trigger_type_idx ON automation_rules(trigger_type)
 - No separate audit log table — `last_run_at` + `run_count` on the rule are the only telemetry. Full execution logs are a future §2.24-style addition.
 - SyncAction is emitted with `modelName: 'AutomationRule'` on every create/update/archive so the client store stays in sync.
 
+### 2.9-pre Projects have no `progress`/`scope` columns
+
+`projects` deliberately has **no** `progress` or `scope` column. Both existed
+and nothing ever wrote them, so every reader rendered a stored `0` — the public
+roadmap and the initiatives page both showed 0% for every project. Progress is
+derived from the issue set on read, by `ProjectService.getProgressBatch` behind
+the `projectProgress` DataLoader (two `groupBy` queries for any number of
+projects), and surfaced as the computed `Project.progress` GraphQL field.
+
+Do not reintroduce them as a cache. Removing the columns is what turned each
+stale read into a compile error, which is how a second forgotten reader
+(`roadmap/[slug]/page.tsx`, with its own `prisma.project.findMany`) was found.
+
+**They were born dead, not rotted.** Both columns arrived in `a682a53` (#19,
+"Add project management feature with milestones and updates") — and *the same
+commit* shipped `ProjectService.getProgress` returning
+`{ progress: completed / total, scope: total }`, an SDL declaring
+`progress: Float!` / `scope: Float!`, and field resolvers that answer from the
+computation. No revision of `project.service.ts` has ever written them, and no
+seed, import path or migration has ever backfilled them. `Cycle` inherited the
+same pair one PR later in `7b09a09` (#21), the same way.
+
+So this is not a cache that stopped being maintained; the column and the
+computed field were authored side by side and never reconciled. Treat any
+proposal to restore them as a proposal to add a *new* cache, and hold it to the
+usual bar: who writes it, on which transitions, and what keeps it honest.
+
+**`cycles` has the same dead columns, and they are still there.** An earlier
+draft of this section claimed they "are written and must stay". That is wrong.
+Verified: the only two `prisma.cycle.update` call sites write
+name/description/dates and `archivedAt`; neither `tx.cycle.create` site (normal
+create, and the rollover loop) writes `progress` or `scope`; nothing selects
+them; and `cycles`' four `*_history` JSONB columns appear only in a test
+fixture. `CycleService.getProgress` computes from the issue set exactly like the
+project path does.
+
+They are left in place for now only because no reader renders a stale value from
+them — unlike `projects`, where the dead column was being displayed as 0%. That
+makes removing them a cleanup, not a bug fix. If you do remove them, take all
+six (`progress`, `scope`, and the four `*_history`) and check `Cycle`'s test
+fixtures.
+
+**Do not generalise from `Initiative`.** `initiatives.progress` looks identical
+and *is* a genuine cached rollup: `InitiativeService` writes it and the
+recursive parent-chain rollup reads it back. That is the one of the three that
+earns its column.
+
 ### 2.9a Project progress history columns
 
 The four JSONB history columns on `projects` — `completed_issue_count_history`,
@@ -1732,6 +1807,7 @@ SELECT indexname FROM pg_indexes
 --   auth_tokens_token_hash_magic_link_idx
 --   auth_tokens_token_hash_refresh_key
 --   idx_issues_fts
+--   issues_team_id_state_id_active_idx
 --   sync_actions_organization_id_xact_id_id_idx
 --   teams_organization_id_key_key
 
