@@ -173,7 +173,7 @@ CREATE TABLE organization_members (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role            VARCHAR(20) NOT NULL DEFAULT 'member',  -- 'owner', 'admin', 'member', 'guest'
+    role            organization_role NOT NULL DEFAULT 'member',  -- enum: owner, admin, member, guest
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
 
@@ -236,7 +236,7 @@ CREATE TABLE teams (
     auto_close_parent_issues    BOOLEAN NOT NULL DEFAULT false,
 
     -- Estimation
-    issue_estimation_type       VARCHAR(20) NOT NULL DEFAULT 'notUsed',  -- 'notUsed', 'linear', 'fibonacci', 'exponential', 'tshirt'
+    issue_estimation_type       issue_estimation_type NOT NULL DEFAULT 'notUsed',  -- enum: notUsed, exponential, fibonacci, linear, tShirt
     issue_estimation_extended   BOOLEAN NOT NULL DEFAULT false,
     issue_estimation_allow_zero BOOLEAN NOT NULL DEFAULT false,
     default_issue_estimate      FLOAT,
@@ -308,7 +308,7 @@ CREATE TABLE workflow_states (
     name            VARCHAR(255) NOT NULL,
     color           VARCHAR(7) NOT NULL,
     description     TEXT,
-    type            VARCHAR(20) NOT NULL,  -- 'triage', 'backlog', 'unstarted', 'started', 'completed', 'canceled'
+    type            workflow_state_type NOT NULL,  -- enum: triage, backlog, unstarted, started, completed, canceled
     position        FLOAT NOT NULL DEFAULT 0,
 
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -501,7 +501,7 @@ CREATE TABLE issue_relations (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     issue_id        UUID NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
     related_issue_id UUID NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
-    type            VARCHAR(20) NOT NULL,  -- 'related', 'blocks', 'duplicate'
+    type            issue_relation_type NOT NULL,  -- enum: related, blocks, blocked_by, duplicate
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     UNIQUE(issue_id, related_issue_id, type)
@@ -552,7 +552,7 @@ CREATE TABLE projects (
     color           VARCHAR(7) NOT NULL DEFAULT '#6366f1',
 
     -- Status
-    status_type     VARCHAR(20) NOT NULL DEFAULT 'planned',  -- 'backlog', 'planned', 'started', 'paused', 'completed', 'canceled'
+    status_type     project_status_type NOT NULL DEFAULT 'planned',  -- enum: backlog, planned, inProgress, paused, completed, canceled
     status_name     VARCHAR(255),
     health          VARCHAR(20),  -- 'onTrack', 'atRisk', 'offTrack'
     health_updated_at TIMESTAMPTZ,
@@ -832,7 +832,7 @@ CREATE TABLE notifications (
     actor_id        UUID REFERENCES users(id) ON DELETE SET NULL,
 
     -- ISSUE_ASSIGNED, ISSUE_MENTIONED, ISSUE_COMMENTED, ISSUE_STATUS_CHANGED, ...
-    type            VARCHAR(50) NOT NULL,
+    type            notification_type NOT NULL,  -- enum: ISSUE_ASSIGNED, ISSUE_STATUS_CHANGED, ISSUE_MENTIONED, ISSUE_COMMENTED
     data            JSONB NOT NULL DEFAULT '{}',
 
     -- State
@@ -2021,7 +2021,7 @@ CREATE TABLE organization_invites (
     id              UUID PRIMARY KEY,
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     email           VARCHAR(255) NOT NULL,   -- lowercased at write time
-    role            VARCHAR(20) NOT NULL DEFAULT 'member',
+    role            organization_role NOT NULL DEFAULT 'member',  -- enum: owner, admin, member, guest
     token_hash      VARCHAR(64) NOT NULL UNIQUE,  -- SHA-256(raw token)
     invited_by_id   UUID REFERENCES users(id) ON DELETE SET NULL,
     expires_at      TIMESTAMPTZ NOT NULL,

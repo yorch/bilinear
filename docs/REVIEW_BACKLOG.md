@@ -408,21 +408,37 @@ inconsistent semantics.
 `Issue.team`. Same for `IssueLabel.organization` / `IssueLabel.team`.
 Document the choice in the schema.
 
-### 2.3 Promote string enums to Prisma enums
+### 2.3 Promote string enums to Prisma enums — ✅ shipped (2026-08-02)
 
-| Field | Current | Allowed values |
-| --- | --- | --- |
-| `OrganizationMember.role` | `String @db.VarChar(20)` | `owner / admin / member / guest` |
-| `Team.issueEstimationType` | `String @db.VarChar(20)` | `notUsed / exponential / fibonacci / linear / tShirt` |
-| `IssueRelation.type` | `String @db.VarChar(20)` | `blocks / blocked_by / related / duplicate` |
-| `Notification.type` | `String @db.VarChar(40)` | `ISSUE_ASSIGNED / ISSUE_STATUS_CHANGED / ISSUE_COMMENT / …` |
-| `WorkflowState.type` | `String @db.VarChar(20)` | `triage / backlog / unstarted / started / completed / canceled` |
-| `Project.statusType` | `String @db.VarChar(20)` | `backlog / planned / inProgress / paused / completed / canceled` |
-
-Pattern already exists for `CustomFieldType`. Each promotion is
-`enum + ALTER TABLE … TYPE … USING …` and a Prisma schema swap. Update
-service-layer string literals to typed enum values; update GraphQL
-schema to expose enum types.
+> Promoted seven `String @db.VarChar` columns to native Prisma enums, each
+> exposed as a matching GraphQL enum (the existing `CustomFieldType` pattern —
+> enum in **both** Prisma and the SDL, so the value flows resolver→service→DB
+> with no casts and invalid input is rejected at parse time as `BAD_USER_INPUT`):
+>
+> | Column(s) | Enum | Values |
+> | --- | --- | --- |
+> | `OrganizationMember.role` + `OrganizationInvite.role` | `OrganizationRole` | owner / admin / member / guest |
+> | `Team.issueEstimationType` | `IssueEstimationType` | notUsed / exponential / fibonacci / linear / tShirt |
+> | `IssueRelation.type` | `IssueRelationType` (GraphQL enum already existed) | related / blocks / blocked_by / duplicate |
+> | `Notification.type` | `NotificationType` | ISSUE_ASSIGNED / ISSUE_STATUS_CHANGED / ISSUE_MENTIONED / ISSUE_COMMENTED |
+> | `WorkflowState.type` | `WorkflowStateType` | triage / backlog / unstarted / started / completed / canceled |
+> | `Project.statusType` | `ProjectStatusType` | backlog / planned / inProgress / paused / completed / canceled |
+>
+> Nothing is deployed, so the init migration was **regenerated**
+> (`migrate diff --from-empty`) rather than shipping `ALTER TYPE … USING`; the
+> diff vs. the prior init is exactly the six `CREATE TYPE`s + the column swaps.
+> The old "BLOCKED on inconsistent vocabularies" call was wrong — `statusType`
+> uniformly uses `inProgress` (the `started` was a mis-read of the `startedAt`
+> *timestamp*) and `WorkflowState.type` uniformly uses `canceled`. The
+> `'cancelled'` (double-l) latent bugs were fixed independently in #117 (which
+> also added the `state-type-spelling.test.ts` guard); the enum now makes the
+> seed's value **compile-enforced** and rejects `cancelled` at the DB. Only two
+> client documents changed (`$role: String!` → `OrganizationRole!`) — every
+> other field flows through an input object where GraphQL coerces the string to
+> the enum. `TeamMembership.role` (its own `TeamMemberRole` enum) and
+> `AuthToken.type` stayed out of scope. Verified against real Postgres 17:
+> migrations apply, drift shows only the documented xid8-index residual, all
+> seven enum types present, `db:seed` green.
 
 **Blocker re-assessed (2026-08-02).** #116 recorded this as ⛔ BLOCKED on
 "inconsistent existing vocabularies (`canceled`/`cancelled`,
