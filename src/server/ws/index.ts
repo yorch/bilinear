@@ -329,6 +329,20 @@ wss.on('connection', async (ws: WebSocket, req) => {
   // Heartbeat: server pings every PING_INTERVAL_MS; if no pong within
   // PONG_TIMEOUT_MS we drop the socket so half-open connections don't
   // accumulate ConnectionManager entries.
+  //
+  // Two ping mechanisms run together on purpose, and each covers what the other
+  // can't:
+  //   - A native `ws.ping()` control frame. The peer's transport auto-replies
+  //     with a `pong` frame WITHOUT its JS event loop running, so `lastPongAt`
+  //     advances even when a browser tab is backgrounded/janked but its TCP is
+  //     alive. A connection that survived a TCP reset (no transport underneath)
+  //     can no longer answer it, so this is what actually reaps those.
+  //   - The app-level `{cmd:'ping'}` frame. A browser cannot observe native
+  //     ping/pong from JavaScript, so this is the only heartbeat the CLIENT can
+  //     see to reset its own idle-liveness timer (see ws-client.ts). It stays.
+  // `lastPongAt` is refreshed by EITHER pong, so a socket is terminated only
+  // when both the transport AND the app layer have gone silent — a genuinely
+  // dead connection, not a merely-busy one.
   let lastPongAt = Date.now();
   const pingTimer = setInterval(() => {
     if (ws.readyState !== 1 /* OPEN */) {
@@ -339,8 +353,14 @@ wss.on('connection', async (ws: WebSocket, req) => {
       ws.terminate();
       return;
     }
+    ws.ping();
     ws.send(JSON.stringify({ cmd: 'ping' }));
   }, PING_INTERVAL_MS);
+
+  // Native pong control frame — the transport-level liveness signal.
+  ws.on('pong', () => {
+    lastPongAt = Date.now();
+  });
 
   ws.on('message', (data: Buffer) => {
     try {

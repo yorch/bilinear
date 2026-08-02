@@ -106,13 +106,13 @@ export const ORGANIZATION_INVITES_QUERY = `
 `;
 
 export const UPDATE_ORG_MEMBER_ROLE_MUTATION = `
-  mutation OrganizationMemberUpdateRole($userId: ID!, $role: String!) {
+  mutation OrganizationMemberUpdateRole($userId: ID!, $role: OrganizationRole!) {
     organizationMemberUpdateRole(userId: $userId, role: $role) { success lastSyncId }
   }
 `;
 
 export const ORGANIZATION_INVITE_CREATE_MUTATION = `
-  mutation OrganizationInviteCreate($email: String!, $role: String!) {
+  mutation OrganizationInviteCreate($email: String!, $role: OrganizationRole!) {
     organizationInviteCreate(email: $email, role: $role) {
       success
       invite { ${INVITE_FIELDS} }

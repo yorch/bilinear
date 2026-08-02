@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import crypto from 'node:crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../src/generated/prisma';
+import { PrismaClient, type WorkflowStateType } from '../src/generated/prisma';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -146,7 +146,12 @@ async function main() {
 
   // ── Workflow states ────────────────────────────────────────────────────────
 
-  const stateConfigs = [
+  const stateConfigs: Array<{
+    color: string;
+    name: string;
+    position: number;
+    type: WorkflowStateType;
+  }> = [
     { color: '#a855f7', name: 'Triage', position: -1, type: 'triage' },
     { color: '#95a3b3', name: 'Backlog', position: 0, type: 'backlog' },
     { color: '#e2e8f0', name: 'Todo', position: 1, type: 'unstarted' },
@@ -155,9 +160,8 @@ async function main() {
     // `canceled`, one L — the canonical spelling everywhere else
     // (`workflow-state.service.ts` VALID_TYPES/REQUIRED_TYPES,
     // `team.service.ts` DEFAULT_WORKFLOW_STATES, and every `type: 'canceled'`
-    // lookup). Seeding `cancelled` produced a state no code could match:
-    // triage decline and duplicate auto-cancel both resolve the target state
-    // by `type: 'canceled'` and would throw on a seeded team.
+    // lookup). Beyond the runtime match, the enum column now rejects the
+    // `cancelled` spelling outright.
     { color: '#ef4444', name: 'Canceled', position: 4, type: 'canceled' },
   ];
 

@@ -408,21 +408,37 @@ inconsistent semantics.
 `Issue.team`. Same for `IssueLabel.organization` / `IssueLabel.team`.
 Document the choice in the schema.
 
-### 2.3 Promote string enums to Prisma enums
+### 2.3 Promote string enums to Prisma enums — ✅ shipped (2026-08-02)
 
-| Field | Current | Allowed values |
-| --- | --- | --- |
-| `OrganizationMember.role` | `String @db.VarChar(20)` | `owner / admin / member / guest` |
-| `Team.issueEstimationType` | `String @db.VarChar(20)` | `notUsed / exponential / fibonacci / linear / tShirt` |
-| `IssueRelation.type` | `String @db.VarChar(20)` | `blocks / blocked_by / related / duplicate` |
-| `Notification.type` | `String @db.VarChar(40)` | `ISSUE_ASSIGNED / ISSUE_STATUS_CHANGED / ISSUE_COMMENT / …` |
-| `WorkflowState.type` | `String @db.VarChar(20)` | `triage / backlog / unstarted / started / completed / canceled` |
-| `Project.statusType` | `String @db.VarChar(20)` | `backlog / planned / inProgress / paused / completed / canceled` |
-
-Pattern already exists for `CustomFieldType`. Each promotion is
-`enum + ALTER TABLE … TYPE … USING …` and a Prisma schema swap. Update
-service-layer string literals to typed enum values; update GraphQL
-schema to expose enum types.
+> Promoted seven `String @db.VarChar` columns to native Prisma enums, each
+> exposed as a matching GraphQL enum (the existing `CustomFieldType` pattern —
+> enum in **both** Prisma and the SDL, so the value flows resolver→service→DB
+> with no casts and invalid input is rejected at parse time as `BAD_USER_INPUT`):
+>
+> | Column(s) | Enum | Values |
+> | --- | --- | --- |
+> | `OrganizationMember.role` + `OrganizationInvite.role` | `OrganizationRole` | owner / admin / member / guest |
+> | `Team.issueEstimationType` | `IssueEstimationType` | notUsed / exponential / fibonacci / linear / tShirt |
+> | `IssueRelation.type` | `IssueRelationType` (GraphQL enum already existed) | related / blocks / blocked_by / duplicate |
+> | `Notification.type` | `NotificationType` | ISSUE_ASSIGNED / ISSUE_STATUS_CHANGED / ISSUE_MENTIONED / ISSUE_COMMENTED |
+> | `WorkflowState.type` | `WorkflowStateType` | triage / backlog / unstarted / started / completed / canceled |
+> | `Project.statusType` | `ProjectStatusType` | backlog / planned / inProgress / paused / completed / canceled |
+>
+> Nothing is deployed, so the init migration was **regenerated**
+> (`migrate diff --from-empty`) rather than shipping `ALTER TYPE … USING`; the
+> diff vs. the prior init is exactly the six `CREATE TYPE`s + the column swaps.
+> The old "BLOCKED on inconsistent vocabularies" call was wrong — `statusType`
+> uniformly uses `inProgress` (the `started` was a mis-read of the `startedAt`
+> *timestamp*) and `WorkflowState.type` uniformly uses `canceled`. The
+> `'cancelled'` (double-l) latent bugs were fixed independently in #117 (which
+> also added the `state-type-spelling.test.ts` guard); the enum now makes the
+> seed's value **compile-enforced** and rejects `cancelled` at the DB. Only two
+> client documents changed (`$role: String!` → `OrganizationRole!`) — every
+> other field flows through an input object where GraphQL coerces the string to
+> the enum. `TeamMembership.role` (its own `TeamMemberRole` enum) and
+> `AuthToken.type` stayed out of scope. Verified against real Postgres 17:
+> migrations apply, drift shows only the documented xid8-index residual, all
+> seven enum types present, `db:seed` green.
 
 **Blocker re-assessed (2026-08-02).** #116 recorded this as ⛔ BLOCKED on
 "inconsistent existing vocabularies (`canceled`/`cancelled`,
@@ -629,16 +645,21 @@ handling.
 
 | Item | File / line | Estimated impact |
 | --- | --- | --- |
-| Native `ws.ping()` + pong-driven terminate timer (vs. app-level JSON pings) | `src/server/ws/index.ts:187-215` | Closes dead connections that survived TCP reset |
+| ✅ **shipped (2026-08-02)** — native `ws.ping()` + `'pong'` handler added alongside the app-level ping. Refreshes `lastPongAt` from EITHER pong, so a socket is reaped only when transport AND app layer are both silent (a genuinely dead connection, not a merely-busy one). The app-level `{cmd:'ping'}` stays because a browser can't observe native ping/pong from JS — it's the only heartbeat the client can see to reset its own idle timer, so native ping is additive on the server, not a replacement. | `src/server/ws/index.ts` | Reaps connections that survived a TCP reset; stops falsely terminating a backgrounded/janked-but-connected tab |
 | ✅ **shipped (2026-08-02)** — `IssueService.update` skips the team-flag read + cascade when the new state isn't terminal (`completed`/`canceled`); neither cascade can fire otherwise | `src/server/services/issue.service.ts` | -1 DB round-trip on every non-terminal `issueUpdate` |
 | ✅ **shipped (2026-08-02)** — `byTeam` MobX secondary index (`Map<teamId, Set<id>>`), replace-Set-on-membership-change so a team selector re-runs only on its own changes; `upsertMany` skips the swap for unchanged-membership bulk updates | `src/stores/issue-store.ts` | Eliminates `Array.from(pool.values()).filter` in observer components — material on 10k-issue stores |
-| TipTap further code-split inside the lazy editor module | `src/components/editor/tiptap-editor.tsx` | Probably a no-op now that the editor is dynamically imported; verify with bundle inspector before doing more work |
+| ✅ **verified no-op (2026-08-02)** — the editor is already `dynamic(…, { ssr: false })` via `tiptap-editor.lazy.tsx`, and every one of its 5 consumers imports the lazy wrapper (no static import pulls it into an entry chunk). The whole editor + extensions + hocuspocus + lowlight sit in one ~928K async chunk that loads only on editor mount. Splitting it further would fragment that on-mount fetch into a request waterfall without reducing initial load (already 0 there). No change made. | `src/components/editor/tiptap-editor.tsx` | none — confirmed already optimal |
 
 - **Acceptance signal:** Each item ships with a before/after measurement
   in the PR description matching its "Estimated impact" column —
   bundle-inspector diff for TipTap, microbenchmark on the
   `Array.from(...).filter` filter selector for the MobX indexes, etc.
-  No item lands without numbers.
+  No item lands without numbers. **Caveat for the WS ping change:** the
+  heartbeat lives in the connection-handler closure, which the ws unit
+  tests mock out (they exercise only the pure `shouldTerminateConnection`),
+  so its runtime behavior wants a staging/browser smoke test — the change
+  is safe-by-construction (strictly additive; can only make termination
+  more lenient, never falsely terminate), which is why it lands here.
 
 ---
 
@@ -692,7 +713,11 @@ without touching the mouse.
 Locking in the parts of the system most likely to hide regressions.
 Listed in priority order.
 
-### 5.1 `auth.service.ts`
+### 5.1 `auth.service.ts` — ✅ shipped (2026-08-02)
+
+> `auth.service.test.ts` covers `verifyMagicLink` (expiry, non-leaking
+> wrong-code, replay, `TEST_AUTH_CODE` production gating) and the token paths.
+
 
 **Currently covered (commit `e826638`):** refresh-token reuse / rotation.
 
@@ -710,7 +735,12 @@ Listed in priority order.
 above with deterministic assertions; the `NODE_ENV !== 'test'` case
 proves `TEST_AUTH_CODE` is rejected.
 
-### 5.2 `sync-manager.ts` (1078 LOC, 0 tests)
+### 5.2 `sync-manager.ts` — ✅ shipped (2026-08-02)
+
+> `sync-manager.test.ts` covers cursor ordering, the local-delta-cursor
+> regression, apply semantics, `stop()` timers, the staleCursor re-bootstrap,
+> and the cache-completeness stamp.
+
 
 Approach: extract the pure dispatch portion of `applyActions` into a
 new `apply-actions.ts` helper that takes `(actions, stores)` and has
@@ -726,7 +756,11 @@ delta sequence.
 coverage on the extracted module; the integration test catches an
 intentionally-introduced bug (e.g. swap I/U dispatch) by failing.
 
-### 5.3 `transaction-queue.ts` (240 LOC, 0 tests)
+### 5.3 `transaction-queue.ts` — ✅ shipped (2026-08-02)
+
+> `transaction-queue.test.ts` covers drain/rollback, offline-pause,
+> RATELIMITED retry-then-permanent, and immediate FORBIDDEN drops.
+
 
 Pairs with §1.2. Test cases under `vi.useFakeTimers`:
 - One enqueued tx → mutation fires once → `onSuccess` called.
@@ -765,7 +799,12 @@ to ephemeral ports; each case asserts the expected close code or
 delivery; the cross-org isolation case is the gate — without it,
 the test suite shouldn't ship.
 
-### 5.5 Resolver auth-guard sweep
+### 5.5 Resolver auth-guard sweep — ✅ shipped (2026-08-02)
+
+> `testAuthGuard` helper + an auth-guard/error-remap sweep over the
+> label/comment/notification/custom-field/project resolvers (kept green through
+> the #109 `requireOrgRole` change and #115/#116).
+
 
 Currently: 6 of 25 resolver files have any test coverage. Build a
 parameterized helper:
@@ -786,7 +825,11 @@ typed errors and the GraphQL `extensions.code` discriminator.
 least one `testAuthGuard` row; deliberately removing a `requireAuth`
 call in any resolver fails the suite.
 
-### 5.6 MobX store coverage
+### 5.6 MobX store coverage — ✅ shipped (2026-08-02)
+
+> Shared `runPoolStoreTests()` helper (`src/stores/test-helpers/pool-store-tests.ts`)
+> drives the 17 pool-store test files.
+
 
 Currently: 2 of 17 store files have tests. Build a shared
 `createPoolStoreTests(store, fixtureRow)` helper that exercises:

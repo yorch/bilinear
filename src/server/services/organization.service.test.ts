@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { Prisma } from '../../generated/prisma';
+import { type OrganizationRole, Prisma } from '../../generated/prisma';
 import { TEST_ORG, TEST_USER } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
@@ -107,7 +107,7 @@ describe('OrganizationService.updateMemberRole', () => {
 
   it('rejects roles outside the documented set', async () => {
     await expect(
-      svc.updateMemberRole(TEST_ORG.id, TEST_USER.id, 'superuser', 'owner'),
+      svc.updateMemberRole(TEST_ORG.id, TEST_USER.id, 'superuser' as OrganizationRole, 'owner'),
     ).rejects.toBeInstanceOf(InvalidRoleError);
 
     expect(prisma.organizationMember.findUnique).not.toHaveBeenCalled();

@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import { beforeEach, describe, expect, it } from 'vitest';
+import type { WorkflowStateType } from '../../../generated/prisma';
 import { createMockContext, type MockGraphQLContext } from '../../../test/context-mock';
 import { DEFAULT_WORKFLOW_STATES, TEST_TEAM, TEST_TEAM_MEMBERSHIP } from '../../../test/fixtures';
 import { workflowStateResolvers } from './workflow-state';
@@ -44,7 +45,7 @@ describe('workflowStateResolvers', () => {
               color: '#000',
               name: 'Bad',
               teamId: TEST_TEAM.id,
-              type: 'invalid_type',
+              type: 'invalid_type' as WorkflowStateType,
             },
           },
           ctx as never,

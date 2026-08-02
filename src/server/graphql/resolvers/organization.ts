@@ -1,5 +1,5 @@
 import { GraphQLError } from 'graphql';
-import type { Organization, OrganizationMember } from '../../../generated/prisma';
+import type { Organization, OrganizationMember, OrganizationRole } from '../../../generated/prisma';
 import { childLogger } from '../../lib/logger';
 import { announceJoin, broadcastMembership } from '../../lib/membership-sync';
 import { clearOrgSession, requireAuth, requireOrgRole, requireUserId } from '../../middleware/auth';
@@ -181,7 +181,7 @@ export const organizationResolvers = {
 
     organizationInviteCreate: async (
       _parent: unknown,
-      { email, role }: { email: string; role: string },
+      { email, role }: { email: string; role: OrganizationRole },
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
@@ -360,7 +360,7 @@ export const organizationResolvers = {
 
     organizationMemberUpdateRole: async (
       _parent: unknown,
-      { userId, role }: { userId: string; role: string },
+      { userId, role }: { userId: string; role: OrganizationRole },
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);

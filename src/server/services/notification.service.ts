@@ -1,4 +1,4 @@
-import type { Notification, PrismaClient } from '../../generated/prisma';
+import type { Notification, NotificationType, PrismaClient } from '../../generated/prisma';
 import {
   sendAssignmentNotificationEmail,
   sendCommentNotificationEmail,
@@ -15,7 +15,7 @@ export interface NotificationCreateInput {
   actorId?: string;
   data?: Record<string, unknown>;
   issueId?: string;
-  type: string;
+  type: NotificationType;
   userId: string;
 }
 

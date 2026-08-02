@@ -182,8 +182,7 @@ model OrganizationMember {
   id             String @id @default(uuid()) @db.Uuid
   organizationId String @map("organization_id") @db.Uuid
   userId         String @map("user_id") @db.Uuid
-  // owner, admin, member, guest
-  role           String @default("member") @db.VarChar(20)
+  role           OrganizationRole @default(member)
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
@@ -324,7 +323,7 @@ model Team {
   autoCloseParentIssues Boolean @default(false) @map("auto_close_parent_issues")
 
   // Estimation
-  issueEstimationType      String  @default("notUsed") @map("issue_estimation_type") @db.VarChar(20)
+  issueEstimationType      IssueEstimationType @default(notUsed) @map("issue_estimation_type")
   issueEstimationExtended  Boolean @default(false) @map("issue_estimation_extended")
   issueEstimationAllowZero Boolean @default(false) @map("issue_estimation_allow_zero")
   defaultIssueEstimate     Float?  @map("default_issue_estimate")
@@ -402,7 +401,7 @@ model WorkflowState {
   name        String  @db.VarChar(255)
   color       String  @db.VarChar(7)
   description String?
-  type        String  @db.VarChar(20)
+  type        WorkflowStateType
   position    Float   @default(0)
 
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
@@ -628,7 +627,7 @@ model Project {
   icon           String? @db.VarChar(255)
   color          String  @default("#6366f1") @db.VarChar(7)
 
-  statusType      String    @default("planned") @map("status_type") @db.VarChar(20)
+  statusType      ProjectStatusType @default(planned) @map("status_type")
   statusName      String?   @map("status_name") @db.VarChar(255)
   health          String?   @db.VarChar(20)
   healthUpdatedAt DateTime? @map("health_updated_at") @db.Timestamptz
@@ -843,8 +842,7 @@ model Notification {
   userId         String    @map("user_id") @db.Uuid
   issueId        String?   @map("issue_id") @db.Uuid
   actorId        String?   @map("actor_id") @db.Uuid
-  // ISSUE_ASSIGNED, ISSUE_MENTIONED, ISSUE_COMMENTED, ISSUE_STATUS_CHANGED
-  type           String    @db.VarChar(50)
+  type           NotificationType
   data           Json      @default("{}")
   read           Boolean   @default(false)
   readAt         DateTime? @map("read_at") @db.Timestamptz
@@ -906,8 +904,7 @@ model IssueRelation {
   id             String   @id @default(uuid()) @db.Uuid
   issueId        String   @map("issue_id") @db.Uuid
   relatedIssueId String   @map("related_issue_id") @db.Uuid
-  // related, blocks, blocked_by, duplicate
-  type           String   @db.VarChar(20)
+  type           IssueRelationType
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   issue        Issue @relation("IssueRelations", fields: [issueId], references: [id], onDelete: Cascade)
@@ -937,6 +934,65 @@ model IssueTemplate {
   @@index([teamId])
   @@index([creatorId])
   @@map("issue_templates")
+}
+
+enum OrganizationRole {
+  owner
+  admin
+  member
+  guest
+
+  @@map("organization_role")
+}
+
+enum IssueEstimationType {
+  notUsed
+  exponential
+  fibonacci
+  linear
+  tShirt
+
+  @@map("issue_estimation_type")
+}
+
+enum WorkflowStateType {
+  triage
+  backlog
+  unstarted
+  started
+  completed
+  canceled
+
+  @@map("workflow_state_type")
+}
+
+enum ProjectStatusType {
+  backlog
+  planned
+  inProgress
+  paused
+  completed
+  canceled
+
+  @@map("project_status_type")
+}
+
+enum NotificationType {
+  ISSUE_ASSIGNED
+  ISSUE_STATUS_CHANGED
+  ISSUE_MENTIONED
+  ISSUE_COMMENTED
+
+  @@map("notification_type")
+}
+
+enum IssueRelationType {
+  related
+  blocks
+  blocked_by
+  duplicate
+
+  @@map("issue_relation_type")
 }
 
 enum CustomFieldType {
@@ -1621,8 +1677,8 @@ model OrganizationInvite {
   /// email to match, so an invitation link is not bearer-usable by whoever
   /// happens to receive a forwarded email.
   email String @db.VarChar(255)
-  /// Org role granted on acceptance: owner, admin, member, or guest.
-  role  String @default("member") @db.VarChar(20)
+  /// Org role granted on acceptance.
+  role  OrganizationRole @default(member)
 
   /// SHA-256(plaintext_token) — 64 hex chars
   tokenHash   String  @unique @map("token_hash") @db.VarChar(64)

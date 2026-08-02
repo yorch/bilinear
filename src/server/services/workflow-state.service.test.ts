@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import type { WorkflowStateType } from '../../generated/prisma';
 import { DEFAULT_WORKFLOW_STATES, TEST_TEAM } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
@@ -48,13 +49,20 @@ describe('WorkflowStateService', () => {
           color: '#000',
           name: 'Bad',
           teamId: TEST_TEAM.id,
-          type: 'invalid',
+          type: 'invalid' as WorkflowStateType,
         }),
       ).rejects.toThrow(InvalidStateTypeError);
     });
 
     it('accepts all valid state types', async () => {
-      const validTypes = ['triage', 'backlog', 'unstarted', 'started', 'completed', 'canceled'];
+      const validTypes: WorkflowStateType[] = [
+        'triage',
+        'backlog',
+        'unstarted',
+        'started',
+        'completed',
+        'canceled',
+      ];
 
       for (const type of validTypes) {
         prisma.workflowState.create.mockResolvedValue({

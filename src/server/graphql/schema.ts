@@ -81,7 +81,7 @@ export const typeDefs = `
     private: Boolean!
     timezone: String!
     cyclesEnabled: Boolean!
-    issueEstimationType: String!
+    issueEstimationType: IssueEstimationType!
     triageEnabled: Boolean!
     issueCount: Int!
     defaultIssueStateId: ID
@@ -120,7 +120,7 @@ export const typeDefs = `
     name: String!
     color: String!
     description: String
-    type: String!
+    type: WorkflowStateType!
     position: Float!
     team: Team!
     createdAt: DateTime!
@@ -419,7 +419,7 @@ export const typeDefs = `
     urlKey: String!
     logoUrl: String
     """The viewer's role in this organization: owner, admin, member, or guest."""
-    role: String!
+    role: OrganizationRole!
     """True for the organization the current session is authenticated to."""
     current: Boolean!
   }
@@ -446,7 +446,7 @@ export const typeDefs = `
     timezone: String
     cyclesEnabled: Boolean
     cycleDuration: Int
-    issueEstimationType: String
+    issueEstimationType: IssueEstimationType
     triageEnabled: Boolean
     autoClosePeriod: Int
     autoArchivePeriod: Int
@@ -481,7 +481,7 @@ export const typeDefs = `
     teamId: ID!
     name: String!
     color: String!
-    type: String!
+    type: WorkflowStateType!
     position: Float
     description: String
   }
@@ -501,7 +501,7 @@ export const typeDefs = `
     content: String
     icon: String
     color: String!
-    statusType: String!
+    statusType: ProjectStatusType!
     statusName: String
     health: String
     healthUpdatedAt: DateTime
@@ -559,7 +559,7 @@ export const typeDefs = `
     name: String!
     icon: String
     color: String!
-    statusType: String!
+    statusType: ProjectStatusType!
     statusName: String
     health: String
     targetDate: Date
@@ -655,7 +655,7 @@ export const typeDefs = `
     description: String
     icon: String
     color: String
-    statusType: String
+    statusType: ProjectStatusType
     leadId: ID
     startDate: Date
     targetDate: Date
@@ -671,7 +671,7 @@ export const typeDefs = `
     content: String
     icon: String
     color: String
-    statusType: String
+    statusType: ProjectStatusType
     health: String
     leadId: ID
     startDate: Date
@@ -712,7 +712,7 @@ export const typeDefs = `
   }
 
   input ProjectFilter {
-    statusType: String
+    statusType: ProjectStatusType
     health: String
     leadId: ID
   }
@@ -743,7 +743,7 @@ export const typeDefs = `
     userId: ID!
     issueId: ID
     actorId: ID
-    type: String!
+    type: NotificationType!
     data: JSON!
     read: Boolean!
     readAt: DateTime
@@ -990,6 +990,47 @@ export const typeDefs = `
     checkbox
   }
 
+  """A member's role within an organization."""
+  enum OrganizationRole {
+    owner
+    admin
+    member
+    guest
+  }
+
+  enum IssueEstimationType {
+    notUsed
+    exponential
+    fibonacci
+    linear
+    tShirt
+  }
+
+  enum WorkflowStateType {
+    triage
+    backlog
+    unstarted
+    started
+    completed
+    canceled
+  }
+
+  enum ProjectStatusType {
+    backlog
+    planned
+    inProgress
+    paused
+    completed
+    canceled
+  }
+
+  enum NotificationType {
+    ISSUE_ASSIGNED
+    ISSUE_STATUS_CHANGED
+    ISSUE_MENTIONED
+    ISSUE_COMMENTED
+  }
+
   type CustomFieldDefinition {
     id: ID!
     """
@@ -1140,7 +1181,7 @@ export const typeDefs = `
   type OrganizationInvite {
     id: ID!
     email: String!
-    role: String!
+    role: OrganizationRole!
     invitedById: ID
     expiresAt: DateTime!
     createdAt: DateTime!
@@ -1871,7 +1912,7 @@ export const typeDefs = `
     commentReactionAdd(commentId: ID!, emoji: String!): CommentReactionPayload!
     commentReactionRemove(commentId: ID!, emoji: String!): DeletePayload!
 
-    organizationMemberUpdateRole(userId: ID!, role: String!): DeletePayload!
+    organizationMemberUpdateRole(userId: ID!, role: OrganizationRole!): DeletePayload!
     """Remove a member from the current organization, along with their team memberships."""
     organizationMemberRemove(userId: ID!): DeletePayload!
     """
@@ -1881,7 +1922,7 @@ export const typeDefs = `
     from organizationMemberRemove, which refuses self-removal on purpose.
     """
     organizationLeave: LeaveOrganizationPayload!
-    organizationInviteCreate(email: String!, role: String!): OrganizationInvitePayload!
+    organizationInviteCreate(email: String!, role: OrganizationRole!): OrganizationInvitePayload!
     organizationInviteRevoke(id: ID!): BasicPayload!
     """Claim an invitation. Requires a signed-in session whose email matches it."""
     organizationInviteAccept(token: String!): EnterOrganizationPayload!
@@ -2223,7 +2264,7 @@ export const typeDefs = `
     id: ID!
     name: String!
     urlKey: String!
-    role: String!
+    role: OrganizationRole!
   }
 
   type PlatformUser {

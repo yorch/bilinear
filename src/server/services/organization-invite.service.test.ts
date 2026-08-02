@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { OrganizationRole } from '../../generated/prisma';
 
 const sendInviteEmail = vi.fn();
 vi.mock('../lib/email', () => ({
@@ -107,7 +108,7 @@ describe('OrganizationInviteService.create', () => {
     // Distinctly from a bad email — the two used to share one error, so an
     // invalid role told the admin "a valid email address is required".
     await expect(
-      svc.create({ ...OWNER, email: 'a@b.com', role: 'superuser' }),
+      svc.create({ ...OWNER, email: 'a@b.com', role: 'superuser' as OrganizationRole }),
     ).rejects.toBeInstanceOf(InvalidRoleError);
   });
 
