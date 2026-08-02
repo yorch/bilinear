@@ -1,4 +1,4 @@
-# Issue Tracker
+# Bilinear
 
 A Linear-style issue tracker built with Next.js 16, GraphQL, and PostgreSQL. See `docs/IMPLEMENTATION_PLAN.md` for the full roadmap and `docs/PATTERNS.md` for established code patterns.
 

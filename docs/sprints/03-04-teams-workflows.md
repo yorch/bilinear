@@ -1,6 +1,6 @@
 # Sprint 3-4: Teams & Workflow States
 
-## Issue Tracker — Linear Rebuild
+## Bilinear — Linear Rebuild
 
 **Phase:** 1 (Foundation)
 **Weeks:** 3-4

@@ -1,6 +1,6 @@
 # Sprint 11-12: Polish & Performance
 
-## Issue Tracker — Linear Rebuild
+## Bilinear — Linear Rebuild
 
 **Phase:** 1 (Foundation)
 **Weeks:** 11-12

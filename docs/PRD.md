@@ -1,6 +1,6 @@
 # Product Requirements Document (PRD)
 
-## Issue Tracker — Open-Source Linear Alternative
+## Bilinear — Open-Source Linear Alternative
 
 **Version:** 1.1
 **Date:** April 2026

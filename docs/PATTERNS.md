@@ -1,6 +1,6 @@
 # Code Patterns
 
-## Issue Tracker — Linear Rebuild
+## Bilinear — Linear Rebuild
 
 **Established:** Sprint 1-2
 **Last updated:** 2026-04-17 (Sprints 35-36 + Public Roadmaps)

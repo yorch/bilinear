@@ -1,6 +1,6 @@
 # Implementation Plan
 
-## Issue Tracker — Open-Source Linear Alternative
+## Bilinear — Open-Source Linear Alternative
 
 **Version:** 1.3
 **Date:** 2026-05-24

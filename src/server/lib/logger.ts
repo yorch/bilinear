@@ -97,7 +97,7 @@ const REDACT_PATHS = [
 
 export const logger = pino(
   {
-    base: { service: 'issue-tracker' },
+    base: { service: 'bilinear' },
     // logMethod runs in the main thread before serialization/transport and is
     // inherited by every child logger, so Sentry capture applies uniformly —
     // no proxy, and `.child()` can't bypass it.

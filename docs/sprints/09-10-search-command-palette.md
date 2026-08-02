@@ -1,6 +1,6 @@
 # Sprint 9-10: Search & Command Palette
 
-## Issue Tracker — Linear Rebuild
+## Bilinear — Linear Rebuild
 
 **Phase:** 1 (Foundation)
 **Weeks:** 9-10

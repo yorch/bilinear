@@ -1,6 +1,6 @@
 # Sprint 5-6: Issue CRUD & List View
 
-## Issue Tracker — Linear Rebuild
+## Bilinear — Linear Rebuild
 
 **Phase:** 1 (Foundation)
 **Weeks:** 5-6
