@@ -1,12 +1,13 @@
 'use client';
 
 import { Pencil, Plus } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { DeleteUpdateButton } from '@/components/shared/delete-update-button';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { CreateUpdateForm, EditUpdateForm } from '@/components/shared/update-forms';
 import { Badge } from '@/components/ui/badge';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql, gqlQuery } from '@/lib/graphql';
 import {
@@ -20,7 +21,8 @@ interface InitiativeUpdate {
   body: string;
   createdAt: string;
   editedAt: string | null;
-  health: string | null;
+  /** `InitiativeUpdate.health` is `String!` — but the form submits `''` for "None". */
+  health: string;
   id: string;
   user: { id: string; displayName: string };
 }
@@ -36,34 +38,32 @@ export function InitiativeUpdatesSection({
 }: InitiativeUpdatesSectionProps) {
   const t = useTranslations();
   const { formatRelativeTime } = useFormatters();
-  const [updates, setUpdates] = useState<InitiativeUpdate[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // The create/edit handlers below already reject on `res.errors`; the load
-  // path did not, so a failed read rendered as "Updates (0)" / "No updates
-  // yet". `gqlQuery` throws, and the error surfaces as an inline retry.
-  const fetchUpdates = useCallback(async () => {
-    setLoadError(false);
-    try {
+  // The create/edit handlers below already reject on `res.errors`; a failed
+  // read must not render as "Updates (0)" / "No updates yet".
+  const {
+    data: updates,
+    error: loadError,
+    loading,
+    refetch,
+  } = useRetryableFetch<InitiativeUpdate[]>(
+    async () => {
       const initiative = await gqlQuery<{ updates: InitiativeUpdate[] } | null>(
         INITIATIVE_UPDATES_QUERY,
         { id: initiativeId },
         'initiative',
       );
-      setUpdates(initiative?.updates ?? []);
-    } catch {
-      setLoadError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [initiativeId]);
+      return initiative?.updates ?? [];
+    },
+    [initiativeId],
+    [],
+  );
 
-  useEffect(() => {
-    fetchUpdates();
-  }, [fetchUpdates]);
+  // Post-mutation refreshes and the inline retry stay silent: `loading` blanks
+  // the whole section, which would tear down an open create/edit form.
+  const fetchUpdates = useCallback(() => refetch({ silent: true }), [refetch]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -133,7 +133,7 @@ export function InitiativeUpdatesSection({
               return (
                 <EditUpdateForm
                   initialBody={update.body}
-                  initialHealth={update.health ?? ''}
+                  initialHealth={update.health}
                   key={update.id}
                   onClose={() => setEditingId(null)}
                   onSave={async (body, health) => {
@@ -160,7 +160,7 @@ export function InitiativeUpdatesSection({
                     </span>
                     {health && (
                       <Badge tone={health.tone}>
-                        {t(PROJECT_HEALTH_LABEL_KEYS[update.health ?? ''])}
+                        {t(PROJECT_HEALTH_LABEL_KEYS[update.health])}
                       </Badge>
                     )}
                     <span className="text-xs text-muted-foreground">

@@ -2,10 +2,11 @@
 
 import { Bell, Check, CheckCheck, Clock, MessageSquare, RefreshCw, User } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBNotification } from '@/lib/db';
 import { gql, gqlQuery } from '@/lib/graphql';
@@ -198,9 +199,6 @@ export const NotificationInbox = observer(function NotificationInbox() {
   const { notificationStore } = store;
   const t = useTranslations();
 
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
   const [snoozingId, setSnoozingId] = useState<string | null>(null);
@@ -211,38 +209,32 @@ export const NotificationInbox = observer(function NotificationInbox() {
   // notification belongs to one recipient. Live delivery needs a per-user
   // channel; until then this fetch is the only path.
   //
-  // `gqlQuery` throws on a GraphQL-level failure; `gql` resolved with `data`
-  // undefined, so a rejected read fell through to `?? []` and rendered the
+  // Rows land in the MobX store, not in the hook's `data` — the list below is
+  // read reactively from the store. A rejected read must not render the
   // "You're all caught up" empty state while assigned issues and @mentions
-  // were silently invisible.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is the retry trigger, not read inside the effect
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setLoadError(false);
-
-    gqlQuery<DBNotification[] | null>(GET_NOTIFICATIONS_QUERY, { limit: 50 }, 'notifications')
-      .then(data => {
-        if (cancelled) {
-          return;
-        }
+  // are silently invisible.
+  const {
+    error: loadError,
+    loading,
+    refetch: retryLoad,
+  } = useRetryableFetch<DBNotification[]>(
+    async () => {
+      try {
+        const data = await gqlQuery<DBNotification[] | null>(
+          GET_NOTIFICATIONS_QUERY,
+          { limit: 50 },
+          'notifications',
+        );
         notificationStore.upsertMany(data ?? []);
-        setLoading(false);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          toast.error(t('notifications.toasts.loadFailed'));
-          setLoadError(true);
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [notificationStore, t, reloadKey]);
-
-  const retryLoad = useCallback(() => setReloadKey(k => k + 1), []);
+        return data ?? [];
+      } catch (err) {
+        toast.error(t('notifications.toasts.loadFailed'));
+        throw err;
+      }
+    },
+    [notificationStore, t],
+    [],
+  );
 
   // Reactive — re-renders when the store is updated (e.g. via WS sync actions)
   const notifications = notificationStore.all;

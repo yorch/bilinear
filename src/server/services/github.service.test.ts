@@ -448,6 +448,10 @@ describe('GitHubService', () => {
         stateId: completedState.id,
       };
       prisma.issue.update.mockResolvedValue(updatedIssue);
+      // `SyncService.recordSyncAction` drops the Yjs `descriptionState` blob
+      // from every Issue payload (it replicates over Hocuspocus, not the
+      // SyncAction stream), so the recorded payload is the row minus that key.
+      const { descriptionState: _descriptionState, ...syncPayload } = updatedIssue;
 
       await service.handlePullRequestEvent(
         TEST_ORG.id,
@@ -494,9 +498,11 @@ describe('GitHubService', () => {
       // delta sync ships the change — before this fix, PR-merge auto-close
       // was a bare prisma write with no SyncAction, and clients showed the
       // issue open forever.
+      // `syncPayload`, not `updatedIssue`: `recordSyncAction` strips the Yjs
+      // `descriptionState` blob from every Issue payload.
       expect(readSyncActionInserts(prisma)).toContainEqual({
         action: 'U',
-        data: JSON.parse(JSON.stringify(updatedIssue)),
+        data: JSON.parse(JSON.stringify(syncPayload)),
         modelId: TEST_ISSUE.id,
         modelName: 'Issue',
         organizationId: TEST_ORG.id,

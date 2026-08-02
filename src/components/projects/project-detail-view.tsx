@@ -7,10 +7,13 @@ import { useMemo } from 'react';
 import { ProgressSparkline } from '@/components/projects/progress-sparkline';
 import { ProjectMilestonesSection } from '@/components/projects/project-milestones-section';
 import { ProjectUpdatesSection } from '@/components/projects/project-updates-section';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { SimpleSelect } from '@/components/ui/select';
 import { useDocumentTitle } from '@/hooks/use-document-title';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
-import { gqlMutate } from '@/lib/graphql';
+import { gqlMutate, gqlQuery } from '@/lib/graphql';
+import { PROJECT_PROGRESS_QUERY } from '@/lib/graphql-queries';
 import { buildIssueHref } from '@/lib/issue-nav';
 import {
   PROJECT_HEALTH_LABEL_KEYS,
@@ -28,6 +31,12 @@ interface ProjectDetailViewProps {
   workspaceKey: string;
 }
 
+/** `progress` is a 0..1 fraction; `scope` is the live issue count. */
+interface ServerProgress {
+  progress: number;
+  scope: number;
+}
+
 export const ProjectDetailView = observer(function ProjectDetailView({
   projectSlugId,
   workspaceKey,
@@ -39,21 +48,35 @@ export const ProjectDetailView = observer(function ProjectDetailView({
 
   useDocumentTitle(project?.name);
 
+  // The issue *list* below stays store-derived on purpose: it renders the
+  // issues this client actually holds, and each row links to one. The progress
+  // *percentage* must not be derived from it — see `projectProgress` below.
   // useMemo must be called before any early return (Rules of Hooks).
   // pool.size is the MobX reactive dependency per repo convention.
   // biome-ignore lint/correctness/useExhaustiveDependencies: issueStore.pool.size is the intentional reactive trigger
-  const { projectIssues, completedIssues, progress } = useMemo(() => {
-    if (!project) {
-      return { completedIssues: [], progress: 0, projectIssues: [] };
-    }
-    const all = issueStore.findByProjectId(project.id);
-    const done = all.filter(i => i.completedAt);
-    return {
-      completedIssues: done,
-      progress: all.length > 0 ? Math.round((done.length / all.length) * 100) : 0,
-      projectIssues: all,
-    };
-  }, [project?.id, issueStore.pool.size]);
+  const projectIssues = useMemo(
+    () => (project ? issueStore.findByProjectId(project.id) : []),
+    [project?.id, issueStore.pool.size],
+  );
+
+  const projectId = project?.id;
+  // Progress comes from the server. Dividing over `issueStore` divides over
+  // whatever issues this client happens to hold, and a guest's pool is scoped
+  // to issues they created or are assigned — so one owned issue in a 50-issue
+  // project renders as 100%. `Project.progress`/`Project.scope` are resolved
+  // from the full issue set server-side.
+  const {
+    data: projectProgress,
+    error: progressError,
+    refetch: refetchProgress,
+  } = useRetryableFetch<ServerProgress | null>(
+    () =>
+      projectId
+        ? gqlQuery<ServerProgress | null>(PROJECT_PROGRESS_QUERY, { id: projectId }, 'project')
+        : Promise.resolve(null),
+    [projectId],
+    null,
+  );
 
   if (!project) {
     return (
@@ -65,6 +88,19 @@ export const ProjectDetailView = observer(function ProjectDetailView({
 
   const status = PROJECT_STATUS_CONFIG[project.statusType] ?? PROJECT_STATUS_CONFIG.planned;
   const lead = project.leadId ? userStore.findById(project.leadId) : null;
+
+  // Null until the server answers (and while retrying after a failure) — the
+  // bar and the ratio render blank rather than defaulting to 0%, which is the
+  // silently-wrong value this whole path exists to avoid. `completed` is
+  // recovered from the server's own ratio: `progress` is completed/scope, so
+  // rounding the product back out is exact for any realistic issue count.
+  const progressStats = projectProgress
+    ? {
+        completed: Math.round(projectProgress.progress * projectProgress.scope),
+        percent: Math.round(projectProgress.progress * 100),
+        total: projectProgress.scope,
+      }
+    : null;
 
   const handleStatusChange = async (newStatus: string) => {
     try {
@@ -175,19 +211,30 @@ export const ProjectDetailView = observer(function ProjectDetailView({
                 {t('projects.progress')}
               </span>
               <span className="text-xs tabular-nums text-muted-foreground">
-                {t('projects.issuesCountRatio', {
-                  completed: completedIssues.length,
-                  progress,
-                  total: projectIssues.length,
-                })}
+                {progressStats
+                  ? t('projects.issuesCountRatio', {
+                      completed: progressStats.completed,
+                      progress: progressStats.percent,
+                      total: progressStats.total,
+                    })
+                  : '—'}
               </span>
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-brand transition-all"
-                style={{ width: `${progress}%` }}
-              />
+              {progressStats && (
+                <div
+                  className="h-full rounded-full bg-brand transition-all"
+                  style={{ width: `${progressStats.percent}%` }}
+                />
+              )}
             </div>
+            {progressError && (
+              <InlineRetry
+                className="py-2"
+                message={t('common.somethingWentWrong')}
+                onRetry={() => refetchProgress()}
+              />
+            )}
             <div className="mt-3 flex items-center justify-between">
               <span className="text-xs text-muted-foreground">{t('projects.trend')}</span>
               <ProgressSparkline projectId={project.id} />

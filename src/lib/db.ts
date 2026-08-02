@@ -152,9 +152,7 @@ export interface DBProject {
   organizationId: string;
   priority: number;
   prioritySortOrder: number;
-  progress: number;
   roadmapVisible: boolean;
-  scope: number;
   slugId: string;
   startDate?: string | null;
   startDateResolution?: string | null;

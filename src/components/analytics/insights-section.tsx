@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery } from '@/lib/graphql';
 
@@ -213,54 +214,28 @@ export function InsightsSection({
     setLocalPreset(p);
     onPresetChange?.(p);
   };
-  const [data, setData] = useState<InsightsData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
-
   const input = useMemo(() => ({ teamId, ...rangeForPreset(preset) }), [preset, teamId]);
 
-  // `gqlQuery` throws on a GraphQL-level failure. Without it, a rejected read
-  // fell through to `?? []` on all four charts — four charts confidently
-  // asserting the team shipped nothing — and the missing rejection handler
-  // also left `setLoading(false)` unreached, hanging on "Loading…" forever.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is the retry trigger, not read inside the effect
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(false);
-    gqlQuery<{
-      analyticsCycleTimeHistogram: HistogramBucket[];
-      analyticsLeadTimeHistogram: HistogramBucket[];
-      analyticsThroughputByWeek: ThroughputPoint[];
-      analyticsTimeInState: TimeInStateRow[];
-    }>(INSIGHTS_QUERY, { input })
-      .then(d => {
-        if (cancelled) {
-          return;
-        }
-        setData({
-          cycle: d.analyticsCycleTimeHistogram,
-          lead: d.analyticsLeadTimeHistogram,
-          throughput: d.analyticsThroughputByWeek,
-          timeInState: d.analyticsTimeInState,
-        });
-        setLoading(false);
-      })
-      .catch(() => {
-        if (cancelled) {
-          return;
-        }
-        setData(null);
-        setError(true);
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [input, reloadKey]);
-
-  const retry = useCallback(() => setReloadKey(k => k + 1), []);
+  // A rejected read must not fall through to `?? []` on all four charts —
+  // four charts confidently asserting the team shipped nothing.
+  const { data, error, loading, refetch } = useRetryableFetch<InsightsData | null>(
+    async () => {
+      const d = await gqlQuery<{
+        analyticsCycleTimeHistogram: HistogramBucket[];
+        analyticsLeadTimeHistogram: HistogramBucket[];
+        analyticsThroughputByWeek: ThroughputPoint[];
+        analyticsTimeInState: TimeInStateRow[];
+      }>(INSIGHTS_QUERY, { input });
+      return {
+        cycle: d.analyticsCycleTimeHistogram,
+        lead: d.analyticsLeadTimeHistogram,
+        throughput: d.analyticsThroughputByWeek,
+        timeInState: d.analyticsTimeInState,
+      };
+    },
+    [input],
+    null,
+  );
 
   return (
     <div className="mt-5">
@@ -287,7 +262,7 @@ export function InsightsSection({
       {loading ? (
         <p className="text-xs text-muted-foreground">{t('analytics.insights.loading')}</p>
       ) : error ? (
-        <InlineRetry message={t('analytics.workspace.failedToLoad')} onRetry={retry} />
+        <InlineRetry message={t('analytics.workspace.failedToLoad')} onRetry={refetch} />
       ) : (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           <div className="rounded-lg border border-border bg-card p-5">

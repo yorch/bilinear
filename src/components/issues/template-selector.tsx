@@ -1,26 +1,14 @@
 'use client';
 
 import { FileText, Star, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { SelectPopover } from '@/components/ui/select-popover';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery } from '@/lib/graphql';
+import { ISSUE_TEMPLATES_QUERY } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
-
-// ─── GraphQL ──────────────────────────────────────────────────────────────────
-
-const GET_ISSUE_TEMPLATES = `
-  query GetIssueTemplates($teamId: String!) {
-    issueTemplates(teamId: $teamId) {
-      id
-      name
-      description
-      templateData
-      isDefault
-    }
-  }
-`;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,45 +31,30 @@ interface TemplateSelectorProps {
 
 export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: TemplateSelectorProps) {
   const t = useTranslations();
-  const [templates, setTemplates] = useState<IssueTemplate[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadError, setLoadError] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
-
-  // Load templates once when dropdown opens (or on mount if teamId is available).
-  // `gqlQuery` throws on a GraphQL-level failure so it reaches the catch — the
-  // old `Array.isArray(result.data?.issueTemplates)` guard left `templates` at
-  // [], which unmounted the whole picker as if the team simply had none.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is a deliberate refetch trigger, not read inside the effect
-  useEffect(() => {
-    if (!teamId) {
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    gqlQuery<IssueTemplate[]>(GET_ISSUE_TEMPLATES, { teamId }, 'issueTemplates')
-      .then(data => {
-        if (cancelled) {
-          return;
-        }
-        setTemplates(data ?? []);
-        setLoadError(false);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLoadError(true);
-          toast.error(t('issueDetail.templates.failedToLoad'));
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [teamId, t, reloadKey]);
+  // A failed read must not leave `templates` at [], which would unmount the
+  // whole picker as if the team simply had none.
+  const {
+    data: templates,
+    error: loadError,
+    loading,
+    refetch,
+  } = useRetryableFetch<IssueTemplate[]>(
+    async () => {
+      try {
+        const data = await gqlQuery<IssueTemplate[]>(
+          ISSUE_TEMPLATES_QUERY,
+          { teamId },
+          'issueTemplates',
+        );
+        return data ?? [];
+      } catch (err) {
+        toast.error(t('issueDetail.templates.failedToLoad'));
+        throw err;
+      }
+    },
+    [teamId, t],
+    [],
+  );
 
   // Sort: default first, then alphabetical
   const sorted = useMemo(
@@ -139,7 +112,7 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
             <InlineRetry
               className="px-3"
               message={t('issueDetail.templates.failedToLoad')}
-              onRetry={() => setReloadKey(k => k + 1)}
+              onRetry={refetch}
             />
           ) : sorted.length === 0 ? (
             <p className="px-3 py-4 text-center text-xs text-muted-foreground italic">

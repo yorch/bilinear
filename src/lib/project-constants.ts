@@ -71,19 +71,3 @@ export const PROJECT_HEALTH_LABEL_KEYS: Record<string, string> = {
   offTrack: 'properties.updateForm.health.offTrack',
   onTrack: 'properties.updateForm.health.onTrack',
 };
-
-/**
- * Client-side mirror of `ProjectService.getProgress`: completed / total over a
- * project's live issues. `issueStore.findByProjectId` already applies the same
- * `!trashed && !archivedAt` filter the server uses.
- *
- * The `Project.progress` column exists but nothing ever writes it — the server
- * computes progress on read — so anything rendering the stored value showed 0%
- * for every project.
- */
-export function computeProjectProgress(issues: { completedAt?: string | null }[]): number {
-  if (issues.length === 0) {
-    return 0;
-  }
-  return issues.filter(i => i.completedAt).length / issues.length;
-}

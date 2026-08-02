@@ -26,6 +26,7 @@ CREATE TABLE "organizations" (
     "max_export_rows" INTEGER NOT NULL DEFAULT 10000,
     "suspended_at" TIMESTAMPTZ,
     "suspended_reason" TEXT,
+    "sync_actions_pruned_through_xact_id" DECIMAL(20,0),
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ NOT NULL,
     "archived_at" TIMESTAMPTZ,
@@ -281,8 +282,6 @@ CREATE TABLE "projects" (
     "health_updated_at" TIMESTAMPTZ,
     "priority" SMALLINT NOT NULL DEFAULT 0,
     "priority_sort_order" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "progress" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "scope" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "start_date" DATE,
     "target_date" DATE,
     "start_date_resolution" VARCHAR(20),
@@ -1478,6 +1477,9 @@ ALTER TABLE "files" ADD CONSTRAINT "files_issue_id_fkey" FOREIGN KEY ("issue_id"
 ALTER TABLE "files" ADD CONSTRAINT "files_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "files" ADD CONSTRAINT "files_uploader_id_fkey" FOREIGN KEY ("uploader_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "comments" ADD CONSTRAINT "comments_issue_id_fkey" FOREIGN KEY ("issue_id") REFERENCES "issues"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1556,6 +1558,9 @@ ALTER TABLE "webhooks" ADD CONSTRAINT "webhooks_organization_id_fkey" FOREIGN KE
 ALTER TABLE "webhooks" ADD CONSTRAINT "webhooks_created_by_id_fkey" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "webhooks" ADD CONSTRAINT "webhooks_team_id_fkey" FOREIGN KEY ("team_id") REFERENCES "teams"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "webhook_deliveries" ADD CONSTRAINT "webhook_deliveries_webhook_id_fkey" FOREIGN KEY ("webhook_id") REFERENCES "webhooks"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1581,6 +1586,9 @@ ALTER TABLE "github_pull_requests" ADD CONSTRAINT "github_pull_requests_integrat
 
 -- AddForeignKey
 ALTER TABLE "slack_integrations" ADD CONSTRAINT "slack_integrations_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "slack_integrations" ADD CONSTRAINT "slack_integrations_default_team_id_fkey" FOREIGN KEY ("default_team_id") REFERENCES "teams"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "automation_rules" ADD CONSTRAINT "automation_rules_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;

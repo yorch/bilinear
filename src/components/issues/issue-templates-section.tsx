@@ -18,7 +18,7 @@ const TEMPLATE_FIELDS = `
   id teamId creatorId name description templateData isDefault createdAt updatedAt archivedAt
 `;
 
-const CREATE_MUTATION = `
+const ISSUE_TEMPLATE_CREATE_MUTATION = `
   mutation IssueTemplateCreate($input: IssueTemplateCreateInput!) {
     issueTemplateCreate(input: $input) {
       success
@@ -28,7 +28,7 @@ const CREATE_MUTATION = `
   }
 `;
 
-const UPDATE_MUTATION = `
+const ISSUE_TEMPLATE_UPDATE_MUTATION = `
   mutation IssueTemplateUpdate($id: ID!, $input: IssueTemplateUpdateInput!) {
     issueTemplateUpdate(id: $id, input: $input) {
       success
@@ -38,7 +38,7 @@ const UPDATE_MUTATION = `
   }
 `;
 
-const DELETE_MUTATION = `
+const ISSUE_TEMPLATE_DELETE_MUTATION = `
   mutation IssueTemplateDelete($id: ID!) {
     issueTemplateDelete(id: $id) {
       success
@@ -99,7 +99,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleCreate = async (form: TemplateFormData) => {
-    const result = await gql(CREATE_MUTATION, {
+    const result = await gql(ISSUE_TEMPLATE_CREATE_MUTATION, {
       input: {
         description: form.description.trim() || null,
         isDefault: form.isDefault,
@@ -121,7 +121,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
   };
 
   const handleUpdate = async (id: string, form: TemplateFormData) => {
-    const result = await gql(UPDATE_MUTATION, {
+    const result = await gql(ISSUE_TEMPLATE_UPDATE_MUTATION, {
       id,
       input: {
         description: form.description.trim() || null,
@@ -145,7 +145,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     try {
-      const result = await gql(DELETE_MUTATION, { id });
+      const result = await gql(ISSUE_TEMPLATE_DELETE_MUTATION, { id });
       if (result.errors?.length) {
         toast.error(gqlError(result, t('issueDetail.templates.failedToDelete')));
         return;

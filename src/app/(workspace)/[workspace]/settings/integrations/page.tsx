@@ -195,7 +195,7 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
       const data = (await gqlMutate(GITHUB_ROTATE_SECRET_MUTATION, {
         newSecret: rotateSecret.trim(),
       })) as {
-        githubRotateWebhookSecret?: { success: boolean; integration: GitHubIntegration };
+        githubRotateWebhookSecret?: { success: boolean; integration: GitHubIntegration | null };
       };
       if (data.githubRotateWebhookSecret?.integration) {
         setIntegration(data.githubRotateWebhookSecret.integration);

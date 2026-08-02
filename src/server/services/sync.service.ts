@@ -1,6 +1,10 @@
 import type { Redis } from 'ioredis';
 import { Prisma, type PrismaClient } from '../../generated/prisma';
-import { DELTA_PAGE_SIZE, MAX_PLAUSIBLE_XACT_ID } from '../../lib/sync-config';
+import {
+  DELTA_PAGE_SIZE,
+  MAX_PLAUSIBLE_XACT_ID,
+  SYNC_ACTION_RETENTION_DAYS,
+} from '../../lib/sync-config';
 import { childLogger } from '../lib/logger';
 
 const log = childLogger({ module: 'sync' });
@@ -10,6 +14,61 @@ const log = childLogger({ module: 'sync' });
 // Sourced from the shared `sync-config` module so client and server can't
 // silently drift — see `src/lib/sync-config.ts`.
 export { DELTA_PAGE_SIZE };
+
+/**
+ * Per-model fields that must never ride a SyncAction payload.
+ *
+ * Enforced at `recordSyncAction` rather than at each row's producer: ~20
+ * emitters pass through here, several of them raw `prisma.issue.findUnique`
+ * calls in `automation.service.ts` and `ws/index.ts` that never touch
+ * `IssueService`, so a per-service fix would miss them.
+ *
+ * - `descriptionState`/`contentState` are Yjs collaborative-editing blobs
+ *   re-synced through Hocuspocus, not this stream. A `Bytes` column nested in a
+ *   jsonb param does not throw — it is base64-encoded — so leaving them in
+ *   silently shipped ~1.33x the blob to every client in the org and into their
+ *   IndexedDB. `getBootstrapData` already omits them for the same reason.
+ * - `Organization.authSettings`/`securitySettings` are admin-console settings
+ *   blobs; a SyncAction fans out to every member.
+ */
+const SYNC_PAYLOAD_OMITTED_FIELDS: Record<string, readonly string[]> = {
+  Document: ['contentState'],
+  Issue: ['descriptionState'],
+  Organization: ['authSettings', 'securitySettings'],
+};
+
+function stripSyncPayload(modelName: string, data: object | null): object | null {
+  const omitted = SYNC_PAYLOAD_OMITTED_FIELDS[modelName];
+  if (!omitted || data === null) {
+    return data;
+  }
+  const record = data as Record<string, unknown>;
+  // Keep the common path allocation-free — most rows carry none of these.
+  if (!omitted.some(field => field in record)) {
+    return data;
+  }
+  const copy = { ...record };
+  for (const field of omitted) {
+    delete copy[field];
+  }
+  return copy;
+}
+
+/**
+ * Per-project cap on bootstrap project updates. Applied as a nested `take` so
+ * one busy project cannot crowd every other project's updates out of the cache
+ * — an org-wide `take` silently truncated whole projects to nothing.
+ */
+const BOOTSTRAP_PROJECT_UPDATES_PER_PROJECT = 50;
+
+/**
+ * Org-level ceiling on the same. The per-project cap alone bounds nothing at
+ * org level — 300 projects would ship 15k rich-text bodies — so the flattened
+ * result is trimmed newest-first. Both caps are needed: one for fairness
+ * between projects, one to bound the payload regardless of project count.
+ * Anything beyond is reachable online through `Project.updates`.
+ */
+const BOOTSTRAP_PROJECT_UPDATES_TOTAL = 1000;
 
 export type SyncActionType = 'I' | 'U' | 'D' | 'A';
 
@@ -188,7 +247,10 @@ export class SyncService {
         ${action},
         ${modelName},
         ${modelId}::uuid,
-        ${data === null ? null : JSON.stringify(data)}::jsonb
+        ${(() => {
+          const payload = stripSyncPayload(modelName, data);
+          return payload === null ? null : JSON.stringify(payload);
+        })()}::jsonb
       )
       RETURNING ${SYNC_ACTION_COLUMNS}
     `);
@@ -299,7 +361,7 @@ export class SyncService {
       documents,
       projects,
       projectMilestones,
-      projectUpdates,
+      projectsWithUpdates,
       customViews,
       issueRelations,
       issueTemplates,
@@ -377,16 +439,21 @@ export class SyncService {
           project: { archivedAt: null, organizationId: orgId, trashed: false },
         },
       }),
-      this.prisma.projectUpdate.findMany({
-        orderBy: { createdAt: 'desc' },
-        take: 500,
-        where: {
-          // Filter the update itself, not just its project. Deleting an update
-          // is a soft delete that broadcasts a 'D' action, so live clients drop
-          // it — but any client bootstrapping afterwards downloaded it again.
-          archivedAt: null,
-          project: { archivedAt: null, organizationId: orgId, trashed: false },
+      // Read through the project relation so the cap applies PER PROJECT
+      // (Prisma runs a nested `take` once per parent row) instead of once
+      // across the whole org. The `archivedAt: null` on the update itself
+      // matters: deleting one is a soft delete that broadcasts a 'D' action, so
+      // live clients drop it — but a client bootstrapping afterwards used to
+      // download it again.
+      this.prisma.project.findMany({
+        select: {
+          updates: {
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            take: BOOTSTRAP_PROJECT_UPDATES_PER_PROJECT,
+            where: { archivedAt: null },
+          },
         },
+        where: { archivedAt: null, organizationId: orgId, trashed: false },
       }),
       this.prisma.customView.findMany({
         where: { archivedAt: null, organizationId: orgId },
@@ -442,6 +509,18 @@ export class SyncService {
       ids.push(a.labelId);
       labelIdsByIssue.set(a.issueId, ids);
     }
+
+    // Newest-first across the whole org, then trimmed — the ordering decides
+    // which survive the org-level cap, so it drops the oldest rather than
+    // whichever projects happen to sort last. `id` breaks `createdAt` ties so
+    // the trim is deterministic across bootstraps.
+    const projectUpdates = projectsWithUpdates
+      .flatMap(p => p.updates)
+      .sort((a, b) => {
+        const byDate = b.createdAt.getTime() - a.createdAt.getTime();
+        return byDate !== 0 ? byDate : b.id.localeCompare(a.id);
+      })
+      .slice(0, BOOTSTRAP_PROJECT_UPDATES_TOTAL);
 
     const cursor = bootstrapCursor;
 
@@ -508,13 +587,90 @@ export class SyncService {
    * paginate by resubmitting with the last cursor, so this just means an
    * extra round-trip, not a correctness gap.
    */
+  /**
+   * Delete `sync_actions` rows older than the retention window, and record how
+   * far the deletion reached so `getDeltaSyncActions` can recognise a cursor
+   * that can no longer be caught up.
+   *
+   * Prunes on `created_at` (which has its own index) rather than `xact_id`:
+   * retention is a wall-clock policy, and xid8 ordering is a commit order, not
+   * a time order. But the *mark* is the highest `xact_id` actually deleted,
+   * because that is the space the cursor lives in.
+   *
+   * One statement, deliberately. An earlier version marked and deleted
+   * separately, which left a window where a delta could read the old mark and
+   * be served a silently incomplete page — advancing its cursor past rows that
+   * no longer exist. A data-modifying CTE makes both halves atomic, so a
+   * concurrent delta sees either the whole prune or none of it.
+   *
+   * `GREATEST(COALESCE(existing, 0), …)` because the mark must never move
+   * backwards: under-reporting staleness corrupts a cache, over-reporting costs
+   * one bootstrap.
+   */
+  async pruneSyncActions(): Promise<number> {
+    const cutoffMs = Date.now() - SYNC_ACTION_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    const cutoff = new Date(cutoffMs);
+
+    const [result] = await this.prisma.$queryRaw<Array<{ deleted: number; orgs: number }>>(
+      Prisma.sql`
+        WITH deleted AS (
+          DELETE FROM "sync_actions"
+          WHERE "created_at" < ${cutoff}
+          RETURNING "organization_id", "xact_id"::text::numeric AS "xact_num"
+        ), marks AS (
+          SELECT "organization_id", MAX("xact_num") AS "max_xact"
+          FROM deleted
+          GROUP BY "organization_id"
+        ), marked AS (
+          UPDATE "organizations" o
+          SET "sync_actions_pruned_through_xact_id" =
+            GREATEST(COALESCE(o."sync_actions_pruned_through_xact_id", 0), m."max_xact")
+          FROM marks m
+          WHERE o."id" = m."organization_id"
+          RETURNING 1
+        )
+        SELECT
+          (SELECT count(*) FROM deleted)::int AS "deleted",
+          (SELECT count(*) FROM marked)::int AS "orgs"
+      `,
+    );
+
+    const deleted = result?.deleted ?? 0;
+    if (deleted > 0) {
+      log.info(
+        { count: deleted, orgCount: result?.orgs ?? 0, retentionDays: SYNC_ACTION_RETENTION_DAYS },
+        'Pruned old sync actions',
+      );
+    }
+    return deleted;
+  }
+
   async getDeltaSyncActions(
     orgId: string,
     fromCursor: DeltaCursor,
     toCursor?: DeltaCursor,
     limit = DELTA_PAGE_SIZE,
     guestScope?: { userId: string; guestTeamIds: string[] },
-  ): Promise<{ actions: SyncActionRow[]; hasMore: boolean }> {
+  ): Promise<{ actions: SyncActionRow[]; hasMore: boolean; staleCursor: boolean }> {
+    // A cursor at or below the retention high-water mark cannot be caught up:
+    // the rows between it and the mark have been deleted. Serving whatever
+    // survives would look like a successful sync while leaving the client's
+    // cache permanently missing the pruned span, so tell it to re-bootstrap.
+    //
+    // Compared in xid8 space because that is what the cursor is keyed on — the
+    // mark records the highest `xact_id` the sweep actually deleted, not a
+    // wall-clock time, so it stays meaningful under the commit-order fence.
+    const org = await this.prisma.organization.findUnique({
+      select: { syncActionsPrunedThroughXactId: true },
+      where: { id: orgId },
+    });
+    const prunedThrough = org?.syncActionsPrunedThroughXactId;
+    if (prunedThrough !== null && prunedThrough !== undefined) {
+      if (fromCursor.xactId < BigInt(prunedThrough.toString())) {
+        return { actions: [], hasMore: false, staleCursor: true };
+      }
+    }
+
     const fromXact = fromCursor.xactId.toString();
 
     // Lower bound — `(xact_id, id) > (fromXact, fromId)`. xid8 is passed as a
@@ -551,10 +707,10 @@ export class SyncService {
         guestScope.guestTeamIds,
         guestScope.userId,
       );
-      return { actions, hasMore };
+      return { actions, hasMore, staleCursor: false };
     }
 
-    return { actions: page, hasMore };
+    return { actions: page, hasMore, staleCursor: false };
   }
 
   /**
@@ -712,7 +868,23 @@ export class SyncService {
       LIMIT 1
     `);
     const last = rows[0];
-    return last ? encodeCursor(BigInt(last.xactId), last.id) : '0-0';
+    if (last) {
+      return encodeCursor(BigInt(last.xactId), last.id);
+    }
+
+    // No settled rows — the caller is nonetheless fully caught up, it just
+    // downloaded everything. Anchoring at '0-0' would read as "infinitely far
+    // behind", so once this org has had anything pruned the next delta answers
+    // `staleCursor` and sends the client straight back to bootstrap, forever.
+    //
+    // `xmin - 1` rather than `xmin`: the cursor is exclusive (`xact_id >`), and
+    // a row sitting exactly at xmin belongs to a transaction still in flight.
+    // Subtracting one keeps it deliverable once it settles.
+    const [{ xmin }] = await this.prisma.$queryRaw<Array<{ xmin: string }>>(Prisma.sql`
+      SELECT pg_snapshot_xmin(pg_current_snapshot())::text AS "xmin"
+    `);
+    const frontier = BigInt(xmin);
+    return encodeCursor(frontier > BigInt(0) ? frontier - BigInt(1) : BigInt(0), BigInt(0));
   }
 }
 

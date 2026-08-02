@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTranslations } from '@/hooks/use-translations';
 import { installSessionCookies } from '@/lib/auth-session';
-import { gql } from '@/lib/graphql';
+import { GqlError, gqlQuery, isGqlErrorCode } from '@/lib/graphql';
 import { EMAIL_VERIFY_MUTATION } from '@/lib/graphql-queries';
 import { safeRelativePath } from '@/lib/safe-path';
 
@@ -43,31 +43,25 @@ export function VerifyCodeForm() {
     setError(null);
 
     try {
-      const data = await gql(EMAIL_VERIFY_MUTATION, {
-        input: { code: verifyCode, email },
-      });
-
-      if (data.errors?.length) {
-        const err = data.errors[0] as {
-          message: string;
-          extensions?: { code: string };
-        };
-        setError(err.extensions?.code === 'INVALID_CODE' ? t('auth.invalidCode') : err.message);
-        return;
-      }
-
-      const { accessToken, refreshToken } = (
-        data.data as {
-          emailVerify: { accessToken: string; refreshToken: string };
-        }
-      ).emailVerify;
+      const { accessToken, refreshToken } = await gqlQuery<{
+        accessToken: string;
+        refreshToken: string;
+      }>(EMAIL_VERIFY_MUTATION, { input: { code: verifyCode, email } }, 'emailVerify');
 
       // Store tokens in httpOnly cookies via the session API
       await installSessionCookies({ accessToken, refreshToken });
 
       router.push(next);
-    } catch {
-      setError(t('common.somethingWentWrong'));
+    } catch (err) {
+      // A wrong/expired code is the expected failure and gets its own copy;
+      // any other rejected request shows the server's message. A transport
+      // failure (or a throw from installSessionCookies) has no message worth
+      // showing, so it keeps the generic fallback.
+      if (isGqlErrorCode(err, 'INVALID_CODE')) {
+        setError(t('auth.invalidCode'));
+      } else {
+        setError(err instanceof GqlError ? err.message : t('common.somethingWentWrong'));
+      }
     } finally {
       setLoading(false);
     }

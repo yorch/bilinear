@@ -236,7 +236,7 @@ test.describe('Triage', () => {
 
       const resp = await fetch('/api/graphql', {
         body: JSON.stringify({
-          query: `query($teamId: String!) { issues(filter: { teamId: $teamId }, first: 50) { edges { node { identifier title } } } }`,
+          query: `query($teamId: ID!) { issues(filter: { teamId: $teamId }, first: 50) { edges { node { identifier title } } } }`,
           variables: { teamId: team.id },
         }),
         credentials: 'include',

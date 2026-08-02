@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery } from '@/lib/graphql';
 import { PROJECT_PROGRESS_HISTORY_QUERY } from '@/lib/graphql-queries';
@@ -23,41 +23,36 @@ interface ProgressSparklineProps {
 
 export function ProgressSparkline({ projectId, width = 160, height = 28 }: ProgressSparklineProps) {
   const t = useTranslations();
-  const [points, setPoints] = useState<ProgressHistoryPoint[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState(false);
-
-  const fetchHistory = useCallback(async () => {
-    // `gqlQuery` throws on a GraphQL-level failure so a rejected read can't
-    // render as "Not enough history yet" — a specific, false claim.
-    setError(false);
-    try {
+  // A rejected read must not fall through to "Not enough history yet" — a
+  // specific, false claim. `useRetryableFetch` only sets `error` when the
+  // fetcher throws, which is why the fetcher must not swallow the failure.
+  const {
+    data: points,
+    error,
+    loading,
+    refetch,
+  } = useRetryableFetch<ProgressHistoryPoint[]>(
+    async () => {
       const project = await gqlQuery<{ progressHistory: ProgressHistoryPoint[] } | null>(
         PROJECT_PROGRESS_HISTORY_QUERY,
         { id: projectId },
         'project',
       );
-      setPoints(project?.progressHistory ?? []);
-    } catch {
-      setError(true);
-    } finally {
-      setLoaded(true);
-    }
-  }, [projectId]);
+      return project?.progressHistory ?? [];
+    },
+    [projectId],
+    [],
+  );
 
-  useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory]);
-
-  if (!loaded) {
+  if (loading) {
     return <Skeleton className="h-7 w-40" />;
   }
   if (error) {
     return (
       <InlineRetry
         className="py-0"
-        message={t('errors.somethingWentWrong')}
-        onRetry={fetchHistory}
+        message={t('common.somethingWentWrong')}
+        onRetry={() => refetch()}
       />
     );
   }

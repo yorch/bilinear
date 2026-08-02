@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery } from '@/lib/graphql';
 
@@ -35,7 +36,7 @@ interface CycleVelocitySectionProps {
 // GraphQL query
 // ---------------------------------------------------------------------------
 
-const CYCLE_VELOCITY_QUERY = `
+const CYCLE_VELOCITY_TREND_QUERY = `
   query CycleVelocityTrend($input: AnalyticsInput) {
     analyticsCycleVelocityTrend(input: $input) {
       cycles {
@@ -133,46 +134,20 @@ type MetricMode = 'issues' | 'points';
 
 export function CycleVelocitySection({ teamId }: CycleVelocitySectionProps) {
   const t = useTranslations();
-  const [data, setData] = useState<CycleVelocityTrendResult | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
   const [mode, setMode] = useState<MetricMode>('issues');
 
-  // `gqlQuery` throws on a GraphQL-level failure — the previous `.catch` only
-  // cleared the spinner, leaving a rejected read to render as "No completed
-  // cycles yet" plus three em-dash rolling averages.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is the retry trigger, not read inside the effect
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(false);
-    gqlQuery<CycleVelocityTrendResult>(
-      CYCLE_VELOCITY_QUERY,
-      { input: { teamId } },
-      'analyticsCycleVelocityTrend',
-    )
-      .then(result => {
-        if (cancelled) {
-          return;
-        }
-        setData(result);
-        setLoading(false);
-      })
-      .catch(() => {
-        if (cancelled) {
-          return;
-        }
-        setData(null);
-        setError(true);
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [teamId, reloadKey]);
-
-  const retry = useCallback(() => setReloadKey(k => k + 1), []);
+  // A rejected read must not render as "No completed cycles yet" plus three
+  // em-dash rolling averages.
+  const { data, error, loading, refetch } = useRetryableFetch<CycleVelocityTrendResult | null>(
+    () =>
+      gqlQuery<CycleVelocityTrendResult>(
+        CYCLE_VELOCITY_TREND_QUERY,
+        { input: { teamId } },
+        'analyticsCycleVelocityTrend',
+      ),
+    [teamId],
+    null,
+  );
 
   const chartData = useMemo(() => {
     if (!data) {
@@ -214,7 +189,7 @@ export function CycleVelocitySection({ teamId }: CycleVelocitySectionProps) {
       {loading ? (
         <p className="text-xs text-muted-foreground">{t('analytics.velocity.loading')}</p>
       ) : error ? (
-        <InlineRetry message={t('analytics.workspace.failedToLoad')} onRetry={retry} />
+        <InlineRetry message={t('analytics.workspace.failedToLoad')} onRetry={refetch} />
       ) : (
         <>
           <div className="mb-3 rounded-lg border border-border bg-card p-5">

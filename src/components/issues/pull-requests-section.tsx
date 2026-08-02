@@ -1,9 +1,9 @@
 'use client';
 
 import { ExternalLink, GitMerge, GitPullRequest, GitPullRequestClosed } from 'lucide-react';
-import { useEffect, useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { Badge } from '@/components/ui/badge';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery } from '@/lib/graphql';
 import { PULL_REQUESTS_QUERY } from '@/lib/graphql-queries';
@@ -29,40 +29,25 @@ interface IssuePullRequestsSectionProps {
 
 export function PullRequestsSection({ issueId }: IssuePullRequestsSectionProps) {
   const t = useTranslations();
-  const [prs, setPrs] = useState<PullRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
-
-  // `gqlQuery` throws on a GraphQL-level failure so the error branch below is
-  // reachable — the old `.catch(() => setPrs([]))` unmounted the section, which
-  // read as the authoritative "this issue has no pull requests".
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is a deliberate refetch trigger, not read inside the effect
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    gqlQuery<{ pullRequests?: PullRequest[] } | null>(PULL_REQUESTS_QUERY, { issueId }, 'issue')
-      .then(issue => {
-        if (cancelled) {
-          return;
-        }
-        setPrs(issue?.pullRequests ?? []);
-        setLoadError(false);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLoadError(true);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [issueId, reloadKey]);
+  // A failed read must not unmount the section, which would read as the
+  // authoritative "this issue has no pull requests".
+  const {
+    data: prs,
+    error: loadError,
+    loading,
+    refetch,
+  } = useRetryableFetch<PullRequest[]>(
+    async () => {
+      const issue = await gqlQuery<{ pullRequests?: PullRequest[] } | null>(
+        PULL_REQUESTS_QUERY,
+        { issueId },
+        'issue',
+      );
+      return issue?.pullRequests ?? [];
+    },
+    [issueId],
+    [],
+  );
 
   if (loading) {
     return null;
@@ -74,11 +59,7 @@ export function PullRequestsSection({ issueId }: IssuePullRequestsSectionProps) 
         <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           {t('issueDetail.pullRequests.title')}
         </h3>
-        <InlineRetry
-          className="py-2"
-          message={t('common.somethingWentWrong')}
-          onRetry={() => setReloadKey(k => k + 1)}
-        />
+        <InlineRetry className="py-2" message={t('common.somethingWentWrong')} onRetry={refetch} />
       </div>
     );
   }

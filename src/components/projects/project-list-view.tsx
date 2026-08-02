@@ -4,7 +4,11 @@ import { Calendar, Plus, Target } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
+import { InlineRetry } from '@/components/shared/inline-retry';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
+import { gqlQuery } from '@/lib/graphql';
+import { PROJECTS_PROGRESS_QUERY } from '@/lib/graphql-queries';
 import {
   PROJECT_HEALTH_CONFIG,
   PROJECT_HEALTH_LABEL_KEYS,
@@ -17,6 +21,14 @@ import { useStore } from '@/providers/store-provider';
 interface ProjectListViewProps {
   workspaceKey: string;
 }
+
+/** `progress` is a 0..1 fraction; `scope` is the live issue count. */
+interface ServerProgress {
+  progress: number;
+  scope: number;
+}
+
+type ProgressByProject = Map<string, ServerProgress>;
 
 const ACTIVE_STATUSES = ['inProgress', 'planned', 'backlog'];
 const COMPLETED_STATUSES = ['completed', 'canceled'];
@@ -37,6 +49,35 @@ export const ProjectListView = observer(function ProjectListView({
   const completedProjects = useMemo(
     () => projects.filter(p => COMPLETED_STATUSES.includes(p.statusType)),
     [projectStore.pool.size],
+  );
+
+  // Progress comes from the server, for every project on the page in one
+  // request. Dividing over `issueStore` divides over whatever issues this
+  // client happens to hold, and a guest's pool is scoped to issues they created
+  // or are assigned — so one owned issue in a 50-issue project renders as 100%.
+  // `Project.progress`/`Project.scope` are resolved from the full issue set
+  // server-side, behind the `projectProgress` DataLoader, so this is two queries
+  // for the whole list rather than one per row.
+  const {
+    data: progressByProject,
+    error: progressError,
+    refetch: refetchProgress,
+  } = useRetryableFetch<ProgressByProject>(
+    async () => {
+      const connection = await gqlQuery<{ nodes: Array<ServerProgress & { id: string }> } | null>(
+        PROJECTS_PROGRESS_QUERY,
+        {},
+        'projects',
+      );
+      return new Map(
+        (connection?.nodes ?? []).map(n => [n.id, { progress: n.progress, scope: n.scope }]),
+      );
+    },
+    // Refetch when the project set changes so a newly created project picks up
+    // a bar. Issue-level changes don't invalidate this — the server value is a
+    // snapshot, same as the initiatives page.
+    [projectStore.pool.size],
+    new Map(),
   );
 
   return (
@@ -64,8 +105,20 @@ export const ProjectListView = observer(function ProjectListView({
           </div>
         ) : (
           <div className="flex flex-col gap-6">
+            {/* One retry for the whole page — the per-row alternative would be
+                N copies of the same failure. Rows render no bar until this
+                lands, rather than a placeholder 0%. */}
+            {progressError && (
+              <InlineRetry
+                className="py-0"
+                message={t('common.somethingWentWrong')}
+                onRetry={() => refetchProgress()}
+              />
+            )}
+
             {activeProjects.length > 0 && (
               <ProjectGroup
+                progressByProject={progressByProject}
                 projects={activeProjects}
                 title={t('projects.active')}
                 workspaceKey={workspaceKey}
@@ -75,6 +128,7 @@ export const ProjectListView = observer(function ProjectListView({
             {completedProjects.length > 0 && (
               <ProjectGroup
                 defaultCollapsed
+                progressByProject={progressByProject}
                 projects={completedProjects}
                 title={t('projects.completed')}
                 workspaceKey={workspaceKey}
@@ -90,6 +144,7 @@ export const ProjectListView = observer(function ProjectListView({
 const ProjectGroup = observer(function ProjectGroup({
   title,
   projects,
+  progressByProject,
   workspaceKey,
   defaultCollapsed = false,
 }: {
@@ -106,29 +161,13 @@ const ProjectGroup = observer(function ProjectGroup({
     color: string;
     icon?: string | null;
   }>;
+  progressByProject: ProgressByProject;
   workspaceKey: string;
   defaultCollapsed?: boolean;
 }) {
   const t = useTranslations();
-  const { issueStore, userStore } = useStore();
+  const { userStore } = useStore();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
-
-  // Pre-compute progress stats for all projects in this group so we don't call
-  // findByProjectId() O(n) times inside the render loop. pool.size is the MobX
-  // reactive dependency per repo convention (using the Map itself is unstable).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: issueStore.pool.size is the intentional reactive trigger
-  const progressByProject = useMemo(() => {
-    const stats = new Map<string, { total: number; progress: number }>();
-    for (const project of projects) {
-      const allIssues = issueStore.findByProjectId(project.id);
-      const completed = allIssues.filter(i => i.completedAt).length;
-      stats.set(project.id, {
-        progress: allIssues.length > 0 ? Math.round((completed / allIssues.length) * 100) : 0,
-        total: allIssues.length,
-      });
-    }
-    return stats;
-  }, [projects, issueStore.pool.size]);
 
   return (
     <div>
@@ -160,10 +199,10 @@ const ProjectGroup = observer(function ProjectGroup({
             const health = project.health ? PROJECT_HEALTH_CONFIG[project.health] : null;
             const lead = project.leadId ? userStore.findById(project.leadId) : null;
 
-            const { total: totalIssues, progress } = progressByProject.get(project.id) ?? {
-              progress: 0,
-              total: 0,
-            };
+            // Absent until the server answers (and after a failed load): the
+            // bar is omitted entirely rather than rendered at a stand-in 0%.
+            const stats = progressByProject.get(project.id);
+            const progress = stats ? Math.round(stats.progress * 100) : 0;
 
             return (
               <Link
@@ -201,7 +240,7 @@ const ProjectGroup = observer(function ProjectGroup({
                   </div>
                 </div>
 
-                {totalIssues > 0 && (
+                {stats !== undefined && stats.scope > 0 && (
                   <div className="flex items-center gap-2">
                     <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
                       <div

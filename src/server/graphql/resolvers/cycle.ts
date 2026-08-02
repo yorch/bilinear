@@ -230,7 +230,7 @@ export const cycleResolvers = {
           'U',
           'Cycle',
           cycleId,
-          completed ?? { completedAt: new Date().toISOString(), id: cycleId },
+          completed,
         );
         void ctx.services.webhook
           .dispatchEvent(

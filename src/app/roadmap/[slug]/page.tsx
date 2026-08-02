@@ -4,6 +4,7 @@ import { cache } from 'react';
 import { PublicRoadmapView } from '@/components/roadmap/public-roadmap-view';
 import { getServerTranslations } from '@/lib/i18n/server';
 import { prisma } from '@/server/lib/prisma';
+import { ProjectService } from '@/server/services/project.service';
 import { verifyRoadmapPassword } from '@/server/services/roadmap.service';
 
 interface Props {
@@ -73,6 +74,12 @@ export default async function PublicRoadmapPage({ params, searchParams }: Props)
       },
     });
 
+    // Progress is computed from the issue set, never stored — `ProjectService`
+    // owns the rule and answers the whole list in two queries.
+    const progressById = await new ProjectService(prisma).getProgressBatch(
+      rawProjects.map(p => p.id),
+    );
+
     projects = rawProjects.map(p => ({
       color: p.color,
       health: p.health,
@@ -80,7 +87,7 @@ export default async function PublicRoadmapPage({ params, searchParams }: Props)
       id: p.id,
       milestoneCount: p.milestones.length,
       name: p.name,
-      progress: p.progress,
+      progress: progressById.get(p.id)?.progress ?? 0,
       statusName: p.statusName,
       statusType: p.statusType,
       targetDate: p.targetDate,

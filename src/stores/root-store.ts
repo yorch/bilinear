@@ -1,3 +1,4 @@
+import { runInAction } from 'mobx';
 import { CustomFieldStore } from './custom-field-store';
 import { CustomViewStore } from './custom-view-store';
 import { CycleStore } from './cycle-store';
@@ -56,6 +57,43 @@ export class RootStore {
     this.notificationStore = new NotificationStore();
     this.projectStore = new ProjectStore();
     this.uiStore = new UIStore();
+  }
+
+  /**
+   * Drop every cached entity from the MobX pools.
+   *
+   * `fullBootstrap` wipes IndexedDB and refills it, but it only *upserts* into
+   * MobX — so an entity deleted while this client was offline survived in
+   * memory until a page reload, even though the disk half was correct. That gap
+   * became load-bearing when delta sync started answering `staleCursor`, whose
+   * entire purpose is to repair a cache that can no longer be caught up
+   * incrementally: re-bootstrapping has to mean "replace", not "merge".
+   *
+   * Reflective rather than a per-store `clear()` method: stores hold between
+   * one and three entity maps each (`pool`, plus e.g. `definitions`/`values`
+   * on CustomFieldStore), and a hand-maintained list is precisely the kind of
+   * thing that silently misses the next map someone adds.
+   *
+   * `syncStore` and `uiStore` are excluded — they hold session and UI state,
+   * not synced entities, and wiping them mid-bootstrap would drop the very
+   * status the bootstrap is reporting through.
+   */
+  clearEntityPools(): void {
+    runInAction(() => {
+      for (const [name, store] of Object.entries(this)) {
+        if (name === 'syncStore' || name === 'uiStore' || typeof store !== 'object' || !store) {
+          continue;
+        }
+        for (const value of Object.values(store)) {
+          // Duck-typed: MobX turns an observable `Map` field into an
+          // ObservableMap, which is NOT `instanceof Map`.
+          const candidate = value as { clear?: unknown; size?: unknown };
+          if (typeof candidate?.clear === 'function' && typeof candidate?.size === 'number') {
+            (candidate.clear as () => void)();
+          }
+        }
+      }
+    });
   }
 }
 

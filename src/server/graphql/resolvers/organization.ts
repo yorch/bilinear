@@ -89,19 +89,16 @@ export const organizationResolvers = {
         data: { aiEnabled: enabled },
         where: { id: ctx.orgId },
       });
-      // Organization is part of the synced dataset — broadcast so other
-      // clients pick up the toggle without a refresh. Strip the two settings
-      // blobs first: this payload goes to every client in the org over the WS
-      // fan-out, and `getBootstrapData` omits them for exactly that reason.
-      const { authSettings, securitySettings, ...broadcastable } = organization;
-      void authSettings;
-      void securitySettings;
+      // Organization is part of the synced dataset — broadcast so other clients
+      // pick up the toggle without a refresh. The settings blobs are stripped
+      // centrally by `recordSyncAction` (see SYNC_PAYLOAD_OMITTED_FIELDS), so
+      // this passes the row through rather than filtering it here.
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
         'U',
         'Organization',
         organization.id,
-        broadcastable,
+        organization,
       );
       return { lastSyncId: sync.id.toString(), organization, success: true };
     },

@@ -2,10 +2,11 @@
 
 import { ChevronDown, Plus, Trash2, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { IssuePicker } from '@/components/issues/issue-picker';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { useOutsideClick } from '@/hooks/use-outside-click';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue } from '@/lib/db';
 import { gqlQuery } from '@/lib/graphql';
@@ -90,45 +91,35 @@ export const RelationsSection = observer(function RelationsSection({
 }: RelationsSectionProps) {
   const t = useTranslations();
   const RELATION_TYPE_LABELS = useMemo(() => getRelationTypeLabels(t), [t]);
-  const [relations, setRelations] = useState<IssueRelation[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
   const [showAddForm, setShowAddForm] = useState(false);
 
   const tq = useMemo(() => new TransactionQueue(), []);
 
-  // Fetch relations on mount / when issueId changes.
-  // `gqlQuery` throws on a GraphQL-level failure; the old `gql()` +
-  // `Array.isArray(result.data?.issueRelations)` guard silently left `relations`
-  // at [], rendering an issue with real blockers as having none.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is a deliberate refetch trigger, not read inside the effect
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    gqlQuery<IssueRelation[]>(GET_ISSUE_RELATIONS, { issueId }, 'issueRelations')
-      .then(data => {
-        if (cancelled) {
-          return;
-        }
-        setRelations(data ?? []);
-        setLoadError(false);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLoadError(true);
-          toast.error(t('issueDetail.relations.failedToLoad'));
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [issueId, t, reloadKey]);
+  // A failed read must not silently leave `relations` at [], rendering an issue
+  // with real blockers as having none.
+  const {
+    data: relations,
+    error: loadError,
+    loading,
+    refetch: fetchRelations,
+    setData: setRelations,
+  } = useRetryableFetch<IssueRelation[]>(
+    async () => {
+      try {
+        const data = await gqlQuery<IssueRelation[]>(
+          GET_ISSUE_RELATIONS,
+          { issueId },
+          'issueRelations',
+        );
+        return data ?? [];
+      } catch (err) {
+        toast.error(t('issueDetail.relations.failedToLoad'));
+        throw err;
+      }
+    },
+    [issueId, t],
+    [],
+  );
 
   const handleDelete = async (relationId: string) => {
     const prev = relations;
@@ -165,18 +156,7 @@ export const RelationsSection = observer(function RelationsSection({
     // Refresh relations from server to get full issue objects. Reported
     // separately from the create above — a failed refresh must not read as
     // "the relation wasn't created", nor leave the list silently stale.
-    try {
-      const data = await gqlQuery<IssueRelation[]>(
-        GET_ISSUE_RELATIONS,
-        { issueId },
-        'issueRelations',
-      );
-      setRelations(data ?? []);
-      setLoadError(false);
-    } catch {
-      setLoadError(true);
-      toast.error(t('issueDetail.relations.failedToLoad'));
-    }
+    await fetchRelations({ silent: true });
   };
 
   // Group relations by type
@@ -218,7 +198,7 @@ export const RelationsSection = observer(function RelationsSection({
         <InlineRetry
           className="py-2"
           message={t('issueDetail.relations.failedToLoad')}
-          onRetry={() => setReloadKey(k => k + 1)}
+          onRetry={fetchRelations}
         />
       )}
 

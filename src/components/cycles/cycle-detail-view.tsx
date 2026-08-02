@@ -9,6 +9,7 @@ import { BurnupChart } from '@/components/cycles/burnup-chart';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { isActiveCycle } from '@/lib/cycle-utils';
 import { gql, gqlQuery } from '@/lib/graphql';
@@ -134,19 +135,7 @@ export const CycleDetailView = observer(function CycleDetailView({
   // Rollover state
   const [rollingOver, setRollingOver] = useState(false);
 
-  // Burndown/burnup state
-  const [burndown, setBurndown] = useState<BurndownPoint[] | null>(null);
-  const [burndownLoading, setBurndownLoading] = useState(false);
-  const [burndownError, setBurndownError] = useState(false);
   const [chartView, setChartView] = useState<'burndown' | 'burnup'>('burndown');
-
-  // Scope / carryover metrics
-  const [scopeMetrics, setScopeMetrics] = useState<ScopeMetrics | null>(null);
-  const [scopeMetricsError, setScopeMetricsError] = useState(false);
-
-  // Velocity state
-  const [velocity, setVelocity] = useState<VelocityResult | null>(null);
-  const [velocityError, setVelocityError] = useState(false);
 
   // Focus the name input when editing starts
   useEffect(() => {
@@ -155,71 +144,54 @@ export const CycleDetailView = observer(function CycleDetailView({
     }
   }, [editingName]);
 
-  // Fetch burndown data. `gqlQuery` throws on a GraphQL-level failure so a
-  // rejected read renders a retry instead of a blank chart, which reads as
-  // "no work was done this cycle".
-  const fetchBurndown = useCallback(() => {
-    if (!cycleId) {
-      return;
-    }
-    setBurndownLoading(true);
-    setBurndownError(false);
-    gqlQuery<BurndownPoint[] | null>(CYCLE_BURNDOWN_QUERY, { cycleId }, 'cycleBurndown')
-      .then(points => setBurndown(points ?? []))
-      .catch(() => setBurndownError(true))
-      .finally(() => setBurndownLoading(false));
-  }, [cycleId]);
+  // Burndown/burnup data. A rejected read renders a retry instead of a blank
+  // chart, which reads as "no work was done this cycle".
+  const {
+    data: burndown,
+    error: burndownError,
+    loading: burndownLoading,
+    refetch: fetchBurndown,
+  } = useRetryableFetch<BurndownPoint[] | null>(
+    () => gqlQuery<BurndownPoint[] | null>(CYCLE_BURNDOWN_QUERY, { cycleId }, 'cycleBurndown'),
+    [cycleId],
+    null,
+  );
 
-  useEffect(() => {
-    fetchBurndown();
-  }, [fetchBurndown]);
+  // Scope / carryover metrics
+  const {
+    data: scopeMetrics,
+    error: scopeMetricsError,
+    refetch: fetchScopeMetrics,
+  } = useRetryableFetch<ScopeMetrics | null>(
+    () =>
+      gqlQuery<ScopeMetrics | null>(
+        CYCLE_SCOPE_METRICS_QUERY,
+        { cycleId },
+        'analyticsCycleScopeMetrics',
+      ),
+    [cycleId],
+    null,
+  );
 
-  // Fetch scope / carryover metrics
-  const fetchScopeMetrics = useCallback(() => {
-    if (!cycleId) {
-      return;
-    }
-    setScopeMetricsError(false);
-    gqlQuery<ScopeMetrics | null>(
-      CYCLE_SCOPE_METRICS_QUERY,
-      { cycleId },
-      'analyticsCycleScopeMetrics',
-    )
-      .then(m => {
-        if (m) {
-          setScopeMetrics(m);
-        }
-      })
-      .catch(() => setScopeMetricsError(true));
-  }, [cycleId]);
-
-  useEffect(() => {
-    fetchScopeMetrics();
-  }, [fetchScopeMetrics]);
-
-  // Fetch velocity data
+  // Velocity data — keyed on the cycle's team, which isn't known until the
+  // cycle itself has loaded into the store.
   const teamId = cycle?.teamId;
-  const fetchVelocity = useCallback(() => {
-    if (!teamId) {
-      return;
-    }
-    setVelocityError(false);
-    gqlQuery<VelocityResult | null>(
-      CYCLE_VELOCITY_QUERY,
-      { cycleCount: 6, teamId },
-      'cycleVelocity',
-    )
-      .then(result => {
-        if (result) {
-          setVelocity(result);
-        }
-      })
-      .catch(() => setVelocityError(true));
-  }, [teamId]);
-
-  useEffect(() => {
-    fetchVelocity();
-  }, [fetchVelocity]);
+  const {
+    data: velocity,
+    error: velocityError,
+    refetch: fetchVelocity,
+  } = useRetryableFetch<VelocityResult | null>(
+    () =>
+      teamId
+        ? gqlQuery<VelocityResult | null>(
+            CYCLE_VELOCITY_QUERY,
+            { cycleCount: 6, teamId },
+            'cycleVelocity',
+          )
+        : Promise.resolve(null),
+    [teamId],
+    null,
+  );
 
   const handleRemoveIssue = useCallback(
     (issueId: string) => {
@@ -433,7 +405,7 @@ export const CycleDetailView = observer(function CycleDetailView({
 
           {/* Scope creep / carryover metrics */}
           {scopeMetricsError && (
-            <InlineRetry message={t('errors.somethingWentWrong')} onRetry={fetchScopeMetrics} />
+            <InlineRetry message={t('common.somethingWentWrong')} onRetry={fetchScopeMetrics} />
           )}
           {scopeMetrics &&
             (scopeMetrics.scopeCreepCount > 0 || scopeMetrics.carryoverCount > 0) && (
@@ -516,7 +488,7 @@ export const CycleDetailView = observer(function CycleDetailView({
                   <Skeleton className="h-[300px]" />
                 </LoadingRegion>
               ) : burndownError ? (
-                <InlineRetry message={t('errors.somethingWentWrong')} onRetry={fetchBurndown} />
+                <InlineRetry message={t('common.somethingWentWrong')} onRetry={fetchBurndown} />
               ) : chartView === 'burndown' ? (
                 <BurndownChart data={burndown ?? []} />
               ) : (
@@ -531,7 +503,7 @@ export const CycleDetailView = observer(function CycleDetailView({
               <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {t('cycles.detail.velocity.title')}
               </h3>
-              <InlineRetry message={t('errors.somethingWentWrong')} onRetry={fetchVelocity} />
+              <InlineRetry message={t('common.somethingWentWrong')} onRetry={fetchVelocity} />
             </div>
           )}
           {velocity && (

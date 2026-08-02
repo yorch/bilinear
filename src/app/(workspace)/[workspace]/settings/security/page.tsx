@@ -6,9 +6,9 @@ import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql, gqlMutate, gqlQuery } from '@/lib/graphql';
+import { gqlMutate, gqlQuery, isPermissionError } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { cn, getErrorMessage, gqlError } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
 // GraphQL
@@ -119,6 +119,20 @@ interface ScimTokenRow {
   lastUsedAt: string | null;
 }
 
+/**
+ * A read on this page that could not be completed. `forbidden` separates "you
+ * aren't allowed to see this" from "this genuinely failed": both hide the data,
+ * but only the latter is rendered as an error.
+ */
+interface LoadError {
+  forbidden: boolean;
+  message: string;
+}
+
+function toLoadError(err: unknown, fallback: string): LoadError {
+  return { forbidden: isPermissionError(err), message: getErrorMessage(err, fallback) };
+}
+
 const DEFAULT_FORM: FormState = {
   emailAttribute: 'email',
   enabled: false,
@@ -141,19 +155,13 @@ export default function SecuritySettingsPage() {
   const [config, setConfig] = useState<SamlConfig | null>(null);
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
   const [loading, setLoading] = useState(true);
-  const [samlLoadError, setSamlLoadError] = useState<{
-    forbidden: boolean;
-    message: string;
-  } | null>(null);
+  const [samlLoadError, setSamlLoadError] = useState<LoadError | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   // SCIM state
   const [scimTokens, setScimTokens] = useState<ScimTokenRow[]>([]);
-  const [scimLoadError, setScimLoadError] = useState<{
-    forbidden: boolean;
-    message: string;
-  } | null>(null);
+  const [scimLoadError, setScimLoadError] = useState<LoadError | null>(null);
   const [scimLoading, setScimLoading] = useState(true);
   const [scimCreating, setScimCreating] = useState(false);
   const [scimNewLabel, setScimNewLabel] = useState('');
@@ -172,20 +180,12 @@ export default function SecuritySettingsPage() {
     // *alongside* `errors` — a genuine partial response. A null field on its
     // own therefore can't be read as "SSO is not configured": doing so would
     // show an empty form to someone who may then overwrite a live IdP config.
-    // Only a clean, error-free response means "not configured".
-    gql(SAML_QUERY)
-      .then(res => {
-        if (res.errors?.length) {
-          const code = (res.errors[0] as { extensions?: { code?: string } })?.extensions?.code;
-          setSamlLoadError({
-            forbidden: code === 'FORBIDDEN' || code === 'UNAUTHENTICATED',
-            message: gqlError(res, t('common.somethingWentWrong')),
-          });
-          return;
-        }
-        const data = (res.data ?? {}) as { samlConfiguration?: SamlConfig | null };
-        const cfg = data.samlConfiguration ?? null;
-        setConfig(cfg);
+    // Only a clean, error-free response means "not configured" — which is
+    // exactly what `gqlQuery` guarantees, since it throws whenever `errors` is
+    // present rather than handing back the partial payload.
+    gqlQuery<SamlConfig | null>(SAML_QUERY, {}, 'samlConfiguration')
+      .then(cfg => {
+        setConfig(cfg ?? null);
         if (cfg) {
           setForm({
             emailAttribute: cfg.emailAttribute,
@@ -201,10 +201,7 @@ export default function SecuritySettingsPage() {
         }
       })
       .catch(err => {
-        setSamlLoadError({
-          forbidden: false,
-          message: getErrorMessage(err, t('common.somethingWentWrong')),
-        });
+        setSamlLoadError(toLoadError(err, t('common.somethingWentWrong')));
       })
       .finally(() => {
         setLoading(false);
@@ -216,26 +213,13 @@ export default function SecuritySettingsPage() {
     // in destructive red would alarm every non-admin. A failed read must still
     // never fall through to "No active tokens.", which would tell an admin
     // auditing credentials that there are none.
-    gql(SCIM_TOKENS_QUERY)
-      .then(res => {
-        if (res.errors?.length) {
-          const code = (res.errors[0] as { extensions?: { code?: string } })?.extensions?.code;
-          setScimTokens([]);
-          setScimLoadError({
-            forbidden: code === 'FORBIDDEN' || code === 'UNAUTHENTICATED',
-            message: gqlError(res, t('common.somethingWentWrong')),
-          });
-          return;
-        }
-        const data = (res.data ?? {}) as { scimTokens?: ScimTokenRow[] | null };
-        setScimTokens(data.scimTokens ?? []);
+    gqlQuery<ScimTokenRow[] | null>(SCIM_TOKENS_QUERY, {}, 'scimTokens')
+      .then(tokens => {
+        setScimTokens(tokens ?? []);
       })
       .catch(err => {
         setScimTokens([]);
-        setScimLoadError({
-          forbidden: false,
-          message: getErrorMessage(err, t('common.somethingWentWrong')),
-        });
+        setScimLoadError(toLoadError(err, t('common.somethingWentWrong')));
       })
       .finally(() => {
         setScimLoading(false);
@@ -392,14 +376,7 @@ export default function SecuritySettingsPage() {
           {scimLoading ? (
             <RowsSkeleton count={3} />
           ) : scimLoadError ? (
-            <p
-              className={cn(
-                'text-sm',
-                scimLoadError.forbidden ? 'text-muted-foreground' : 'text-destructive',
-              )}
-            >
-              {scimLoadError.message}
-            </p>
+            <LoadErrorMessage error={scimLoadError} />
           ) : (
             <>
               {scimTokens.length === 0 ? (
@@ -512,14 +489,7 @@ export default function SecuritySettingsPage() {
           // A permission error means "you can't see this"; anything else is a
           // real failure. Either way the form stays hidden, so a configuration
           // that could not be read can never be silently overwritten.
-          <p
-            className={cn(
-              'text-sm',
-              samlLoadError.forbidden ? 'text-muted-foreground' : 'text-destructive',
-            )}
-          >
-            {samlLoadError.message}
-          </p>
+          <LoadErrorMessage error={samlLoadError} />
         ) : (
           <>
             {/* SP (Service Provider) read-only info */}
@@ -696,6 +666,21 @@ export default function SecuritySettingsPage() {
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
+
+/**
+ * The message shown in place of a section whose read failed. A permission
+ * failure is muted — an ordinary member simply can't see this section — while
+ * anything else is a real error and stays destructive-red. Either way the
+ * section's data is NOT rendered, so an unreadable config can never be
+ * mistaken for an absent one.
+ */
+function LoadErrorMessage({ error }: { error: LoadError }) {
+  return (
+    <p className={cn('text-sm', error.forbidden ? 'text-muted-foreground' : 'text-destructive')}>
+      {error.message}
+    </p>
+  );
+}
 
 function ReadOnlyField({
   label,
