@@ -267,6 +267,7 @@ export class SyncService {
 
     const [
       organizations,
+      organizationMembers,
       teams,
       users,
       issues,
@@ -291,6 +292,17 @@ export class SyncService {
         // policy) — they reach every member's IndexedDB from here otherwise.
         omit: { authSettings: true, securitySettings: true },
         where: { id: orgId },
+      }),
+      // The org roster. Ships alongside `users` rather than being folded into
+      // it because the two answer different questions: `users` is "who can I
+      // see", populated for anyone with a membership, while this is "who is
+      // still in this workspace, and as what". Removing someone deletes the
+      // membership but never the User row, so without this the settings page
+      // could not tell a departed member from a current one without its own
+      // query — which is exactly why the `'D' OrganizationMember` SyncAction
+      // had no client to act on it.
+      this.prisma.organizationMember.findMany({
+        where: { organizationId: orgId },
       }),
       this.prisma.team.findMany({
         where: { archivedAt: null, organizationId: orgId },
@@ -440,6 +452,7 @@ export class SyncService {
       })),
       issueTemplates,
       lastSyncId: cursor,
+      organizationMembers,
       organizations: organizations ? [organizations] : [],
       projectMilestones,
       projects,

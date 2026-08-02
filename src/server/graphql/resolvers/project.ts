@@ -68,7 +68,7 @@ export const projectResolvers = {
         });
       }
       // Restructuring a project's membership is not a guest capability.
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, [...PROJECT_MEMBERSHIP_ROLES]);
+      requireOrgRole(ctx, [...PROJECT_MEMBERSHIP_ROLES]);
 
       const isOrgMember = await ctx.services.organization.isMember(ctx.orgId, userId);
       if (!isOrgMember) {
@@ -103,7 +103,7 @@ export const projectResolvers = {
         });
       }
 
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, [...PROJECT_MEMBERSHIP_ROLES]);
+      requireOrgRole(ctx, [...PROJECT_MEMBERSHIP_ROLES]);
 
       const team = await ctx.services.team.findById(teamId);
       if (!team || team.organizationId !== ctx.orgId) {
@@ -355,7 +355,7 @@ export const projectResolvers = {
         });
       }
 
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, [...PROJECT_MEMBERSHIP_ROLES]);
+      requireOrgRole(ctx, [...PROJECT_MEMBERSHIP_ROLES]);
 
       await ctx.services.project.removeMember(projectId, userId);
       const project = await ctx.services.project.findById(projectId);
@@ -383,7 +383,7 @@ export const projectResolvers = {
         });
       }
 
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, [...PROJECT_MEMBERSHIP_ROLES]);
+      requireOrgRole(ctx, [...PROJECT_MEMBERSHIP_ROLES]);
 
       await ctx.services.project.removeTeam(projectId, teamId);
       const project = await ctx.services.project.findById(projectId);

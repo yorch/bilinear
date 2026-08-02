@@ -183,6 +183,18 @@ CREATE INDEX idx_org_members_org ON organization_members(organization_id);
 CREATE INDEX idx_org_members_user ON organization_members(user_id);
 ```
 
+**No soft delete here, and that is load-bearing.** There is no `archived_at`:
+removal really is a row delete, and the row's *presence* is the answer to "is
+this person still in the workspace". Nothing ever deletes a `users` row, so
+after a removal the person is still in every client's `userStore` — membership
+is the only thing that distinguishes a current member from a departed one.
+That is why the roster ships as its own bootstrap collection and its own
+client store rather than being folded into `users`; see PATTERNS §78.
+
+Rows are synced: `organizationMemberRemove`, `organizationMemberUpdateRole` and
+`organizationLeave` all emit `OrganizationMember` SyncActions, and the client
+applies `'D'` as a pool delete. `'A'` has no distinct meaning for this table.
+
 ### 2.2 Teams
 
 ```sql

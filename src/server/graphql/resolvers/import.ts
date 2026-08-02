@@ -70,7 +70,7 @@ export const importResolvers = {
       // ANY member (including guests) could pull every other team's issue
       // data. Restrict to org owner/admin, matching teamCreate/teamDelete's
       // bar.
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+      requireOrgRole(ctx, ['owner', 'admin']);
       const data = await ctx.services.import.exportData(ctx.orgId, teamId ?? undefined);
       return JSON.stringify(data);
     },

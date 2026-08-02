@@ -390,6 +390,24 @@ export const typeDefs = `
   }
 
   """
+  The session after the caller left a workspace.
+
+  Deliberately not EnterOrganizationPayload: that type's organization is
+  non-null because you always land somewhere, whereas leaving your last
+  workspace legitimately lands you nowhere. A null organization here means an
+  org-less session, which still authenticates for viewerOrganizations and the
+  create-workspace flow.
+  """
+  type LeaveOrganizationPayload {
+    success: Boolean!
+    lastSyncId: String!
+    organization: Organization
+    accessToken: String!
+    refreshToken: String!
+    expiresIn: Int!
+  }
+
+  """
   One workspace the signed-in user can enter, as shown in the workspace
   switcher. Only organizations they still belong to and that are neither
   archived nor suspended appear — the list is "where can I go", not "where
@@ -1862,6 +1880,13 @@ export const typeDefs = `
     organizationMemberUpdateRole(userId: ID!, role: String!): DeletePayload!
     """Remove a member from the current organization, along with their team memberships."""
     organizationMemberRemove(userId: ID!): DeletePayload!
+    """
+    Give up your own membership in the current organization, along with your
+    team memberships inside it. Any member may leave; the last owner may not,
+    since that strands the workspace with nobody able to manage it. Separate
+    from organizationMemberRemove, which refuses self-removal on purpose.
+    """
+    organizationLeave: LeaveOrganizationPayload!
     organizationInviteCreate(email: String!, role: String!): OrganizationInvitePayload!
     organizationInviteRevoke(id: ID!): BasicPayload!
     """Claim an invitation. Requires a signed-in session whose email matches it."""

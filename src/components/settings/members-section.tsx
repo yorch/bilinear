@@ -5,11 +5,10 @@ import { observer } from 'mobx-react-lite';
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
-import { InlineRetry } from '@/components/shared/inline-retry';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFormatters } from '@/hooks/use-formatters';
-import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
+import { useOrganizationLeave } from '@/hooks/use-organization-switch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import {
@@ -17,7 +16,6 @@ import {
   ORGANIZATION_INVITE_REVOKE_MUTATION,
   ORGANIZATION_INVITES_QUERY,
   ORGANIZATION_MEMBER_REMOVE_MUTATION,
-  ORGANIZATION_MEMBERS_QUERY,
   UPDATE_ORG_MEMBER_ROLE_MUTATION,
 } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
@@ -58,18 +56,24 @@ interface RemovalTarget {
   userId: string;
 }
 
+interface MembersSectionProps {
+  /** The current workspace's name, for the leave confirmation copy. */
+  orgName: string;
+}
+
 /**
- * Workspace members: the roster with role editing, removal, and pending
- * invitations.
+ * Workspace members: the roster with role editing, removal, pending
+ * invitations, and the viewer's own "leave workspace" action.
  *
  * Owns its own data rather than taking it from the settings page, because
- * all three operations mutate the same two lists (a member removed leaves
- * the roster, an invitation accepted joins it) and threading that back
+ * all three roster operations mutate the same two lists (a member removed
+ * leaves the roster, an invitation accepted joins it) and threading that back
  * through the page's state would put the reconciliation logic a long way
- * from the mutations that cause it.
+ * from the mutations that cause it. Leaving lives here for the same reason —
+ * whether it may be offered at all depends on the owner count in that roster.
  */
-export const MembersSection = observer(function MembersSection() {
-  const { userStore } = useStore();
+export const MembersSection = observer(function MembersSection({ orgName }: MembersSectionProps) {
+  const { organizationMemberStore, userStore } = useStore();
   const t = useTranslations();
   const { formatDate } = useFormatters();
 
@@ -83,33 +87,17 @@ export const MembersSection = observer(function MembersSection() {
   const [inviting, setInviting] = useState(false);
   const [revokingInvite, setRevokingInvite] = useState<string | null>(null);
 
-  // `gqlQuery` throws on a GraphQL error, which is what makes the error
-  // branch below reachable at all: a fetcher that swallowed the failure and
-  // returned `[]` would render "no members found" for a request the server
-  // rejected. See PATTERNS §76.1.
-  const {
-    data: memberRoles,
-    error: rosterError,
-    refetch: refetchRoster,
-    setData: setMemberRoles,
-  } = useRetryableFetch<Record<string, OrgRole>>(
-    async () => {
-      const rows = await gqlQuery<{ userId: string; role: string }[]>(
-        ORGANIZATION_MEMBERS_QUERY,
-        {},
-        'organizationMembers',
-      );
-      const roles: Record<string, OrgRole> = {};
-      for (const m of rows) {
-        if (ORG_ROLES.includes(m.role as OrgRole)) {
-          roles[m.userId] = m.role as OrgRole;
-        }
-      }
-      return roles;
-    },
-    [],
-    {},
-  );
+  // The roster comes from the sync pipeline, not a query of its own.
+  //
+  // It used to be fetched here and reconciled locally after each mutation,
+  // which is why `organizationMemberRemove` and `organizationMemberUpdateRole`
+  // emitted SyncActions that no client handled: a second admin's open tab kept
+  // showing someone who had been removed until they reloaded. Bootstrap now
+  // ships `organizationMembers` and `SyncManager` applies the live actions, so
+  // every open tab converges — and the local reconciliation, its rollback
+  // branch, and the load/retry state all disappear with it. A failed bootstrap
+  // is already surfaced app-wide by `SyncErrorState`.
+  const memberRoles = organizationMemberStore.rolesByUserId as Record<string, OrgRole>;
 
   const currentUserId = userStore.currentUser?.id ?? null;
   const viewerRole = currentUserId ? memberRoles[currentUserId] : undefined;
@@ -118,6 +106,20 @@ export const MembersSection = observer(function MembersSection() {
   // admin-only query happened to succeed: a network failure on the invites
   // request must not silently strip an owner of their management controls.
   const canManage = viewerRole === 'owner' || viewerRole === 'admin';
+  // The server refuses to let the last owner leave, so the UI doesn't offer
+  // it — mirroring the guard rather than discovering it from a rejection.
+  const isLastOwner = isOwner && organizationMemberStore.countByRole('owner') === 1;
+
+  const [confirmingLeave, setConfirmingLeave] = useState(false);
+  const { leave, leaving } = useOrganizationLeave();
+
+  async function leaveWorkspace() {
+    try {
+      await leave();
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('settings.workspace.leaveError')));
+    }
+  }
 
   // Owner/admin-only, so it waits until the roster says the viewer can
   // manage — asking earlier would collect a guaranteed FORBIDDEN for
@@ -142,24 +144,21 @@ export const MembersSection = observer(function MembersSection() {
     };
   }, [canManage]);
 
-  // The roster is the members query intersected with synced users: a user row
-  // can linger in the store after removal (nothing deletes Users), so
-  // `memberRoles` decides who is still in the workspace.
+  // Synced users intersected with the roster: a User row can linger in the
+  // store after removal (nothing deletes Users), so membership decides who is
+  // still in the workspace.
   const members = userStore.all.filter(u => memberRoles[u.id] !== undefined);
 
+  // No optimistic apply and so no rollback: the server's SyncAction is what
+  // moves the store, which means a rejected request (an admin attempting to
+  // grant owner) simply never changes the displayed role. The previous code
+  // wrote the new role locally and had to restore it by hand on failure.
   async function updateMemberRole(userId: string, role: OrgRole) {
     setUpdatingRole(userId);
-    const previous = memberRoles[userId];
     try {
       await gqlMutate(UPDATE_ORG_MEMBER_ROLE_MUTATION, { role, userId });
-      setMemberRoles(prev => ({ ...prev, [userId]: role }));
       toast.success(t('settings.workspace.memberRoleUpdated'));
     } catch (err) {
-      // Restore the previous value so the select doesn't display a role
-      // the server rejected (e.g. an admin attempting to grant owner).
-      if (previous) {
-        setMemberRoles(prev => ({ ...prev, [userId]: previous }));
-      }
       toast.error(getErrorMessage(err, t('settings.workspace.memberRoleUpdateError')));
     } finally {
       setUpdatingRole(null);
@@ -170,11 +169,6 @@ export const MembersSection = observer(function MembersSection() {
     setRemoving(target.userId);
     try {
       await gqlMutate(ORGANIZATION_MEMBER_REMOVE_MUTATION, { userId: target.userId });
-      setMemberRoles(prev => {
-        const next = { ...prev };
-        delete next[target.userId];
-        return next;
-      });
       toast.success(t('settings.workspace.removeMemberSuccess', { name: target.name }));
     } catch (err) {
       toast.error(getErrorMessage(err, t('settings.workspace.removeMemberFailed')));
@@ -230,13 +224,7 @@ export const MembersSection = observer(function MembersSection() {
           </span>
         </h2>
         <div className="rounded-lg border border-border bg-card overflow-hidden">
-          {rosterError ? (
-            <InlineRetry
-              className="px-5"
-              message={t('settings.workspace.membersLoadError')}
-              onRetry={() => void refetchRoster()}
-            />
-          ) : members.length === 0 ? (
+          {members.length === 0 ? (
             <p className="px-5 py-4 text-sm text-muted-foreground">
               {t('settings.workspace.noMembersFound')}
             </p>
@@ -396,6 +384,49 @@ export const MembersSection = observer(function MembersSection() {
           </div>
         </section>
       )}
+
+      {/*
+        Leaving is the viewer's own action, so it sits apart from the roster
+        rather than as a row action — the members list is where you act on
+        *other* people, and the server refuses self-removal from there.
+
+        Hidden for the last owner, mirroring the server's guard: an owner with
+        no co-owner cannot leave, because that strands the workspace with
+        nobody able to manage it. `isLastOwner` reads the roster the section
+        already has, so it never offers an action the server will reject.
+      */}
+      {currentUserId && !isLastOwner && (
+        <section>
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('settings.workspace.leaveTitle')}
+          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger/40 bg-card px-5 py-4">
+            <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+              {t('settings.workspace.leaveDescription')}
+            </p>
+            <button
+              className="shrink-0 rounded-md border border-destructive/50 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10 disabled:opacity-50"
+              disabled={leaving}
+              onClick={() => setConfirmingLeave(true)}
+              type="button"
+            >
+              {leaving ? t('settings.workspace.leaving') : t('settings.workspace.leave')}
+            </button>
+          </div>
+        </section>
+      )}
+
+      <ConfirmDialog
+        confirmLabel={t('settings.workspace.leave')}
+        message={t('settings.workspace.leaveConfirm', { name: orgName })}
+        onCancel={() => setConfirmingLeave(false)}
+        onConfirm={() => {
+          setConfirmingLeave(false);
+          void leaveWorkspace();
+        }}
+        open={confirmingLeave}
+        title={t('settings.workspace.leaveConfirmTitle')}
+      />
 
       <ConfirmDialog
         confirmLabel={t('settings.workspace.removeMember')}

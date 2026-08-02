@@ -240,7 +240,7 @@ Every domain with a GraphQL resolver has a matching service in
 `createContext` — resolvers never `new` a service on the fly and never call
 `ctx.prisma` for business logic (auth guards are the exception).
 
-The `prisma` instance is exposed on context so authorization guards can perform queries without going through a service (e.g., `requireOrgRole` checks `organizationMember` directly).
+The `prisma` instance is exposed on context so authorization guards can perform queries without going through a service (e.g. `requireTeamMember` checks `teamMembership` directly). `requireOrgRole` no longer needs it — the caller's org role rides `AuthContext`; see below.
 
 ---
 
@@ -470,21 +470,40 @@ const handleUpdate = useCallback((id, patch) => {
 
 ## 14. Authorization Pattern (Sprint 3-4)
 
-Role-based guards are standalone async functions that take the Prisma client and throw `GraphQLError` with `FORBIDDEN` code:
+Role-based guards throw `GraphQLError` with a `FORBIDDEN` code. The team guards
+query; the org guard does not:
 
 ```typescript
 // src/server/middleware/auth.ts — role-based guards
-export async function requireOrgRole(prisma, orgId, userId, roles: string[]): Promise<void>
-export async function requireTeamMember(prisma, teamId, userId): Promise<void>
-export async function requireTeamOwner(prisma, teamId, userId): Promise<void>
+export function requireOrgRole(ctx: AuthContext, roles: string[]): string  // sync
+export async function requireTeamMember(prisma, teamId, orgId, userId): Promise<void>
+export async function requireTeamOwner(prisma, teamId, orgId, userId): Promise<void>
 ```
+
+`requireOrgRole` reads `ctx.orgRole`, which `extractAuthContext` resolved from
+the membership row it must load anyway for the session-validity check. It used
+to take `(prisma, orgId, userId, roles)` and re-query that row at each of its
+~25 call sites — a second traversal of the same unique index, per mutation, for
+a value the request already had. Two invariants keep that safe:
+
+- **`orgId` and `orgRole` are cleared together.** Anything that drops `orgId`
+  must drop the role in the same assignment, or an authorization check could
+  pass against a workspace the session no longer holds. `requireOrgRole` also
+  fails closed on a role without an org, as defence in depth.
+- **Every call site runs before its resolver's first write**, so nothing
+  observes a role it changed itself. Per-request freshness is exactly what the
+  extra read gave.
+
+It returns the caller's *actual* role rather than a bare pass/fail, because an
+owner and an admin both clear `['owner', 'admin']` and only one of them may
+touch ownership.
 
 Usage in resolvers:
 
 ```typescript
 teamCreate: async (_parent, { input }, ctx) => {
-  requireAuth(ctx);                                         // sync — throws UNAUTHENTICATED
-  await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);  // async — throws FORBIDDEN
+  requireAuth(ctx);                              // sync — throws UNAUTHENTICATED
+  requireOrgRole(ctx, ['owner', 'admin']);       // sync — throws FORBIDDEN
   const team = await ctx.services.team.create(ctx.orgId, ctx.userId, input);
   return { success: true, team, lastSyncId: 0 };
 },
@@ -2411,23 +2430,58 @@ ownership. On top of that allow-list:
   previously an admin could promote a second account of their own to owner
   straight from the members list, a full privilege escalation;
 - the last owner can be neither demoted nor removed;
-- nobody removes themselves (leaving is a different operation with different
-  consequences, and isn't built).
+- nobody removes themselves — leaving is a different operation (see below).
 
 The UI mirrors each guard so it never offers an action the server will
 reject, but the server is the enforcement point — `MembersSection` derives
 `canManage` from the viewer's role in the members query, not from whether an
 admin-only request happened to succeed.
 
-**Caveat on the removal SyncAction.** `organizationMemberRemove` emits a
-`'D' OrganizationMember` action, but `sync-manager.ts` has no
-`OrganizationMember` case, so no client acts on it today — the settings page
-reconciles its own roster locally, and other admins' open tabs stay stale
-until reload. (The pre-existing `'U'` from `organizationMemberUpdateRole` is
-equally inert.) Access is unaffected: the removed user loses the org on their
-next request and their socket closes on the next re-auth sweep. Teaching the
-sync pipeline about an org roster — a bootstrap collection plus a store — is
-the real fix and is not built.
+**The roster is in the sync pipeline (2026-08-02).** `organizationMemberRemove`
+and `organizationMemberUpdateRole` emit `'D'`/`'U' OrganizationMember` actions.
+Those were inert for a while — `sync-manager.ts` had no case for the model, so
+the settings page reconciled its own copy locally and a second admin's open tab
+kept listing someone who had been removed until they reloaded. Closed by
+carrying the roster the whole way: `getBootstrapData` ships
+`organizationMembers`, Dexie has the table, `OrganizationMemberStore` holds it,
+and `applyActions` routes the live actions into it.
+
+It is deliberately a **separate collection from `users`**, because the two
+answer different questions. `users` is "who can I see" and is populated for
+anyone with a membership; the roster is "who is in this workspace, and as
+what". Nothing ever deletes a `User` row, so after a removal the person is
+still in `userStore` — membership presence is the only thing that can tell a
+current member from a departed one. `MembersSection` now derives its roster,
+`canManage` and last-owner check from the store, which deleted its own query,
+its optimistic apply, and that apply's rollback branch.
+
+Access never depended on any of this: a removed user loses the org on their
+next request and their socket closes on the next re-auth sweep.
+
+**Leaving is its own operation (2026-08-02).** `organizationLeave` exists
+separately from `organizationMemberRemove`, which still refuses self-removal,
+because the two differ in who bears the consequence: removal is done *to*
+someone by an admin, leaving is done *by* you and costs you your own access.
+Folding them together would have meant either dropping the self-guard — so a
+mis-click on your own row in the members list ejects you — or giving "leave" an
+admin-only permission check it should not have.
+
+They share the write. Both route through one private `deleteMembership`, so
+leaving cascades team memberships in the same transaction and inherits the
+last-owner guard: an owner may leave only once another owner exists, otherwise
+the workspace is stranded with nobody able to manage it and — unlike a removal
+— there is no second party in the room to notice.
+
+It returns a **`LeaveOrganizationPayload`, not `EnterOrganizationPayload`**.
+That type's `organization` is non-null because you always land somewhere;
+leaving your last workspace legitimately lands you nowhere, and a null
+organization means an org-less session, which still authenticates for
+`viewerOrganizations` and workspace creation. The destination is resolved
+*after* the delete and through the same usable-org filter login uses, so it can
+neither pick the org just left nor land on a suspended one. Client-side it ends
+in the same handoff as a switch — install cookies, then a **full document
+load** — for the reason spelled out on `useOrganizationSwitch`: only a fresh
+document remounts `SyncProvider` and wipes the departed org's Dexie cache.
 
 **Client data access follows §76.1.** Every read here goes through
 `gqlQuery` and every user-visible write through `gqlMutate`, so a rejected

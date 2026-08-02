@@ -87,7 +87,7 @@ export const analyticsResolvers = {
 
     analyticsWorkspaceOverview: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+      requireOrgRole(ctx, ['owner', 'admin']);
       return ctx.services.analytics.workspaceOverview(ctx.orgId);
     },
   },

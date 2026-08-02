@@ -6,7 +6,7 @@ export const slackResolvers = {
   Mutation: {
     slackDisconnect: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+      requireOrgRole(ctx, ['owner', 'admin']);
       await ctx.services.slack.disconnect(ctx.orgId);
       return { success: true };
     },
@@ -17,7 +17,7 @@ export const slackResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+      requireOrgRole(ctx, ['owner', 'admin']);
       // Verify the chosen team belongs to this org before storing it.
       if (teamId) {
         await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);

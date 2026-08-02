@@ -23,7 +23,7 @@ export const auditLogResolvers = {
       requireAuth(ctx);
 
       try {
-        await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+        requireOrgRole(ctx, ['owner', 'admin']);
       } catch {
         throw new GraphQLError('You need admin access to view audit logs', {
           extensions: { code: 'FORBIDDEN' },

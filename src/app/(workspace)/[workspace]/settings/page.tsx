@@ -495,7 +495,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
           </div>
         </section>
 
-        <MembersSection />
+        <MembersSection orgName={org?.name ?? ''} />
 
         {/* Personal preferences */}
         <section>

@@ -176,18 +176,105 @@ describe('organization query', () => {
   });
 });
 
+describe('organizationLeave', () => {
+  function ctxLeaving(role: string, opts: { otherOwners?: number; nextOrg?: unknown } = {}) {
+    const ctx = createMockContext({ orgRole: role });
+    ctx.prisma.organizationMember.findUnique.mockResolvedValue({ id: 'm1', role });
+    ctx.prisma.organizationMember.count.mockResolvedValue(opts.otherOwners ?? 0);
+    ctx.prisma.teamMembership.deleteMany.mockResolvedValue({ count: 2 });
+    ctx.prisma.organizationMember.delete.mockResolvedValue({ id: 'm1', role });
+    ctx.prisma.organizationMember.findFirst.mockResolvedValue(
+      opts.nextOrg === undefined ? null : opts.nextOrg,
+    );
+    return ctx;
+  }
+
+  it('lets an ordinary member leave, cascading their team memberships', async () => {
+    const ctx = ctxLeaving('member');
+    const sync = vi.spyOn(ctx.services.sync, 'createSyncAction');
+
+    const result = await organizationResolvers.Mutation.organizationLeave(null, {}, ctx as never);
+
+    expect(result.success).toBe(true);
+    // Team rows go in the same transaction as the org membership: a user
+    // holding team rows in an org they have left is a state every team query
+    // would otherwise have to defend against.
+    expect(ctx.prisma.teamMembership.deleteMany).toHaveBeenCalledWith({
+      where: { team: { organizationId: TEST_ORG.id }, userId: TEST_USER.id },
+    });
+    expect(ctx.prisma.organizationMember.delete).toHaveBeenCalled();
+    expect(sync).toHaveBeenCalledWith(
+      TEST_ORG.id,
+      'D',
+      'OrganizationMember',
+      'm1',
+      expect.anything(),
+    );
+  });
+
+  it('hands back an org-less session when nothing remains', async () => {
+    const ctx = ctxLeaving('member');
+    const result = await organizationResolvers.Mutation.organizationLeave(null, {}, ctx as never);
+
+    // Null organization is the point of the separate payload type: leaving
+    // your last workspace lands you nowhere, and the session must still
+    // authenticate for viewerOrganizations and workspace creation.
+    expect(result.organization).toBeNull();
+    expect(result.accessToken).toBeTruthy();
+    expect(result.refreshToken).toBeTruthy();
+  });
+
+  it('re-issues into a remaining workspace, resolved after the delete', async () => {
+    const ctx = ctxLeaving('member', { nextOrg: { organization: OTHER_ORG } });
+    const result = await organizationResolvers.Mutation.organizationLeave(null, {}, ctx as never);
+
+    expect(result.organization).toMatchObject({ id: OTHER_ORG.id });
+    // Resolved through the same usable-org filter login uses, so it can
+    // neither return the org just left nor a suspended one.
+    expect(ctx.prisma.organizationMember.findFirst).toHaveBeenCalled();
+  });
+
+  it('refuses to strand the workspace when the caller is the last owner', async () => {
+    const ctx = ctxLeaving('owner', { otherOwners: 0 });
+
+    await expect(
+      organizationResolvers.Mutation.organizationLeave(null, {}, ctx as never),
+    ).rejects.toSatisfy(err => codeOf(err) === 'BAD_USER_INPUT');
+    expect(ctx.prisma.organizationMember.delete).not.toHaveBeenCalled();
+  });
+
+  it('lets an owner leave once another owner exists', async () => {
+    const ctx = ctxLeaving('owner', { otherOwners: 1 });
+
+    const result = await organizationResolvers.Mutation.organizationLeave(null, {}, ctx as never);
+    expect(result.success).toBe(true);
+  });
+
+  it('refuses while impersonating', async () => {
+    // An admin acting as someone else must not be able to drop that person
+    // out of a workspace — the audit trail records the admin entering, not
+    // a membership change made in their name.
+    const ctx = ctxLeaving('member');
+    ctx.impersonatorId = 'admin-1';
+
+    await expect(
+      organizationResolvers.Mutation.organizationLeave(null, {}, ctx as never),
+    ).rejects.toSatisfy(err => codeOf(err) === 'FORBIDDEN');
+    expect(ctx.prisma.organizationMember.delete).not.toHaveBeenCalled();
+  });
+});
+
 describe('organizationMemberRemove', () => {
   const TARGET = '00000000-0000-0000-0000-0000000000c1';
 
-  function ctxWithActor(role: string) {
-    const ctx = createMockContext();
-    // requireOrgRole and the service both read organizationMember.findUnique;
-    // the first call resolves the actor's role, the second the target's.
-    ctx.prisma.organizationMember.findUnique
-      .mockResolvedValueOnce({ role })
-      .mockResolvedValue({ id: 'm2', role: 'member' });
+  function ctxWithActor(role: string, targetRole = 'member') {
+    // The actor's role rides the context now (AuthContext.orgRole), so the
+    // single findUnique mock is unambiguously the *target's* row — it used to
+    // be a two-call sequence where the first stood in for requireOrgRole.
+    const ctx = createMockContext({ orgRole: role });
+    ctx.prisma.organizationMember.findUnique.mockResolvedValue({ id: 'm2', role: targetRole });
     ctx.prisma.teamMembership.deleteMany.mockResolvedValue({ count: 0 });
-    ctx.prisma.organizationMember.delete.mockResolvedValue({ id: 'm2', role: 'member' });
+    ctx.prisma.organizationMember.delete.mockResolvedValue({ id: 'm2', role: targetRole });
     return ctx;
   }
 
@@ -213,8 +300,9 @@ describe('organizationMemberRemove', () => {
   });
 
   it('rejects a caller who is only a member', async () => {
-    const ctx = createMockContext();
-    ctx.prisma.organizationMember.findUnique.mockResolvedValue({ role: 'member' });
+    // The role now rides the request context (AuthContext.orgRole), resolved
+    // once by extractAuthContext — requireOrgRole no longer re-queries it.
+    const ctx = createMockContext({ orgRole: 'member' });
 
     await expect(
       organizationResolvers.Mutation.organizationMemberRemove(
@@ -289,8 +377,7 @@ describe('organizationInviteAccept', () => {
 
 describe('organizationInvites query', () => {
   it('is owner/admin only', async () => {
-    const ctx = createMockContext();
-    ctx.prisma.organizationMember.findUnique.mockResolvedValue({ role: 'member' });
+    const ctx = createMockContext({ orgRole: 'member' });
 
     await expect(
       organizationResolvers.Query.organizationInvites(null, {}, ctx as never),

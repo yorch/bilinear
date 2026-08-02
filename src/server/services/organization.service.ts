@@ -194,6 +194,49 @@ export class OrganizationService {
       await this.assertNotLastOwner(orgId, userId);
     }
 
+    return this.deleteMembership(orgId, userId);
+  }
+
+  /**
+   * The caller gives up their own membership.
+   *
+   * Deliberately a separate entry point from `removeMember`, which refuses
+   * self-removal, because the two differ in who bears the consequence:
+   * removal is done *to* someone by an admin, leaving is done *by* you and
+   * costs you your own access. Folding them together would have meant either
+   * dropping `removeMember`'s self-guard — so a mis-click on your own row in
+   * the members list silently ejects you — or giving "leave" an admin-only
+   * permission check it should not have.
+   *
+   * What they *do* share is the write: both route through the same
+   * transaction, so leaving cascades team memberships exactly like removal
+   * and inherits the last-owner guard. An owner may leave only once another
+   * owner exists; otherwise the workspace is stranded with no one able to
+   * manage it, and — unlike being removed — there is no second party in the
+   * room to notice.
+   *
+   * `user.active` is untouched: this is one workspace, not the account.
+   */
+  async leaveOrganization(orgId: string, userId: string): Promise<OrganizationMember> {
+    const membership = await this.prisma.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId: orgId, userId } },
+    });
+    if (!membership) {
+      throw new MemberNotFoundError();
+    }
+    if (membership.role === 'owner') {
+      await this.assertNotLastOwner(orgId, userId);
+    }
+    return this.deleteMembership(orgId, userId);
+  }
+
+  /**
+   * The single write shared by removal and leaving. Team memberships go in
+   * the same transaction as the org membership: a user left holding team rows
+   * in an org they are not a member of is a state every team query would have
+   * to defend against.
+   */
+  private async deleteMembership(orgId: string, userId: string): Promise<OrganizationMember> {
     return this.prisma.$transaction(async tx => {
       await tx.teamMembership.deleteMany({
         where: { team: { organizationId: orgId }, userId },

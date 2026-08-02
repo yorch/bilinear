@@ -83,7 +83,7 @@ export const organizationResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+      requireOrgRole(ctx, ['owner', 'admin']);
       const organization = await ctx.prisma.organization.update({
         data: { aiEnabled: enabled },
         where: { id: ctx.orgId },
@@ -177,7 +177,7 @@ export const organizationResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      const actorRole = await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+      const actorRole = requireOrgRole(ctx, ['owner', 'admin']);
 
       let invite: Awaited<ReturnType<typeof ctx.services.organizationInvite.create>>;
       try {
@@ -213,7 +213,7 @@ export const organizationResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+      requireOrgRole(ctx, ['owner', 'admin']);
 
       const revoked = await ctx.services.organizationInvite.revoke(ctx.orgId, id);
       if (!revoked) {
@@ -235,13 +235,86 @@ export const organizationResolvers = {
 
       return { success: true };
     },
+
+    /**
+     * The caller gives up their own membership in the session's org.
+     *
+     * Separate from `organizationMemberRemove`, which refuses self-removal on
+     * purpose — see `OrganizationService.leaveOrganization`. Deliberately
+     * needs no role gate: any member may leave, and the only structural
+     * constraint (the last owner cannot) lives in the service, where removal
+     * enforces it too.
+     *
+     * Returns a fresh session rather than just `success`. Leaving invalidates
+     * the org the caller is standing in, so the response either moves them
+     * into another workspace they hold or hands back an org-less session —
+     * which still authenticates well enough to reach `viewerOrganizations`
+     * and the create-workspace flow. Without this the client would be left
+     * holding a token whose `orgId` names an org it was just ejected from,
+     * and every subsequent request would silently drop the claim.
+     */
+    organizationLeave: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+
+      // An impersonated session must not be able to drop the target out of a
+      // workspace: the audit trail records the admin entering, not this.
+      if (ctx.impersonatorId) {
+        throw new GraphQLError('Cannot leave a workspace while impersonating', {
+          extensions: { code: 'FORBIDDEN' },
+        });
+      }
+
+      const orgId = ctx.orgId;
+      let left: OrganizationMember;
+      try {
+        left = await ctx.services.organization.leaveOrganization(orgId, ctx.userId);
+      } catch (err) {
+        rethrowMembershipError(err);
+      }
+
+      const sync = await ctx.services.sync.createSyncAction(
+        orgId,
+        'D',
+        'OrganizationMember',
+        left.id,
+        left,
+      );
+
+      ctx.services.auditLog
+        .log({
+          action: 'member.left',
+          ipAddress: ctx.clientIp,
+          metadata: { role: left.role },
+          orgId,
+          resourceId: ctx.userId,
+          resourceType: 'OrganizationMember',
+          userId: ctx.userId,
+        })
+        .catch(err => log.warn({ err }, 'audit log failed'));
+
+      // Re-issue into whichever workspace remains. Resolved *after* the
+      // delete, and through the same usable-org filter login uses, so it can
+      // neither pick the org just left nor land on a suspended one. Null when
+      // nothing remains — an org-less session, not a redirect to a workspace
+      // the caller never chose.
+      const next = await ctx.services.user.getOrganizationForUser(ctx.userId);
+      const tokenPair = await ctx.services.auth.reissueTokens(ctx.userId, next?.id ?? null);
+      return {
+        accessToken: tokenPair.accessToken,
+        expiresIn: tokenPair.expiresIn,
+        lastSyncId: sync.id.toString(),
+        organization: next ?? null,
+        refreshToken: tokenPair.refreshToken,
+        success: true,
+      };
+    },
     organizationMemberRemove: async (
       _parent: unknown,
       { userId }: { userId: string },
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      const actorRole = await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+      const actorRole = requireOrgRole(ctx, ['owner', 'admin']);
 
       let removed: OrganizationMember;
       try {
@@ -293,7 +366,7 @@ export const organizationResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      const actorRole = await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+      const actorRole = requireOrgRole(ctx, ['owner', 'admin']);
 
       let updated: OrganizationMember;
       try {
@@ -398,7 +471,7 @@ export const organizationResolvers = {
       requireAuth(ctx);
       // Pending invitations expose the email addresses an org has reached out
       // to, so they are admin-only rather than visible to every member.
-      await requireOrgRole(ctx.prisma, ctx.orgId, ctx.userId, ['owner', 'admin']);
+      requireOrgRole(ctx, ['owner', 'admin']);
       return ctx.services.organizationInvite.listPending(ctx.orgId);
     },
 

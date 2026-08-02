@@ -355,9 +355,17 @@ export class AuthService {
     }
   }
 
-  /** Re-issue access + refresh tokens after an org change (e.g. onboarding). */
-  async reissueTokens(userId: string, orgId: string): Promise<AuthPayload> {
-    return this.issueTokenPair(userId, orgId);
+  /**
+   * Re-issue access + refresh tokens after an org change (onboarding, a
+   * workspace switch, leaving a workspace).
+   *
+   * `orgId: null` is meaningful and distinct from omitting it: it mints an
+   * explicitly org-less session. Leaving your last workspace needs that —
+   * omitting the argument would make `issueTokenPair` re-derive a default
+   * org, which is right at login and wrong here.
+   */
+  async reissueTokens(userId: string, orgId: string | null): Promise<AuthPayload> {
+    return this.issueTokenPair(userId, orgId ?? '');
   }
 
   /**
@@ -438,8 +446,12 @@ export class AuthService {
     knownOrgId?: string,
     existingFamilyId?: string | null,
   ): Promise<AuthPayload> {
+    // `undefined` means "work out where this user belongs" (login). An empty
+    // string means "deliberately org-less" (they just left their last
+    // workspace) and must NOT be re-derived, or leaving would hand back a
+    // session pointing at some other org the caller did not ask for.
     let orgId = knownOrgId;
-    if (!orgId) {
+    if (orgId === undefined) {
       const org = await this.userService.getOrganizationForUser(userId);
       orgId = org?.id ?? '';
     }

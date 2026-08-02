@@ -52,55 +52,41 @@ describe('requireAuth', () => {
 });
 
 describe('requireOrgRole', () => {
-  const prisma = createMockPrisma();
-
-  beforeEach(() => {
-    prisma.organizationMember.findUnique.mockReset();
+  const ctx = (orgRole: string | null, orgId: string | null = 'org-1') => ({
+    orgId,
+    orgRole,
+    userId: 'user-1',
   });
 
-  it('passes when user has required role', async () => {
-    prisma.organizationMember.findUnique.mockResolvedValue({
-      id: 'mem-1',
-      organizationId: 'org-1',
-      role: 'admin',
-      userId: 'user-1',
-    });
-
-    // Returns the caller's *actual* role, not just a pass/fail — the
-    // membership-management mutations need to tell an owner from an admin
-    // after both have cleared the same allow-list.
-    await expect(
-      requireOrgRole(prisma as never, 'org-1', 'user-1', ['owner', 'admin']),
-    ).resolves.toBe('admin');
+  it("returns the caller's actual role, not just a pass/fail", () => {
+    // An owner and an admin both clear ['owner', 'admin'], and only one of
+    // them may touch ownership — so the membership-management mutations need
+    // to tell them apart after the allow-list has passed.
+    expect(requireOrgRole(ctx('admin'), ['owner', 'admin'])).toBe('admin');
+    expect(requireOrgRole(ctx('owner'), ['owner', 'admin'])).toBe('owner');
   });
 
-  it('throws FORBIDDEN when user has wrong role', async () => {
-    prisma.organizationMember.findUnique.mockResolvedValue({
-      id: 'mem-1',
-      organizationId: 'org-1',
-      role: 'member',
-      userId: 'user-1',
-    });
-
+  it('throws FORBIDDEN when the role is not in the allow-list', () => {
+    expect(() => requireOrgRole(ctx('member'), ['owner', 'admin'])).toThrow(GraphQLError);
     try {
-      await requireOrgRole(prisma as never, 'org-1', 'user-1', ['owner', 'admin']);
-      expect.unreachable('Should have thrown');
+      requireOrgRole(ctx('member'), ['owner', 'admin']);
     } catch (e) {
-      expect(e).toBeInstanceOf(GraphQLError);
       expect((e as GraphQLError).extensions?.code).toBe('FORBIDDEN');
     }
   });
 
-  it('throws FORBIDDEN when membership does not exist', async () => {
-    prisma.organizationMember.findUnique.mockResolvedValue(null);
+  it('fails closed when the session carries no role', () => {
+    // No membership, or a membership that failed revalidation this request.
+    expect(() => requireOrgRole(ctx(null), ['owner', 'admin'])).toThrow(GraphQLError);
+    expect(() => requireOrgRole(ctx(null), ['member'])).toThrow(GraphQLError);
+  });
 
-    try {
-      await requireOrgRole(prisma as never, 'org-1', 'user-1', ['owner', 'admin']);
-      expect.unreachable('Should have thrown');
-    } catch (e) {
-      expect(e).toBeInstanceOf(GraphQLError);
-      expect((e as GraphQLError).extensions?.code).toBe('FORBIDDEN');
-    }
+  it('fails closed when orgId was dropped but a stale role lingers', () => {
+    // Defence in depth for the AuthContext invariant: `orgId` and `orgRole`
+    // are cleared together, so a role without an org can only mean the pair
+    // got out of sync. Authorizing on it would grant access to a workspace
+    // the session no longer holds.
+    expect(() => requireOrgRole(ctx('owner', null), ['owner'])).toThrow(GraphQLError);
   });
 });
 

@@ -44,6 +44,7 @@ const TABLE_NAMES = [
   'initiativeProjects',
   'favorites',
   'issueActivities',
+  'organizationMembers',
   'syncMetadata',
   'pendingTransactions',
 ] as const;
@@ -118,6 +119,7 @@ function createFakeStores() {
     'notificationStore',
     'issueRelationStore',
     'issueTemplateStore',
+    'organizationMemberStore',
   ] as const;
 
   const stores: Record<string, unknown> = { syncStore };
@@ -300,6 +302,42 @@ describe('SyncManager', () => {
   });
 
   // ─── deltaSync local-cursor pagination ──────────────────────────────────
+  // §78 shipped `'D' OrganizationMember` SyncActions with no client handler,
+  // so removing someone left every other admin's open tab showing them until
+  // reload. These assert the action now reaches a store.
+  describe('organization roster actions', () => {
+    it('routes a member removal to the roster store', async () => {
+      const stores = createFakeStores();
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+
+      await (manager as Instance).applyActions([
+        makeAction({ action: 'D', data: null, modelId: 'mem-1', modelName: 'OrganizationMember' }),
+      ]);
+
+      expect(stores.organizationMemberStore.applySyncAction).toHaveBeenCalledWith(
+        'D',
+        'mem-1',
+        null,
+      );
+    });
+
+    it('routes a role change to the roster store', async () => {
+      const stores = createFakeStores();
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+      const row = { id: 'mem-1', organizationId: 'org-1', role: 'admin', userId: 'u1' };
+
+      await (manager as Instance).applyActions([
+        makeAction({ action: 'U', data: row, modelId: 'mem-1', modelName: 'OrganizationMember' }),
+      ]);
+
+      expect(stores.organizationMemberStore.applySyncAction).toHaveBeenCalledWith(
+        'U',
+        'mem-1',
+        row,
+      );
+    });
+  });
+
   describe('deltaSync pagination', () => {
     it('pages through hasMore results until the server reports hasMore=false', async () => {
       const stores = createFakeStores();
