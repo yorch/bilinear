@@ -1630,12 +1630,12 @@ prisma/
                                                   -- hand-written DDL Prisma can't express:
                                                   --   partial/expression indexes (incl. the
                                                   --   teams(org, key) WHERE archived_at IS
-                                                  --   NULL unique), the FTS GIN index and
-                                                  --   trigger, the sync_actions
-                                                  --   (org, xact_id, id) index (the xact_id
-                                                  --   column itself is in init), check
-                                                  --   constraints, and the String[] NOT NULL
-                                                  --   guards
+                                                  --   NULL unique and the issues(team, state)
+                                                  --   WHERE active partial), the FTS GIN
+                                                  --   index, the sync_actions (org, xact_id,
+                                                  --   id) index (the xact_id column itself is
+                                                  --   in init), check constraints, and the
+                                                  --   String[] NOT NULL guards
 ```
 
 **Regenerating the baseline** (no database required — it diffs an empty

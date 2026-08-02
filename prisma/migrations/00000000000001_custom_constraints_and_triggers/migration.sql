@@ -81,3 +81,15 @@ ALTER TABLE "webhooks"
 
 ALTER TABLE "auth_tokens"
   ALTER COLUMN "scopes" SET NOT NULL;
+
+-- ---------------------------------------------------------------------------
+-- Active-issues partial index (§2.1 DB hardening)
+-- ---------------------------------------------------------------------------
+-- Serves the per-team active list view (the most-rendered issue query): issues
+-- on a team, filtered to a state, excluding archived/trashed rows. A partial
+-- index keyed on the same predicate the list uses keeps it small (dead rows
+-- excluded) and lets Postgres satisfy the filter from the index alone. Prisma's
+-- @@index can't carry a WHERE predicate, so it lives here.
+CREATE INDEX "issues_team_id_state_id_active_idx"
+  ON "issues" ("team_id", "state_id")
+  WHERE "archived_at" IS NULL AND "trashed" = false;

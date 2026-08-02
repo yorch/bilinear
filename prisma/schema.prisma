@@ -468,8 +468,11 @@ model Issue {
   // it prevents an accidental team delete from silently wiping every issue.
   // A deliberate org/team purge must delete issues (and their state refs) in
   // dependency order first; there is no implicit cascade by design.
-  organization      Organization               @relation(fields: [organizationId], references: [id])
-  team              Team                       @relation(fields: [teamId], references: [id])
+  // Cascade on org/team delete to match peer models (Project, Cycle, which
+  // already Cascade). Without it, deleting an org/team with issues errored on
+  // the default Restrict while its projects cascaded — inconsistent semantics.
+  organization      Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team              Team                       @relation(fields: [teamId], references: [id], onDelete: Cascade)
   state             WorkflowState              @relation(fields: [stateId], references: [id])
   assignee          User?                      @relation("AssignedIssues", fields: [assigneeId], references: [id])
   creator           User?                      @relation("CreatedIssues", fields: [creatorId], references: [id])
@@ -496,13 +499,18 @@ model Issue {
   @@index([teamId])
   @@index([stateId])
   @@index([assigneeId])
-  @@index([projectId])
   @@index([cycleId])
   @@index([parentId])
   @@index([identifier])
   @@index([teamId, priority])
   @@index([teamId, createdAt])
-  @@index([updatedAt])
+  // §2.1 DB hardening — compound/anchored indexes for hot list paths. The
+  // org-anchored (org, updated_at DESC) replaces the un-anchored (updated_at)
+  // single index (every issue read is org-scoped); (project_id, archived_at,
+  // trashed) replaces the bare (project_id) it prefixes, serving Project.issues.
+  @@index([organizationId, updatedAt(sort: Desc)])
+  @@index([assigneeId, stateId])
+  @@index([projectId, archivedAt, trashed])
   // GIN index over the previous-identifier history array. Load-bearing:
   // `IssueService.findByIdentifier` falls back to a `previousIdentifiers`
   // lookup (OR clause) and `GithubService.linkPullRequest` matches with
@@ -531,8 +539,11 @@ model IssueLabel {
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   archivedAt DateTime? @map("archived_at") @db.Timestamptz
 
-  organization Organization           @relation(fields: [organizationId], references: [id])
-  team         Team?                  @relation(fields: [teamId], references: [id])
+  // Cascade on org/team delete, matching Issue (§2.2). A team-scoped label is
+  // meaningless once its team is gone; workspace-scoped labels (teamId null)
+  // are unaffected by a team delete.
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team         Team?                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
   parent       IssueLabel?            @relation("LabelHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children     IssueLabel[]           @relation("LabelHierarchy")
   creator      User?                  @relation("CreatedLabels", fields: [creatorId], references: [id])
@@ -579,6 +590,8 @@ model SyncAction {
 
   @@index([organizationId, id])
   @@index([createdAt])
+  // §2.1 — targeted SyncAction lookup by (org, model, id) for replay/debug.
+  @@index([organizationId, modelName, modelId])
   @@map("sync_actions")
 }
 
@@ -826,7 +839,11 @@ model Notification {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation("ReceivedNotifications", fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, read])
+  // §2.1 — the inbox unread feed (NotificationService.findByUserId) filters by
+  // (user_id, read) and orders by created_at DESC. This compound serves that in
+  // one index scan and makes the (user_id, read) single redundant (it's a
+  // prefix). (user_id, created_at) stays for the "all notifications by date" read.
+  @@index([userId, read, createdAt(sort: Desc)])
   @@index([userId, createdAt])
   @@index([organizationId])
   @@index([issueId])
