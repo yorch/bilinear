@@ -1585,6 +1585,20 @@ Do not reintroduce them as a cache. Removing the columns is what turned each
 stale read into a compile error, which is how a second forgotten reader
 (`roadmap/[slug]/page.tsx`, with its own `prisma.project.findMany`) was found.
 
+**They were born dead, not rotted.** Both columns arrived in `a682a53` (#19,
+"Add project management feature with milestones and updates") — and *the same
+commit* shipped `ProjectService.getProgress` returning
+`{ progress: completed / total, scope: total }`, an SDL declaring
+`progress: Float!` / `scope: Float!`, and field resolvers that answer from the
+computation. No revision of `project.service.ts` has ever written them, and no
+seed, import path or migration has ever backfilled them. `Cycle` inherited the
+same pair one PR later in `7b09a09` (#21), the same way.
+
+So this is not a cache that stopped being maintained; the column and the
+computed field were authored side by side and never reconciled. Treat any
+proposal to restore them as a proposal to add a *new* cache, and hold it to the
+usual bar: who writes it, on which transitions, and what keeps it honest.
+
 **`cycles` has the same dead columns, and they are still there.** An earlier
 draft of this section claimed they "are written and must stay". That is wrong.
 Verified: the only two `prisma.cycle.update` call sites write
