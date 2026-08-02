@@ -320,10 +320,10 @@ CREATE INDEX idx_workflow_states_type ON workflow_states(team_id, type);
 ```sql
 CREATE TABLE issues (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID NOT NULL REFERENCES organizations(id),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
 
     -- Identity
-    team_id         UUID NOT NULL REFERENCES teams(id),
+    team_id         UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
     number          INT NOT NULL,  -- sequential per team
     identifier      VARCHAR(20) NOT NULL,  -- 'ENG-123' (denormalized)
     previous_identifiers TEXT[] DEFAULT '{}',
@@ -396,16 +396,22 @@ CREATE INDEX idx_issues_org ON issues(organization_id);
 CREATE INDEX idx_issues_team ON issues(team_id);
 CREATE INDEX idx_issues_state ON issues(state_id);
 CREATE INDEX idx_issues_assignee ON issues(assignee_id);
-CREATE INDEX idx_issues_project ON issues(project_id);
 CREATE INDEX idx_issues_cycle ON issues(cycle_id);
 CREATE INDEX idx_issues_parent ON issues(parent_id);
 CREATE INDEX idx_issues_identifier ON issues(identifier);
 CREATE INDEX idx_issues_priority ON issues(team_id, priority);
 CREATE INDEX idx_issues_due_date ON issues(due_date) WHERE due_date IS NOT NULL;
 CREATE INDEX idx_issues_created_at ON issues(team_id, created_at);
-CREATE INDEX idx_issues_updated_at ON issues(updated_at);
 CREATE INDEX idx_issues_trashed ON issues(trashed) WHERE trashed = true;
 CREATE INDEX idx_issues_archived ON issues(archived_at) WHERE archived_at IS NOT NULL;
+-- §2.1 DB hardening: org-anchored recent feed (replaces the un-anchored
+-- (updated_at)), "my issues", Project.issues (replaces the bare (project_id)),
+-- and the per-team active list view (partial, in the custom migration).
+CREATE INDEX idx_issues_org_updated ON issues(organization_id, updated_at DESC);
+CREATE INDEX idx_issues_assignee_state ON issues(assignee_id, state_id);
+CREATE INDEX idx_issues_project_active ON issues(project_id, archived_at, trashed);
+CREATE INDEX idx_issues_team_state_active ON issues(team_id, state_id)
+    WHERE archived_at IS NULL AND trashed = false;
 
 -- Full-text search
 CREATE INDEX idx_issues_search ON issues
@@ -417,8 +423,8 @@ CREATE INDEX idx_issues_search ON issues
 ```sql
 CREATE TABLE issue_labels (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID NOT NULL REFERENCES organizations(id),
-    team_id         UUID REFERENCES teams(id),  -- null = workspace-global
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    team_id         UUID REFERENCES teams(id) ON DELETE CASCADE,  -- null = workspace-global
     name            VARCHAR(255) NOT NULL,
     color           VARCHAR(7) NOT NULL,
     description     TEXT,
@@ -835,7 +841,9 @@ CREATE TABLE notifications (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_notifications_user_read ON notifications(user_id, read);
+-- §2.1: inbox unread feed filters (user_id, read) and orders by created_at DESC
+-- in one scan; makes the (user_id, read) prefix redundant.
+CREATE INDEX idx_notifications_user_read_created ON notifications(user_id, read, created_at DESC);
 CREATE INDEX idx_notifications_user_created ON notifications(user_id, created_at);
 CREATE INDEX idx_notifications_organization ON notifications(organization_id);
 CREATE INDEX idx_notifications_issue ON notifications(issue_id);
@@ -1098,7 +1106,8 @@ CREATE TABLE sync_actions (
 );
 CREATE INDEX idx_sync_actions_org ON sync_actions(organization_id, id);
 CREATE INDEX idx_sync_actions_org_xact ON sync_actions(organization_id, xact_id, id);
-CREATE INDEX idx_sync_actions_model ON sync_actions(model_name, model_id);
+-- §2.1: targeted lookup for replay/debug of one model's actions in an org.
+CREATE INDEX idx_sync_actions_org_model ON sync_actions(organization_id, model_name, model_id);
 
 -- Partition by organization for scale (optional)
 -- Prune old entries (>30 days) via background job
