@@ -208,8 +208,12 @@ describe('TransactionQueue', () => {
   it('retries a RATELIMITED error instead of dropping it, and succeeds on retry', async () => {
     vi.useFakeTimers();
     gqlMock
-      .mockResolvedValueOnce({ errors: [{ extensions: { code: 'RATELIMITED' }, message: 'slow down' }] })
-      .mockResolvedValueOnce({ errors: [{ extensions: { code: 'RATELIMITED' }, message: 'slow down' }] })
+      .mockResolvedValueOnce({
+        errors: [{ extensions: { code: 'RATELIMITED' }, message: 'slow down' }],
+      })
+      .mockResolvedValueOnce({
+        errors: [{ extensions: { code: 'RATELIMITED' }, message: 'slow down' }],
+      })
       .mockResolvedValueOnce({ data: { ok: true } });
     const onSuccess = vi.fn();
     const onError = vi.fn();
