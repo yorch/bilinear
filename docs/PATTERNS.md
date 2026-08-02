@@ -1104,15 +1104,27 @@ export interface DBProjectUpdate {
 }
 ```
 
-Add a Dexie version bump with the new table:
+Add the table to the Dexie schema. **Pre-launch this means editing the
+existing `.version(1)` block in place** — nothing is deployed, so a version
+generation buys nothing and costs a dev browser one re-bootstrap. After the
+first real deployment it becomes a new `.version(N)` block instead, never an
+edit to a previous one (see the `TODO(pre-launch)` above the `AppDatabase`
+constructor):
 
 ```typescript
-// Bump the version — NEVER modify a previous version block
-this.version(3).stores({
-  ...allPreviousTableSchemas,
+this.version(1).stores({
+  // …existing tables…
   projectUpdates: 'id, projectId, userId',
 });
 ```
+
+Then add it to `CACHED_COLLECTIONS` in `src/lib/db-collections.ts`. This is
+not optional for a **synced** collection, and it is not cosmetic: a client with
+a warm cache would otherwise keep that table empty forever, because the delta
+path only carries rows that *changed*. The stamp makes such a client
+re-bootstrap once instead. A test asserts the constant matches the tables
+`fullBootstrap` actually clears, so forgetting this fails the suite rather than
+shipping a silent hole.
 
 And add a typed table property to `AppDatabase`:
 
@@ -2516,18 +2528,32 @@ schedules the follow-up delta the cold-start path already had — `fullBootstrap
 regresses `lastSyncId` to the snapshot's cursor, so an action that applied
 while the snapshot was in flight is re-delivered.
 
-**Adding a synced collection will need more than a Dexie version bump**, once
-the pre-launch `.version(N)` + `.upgrade()` work in `src/lib/db.ts` lands. A
-Dexie upgrade creates the new object store *empty* and leaves every other
-table in place, so `loadFromIndexedDB` reports a usable cache and `start`
-takes the delta path — which carries only rows that *changed*. An untouched
-collection never backfills, and the surface reading it renders an empty state
-forever. Today the whole database is recreated whenever the schema moves, so
-the cache is always cold and the problem cannot arise; the moment it stops
-being recreated, a "which collections does this cache hold" stamp in
-`syncMetadata` (checked by `loadFromIndexedDB`, written by `fullBootstrap` in
-the same transaction as the rows) is what carries that invariant. See the TODO
-above the `AppDatabase` constructor.
+**Adding a synced collection needs more than a Dexie schema edit** — and the
+mechanism that carries this is now built. A Dexie upgrade creates the new
+object store *empty* and leaves every other table in place, so
+`loadFromIndexedDB` would report a usable cache and `start` would take the
+delta path — which carries only rows that *changed*. An untouched collection
+never backfills, and the surface reading it renders an empty state forever.
+
+So `fullBootstrap` stamps `CACHED_COLLECTIONS` (`src/lib/db-collections.ts`)
+into `syncMetadata` **in the same transaction as the rows it describes**, and
+`loadFromIndexedDB` refuses any cache whose stamp doesn't cover every required
+collection. Adding a collection to bootstrap therefore costs exactly one edit —
+add it to that constant — and every existing client re-bootstraps once instead
+of running with a hole. A test asserts the constant matches the tables the
+bootstrap transaction actually clears, so the two cannot drift.
+
+`favorites` is deliberately excluded: the server's bootstrap payload doesn't
+carry it, `fullBootstrap` never writes it, and the sidebar reads favorites from
+GraphQL using the store only as a refetch trigger. Listing it would make every
+client re-bootstrap forever, since bootstrap could never satisfy the claim.
+`pendingTransactions` is excluded because it is the offline queue — the one
+thing in the cache that exists nowhere else.
+
+This is independent of the version scheme. While nothing is deployed
+`src/lib/db.ts` still edits `.version(1)` in place (see the `TODO(pre-launch)`
+above the constructor); the stamp is what makes the eventual `.version(N)` +
+`.upgrade()` work safe, not a prerequisite for it.
 
 **Leaving is its own operation (2026-08-02).** `organizationLeave` exists
 separately from `organizationMemberRemove`, which still refuses self-removal,
