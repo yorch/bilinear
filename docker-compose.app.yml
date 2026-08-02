@@ -13,6 +13,31 @@ services:
       HOSTNAME: "0.0.0.0"
       DATABASE_URL: ${DATABASE_URL_OVERRIDE:-postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/${POSTGRES_DB:-bilinear}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      # No reverse proxy in this overlay, so point the browser straight at
+      # the published `ws` port below rather than at a same-origin path.
+      WS_PUBLIC_URL: ${WS_PUBLIC_URL:-ws://localhost:${WS_PORT_PUBLISHED:-3001}}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # See docker-compose.prod.yml for why this is a separate process.
+  ws:
+    build:
+      context: .
+    init: true
+    restart: unless-stopped
+    # `prisma migrate deploy` is owned by the app container above.
+    entrypoint: ["node", "./node_modules/tsx/dist/cli.mjs", "src/server/ws/index.ts"]
+    ports:
+      - ${WS_PORT_PUBLISHED:-3001}:3001
+    env_file:
+      - .env
+    environment:
+      WS_PORT: "3001"
+      DATABASE_URL: ${DATABASE_URL_OVERRIDE:-postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/${POSTGRES_DB:-bilinear}}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
     depends_on:
       postgres:
         condition: service_healthy

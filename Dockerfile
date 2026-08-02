@@ -62,6 +62,17 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 
+# The standalone build only produces the Next.js app. The WS server is a
+# second, independent process (`yarn ws:server`) that owns real-time sync
+# fan-out, the webhook retry sweep and cycle auto-rollover — without it the
+# browser's `wss://` connection has nothing to connect to. It runs straight
+# from TypeScript via tsx, which the full node_modules overlay above already
+# provides, so shipping the source plus tsconfig (for the `@/*` path alias)
+# is what lets ONE image serve both processes. Copied AFTER the standalone
+# overlay so these are the files that win. See docker-compose.prod.yml.
+COPY --from=builder --chown=node:node /app/src ./src
+COPY --from=builder --chown=node:node /app/tsconfig.json ./tsconfig.json
+
 COPY --chown=node:node docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 

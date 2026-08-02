@@ -236,14 +236,38 @@ Required environment variables (in addition to defaults): `JWT_SECRET`, `JWT_REF
 
 Two long-running processes are required in production alongside the Next.js app:
 
-| Process                     | Command           | Responsibilities                                                                                                 |
-| --------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------- |
-| **WebSocket server**        | `yarn ws:server`  | Real-time sync fan-out (Redis Pub/Sub → connected clients), webhook retry sweep (every 30s), cycle auto-rollover |
-| **YJS server** *(optional)* | `yarn yjs:server` | Collaborative editing — only needed when `NEXT_PUBLIC_COLLAB_ENABLED=true`                                       |
+| Process                     | Command           | Wired into compose?  | Responsibilities                                                                                                 |
+| --------------------------- | ----------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **WebSocket server**        | `yarn ws:server`  | Yes — the `ws` service | Real-time sync fan-out (Redis Pub/Sub → connected clients), webhook retry sweep (every 30s), cycle auto-rollover |
+| **YJS server** *(optional)* | `yarn yjs:server` | No — run it yourself | Collaborative editing — only needed when `NEXT_PUBLIC_COLLAB_ENABLED=true`                                       |
 
-**Neither server is wired into the Docker Compose files** — run them as separate services or background processes in your deployment. Set `NEXT_PUBLIC_WS_PORT` (and `NEXT_PUBLIC_YJS_SERVER_URL` for YJS) before `yarn build` so the values are inlined at build time.
+The `ws` service runs from the same image as the app (which ships the TypeScript
+source and runs it via `tsx`), with the migrating entrypoint overridden so only
+the app container runs `prisma migrate deploy`.
 
 > **Warning:** The webhook retry sweep and cycle auto-rollover run exclusively inside the WS server process. If it is not running, scheduled webhooks will not be retried and cycles will not roll over automatically.
+
+#### Pointing the browser at the WS server
+
+Set **`WS_PUBLIC_URL`**. It is read at request time and handed to the client by
+`/api/auth/ws-ticket`, so it works with a prebuilt image — unlike the
+`NEXT_PUBLIC_*` fallbacks, which `next build` inlines and which therefore cannot
+be changed at deploy time.
+
+| Deployment                          | Value                    | Result                        |
+| ----------------------------------- | ------------------------ | ----------------------------- |
+| Behind a TLS reverse proxy          | `/ws`                    | `wss://your-domain/ws`        |
+| Direct, no proxy                    | `ws://your-host:3001`    | used verbatim                 |
+| Separate WS hostname with its own cert | `wss://rt.example.com` | used verbatim                 |
+
+The `traefik` overlay routes `Host(DOMAIN_APP) && PathPrefix('/ws')` to the `ws`
+service on the existing `websecure` entrypoint, so the WebSocket shares the app's
+:443 listener and certificate. **Publishing the WS server on its own port and
+connecting to `wss://host:3001` does not work** unless that port has its own TLS
+listener and certificate — a browser on an `https://` page cannot open a plain
+`ws://` socket, and a raw port behind a proxy that only terminates TLS on :443
+has no certificate to present. That mismatch surfaces as
+`WebSocket connection to 'wss://host:3001/?token=…' failed`.
 
 ---
 

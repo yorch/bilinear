@@ -135,6 +135,23 @@ export const env = Object.freeze({
     return numericEnv('WS_PORT', { default: 3001, max: 65535, min: 1 });
   },
 
+  /**
+   * Public endpoint the BROWSER uses to reach the WS server — a path
+   * (`/ws`), an absolute URL, or a bare host. Served to the client by
+   * `/api/auth/ws-ticket`.
+   *
+   * Deliberately NOT a `NEXT_PUBLIC_*` var even though it is public data:
+   * those are inlined by `next build`, so a deployment running the published
+   * image could never set it. Read at request time, it is configurable by
+   * anyone who can set an environment variable on the container.
+   *
+   * Unset preserves the legacy `<hostname>:<NEXT_PUBLIC_WS_PORT>` behavior.
+   */
+  get WS_PUBLIC_URL(): string | null {
+    const raw = process.env.WS_PUBLIC_URL?.trim();
+    return raw ? raw : null;
+  },
+
   /** Standalone YJS collaborative-editing server port (`yarn yjs:server`). */
   get YJS_PORT(): number {
     return numericEnv('YJS_PORT', { default: 1234, max: 65535, min: 1 });

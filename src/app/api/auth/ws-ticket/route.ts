@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { env } from '@/server/lib/env';
 import { signWsTicket } from '@/server/lib/jwt';
 import { prisma } from '@/server/lib/prisma';
 import { requireAuthContext } from '@/server/middleware/auth';
@@ -15,6 +16,14 @@ import { requireAuthContext } from '@/server/middleware/auth';
  *
  * The ticket carries the same userId/orgId claims so the WS server only
  * needs to verify the ticket, not the access cookie.
+ *
+ * It also returns `wsUrl` — the endpoint the browser should connect to.
+ * This endpoint is already fetched on every (re)connect, so it costs no
+ * extra round-trip, and being read at REQUEST time it is the only way to
+ * make the URL configurable for a deployment running a prebuilt image
+ * (`NEXT_PUBLIC_*` is inlined at build time). `null` means "unconfigured" —
+ * the client then falls back to its build-time default. See
+ * `src/lib/ws-url.ts`.
  */
 export async function GET(req: NextRequest) {
   // Routed through requireAuthContext (not a raw verifyAccessToken call) so
@@ -35,7 +44,7 @@ export async function GET(req: NextRequest) {
   const ticket = await signWsTicket({ orgId: ctx.orgId, userId: ctx.userId });
 
   return NextResponse.json(
-    { orgId: ctx.orgId, ticket, userId: ctx.userId },
+    { orgId: ctx.orgId, ticket, userId: ctx.userId, wsUrl: env.WS_PUBLIC_URL },
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }
