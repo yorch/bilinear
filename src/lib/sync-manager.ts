@@ -624,11 +624,32 @@ export class SyncManager {
     }
   }
 
-  private async applyActions(actions: SerializedSyncAction[]) {
-    if (actions.length === 0) {
-      return;
-    }
+  /**
+   * Serialize every apply — delta pages AND live WS messages — through a
+   * single-slot promise chain. `applyActions` is invoked from both `deltaSync`
+   * (line ~604) and the WS `onMessage` handler; without a lock a WS message
+   * arriving while a delta is mid-`await` interleaves its MobX/Dexie writes and
+   * its `lastSyncId` advance with the delta's. Both calls read the same stale
+   * `syncStore.lastSyncId`, then race the shared Dexie transaction — the slower
+   * one can persist a LOWER `lastSyncId` (forcing the next delta to re-request
+   * already-applied actions) and, with overlapping action sets, overwrite a
+   * newer row with an older snapshot. Writes are idempotent so this was benign
+   * at small scale; the lock makes it correct at any delta-page size / WS rate.
+   */
+  private applyLock: Promise<void> = Promise.resolve();
 
+  private applyActions(actions: SerializedSyncAction[]): Promise<void> {
+    if (actions.length === 0) {
+      return Promise.resolve();
+    }
+    const run = this.applyLock.then(() => this.doApplyActions(actions));
+    // Keep the chain alive if one apply throws — a rejected lock would wedge
+    // every subsequent apply. Callers still see the real rejection via `run`.
+    this.applyLock = run.catch(() => {});
+    return run;
+  }
+
+  private async doApplyActions(actions: SerializedSyncAction[]) {
     const {
       teamStore,
       userStore,

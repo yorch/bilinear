@@ -322,9 +322,22 @@ async function processNext(): Promise<void> {
   try {
     const result = await gql(tx.mutation, tx.variables);
     if (result.errors?.length) {
-      const firstError = result.errors[0] as { message: string };
+      const firstError = result.errors[0] as {
+        message: string;
+        extensions?: { code?: string };
+      };
+      // A `RATELIMITED` error is the one GraphQL application error the server
+      // explicitly says to retry — route it through the bounded
+      // RETRY_DELAYS_MS path (like a transient 5xx), not the permanent-drop
+      // path. Without this it was tagged `permanent: true` and dequeued
+      // immediately: the optimistic state it applied was never rolled back and
+      // never confirmed, so the mutation silently vanished. Every other code
+      // (FORBIDDEN / NOT_FOUND / BAD_USER_INPUT / …) is a real rejection that
+      // retrying can't fix, so it stays permanent. A RATELIMITED that keeps
+      // failing still becomes permanent once `retryCount` hits MAX_RETRIES.
+      const retryable = firstError.extensions?.code === 'RATELIMITED';
       throw Object.assign(new Error(firstError.message), {
-        permanent: true,
+        permanent: !retryable,
       });
     }
     // Signal a successful drain so SyncManager can schedule a delta-sync
