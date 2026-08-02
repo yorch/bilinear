@@ -13,6 +13,9 @@ on:
 
 env:
   GHCR_IMAGE: ghcr.io/${{ github.repository }}
+  # arm64 is disabled, not removed. Re-enable with:
+  # BUILD_PLATFORMS: linux/amd64,linux/arm64
+  BUILD_PLATFORMS: linux/amd64
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -44,9 +47,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          # arm64 is disabled: the emulated QEMU build dominates CI wall-clock.
-          # Re-enable by restoring `linux/amd64,linux/arm64` here and in `publish`.
-          platforms: linux/amd64
+          platforms: ${{ env.BUILD_PLATFORMS }}
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -138,10 +139,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          # arm64 is disabled: the emulated QEMU build dominates CI wall-clock.
-          # Re-enable by restoring `linux/amd64,linux/arm64` here and in `build`.
-          # Note the published manifest becomes amd64-only while this stands.
-          platforms: linux/amd64
+          platforms: ${{ env.BUILD_PLATFORMS }}
           # The publish job only runs on main / v* tag refs (see job `if`), so always push.
           push: true
           tags: ${{ steps.meta.outputs.tags }}
