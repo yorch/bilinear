@@ -45,6 +45,10 @@ current work queue are in [`docs/REVIEW_BACKLOG.md`](docs/REVIEW_BACKLOG.md).
 | Benchmark hot-path indexes      | `yarn db:verify:indexes` (needs a live Postgres)           |
 | Grant platform admin            | `yarn admin:grant`                                         |
 | Start infra (Postgres + Redis)  | `yarn docker:infra:up`                                     |
+| Start infra via Just            | `just infra-up`                                            |
+| Start local Docker stack        | `just dev-up`                                              |
+| Start production stack          | `just prod-up`                                             |
+| Deploy with Traefik + Watchtower | `just prod-full-up`                                       |
 
 **The CI gate suite is `yarn lint`, `yarn lint:tokens`, `yarn typecheck`, `yarn test`, `yarn build`** (`.github/workflows/ci.yml`) — run all five before pushing.
 

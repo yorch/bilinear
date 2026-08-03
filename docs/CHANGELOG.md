@@ -68,6 +68,17 @@ Rebased from `b38c415` onto `main` at #126 — 28 commits, including #108 (the U
 - **Server error messages reach the UI untranslated, ~144 of them.** `getErrorMessage(err, fallback)` prefers `err.message` over the translated fallback whenever `err` is an `Error`, and `gqlMutate` propagates the GraphQL error's message verbatim — so every hardcoded `GraphQLError('Comment not found')` wins over the `t()` fallback at the toast. The same holds for `/api/upload`'s JSON error strings. This is one architectural fix (map `extensions.code` → a dictionary key client-side, where the discriminator already exists per `.claude/rules/server.md`), not 144 string edits, and it is a behaviour change to every error path — too large to fold into an audit pass. **This is the largest remaining i18n gap.**
 - **`analytics.*` uses "issues" as a Spanish loanword** ("Issues completados por ciclo") while the rest of the app says "Tareas". Internally consistent within that section, so changing the one key that looked odd would have made it *less* consistent — it's a terminology decision for whoever owns the Spanish copy, not a wiring bug.
 - **`global-error.tsx` is hardcoded English on purpose** — it renders outside every provider, so there is no `LocaleProvider` and no locale to read. `/design` is a developer-only token reference. Both left alone.
+## Recently shipped (2026-08-02, Docker operations Justfile)
+
+- **One task-oriented interface now covers the existing Compose overlays.** The
+  root `Justfile` exposes infra-only recipes for native development, full-stack
+  local build/run/log/status operations, and production pull/up/down flows for
+  direct ports, Traefik, Watchtower, or both overlays together. It delegates to
+  the existing Compose files rather than duplicating their configuration, and
+  preserves optional profiles such as `collab` through normal Compose env vars.
+- **The operator path is documented where people look for it.** `README.md`
+  includes the common recipes and their raw-Compose fallback; `AGENTS.md` adds
+  the key local and production commands to the command reference.
 
 ## Recently shipped (2026-08-02, installable web app)
 

@@ -26,6 +26,7 @@ A Linear-style issue tracker built with Next.js 16, GraphQL, and PostgreSQL. See
 
 - Node.js 24+
 - Docker & Docker Compose (for local infrastructure via `yarn docker:infra:up`; both PostgreSQL and Redis are required)
+- [Just](https://just.systems/) (optional task runner for the Docker workflows below)
 
 ## Getting Started
 
@@ -137,6 +138,27 @@ CI runs `lint`, `lint:tokens`, `typecheck`, `test` and `build` on every PR
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) — run all five locally
 before pushing.
 
+### Docker commands via Just
+
+The root `Justfile` provides one interface for native-development infrastructure,
+the complete local Docker stack, and production deployments. Run `just` to list
+every recipe. Common commands:
+
+| Command                   | Description                                      |
+| ------------------------- | ------------------------------------------------ |
+| `just infra-up`           | Start PostgreSQL, Redis, and Mailpit             |
+| `just infra-down`         | Stop native-development infrastructure           |
+| `just dev-up`             | Build and start the complete local Docker stack  |
+| `just dev-logs [service]` | Follow all local logs or one service             |
+| `just dev-down`           | Stop the complete local Docker stack             |
+| `just prod-up`            | Pull and start production with published ports   |
+| `just prod-traefik-up`    | Pull and start production behind Traefik         |
+| `just prod-watchtower-up` | Start production with Watchtower updates         |
+| `just prod-full-up`       | Start production with Traefik and Watchtower     |
+
+Set `COMPOSE_PROFILES=collab` together with `COLLAB_ENABLED=true` and the
+appropriate `YJS_PUBLIC_URL` to include the optional YJS service in any recipe.
+
 ---
 
 ## Project Structure
@@ -236,17 +258,22 @@ traffic.
 
 ```bash
 # Local full-stack build (builds from source)
-yarn docker:infra:up
-docker compose -f docker-compose.app.yml -f docker-compose.infra.yml up --build
+just dev-up
 
 # Production (pulls the published image)
 cp .env.example .env
-docker compose -f docker-compose.prod.yml -f docker-compose.infra.yml up -d
+just prod-up
 
 # Behind Traefik (TLS, custom domain — set DOMAIN_APP first)
-docker compose -f docker-compose.prod.yml -f docker-compose.infra.yml \
-               -f docker-compose.traefik.yml up -d
+just prod-traefik-up
+
+# Behind Traefik with Watchtower updates enabled
+just prod-full-up
 ```
+
+The underlying `docker compose -f …` commands remain valid when Just is not
+installed; the recipes are a task-oriented interface over the existing overlay
+files, not a second deployment implementation.
 
 Required environment variables (in addition to defaults): `JWT_SECRET`, `JWT_REFRESH_SECRET`, `APP_URL`, `REDIS_URL`, and optionally `POSTGRES_PASSWORD`, `WS_PORT` (default 3001), SMTP / Google OAuth / GitHub OAuth settings. See `.env.example` for the full list.
 
