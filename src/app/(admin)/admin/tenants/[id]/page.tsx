@@ -53,7 +53,7 @@ function Stat({ label, value }: { label: string; value: number }) {
 
 export default function AdminTenantDetailPage() {
   const t = useTranslations();
-  const { formatDate } = useFormatters();
+  const { formatDate, intlLocale } = useFormatters();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [tenant, setTenant] = useState<PlatformTenantDetail | null>(null);
@@ -364,7 +364,7 @@ export default function AdminTenantDetailPage() {
                       />
                     ) : (
                       <span className="font-medium tabular-nums text-foreground">
-                        {tenant.limits[key].toLocaleString()}
+                        {tenant.limits[key].toLocaleString(intlLocale)}
                       </span>
                     )}
                   </td>

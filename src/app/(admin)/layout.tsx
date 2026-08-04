@@ -1,9 +1,14 @@
+import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { AdminShell } from '@/components/admin/admin-shell';
+import { getServerTranslations } from '@/lib/i18n/server';
 import { prisma } from '@/server/lib/prisma';
 import { readSessionClaim } from '@/server/lib/session-claim';
 
-export const metadata = { title: 'Platform Admin' };
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getServerTranslations();
+  return { title: t('admin.nav.metaTitle') };
+}
 
 /**
  * Server-side guard for the platform console. Everything under `(admin)` is

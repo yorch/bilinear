@@ -49,6 +49,7 @@
       "audit": "Audit log",
       "backToApp": "Back to app",
       "dashboard": "Dashboard",
+      "metaTitle": "Platform Admin",
       "platformBadge": "Platform",
       "tenants": "Tenants",
       "users": "Users"
@@ -141,6 +142,8 @@
     "insights": {
       "avgTimeInState": "Avg time in state",
       "avgTimeInStateSubtitle": "approximation from lifecycle timestamps; full audit log is a follow-up",
+      "bucketDaysPlus": "{count}d+",
+      "bucketDaysRange": "{from}–{to}d",
       "completedWeekOf": "{count} completed week of {weekStart}",
       "cycleTime": "Cycle time",
       "cycleTimeSubtitle": "started → completed, in days",
@@ -151,6 +154,7 @@
       "noStateTransitionData": "No state-transition data yet",
       "noThroughputDataInRange": "No throughput data in range",
       "rangeAll": "All",
+      "rangeDays": "{count}d",
       "throughputTrend": "Throughput trend",
       "throughputTrendSubtitle": "issues completed per week",
       "title": "Insights"
@@ -650,15 +654,19 @@
       "failedToLoad": "Couldn't load activity",
       "fields": {
         "assignee": "assignee",
+        "comment": "comment",
         "cycle": "cycle",
         "description": "description",
         "dueDate": "due date",
         "estimate": "estimate",
         "labels": "labels",
+        "parent": "parent issue",
         "priority": "priority",
         "project": "project",
+        "startDate": "start date",
         "status": "status",
-        "title": "title"
+        "title": "title",
+        "trashed": "trash"
       },
       "loading": "Loading activity…",
       "set": "{actor} set {field} to {value}",
@@ -1112,6 +1120,7 @@
       "canceled": "Canceled",
       "completed": "Completed",
       "inProgress": "In Progress",
+      "label": "Status",
       "paused": "Paused",
       "planned": "Planned"
     },

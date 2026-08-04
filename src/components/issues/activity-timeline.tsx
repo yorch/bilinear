@@ -33,17 +33,35 @@ interface ActivityTimelineProps {
   refetchKey?: number;
 }
 
+/**
+ * Keyed by the raw `IssueActivity.field` string the server writes — NOT by the
+ * GraphQL/UI name for the same concept. `getFieldLabel` falls through to the
+ * raw field when a key is missing, so a name that doesn't match the server
+ * renders the camelCase column into the sentence ("changed stateId from … to
+ * …") in every locale, without ever reaching `t()`.
+ *
+ * The writers are `TRACKED_ACTIVITY_FIELDS` in `server/graphql/resolvers/
+ * issue.ts` plus the four one-off pushes in `issue.ts` (labelAdded/
+ * labelRemoved), `issue-relation.ts` (stateId) and `comment.ts`
+ * (commentResolved/commentUnresolved). Keep this map in step with them.
+ */
 const FIELD_LABEL_KEYS: Record<string, string> = {
   assigneeId: 'issueDetail.activity.fields.assignee',
+  commentResolved: 'issueDetail.activity.fields.comment',
+  commentUnresolved: 'issueDetail.activity.fields.comment',
   cycleId: 'issueDetail.activity.fields.cycle',
   description: 'issueDetail.activity.fields.description',
   dueDate: 'issueDetail.activity.fields.dueDate',
   estimate: 'issueDetail.activity.fields.estimate',
-  labels: 'issueDetail.activity.fields.labels',
+  labelAdded: 'issueDetail.activity.fields.labels',
+  labelRemoved: 'issueDetail.activity.fields.labels',
+  parentId: 'issueDetail.activity.fields.parent',
   priority: 'issueDetail.activity.fields.priority',
   projectId: 'issueDetail.activity.fields.project',
-  status: 'issueDetail.activity.fields.status',
+  startDate: 'issueDetail.activity.fields.startDate',
+  stateId: 'issueDetail.activity.fields.status',
   title: 'issueDetail.activity.fields.title',
+  trashed: 'issueDetail.activity.fields.trashed',
 };
 
 function getFieldLabel(field: string, t: ReturnType<typeof useTranslations>): string {

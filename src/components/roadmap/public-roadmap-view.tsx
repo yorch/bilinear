@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useRef } from 'react';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
+import { PROJECT_HEALTH_LABEL_KEYS } from '@/lib/project-constants';
 import { cn } from '@/lib/utils';
 
 interface RoadmapProject {
@@ -68,6 +69,13 @@ const HEALTH_DOTS: Record<string, string> = {
   offTrack: 'bg-danger',
   onTrack: 'bg-success',
 };
+
+/**
+ * `PROJECT_HEALTH_LABEL_KEYS` covers the three health values a project update
+ * can set; `noUpdate` is this page's own "never reported" dot, so it falls back
+ * to the shared "none" label rather than rendering the raw enum.
+ */
+const HEALTH_NONE_LABEL_KEY = 'properties.updateForm.health.none';
 
 function PasswordForm({ slug }: { slug: string }) {
   const t = useTranslations();
@@ -182,7 +190,10 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
                     {healthDot && (
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
                         <span className={cn('h-2 w-2 rounded-full', healthDot)} />
-                        {project.health}
+                        {t(
+                          (project.health && PROJECT_HEALTH_LABEL_KEYS[project.health]) ??
+                            HEALTH_NONE_LABEL_KEY,
+                        )}
                       </span>
                     )}
                     {targetDateStr && (

@@ -708,6 +708,108 @@ related violations; a keyboard-only walkthrough opens each select,
 filters with type-ahead, selects an option, and closes with Esc
 without touching the mouse.
 
+### 4.3 Server error messages reach the UI untranslated (2026-08-04)
+
+> Found during the i18n audit and deliberately left out of that PR: it is one
+> architectural change touching every error path, not an audit edit.
+> **This is the largest remaining i18n gap.**
+
+**File entry points:**
+- `src/lib/utils.ts:14-16` — `getErrorMessage(err, fallback)`
+- `src/lib/graphql.ts:69` — `throw new GqlError(first?.message ?? 'Request failed', …)`
+- `src/server/graphql/resolvers/*.ts` — ~144 hardcoded English `GraphQLError`
+  message literals
+- `src/app/api/upload/route.ts` — hardcoded JSON `error` strings
+
+**Problem.** `getErrorMessage` prefers `err.message` over the translated
+fallback whenever `err` is an `Error`:
+
+```ts
+return err instanceof Error ? err.message : fallback;
+```
+
+`gqlMutate`/`gqlQuery` propagate the GraphQL error's message verbatim, so a
+call site that looks fully localized —
+`toast.error(getErrorMessage(err, t('settings.workspace.leaveError')))` — still
+shows the server's hardcoded English whenever the server supplied a message.
+The `t()` fallback only wins for non-`Error` throws. Same shape for the upload
+route: `toast.error(err.error ?? t('issueDetail.attachments.uploadFailed'))`.
+
+Confirmed live in `src/components/settings/members-section.tsx:120` and
+`src/components/issues/file-attachments.tsx:81`.
+
+**Why it's deferred.** The fix is not to translate 144 literals — server
+messages are also read by logs, tests and API clients. It is to key the toast
+off the error *code* rather than its prose. `extensions.code` is already the
+established discriminator (`.claude/rules/server.md`: `UNAUTHENTICATED`,
+`NOT_FOUND`, `FORBIDDEN`, `RATELIMITED`, `BAD_USER_INPUT`, …), so the client
+can map code → dictionary key and use the server message only as a
+last-resort fallback for codes it doesn't know. That changes what every
+error path renders, which wants its own PR and its own review.
+
+**First-touch.** Add `errors.byCode.*` keys for the existing `extensions.code`
+values, then give `GqlError` a `code` field and add a
+`translateError(err, t, fallbackKey)` helper that prefers `code` → `t()` over
+`err.message`. Migrate `members-section.tsx` and `file-attachments.tsx` first
+(both have confirmed reproductions), then sweep the remaining
+`getErrorMessage(` call sites.
+
+**Effort:** Medium. **Risk:** Medium — touches every mutation failure path.
+
+**Acceptance signal:** with the app in `es`, a failing mutation whose resolver
+throws a hardcoded English `GraphQLError` renders a Spanish toast; a code the
+client doesn't recognize still renders something useful rather than an empty
+string. A test asserts `translateError` prefers the code-derived key over
+`err.message`.
+
+### 4.4 `yarn build` emits one Turbopack NFT warning (2026-08-04)
+
+**File entry points:**
+- `src/app/api/upload/route.ts:25-26` — module-scope `mkdirSync(getUploadDir())`
+- `src/server/lib/upload-dir.ts` — `resolve(process.cwd(), 'uploads')`
+
+**Problem.** Every `yarn build` (and the Docker build) ends with:
+
+```
+Turbopack build encountered 1 warnings:
+./next.config.ts
+Encountered unexpected file in NFT list
+…
+Import trace:
+  App Route:
+    ./next.config.ts
+    ./src/app/api/upload/route.ts
+```
+
+The upload route resolves its directory from `process.env.UPLOAD_DIR` /
+`process.cwd()` and calls `mkdirSync` at **module scope**. Turbopack's file
+tracer can't follow the dynamic path, gives up, and pulls the whole project
+into that route's NFT list — `next.config.ts` included — which bloats the
+standalone output. The build still succeeds and the route works.
+
+**Confirmed pre-existing:** reproduced on clean `origin/main` (`0b36764`), so
+it is not introduced by any branch currently in flight.
+
+**Why it's deferred.** The obvious one-line fix does *not* work — adding
+`/* turbopackIgnore: true */` to the `resolve()` calls in `upload-dir.ts`
+leaves the warning unchanged (verified). The trigger is the module-scope
+`mkdirSync`, not the path resolution, so a real fix means moving directory
+creation out of module scope — which is a deliberate choice today ("Ensure the
+directory exists once at module load rather than on every request") with a
+first-upload correctness implication.
+
+**First-touch.** Move `mkdirSync` into a `let ensured = false` lazy guard
+invoked at the top of the POST handler, or into the container entrypoint
+(`docker-entrypoint.sh` already runs migrations, so directory creation fits
+there). Then re-run `yarn build` and confirm the warning count drops to zero.
+
+**Effort:** Small. **Risk:** Low-Medium — the upload directory must exist
+before the first write on a cold container.
+
+**Acceptance signal:** `yarn build` completes with no Turbopack warnings, and
+an upload against a container with no pre-existing `uploads/` directory still
+succeeds.
+
 ---
 
 ## 5. Test coverage gaps

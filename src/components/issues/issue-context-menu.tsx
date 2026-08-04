@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { LabelDot } from '@/components/properties/label-select';
+import { priorityLabelKey } from '@/components/properties/priority-icon';
 import { StatusDot } from '@/components/properties/status-select';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { useOutsideClick } from '@/hooks/use-outside-click';
@@ -261,7 +262,7 @@ export function IssueContextMenu({
                       className="h-2 w-2 shrink-0 rounded-full"
                       style={{ backgroundColor: cfg.color }}
                     />
-                    <span>{p.label}</span>
+                    <span>{t(priorityLabelKey(value))}</span>
                   </button>
                 );
               })}

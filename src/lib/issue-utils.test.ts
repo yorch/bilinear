@@ -4,28 +4,29 @@ import {
   getDueDateColor,
   getPriorityConfig,
   PRIORITY_CONFIG,
-  PRIORITY_LABELS,
   PRIORITY_OPTIONS,
 } from './issue-utils';
 
 describe('priority constants', () => {
-  it('PRIORITY_LABELS mirrors PRIORITY_CONFIG labels', () => {
-    expect(PRIORITY_LABELS).toEqual({
-      0: 'No priority',
-      1: 'Urgent',
-      2: 'High',
-      3: 'Medium',
-      4: 'Low',
-    });
+  it('carries no display label — those come from the dictionary', () => {
+    // An English `label` here would render untranslated wherever a component
+    // reached for it instead of `t(priorityLabelKey(p))`, which is exactly how
+    // the priority context submenu shipped English-only.
+    for (const config of Object.values(PRIORITY_CONFIG)) {
+      expect(config).not.toHaveProperty('label');
+    }
+    for (const option of PRIORITY_OPTIONS) {
+      expect(option).not.toHaveProperty('label');
+    }
   });
 
   it('PRIORITY_OPTIONS exposes string values for every priority', () => {
     expect(PRIORITY_OPTIONS).toEqual([
-      { label: 'No priority', value: '0' },
-      { label: 'Urgent', value: '1' },
-      { label: 'High', value: '2' },
-      { label: 'Medium', value: '3' },
-      { label: 'Low', value: '4' },
+      { value: '0' },
+      { value: '1' },
+      { value: '2' },
+      { value: '3' },
+      { value: '4' },
     ]);
   });
 });

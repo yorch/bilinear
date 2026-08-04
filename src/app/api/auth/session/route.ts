@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { ACCENT_COOKIE, ACCENT_COOKIE_MAX_AGE, isAccent } from '@/lib/accent';
+import { isLocale, LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE } from '@/lib/i18n';
 import { verifyAccessToken, verifyRefreshToken } from '@/server/lib/jwt';
 import { logger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
@@ -57,19 +58,30 @@ export async function POST(req: NextRequest) {
   //
   // Not httpOnly: `AccentProvider.setAccent` rewrites this cookie from the
   // client, and an httpOnly cookie of the same name would shadow that write.
+  //
+  // `locale` rides along on the same read for the same reason: it is a
+  // per-account preference, and without this seeding it was write-only —
+  // `LocaleProvider.setLocale` persisted it so transactional emails matched the
+  // chosen language, but nothing ever read the column back for the UI, so the
+  // user's language did NOT follow them to a new browser or device. Clearing it
+  // (rather than defaulting to `en`) is what lets `getServerLocale` fall through
+  // to the visitor's `Accept-Language`.
   let accent: string | null = null;
+  let locale: string | null = null;
   try {
     const user = await prisma.user.findUnique({
-      select: { accent: true },
+      select: { accent: true, locale: true },
       where: { id: accessPayload.userId },
     });
     accent = isAccent(user?.accent) ? user.accent : null;
+    locale = isLocale(user?.locale) ? user.locale : null;
   } catch (err) {
     // Best-effort: fall through to the clear, so a transient DB failure lands
     // on the default rather than on whoever used this browser last.
-    logger.warn({ err }, 'Failed to read the accent preference from the user record');
+    logger.warn({ err }, 'Failed to read the accent/locale preferences from the user record');
   }
   writeAccentCookie(res, accent);
+  writeLocaleCookie(res, locale);
 
   return res;
 }
@@ -78,10 +90,11 @@ export async function DELETE(_req: NextRequest) {
   const res = NextResponse.json({ success: true });
   res.cookies.delete('access_token');
   res.cookies.delete('refresh_token');
-  // The accent is a per-account preference, so it goes with the session. Left
-  // behind, it would style the login screen — and then the next account — in
-  // the departing user's colour.
+  // Accent and locale are per-account preferences, so they go with the session.
+  // Left behind, they would style — and translate — the login screen, and then
+  // the next account, for the departing user.
   writeAccentCookie(res, null);
+  writeLocaleCookie(res, null);
   return res;
 }
 
@@ -90,6 +103,21 @@ function writeAccentCookie(res: NextResponse, accent: string | null) {
   res.cookies.set(ACCENT_COOKIE, accent ?? '', {
     httpOnly: false,
     maxAge: accent ? ACCENT_COOKIE_MAX_AGE : 0,
+    path: '/',
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  });
+}
+
+/**
+ * Sets the locale cookie, or clears it when `locale` is null. Not httpOnly, for
+ * the same reason as the accent cookie: `LocaleProvider.setLocale` rewrites it
+ * from the client, and an httpOnly cookie of the same name would shadow that.
+ */
+function writeLocaleCookie(res: NextResponse, locale: string | null) {
+  res.cookies.set(LOCALE_COOKIE, locale ?? '', {
+    httpOnly: false,
+    maxAge: locale ? LOCALE_COOKIE_MAX_AGE : 0,
     path: '/',
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',

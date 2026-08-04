@@ -1,24 +1,26 @@
 import type { Locale as DateFnsLocale } from 'date-fns';
 import { differenceInCalendarDays, format, isToday } from 'date-fns';
 
+/**
+ * Presentation only — deliberately carries no `label`. The display name of a
+ * priority comes from `priorityLabelKey()` + `t()`
+ * (`components/properties/priority-icon.tsx`); an English `label` here is a trap,
+ * and was one: the issue context menu rendered it straight to screen, so the
+ * priority submenu stayed English in every locale while every other priority UI
+ * translated correctly.
+ */
 export const PRIORITY_CONFIG = {
-  0: { color: 'var(--priority-none)', icon: '-', label: 'No priority' },
-  1: { color: 'var(--priority-urgent)', icon: '!!!', label: 'Urgent' },
-  2: { color: 'var(--priority-high)', icon: '!!', label: 'High' },
-  3: { color: 'var(--priority-medium)', icon: '!', label: 'Medium' },
-  4: { color: 'var(--priority-low)', icon: '·', label: 'Low' },
+  0: { color: 'var(--priority-none)', icon: '-' },
+  1: { color: 'var(--priority-urgent)', icon: '!!!' },
+  2: { color: 'var(--priority-high)', icon: '!!' },
+  3: { color: 'var(--priority-medium)', icon: '!' },
+  4: { color: 'var(--priority-low)', icon: '·' },
 } as const;
 
 export type Priority = keyof typeof PRIORITY_CONFIG;
 
-/** Flat label lookup keyed by priority integer (0–4). */
-export const PRIORITY_LABELS: Record<number, string> = Object.fromEntries(
-  Object.entries(PRIORITY_CONFIG).map(([k, v]) => [Number(k), v.label]),
-);
-
-/** Select-compatible options for filter and picker UIs. */
-export const PRIORITY_OPTIONS: { label: string; value: string }[] = [0, 1, 2, 3, 4].map(p => ({
-  label: PRIORITY_CONFIG[p as Priority].label,
+/** The priority values, in display order. Labels come from `priorityLabelKey()`. */
+export const PRIORITY_OPTIONS: { value: string }[] = [0, 1, 2, 3, 4].map(p => ({
   value: String(p),
 }));
 

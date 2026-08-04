@@ -6,6 +6,7 @@ import { useCallback, useMemo } from 'react';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { useTranslations } from '@/hooks/use-translations';
 import { PROJECT_UPDATE_MUTATION } from '@/lib/graphql-queries';
+import { PROJECT_STATUS_LABEL_KEYS } from '@/lib/project-constants';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
@@ -36,9 +37,9 @@ export const ProjectRoadmapView = observer(function ProjectRoadmapView({
         id: p.id,
         name: p.name,
         startDate: p.startDate ?? null,
-        subtitle: p.statusType,
+        subtitle: t(PROJECT_STATUS_LABEL_KEYS[p.statusType] ?? PROJECT_STATUS_LABEL_KEYS.planned),
       })),
-    [projects, workspaceKey],
+    [projects, workspaceKey, t],
   );
 
   const handleChange = useCallback(

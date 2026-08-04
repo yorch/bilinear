@@ -145,20 +145,26 @@ CREATE TABLE users (
 
     -- Persisted UI/email language preference (app locale, e.g. 'en'/'es').
     -- Written by userUpdateLocale when the user switches language; null = never
-    -- set -> transactional emails fall back to the app default locale. Distinct
-    -- from the browser `locale` cookie, which drives the UI but never reaches
-    -- server-side email rendering. See PATTERNS.md §75.1.
+    -- set -> Accept-Language, then the app default. Read in TWO places: email
+    -- rendering (which happens server-side and never sees the browser cookie),
+    -- and /api/auth/session, which seeds the `locale` cookie at login so the
+    -- language follows the account to a new browser or device — the same
+    -- treatment `accent` gets below. Before that seeding existed the column was
+    -- effectively write-only for the UI: a language chosen on one machine did
+    -- not travel. The running app still always reads the cookie, so the root
+    -- layout never queries this column. See PATTERNS.md §75.1.
     locale          VARCHAR(10),
 
     -- Persisted accent-colour preference ('aurora' | 'ion' | 'ultraviolet').
     -- Written by userUpdateAccent; null = never chosen -> the default accent.
-    -- The MIRROR IMAGE of `locale` above: locale exists because transactional
-    -- emails render server-side and never see the cookie, whereas the accent
-    -- has no server-side renderer at all. It is stored purely so the choice
-    -- follows the account to a new browser, and is read in exactly ONE place —
-    -- /api/auth/session, which seeds the `accent` cookie at login. The running
-    -- app always reads the cookie (stamped onto <html> during SSR), so the
-    -- root layout never queries this column. See PATTERNS.md §79.3.
+    -- Nearly the mirror image of `locale` above, and now seeded the same way:
+    -- locale ALSO exists because transactional emails render server-side and
+    -- never see the cookie, whereas the accent has no server-side renderer at
+    -- all — it is stored purely so the choice follows the account to a new
+    -- browser. Read in exactly ONE place: /api/auth/session, which seeds the
+    -- `accent` cookie at login (the same read now also picks up `locale`). The
+    -- running app always reads the cookie (stamped onto <html> during SSR), so
+    -- the root layout never queries this column. See PATTERNS.md §79.3.
     accent          VARCHAR(20),
 
     -- iCal cycle feed token (32-byte random hex, rotated via userCalendarFeedTokenRotate)

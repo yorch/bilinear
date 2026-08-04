@@ -141,9 +141,12 @@ export async function sendMagicLinkEmail(
  * a failure to send means the invitation is unreachable and must be re-issued
  * rather than looked up.
  *
- * Localized to the *organization's* inviter-independent default rather than
- * the recipient's saved locale: an invitee frequently has no account yet, and
- * therefore no `User.locale` to read.
+ * Localized to the *inviter's* saved locale rather than the recipient's: an
+ * invitee frequently has no account yet, and therefore no `User.locale` to
+ * read. There is no organization-level default to fall back on — `locale` is a
+ * `User` column only — so the inviter's language is the best available guess at
+ * the one the invitee shares. Falls back to the app default when the inviter
+ * has never chosen one.
  */
 export async function sendOrganizationInviteEmail(params: {
   to: string;
