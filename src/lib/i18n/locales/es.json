@@ -49,6 +49,7 @@
       "audit": "Registro de auditoría",
       "backToApp": "Volver a la app",
       "dashboard": "Panel",
+      "metaTitle": "Administración de la plataforma",
       "platformBadge": "Plataforma",
       "tenants": "Organizaciones",
       "users": "Usuarios"
@@ -141,6 +142,8 @@
     "insights": {
       "avgTimeInState": "Tiempo promedio en estado",
       "avgTimeInStateSubtitle": "aproximación a partir de las marcas de tiempo del ciclo de vida; el registro de auditoría completo llegará después",
+      "bucketDaysPlus": "{count} d+",
+      "bucketDaysRange": "{from}–{to} d",
       "completedWeekOf": "{count} completados en la semana del {weekStart}",
       "cycleTime": "Tiempo de ciclo",
       "cycleTimeSubtitle": "iniciado → completado, en días",
@@ -151,6 +154,7 @@
       "noStateTransitionData": "Aún no hay datos de transición de estado",
       "noThroughputDataInRange": "No hay datos de rendimiento en el rango",
       "rangeAll": "Todo",
+      "rangeDays": "{count} d",
       "throughputTrend": "Tendencia de rendimiento",
       "throughputTrendSubtitle": "issues completados por semana",
       "title": "Insights"
@@ -650,15 +654,19 @@
       "failedToLoad": "No se pudo cargar la actividad",
       "fields": {
         "assignee": "responsable",
+        "comment": "comentario",
         "cycle": "ciclo",
         "description": "descripción",
         "dueDate": "fecha límite",
         "estimate": "estimación",
         "labels": "etiquetas",
+        "parent": "tarea principal",
         "priority": "prioridad",
         "project": "proyecto",
+        "startDate": "fecha de inicio",
         "status": "estado",
-        "title": "título"
+        "title": "título",
+        "trashed": "papelera"
       },
       "loading": "Cargando actividad…",
       "set": "{actor} estableció {field} en {value}",
@@ -1112,6 +1120,7 @@
       "canceled": "Cancelado",
       "completed": "Completado",
       "inProgress": "En curso",
+      "label": "Estado",
       "paused": "Pausado",
       "planned": "Planificado"
     },

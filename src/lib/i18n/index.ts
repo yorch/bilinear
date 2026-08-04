@@ -17,6 +17,9 @@ export type Dictionary = typeof en;
 
 export const LOCALE_COOKIE = 'locale';
 
+/** One year, matching the accent cookie. */
+export const LOCALE_COOKIE_MAX_AGE = 31536000;
+
 export function isLocale(value: string | undefined | null): value is Locale {
   return !!value && (locales as readonly string[]).includes(value);
 }

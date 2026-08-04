@@ -112,9 +112,12 @@ model User {
   emailNotificationsEnabled Boolean @default(true) @map("email_notifications_enabled")
 
   // Persisted UI/email language preference (app locale, e.g. "en" / "es").
-  // Written when the user switches language; null = never set -> fall back to the
-  // app default. Used server-side to localize transactional emails, which have
-  // no access to the browser's locale cookie.
+  // Written when the user switches language; null = never set -> fall back to
+  // the visitor's Accept-Language, then the app default. Read in two places:
+  // server-side to localize transactional emails, which have no access to the
+  // browser's locale cookie, and by the session route, which seeds that cookie
+  // at login so the language follows the account to a new browser or device
+  // (the same treatment `accent` gets below).
   locale String? @db.VarChar(10)
 
   // Persisted accent-colour preference (see src/lib/accent.ts). Unlike `locale`

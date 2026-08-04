@@ -138,7 +138,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const { workspace } = useParams<{ workspace: string }>();
   const { teamStore } = useStore();
   const t = useTranslations();
-  const { formatDate } = useFormatters();
+  const { formatDate, intlLocale } = useFormatters();
 
   const [org, setOrg] = useState<OrgInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -397,7 +397,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                       {t(`settings.workspace.${labelKey}`)}
                     </dt>
                     <dd className="text-right text-sm tabular-nums text-foreground">
-                      {org.planLimits[key].toLocaleString()}
+                      {org.planLimits[key].toLocaleString(intlLocale)}
                     </dd>
                   </div>
                 ))}

@@ -48,11 +48,16 @@ const INSIGHTS_QUERY = `
 
 type RangePreset = '30d' | '90d' | '180d' | 'all';
 
-const PRESETS: Array<{ value: RangePreset }> = [
-  { value: '30d' },
-  { value: '90d' },
-  { value: '180d' },
-  { value: 'all' },
+/**
+ * `days` drives the button label through `analytics.insights.rangeDays` — the
+ * `'30d'` value is the internal preset id, not display text, so it must never
+ * be rendered directly (the `d` suffix spaces differently per locale).
+ */
+const PRESETS: Array<{ days: number | null; value: RangePreset }> = [
+  { days: 30, value: '30d' },
+  { days: 90, value: '90d' },
+  { days: 180, value: '180d' },
+  { days: null, value: 'all' },
 ];
 
 function rangeForPreset(preset: RangePreset): { from?: string; to?: string } {
@@ -65,11 +70,11 @@ function rangeForPreset(preset: RangePreset): { from?: string; to?: string } {
   return { from: from.toISOString().split('T')[0] };
 }
 
-function fmtBucketLabel(b: HistogramBucket): string {
+function fmtBucketLabel(b: HistogramBucket, t: ReturnType<typeof useTranslations>): string {
   if (b.bucketEnd === Number.POSITIVE_INFINITY || !Number.isFinite(b.bucketEnd)) {
-    return `${b.bucketStart}d+`;
+    return t('analytics.insights.bucketDaysPlus', { count: b.bucketStart });
   }
-  return `${b.bucketStart}–${b.bucketEnd}d`;
+  return t('analytics.insights.bucketDaysRange', { from: b.bucketStart, to: b.bucketEnd });
 }
 
 function Histogram({ buckets, color }: { buckets: HistogramBucket[]; color: string }) {
@@ -102,7 +107,9 @@ function Histogram({ buckets, color }: { buckets: HistogramBucket[]; color: stri
                 minHeight: b.count > 0 ? '4px' : '0',
               }}
             />
-            <span className="truncate text-[10px] text-muted-foreground">{fmtBucketLabel(b)}</span>
+            <span className="truncate text-[10px] text-muted-foreground">
+              {fmtBucketLabel(b, t)}
+            </span>
           </div>
         );
       })}
@@ -253,7 +260,9 @@ export function InsightsSection({
               onClick={() => setPreset(p.value)}
               type="button"
             >
-              {p.value === 'all' ? t('analytics.insights.rangeAll') : p.value}
+              {p.days === null
+                ? t('analytics.insights.rangeAll')
+                : t('analytics.insights.rangeDays', { count: p.days })}
             </button>
           ))}
         </div>

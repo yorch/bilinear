@@ -88,7 +88,7 @@ export function CsvExportButton({
         issue.labels.map(l => l.name),
         issue.dueDate ?? '',
         issue.estimate ?? '',
-        cycle ? (cycle.name ?? t('issues.cycleNumber', { number: cycle.number })) : '',
+        cycle ? (cycle.name ?? t('cycles.defaultName', { number: cycle.number })) : '',
         project?.name ?? '',
         issue.createdAt ?? '',
         issue.updatedAt ?? '',

@@ -50,18 +50,36 @@ const CUSTOM_FIELD_ARCHIVE_MUTATION = `
   }
 `;
 
+/**
+ * Single source of truth for the display name of a field type — the "add field"
+ * dropdown and the read-only badge on each existing field both render from it,
+ * so neither can fall back to the raw `multi_select`-style enum value.
+ */
+const FIELD_TYPE_LABEL_KEYS: Record<CustomFieldType, string> = {
+  checkbox: 'customFields.fieldType.checkbox',
+  date: 'customFields.fieldType.date',
+  multi_select: 'customFields.fieldType.selectMultiple',
+  number: 'customFields.fieldType.number',
+  select: 'customFields.fieldType.selectSingle',
+  text: 'customFields.fieldType.text',
+  url: 'customFields.fieldType.url',
+};
+
+/** Dropdown order is deliberate (simple scalars first), not the map's key order. */
+const FIELD_TYPE_ORDER: CustomFieldType[] = [
+  'text',
+  'number',
+  'date',
+  'url',
+  'checkbox',
+  'select',
+  'multi_select',
+];
+
 function getTypeOptions(
   t: ReturnType<typeof useTranslations>,
 ): { value: CustomFieldType; label: string }[] {
-  return [
-    { label: t('customFields.fieldType.text'), value: 'text' },
-    { label: t('customFields.fieldType.number'), value: 'number' },
-    { label: t('customFields.fieldType.date'), value: 'date' },
-    { label: t('customFields.fieldType.url'), value: 'url' },
-    { label: t('customFields.fieldType.checkbox'), value: 'checkbox' },
-    { label: t('customFields.fieldType.selectSingle'), value: 'select' },
-    { label: t('customFields.fieldType.selectMultiple'), value: 'multi_select' },
-  ];
+  return FIELD_TYPE_ORDER.map(value => ({ label: t(FIELD_TYPE_LABEL_KEYS[value]), value }));
 }
 
 const MAX_FIELDS = 20;
@@ -154,7 +172,7 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-foreground">{def.name}</span>
                   <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                    {def.type.replace('_', ' ')}
+                    {t(FIELD_TYPE_LABEL_KEYS[def.type as CustomFieldType] ?? def.type)}
                   </span>
                   {def.required && (
                     <span className="text-xs text-warning-subtle-foreground">

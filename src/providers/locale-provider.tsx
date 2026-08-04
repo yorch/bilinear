@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { gql } from '@/lib/graphql';
 import { USER_UPDATE_LOCALE_MUTATION } from '@/lib/graphql-queries';
-import { LOCALE_COOKIE, type Locale } from '@/lib/i18n';
+import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE, type Locale } from '@/lib/i18n';
 
 interface LocaleContextValue {
   locale: Locale;
@@ -28,7 +28,7 @@ export function LocaleProvider({
   const setLocale = useCallback((next: Locale) => {
     setLocaleState(next);
     // biome-ignore lint/suspicious/noDocumentCookie: Cookie Store API isn't broadly supported yet; this is a simple, short-lived preference cookie
-    document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
+    document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=${LOCALE_COOKIE_MAX_AGE}; samesite=lax`;
     // Persist to the account so transactional emails (which never see the
     // cookie) match the chosen language. Fire-and-forget, but don't swallow
     // everything: UNAUTHENTICATED is expected on the pre-login pages
