@@ -2,6 +2,7 @@
 
 import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useState } from 'react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
@@ -75,6 +76,7 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
   const [rotateSecret, setRotateSecret] = useState('');
   const [showRotate, setShowRotate] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [pendingDisconnect, setPendingDisconnect] = useState<'github' | 'slack' | null>(null);
   const [slack, setSlack] = useState<SlackIntegration | null>(null);
   // `githubIntegration`/`slackIntegration` are nullable roots: a failed query
   // answers HTTP 200 with the field null *alongside* `errors`. Without these
@@ -126,9 +128,6 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
   }, [loadGithub, loadSlack]);
 
   async function handleSlackDisconnect() {
-    if (!confirm(t('settings.integrations.disconnectSlackConfirm'))) {
-      return;
-    }
     setSaving(true);
     try {
       await gqlMutate(SLACK_DISCONNECT_MUTATION);
@@ -167,9 +166,6 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
   }
 
   async function handleDisconnect() {
-    if (!confirm(t('settings.integrations.disconnectGithubConfirm'))) {
-      return;
-    }
     setSaving(true);
     try {
       await gqlMutate(GITHUB_DISCONNECT_MUTATION);
@@ -274,7 +270,7 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
               <button
                 className="rounded-md border border-destructive/50 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10 disabled:opacity-50"
                 disabled={saving}
-                onClick={handleDisconnect}
+                onClick={() => setPendingDisconnect('github')}
                 type="button"
               >
                 {t('settings.integrations.disconnect')}
@@ -386,7 +382,7 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
             <button
               className="rounded-md border border-destructive/50 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10 disabled:opacity-50"
               disabled={saving}
-              onClick={handleSlackDisconnect}
+              onClick={() => setPendingDisconnect('slack')}
               type="button"
             >
               {t('settings.integrations.disconnect')}
@@ -411,6 +407,26 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
           </div>
         )}
       </section>
+
+      <ConfirmDialog
+        confirmLabel={t('settings.integrations.disconnect')}
+        message={
+          pendingDisconnect === 'slack'
+            ? t('settings.integrations.disconnectSlackConfirm')
+            : t('settings.integrations.disconnectGithubConfirm')
+        }
+        onCancel={() => setPendingDisconnect(null)}
+        onConfirm={() => {
+          if (pendingDisconnect === 'slack') {
+            void handleSlackDisconnect();
+          } else if (pendingDisconnect === 'github') {
+            void handleDisconnect();
+          }
+          setPendingDisconnect(null);
+        }}
+        open={pendingDisconnect !== null}
+        title={t('settings.integrations.disconnect')}
+      />
     </div>
   );
 });

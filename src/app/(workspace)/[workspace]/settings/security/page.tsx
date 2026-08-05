@@ -2,13 +2,14 @@
 
 import { Copy, ExternalLink } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery, isPermissionError } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { cn, getErrorMessage } from '@/lib/utils';
+import { cn, getErrorMessage, TOUCH_TARGET } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
 // GraphQL
@@ -158,6 +159,9 @@ export default function SecuritySettingsPage() {
   const [samlLoadError, setSamlLoadError] = useState<LoadError | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [pendingAction, setPendingAction] = useState<
+    { tokenId: string; type: 'revokeScim' } | { type: 'removeSaml' } | null
+  >(null);
 
   // SCIM state
   const [scimTokens, setScimTokens] = useState<ScimTokenRow[]>([]);
@@ -254,9 +258,6 @@ export default function SecuritySettingsPage() {
   }
 
   async function handleScimRevoke(tokenId: string) {
-    if (!confirm(t('settings.security.revokeScimTokenConfirm'))) {
-      return;
-    }
     try {
       await gqlMutate(SCIM_TOKEN_REVOKE_MUTATION, { id: tokenId });
       setScimTokens(prev => prev.filter(tok => tok.id !== tokenId));
@@ -318,9 +319,6 @@ export default function SecuritySettingsPage() {
   }
 
   async function handleDelete() {
-    if (!confirm(t('settings.security.removeSamlConfirm'))) {
-      return;
-    }
     setDeleting(true);
     try {
       await gqlMutate(SAML_DELETE_MUTATION);
@@ -403,7 +401,7 @@ export default function SecuritySettingsPage() {
                       </div>
                       <button
                         className="ml-3 shrink-0 rounded-md border border-destructive/50 px-2.5 py-1 text-xs text-destructive hover:bg-destructive/10"
-                        onClick={() => handleScimRevoke(tok.id)}
+                        onClick={() => setPendingAction({ tokenId: tok.id, type: 'revokeScim' })}
                         type="button"
                       >
                         {t('settings.security.revoke')}
@@ -425,7 +423,10 @@ export default function SecuritySettingsPage() {
                     </code>
                     <button
                       aria-label={t('settings.security.copyToken')}
-                      className="shrink-0 text-muted-foreground hover:text-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+                      className={cn(
+                        'shrink-0 text-muted-foreground hover:text-foreground',
+                        TOUCH_TARGET,
+                      )}
                       onClick={() =>
                         copyToClipboard(scimNewPlaintext, t('settings.security.scimTokenLabel'))
                       }
@@ -645,7 +646,7 @@ export default function SecuritySettingsPage() {
                     <button
                       className="rounded-md border border-destructive/50 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10 disabled:opacity-50"
                       disabled={deleting}
-                      onClick={handleDelete}
+                      onClick={() => setPendingAction({ type: 'removeSaml' })}
                       type="button"
                     >
                       {deleting
@@ -659,6 +660,34 @@ export default function SecuritySettingsPage() {
           </>
         )}
       </section>
+
+      <ConfirmDialog
+        confirmLabel={
+          pendingAction?.type === 'revokeScim'
+            ? t('settings.security.revoke')
+            : t('settings.security.remove')
+        }
+        message={
+          pendingAction?.type === 'revokeScim'
+            ? t('settings.security.revokeScimTokenConfirm')
+            : t('settings.security.removeSamlConfirm')
+        }
+        onCancel={() => setPendingAction(null)}
+        onConfirm={() => {
+          if (pendingAction?.type === 'revokeScim') {
+            void handleScimRevoke(pendingAction.tokenId);
+          } else if (pendingAction?.type === 'removeSaml') {
+            void handleDelete();
+          }
+          setPendingAction(null);
+        }}
+        open={pendingAction !== null}
+        title={
+          pendingAction?.type === 'revokeScim'
+            ? t('settings.security.revoke')
+            : t('settings.security.remove')
+        }
+      />
     </div>
   );
 }
@@ -701,7 +730,7 @@ function ReadOnlyField({
         </code>
         <button
           aria-label={t('settings.security.copy')}
-          className="shrink-0 text-muted-foreground hover:text-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+          className={cn('shrink-0 text-muted-foreground hover:text-foreground', TOUCH_TARGET)}
           onClick={onCopy}
           title={t('settings.security.copy')}
           type="button"

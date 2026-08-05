@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
@@ -66,6 +67,7 @@ export default function AutomationsSettingsPage() {
   const [data, setData] = useState<RulesData | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<AutomationRule | null>(null);
 
   // Create-form state
   const [name, setName] = useState('');
@@ -131,9 +133,6 @@ export default function AutomationsSettingsPage() {
   };
 
   const handleArchive = async (rule: AutomationRule) => {
-    if (!confirm(t('settings.automations.deleteRuleConfirm', { name: rule.name }))) {
-      return;
-    }
     const res = await gql(RULE_ARCHIVE_MUTATION, { id: rule.id });
     if (res.errors?.length) {
       toast.error((res.errors[0] as { message: string }).message);
@@ -253,7 +252,7 @@ export default function AutomationsSettingsPage() {
                 </div>
                 <button
                   className="text-xs text-danger-subtle-foreground hover:underline"
-                  onClick={() => handleArchive(rule)}
+                  onClick={() => setPendingDelete(rule)}
                   type="button"
                 >
                   {t('common.delete')}
@@ -263,6 +262,19 @@ export default function AutomationsSettingsPage() {
           </ul>
         )}
       </section>
+
+      <ConfirmDialog
+        message={t('settings.automations.deleteRuleConfirm', { name: pendingDelete?.name ?? '' })}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          if (pendingDelete) {
+            void handleArchive(pendingDelete);
+          }
+          setPendingDelete(null);
+        }}
+        open={pendingDelete !== null}
+        title={t('common.delete')}
+      />
     </div>
   );
 }

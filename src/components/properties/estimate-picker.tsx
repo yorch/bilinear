@@ -88,6 +88,11 @@ export function EstimatePicker({
   return (
     <SelectPopover
       forceOpen={forceOpen}
+      // Only a listbox in the branch that renders an option list. When the team
+      // has no estimation scale the panel is a free-form number field, and
+      // `role="listbox"` over a form field is exactly the mismatch the prop's
+      // contract warns about.
+      listbox={scale != null}
       onClose={onClose}
       panelClassName="min-w-[120px] py-1"
       triggerChildren={<EstimateBadge estimationType={estimationType} value={value} />}
@@ -99,11 +104,14 @@ export function EstimatePicker({
           {/* Clear estimate */}
           {value != null && (
             <button
+              aria-selected={false}
               className="w-full px-3 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent"
-              onClick={() => {
+              onClick={e => {
+                e.stopPropagation();
                 onChange(null);
                 close();
               }}
+              role="option"
               type="button"
             >
               {t('properties.estimate.noEstimate')}
@@ -113,6 +121,7 @@ export function EstimatePicker({
           {scale ? (
             scale.map(opt => (
               <button
+                aria-selected={value === opt.value}
                 className={cn(
                   'w-full px-3 py-1.5 text-left text-sm transition-colors',
                   value === opt.value
@@ -120,10 +129,15 @@ export function EstimatePicker({
                     : 'text-foreground-secondary hover:bg-accent',
                 )}
                 key={opt.value}
-                onClick={() => {
+                // Matches the four sibling pickers: the picker is rendered
+                // inside clickable rows, so a bubbling click would also
+                // activate the row behind it.
+                onClick={e => {
+                  e.stopPropagation();
                   onChange(opt.value);
                   close();
                 }}
+                role="option"
                 type="button"
               >
                 {opt.label}
