@@ -2,7 +2,7 @@
 
 import { SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
-import { cn } from '@/lib/utils';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 import { PriorityIcon, priorityLabelKey } from './priority-icon';
 
 interface PrioritySelectProps {
@@ -32,7 +32,7 @@ export function PrioritySelect({
       panelClassName="min-w-[160px] py-1"
       panelDataTestId="priority-select-popover"
       triggerChildren={<PriorityIcon priority={value} />}
-      triggerClassName="px-1.5 py-1 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+      triggerClassName={cn('px-1.5 py-1', TOUCH_TARGET)}
       triggerTitle={t(priorityLabelKey(value))}
     >
       {close =>

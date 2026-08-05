@@ -9,6 +9,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery } from '@/lib/graphql';
 import { ISSUE_TEMPLATES_QUERY } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -96,7 +97,10 @@ export function TemplateSelector({ teamId, onSelect, forceOpen, onClose }: Templ
             </span>
             <button
               aria-label={t('common.close')}
-              className="rounded p-0.5 text-muted-foreground hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+              className={cn(
+                'rounded p-0.5 text-muted-foreground hover:text-foreground-secondary',
+                TOUCH_TARGET,
+              )}
               onClick={close}
               type="button"
             >

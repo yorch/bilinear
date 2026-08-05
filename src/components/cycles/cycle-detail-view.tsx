@@ -23,7 +23,7 @@ import {
 } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
-import { cn } from '@/lib/utils';
+import { cn, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 interface CycleDetailViewProps {
@@ -331,7 +331,10 @@ export const CycleDetailView = observer(function CycleDetailView({
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex h-12 items-center gap-3 border-b border-border px-4">
         <Link
-          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:h-11 max-md:w-11"
+          className={cn(
+            'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
+            TOUCH_TARGET_SQUARE,
+          )}
           href={`/${workspaceKey}/team/${teamKey}/cycles`}
         >
           <ArrowLeft className="h-4 w-4" />

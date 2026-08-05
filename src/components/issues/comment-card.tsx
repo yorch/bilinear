@@ -11,7 +11,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate } from '@/lib/graphql';
 import { COMMENT_UPDATE_MUTATION, CONVERT_TO_SUB_ISSUE_MUTATION } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
-import { cn, getErrorMessage } from '@/lib/utils';
+import { cn, getErrorMessage, TOUCH_TARGET } from '@/lib/utils';
 import type { MentionItem } from '../editor/mention-list';
 import { TipTapEditor } from '../editor/tiptap-editor.lazy';
 import { UserAvatar } from '../ui/user-avatar';
@@ -193,7 +193,10 @@ export function CommentCard({
               align="right"
               panelClassName="flex gap-1 p-1.5"
               triggerChildren={<Smile className="h-3.5 w-3.5" />}
-              triggerClassName="p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+              triggerClassName={cn(
+                'p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
+                TOUCH_TARGET,
+              )}
               triggerTitle={t('issueDetail.comments.react')}
             >
               {close => (
@@ -211,7 +214,10 @@ export function CommentCard({
             {depth === 0 && (
               <button
                 aria-label={t('issueDetail.comments.quoteReply')}
-                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+                className={cn(
+                  'rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground',
+                  TOUCH_TARGET,
+                )}
                 onClick={handleQuoteReply}
                 title={t('issueDetail.comments.quoteReply')}
                 type="button"
@@ -226,7 +232,8 @@ export function CommentCard({
                 isResolved ? t('issueDetail.comments.unresolve') : t('issueDetail.comments.resolve')
               }
               className={cn(
-                'rounded p-1 transition-colors max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center',
+                'rounded p-1 transition-colors',
+                TOUCH_TARGET,
                 isResolved
                   ? 'text-success-subtle-foreground hover:bg-success-subtle'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -245,7 +252,10 @@ export function CommentCard({
               align="right"
               panelClassName="min-w-[160px] py-1"
               triggerChildren={<MoreHorizontal className="h-3.5 w-3.5" />}
-              triggerClassName="p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+              triggerClassName={cn(
+                'p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
+                TOUCH_TARGET,
+              )}
             >
               {close => (
                 <>

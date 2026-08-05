@@ -18,7 +18,7 @@ import {
   NOTIFICATION_SNOOZE_MUTATION,
 } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 // ─── Snooze helpers ───────────────────────────────────────────────────────────
@@ -155,7 +155,10 @@ function NotificationItem({
             disabled={isSnoozingThis}
             panelClassName="w-44 py-1 shadow-e3"
             triggerChildren={<Clock className="h-3.5 w-3.5" />}
-            triggerClassName="p-1 text-muted-foreground hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+            triggerClassName={cn(
+              'p-1 text-muted-foreground hover:text-foreground-secondary',
+              TOUCH_TARGET,
+            )}
             triggerTitle={t('notifications.snooze.buttonTitle')}
           >
             {close => (
@@ -179,7 +182,10 @@ function NotificationItem({
 
           {/* Mark read button */}
           <button
-            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-brand disabled:opacity-50 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+            className={cn(
+              'rounded p-1 text-muted-foreground hover:bg-muted hover:text-brand disabled:opacity-50',
+              TOUCH_TARGET,
+            )}
             disabled={isMarkingThis}
             onClick={() => onMarkRead(id)}
             title={t('notifications.markAsRead')}

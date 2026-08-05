@@ -8,7 +8,7 @@ import { SimpleSelect } from '@/components/ui/select';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { getErrorMessage } from '@/lib/utils';
+import { cn, getErrorMessage, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 type CustomFieldType = 'text' | 'number' | 'date' | 'select' | 'multi_select' | 'url' | 'checkbox';
@@ -186,7 +186,10 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
               </div>
               <button
                 aria-label={t('customFields.archive')}
-                className="rounded p-1 text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger-subtle-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+                className={cn(
+                  'rounded p-1 text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger-subtle-foreground',
+                  TOUCH_TARGET,
+                )}
                 onClick={() => setConfirmingArchive({ id: def.id, name: def.name })}
                 type="button"
               >
@@ -329,7 +332,10 @@ function CustomFieldForm({
               />
               <button
                 aria-label={t('customFields.removeOption')}
-                className="rounded p-1 text-muted-foreground hover:text-danger-subtle-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+                className={cn(
+                  'rounded p-1 text-muted-foreground hover:text-danger-subtle-foreground',
+                  TOUCH_TARGET,
+                )}
                 onClick={() => removeOption(opt.key)}
                 type="button"
               >

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { UpdateFormFields } from '@/components/shared/update-form-fields';
 import { useTranslations } from '@/hooks/use-translations';
 import { toast } from '@/lib/toast';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 
 // ─── Create form ─────────────────────────────────────────────────────────────
 
@@ -57,7 +58,10 @@ export function CreateUpdateForm({
         </span>
         <button
           aria-label={t('common.close')}
-          className="ml-auto rounded p-0.5 text-muted-foreground hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+          className={cn(
+            'ml-auto rounded p-0.5 text-muted-foreground hover:text-foreground-secondary',
+            TOUCH_TARGET,
+          )}
           onClick={onClose}
           title={t('common.close')}
           type="button"

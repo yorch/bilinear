@@ -2,7 +2,7 @@
 
 import { useTranslations } from '@/hooks/use-translations';
 import { ACCENT_DEFINITIONS, type Accent, accentSwatchGradient } from '@/lib/accent';
-import { cn } from '@/lib/utils';
+import { cn, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { useAccent } from '@/providers/accent-provider';
 
 interface AccentToggleProps {
@@ -58,7 +58,8 @@ export function AccentToggle({ className, compact = false }: AccentToggleProps) 
         <button
           aria-pressed={accent === definition.id}
           className={cn(
-            'flex h-6 w-6 items-center justify-center rounded transition-colors max-md:h-11 max-md:w-11',
+            'flex h-6 w-6 items-center justify-center rounded transition-colors',
+            TOUCH_TARGET_SQUARE,
             accent === definition.id ? 'bg-surface-raised shadow-e1' : 'hover:bg-accent',
           )}
           key={definition.id}

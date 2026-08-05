@@ -19,7 +19,7 @@ import {
   UPDATE_ORG_MEMBER_ROLE_MUTATION,
 } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
-import { cn, getErrorMessage } from '@/lib/utils';
+import { cn, getErrorMessage, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 const ORG_ROLES = ['owner', 'admin', 'member', 'guest'] as const;
@@ -291,7 +291,10 @@ export const MembersSection = observer(function MembersSection({ orgName }: Memb
                     {manageable && (
                       <button
                         aria-label={t('settings.workspace.removeMember')}
-                        className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+                        className={cn(
+                          'shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50',
+                          TOUCH_TARGET,
+                        )}
                         disabled={removing === user.id}
                         onClick={() =>
                           setConfirmingRemoval({ name: user.displayName, userId: user.id })
@@ -368,7 +371,10 @@ export const MembersSection = observer(function MembersSection({ orgName }: Memb
                       </div>
                       <button
                         aria-label={t('settings.workspace.inviteRevoke')}
-                        className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+                        className={cn(
+                          'shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50',
+                          TOUCH_TARGET,
+                        )}
                         disabled={revokingInvite === invite.id}
                         onClick={() => void revokeInvite(invite.id)}
                         title={t('settings.workspace.inviteRevoke')}

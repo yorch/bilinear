@@ -6,7 +6,7 @@ import type { NodeViewProps } from '@tiptap/react';
 import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import { useState } from 'react';
 import { useTranslations } from '@/hooks/use-translations';
-import { cn } from '@/lib/utils';
+import { cn, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 
 const YOUTUBE_RE = /(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
 const LOOM_RE = /loom\.com\/(?:share|embed)\/([a-zA-Z0-9]+)/;
@@ -90,7 +90,10 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
         />
         <button
           aria-label={t('editor.embed.editAriaLabel')}
-          className="absolute right-2 top-2 z-10 flex rounded bg-black/50 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100 max-md:h-11 max-md:w-11 max-md:items-center max-md:justify-center max-md:opacity-100"
+          className={cn(
+            'absolute right-2 top-2 z-10 flex rounded bg-black/50 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100 max-md:items-center max-md:justify-center max-md:opacity-100',
+            TOUCH_TARGET_SQUARE,
+          )}
           onClick={() => setEditing(true)}
           title={t('editor.embed.editAriaLabel')}
           type="button"

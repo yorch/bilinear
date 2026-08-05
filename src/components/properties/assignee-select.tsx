@@ -2,7 +2,7 @@
 
 import { SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
-import { cn } from '@/lib/utils';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 import { UserAvatar } from '../ui/user-avatar';
 
 interface User {
@@ -48,7 +48,7 @@ export function AssigneeSelect({
           <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border-2 border-dashed border-border" />
         )
       }
-      triggerClassName="px-1 py-1 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+      triggerClassName={cn('px-1 py-1', TOUCH_TARGET)}
       triggerTitle={current?.displayName ?? t('properties.assignee.noAssignee')}
     >
       {close => (

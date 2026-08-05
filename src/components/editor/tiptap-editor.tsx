@@ -32,7 +32,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import * as Y from 'yjs';
 import { useTranslations } from '@/hooks/use-translations';
 import { DEFAULT_YJS_PORT } from '@/lib/collab';
-import { cn } from '@/lib/utils';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 import { resolveBrowserWsUrl } from '@/lib/ws-url';
 import { useCollabConfig } from '@/providers/collab-provider';
 import { Details, DetailsSummary } from './details-node';
@@ -960,7 +960,8 @@ function ToolbarButton({
     <button
       aria-label={title}
       className={cn(
-        'rounded px-1.5 py-0.5 text-xs font-medium transition-colors max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center',
+        'rounded px-1.5 py-0.5 text-xs font-medium transition-colors',
+        TOUCH_TARGET,
         active
           ? 'bg-brand-subtle text-brand-subtle-foreground'
           : 'text-muted-foreground hover:bg-foreground/10',

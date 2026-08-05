@@ -11,6 +11,7 @@ import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { PROJECT_HEALTH_CONFIG, PROJECT_HEALTH_LABEL_KEYS } from '@/lib/project-constants';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import { UserAvatar } from '../ui/user-avatar';
 
@@ -139,7 +140,10 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
                   {isOwner && (
                     <div className="flex shrink-0 items-center gap-1">
                       <button
-                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+                        className={cn(
+                          'rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
+                          TOUCH_TARGET,
+                        )}
                         onClick={() => openEdit(update.id)}
                         title={t('common.edit')}
                         type="button"

@@ -13,7 +13,7 @@ import type { DBIssue } from '@/lib/db';
 import { gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
-import { cn } from '@/lib/utils';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 
 // ─── GraphQL documents ────────────────────────────────────────────────────────
 
@@ -238,7 +238,10 @@ export const RelationsSection = observer(function RelationsSection({
                         </span>
                         <button
                           aria-label={t('issueDetail.relations.removeRelation')}
-                          className="hidden items-center rounded p-0.5 text-muted-foreground hover:text-danger-subtle-foreground group-hover:flex max-md:flex max-md:h-11 max-md:min-w-11 max-md:justify-center"
+                          className={cn(
+                            'hidden items-center rounded p-0.5 text-muted-foreground hover:text-danger-subtle-foreground group-hover:flex',
+                            TOUCH_TARGET,
+                          )}
                           onClick={() => handleDelete(rel.id)}
                           type="button"
                         >
@@ -345,7 +348,10 @@ function AddRelationForm({ onSubmit, onClose, issueId }: AddRelationFormProps) {
 
       <button
         aria-label={t('common.cancel')}
-        className="rounded p-1 text-muted-foreground hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+        className={cn(
+          'rounded p-1 text-muted-foreground hover:text-foreground-secondary',
+          TOUCH_TARGET,
+        )}
         onClick={onClose}
         type="button"
       >

@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useTranslations } from '@/hooks/use-translations';
 import { toast } from '@/lib/toast';
-import { cn, getErrorMessage } from '@/lib/utils';
+import { cn, getErrorMessage, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 
 export type TeamRole = 'admin' | 'member' | 'guest';
 
@@ -266,7 +266,8 @@ export function TeamMemberManagement({
                     {canManageMembers && (
                       <button
                         className={cn(
-                          'flex h-7 w-7 items-center justify-center rounded text-xs transition-colors disabled:opacity-50 max-md:h-11 max-md:w-11',
+                          'flex h-7 w-7 items-center justify-center rounded text-xs transition-colors disabled:opacity-50',
+                          TOUCH_TARGET_SQUARE,
                           member.isOwner
                             ? 'text-warning-subtle-foreground hover:bg-warning-subtle'
                             : 'text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
@@ -281,7 +282,10 @@ export function TeamMemberManagement({
                     )}
                     {(canManageMembers || isSelf) && (
                       <button
-                        className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger-subtle-foreground disabled:opacity-50 max-md:h-11 max-md:w-11"
+                        className={cn(
+                          'flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger-subtle-foreground disabled:opacity-50',
+                          TOUCH_TARGET_SQUARE,
+                        )}
                         disabled={isLoading}
                         onClick={() => setPendingRemoveId(member.membershipId)}
                         title={isSelf ? t('teams.leaveTeam') : t('teams.removeMember')}

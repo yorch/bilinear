@@ -39,7 +39,7 @@ import { gql, gqlQuery } from '@/lib/graphql';
 import { FAVORITE_DELETE_MUTATION, FAVORITES_QUERY } from '@/lib/graphql-queries';
 import { isPathWithin } from '@/lib/issue-nav';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { cn, TOUCH_TARGET, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 interface FavoriteMeta {
@@ -238,7 +238,10 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
               </Link>
               <button
                 aria-label={t('nav.removeNamedFromFavorites', { name: label })}
-                className="mr-1 hidden shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground group-hover:flex max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+                className={cn(
+                  'mr-1 hidden shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground group-hover:flex',
+                  TOUCH_TARGET,
+                )}
                 onClick={() => void removeFavorite(fav.id)}
                 title={t('nav.removeFromFavorites')}
                 type="button"
@@ -400,7 +403,10 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                         aria-label={t(expanded ? 'nav.collapseTeam' : 'nav.expandTeam', {
                           team: team.displayName || team.name,
                         })}
-                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground max-md:h-11 max-md:w-11"
+                        className={cn(
+                          'flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+                          TOUCH_TARGET_SQUARE,
+                        )}
                         onClick={() =>
                           setManuallyToggled(prev => ({ ...prev, [team.key]: !expanded }))
                         }

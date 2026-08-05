@@ -16,7 +16,7 @@ import {
 } from '@/lib/graphql-queries';
 import { getDueDateColor } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 import { CustomFieldsEditor } from '../custom-fields/custom-fields-editor';
@@ -240,7 +240,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
                     ? t('issueDetail.unsubscribeShortcut')
                     : t('issueDetail.subscribeShortcut')
                 }
-                className="rounded p-1 text-muted-foreground hover:bg-accent max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+                className={cn('rounded p-1 text-muted-foreground hover:bg-accent', TOUCH_TARGET)}
                 onClick={handleToggleSubscription}
                 title={
                   subscribed
@@ -254,7 +254,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
             )}
             <button
               aria-label={t('common.close')}
-              className="rounded p-1 text-muted-foreground hover:bg-accent max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+              className={cn('rounded p-1 text-muted-foreground hover:bg-accent', TOUCH_TARGET)}
               onClick={onClose}
               type="button"
             >

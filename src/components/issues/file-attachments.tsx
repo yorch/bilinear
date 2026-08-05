@@ -8,7 +8,7 @@ import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { getErrorMessage } from '@/lib/utils';
+import { cn, getErrorMessage, TOUCH_TARGET } from '@/lib/utils';
 
 interface Attachment {
   id: string;
@@ -146,7 +146,10 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
               <span className="shrink-0 text-muted-foreground">{formatFileSize(att.size)}</span>
               <button
                 aria-label={t('issueDetail.attachments.removeAttachment')}
-                className="text-muted-foreground hover:text-danger-subtle-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+                className={cn(
+                  'text-muted-foreground hover:text-danger-subtle-foreground',
+                  TOUCH_TARGET,
+                )}
                 onClick={() => handleDelete(att)}
                 type="button"
               >

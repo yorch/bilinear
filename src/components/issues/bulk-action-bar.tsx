@@ -8,6 +8,7 @@ import { SelectPopover } from '@/components/ui/select-popover';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { useTranslations } from '@/hooks/use-translations';
 import { getPriorityConfig } from '@/lib/issue-utils';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 
 const PRIORITIES = [0, 1, 2, 3, 4] as const;
@@ -184,7 +185,10 @@ export function BulkActionBar({
 
       <button
         aria-label={t('issues.clearSelection')}
-        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+        className={cn(
+          'rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
+          TOUCH_TARGET,
+        )}
         onClick={onClear}
         title={t('issues.clearSelection')}
         type="button"

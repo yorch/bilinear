@@ -14,7 +14,7 @@ import {
   ISSUE_REACTIONS_QUERY,
 } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 
 interface Reaction {
   emoji: string;
@@ -102,7 +102,8 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
           </>
         }
         triggerClassName={cn(
-          'rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center',
+          'rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
+          TOUCH_TARGET,
           hasAny ? '' : 'flex items-center gap-1 px-2 text-xs',
         )}
         triggerTitle={t('issueDetail.reactions.addReaction')}
