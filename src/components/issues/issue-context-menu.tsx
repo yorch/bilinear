@@ -6,6 +6,7 @@ import { useRef, useState } from 'react';
 import { LabelDot } from '@/components/properties/label-select';
 import { priorityLabelKey } from '@/components/properties/priority-icon';
 import { StatusDot } from '@/components/properties/status-select';
+import { ColorDot } from '@/components/ui/color-dot';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { useTranslations } from '@/hooks/use-translations';
@@ -258,10 +259,7 @@ export function IssueContextMenu({
                     }}
                     type="button"
                   >
-                    <span
-                      className="h-2 w-2 shrink-0 rounded-full"
-                      style={{ backgroundColor: cfg.color }}
-                    />
+                    <ColorDot color={cfg.color} size="sm" />
                     <span>{t(priorityLabelKey(value))}</span>
                   </button>
                 );

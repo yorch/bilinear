@@ -5,6 +5,7 @@ import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
 import { InitiativeUpdatesSection } from '@/components/initiatives/initiative-updates-section';
 import { Button } from '@/components/ui/button';
+import { ColorDot } from '@/components/ui/color-dot';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
@@ -225,10 +226,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
                   className="flex items-center gap-2 text-xs text-foreground-secondary"
                   key={p.id}
                 >
-                  <span
-                    className="inline-block h-2 w-2 rounded-full"
-                    style={{ backgroundColor: p.color }}
-                  />
+                  <ColorDot color={p.color} size="sm" />
                   <span className="flex-1">{p.name}</span>
                   <span className="text-muted-foreground">
                     {progressById[p.id] === undefined

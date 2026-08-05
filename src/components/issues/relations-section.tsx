@@ -1,10 +1,11 @@
 'use client';
 
-import { ChevronDown, Plus, Trash2, X } from 'lucide-react';
+import { ChevronDown, Trash2, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useMemo, useRef, useState } from 'react';
 import { IssuePicker } from '@/components/issues/issue-picker';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { SectionAddButton, SectionHeader } from '@/components/shared/section-header';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
@@ -174,21 +175,21 @@ export const RelationsSection = observer(function RelationsSection({
 
   return (
     <div className="mt-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {t('issueDetail.relations.title')} {relations.length > 0 && `(${relations.length})`}
-        </h3>
-        {!showAddForm && (
-          <button
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
-            onClick={() => setShowAddForm(true)}
-            type="button"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {t('issueDetail.relations.addRelation')}
-          </button>
-        )}
-      </div>
+      <SectionHeader
+        action={
+          !showAddForm && (
+            <SectionAddButton
+              label={t('issueDetail.relations.addRelation')}
+              onClick={() => setShowAddForm(true)}
+            />
+          )
+        }
+        title={
+          <>
+            {t('issueDetail.relations.title')} {relations.length > 0 && `(${relations.length})`}
+          </>
+        }
+      />
 
       {loading && (
         <p className="mt-2 text-xs text-muted-foreground italic">{t('common.loading')}</p>

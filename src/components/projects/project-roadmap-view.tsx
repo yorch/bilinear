@@ -4,6 +4,7 @@ import { observer } from 'mobx-react-lite';
 import { useRouter } from 'next/navigation';
 import { useCallback, useMemo } from 'react';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
+import { ColorDot } from '@/components/ui/color-dot';
 import { useTranslations } from '@/hooks/use-translations';
 import { PROJECT_UPDATE_MUTATION } from '@/lib/graphql-queries';
 import { PROJECT_STATUS_LABEL_KEYS } from '@/lib/project-constants';
@@ -97,10 +98,7 @@ export const ProjectRoadmapView = observer(function ProjectRoadmapView({
                 onClick={() => router.push(`/${workspaceKey}/project/${p.slugId}`)}
                 type="button"
               >
-                <span
-                  className="h-2 w-2 rounded-full"
-                  style={{ backgroundColor: p.color ?? 'var(--brand)' }}
-                />
+                <ColorDot color={p.color ?? 'var(--brand)'} size="sm" />
                 {p.icon ? `${p.icon} ` : ''}
                 {p.name}
               </button>

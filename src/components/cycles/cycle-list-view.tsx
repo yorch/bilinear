@@ -4,6 +4,8 @@ import { Calendar, RefreshCw } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useState } from 'react';
+import { EmptyState } from '@/components/ui/empty-state';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBCycle } from '@/lib/db';
@@ -66,17 +68,11 @@ export const CycleListView = observer(function CycleListView({
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {hasNoCycles ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-              <RefreshCw className="h-6 w-6 text-muted-foreground" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-foreground">{t('cycles.list.emptyTitle')}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t('cycles.list.emptyDescription')}
-              </p>
-            </div>
-          </div>
+          <EmptyState
+            description={t('cycles.list.emptyDescription')}
+            icon={<RefreshCw className="h-5 w-5" />}
+            title={t('cycles.list.emptyTitle')}
+          />
         ) : (
           <div className="flex flex-col gap-6">
             {activeCycles.length > 0 && (
@@ -194,12 +190,7 @@ const CycleGroup = observer(function CycleGroup({
 
                 {cycleIssues.length > 0 && (
                   <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-brand transition-all"
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
+                    <ProgressBar className="h-1.5 w-16" value={progress} />
                     <span className="text-xs tabular-nums text-muted-foreground">
                       {completedIssues.length}/{cycleIssues.length}
                     </span>

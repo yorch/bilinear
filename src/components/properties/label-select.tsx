@@ -1,5 +1,6 @@
 'use client';
 
+import { ColorDot } from '@/components/ui/color-dot';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
@@ -20,12 +21,7 @@ interface LabelSelectProps {
 }
 
 export function LabelDot({ color, className }: { color: string; className?: string }) {
-  return (
-    <span
-      className={cn('inline-block h-2 w-2 rounded-full flex-shrink-0', className)}
-      style={{ backgroundColor: color }}
-    />
-  );
+  return <ColorDot className={className} color={color} size="sm" />;
 }
 
 export function LabelSelect({

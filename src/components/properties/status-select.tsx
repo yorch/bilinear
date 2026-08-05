@@ -1,5 +1,6 @@
 'use client';
 
+import { ColorDot } from '@/components/ui/color-dot';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
@@ -21,12 +22,7 @@ interface StatusSelectProps {
 }
 
 export function StatusDot({ color, className }: { color: string; className?: string }) {
-  return (
-    <span
-      className={cn('inline-block h-2.5 w-2.5 rounded-full flex-shrink-0', className)}
-      style={{ backgroundColor: color }}
-    />
-  );
+  return <ColorDot className={className} color={color} size="md" />;
 }
 
 export function StatusSelect({

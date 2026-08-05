@@ -4,6 +4,7 @@ import { Bell, Check, CheckCheck, Clock, MessageSquare, RefreshCw, User } from '
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { EmptyState } from '@/components/ui/empty-state';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
@@ -352,15 +353,11 @@ export const NotificationInbox = observer(function NotificationInbox() {
 
       {/* Empty state */}
       {!loading && !loadError && notifications.length === 0 && (
-        <div className="flex flex-col items-center gap-3 py-16 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-            <Bell className="h-6 w-6 text-muted-foreground" />
-          </div>
-          <p className="text-sm font-medium text-muted-foreground">
-            {t('notifications.emptyState.title')}
-          </p>
-          <p className="text-xs text-muted-foreground">{t('notifications.emptyState.detail')}</p>
-        </div>
+        <EmptyState
+          description={t('notifications.emptyState.detail')}
+          icon={<Bell className="h-5 w-5" />}
+          title={t('notifications.emptyState.title')}
+        />
       )}
 
       {/* Unread section */}

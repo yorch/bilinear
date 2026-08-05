@@ -1,14 +1,15 @@
 'use client';
 
 import { CheckCircle, CornerDownRight, MoreHorizontal, Smile } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
+import { ReactionEmojiOptions } from '@/components/issues/reaction-emoji-options';
 import { Badge } from '@/components/ui/badge';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useReactionCounts } from '@/hooks/use-reaction-counts';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate } from '@/lib/graphql';
 import { COMMENT_UPDATE_MUTATION, CONVERT_TO_SUB_ISSUE_MUTATION } from '@/lib/graphql-queries';
-import { QUICK_EMOJIS } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
 import { cn, getErrorMessage } from '@/lib/utils';
 import type { MentionItem } from '../editor/mention-list';
@@ -94,20 +95,7 @@ export function CommentCard({
   const isOwn = comment.author.id === currentUserId;
   const isResolved = !!comment.resolvedAt;
 
-  const reactionCounts = useMemo(
-    () =>
-      comment.reactions.reduce<Record<string, { count: number; reacted: boolean }>>((acc, r) => {
-        if (!acc[r.emoji]) {
-          acc[r.emoji] = { count: 0, reacted: false };
-        }
-        acc[r.emoji].count++;
-        if (r.userId === currentUserId) {
-          acc[r.emoji].reacted = true;
-        }
-        return acc;
-      }, {}),
-    [comment.reactions, currentUserId],
-  );
+  const reactionCounts = useReactionCounts(comment.reactions, currentUserId);
 
   const saveEdit = async () => {
     if (!editBody.trim() || editBody === comment.body) {
@@ -209,27 +197,13 @@ export function CommentCard({
               triggerTitle={t('issueDetail.comments.react')}
             >
               {close => (
-                <>
-                  {QUICK_EMOJIS.map(emoji => {
-                    const info = reactionCounts[emoji];
-                    return (
-                      <button
-                        className={cn(
-                          'rounded px-1 py-0.5 text-sm hover:bg-accent',
-                          info?.reacted && 'bg-brand-subtle',
-                        )}
-                        key={emoji}
-                        onClick={() => {
-                          onToggleReaction(comment.id, emoji, info?.reacted ?? false);
-                          close();
-                        }}
-                        type="button"
-                      >
-                        {emoji}
-                      </button>
-                    );
-                  })}
-                </>
+                <ReactionEmojiOptions
+                  counts={reactionCounts}
+                  onPick={(emoji, reacted) => {
+                    onToggleReaction(comment.id, emoji, reacted);
+                    close();
+                  }}
+                />
               )}
             </SelectPopover>
 

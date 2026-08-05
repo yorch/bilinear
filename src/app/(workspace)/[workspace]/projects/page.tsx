@@ -9,11 +9,11 @@ import { ProjectListView } from '@/components/projects/project-list-view';
 import { ProjectRoadmapView } from '@/components/projects/project-roadmap-view';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 type ProjectsLayout = 'list' | 'roadmap';
@@ -80,36 +80,33 @@ export default observer(function ProjectsPage() {
       <PageHeader
         actions={
           <>
-            <div className="flex rounded-md border border-border p-0.5">
-              <button
-                aria-label={t('projects.listView')}
-                className={cn(
-                  'flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors',
-                  layout === 'list'
-                    ? 'bg-muted text-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-                onClick={() => setLayoutPersisted('list')}
-                type="button"
-              >
-                <LayoutList className="h-3.5 w-3.5" />
-                {t('projects.list')}
-              </button>
-              <button
-                aria-label={t('projects.roadmapView')}
-                className={cn(
-                  'flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors',
-                  layout === 'roadmap'
-                    ? 'bg-muted text-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-                onClick={() => setLayoutPersisted('roadmap')}
-                type="button"
-              >
-                <MapIcon className="h-3.5 w-3.5" />
-                {t('projects.roadmap')}
-              </button>
-            </div>
+            <SegmentedControl
+              onChange={setLayoutPersisted}
+              options={[
+                {
+                  ariaLabel: t('projects.listView'),
+                  label: (
+                    <>
+                      <LayoutList className="h-3.5 w-3.5" />
+                      {t('projects.list')}
+                    </>
+                  ),
+                  value: 'list',
+                },
+                {
+                  ariaLabel: t('projects.roadmapView'),
+                  label: (
+                    <>
+                      <MapIcon className="h-3.5 w-3.5" />
+                      {t('projects.roadmap')}
+                    </>
+                  ),
+                  value: 'roadmap',
+                },
+              ]}
+              size="md"
+              value={layout}
+            />
             <Button onClick={() => uiStore.openCreateProjectModal()} size="sm" type="button">
               <Plus className="h-3.5 w-3.5" />
               {t('projects.newProject')}

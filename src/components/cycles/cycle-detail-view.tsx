@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BurndownChart } from '@/components/cycles/burndown-chart';
 import { BurnupChart } from '@/components/cycles/burnup-chart';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
@@ -416,12 +417,7 @@ export const CycleDetailView = observer(function CycleDetailView({
                 })}
               </span>
             </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-brand transition-all"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
+            <ProgressBar className="mt-2 h-2" value={progress} />
           </div>
 
           {/* Scope creep / carryover metrics */}

@@ -1,9 +1,10 @@
 'use client';
 
-import { Pencil, Plus } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { DeleteUpdateButton } from '@/components/shared/delete-update-button';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { SectionAddButton, SectionHeader } from '@/components/shared/section-header';
 import { CreateUpdateForm, EditUpdateForm } from '@/components/shared/update-forms';
 import { Badge } from '@/components/ui/badge';
 import { useFormatters } from '@/hooks/use-formatters';
@@ -83,21 +84,16 @@ export function InitiativeUpdatesSection({
 
   return (
     <div className="mt-4">
-      <div className="flex items-center justify-between">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {t('initiatives.updates.title', { count: updates.length })}
-        </h4>
-        {!creating && !editingId && (
-          <button
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
-            onClick={openCreate}
-            type="button"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {t('initiatives.updates.addUpdate')}
-          </button>
-        )}
-      </div>
+      <SectionHeader
+        action={
+          !creating &&
+          !editingId && (
+            <SectionAddButton label={t('initiatives.updates.addUpdate')} onClick={openCreate} />
+          )
+        }
+        as="h4"
+        title={t('initiatives.updates.title', { count: updates.length })}
+      />
 
       {creating && (
         <CreateUpdateForm

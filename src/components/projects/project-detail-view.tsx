@@ -8,6 +8,7 @@ import { ProgressSparkline } from '@/components/projects/progress-sparkline';
 import { ProjectMilestonesSection } from '@/components/projects/project-milestones-section';
 import { ProjectUpdatesSection } from '@/components/projects/project-updates-section';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import { SimpleSelect } from '@/components/ui/select';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
@@ -220,14 +221,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
                   : '—'}
               </span>
             </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-              {progressStats && (
-                <div
-                  className="h-full rounded-full bg-brand transition-all"
-                  style={{ width: `${progressStats.percent}%` }}
-                />
-              )}
-            </div>
+            <ProgressBar className="mt-2 h-2" value={progressStats?.percent ?? 0} />
             {progressError && (
               <InlineRetry
                 className="py-2"

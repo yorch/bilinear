@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery } from '@/lib/graphql';
@@ -168,22 +169,14 @@ export function CycleVelocitySection({ teamId }: CycleVelocitySectionProps) {
     <div className="mt-5">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-foreground">{t('analytics.velocity.title')}</h2>
-        <div className="flex rounded-md border border-border p-0.5">
-          {(['issues', 'points'] as MetricMode[]).map(m => (
-            <button
-              className={
-                mode === m
-                  ? 'rounded bg-muted px-2 py-0.5 text-xs text-foreground'
-                  : 'px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground'
-              }
-              key={m}
-              onClick={() => setMode(m)}
-              type="button"
-            >
-              {m === 'issues' ? t('analytics.velocity.issues') : t('analytics.velocity.points')}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          onChange={setMode}
+          options={[
+            { label: t('analytics.velocity.issues'), value: 'issues' },
+            { label: t('analytics.velocity.points'), value: 'points' },
+          ]}
+          value={mode}
+        />
       </div>
 
       {loading ? (

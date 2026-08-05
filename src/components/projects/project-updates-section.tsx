@@ -1,9 +1,10 @@
 'use client';
 
-import { Pencil, Plus } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
 import { DeleteUpdateButton } from '@/components/shared/delete-update-button';
+import { SectionAddButton, SectionHeader } from '@/components/shared/section-header';
 import { CreateUpdateForm, EditUpdateForm } from '@/components/shared/update-forms';
 import { Badge } from '@/components/ui/badge';
 import { useFormatters } from '@/hooks/use-formatters';
@@ -42,21 +43,13 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
 
   return (
     <div className="mt-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {t('projects.updatesCount', { count: updates.length })}
-        </h3>
-        {!creating && !editingId && (
-          <button
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
-            onClick={openCreate}
-            type="button"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {t('projects.addUpdate')}
-          </button>
-        )}
-      </div>
+      <SectionHeader
+        action={
+          !creating &&
+          !editingId && <SectionAddButton label={t('projects.addUpdate')} onClick={openCreate} />
+        }
+        title={t('projects.updatesCount', { count: updates.length })}
+      />
 
       {creating && (
         <CreateUpdateForm

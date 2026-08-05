@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 import { CycleVelocitySection } from '@/components/analytics/cycle-velocity-section';
 import { InsightsSection } from '@/components/analytics/insights-section';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { ColorDot } from '@/components/ui/color-dot';
 import { PageHeader } from '@/components/ui/page-header';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
@@ -579,10 +580,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
                     <div className="flex flex-col gap-1" key={item.label}>
                       <div className="flex items-center justify-between text-xs">
                         <span className="flex items-center gap-1.5 text-muted-foreground">
-                          <span
-                            className="h-2.5 w-2.5 rounded-full"
-                            style={{ backgroundColor: item.color }}
-                          />
+                          <ColorDot color={item.color} />
                           {item.label}
                         </span>
                         <span className="font-medium text-muted-foreground">

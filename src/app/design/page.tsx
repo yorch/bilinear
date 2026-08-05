@@ -1,10 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import { AccentToggle } from '@/components/accent-toggle';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ColorDot } from '@/components/ui/color-dot';
 import { Input } from '@/components/ui/input';
+import { ProgressBar } from '@/components/ui/progress-bar';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
@@ -85,6 +89,7 @@ function Swatch({ name }: { name: string }) {
 }
 
 export default function DesignPage() {
+  const [segment, setSegment] = useState('issues');
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-10 flex flex-wrap items-center gap-4 border-b border-border bg-background/80 px-8 py-3 backdrop-blur">
@@ -314,6 +319,44 @@ export default function DesignPage() {
             </div>
           </div>
           <Textarea placeholder="Textarea" rows={3} />
+        </Section>
+
+        <Section
+          note="Small shared primitives. ProgressBar takes its track size from className and its fill defaults to bg-brand; ColorDot renders a caller-supplied entity colour (label/workflow-state swatches) so it is deliberately not tokenised."
+          title="Indicators"
+        >
+          <div className="flex max-w-md flex-col gap-3">
+            <ProgressBar className="h-2" value={30} />
+            <ProgressBar className="h-2" fillClassName="bg-success" value={72} />
+            <ProgressBar className="h-1.5 w-16" value={100} />
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="flex items-center gap-1.5 text-sm text-foreground-secondary">
+              <ColorDot color="var(--brand)" size="md" /> md
+            </span>
+            <span className="flex items-center gap-1.5 text-sm text-foreground-secondary">
+              <ColorDot color="var(--success)" size="sm" /> sm
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <SegmentedControl
+              onChange={setSegment}
+              options={[
+                { label: 'Issues', value: 'issues' },
+                { label: 'Points', value: 'points' },
+              ]}
+              value={segment}
+            />
+            <SegmentedControl
+              onChange={setSegment}
+              options={[
+                { label: 'Issues', value: 'issues' },
+                { label: 'Points', value: 'points' },
+              ]}
+              size="md"
+              value={segment}
+            />
+          </div>
         </Section>
 
         <Section
