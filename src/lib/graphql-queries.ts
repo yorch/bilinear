@@ -625,6 +625,28 @@ export const CYCLE_PROGRESS_QUERY = `
 `;
 
 /**
+ * Server-resolved progress for every cycle on a team, in one request.
+ *
+ * `cycles(teamId:)` is an unpaginated list field and `Cycle.progress`/`scope`
+ * are backed by the `cycleProgress` DataLoader, so every cycle in the response
+ * is answered by a single batched `getProgressBatch` call — fetch this once
+ * for a whole list, never `CYCLE_PROGRESS_QUERY` per row in a loop.
+ *
+ * Same caveats as the singular query: a guest's local issue pool holds only
+ * their own issues, and a canceled issue is done without a `completedAt`, so a
+ * client-side count over `issueStore` disagrees with this on both counts.
+ */
+export const CYCLES_PROGRESS_QUERY = `
+  query CyclesProgress($teamId: ID!) {
+    cycles(teamId: $teamId) {
+      id
+      progress
+      scope
+    }
+  }
+`;
+
+/**
  * Server-resolved progress for every live project in the org, in one request.
  * `Project.progress`/`scope` are backed by the `projectProgress` DataLoader, so
  * this costs two queries in total no matter how many projects come back —
