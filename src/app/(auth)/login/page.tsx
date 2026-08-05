@@ -1,5 +1,5 @@
+import { AuthHeader } from '@/components/auth/auth-header';
 import { LoginForm } from '@/components/auth/login-form';
-import { LoginHeader } from '@/components/auth/login-header';
 import { APP_NAME } from '@/lib/app-config';
 import { getServerTranslations } from '@/lib/i18n/server';
 
@@ -8,10 +8,15 @@ export async function generateMetadata() {
   return { title: `${t('meta.signIn')} — ${APP_NAME}` };
 }
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const { t } = await getServerTranslations();
   return (
     <div className="flex flex-col gap-6">
-      <LoginHeader />
+      <AuthHeader
+        brandMark
+        subtitle={t('auth.signInSubtitle')}
+        title={t('auth.signInTitle', { appName: APP_NAME })}
+      />
       <LoginForm />
     </div>
   );

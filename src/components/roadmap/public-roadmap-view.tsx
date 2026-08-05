@@ -2,6 +2,8 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useRef } from 'react';
+import { ColorDot } from '@/components/ui/color-dot';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { PROJECT_HEALTH_LABEL_KEYS } from '@/lib/project-constants';
@@ -167,10 +169,7 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
                     {project.icon ? (
                       <span className="text-lg leading-none">{project.icon}</span>
                     ) : (
-                      <span
-                        className="h-3 w-3 shrink-0 rounded-full"
-                        style={{ backgroundColor: project.color }}
-                      />
+                      <ColorDot className="h-3 w-3" color={project.color} />
                     )}
                     <span className="flex-1 truncate text-sm font-semibold text-foreground">
                       {project.name}
@@ -213,12 +212,7 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
                         {progressPct}%
                       </span>
                     </div>
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-brand transition-all"
-                        style={{ width: `${progressPct}%` }}
-                      />
-                    </div>
+                    <ProgressBar className="h-1.5 w-full" value={progressPct} />
                   </div>
 
                   {/* Milestones */}

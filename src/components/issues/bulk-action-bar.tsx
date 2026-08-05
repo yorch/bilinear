@@ -3,6 +3,7 @@
 import { X } from 'lucide-react';
 import { priorityLabelKey } from '@/components/properties/priority-icon';
 import { StatusDot } from '@/components/properties/status-select';
+import { ColorDot } from '@/components/ui/color-dot';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { useTranslations } from '@/hooks/use-translations';
@@ -99,10 +100,7 @@ export function BulkActionBar({
                   }}
                   type="button"
                 >
-                  <span
-                    className="h-2 w-2 shrink-0 rounded-full"
-                    style={{ backgroundColor: cfg.color }}
-                  />
+                  <ColorDot color={cfg.color} size="sm" />
                   <span>{t(priorityLabelKey(p))}</span>
                 </button>
               );
@@ -173,10 +171,7 @@ export function BulkActionBar({
                   }}
                   type="button"
                 >
-                  <span
-                    className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: l.color }}
-                  />
+                  <ColorDot color={l.color} />
                   <span className="truncate">{l.name}</span>
                 </button>
               ))}

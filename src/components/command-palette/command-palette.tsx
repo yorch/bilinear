@@ -4,6 +4,7 @@ import { observer } from 'mobx-react-lite';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { priorityLabelKey } from '@/components/properties/priority-icon';
+import { ColorDot } from '@/components/ui/color-dot';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import type { RecentItem } from '@/hooks/use-recent-items';
 import { type Theme, useTheme } from '@/hooks/use-theme';
@@ -237,12 +238,7 @@ const ResultsList = observer(function ResultsList({
               role="option"
               type="button"
             >
-              {item.stateColor && (
-                <span
-                  className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
-                  style={{ backgroundColor: item.stateColor }}
-                />
-              )}
+              {item.stateColor && <ColorDot color={item.stateColor} />}
               <span className="w-16 flex-shrink-0 font-mono text-xs text-muted-foreground">
                 {item.issue.identifier}
               </span>

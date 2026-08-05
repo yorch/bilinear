@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
+import { AuthHeader } from '@/components/auth/auth-header';
 import { VerifyCodeForm } from '@/components/auth/verify-code-form';
-import { VerifyHeader } from '@/components/auth/verify-header';
 import { APP_NAME } from '@/lib/app-config';
 import { getServerTranslations } from '@/lib/i18n/server';
 
@@ -9,10 +9,11 @@ export async function generateMetadata() {
   return { title: `${t('meta.verify')} — ${APP_NAME}` };
 }
 
-export default function VerifyPage() {
+export default async function VerifyPage() {
+  const { t } = await getServerTranslations();
   return (
     <div className="flex flex-col gap-6">
-      <VerifyHeader />
+      <AuthHeader subtitle={t('auth.enterCode')} title={t('auth.checkYourEmail')} />
       <Suspense>
         <VerifyCodeForm />
       </Suspense>

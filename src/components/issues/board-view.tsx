@@ -22,6 +22,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { ChevronDown, ChevronRight, Columns3 } from 'lucide-react';
 import { useState } from 'react';
 import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
+import { ColorDot } from '@/components/ui/color-dot';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useFormatters } from '@/hooks/use-formatters';
 import { usePending } from '@/hooks/use-pending-ids';
@@ -240,12 +241,7 @@ function BoardColumn({
     <div className="flex w-[85vw] max-w-72 flex-shrink-0 flex-col sm:w-72">
       {/* Column header */}
       <div className="mb-2 flex items-center gap-2 px-1">
-        {column.color && (
-          <span
-            className="inline-block h-2.5 w-2.5 rounded-full"
-            style={{ backgroundColor: column.color }}
-          />
-        )}
+        {column.color && <ColorDot color={column.color} />}
         <span className="text-sm font-medium text-foreground-secondary">{column.label}</span>
         <span className="text-xs text-muted-foreground">{column.issues.length}</span>
       </div>

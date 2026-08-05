@@ -5,6 +5,9 @@ import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery } from '@/lib/graphql';
@@ -84,25 +87,17 @@ export const ProjectListView = observer(function ProjectListView({
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {projects.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-              <Target className="h-6 w-6 text-muted-foreground" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-foreground">{t('projects.noProjectsYet')}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t('projects.createProjectPrompt')}
-              </p>
-            </div>
-            <button
-              className="mt-2 flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-              onClick={() => uiStore.openCreateProjectModal()}
-              type="button"
-            >
-              <Plus className="h-4 w-4" />
-              {t('projects.createProject')}
-            </button>
-          </div>
+          <EmptyState
+            action={
+              <Button onClick={() => uiStore.openCreateProjectModal()} type="button">
+                <Plus className="h-4 w-4" />
+                {t('projects.createProject')}
+              </Button>
+            }
+            description={t('projects.createProjectPrompt')}
+            icon={<Target className="h-5 w-5" />}
+            title={t('projects.noProjectsYet')}
+          />
         ) : (
           <div className="flex flex-col gap-6">
             {/* One retry for the whole page — the per-row alternative would be
@@ -242,12 +237,7 @@ const ProjectGroup = observer(function ProjectGroup({
 
                 {stats !== undefined && stats.scope > 0 && (
                   <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-brand transition-all"
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
+                    <ProgressBar className="h-1.5 w-16" value={progress} />
                     <span className="text-xs tabular-nums text-muted-foreground">{progress}%</span>
                   </div>
                 )}

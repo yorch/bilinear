@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
+import { ColorDot } from '@/components/ui/color-dot';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useTranslations } from '@/hooks/use-translations';
@@ -362,10 +363,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                   const isToggling = togglingProjectId === project.id;
                   return (
                     <li className="flex items-center gap-3 px-5 py-3" key={project.id}>
-                      <span
-                        className="h-3 w-3 shrink-0 rounded-full"
-                        style={{ backgroundColor: project.color }}
-                      />
+                      <ColorDot className="h-3 w-3" color={project.color} />
                       <div className="flex-1 min-w-0">
                         <p className="truncate text-sm font-medium text-foreground">
                           {project.name}

@@ -1,9 +1,12 @@
 'use client';
 
-import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useMemo, useRef, useState } from 'react';
 import { priorityLabelKey } from '@/components/properties/priority-icon';
+import { SectionAddButton } from '@/components/shared/section-header';
+import { ColorDot } from '@/components/ui/color-dot';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import { useTranslations } from '@/hooks/use-translations';
 import { CREATE_SUB_ISSUE_MUTATION } from '@/lib/graphql-queries';
 import { getPriorityConfig } from '@/lib/issue-utils';
@@ -103,23 +106,18 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
             <span className="text-xs tabular-nums text-muted-foreground">
               {completedCount}/{subIssues.length}
             </span>
-            <div className="h-1 w-20 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-success transition-all duration-300"
-                style={{ width: `${completionPct}%` }}
-              />
-            </div>
+            <ProgressBar
+              className="h-1 w-20"
+              fillClassName="bg-success duration-300"
+              value={completionPct}
+            />
           </div>
         )}
         {!showCreateForm && (
-          <button
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
+          <SectionAddButton
+            label={t('issueDetail.subIssues.addSubIssue')}
             onClick={() => setShowCreateForm(true)}
-            type="button"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {t('issueDetail.subIssues.addSubIssue')}
-          </button>
+          />
         )}
       </div>
 
@@ -156,9 +154,9 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
                         key={issue.id}
                       >
                         {/* Priority dot */}
-                        <span
-                          className="h-2 w-2 shrink-0 rounded-full"
-                          style={{ backgroundColor: priorityCfg.color }}
+                        <ColorDot
+                          color={priorityCfg.color}
+                          size="sm"
                           title={t(priorityLabelKey(issue.priority))}
                         />
                         {/* State color dot */}

@@ -1,8 +1,10 @@
 'use client';
 
 import { Smile } from 'lucide-react';
+import { ReactionEmojiOptions } from '@/components/issues/reaction-emoji-options';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { SelectPopover } from '@/components/ui/select-popover';
+import { useReactionCounts } from '@/hooks/use-reaction-counts';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql, gqlQuery } from '@/lib/graphql';
@@ -11,7 +13,6 @@ import {
   ISSUE_REACTION_REMOVE_MUTATION,
   ISSUE_REACTIONS_QUERY,
 } from '@/lib/graphql-queries';
-import { QUICK_EMOJIS } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 
@@ -46,16 +47,7 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
     [],
   );
 
-  const counts = reactions.reduce<Record<string, { count: number; reacted: boolean }>>((acc, r) => {
-    if (!acc[r.emoji]) {
-      acc[r.emoji] = { count: 0, reacted: false };
-    }
-    acc[r.emoji].count++;
-    if (r.userId === currentUserId) {
-      acc[r.emoji].reacted = true;
-    }
-    return acc;
-  }, {});
+  const counts = useReactionCounts(reactions, currentUserId);
 
   const toggle = async (emoji: string, hasReacted: boolean) => {
     try {
@@ -116,27 +108,13 @@ export function IssueReactionBar({ issueId, currentUserId }: IssueReactionBarPro
         triggerTitle={t('issueDetail.reactions.addReaction')}
       >
         {close => (
-          <>
-            {QUICK_EMOJIS.map(emoji => {
-              const info = counts[emoji];
-              return (
-                <button
-                  className={cn(
-                    'rounded px-1 py-0.5 text-sm hover:bg-accent',
-                    info?.reacted && 'bg-brand-subtle',
-                  )}
-                  key={emoji}
-                  onClick={() => {
-                    toggle(emoji, info?.reacted ?? false);
-                    close();
-                  }}
-                  type="button"
-                >
-                  {emoji}
-                </button>
-              );
-            })}
-          </>
+          <ReactionEmojiOptions
+            counts={counts}
+            onPick={(emoji, reacted) => {
+              toggle(emoji, reacted);
+              close();
+            }}
+          />
         )}
       </SelectPopover>
     </div>

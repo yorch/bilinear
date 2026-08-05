@@ -1,9 +1,10 @@
 'use client';
 
-import { Check, Pencil, Plus, Target, Trash2, X } from 'lucide-react';
+import { Check, Pencil, Target, Trash2, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { SectionAddButton, SectionHeader } from '@/components/shared/section-header';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBProjectMilestone } from '@/lib/db';
@@ -306,21 +307,13 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
 
   return (
     <div className="mt-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {t('projects.milestonesCount', { count: milestones.length })}
-        </h3>
-        {!creating && !editingId && (
-          <button
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
-            onClick={openCreate}
-            type="button"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {t('projects.addMilestone')}
-          </button>
-        )}
-      </div>
+      <SectionHeader
+        action={
+          !creating &&
+          !editingId && <SectionAddButton label={t('projects.addMilestone')} onClick={openCreate} />
+        }
+        title={t('projects.milestonesCount', { count: milestones.length })}
+      />
 
       {creating && (
         <MilestoneForm

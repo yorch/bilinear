@@ -1,5 +1,5 @@
+import { AuthHeader } from '@/components/auth/auth-header';
 import { OnboardingForm } from '@/components/auth/onboarding-form';
-import { OnboardingHeader } from '@/components/auth/onboarding-header';
 import { APP_NAME } from '@/lib/app-config';
 import { getServerTranslations } from '@/lib/i18n/server';
 
@@ -8,10 +8,11 @@ export async function generateMetadata() {
   return { title: `${t('meta.createWorkspace')} — ${APP_NAME}` };
 }
 
-export default function OnboardingPage() {
+export default async function OnboardingPage() {
+  const { t } = await getServerTranslations();
   return (
     <div className="flex flex-col gap-6">
-      <OnboardingHeader />
+      <AuthHeader subtitle={t('auth.createWorkspaceSubtitle')} title={t('auth.createWorkspace')} />
       <OnboardingForm />
     </div>
   );
