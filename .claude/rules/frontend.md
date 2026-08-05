@@ -65,6 +65,13 @@ In `src/components/ui/`:
   `text-white` over caller-supplied status fills and failed contrast (~1.4:1 on
   `--warning` in dark). Solid status chips are `tone` pills.
 - `UserAvatar`, `Input`, `Textarea`, `Switch`, `EmptyState`
+- `ProgressBar` — track sizing comes from `className` (`h-2`, `h-1.5 w-16`); the
+  fill is `bg-brand` unless `fillClassName` overrides it (`bg-success` for the
+  sub-issue completion bar).
+- `ColorDot` — `sm` (8px, labels) / `md` (10px, workflow states). Backs
+  `LabelDot` / `StatusDot`. The colour is entity data from the DB, so it stays an
+  inline `backgroundColor`, not a token.
+- `SegmentedControl` — the small bordered toggle used by the analytics sections.
 - `SimpleSelect` (from `ui/select`)
 - `Skeleton` + `LoadingRegion` / `RowsSkeleton` / `PageSkeleton` /
   `IssueListSkeleton` / `IssueSkeleton` / `DetailPanelSkeleton` /
@@ -80,7 +87,14 @@ In `src/components/shared/`: `ConfirmDialog` (destructive confirmations — alwa
 prefer over `window.confirm`), `InlineRetry` (a failed fetch must offer a retry,
 never render as an authoritative empty state), `SettingToggleRow`,
 `SyncErrorState`, `UpdateFormFields`, `CreateUpdateForm` / `EditUpdateForm`,
-`DeleteUpdateButton`. Add cross-feature building blocks here.
+`DeleteUpdateButton`, `SectionHeader` + `SectionAddButton` (the uppercase
+subsection header and its "+ Add X" control — pass `as` to keep the heading
+level right; `SectionAddButton` is usable standalone where the surrounding row
+isn't a `SectionHeader`). Add cross-feature building blocks here.
+
+Feature-local shared pieces stay in their feature directory: `ReactionEmojiOptions`
+(`issues/reaction-emoji-options.tsx`) is the QUICK_EMOJIS grid rendered inside a
+reaction `SelectPopover`, shared by the issue reaction bar and comment cards.
 
 Loading states shimmer **and** announce: a `Skeleton` is `aria-hidden`, so wrap
 it in `LoadingRegion` (`role="status"` + `aria-busy` + sr-only text). Never
@@ -121,6 +135,9 @@ pulse means "live" (connection status, pending write), not "loading".
   `useIssueUpdate()` — they own the optimistic apply, TransactionQueue enqueue,
   rollback and failure toast. Map store models with `toIssueUsers` /
   `toIssueLabels` from `@/lib/issue-mappers`; don't hand-roll the mapping.
+- Emoji reactions: `useReactionCounts(reactions, viewerId)` returns the per-emoji
+  `{ count, reacted }` map. Don't re-roll the reducer — it lived twice, verbatim,
+  in the issue reaction bar and comment cards before it was extracted.
 - Issue creation UI: there is exactly one create modal — `GlobalCreateIssueModal`,
   mounted in `WorkspaceClient` and driven by `uiStore.openCreateIssueModal()`.
   Open it via the store; never mount a second `CreateIssueModal`.
