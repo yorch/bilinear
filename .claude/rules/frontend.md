@@ -46,6 +46,13 @@ boundary held at ≥3:1 for WCAG 1.4.11. Bound an input with `border-input`.
   `data-accent` on `<html>` (see `src/lib/accent.ts`).
 - Use `cn()` from `@/lib/utils` (clsx + tailwind-merge) for all class merging —
   never template-literal concatenation.
+- **Icon-sized controls take a mobile touch target from a constant, never a
+  hand-typed class string.** `TOUCH_TARGET` (from `@/lib/utils`) raises a control
+  to 44px below `md` with a width *floor*, so a trigger whose label is wider than
+  its icon still fits; `TOUCH_TARGET_SQUARE` pins an exact 44×44 for controls
+  wrapping a fixed-size icon. These are strings rather than a `Button` variant
+  because most such controls are raw `<button>`/`<Link>` elements and
+  `SelectPopover` renders its own trigger, exposing only `triggerClassName`.
 - Typography: `--font-sans` is Instrument Sans, `--font-mono` is Geist Mono, both
   vendored under `src/app/fonts` and loaded with `next/font/local` (never
   `next/font/google` — the build must not depend on a font CDN). Identifiers,
