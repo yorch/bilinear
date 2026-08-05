@@ -36,7 +36,7 @@ import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { buildIssueHref } from '@/lib/issue-nav';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
-import { getErrorMessage } from '@/lib/utils';
+import { cn, getErrorMessage, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
 
@@ -388,7 +388,10 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
             )}
             <ViewToggle mode={viewMode} onChange={setViewMode} />
             <Link
-              className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground max-md:h-11 max-md:w-11"
+              className={cn(
+                'flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground',
+                TOUCH_TARGET_SQUARE,
+              )}
               href={`/${workspace}/team/${teamKey}/settings`}
               title={t('issues.teamSettings')}
             >

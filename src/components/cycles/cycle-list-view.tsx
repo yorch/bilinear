@@ -4,11 +4,15 @@ import { Calendar, RefreshCw } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useState } from 'react';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBCycle } from '@/lib/db';
+import { gqlQuery } from '@/lib/graphql';
+import { CYCLES_PROGRESS_QUERY } from '@/lib/graphql-queries';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -17,6 +21,14 @@ interface CycleListViewProps {
   teamKey: string;
   workspaceKey: string;
 }
+
+/** `progress` is a 0..1 fraction; `scope` is the live issue count. */
+interface ServerProgress {
+  progress: number;
+  scope: number;
+}
+
+type ProgressByCycle = Map<string, ServerProgress>;
 
 function getCycleDisplayName(cycle: DBCycle, t: ReturnType<typeof useTranslations>): string {
   return cycle.name || t('cycles.defaultName', { number: cycle.number });
@@ -60,6 +72,32 @@ export const CycleListView = observer(function CycleListView({
   const hasNoCycles =
     activeCycles.length === 0 && upcomingCycles.length === 0 && completedCycles.length === 0;
 
+  // Progress comes from the server, not from `issueStore`. A guest's local pool
+  // holds only the issues they created or are assigned, and a canceled issue is
+  // resolved without ever getting a `completedAt` — so a client-side count is
+  // wrong twice over. `Cycle.progress`/`scope` sit behind the `cycleProgress`
+  // DataLoader, so the whole list costs one batched call. (`cycle-detail-view`
+  // moved to this when cycle progress went server-side; the list was missed.)
+  const {
+    data: progressByCycle,
+    error: progressError,
+    refetch: refetchProgress,
+  } = useRetryableFetch<ProgressByCycle>(
+    async () => {
+      const cycles = await gqlQuery<Array<ServerProgress & { id: string }> | null>(
+        CYCLES_PROGRESS_QUERY,
+        { teamId },
+        'cycles',
+      );
+      return new Map((cycles ?? []).map(c => [c.id, { progress: c.progress, scope: c.scope }]));
+    },
+    // Refetch when the cycle set changes so a new cycle picks up a bar. Issue
+    // churn doesn't invalidate it — the server value is a snapshot, matching
+    // how the projects list treats the same data.
+    [teamId, cycleStore.pool.size],
+    new Map(),
+  );
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex h-12 items-center justify-between border-b border-border px-4">
@@ -75,9 +113,21 @@ export const CycleListView = observer(function CycleListView({
           />
         ) : (
           <div className="flex flex-col gap-6">
+            {/* One retry for the whole page — the per-row alternative would be
+                N copies of the same failure. Rows render no bar until this
+                lands, rather than a placeholder 0%. */}
+            {progressError && (
+              <InlineRetry
+                className="py-0"
+                message={t('common.somethingWentWrong')}
+                onRetry={() => refetchProgress()}
+              />
+            )}
+
             {activeCycles.length > 0 && (
               <CycleGroup
                 cycles={activeCycles}
+                progressByCycle={progressByCycle}
                 status="active"
                 teamKey={teamKey}
                 title={t('cycles.status.active')}
@@ -88,6 +138,7 @@ export const CycleListView = observer(function CycleListView({
             {upcomingCycles.length > 0 && (
               <CycleGroup
                 cycles={upcomingCycles}
+                progressByCycle={progressByCycle}
                 status="upcoming"
                 teamKey={teamKey}
                 title={t('cycles.status.upcoming')}
@@ -99,6 +150,7 @@ export const CycleListView = observer(function CycleListView({
               <CycleGroup
                 cycles={completedCycles}
                 defaultCollapsed
+                progressByCycle={progressByCycle}
                 status="completed"
                 teamKey={teamKey}
                 title={t('cycles.status.completed')}
@@ -119,6 +171,7 @@ const CycleGroup = observer(function CycleGroup({
   workspaceKey,
   teamKey,
   defaultCollapsed = false,
+  progressByCycle,
 }: {
   title: string;
   cycles: DBCycle[];
@@ -126,8 +179,8 @@ const CycleGroup = observer(function CycleGroup({
   workspaceKey: string;
   teamKey: string;
   defaultCollapsed?: boolean;
+  progressByCycle: ProgressByCycle;
 }) {
-  const { issueStore } = useStore();
   const t = useTranslations();
   const { formatDate } = useFormatters();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
@@ -158,12 +211,9 @@ const CycleGroup = observer(function CycleGroup({
         <div className="mt-1 flex flex-col gap-1">
           {cycles.map(cycle => {
             const badge = getCycleStatusBadge(status, t);
-            const cycleIssues = issueStore.findByCycleId(cycle.id);
-            const completedIssues = cycleIssues.filter(i => i.completedAt);
-            const progress =
-              cycleIssues.length > 0
-                ? Math.round((completedIssues.length / cycleIssues.length) * 100)
-                : 0;
+            const stats = progressByCycle.get(cycle.id);
+            const progress = stats ? Math.round(stats.progress * 100) : 0;
+            const completedCount = stats ? Math.round(stats.progress * stats.scope) : 0;
 
             return (
               <Link
@@ -188,11 +238,11 @@ const CycleGroup = observer(function CycleGroup({
                   </div>
                 </div>
 
-                {cycleIssues.length > 0 && (
+                {stats !== undefined && stats.scope > 0 && (
                   <div className="flex items-center gap-2">
                     <ProgressBar className="h-1.5 w-16" value={progress} />
                     <span className="text-xs tabular-nums text-muted-foreground">
-                      {completedIssues.length}/{cycleIssues.length}
+                      {completedCount}/{stats.scope}
                     </span>
                   </div>
                 )}

@@ -5,6 +5,23 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * Below `md`, grow a control to the 44px minimum touch target (WCAG 2.5.8).
+ * `min-w` rather than `w`, so a trigger whose label is wider than its icon —
+ * the reaction bar's "🙂 React", the editor toolbar's `B`/`I`/`U` glyphs —
+ * still fits. This is the default; reach for `TOUCH_TARGET_SQUARE` only when
+ * the content is a fixed-size icon and a square hit area is the intent.
+ *
+ * A string, not a `Button` variant: most of these are raw `<button>`/`<Link>`
+ * elements, and `SelectPopover` renders its own trigger and accepts only a
+ * `triggerClassName`.
+ */
+export const TOUCH_TARGET =
+  'max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center';
+
+/** Fixed 44×44 variant, for controls wrapping a fixed-size icon. */
+export const TOUCH_TARGET_SQUARE = 'max-md:h-11 max-md:w-11';
+
 /** Extract the first error message from a GraphQL response, with a fallback. */
 export function gqlError(result: { errors?: unknown[] }, fallback: string): string {
   return (result.errors?.[0] as { message?: string })?.message ?? fallback;

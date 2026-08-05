@@ -10,7 +10,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import type { DBProjectMilestone } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { cn, getErrorMessage } from '@/lib/utils';
+import { cn, getErrorMessage, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 const MILESTONE_FIELDS =
@@ -168,7 +168,10 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
       )}
       <div className="flex shrink-0 items-center gap-0.5">
         <button
-          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+          className={cn(
+            'rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
+            TOUCH_TARGET,
+          )}
           onClick={() => onEdit(milestone.id)}
           title={t('projects.editMilestone')}
           type="button"
@@ -176,7 +179,10 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
           <Pencil className="h-3.5 w-3.5" />
         </button>
         <button
-          className="rounded p-1 text-muted-foreground hover:bg-danger-subtle hover:text-danger-subtle-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+          className={cn(
+            'rounded p-1 text-muted-foreground hover:bg-danger-subtle hover:text-danger-subtle-foreground',
+            TOUCH_TARGET,
+          )}
           disabled={deleting}
           onClick={() => setConfirmingDelete(true)}
           title={t('projects.deleteMilestone')}

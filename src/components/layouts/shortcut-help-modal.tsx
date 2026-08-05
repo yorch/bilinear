@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useTranslations } from '@/hooks/use-translations';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 
 interface ShortcutEntry {
   descriptionKey: string;
@@ -139,7 +140,10 @@ export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
           </h2>
           <button
             aria-label={t('layout.shortcutHelp.closeAriaLabel')}
-            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+            className={cn(
+              'rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
+              TOUCH_TARGET,
+            )}
             onClick={onClose}
             type="button"
           >

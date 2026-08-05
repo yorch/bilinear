@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { cn, getErrorMessage, gqlError } from '@/lib/utils';
+import { cn, getErrorMessage, gqlError, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 // ---------------------------------------------------------------------------
@@ -287,7 +287,10 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                     <div className="flex shrink-0 items-center gap-1">
                       <button
                         aria-label={t('issueDetail.templates.editTemplate')}
-                        className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+                        className={cn(
+                          'rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground-secondary',
+                          TOUCH_TARGET,
+                        )}
                         onClick={() => setEditingId(tmpl.id)}
                         type="button"
                       >
@@ -296,7 +299,8 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                       <button
                         aria-label={t('issueDetail.templates.deleteTemplate')}
                         className={cn(
-                          'rounded p-1 text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger-subtle-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center',
+                          'rounded p-1 text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger-subtle-foreground',
+                          TOUCH_TARGET,
                           isDeleting && 'cursor-not-allowed opacity-50',
                         )}
                         disabled={isDeleting}

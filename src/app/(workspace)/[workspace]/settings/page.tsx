@@ -17,7 +17,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import { type OrganizationPlanLimits, PLAN_LIMIT_FIELDS } from '@/lib/plan-limits';
 import { toast } from '@/lib/toast';
-import { cn, getErrorMessage } from '@/lib/utils';
+import { cn, getErrorMessage, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 // ---------------------------------------------------------------------------
@@ -558,7 +558,10 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                         {calendarFeedUrl}
                       </code>
                       <button
-                        className="shrink-0 text-muted-foreground hover:text-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+                        className={cn(
+                          'shrink-0 text-muted-foreground hover:text-foreground',
+                          TOUCH_TARGET,
+                        )}
                         onClick={() => {
                           void navigator.clipboard.writeText(calendarFeedUrl);
                           toast.success(t('settings.workspace.copiedToClipboard'));
@@ -615,7 +618,10 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                     {newPlaintext}
                   </code>
                   <button
-                    className="shrink-0 rounded p-1 text-warning-subtle-foreground hover:bg-warning/35 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+                    className={cn(
+                      'shrink-0 rounded p-1 text-warning-subtle-foreground hover:bg-warning/35',
+                      TOUCH_TARGET,
+                    )}
                     onClick={() => {
                       void navigator.clipboard.writeText(newPlaintext);
                       toast.success(t('settings.workspace.copiedToClipboard'));
@@ -767,7 +773,10 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                       </p>
                     </div>
                     <button
-                      className="shrink-0 text-muted-foreground hover:text-danger-subtle-foreground disabled:opacity-40 max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+                      className={cn(
+                        'shrink-0 text-muted-foreground hover:text-danger-subtle-foreground disabled:opacity-40',
+                        TOUCH_TARGET,
+                      )}
                       disabled={revokingTokenId === token.id}
                       onClick={() => setConfirmingRevokeToken(token)}
                       title={t('settings.workspace.revokeToken')}

@@ -14,7 +14,7 @@ import type {
   FilterOperator,
   FilterSet,
 } from '@/lib/filter-engine';
-import { cn } from '@/lib/utils';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 import type { IssueLabel, IssueUser } from '@/types/issues';
 
 // ─── Field config ───────────────────────────────────────────────────────────
@@ -110,7 +110,7 @@ function FilterPill({ condition, states, users, labels, customFields, onRemove }
       {valueLabel && <span>{valueLabel}</span>}
       <button
         aria-label={t('issues.removeFilter')}
-        className="ml-0.5 text-muted-foreground hover:text-foreground-secondary max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+        className={cn('ml-0.5 text-muted-foreground hover:text-foreground-secondary', TOUCH_TARGET)}
         onClick={onRemove}
         title={t('issues.removeFilter')}
         type="button"
@@ -432,7 +432,10 @@ export function FilterBuilder({
         />
       ) : (
         <button
-          className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground-secondary max-md:h-11 max-md:min-w-11 max-md:justify-center"
+          className={cn(
+            'flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground-secondary',
+            TOUCH_TARGET,
+          )}
           onClick={() => setShowAddForm(true)}
           type="button"
         >

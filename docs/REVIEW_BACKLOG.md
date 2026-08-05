@@ -673,13 +673,24 @@ Paired with §3.3 — same code change, same payoff (perf for filter
 selectors). Shipped the `byTeam` index (the hottest); cycle/project/state
 still scan (lower traffic). See §3.3.
 
-### 4.2 `StatusSelect` and combobox a11y audit — ⚠️ partially shipped (2026-08-02)
+### 4.2 `StatusSelect` and combobox a11y audit — ⚠️ partially shipped (2026-08-05)
 
 > Shipped the listbox/option pattern on the three single-select pickers
 > (status/priority/assignee) via a `SelectPopover` opt-in `listbox` prop +
-> `role="option"`/`aria-selected`. The full combobox restructure across the
-> searchable/multi-section pickers (label/project/cycle) and the axe-core sweep
-> in the checklist below are still open.
+> `role="option"`/`aria-selected`, then extended it to `estimate-picker`
+> (2026-08-05), which the first pass missed. Its panel is only a listbox in the
+> branch that renders a scale — with no estimation scale the panel is a
+> free-form number field, so `listbox` is bound to `scale != null` rather than
+> set unconditionally. It also picked up the `e.stopPropagation()` the other
+> four pickers already had; without it a pick bubbles to the row behind.
+>
+> `label-select` remains deliberately excluded: it is multi-select, and the
+> listbox pattern needs `aria-multiselectable` plumbed through `SelectPopover`
+> before it would be correct rather than merely present.
+>
+> Still open: the full combobox restructure across the searchable pickers
+> (project/cycle), `aria-haspopup`/`aria-expanded` on the trigger buttons, and
+> the axe-core sweep in the checklist below.
 
 **File entry points:**
 - `src/components/properties/status-select.tsx`
@@ -790,18 +801,28 @@ standalone output. The build still succeeds and the route works.
 **Confirmed pre-existing:** reproduced on clean `origin/main` (`0b36764`), so
 it is not introduced by any branch currently in flight.
 
-**Why it's deferred.** The obvious one-line fix does *not* work — adding
-`/* turbopackIgnore: true */` to the `resolve()` calls in `upload-dir.ts`
-leaves the warning unchanged (verified). The trigger is the module-scope
-`mkdirSync`, not the path resolution, so a real fix means moving directory
-creation out of module scope — which is a deliberate choice today ("Ensure the
-directory exists once at module load rather than on every request") with a
-first-upload correctness implication.
+**Why it's deferred.** Three candidate fixes have now been tried and *none*
+moves the warning, so the trigger is still unidentified:
 
-**First-touch.** Move `mkdirSync` into a `let ensured = false` lazy guard
-invoked at the top of the POST handler, or into the container entrypoint
-(`docker-entrypoint.sh` already runs migrations, so directory creation fits
-there). Then re-run `yarn build` and confirm the warning count drops to zero.
+1. `/* turbopackIgnore: true */` on the `resolve()` calls in `upload-dir.ts` —
+   no change (verified 2026-08-04).
+2. **Moving `mkdirSync` out of module scope** into a `let ensured = false` lazy
+   guard called from the POST handler — no change (verified 2026-08-05). This
+   disproves the previous hypothesis recorded here, which named the module-scope
+   `mkdirSync` as the cause; that guess was wrong and the change was reverted
+   rather than kept, since it trades a boot-time guarantee for nothing.
+3. `join(process.cwd(), 'uploads')` instead of `resolve(...)` — the shape the
+   warning text itself suggests ("statically scoped to some subfolder") — also
+   no change (verified 2026-08-05).
+
+The import trace still reports only `next.config.ts → src/app/api/upload/route.ts`
+with the route otherwise untouched, so the next step is to bisect the route's
+*other* module-scope work (the `env`/`prisma`/`FileService` import chain) rather
+than the upload directory, which now has three negative results against it.
+
+**First-touch.** Bisect by stubbing the route down to a bare handler and adding
+imports back one at a time until the warning reappears — that identifies the
+real edge in the trace. Only then pick a fix.
 
 **Effort:** Small. **Risk:** Low-Medium — the upload directory must exist
 before the first write on a cold container.

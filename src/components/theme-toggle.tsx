@@ -4,7 +4,7 @@ import { Monitor, Moon, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTheme } from '@/hooks/use-theme';
 import { useTranslations } from '@/hooks/use-translations';
-import { cn } from '@/lib/utils';
+import { cn, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 
 const OPTIONS = [
   { icon: Sun, key: 'theme.light', value: 'light' as const },
@@ -63,7 +63,8 @@ export function ThemeToggle({ className, compact = false }: ThemeToggleProps) {
         <button
           aria-pressed={mounted ? theme === value : undefined}
           className={cn(
-            'flex h-6 w-6 items-center justify-center rounded transition-colors max-md:h-11 max-md:w-11',
+            'flex h-6 w-6 items-center justify-center rounded transition-colors',
+            TOUCH_TARGET_SQUARE,
             mounted && theme === value
               ? 'bg-surface-raised text-foreground shadow-e1'
               : 'text-muted-foreground hover:text-foreground',

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 
 interface DeleteUpdateButtonProps {
   mutation: string;
@@ -59,7 +60,10 @@ export function DeleteUpdateButton({ updateId, mutation, onDeleted }: DeleteUpda
 
   return (
     <button
-      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-danger-subtle-foreground max-md:flex max-md:h-11 max-md:min-w-11 max-md:items-center max-md:justify-center"
+      className={cn(
+        'rounded p-1 text-muted-foreground hover:bg-muted hover:text-danger-subtle-foreground',
+        TOUCH_TARGET,
+      )}
       onClick={() => setConfirming(true)}
       title={t('common.delete')}
       type="button"

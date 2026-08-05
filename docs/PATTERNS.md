@@ -2806,6 +2806,19 @@ accent or theme re-renders every specimen. Open it when changing anything in
 `ui/` or `globals.css` — this repo has no visual-regression suite, so it is the
 manual stand-in.
 
+**Mobile touch targets come from `TOUCH_TARGET` / `TOUCH_TARGET_SQUARE`**
+(`@/lib/utils`), never a hand-typed `max-md:h-11 …` string. The class was
+retyped at 51 sites across 33 files before the extraction, which made WCAG
+2.5.8 opt-in by copy-paste — a new icon button that forgot it shipped with a
+sub-44px hit area and nothing caught it. The two forms are not
+interchangeable: `TOUCH_TARGET` sets a width *floor* (`min-w-11`) so a trigger
+whose label is wider than its icon — the reaction bar's "🙂 React", the editor
+toolbar's `B`/`I`/`U` — still fits, while `TOUCH_TARGET_SQUARE` pins an exact
+44×44 for a fixed-size icon. They are exported strings rather than a `Button`
+size because none of those 51 sites render `<Button>` (they are raw
+`<button>`/`<Link>`), and `SelectPopover` builds its own trigger and accepts
+only a `triggerClassName` — a component-shaped API could not reach it at all.
+
 ### 79.6 The contrast contract (`src/lib/contrast.test.ts`)
 
 Computed tokens are what makes the system coherent and also what makes contrast
