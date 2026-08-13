@@ -22,10 +22,12 @@ current work queue are in [`docs/REVIEW_BACKLOG.md`](docs/REVIEW_BACKLOG.md).
 | WebSocket sync server           | `yarn ws:server`                                           |
 | Yjs collab-editing server       | `yarn yjs:server`                                          |
 | Build                           | `yarn build`                                               |
+| Start production server         | `yarn start`                                               |
 | Build + bundle analyzer         | `yarn analyze`                                             |
 | Lint                            | `yarn lint`                                                |
 | Lint + fix                      | `yarn lint:fix`                                            |
 | Design-token check              | `yarn lint:tokens`                                         |
+| Re-baseline design tokens       | `yarn lint:tokens:update`                                  |
 | Format                          | `yarn format`                                              |
 | Typecheck                       | `yarn typecheck`                                           |
 | All unit tests                  | `yarn test`                                                |
@@ -43,14 +45,19 @@ current work queue are in [`docs/REVIEW_BACKLOG.md`](docs/REVIEW_BACKLOG.md).
 | Database browser                | `yarn db:studio`                                           |
 | Verify xid8 delta fence         | `yarn db:verify:fence` (needs a live Postgres)             |
 | Benchmark hot-path indexes      | `yarn db:verify:indexes` (needs a live Postgres)           |
+| Verify custom migration applied | `yarn db:verify:schema` (needs a live Postgres)            |
 | Grant platform admin            | `yarn admin:grant`                                         |
-| Start infra (Postgres + Redis)  | `yarn docker:infra:up`                                     |
+| Start infra (Postgres/Redis/Mailpit) | `yarn docker:infra:up`                                |
+| Start infra (foreground)        | `yarn docker:infra`                                        |
+| Stop infra                      | `yarn docker:infra:down`                                   |
 | Start infra via Just            | `just infra-up`                                            |
 | Start local Docker stack        | `just dev-up`                                              |
 | Start production stack          | `just prod-up`                                             |
 | Deploy with Traefik + Watchtower | `just prod-full-up`                                       |
 
 **The CI gate suite is `yarn lint`, `yarn lint:tokens`, `yarn typecheck`, `yarn test`, `yarn build`** (`.github/workflows/ci.yml`) — run all five before pushing.
+
+Local mail goes to Mailpit — SMTP on 1025, inbox at http://localhost:8025. Magic-link codes are also printed to the dev server console.
 
 **Dev needs three processes:** `yarn dev` (port 3000), `yarn ws:server` (port 3001, sync), and `yarn yjs:server` (port 1234, collaborative editing). The app boots without the Yjs server, but every TipTap editor silently stops syncing — set `NEXT_PUBLIC_YJS_SERVER_URL` if you move it off the default port.
 
@@ -139,7 +146,7 @@ Copy `.env.example`. Required: `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `JWT_R
 
 | Doc                            | Use it for                                                              |
 | ------------------------------ | ----------------------------------------------------------------------- |
-| `docs/PATTERNS.md`             | **Primary conventions reference** — 79 sections, start from its TOC      |
+| `docs/PATTERNS.md`             | **Primary conventions reference** — 80 sections, start from its TOC      |
 | `docs/ARCHITECTURE.md`         | System architecture                                                     |
 | `docs/DATABASE_SCHEMA.md`      | Schema, migration policy, the real-Postgres verification recipe         |
 | `docs/API_DESIGN.md`           | GraphQL contracts                                                       |
@@ -147,5 +154,5 @@ Copy `.env.example`. Required: `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `JWT_R
 | `docs/CHANGELOG.md`            | What shipped when, and why it was done that way                         |
 | `docs/IMPLEMENTATION_PLAN.md`  | Canonical per-sprint status                                             |
 
-`PATTERNS.md` is ~2,900 lines — read the section you need via its table of
+`PATTERNS.md` is 3,000+ lines — read the section you need via its table of
 contents, not the whole file.

@@ -9,7 +9,7 @@ hand-maintained stamp here only ever drifts.
 
 > This is the primary onboarding document for new contributors. All patterns here are the mandated conventions for the codebase. If you deviate from a pattern, document why.
 
-> **This file is ~2,900 lines.** Read the section you need from the table of
+> **This file is 3,000+ lines.** Read the section you need from the table of
 > contents below — don't read it end to end. Sections are append-only and
 > numbered in the order they were established, so a higher number means newer,
 > not more important.

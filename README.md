@@ -42,7 +42,9 @@ yarn install
 yarn docker:infra:up
 ```
 
-This starts PostgreSQL on port `5432` and Redis on port `6379` using `docker-compose.infra.yml`.
+This starts PostgreSQL on port `5432`, Redis on port `6379`, and Mailpit using
+`docker-compose.infra.yml`. Mailpit catches all outbound mail in development —
+SMTP on `1025`, inbox at [http://localhost:8025](http://localhost:8025).
 
 ### 3. Configure environment
 
@@ -111,6 +113,7 @@ In development, magic link codes are printed to the server console instead of be
 | `yarn lint`                  | Run Biome checks                                       |
 | `yarn lint:fix`              | Run Biome checks and apply fixes                       |
 | `yarn lint:tokens`           | Design-token check — bans raw colours (CI gate)        |
+| `yarn lint:tokens:update`    | Re-baseline the design-token allowance after a sweep   |
 | `yarn typecheck`             | TypeScript check (CI gate)                             |
 | `yarn test`                  | Run all tests                                          |
 | `yarn test:watch`            | Run tests in watch mode                                |
@@ -128,6 +131,7 @@ In development, magic link codes are printed to the server console instead of be
 | `yarn db:seed`               | Seed the database with demo data and E2E test fixtures |
 | `yarn db:verify:fence`       | Prove the xid8 delta fence never skips (live Postgres) |
 | `yarn db:verify:indexes`     | EXPLAIN-benchmark the hot paths (live Postgres)        |
+| `yarn db:verify:schema`      | Assert the custom migration applied (live Postgres)    |
 | `yarn admin:grant`           | Grant a user the platform-admin flag                   |
 | `yarn test:e2e`              | Run Playwright E2E tests (requires running dev server) |
 | `yarn test:e2e:ui`           | Open Playwright UI for interactive E2E debugging       |

@@ -3,7 +3,7 @@
 ## Bilinear — Linear Rebuild
 
 Start with [`PATTERNS.md`](PATTERNS.md) — it is the primary conventions
-reference. It is ~2,900 lines, so read the section you need from its table of
+reference. It is 3,000+ lines, so read the section you need from its table of
 contents rather than the whole file.
 
 ## Living documents
@@ -46,7 +46,20 @@ Agent-facing guidance is split by how often it is needed:
 - [`../.claude/rules/`](../.claude/rules/) — path-scoped rules that load only
   when the matching files are touched: frontend/design-system, server/database,
   and testing.
-- `PATTERNS.md` — the long-form reference behind both.
+- [`../.claude/skills/`](../.claude/skills/) — procedures that load only when
+  invoked or judged relevant. Currently `verify-schema`, the real-Postgres check
+  for a migration change.
+- [`../.claude/hooks/`](../.claude/hooks/) — shell commands run at fixed
+  lifecycle events, independent of what the agent decides. `session-start.sh`
+  installs dependencies so the CI gates are runnable in a fresh remote container.
+- `PATTERNS.md` — the long-form reference behind all of it.
 
 Keep `AGENTS.md` short. It is loaded in full every session, and length there is
 paid on every turn.
+
+The reason conventions are *not* enforced by hooks here is that this repo already
+enforces them better, with tests that fail: `lint:tokens` at a literal-zero
+baseline plus `contrast.test.ts`, `accent.test.ts`, `state-type-spelling.test.ts`,
+`graphql-documents.test.ts`, `db-collections.test.ts` and `schema.test.ts`. A
+guard test protects humans and CI too, not just the agent. Prefer adding one of
+those over adding a hook.
