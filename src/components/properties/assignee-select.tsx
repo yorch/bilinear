@@ -1,9 +1,9 @@
 'use client';
 
 import { SelectPopover } from '@/components/ui/select-popover';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { useTranslations } from '@/hooks/use-translations';
 import { cn, TOUCH_TARGET } from '@/lib/utils';
-import { UserAvatar } from '../ui/user-avatar';
 
 interface User {
   avatarBackgroundColor: string;

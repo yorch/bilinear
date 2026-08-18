@@ -2,24 +2,24 @@
 
 import { Users } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { TipTapEditor } from '@/components/editor/tiptap-editor.lazy';
+import { AssigneeSelect } from '@/components/properties/assignee-select';
+import { DueDatePicker } from '@/components/properties/due-date-picker';
+import { LabelSelect } from '@/components/properties/label-select';
+import { PrioritySelect } from '@/components/properties/priority-select';
+import { ProjectSelect } from '@/components/properties/project-select';
+import { StatusSelect } from '@/components/properties/status-select';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { Button } from '@/components/ui/button';
+import { ModalDialog } from '@/components/ui/modal-dialog';
+import { SelectPopover } from '@/components/ui/select-popover';
+import { Switch } from '@/components/ui/switch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql, gqlQuery } from '@/lib/graphql';
 import { ISSUE_TEMPLATES_QUERY } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
 import { cn, getErrorMessage } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
-import { TipTapEditor } from '../editor/tiptap-editor.lazy';
-import { AssigneeSelect } from '../properties/assignee-select';
-import { DueDatePicker } from '../properties/due-date-picker';
-import { LabelSelect } from '../properties/label-select';
-import { PrioritySelect } from '../properties/priority-select';
-import { ProjectSelect } from '../properties/project-select';
-import { StatusSelect } from '../properties/status-select';
-import { Button } from '../ui/button';
-import { ModalDialog } from '../ui/modal-dialog';
-import { SelectPopover } from '../ui/select-popover';
-import { Switch } from '../ui/switch';
 import { TemplateSelector } from './template-selector';
 
 export interface CreateIssueTeamOption {

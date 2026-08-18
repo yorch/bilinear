@@ -1,18 +1,18 @@
 'use client';
 
+import { AssigneeSelect } from '@/components/properties/assignee-select';
+import { CycleSelect } from '@/components/properties/cycle-select';
+import { DueDatePicker } from '@/components/properties/due-date-picker';
+import { EstimatePicker } from '@/components/properties/estimate-picker';
+import { LabelSelect } from '@/components/properties/label-select';
+import { PrioritySelect } from '@/components/properties/priority-select';
+import { StatusSelect } from '@/components/properties/status-select';
 import { usePending } from '@/hooks/use-pending-ids';
 import { useTranslations } from '@/hooks/use-translations';
 import type { ColumnKey } from '@/hooks/use-visible-columns';
 import type { DBCustomFieldDefinition } from '@/lib/db';
 import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
-import { AssigneeSelect } from '../properties/assignee-select';
-import { CycleSelect } from '../properties/cycle-select';
-import { DueDatePicker } from '../properties/due-date-picker';
-import { EstimatePicker } from '../properties/estimate-picker';
-import { LabelSelect } from '../properties/label-select';
-import { PrioritySelect } from '../properties/priority-select';
-import { StatusSelect } from '../properties/status-select';
 
 export interface IssueRowData {
   assigneeId?: string | null;

@@ -2,9 +2,12 @@
 
 import { CheckCircle, CornerDownRight, MoreHorizontal, Smile } from 'lucide-react';
 import { useState } from 'react';
+import type { MentionItem } from '@/components/editor/mention-list';
+import { TipTapEditor } from '@/components/editor/tiptap-editor.lazy';
 import { ReactionEmojiOptions } from '@/components/issues/reaction-emoji-options';
 import { Badge } from '@/components/ui/badge';
 import { SelectPopover } from '@/components/ui/select-popover';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useReactionCounts } from '@/hooks/use-reaction-counts';
 import { useTranslations } from '@/hooks/use-translations';
@@ -12,9 +15,6 @@ import { gqlMutate } from '@/lib/graphql';
 import { COMMENT_UPDATE_MUTATION, CONVERT_TO_SUB_ISSUE_MUTATION } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
 import { cn, getErrorMessage, TOUCH_TARGET } from '@/lib/utils';
-import type { MentionItem } from '../editor/mention-list';
-import { TipTapEditor } from '../editor/tiptap-editor.lazy';
-import { UserAvatar } from '../ui/user-avatar';
 import { CommentComposer } from './comment-composer';
 
 export interface CommentAuthor {

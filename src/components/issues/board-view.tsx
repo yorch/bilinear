@@ -24,6 +24,7 @@ import { useState } from 'react';
 import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
 import { ColorDot } from '@/components/ui/color-dot';
 import { EmptyState } from '@/components/ui/empty-state';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { useFormatters } from '@/hooks/use-formatters';
 import { usePending } from '@/hooks/use-pending-ids';
 import { useTranslations } from '@/hooks/use-translations';
@@ -31,7 +32,6 @@ import type { DBWorkflowState } from '@/lib/db';
 import { getDueDateColor } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser } from '@/types/issues';
-import { UserAvatar } from '../ui/user-avatar';
 import type { IssueRowData } from './issue-row';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
