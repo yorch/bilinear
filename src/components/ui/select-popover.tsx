@@ -1,11 +1,10 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { useCallback, useEffect, useId, useRef } from 'react';
+import { useCallback } from 'react';
 import { usePopover } from '@/hooks/use-popover';
 import { usePopoverFlip } from '@/hooks/use-popover-flip';
-import { useRestoreFocus } from '@/hooks/use-restore-focus';
-import { isRovingFocusKey, nextRovingIndex } from '@/lib/roving-focus';
+import { usePopoverPanel } from '@/hooks/use-popover-panel';
 import { cn } from '@/lib/utils';
 
 interface SelectPopoverProps {
@@ -43,9 +42,6 @@ interface SelectPopoverProps {
 export const POPOVER_ITEM_CLASS =
   'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent';
 
-const FOCUSABLE_SELECTOR =
-  'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
 export function SelectPopover({
   align = 'left',
   children,
@@ -61,44 +57,20 @@ export function SelectPopover({
   triggerTitle,
 }: SelectPopoverProps) {
   const { open, setOpen, ref } = usePopover({ closeOnEscape: true, forceOpen, onClose });
-  const panelId = useId();
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-  useRestoreFocus(open, triggerRef);
+  // Panels here hold arbitrary consumer markup, so roving covers every enabled
+  // button rather than just `[role="option"]`.
+  const {
+    onKeyDown: handlePanelKeyDown,
+    panelId,
+    panelRef,
+    triggerRef,
+  } = usePopoverPanel({ itemSelector: 'button:not([disabled])' }, open);
   const openUpward = usePopoverFlip(open, triggerRef);
 
   const close = useCallback(() => {
     setOpen(false);
     onClose?.();
   }, [setOpen, onClose]);
-
-  // Move focus into the panel on open (useRestoreFocus returns it on close).
-  useEffect(() => {
-    if (open) {
-      panelRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)?.focus();
-    }
-  }, [open]);
-
-  // Roving focus across the option buttons consumers render into the panel.
-  const handlePanelKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!isRovingFocusKey(e.key)) {
-      return;
-    }
-    const target = e.target as HTMLElement;
-    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-      return;
-    }
-    const items = Array.from(
-      panelRef.current?.querySelectorAll<HTMLElement>('button:not([disabled])') ?? [],
-    );
-    if (items.length === 0) {
-      return;
-    }
-    e.preventDefault();
-    e.stopPropagation();
-    const idx = items.indexOf(document.activeElement as HTMLElement);
-    items[nextRovingIndex(e.key, idx, items.length)]?.focus();
-  }, []);
 
   return (
     <div className={cn('relative', className)} ref={ref}>

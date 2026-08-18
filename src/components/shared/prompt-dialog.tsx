@@ -8,6 +8,13 @@ import { useTranslations } from '@/hooks/use-translations';
 interface PromptDialogProps {
   /** Confirm button label; defaults to common.save. */
   confirmLabel?: string;
+  /**
+   * Value the field opens with, for editing something that already exists —
+   * the link dialog pre-fills the current href so changing one character does
+   * not mean retyping the URL. Re-read on every open, so a cancelled edit does
+   * not leak into the next one.
+   */
+  initialValue?: string;
   /** Visible label for the text field — also its accessible name. */
   label: string;
   onCancel: () => void;
@@ -31,6 +38,7 @@ interface PromptDialogProps {
  */
 export function PromptDialog({
   confirmLabel,
+  initialValue = '',
   label,
   onCancel,
   onSubmit,
@@ -41,19 +49,21 @@ export function PromptDialog({
   const t = useTranslations();
   const fieldId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState(initialValue);
 
-  // Each open starts from a clean field rather than the previous answer, and
-  // focus lands on that field. `autoFocus` cannot do this: React applies it
-  // during commit, which runs *before* ModalDialog's effect calls `showModal()`,
-  // and focusing a still-`display:none` dialog child is a silent no-op. Doing it
-  // in a passive effect puts it after the dialog is genuinely open.
+  // Each open starts from `initialValue` rather than whatever was typed last
+  // time, and focus lands on the field with the text selected so typing
+  // replaces it. `autoFocus` cannot do this: React applies it during commit,
+  // which runs *before* ModalDialog's effect calls `showModal()`, and focusing
+  // a still-`display:none` dialog child is a silent no-op. Doing it in a
+  // passive effect puts it after the dialog is genuinely open.
   useEffect(() => {
     if (open) {
-      setValue('');
+      setValue(initialValue);
       inputRef.current?.focus();
+      inputRef.current?.select();
     }
-  }, [open]);
+  }, [open, initialValue]);
 
   return (
     <ModalDialog aria-label={title} onClose={onCancel} open={open}>

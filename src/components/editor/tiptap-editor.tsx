@@ -28,8 +28,9 @@ import StarterKit from '@tiptap/starter-kit';
 // usage in an issue tracker and trims the editor bundle significantly.
 import { common, createLowlight } from 'lowlight';
 import { ImageIcon, Link2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Y from 'yjs';
+import { PromptDialog } from '@/components/shared/prompt-dialog';
 import { useTranslations } from '@/hooks/use-translations';
 import { DEFAULT_YJS_PORT } from '@/lib/collab';
 import { cn, TOUCH_TARGET } from '@/lib/utils';
@@ -754,21 +755,50 @@ export function TipTapEditor({
     }
   }, [editor, content, collabEnabled]);
 
-  const setLink = useCallback(() => {
+  /**
+   * The selection the link applies to, captured when the dialog opens.
+   *
+   * This is the whole reason the link prompt outlived the other `window.prompt`
+   * replacements. A native prompt blocks synchronously and never touches the
+   * ProseMirror selection, so `extendMarkRange('link')` was guaranteed to act on
+   * what the user had highlighted. A dialog takes focus into the browser's top
+   * layer, and a selection restored only by `.focus()` is a selection you are
+   * *hoping* survived — get it wrong and the link silently lands on the wrong
+   * text. Capturing `from`/`to` up front and replaying them with
+   * `setTextSelection` makes that independent of whatever focus did.
+   */
+  const [linkTarget, setLinkTarget] = useState<{ from: number; href: string; to: number } | null>(
+    null,
+  );
+
+  const openLinkDialog = useCallback(() => {
     if (!editor) {
       return;
     }
-    const prev = editor.getAttributes('link').href ?? '';
-    const url = window.prompt(t('editor.linkPrompt'), prev);
-    if (url === null) {
-      return;
-    }
-    if (url === '') {
-      editor.chain().focus().extendMarkRange('link').unsetLink().run();
-    } else {
-      editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-    }
-  }, [editor, t]);
+    const { from, to } = editor.state.selection;
+    setLinkTarget({ from, href: editor.getAttributes('link').href ?? '', to });
+  }, [editor]);
+
+  const applyLink = useCallback(
+    (url: string) => {
+      const target = linkTarget;
+      setLinkTarget(null);
+      if (!editor || !target) {
+        return;
+      }
+      const chain = editor
+        .chain()
+        .focus()
+        .setTextSelection({ from: target.from, to: target.to })
+        .extendMarkRange('link');
+      // An empty field clears the link, matching what the prompt's empty string
+      // did; cancelling closes without touching the document, as returning null
+      // did.
+      const trimmed = url.trim();
+      (trimmed === '' ? chain.unsetLink() : chain.setLink({ href: trimmed })).run();
+    },
+    [editor, linkTarget],
+  );
 
   /**
    * Insert an image from a file input — converts to a base64 data URL.
@@ -834,7 +864,7 @@ export function TipTapEditor({
           </ToolbarButton>
           <ToolbarButton
             active={editor.isActive('link')}
-            onClick={setLink}
+            onClick={openLinkDialog}
             title={t('editor.toolbar.link')}
           >
             <Link2 className="h-3 w-3" />
@@ -941,6 +971,15 @@ export function TipTapEditor({
       )}
 
       <EditorContent editor={editor} />
+
+      <PromptDialog
+        initialValue={linkTarget?.href ?? ''}
+        label={t('editor.linkPrompt')}
+        onCancel={() => setLinkTarget(null)}
+        onSubmit={applyLink}
+        open={linkTarget !== null}
+        title={t('editor.toolbar.link')}
+      />
     </div>
   );
 }
