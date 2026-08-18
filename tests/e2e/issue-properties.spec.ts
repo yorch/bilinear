@@ -37,7 +37,11 @@ test.describe('Issue Properties via Keyboard', () => {
     // position=-1 so it sorts first in the popover, but moving the active
     // issue to Triage hides it from the main list view and breaks sibling
     // specs that look up issues like ENG-1 by title.
-    await popover.getByRole('button', { name: /^Todo$/ }).click();
+    // `getByRole('option')`, not `'button'`: these rows are <button role="option">
+    // and an explicit role replaces the implicit one, so a 'button' query cannot
+    // match them. They became options when the picker listbox pattern landed
+    // (REVIEW_BACKLOG §4.2) and these specs were not updated with them.
+    await popover.getByRole('option', { name: /^Todo$/ }).click();
     await expect(popover).not.toBeVisible();
   });
 
@@ -45,7 +49,7 @@ test.describe('Issue Properties via Keyboard', () => {
     await page.keyboard.press('p');
     const popover = page.locator('[data-testid="priority-select-popover"]');
     await expect(popover).toBeVisible();
-    await popover.getByRole('button', { name: /urgent/i }).click();
+    await popover.getByRole('option', { name: /urgent/i }).click();
     await expect(popover).not.toBeVisible();
   });
 
@@ -70,7 +74,7 @@ test.describe('Issue Properties via Keyboard', () => {
     // Match it page-wide so the assertion is valid even after dismiss
     // (when the row may also lose `data-selected`).
     const popover = page.locator('div.absolute.z-50.min-w-\\[200px\\]', {
-      has: page.getByRole('button', { name: /^No assignee$/ }),
+      has: page.getByRole('option', { name: /^No assignee$/ }),
     });
     await expect(popover).toBeVisible({ timeout: 5_000 });
     await dismissPopover(page);

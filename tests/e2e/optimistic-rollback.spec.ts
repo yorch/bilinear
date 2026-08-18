@@ -142,7 +142,11 @@ test.describe('Optimistic Update Rollback', () => {
     await expect(popover).toBeVisible();
 
     // Pick a different workflow state. The popover lists every state by name.
-    await popover.getByRole('button', { name: new RegExp(`^${targetStateName}$`, 'i') }).click();
+    // `getByRole('option')`, not `'button'`: these rows are <button role="option">
+    // and an explicit role replaces the implicit one, so a 'button' query cannot
+    // match them. They became options when the picker listbox pattern landed
+    // (REVIEW_BACKLOG §4.2) and these specs were not updated with them.
+    await popover.getByRole('option', { name: new RegExp(`^${targetStateName}$`, 'i') }).click();
     await expect(popover).not.toBeVisible();
 
     // Final state: after the GraphQL `errors[]` response trips the permanent-

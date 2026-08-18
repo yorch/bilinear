@@ -33,7 +33,11 @@ test.describe('Property Popovers', () => {
     // Pick "Todo" by name. The seeded Triage state sorts first (position=-1)
     // but moving an issue into Triage hides it from the main list, breaking
     // sibling specs that look up the seeded ENG-1 by title.
-    await popover.getByRole('button', { name: /^Todo$/ }).click();
+    // `getByRole('option')`, not `'button'`: these rows are <button role="option">
+    // and an explicit role replaces the implicit one, so a 'button' query cannot
+    // match them. They became options when the picker listbox pattern landed
+    // (REVIEW_BACKLOG §4.2) and these specs were not updated with them.
+    await popover.getByRole('option', { name: /^Todo$/ }).click();
     await expect(popover).not.toBeVisible();
   });
 
@@ -44,7 +48,7 @@ test.describe('Property Popovers', () => {
     // Each option button renders the priority icon glyph followed by the
     // label, so the accessible name is e.g. "!!! Urgent" — match the label
     // substring rather than anchoring on the whole name.
-    await popover.getByRole('button', { name: /urgent/i }).click();
+    await popover.getByRole('option', { name: /urgent/i }).click();
     await expect(popover).not.toBeVisible();
   });
 });
