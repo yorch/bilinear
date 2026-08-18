@@ -1,0 +1,86 @@
+'use client';
+
+import { useEffect, useId, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { ModalDialog } from '@/components/ui/modal-dialog';
+import { useTranslations } from '@/hooks/use-translations';
+
+interface PromptDialogProps {
+  /** Confirm button label; defaults to common.save. */
+  confirmLabel?: string;
+  /** Visible label for the text field — also its accessible name. */
+  label: string;
+  onCancel: () => void;
+  /** Receives the raw field value; the caller decides how to trim/interpret it. */
+  onSubmit: (value: string) => void;
+  open: boolean;
+  placeholder?: string;
+  title: string;
+}
+
+/**
+ * Shared single-field prompt for actions that need one short string before they
+ * run. The counterpart to `ConfirmDialog`, and preferred over `window.prompt`
+ * for the same reasons: a native prompt is unstyled, untranslatable, blocks the
+ * main thread, is suppressible by the browser, and gives the operator no context
+ * beyond one line of text.
+ *
+ * Submitting is allowed with an empty field — "no reason given" is a legitimate
+ * answer for the suspension flows this backs. Cancelling calls `onCancel` and
+ * nothing else, matching `window.prompt` returning null.
+ */
+export function PromptDialog({
+  confirmLabel,
+  label,
+  onCancel,
+  onSubmit,
+  open,
+  placeholder,
+  title,
+}: PromptDialogProps) {
+  const t = useTranslations();
+  const fieldId = useId();
+  const [value, setValue] = useState('');
+
+  // Each open starts from a clean field rather than the previous answer.
+  useEffect(() => {
+    if (open) {
+      setValue('');
+    }
+  }, [open]);
+
+  return (
+    <ModalDialog aria-label={title} onClose={onCancel} open={open}>
+      <form
+        onSubmit={e => {
+          e.preventDefault();
+          onSubmit(value);
+        }}
+      >
+        <div className="px-5 py-4">
+          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+          <label className="mt-3 block text-xs text-muted-foreground" htmlFor={fieldId}>
+            {label}
+          </label>
+          <Input
+            autoFocus
+            className="mt-1"
+            id={fieldId}
+            onChange={e => setValue(e.target.value)}
+            placeholder={placeholder}
+            value={value}
+          />
+        </div>
+        <div className="flex justify-end gap-2 border-t border-border px-5 py-3">
+          <Button onClick={onCancel} size="sm" type="button" variant="ghost">
+            {t('common.cancel')}
+          </Button>
+          <Button size="sm" type="submit">
+            {confirmLabel ?? t('common.save')}
+          </Button>
+        </div>
+      </form>
+    </ModalDialog>
+  );
+}

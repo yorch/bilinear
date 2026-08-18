@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { PromptDialog } from '@/components/shared/prompt-dialog';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
@@ -46,6 +47,7 @@ function TenantsInner() {
   const [includeArchived, setIncludeArchived] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState<PlatformTenant | null>(null);
+  const [suspending, setSuspending] = useState<PlatformTenant | null>(null);
 
   const {
     data: tenants,
@@ -75,11 +77,8 @@ function TenantsInner() {
     }
   }
 
-  async function handleSuspend(tenant: PlatformTenant) {
-    const reason = window.prompt(t('admin.tenants.suspendPrompt', { name: tenant.name }), '');
-    if (reason === null) {
-      return;
-    }
+  async function handleSuspendConfirmed(tenant: PlatformTenant, reason: string) {
+    setSuspending(null);
     await withBusy(tenant.id, async () => {
       replaceRow(await suspendTenant(tenant.id, reason.trim() || null));
       toast.success(t('admin.tenants.suspendedToast', { name: tenant.name }));
@@ -220,7 +219,7 @@ function TenantsInner() {
                           <button
                             className="rounded border border-warning/40 px-2 py-1 text-xs text-warning-subtle-foreground hover:bg-warning-subtle disabled:opacity-50"
                             disabled={busyId === tenant.id}
-                            onClick={() => handleSuspend(tenant)}
+                            onClick={() => setSuspending(tenant)}
                             type="button"
                           >
                             {t('admin.tenants.suspend')}
@@ -256,6 +255,18 @@ function TenantsInner() {
         }}
         open={confirmingDelete !== null}
         title={t('common.delete')}
+      />
+      <PromptDialog
+        confirmLabel={t('admin.tenants.suspend')}
+        label={t('admin.tenants.suspendPrompt', { name: suspending?.name ?? '' })}
+        onCancel={() => setSuspending(null)}
+        onSubmit={reason => {
+          if (suspending) {
+            void handleSuspendConfirmed(suspending, reason);
+          }
+        }}
+        open={suspending !== null}
+        title={t('admin.tenants.suspend')}
       />
     </div>
   );

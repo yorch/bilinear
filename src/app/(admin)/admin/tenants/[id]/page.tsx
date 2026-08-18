@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { PromptDialog } from '@/components/shared/prompt-dialog';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
@@ -60,6 +61,7 @@ export default function AdminTenantDetailPage() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [suspendOpen, setSuspendOpen] = useState(false);
   // null = not editing; otherwise a draft of the five caps as strings (so the
   // inputs stay controlled while mid-edit, including a transient empty value).
   const [limitsDraft, setLimitsDraft] = useState<Record<PlanLimitKey, string> | null>(null);
@@ -93,12 +95,9 @@ export default function AdminTenantDetailPage() {
     }
   }
 
-  async function handleSuspend() {
+  async function handleSuspendConfirmed(reason: string) {
+    setSuspendOpen(false);
     if (!tenant) {
-      return;
-    }
-    const reason = window.prompt(t('admin.tenants.suspendPrompt', { name: tenant.name }), '');
-    if (reason === null) {
       return;
     }
     await withBusy(async () => {
@@ -238,7 +237,7 @@ export default function AdminTenantDetailPage() {
           <button
             className="rounded border border-warning/40 px-3 py-1.5 text-xs text-warning-subtle-foreground hover:bg-warning-subtle disabled:opacity-50"
             disabled={busy}
-            onClick={handleSuspend}
+            onClick={() => setSuspendOpen(true)}
             type="button"
           >
             {t('admin.tenants.suspend')}
@@ -377,6 +376,14 @@ export default function AdminTenantDetailPage() {
         onConfirm={handleDelete}
         open={confirmingDelete}
         title={t('common.delete')}
+      />
+      <PromptDialog
+        confirmLabel={t('admin.tenants.suspend')}
+        label={t('admin.tenants.suspendPrompt', { name: tenant.name })}
+        onCancel={() => setSuspendOpen(false)}
+        onSubmit={reason => void handleSuspendConfirmed(reason)}
+        open={suspendOpen}
+        title={t('admin.tenants.suspend')}
       />
     </div>
   );
