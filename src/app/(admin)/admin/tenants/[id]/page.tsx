@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { PromptDialog } from '@/components/shared/prompt-dialog';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
@@ -77,6 +78,8 @@ export default function AdminTenantDetailPage() {
     errorMessage,
     refetch: load,
   } = useRetryableFetch<PlatformTenantDetail | null>(() => fetchTenant(id), [id], null);
+
+  useDocumentTitle(tenant?.name);
 
   // Merge the base fields a mutation returns back into the detail record so the
   // status badge/reason update without a second round trip.

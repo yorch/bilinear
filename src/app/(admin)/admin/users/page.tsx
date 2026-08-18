@@ -6,6 +6,7 @@ import { InlineRetry } from '@/components/shared/inline-retry';
 import { Button } from '@/components/ui/button';
 import { ModalDialog } from '@/components/ui/modal-dialog';
 import { RowsSkeleton } from '@/components/ui/skeleton';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import {
@@ -31,6 +32,7 @@ function soleOrg(user: PlatformUser): PlatformUser['organizations'][number] | nu
 
 export default function AdminUsersPage() {
   const t = useTranslations();
+  useDocumentTitle(t('admin.users.title'));
   const [query, setQuery] = useState('');
   const [applied, setApplied] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);

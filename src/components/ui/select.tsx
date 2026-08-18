@@ -3,6 +3,8 @@
 import { ChevronDown } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useOutsideClick } from '@/hooks/use-outside-click';
+import { useRestoreFocus } from '@/hooks/use-restore-focus';
+import { isRovingFocusKey, nextRovingIndex } from '@/lib/roving-focus';
 import { cn } from '@/lib/utils';
 
 export interface SelectOption {
@@ -41,10 +43,17 @@ export function SimpleSelect({
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
   const current = options.find(o => o.value === value);
 
-  useOutsideClick(ref, () => setOpen(false), open);
+  // `closeOnEscape` and `useRestoreFocus` are load-bearing, not polish: focus is
+  // moved into the panel on open (below), so without an Escape route a keyboard
+  // user is trapped in the dropdown, and without the restore, choosing an option
+  // unmounts the focused button and drops focus onto <body>. Both mirror
+  // SelectPopover, which pairs the same three behaviours for the same reason.
+  useOutsideClick(ref, () => setOpen(false), open, true);
+  useRestoreFocus(open, triggerRef);
 
   // The trigger advertises `aria-haspopup="listbox"`, so the panel has to be a
   // real listbox: focus moves into it on open, and Up/Down/Home/End rove across
@@ -59,7 +68,7 @@ export function SimpleSelect({
   }, [open]);
 
   const handlePanelKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') {
+    if (!isRovingFocusKey(e.key)) {
       return;
     }
     const items = Array.from(
@@ -71,17 +80,7 @@ export function SimpleSelect({
     e.preventDefault();
     e.stopPropagation();
     const idx = items.indexOf(document.activeElement as HTMLElement);
-    const next =
-      e.key === 'ArrowDown'
-        ? (idx + 1) % items.length
-        : e.key === 'ArrowUp'
-          ? idx <= 0
-            ? items.length - 1
-            : idx - 1
-          : e.key === 'Home'
-            ? 0
-            : items.length - 1;
-    items[next]?.focus();
+    items[nextRovingIndex(e.key, idx, items.length)]?.focus();
   }, []);
 
   return (
@@ -100,6 +99,7 @@ export function SimpleSelect({
         )}
         id={id}
         onClick={() => setOpen(o => !o)}
+        ref={triggerRef}
         type="button"
       >
         <span>{current?.label ?? placeholder ?? '—'}</span>
@@ -117,34 +117,34 @@ export function SimpleSelect({
             'absolute left-0 z-50 min-w-full rounded-md border border-border bg-popover py-1 shadow-e2',
             placement === 'bottom' ? 'top-full mt-1' : 'bottom-full mb-1',
           )}
-          id={panelId}
-          onKeyDown={handlePanelKeyDown}
-          ref={panelRef}
-          role="listbox"
         >
+          {/* Outside the listbox deliberately: it is a caption, not a choice, and
+              a listbox whose children are not all options is invalid ARIA. */}
           {placeholder && (
             <p className="flex w-full cursor-default items-center px-3 py-1.5 text-sm text-muted-foreground">
               {placeholder}
             </p>
           )}
-          {options.map(opt => (
-            <button
-              aria-selected={opt.value === value}
-              className={cn(
-                'flex w-full items-center px-3 py-1.5 text-sm text-foreground hover:bg-accent',
-                opt.value === value && 'font-medium',
-              )}
-              key={opt.value}
-              onClick={() => {
-                onChange(opt.value);
-                setOpen(false);
-              }}
-              role="option"
-              type="button"
-            >
-              {opt.label}
-            </button>
-          ))}
+          <div id={panelId} onKeyDown={handlePanelKeyDown} ref={panelRef} role="listbox">
+            {options.map(opt => (
+              <button
+                aria-selected={opt.value === value}
+                className={cn(
+                  'flex w-full items-center px-3 py-1.5 text-sm text-foreground hover:bg-accent',
+                  opt.value === value && 'font-medium',
+                )}
+                key={opt.value}
+                onClick={() => {
+                  onChange(opt.value);
+                  setOpen(false);
+                }}
+                role="option"
+                type="button"
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>

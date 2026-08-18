@@ -1,9 +1,8 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ModalDialog } from '@/components/ui/modal-dialog';
+import { ModalDialog, ModalFooter, ModalHeader } from '@/components/ui/modal-dialog';
 import { useTranslations } from '@/hooks/use-translations';
 
 interface PromptDialogProps {
@@ -64,9 +63,9 @@ export function PromptDialog({
           onSubmit(value);
         }}
       >
+        <ModalHeader title={title} />
         <div className="px-5 py-4">
-          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-          <label className="mt-3 block text-xs text-muted-foreground" htmlFor={fieldId}>
+          <label className="block text-xs text-muted-foreground" htmlFor={fieldId}>
             {label}
           </label>
           <Input
@@ -78,14 +77,11 @@ export function PromptDialog({
             value={value}
           />
         </div>
-        <div className="flex justify-end gap-2 border-t border-border px-5 py-3">
-          <Button onClick={onCancel} size="sm" type="button" variant="ghost">
-            {t('common.cancel')}
-          </Button>
-          <Button size="sm" type="submit">
-            {confirmLabel ?? t('common.save')}
-          </Button>
-        </div>
+        <ModalFooter
+          cancelLabel={t('common.cancel')}
+          onCancel={onCancel}
+          submitLabel={confirmLabel ?? t('common.save')}
+        />
       </form>
     </ModalDialog>
   );

@@ -7,6 +7,7 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { PromptDialog } from '@/components/shared/prompt-dialog';
 import { RowsSkeleton } from '@/components/ui/skeleton';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
@@ -40,6 +41,7 @@ const STATUS_STYLES: Record<TenantStatus, string> = {
 
 function TenantsInner() {
   const t = useTranslations();
+  useDocumentTitle(t('admin.nav.tenants'));
   const { formatDate } = useFormatters();
   const searchParams = useSearchParams();
   const [query, setQuery] = useState(searchParams.get('q') ?? '');

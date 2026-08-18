@@ -47,7 +47,9 @@ interface AuditLogPage {
  * transport or GraphQL failure is retryable and must never be rendered as an
  * empty log. Only the latter reaches the fetch hook's `error`.
  */
-type AuditOutcome = { entries: AuditLogEntry[]; kind: 'ok' } | { kind: 'forbidden' };
+type AuditOutcome =
+  | { entries: AuditLogEntry[]; hasMore: boolean; kind: 'ok'; nextCursor: string | null }
+  | { kind: 'forbidden' };
 
 const AUDIT_LOGS_QUERY = `
   query AuditLogs($filter: AuditLogFilter) {
@@ -99,8 +101,6 @@ export default function AuditLogPage() {
   const t = useTranslations();
   useDocumentTitle(t('settings.auditLog.title'));
   const { formatDateTime } = useFormatters();
-  const [hasMore, setHasMore] = useState(false);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
 
   // Filters
@@ -134,9 +134,17 @@ export default function AuditLogPage() {
           { filter: Object.keys(filter).length ? filter : null },
           'auditLogs',
         );
-        setHasMore(page?.hasMore ?? false);
-        setNextCursor(page?.nextCursor ?? null);
-        return { entries: page?.entries ?? [], kind: 'ok' };
+        // The cursor travels inside the returned outcome rather than in its own
+        // state. Setting it here would put it outside the hook's monotonic
+        // request-id guard: a stale response has its `data` discarded, but would
+        // already have overwritten the cursor, so "Load more" would then append
+        // rows from the previous filter.
+        return {
+          entries: page?.entries ?? [],
+          hasMore: page?.hasMore ?? false,
+          kind: 'ok',
+          nextCursor: page?.nextCursor ?? null,
+        };
       } catch (err) {
         if (isPermissionError(err)) {
           return { kind: 'forbidden' };
@@ -145,14 +153,12 @@ export default function AuditLogPage() {
       }
     },
     [appliedAction, appliedUserId],
-    { entries: [], kind: 'ok' },
+    { entries: [], hasMore: false, kind: 'ok', nextCursor: null },
   );
 
   const entries = outcome.kind === 'ok' ? outcome.entries : [];
-
-  const setEntries = (next: (prev: AuditLogEntry[]) => AuditLogEntry[]) => {
-    setOutcome(prev => (prev.kind === 'ok' ? { entries: next(prev.entries), kind: 'ok' } : prev));
-  };
+  const hasMore = outcome.kind === 'ok' && outcome.hasMore;
+  const nextCursor = outcome.kind === 'ok' ? outcome.nextCursor : null;
 
   async function handleLoadMore() {
     if (!nextCursor || loadingMore) {
@@ -169,9 +175,16 @@ export default function AuditLogPage() {
     try {
       const page = await gqlQuery<AuditLogPage | null>(AUDIT_LOGS_QUERY, { filter }, 'auditLogs');
       if (page) {
-        setEntries(prev => [...prev, ...page.entries]);
-        setHasMore(page.hasMore);
-        setNextCursor(page.nextCursor);
+        setOutcome(prev =>
+          prev.kind === 'ok'
+            ? {
+                entries: [...prev.entries, ...page.entries],
+                hasMore: page.hasMore,
+                kind: 'ok',
+                nextCursor: page.nextCursor,
+              }
+            : prev,
+        );
       }
     } catch (err) {
       // Previously swallowed: "Load more" simply did nothing on failure.

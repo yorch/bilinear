@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { fetchMetrics, type PlatformMetrics } from '@/lib/admin-api';
@@ -18,6 +19,7 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
 
 export default function AdminDashboardPage() {
   const t = useTranslations();
+  useDocumentTitle(t('admin.nav.dashboard'));
   const {
     data: metrics,
     loading,

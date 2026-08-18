@@ -5,6 +5,7 @@ import { useCallback, useEffect, useId, useRef } from 'react';
 import { usePopover } from '@/hooks/use-popover';
 import { usePopoverFlip } from '@/hooks/use-popover-flip';
 import { useRestoreFocus } from '@/hooks/use-restore-focus';
+import { isRovingFocusKey, nextRovingIndex } from '@/lib/roving-focus';
 import { cn } from '@/lib/utils';
 
 interface SelectPopoverProps {
@@ -80,7 +81,7 @@ export function SelectPopover({
 
   // Roving focus across the option buttons consumers render into the panel.
   const handlePanelKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') {
+    if (!isRovingFocusKey(e.key)) {
       return;
     }
     const target = e.target as HTMLElement;
@@ -96,17 +97,7 @@ export function SelectPopover({
     e.preventDefault();
     e.stopPropagation();
     const idx = items.indexOf(document.activeElement as HTMLElement);
-    const next =
-      e.key === 'ArrowDown'
-        ? (idx + 1) % items.length
-        : e.key === 'ArrowUp'
-          ? idx <= 0
-            ? items.length - 1
-            : idx - 1
-          : e.key === 'Home'
-            ? 0
-            : items.length - 1;
-    items[next]?.focus();
+    items[nextRovingIndex(e.key, idx, items.length)]?.focus();
   }, []);
 
   return (

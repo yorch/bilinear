@@ -10,7 +10,7 @@ const ROW: Row = { id: 'r1', name: 'original' };
 const NEXT: Row = { id: 'r1', name: 'updated' };
 
 /**
- * The twelve store methods that delegate here are each covered through their own
+ * The seventeen store methods that delegate here are each covered through their own
  * suite, but the contract itself lives in one place, so it is pinned in one
  * place too — including the two branches that are easy to "simplify" away: the
  * payload-less upsert and the unrecognised verb.
