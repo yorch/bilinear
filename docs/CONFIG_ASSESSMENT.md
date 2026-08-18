@@ -5,6 +5,11 @@ question: *what would it take to give this app a single, coherent configuration
 system that admins (and other roles) can drive from the UI, instead of the five
 disconnected mechanisms it has today?*
 
+Four design questions were settled in review on 2026-08-18 — scope model,
+storage shape, who edits plan limits, and env-vs-database precedence. They are
+recorded with their reasoning in [§7](#7-decisions-taken-2026-08-18); what is
+still open is in [§8](#8-still-open).
+
 Scope: every value that changes app behaviour without changing user data —
 environment variables, feature flags, plan-tier caps, tunables, defaults, and
 per-user preferences.
@@ -314,8 +319,9 @@ defineSetting({
   default: 5,
   bounds: { min: 1, max: 20 },
   editableBy: 'platform-admin',   // role required to write
-  visibleTo: 'org-admin',         // role required to read
-  envOverride: 'WEBHOOK_MAX_ATTEMPTS',  // optional escape hatch
+  visibleTo: 'org-admin',         // role required to read — genuinely a
+                                  // separate field, see §7-D3
+  env: { name: 'WEBHOOK_MAX_ATTEMPTS', mode: 'default' },  // see §4.2
   labelKey: 'settings.webhook.maxAttempts',
   restartRequired: false,
 })
@@ -347,12 +353,63 @@ memoised per request. Two properties matter:
   answerable and what makes the admin UI honest ("inherited from org" vs "set
   here").
 
-Storage: a single `settings` table (`scopeType`, `scopeId`, `key`, `value`
-Json, `updatedBy`, `updatedAt`) rather than one column per knob. Columns do
-not scale to 60+ knobs across four scopes, and every new knob would be a
-migration. The existing `Organization.max*` columns can be read as a
-first-class layer during migration and folded in later, or left as-is
-permanently — the resolver does not care where a layer's data comes from.
+**Storage — decided (§8-D2): a single generic `settings` table.**
+
+```
+settings(scope_type, scope_id, key, value Json, updated_by, updated_at)
+  @@unique([scope_type, scope_id, key])
+  @@index([scope_type, scope_id])          -- load a whole scope in one read
+```
+
+Typed columns do not scale to 60+ knobs across four scopes, and every new knob
+would be a migration. The registry supplies the type and bounds that the DB
+column would otherwise have given us; `value` is `Json` so one table carries
+ints, booleans, strings and enums without a column per shape.
+
+Two consequences worth stating up front:
+
+- **The DB no longer type-checks a value, so the registry must.** Every write
+  goes through the registry's validator (§4.1 `type` + `bounds`) — there is no
+  second line of defence like a `SmallInt` column. This is the price of the
+  generic table and it makes the validator load-bearing rather than a nicety.
+  Reads must also tolerate a row whose stored shape no longer matches the
+  registry (a knob whose type changed across a release): fall back to the next
+  layer and log, never throw.
+- **The `Organization.max*` columns get folded in, not kept in parallel.**
+  During Phase 1 the resolver reads them as a layer so nothing has to migrate;
+  Phase 2 copies them into `settings` rows and drops the columns. The GraphQL
+  `OrganizationPlanLimits` type is unchanged throughout — the resolver serves
+  the same SDL shape from the registry, so this is a storage move with no API
+  break. Keeping both permanently would recreate the exact "two mechanisms, no
+  shared read path" problem this whole exercise is meant to remove.
+
+**Env precedence — decided (§8-D4): a per-knob mode, defaulting to `default`.**
+
+Each registry entry declares how its `envOverride` participates:
+
+| Mode | Position in the chain | Use for |
+| ---- | --------------------- | ------- |
+| `default` (the default) | replaces the *code default*, below every DB layer | almost everything |
+| `seed` | supplies the initial DB value at first boot / org creation, then never again | branding, default locale/accent |
+| `override` | sits **above every layer**, including user | safety and infra knobs an operator must be able to force |
+
+`default` is the chain exactly as drawn above, which is why it is the default:
+setting an env var changes behaviour for anyone who has not explicitly
+configured the knob, and an explicit setting always wins. `override` is the
+deliberate exception — `ALLOW_PRIVATE_WEBHOOK_URLS`, `AUTH_RATE_LIMIT_FAIL_CLOSED`
+and the security-invariant caps of §5 should be forceable from the deployment
+no matter what any tenant has stored.
+
+The rule that makes `override` safe: **a knob whose effective value comes from
+an env override must render as locked in the admin UI, showing the env var
+name and its value.** `explain()` already returns provenance, so this is free —
+and without it `override` produces exactly the "I saved it and nothing
+happened" confusion that made this an open question in the first place.
+
+Migration safety: every env var moved onto the registry in Phase 3 starts in
+`default` mode, which reproduces today's behaviour bit for bit (env if set,
+else the constant). Promotion to `override` is a separate, deliberate call
+per knob.
 
 ### 4.3 Cache + invalidation
 
@@ -423,9 +480,13 @@ read-only "effective configuration" view — that alone closes F6 and proves the
 provenance model before anything is writable.
 
 **Phase 2 — The `settings` table and generic writes.**
-Add the table, the layered write path with bounds validation, SyncAction
-emission, and audit logging. Registry-driven forms in all three UIs. Now
-adding a knob is one registry entry.
+Add the table (§4.2), the layered write path with registry-backed validation,
+SyncAction emission, and audit logging. Migrate the five `Organization.max*`
+columns into `settings` rows and drop the columns — the
+`OrganizationPlanLimits` SDL type is unchanged, so this is invisible to
+clients. Registry-driven forms in all three UIs. Add "reset to inherited"
+(delete the row) while the write path is being built; per §8-3 it is close to
+free here and awkward to retrofit. Now adding a knob is one registry entry.
 
 **Phase 3 — Migrate the tunables.**
 Move §2.1d's ~14 operational env vars and the safe subset of §2.4's constants
@@ -441,33 +502,96 @@ resolver.
 
 ---
 
-## 7. Open questions for discussion
+## 7. Decisions taken (2026-08-18)
 
-1. **Scope model.** Is `platform → org → team → user` the right chain, or is
-   `project` a needed fifth scope? Should a team be able to *override* an org
-   value, or only narrow it (e.g. team may set a stricter cap than the org,
-   never a looser one)?
-2. **Storage shape.** Generic `settings` table (flexible, one migration ever,
-   untyped at the DB level) vs. typed columns (self-documenting, indexable,
-   one migration per knob). Recommendation is the generic table with the
-   registry supplying types — but the `max*` columns are evidence the team may
-   prefer columns.
-3. **Who edits what.** Should org owners be able to raise their own plan
-   limits, or is that permanently platform-admin? The current split says
-   platform-only, which reads as a billing decision rather than a technical
-   one — worth confirming it is intentional.
-4. **Env override precedence.** Should env *win over* the database (operator
-   escape hatch, DB edit silently ignored — confusing) or *seed* it (DB wins
-   once set — but then an env change does nothing after first boot)? The
-   registry should probably mark this per-knob rather than picking one rule.
-5. **Restart-required knobs.** Some values are read once at process start
-   (ports, sweep intervals installed via `setInterval`). Does the system flag
-   these (`restartRequired: true`) and show a banner, or refuse to expose them
-   at all?
-6. **Dead-column disposition.** Drop the 15 dead columns, or implement the
-   features they were placeholders for? `themeSettings`/`authSettings`/
-   `securitySettings` in particular look like they were reserved for planned
-   work — worth knowing whether that work is still planned before deleting.
-7. **Blast radius.** A misconfigured global knob can take down every tenant.
-   Does the system need staged rollout, a "reset to defaults" escape hatch, or
-   a config-change confirmation for platform-scope writes?
+Four of the seven open questions were settled in review. Recorded here with
+the reasoning, because the reasoning is what the next person needs.
+
+### D1 — Scope model: four scopes. `project` is **not** one of them.
+
+`platform → org → team → user`, and it stops there.
+
+The decisive argument is structural, not a matter of taste. A precedence chain
+has to be a **tree** — each scope needs exactly one parent for "inherited
+value" to be well defined. `Project` is not in that tree:
+
+- `Project` has **no team FK**. It relates to teams many-to-many through
+  `ProjectTeam` (`prisma/schema.prisma:685`). A project in teams A and B, where
+  A sets `autoClosePeriod = 30` and B sets `60`, has no defined inherited
+  value. Any tie-break we invented (lowest, first-joined, most-restrictive)
+  would be a coin flip dressed as a rule.
+- Its only real FK parent is `Organization`. So the sole unambiguous chain is
+  `org → project`, which makes project a **sibling** of team, not a descendant
+  — a DAG, not a tree.
+
+`Initiative` has the same shape (org-owned, no team FK) and fails for the same
+reason.
+
+The second argument is that nothing wants it. Scanning `Project`'s 30-odd
+columns, the only config-shaped field is `roadmapVisible` — and that is an
+**attribute of one project**, not a policy over a class of entities. That
+distinction is the rule to apply when this comes up again:
+
+> Config is policy that applies to a *class* of entities and is inherited.
+> An attribute is a property of *one* entity and is edited on that entity.
+> `Team.autoClosePeriod` is config. `Project.roadmapVisible` is an attribute.
+
+If a genuine per-project need appears later, the answer is a column on
+`Project` (an attribute), not a fifth scope. The `settings` table's
+`scope_type` is a string, so nothing forecloses adding one — but the resolver
+chain should not grow a DAG to accommodate a case the schema does not have.
+
+**Left open deliberately:** whether a team may only *narrow* an org value
+rather than override it freely. That is per-knob policy, and it is cheap to add
+to the registry later (`teamMayOnlyNarrow: true`) once there is a real knob
+that needs it. Nothing today does.
+
+### D2 — Storage: generic `settings` table.
+
+Settled; the shape and its two consequences are in §4.2. The headline: the
+registry's validator becomes load-bearing, because the DB no longer type-checks
+anything, and the `Organization.max*` columns get folded in during Phase 2
+rather than kept as a parallel mechanism.
+
+### D3 — Plan limits stay platform-admin only.
+
+`editableBy: 'platform-admin'` for all five `max*` knobs. Org owners keep the
+read-only view they already have at `/[workspace]/settings`. This is a billing
+boundary, and the registry expresses it as data rather than as a hand-written
+`requireOrgRole` at each call site.
+
+Worth noting what this implies for the registry: `editableBy` and `visibleTo`
+are genuinely two fields, not one. The plan limits are the proof — visible to
+org admins, editable only by platform admins. A single `role` field could not
+express the case that already exists in the product.
+
+### D4 — Env precedence: per-knob mode, defaulting to `default`.
+
+Three modes (`default` / `seed` / `override`), the table and the
+locked-in-the-UI rule are in §4.2. The load-bearing part is the migration
+safety property: everything moved in Phase 3 starts in `default` mode, which
+is bit-for-bit today's behaviour, so Phase 3 can ship without a behavioural
+diff and `override` promotions happen one knob at a time.
+
+---
+
+## 8. Still open
+
+1. **Restart-required knobs.** Some values are read once at process start
+   (ports, sweep intervals installed via `setInterval` in `ws/index.ts` and
+   `yjs/server.ts`). Does the system flag these (`restartRequired: true`) and
+   show a banner, or refuse to expose them at all? Leaning toward the flag —
+   a knob you can see and must restart to apply beats a knob you cannot find.
+2. **Dead-column disposition.** Drop the 15 dead columns, or implement the
+   features they were placeholders for? `themeSettings` / `authSettings` /
+   `securitySettings` in particular look reserved for planned work — worth
+   knowing whether that work is still planned before deleting. Note this is
+   now partly forced: with D2 settled, any new org-level config lands in
+   `settings`, so those three Json blobs have no future role unless a specific
+   feature claims them.
+3. **Blast radius.** A misconfigured platform-scope knob can affect every
+   tenant at once. Does the system need staged rollout, a "reset to defaults"
+   escape hatch, or a confirmation step on platform-scope writes? The
+   `settings` table makes "reset" trivial (delete the row → fall through to the
+   layer below), so that one is close to free and probably worth doing in
+   Phase 2 regardless.
