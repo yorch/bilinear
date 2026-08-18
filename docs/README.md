@@ -32,6 +32,7 @@ counts, file references, or status markers without checking against the code.
 | Document                                            | Written                        |
 | --------------------------------------------------- | ------------------------------ |
 | [`UI_UX_ASSESSMENT.md`](UI_UX_ASSESSMENT.md)         | UI/UX audit + design-system rationale (through 2026-08-01) |
+| [`CONFIG_ASSESSMENT.md`](CONFIG_ASSESSMENT.md)       | Configuration-surface audit + centralized-config proposal (2026-08-18) |
 | [`E2E_TEST_GAP_ANALYSIS.md`](E2E_TEST_GAP_ANALYSIS.md) | E2E coverage analysis (2026-05-10) |
 | [`LINEAR_RESEARCH.md`](LINEAR_RESEARCH.md)           | Competitive research (April 2026) |
 | [`LINEAR_RESEARCH_2.md`](LINEAR_RESEARCH_2.md)       | Competitive research, round 2   |
