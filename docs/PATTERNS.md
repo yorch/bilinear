@@ -2314,7 +2314,7 @@ Cross-tenant operator layer that sits **above** every organization — the app's
 Client-side i18n layer supporting `en` (default) and `es`, modeled after the existing `next-themes` dark-mode pattern rather than URL-segment routing (`/en/...`), since routes are keyed by `[workspace]` and restructuring them was out of scope.
 
 - **Dictionaries** — `src/lib/i18n/locales/{en,es}.json`. Flat-ish nested JSON, namespaced by feature (`common`, `nav`, `theme`, `language`, `auth`, `errors`, …). Keys are sorted (Biome `useSortedKeys` enforces this — run `yarn lint:fix` after editing).
-- **Core lib** — `src/lib/i18n/index.ts` exports `locales`, `defaultLocale`, `localeNames`, `dictionaries`, `LOCALE_COOKIE`, the `Locale`/`Dictionary` types, and the shared `translate(locale, key, params?)` function. `translate()` is the single lookup+interpolation core: dotted-key resolve → English fallback → raw key, then `{placeholder}` substitution. **Both** the client `useTranslations()` hook and the server `getServerTranslations()` helper delegate to it, so key resolution, fallback, and interpolation are identical client- and server-side — do not hand-roll a second dotted-key walker (tests use `translate('en'|'es', …)` too). Interpolation passes the replacement as a *function* to `String.prototype.replaceAll`, so `$`-sequences in user-supplied values (issue titles, entity names) are inserted literally rather than treated as `$&`/`` $` ``/`$$` special patterns.
+- **Core lib** — `src/lib/i18n/index.ts` exports `locales`, `defaultLocale`, `dictionaries`, `LOCALE_COOKIE`, the `Locale`/`Dictionary` types, and the shared `translate(locale, key, params?)` function. `translate()` is the single lookup+interpolation core: dotted-key resolve → English fallback → raw key, then `{placeholder}` substitution. **Both** the client `useTranslations()` hook and the server `getServerTranslations()` helper delegate to it, so key resolution, fallback, and interpolation are identical client- and server-side — do not hand-roll a second dotted-key walker (tests use `translate('en'|'es', …)` too). Interpolation passes the replacement as a *function* to `String.prototype.replaceAll`, so `$`-sequences in user-supplied values (issue titles, entity names) are inserted literally rather than treated as `$&`/`` $` ``/`$$` special patterns.
 - **Provider** — `src/providers/locale-provider.tsx` (`LocaleProvider`, `useLocale`). Client context seeded from a server-read cookie (`RootLayout` reads `cookies()` and passes `initialLocale`, mirroring `attribute="class"` theme init) — no hydration-mismatch flash. `setLocale` persists to the `locale` cookie (1yr, `LOCALE_COOKIE_MAX_AGE` — shared with the session route so the two writers can't drift) and updates `document.documentElement.lang`. The cookie has a **second writer**: `/api/auth/session` seeds it from `User.locale` at login (see §75.3), so a language chosen on one device follows the account to the next. **Rendering-strategy tradeoff:** reading `cookies()` in the root layout opts every route into dynamic rendering (the cost of cookie-based locale without URL-segment routing). Acceptable here — the app is auth-gated and real-time, so it is dynamic anyway; the only public page (`/roadmap/[slug]`) is slug+password specific and per-request by nature.
 - **Hook** — `src/hooks/use-translations.ts` (`useTranslations()`) returns a `t(key, params?)` function (a `useCallback` memoized on `locale`) that delegates to `translate()`. Usage: `t('nav.myIssues')`, or with params `t('auth.failedToStart', { provider: 'Google' })`.
 - **UI toggle** — `src/components/language-toggle.tsx` (`LanguageToggle`), a two-way EN/ES cycle button styled identically to `ThemeToggle`; supports the same `compact` prop. Rendered in the sidebar footer (`src/components/layouts/sidebar.tsx`) next to `ThemeToggle`, both expanded and collapsed states.
@@ -2801,6 +2801,23 @@ inline `backgroundColor` because it is entity data from the DB, not a token),
 "+ Add X" control — `as` keeps each call site's heading level, so consolidating
 the markup doesn't flatten the document outline).
 
+A later pass added two more, both extracted from markup rather than invented:
+`PromptDialog` in `shared/` (the single-text-field counterpart to
+`ConfirmDialog` — same `ModalDialog` shell, same Cancel/confirm footer, one
+labelled `Input`), and `POPOVER_ITEM_CLASS` exported from
+`ui/select-popover.tsx`. The second is a *constant*, not a component,
+deliberately: the option row inside a popover panel was one class string
+repeated at 14 sites across 6 files, and `SelectPopover`'s roving-focus query
+walks the real buttons those sites render — wrapping them in a component would
+have changed the DOM the primitive reaches into for no gain.
+
+**`window.prompt` is banned for the same reason `window.confirm` is.** It is
+unstyled, untranslatable, blocks the main thread, and browsers may suppress it
+outright. Use `PromptDialog`. The case that made this a rule rather than a
+preference: the platform-admin impersonation picker printed a numbered list of
+organizations and asked the operator to *type an index*, so one mistyped digit
+impersonated into the wrong tenant with no confirmation step.
+
 **`/design`** renders the whole token layer and every primitive; switching
 accent or theme re-renders every specimen. Open it when changing anything in
 `ui/` or `globals.css` — this repo has no visual-regression suite, so it is the
@@ -2955,9 +2972,15 @@ When adding a missing FK, pick `onDelete` from what the null state *means*:
 
 ### 80.6 Fetch-on-mount goes through `useRetryableFetch`
 
-Any component that loads data in an effect uses `useRetryableFetch(fetcher, deps, initialValue)` (`src/hooks/use-retryable-fetch.ts`). It returns `{ data, setData, loading, error, refetch }`, and `refetch` **is** the retry handler you hand to `InlineRetry`.
+Any component that loads data in an effect uses `useRetryableFetch(fetcher, deps, initialValue)` (`src/hooks/use-retryable-fetch.ts`). It returns `{ data, setData, loading, error, errorMessage, refetch }`, and `refetch` **is** the retry handler you hand to `InlineRetry`.
+
+`error` is the boolean nearly every call site switches on. `errorMessage` carries the thrown error's own text and exists for the surfaces where the specific failure is the diagnostic rather than noise — the platform-admin console, where "couldn't load" tells an operator nothing that the server's message wouldn't tell them better. Render `errorMessage ?? t('common.somethingWentWrong')` so a non-`Error` throw still says something. Both are cleared when a retry starts, so a caller may render `loading` and `error` as siblings without the spinner and the failure row appearing together.
+
+Two outcomes deliberately do **not** travel through `error`: a row that does not exist, and a request the viewer is not allowed to make. Both are answers, not failures, and neither is retryable — offering a Retry that can never succeed is worse than offering none. Model them as data instead: `admin/tenants/[id]` lets `fetchTenant` resolve to `null`, and `settings/audit-log` returns an `AuditOutcome` union whose `forbidden` variant renders its own message (`isPermissionError` from `src/lib/graphql.ts` is what distinguishes it).
 
 Do not hand-roll the equivalent. The recognisable shape — `useState` for data, a `loadError` boolean, a `useState(0)` `reloadKey`, a `let cancelled = false` flag with `if (!cancelled)` guards, and a `biome-ignore useExhaustiveDependencies` for the reload key — was written out fifteen times before being consolidated, and the hand-rolled version is strictly worse: it races on out-of-order responses where the hook discards stale ones via a monotonic request id.
+
+**The one shape the hook does not fit** is fetch-then-seed-a-form: a page that spreads one response across many `useState` form fields rather than rendering it (`settings/page.tsx`, `settings/roadmap`, `settings/security`, `settings/integrations`, `team/[key]/settings`, `issue/[id]`). Routing those through the hook means calling `setX(...)` from inside the fetcher, which is a side effect in the one place that must stay pure. They keep their own effect deliberately — that is not drift, and "consolidate the last six" is the wrong instinct until a second hook exists for that shape.
 
 The hook only sets `error` when the fetcher **throws**, which is why the fetcher must use `gqlQuery`/`gqlMutate` (§76.1) rather than swallowing errors and returning `[]`. A fetcher that returns an empty array on failure renders as a legitimate empty state and leaves the retry branch dead — that combination is what hid a real query bug for a long time.
 
