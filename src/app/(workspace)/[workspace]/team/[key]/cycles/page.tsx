@@ -5,11 +5,13 @@ import { useParams } from 'next/navigation';
 import { CycleListView } from '@/components/cycles/cycle-list-view';
 import { SyncErrorState } from '@/components/shared/sync-error-state';
 import { PageSkeleton } from '@/components/ui/skeleton';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import { useStore } from '@/providers/store-provider';
 
 const TeamCyclesPage = observer(function TeamCyclesPage() {
   const t = useTranslations();
+  useDocumentTitle(t('nav.cycles'));
   const { workspace, key: teamKey } = useParams<{
     workspace: string;
     key: string;

@@ -6,6 +6,7 @@ import { DocumentList } from '@/components/documents/document-list';
 import { SyncErrorState } from '@/components/shared/sync-error-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { PageSkeleton } from '@/components/ui/skeleton';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import { useStore } from '@/providers/store-provider';
 
@@ -13,6 +14,7 @@ const TeamDocsPage = observer(function TeamDocsPage() {
   const { key: teamKey } = useParams<{ key: string; workspace: string }>();
   const { teamStore, syncStore } = useStore();
   const t = useTranslations();
+  useDocumentTitle(t('nav.docs'));
 
   const team = teamStore.findByKey(teamKey);
 

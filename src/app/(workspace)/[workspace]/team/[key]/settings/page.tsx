@@ -15,6 +15,7 @@ import {
 } from '@/components/teams/team-member-management';
 import { PageHeader } from '@/components/ui/page-header';
 import { SimpleSelect } from '@/components/ui/select';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -148,6 +149,10 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
   const t = useTranslations();
 
   const team = teamStore.findByKey(teamKey);
+
+  useDocumentTitle(
+    team ? t('settings.team.settingsHeading', { name: team.displayName || team.name }) : null,
+  );
 
   // ── Local form state ──────────────────────────────────────────────────────
   const [name, setName] = useState(team?.name ?? '');

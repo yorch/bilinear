@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { PageSkeleton } from '@/components/ui/skeleton';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -72,6 +73,7 @@ const WEBHOOK_ROTATE_SECRET_MUTATION = `
 
 export default function WebhooksSettingsPage() {
   const t = useTranslations();
+  useDocumentTitle(t('settings.webhooks.title'));
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [availableEvents, setAvailableEvents] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);

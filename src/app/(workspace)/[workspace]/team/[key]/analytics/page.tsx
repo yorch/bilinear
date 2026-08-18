@@ -8,6 +8,7 @@ import { InsightsSection } from '@/components/analytics/insights-section';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { ColorDot } from '@/components/ui/color-dot';
 import { PageHeader } from '@/components/ui/page-header';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
@@ -205,6 +206,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
   const t = useTranslations();
+  useDocumentTitle(t('analytics.team.title'));
   const { formatDate } = useFormatters();
   const { key: teamKey } = useParams<{ workspace: string; key: string }>();
   const { issueStore, teamStore, workflowStateStore, userStore, syncStore } = useStore();

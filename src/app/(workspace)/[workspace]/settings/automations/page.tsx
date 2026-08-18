@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { RowsSkeleton } from '@/components/ui/skeleton';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
@@ -82,6 +83,7 @@ function isRulesData(value: unknown): value is RulesData {
 
 export default function AutomationsSettingsPage() {
   const t = useTranslations();
+  useDocumentTitle(t('settings.automations.title'));
   const { formatDateTime } = useFormatters();
   const [data, setData] = useState<RulesData | null>(null);
   const [loading, setLoading] = useState(true);

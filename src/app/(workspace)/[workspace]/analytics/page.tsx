@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { PageHeader } from '@/components/ui/page-header';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { cn } from '@/lib/utils';
@@ -81,6 +82,7 @@ function ProgressBar({ pct, color }: { pct: number; color: string }) {
 
 export default function WorkspaceAnalyticsPage() {
   const t = useTranslations();
+  useDocumentTitle(t('analytics.workspace.title'));
   const [data, setData] = useState<WorkspaceOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

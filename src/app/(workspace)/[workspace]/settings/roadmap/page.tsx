@@ -9,6 +9,7 @@ import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { ColorDot } from '@/components/ui/color-dot';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowsSkeleton } from '@/components/ui/skeleton';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -65,6 +66,7 @@ interface RoadmapSettings {
 
 const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
   const t = useTranslations();
+  useDocumentTitle(t('roadmap.settings.title'));
   const { projectStore } = useStore();
 
   const [roadmap, setRoadmap] = useState<RoadmapSettings | null>(null);

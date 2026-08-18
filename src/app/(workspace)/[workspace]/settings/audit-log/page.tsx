@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { RowsSkeleton } from '@/components/ui/skeleton';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery, isPermissionError } from '@/lib/graphql';
@@ -86,6 +87,7 @@ const AUDIT_ACTIONS = [
 
 export default function AuditLogPage() {
   const t = useTranslations();
+  useDocumentTitle(t('settings.auditLog.title'));
   const { formatDateTime } = useFormatters();
   const [entries, setEntries] = useState<AuditLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
