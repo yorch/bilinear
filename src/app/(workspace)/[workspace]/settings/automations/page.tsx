@@ -1,10 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -85,8 +87,6 @@ export default function AutomationsSettingsPage() {
   const t = useTranslations();
   useDocumentTitle(t('settings.automations.title'));
   const { formatDateTime } = useFormatters();
-  const [data, setData] = useState<RulesData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<AutomationRule | null>(null);
 
@@ -96,20 +96,25 @@ export default function AutomationsSettingsPage() {
   const [actionType, setActionType] = useState('set_priority');
   const [actionConfigText, setActionConfigText] = useState('{"priority": 1}');
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const res = await gql(RULES_QUERY, {});
-    if (isRulesData(res.data)) {
-      setData(res.data);
-    } else {
-      toast.error(t('settings.automations.loadError'));
-    }
-    setLoading(false);
-  }, [t]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // The fetcher throws on a shape mismatch so `error` below covers both a failed
+  // request and a response that isn't RulesData — the page used to toast and then
+  // render as though the list were simply empty.
+  const {
+    data,
+    loading,
+    error,
+    refetch: load,
+  } = useRetryableFetch<RulesData | null>(
+    async () => {
+      const res = await gql(RULES_QUERY, {});
+      if (!isRulesData(res.data)) {
+        throw new Error('Unexpected automationRules response shape');
+      }
+      return res.data;
+    },
+    [],
+    null,
+  );
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,6 +170,14 @@ export default function AutomationsSettingsPage() {
 
   if (loading) {
     return <RowsSkeleton className="p-6" count={5} />;
+  }
+
+  if (error || !data) {
+    return (
+      <div className="mx-auto max-w-4xl px-6 py-6">
+        <InlineRetry message={t('settings.automations.loadError')} onRetry={() => load()} />
+      </div>
+    );
   }
 
   return (

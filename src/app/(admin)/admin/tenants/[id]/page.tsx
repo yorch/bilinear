@@ -2,9 +2,11 @@
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import {
   deleteTenant,
@@ -56,33 +58,23 @@ export default function AdminTenantDetailPage() {
   const { formatDate, intlLocale } = useFormatters();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [tenant, setTenant] = useState<PlatformTenantDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   // null = not editing; otherwise a draft of the five caps as strings (so the
   // inputs stay controlled while mid-edit, including a transient empty value).
   const [limitsDraft, setLimitsDraft] = useState<Record<PlanLimitKey, string> | null>(null);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    fetchTenant(id)
-      .then(result => {
-        if (!result) {
-          setError(t('admin.tenants.notFound'));
-        } else {
-          setTenant(result);
-        }
-      })
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [id, t]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  // A missing tenant resolves to `null` rather than throwing, which keeps it
+  // distinct from a failed request below: "no such tenant" is not retryable,
+  // a transport or GraphQL error is.
+  const {
+    data: tenant,
+    setData: setTenant,
+    loading,
+    error,
+    errorMessage,
+    refetch: load,
+  } = useRetryableFetch<PlatformTenantDetail | null>(() => fetchTenant(id), [id], null);
 
   // Merge the base fields a mutation returns back into the detail record so the
   // status badge/reason update without a second round trip.
@@ -187,9 +179,14 @@ export default function AdminTenantDetailPage() {
   if (error || !tenant) {
     return (
       <div className="flex flex-col gap-4">
-        <p className="text-sm text-danger-subtle-foreground">
-          {error ?? t('admin.tenants.notFound')}
-        </p>
+        {error ? (
+          <InlineRetry
+            message={errorMessage ?? t('common.somethingWentWrong')}
+            onRetry={() => load()}
+          />
+        ) : (
+          <p className="text-sm text-danger-subtle-foreground">{t('admin.tenants.notFound')}</p>
+        )}
         <Link className="text-sm text-brand hover:underline" href="/admin/tenants">
           {t('admin.tenants.backToTenants')}
         </Link>

@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery, isPermissionError } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -38,6 +40,14 @@ interface AuditLogPage {
   hasMore: boolean;
   nextCursor: string | null;
 }
+
+/**
+ * The load has three outcomes, not two. A non-admin simply cannot see the audit
+ * log — that is "not for you", a terminal state with nothing to retry — while a
+ * transport or GraphQL failure is retryable and must never be rendered as an
+ * empty log. Only the latter reaches the fetch hook's `error`.
+ */
+type AuditOutcome = { entries: AuditLogEntry[]; kind: 'ok' } | { kind: 'forbidden' };
 
 const AUDIT_LOGS_QUERY = `
   query AuditLogs($filter: AuditLogFilter) {
@@ -89,10 +99,6 @@ export default function AuditLogPage() {
   const t = useTranslations();
   useDocumentTitle(t('settings.auditLog.title'));
   const { formatDateTime } = useFormatters();
-  const [entries, setEntries] = useState<AuditLogEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [forbidden, setForbidden] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -103,54 +109,50 @@ export default function AuditLogPage() {
   const [appliedAction, setAppliedAction] = useState('');
   const [appliedUserId, setAppliedUserId] = useState('');
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setForbidden(false);
-
-    const filter: Record<string, unknown> = {};
-    if (appliedAction) {
-      filter.action = appliedAction;
-    }
-    if (appliedUserId) {
-      filter.userId = appliedUserId;
-    }
-
-    gqlQuery<AuditLogPage | null>(
-      AUDIT_LOGS_QUERY,
-      { filter: Object.keys(filter).length ? filter : null },
-      'auditLogs',
-    )
-      .then(page => {
-        if (cancelled || !page) {
-          return;
-        }
-        setEntries(page.entries);
-        setHasMore(page.hasMore);
-        setNextCursor(page.nextCursor);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) {
-          return;
-        }
-        // A non-admin simply can't see the audit log — that's "not for you",
-        // not a failure. Anything else is a real error and must not render as
-        // an empty log.
+  // "Not for you" is an outcome, not a failure, so it is modelled as data
+  // rather than as the hook's `error`: a non-admin must not be offered a Retry
+  // that can never succeed, while a transport or GraphQL failure must be
+  // retryable and must never render as an empty log.
+  const {
+    data: outcome,
+    setData: setOutcome,
+    loading,
+    error,
+    refetch: load,
+  } = useRetryableFetch<AuditOutcome>(
+    async () => {
+      const filter: Record<string, unknown> = {};
+      if (appliedAction) {
+        filter.action = appliedAction;
+      }
+      if (appliedUserId) {
+        filter.userId = appliedUserId;
+      }
+      try {
+        const page = await gqlQuery<AuditLogPage | null>(
+          AUDIT_LOGS_QUERY,
+          { filter: Object.keys(filter).length ? filter : null },
+          'auditLogs',
+        );
+        setHasMore(page?.hasMore ?? false);
+        setNextCursor(page?.nextCursor ?? null);
+        return { entries: page?.entries ?? [], kind: 'ok' };
+      } catch (err) {
         if (isPermissionError(err)) {
-          setForbidden(true);
-        } else {
-          setLoadError(getErrorMessage(err, t('common.somethingWentWrong')));
+          return { kind: 'forbidden' };
         }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [appliedAction, appliedUserId, t]);
+        throw err;
+      }
+    },
+    [appliedAction, appliedUserId],
+    { entries: [], kind: 'ok' },
+  );
+
+  const entries = outcome.kind === 'ok' ? outcome.entries : [];
+
+  const setEntries = (next: (prev: AuditLogEntry[]) => AuditLogEntry[]) => {
+    setOutcome(prev => (prev.kind === 'ok' ? { entries: next(prev.entries), kind: 'ok' } : prev));
+  };
 
   async function handleLoadMore() {
     if (!nextCursor || loadingMore) {
@@ -191,15 +193,15 @@ export default function AuditLogPage() {
     setAppliedUserId('');
   }
 
-  if (loadError) {
+  if (error) {
     return (
       <div className="p-6">
-        <p className="text-sm text-destructive">{loadError}</p>
+        <InlineRetry message={t('common.somethingWentWrong')} onRetry={() => load()} />
       </div>
     );
   }
 
-  if (forbidden) {
+  if (outcome.kind === 'forbidden') {
     return (
       <div className="flex flex-1 items-center justify-center">
         <p className="text-sm text-muted-foreground">{t('settings.auditLog.forbidden')}</p>

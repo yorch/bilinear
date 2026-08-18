@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gql, gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 
 /**
@@ -74,9 +76,6 @@ const WEBHOOK_ROTATE_SECRET_MUTATION = `
 export default function WebhooksSettingsPage() {
   const t = useTranslations();
   useDocumentTitle(t('settings.webhooks.title'));
-  const [webhooks, setWebhooks] = useState<Webhook[]>([]);
-  const [availableEvents, setAvailableEvents] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
@@ -87,31 +86,33 @@ export default function WebhooksSettingsPage() {
     type: 'delete' | 'rotate';
   } | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const res = await gql(WEBHOOKS_QUERY);
-      if (cancelled) {
-        return;
-      }
-      if (res.errors?.length) {
-        toast.error(
-          (res.errors[0] as { message?: string })?.message ?? t('settings.webhooks.loadError'),
-        );
-      } else {
-        const data = (res.data ?? {}) as {
-          webhooks?: Webhook[];
-          webhookEvents?: string[];
-        };
-        setWebhooks(data.webhooks ?? []);
-        setAvailableEvents(data.webhookEvents ?? []);
-      }
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [t]);
+  // One query feeds both lists, so they travel together as one value.
+  // gqlQuery throws on a GraphQL error, which makes the retry branch reachable —
+  // previously a failed load toasted once and then rendered as "no webhooks".
+  const {
+    data: { availableEvents, webhooks },
+    setData,
+    loading,
+    error,
+    refetch: load,
+  } = useRetryableFetch<{ availableEvents: string[]; webhooks: Webhook[] }>(
+    async () => {
+      const data = await gqlQuery<{ webhookEvents?: string[]; webhooks?: Webhook[] }>(
+        WEBHOOKS_QUERY,
+        {},
+      );
+      return { availableEvents: data.webhookEvents ?? [], webhooks: data.webhooks ?? [] };
+    },
+    [],
+    { availableEvents: [], webhooks: [] },
+  );
+
+  const setWebhooks = (next: Webhook[] | ((prev: Webhook[]) => Webhook[])) => {
+    setData(prev => ({
+      ...prev,
+      webhooks: typeof next === 'function' ? next(prev.webhooks) : next,
+    }));
+  };
 
   const handleCreate = async () => {
     if (!name.trim() || !url.trim() || selectedEvents.size === 0) {
@@ -191,6 +192,14 @@ export default function WebhooksSettingsPage() {
 
   if (loading) {
     return <PageSkeleton />;
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto w-full max-w-3xl px-6 py-8">
+        <InlineRetry message={t('settings.webhooks.loadError')} onRetry={() => load()} />
+      </div>
+    );
   }
 
   return (
