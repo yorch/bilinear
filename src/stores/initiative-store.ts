@@ -100,6 +100,15 @@ export class InitiativeStore {
     }
   }
 
+  /**
+   * Deliberately not delegated to `applyPoolSyncAction`: that helper treats
+   * `'A'` as an upsert, and this stream never carries one. The server emits
+   * exactly two verbs for `InitiativeProject` — `'I'` when a project is linked
+   * (`resolvers/initiative.ts:112` and the create fan-out at `:195`) and `'D'`
+   * when it is unlinked (`:255`). There is no archive path, and
+   * `resolvers/project.ts:197` documents why archiving a project deliberately
+   * does *not* emit one. `'U'` is accepted here for symmetry; nothing sends it.
+   */
   applyInitiativeProjectSyncAction(
     actionType: string,
     id: string,
