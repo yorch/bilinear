@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { DBProjectUpdate } from '@/lib/db';
+import type { DBProject, DBProjectMilestone, DBProjectUpdate } from '@/lib/db';
 import { ProjectStore } from './project-store';
+import { runPoolStoreTests } from './test-helpers/pool-store-tests';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -18,6 +19,37 @@ function makeUpdate(overrides: Partial<DBProjectUpdate> & { id: string }): DBPro
     projectId: PROJECT_A,
     updatedAt: '2026-01-01T00:00:00Z',
     userId: USER_1,
+    ...overrides,
+  };
+}
+
+function makeProject(overrides: Partial<DBProject> & { id: string }): DBProject {
+  return {
+    color: '#000000',
+    createdAt: '2026-01-01T00:00:00Z',
+    description: '',
+    name: 'Project',
+    organizationId: 'org-1',
+    priority: 0,
+    prioritySortOrder: 0,
+    roadmapVisible: true,
+    slugId: 'slug',
+    statusType: 'planned',
+    trashed: false,
+    updatedAt: '2026-01-01T00:00:00Z',
+    ...overrides,
+  };
+}
+
+function makeMilestone(
+  overrides: Partial<DBProjectMilestone> & { id: string },
+): DBProjectMilestone {
+  return {
+    createdAt: '2026-01-01T00:00:00Z',
+    name: 'Milestone',
+    projectId: PROJECT_A,
+    sortOrder: 0,
+    updatedAt: '2026-01-01T00:00:00Z',
     ...overrides,
   };
 }
@@ -146,5 +178,49 @@ describe('ProjectStore', () => {
       store.applyUpdateSyncAction('I', 'u1', null);
       expect(store.updatePool.has('u1')).toBe(false);
     });
+  });
+
+  // ProjectStore is the only three-pool store, so each dispatcher is asserted to
+  // touch its own pool AND to leave the other two alone — that cross-pool check
+  // is what actually pins the delegation target. A copy-paste that pointed
+  // `applyMilestoneSyncAction` at `this.pool` would still pass a single-pool test.
+  describe('pool dispatchers write to the right pool', () => {
+    it('applySyncAction touches only the project pool', () => {
+      store.applySyncAction('I', 'p1', makeProject({ id: 'p1' }));
+
+      expect(store.pool.has('p1')).toBe(true);
+      expect(store.milestonePool.size).toBe(0);
+      expect(store.updatePool.size).toBe(0);
+    });
+
+    it('applyMilestoneSyncAction touches only the milestone pool', () => {
+      store.applyMilestoneSyncAction('I', 'm1', makeMilestone({ id: 'm1' }));
+
+      expect(store.milestonePool.has('m1')).toBe(true);
+      expect(store.pool.size).toBe(0);
+      expect(store.updatePool.size).toBe(0);
+    });
+
+    it('applyMilestoneSyncAction upserts on U/A and deletes on D', () => {
+      store.applyMilestoneSyncAction('I', 'm1', makeMilestone({ id: 'm1' }));
+      store.applyMilestoneSyncAction('U', 'm1', makeMilestone({ id: 'm1', name: 'Renamed' }));
+      expect(store.milestonePool.get('m1')?.name).toBe('Renamed');
+
+      store.applyMilestoneSyncAction('A', 'm1', makeMilestone({ id: 'm1', name: 'Archived' }));
+      expect(store.milestonePool.get('m1')?.name).toBe('Archived');
+
+      store.applyMilestoneSyncAction('D', 'm1', null);
+      expect(store.milestonePool.has('m1')).toBe(false);
+    });
+  });
+});
+
+// The shared SyncAction contract, applied to the project pool itself.
+describe('ProjectStore (project pool)', () => {
+  runPoolStoreTests<DBProject>({
+    makeRow: makeProject,
+    makeStore: () => new ProjectStore(),
+    updateField: 'name',
+    updateValue: 'Renamed',
   });
 });

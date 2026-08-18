@@ -5,6 +5,7 @@ import { useCallback, useEffect, useId, useRef } from 'react';
 import { usePopover } from '@/hooks/use-popover';
 import { usePopoverFlip } from '@/hooks/use-popover-flip';
 import { useRestoreFocus } from '@/hooks/use-restore-focus';
+import { isRovingFocusKey, nextRovingIndex } from '@/lib/roving-focus';
 import { cn } from '@/lib/utils';
 
 interface SelectPopoverProps {
@@ -28,6 +29,19 @@ interface SelectPopoverProps {
   triggerClassName?: string;
   triggerTitle?: string;
 }
+
+/**
+ * Shared class string for a single option/menu row rendered into a
+ * `SelectPopover` panel (and the hand-rolled issue context menu, which mirrors
+ * the same visual contract). It lived verbatim at 14 call sites across the
+ * property pickers, the bulk-action bar and the context menu; the panel's
+ * roving-focus keyboard handling assumes every row looks and sizes alike, so
+ * they have to change together.
+ *
+ * Compose per-row state on top with `cn(POPOVER_ITEM_CLASS, selected && '…')`.
+ */
+export const POPOVER_ITEM_CLASS =
+  'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent';
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -67,7 +81,7 @@ export function SelectPopover({
 
   // Roving focus across the option buttons consumers render into the panel.
   const handlePanelKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') {
+    if (!isRovingFocusKey(e.key)) {
       return;
     }
     const target = e.target as HTMLElement;
@@ -83,17 +97,7 @@ export function SelectPopover({
     e.preventDefault();
     e.stopPropagation();
     const idx = items.indexOf(document.activeElement as HTMLElement);
-    const next =
-      e.key === 'ArrowDown'
-        ? (idx + 1) % items.length
-        : e.key === 'ArrowUp'
-          ? idx <= 0
-            ? items.length - 1
-            : idx - 1
-          : e.key === 'Home'
-            ? 0
-            : items.length - 1;
-    items[next]?.focus();
+    items[nextRovingIndex(e.key, idx, items.length)]?.focus();
   }, []);
 
   return (

@@ -107,5 +107,34 @@ export function runPoolStoreTests<T extends { id: string }>(options: RunPoolStor
 
       expect(store.pool.size).toBe(1);
     });
+
+    // The two cases below pin the halves of the contract that `applyPoolSyncAction`
+    // is now the single owner of across every pool store. Asserting through
+    // `pool` rather than `findById` is deliberate: `findById` is `get(id) ?? null`,
+    // so a row overwritten with `null` would still read back as `null` and the
+    // assertion could not fail.
+    it('ignores an upsert verb carrying no payload', () => {
+      const store = makeStore();
+      const row = makeRow({ id: 'row-1' } as Partial<T> & { id: string });
+      store.applySyncAction('I', 'row-1', row);
+
+      store.applySyncAction('U', 'row-1', null);
+      store.applySyncAction('A', 'row-1', null);
+
+      expect(store.pool.size).toBe(1);
+      expect(store.pool.get('row-1')).toEqual(row);
+    });
+
+    it('ignores an unrecognised action type', () => {
+      const store = makeStore();
+      const row = makeRow({ id: 'row-1' } as Partial<T> & { id: string });
+      store.applySyncAction('I', 'row-1', row);
+
+      store.applySyncAction('X', 'row-1', makeRow({ id: 'row-1' } as Partial<T> & { id: string }));
+      store.applySyncAction('', 'row-2', row);
+
+      expect(store.pool.size).toBe(1);
+      expect(store.pool.get('row-1')).toEqual(row);
+    });
   });
 }

@@ -1,5 +1,6 @@
 import { action, computed, makeObservable, observable } from 'mobx';
 import type { DBDocument } from '@/lib/db';
+import { applyPoolSyncAction } from './apply-pool-sync-action';
 
 export class DocumentStore {
   pool = new Map<string, DBDocument>();
@@ -42,12 +43,6 @@ export class DocumentStore {
   }
 
   applySyncAction(actionType: string, id: string, data: DBDocument | null) {
-    if (actionType === 'I' || actionType === 'U' || actionType === 'A') {
-      if (data) {
-        this.pool.set(id, data);
-      }
-    } else if (actionType === 'D') {
-      this.pool.delete(id);
-    }
+    applyPoolSyncAction(this.pool, actionType, id, data);
   }
 }

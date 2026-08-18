@@ -79,6 +79,15 @@ export function useVisibleColumns(scope: string): {
     [scope],
   );
 
+  // `persist` runs *inside* the functional updater, which is deliberate and was
+  // once "fixed" the wrong way. Computing the next Set from the render closure's
+  // `visible` instead loses an update whenever two calls land in one React batch
+  // (`showAll(...)` then `toggle(...)` from the same handler) — both would build
+  // from the same pre-batch value. Here each invocation derives `next` from that
+  // invocation's own `prev`, so batches compose. React may invoke an updater
+  // more than once, but the only consequence is a repeated write of an identical
+  // value to the same key, and persisting from an effect instead would need a
+  // ref to stop it writing defaults back out on mount and on every scope switch.
   const toggle = useCallback(
     (key: ColumnKey) => {
       setVisible(prev => {

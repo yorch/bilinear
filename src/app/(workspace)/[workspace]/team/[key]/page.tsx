@@ -538,7 +538,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
 
       {/* Save current filters as a custom view */}
       <SaveViewModal
-        initialFilters={filterSet as unknown as object}
+        initialFilters={filterSet}
         initialGroupBy={viewMode === 'board' ? boardGroupBy : undefined}
         initialLayout={viewMode}
         onClose={() => setSaveViewOpen(false)}

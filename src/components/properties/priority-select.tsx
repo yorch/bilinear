@@ -1,6 +1,6 @@
 'use client';
 
-import { SelectPopover } from '@/components/ui/select-popover';
+import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
 import { cn, TOUCH_TARGET } from '@/lib/utils';
 import { PriorityIcon, priorityLabelKey } from './priority-icon';
@@ -41,10 +41,7 @@ export function PrioritySelect({
           return (
             <button
               aria-selected={p === value}
-              className={cn(
-                'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent',
-                p === value && 'font-medium',
-              )}
+              className={cn(POPOVER_ITEM_CLASS, p === value && 'font-medium')}
               key={p}
               onClick={e => {
                 e.stopPropagation();

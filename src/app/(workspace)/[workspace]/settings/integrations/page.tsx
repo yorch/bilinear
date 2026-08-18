@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { RowsSkeleton } from '@/components/ui/skeleton';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
@@ -67,6 +68,7 @@ const GITHUB_ROTATE_SECRET_MUTATION = `
 
 const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
   const t = useTranslations();
+  useDocumentTitle(t('settings.integrations.title'));
   const { formatDate } = useFormatters();
   const { teamStore } = useStore();
   const teams = teamStore.all;

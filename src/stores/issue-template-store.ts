@@ -1,5 +1,6 @@
 import { action, computed, makeObservable, observable } from 'mobx';
 import type { DBIssueTemplate } from '@/lib/db';
+import { applyPoolSyncAction } from './apply-pool-sync-action';
 
 export class IssueTemplateStore {
   pool = new Map<string, DBIssueTemplate>();
@@ -51,12 +52,6 @@ export class IssueTemplateStore {
   }
 
   applySyncAction(actionType: string, id: string, data: DBIssueTemplate | null) {
-    if (actionType === 'I' || actionType === 'U' || actionType === 'A') {
-      if (data) {
-        this.pool.set(id, data);
-      }
-    } else if (actionType === 'D') {
-      this.pool.delete(id);
-    }
+    applyPoolSyncAction(this.pool, actionType, id, data);
   }
 }

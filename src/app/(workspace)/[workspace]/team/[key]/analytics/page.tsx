@@ -8,6 +8,7 @@ import { InsightsSection } from '@/components/analytics/insights-section';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { ColorDot } from '@/components/ui/color-dot';
 import { PageHeader } from '@/components/ui/page-header';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
@@ -205,6 +206,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
   const t = useTranslations();
+  useDocumentTitle(t('analytics.team.title'));
   const { formatDate } = useFormatters();
   const { key: teamKey } = useParams<{ workspace: string; key: string }>();
   const { issueStore, teamStore, workflowStateStore, userStore, syncStore } = useStore();
@@ -232,10 +234,10 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
 
   // ── Raw data ─────────────────────────────────────────────────────────────
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the intentional reactive trigger
   const issues = useMemo(
     () => (teamId ? issueStore.findByTeamId(teamId) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [teamId, issueStore.findByTeamId],
+    [teamId, issueStore.pool.size],
   );
 
   // Issues filtered by date range (created or completed within the window).
@@ -251,17 +253,18 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
     });
   }, [issues, cutoff]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the intentional reactive trigger
   const states = useMemo(
     () => (teamId ? workflowStateStore.findByTeamId(teamId) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [teamId, workflowStateStore.findByTeamId],
+    [teamId, workflowStateStore.pool.size],
   );
 
-  const users = useMemo(
-    () => userStore.all,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [userStore.all],
-  );
+  // A plain read of the MobX computed — `observer` tracks it, and the computed is
+  // cached while observed, so a memo would add nothing. Deliberately NOT keyed on
+  // `pool.size` like `issues`/`states` above: those wrap a prototype *method*
+  // whose identity never changes, whereas `all` already changes identity on an
+  // in-place row update such as a rename.
+  const users = userStore.all;
 
   // ── Issues by state ───────────────────────────────────────────────────────
 

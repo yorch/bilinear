@@ -1,5 +1,6 @@
 import { action, computed, makeObservable, observable } from 'mobx';
 import type { DBProject, DBProjectMilestone, DBProjectUpdate } from '@/lib/db';
+import { applyPoolSyncAction } from './apply-pool-sync-action';
 
 export class ProjectStore {
   pool = new Map<string, DBProject>();
@@ -85,32 +86,14 @@ export class ProjectStore {
   }
 
   applySyncAction(actionType: string, id: string, data: DBProject | null) {
-    if (actionType === 'I' || actionType === 'U' || actionType === 'A') {
-      if (data) {
-        this.pool.set(id, data);
-      }
-    } else if (actionType === 'D') {
-      this.pool.delete(id);
-    }
+    applyPoolSyncAction(this.pool, actionType, id, data);
   }
 
   applyMilestoneSyncAction(actionType: string, id: string, data: DBProjectMilestone | null) {
-    if (actionType === 'I' || actionType === 'U' || actionType === 'A') {
-      if (data) {
-        this.milestonePool.set(id, data);
-      }
-    } else if (actionType === 'D') {
-      this.milestonePool.delete(id);
-    }
+    applyPoolSyncAction(this.milestonePool, actionType, id, data);
   }
 
   applyUpdateSyncAction(actionType: string, id: string, data: DBProjectUpdate | null) {
-    if (actionType === 'I' || actionType === 'U' || actionType === 'A') {
-      if (data) {
-        this.updatePool.set(id, data);
-      }
-    } else if (actionType === 'D') {
-      this.updatePool.delete(id);
-    }
+    applyPoolSyncAction(this.updatePool, actionType, id, data);
   }
 }

@@ -547,7 +547,6 @@ export function TipTapEditor({
         // noop — auth success is logged server-side
       },
       onAuthenticationFailed: ({ reason }) => {
-        // eslint-disable-next-line no-console
         console.warn('[collab] Authentication failed:', reason);
       },
       onSynced: ({ state }) => {
@@ -614,8 +613,10 @@ export function TipTapEditor({
       seededRef.current = false;
       needsSeedRef.current = false;
     },
+    // Mount-once: every value read inside is held in a ref precisely so this
+    // callback stays stable — a re-created provider would drop the live session.
     [],
-  ); // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   // Extensions are built once — TipTap does not support hot-reloading them.
   // Mutable state (mentionUsers) is accessed via mentionUsersRef at call time.
@@ -672,7 +673,6 @@ export function TipTapEditor({
           ]
         : []),
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 

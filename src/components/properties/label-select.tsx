@@ -1,7 +1,7 @@
 'use client';
 
 import { ColorDot } from '@/components/ui/color-dot';
-import { SelectPopover } from '@/components/ui/select-popover';
+import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 
@@ -68,10 +68,7 @@ export function LabelSelect({
           )}
           {labels.map(label => (
             <button
-              className={cn(
-                'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent',
-                value.includes(label.id) && 'font-medium',
-              )}
+              className={cn(POPOVER_ITEM_CLASS, value.includes(label.id) && 'font-medium')}
               key={label.id}
               onClick={e => {
                 e.stopPropagation();

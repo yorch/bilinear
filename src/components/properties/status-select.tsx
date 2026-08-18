@@ -1,7 +1,7 @@
 'use client';
 
 import { ColorDot } from '@/components/ui/color-dot';
-import { SelectPopover } from '@/components/ui/select-popover';
+import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 
@@ -57,10 +57,7 @@ export function StatusSelect({
         states.map(state => (
           <button
             aria-selected={state.id === value}
-            className={cn(
-              'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent',
-              state.id === value && 'font-medium',
-            )}
+            className={cn(POPOVER_ITEM_CLASS, state.id === value && 'font-medium')}
             key={state.id}
             onClick={e => {
               e.stopPropagation();

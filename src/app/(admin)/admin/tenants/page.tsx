@@ -2,10 +2,14 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { InlineRetry } from '@/components/shared/inline-retry';
+import { PromptDialog } from '@/components/shared/prompt-dialog';
 import { RowsSkeleton } from '@/components/ui/skeleton';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import {
   deleteTenant,
@@ -37,29 +41,28 @@ const STATUS_STYLES: Record<TenantStatus, string> = {
 
 function TenantsInner() {
   const t = useTranslations();
+  useDocumentTitle(t('admin.nav.tenants'));
   const { formatDate } = useFormatters();
   const searchParams = useSearchParams();
   const [query, setQuery] = useState(searchParams.get('q') ?? '');
   const [applied, setApplied] = useState(searchParams.get('q') ?? '');
   const [includeArchived, setIncludeArchived] = useState(false);
-  const [tenants, setTenants] = useState<PlatformTenant[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState<PlatformTenant | null>(null);
+  const [suspending, setSuspending] = useState<PlatformTenant | null>(null);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    fetchTenants(applied, includeArchived)
-      .then(setTenants)
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [applied, includeArchived]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const {
+    data: tenants,
+    setData: setTenants,
+    loading,
+    error,
+    errorMessage,
+    refetch: load,
+  } = useRetryableFetch<PlatformTenant[]>(
+    () => fetchTenants(applied, includeArchived),
+    [applied, includeArchived],
+    [],
+  );
 
   function replaceRow(updated: PlatformTenant) {
     setTenants(prev => prev.map(t => (t.id === updated.id ? updated : t)));
@@ -76,11 +79,8 @@ function TenantsInner() {
     }
   }
 
-  async function handleSuspend(tenant: PlatformTenant) {
-    const reason = window.prompt(t('admin.tenants.suspendPrompt', { name: tenant.name }), '');
-    if (reason === null) {
-      return;
-    }
+  async function handleSuspendConfirmed(tenant: PlatformTenant, reason: string) {
+    setSuspending(null);
     await withBusy(tenant.id, async () => {
       replaceRow(await suspendTenant(tenant.id, reason.trim() || null));
       toast.success(t('admin.tenants.suspendedToast', { name: tenant.name }));
@@ -145,7 +145,10 @@ function TenantsInner() {
       {loading ? (
         <RowsSkeleton count={5} />
       ) : error ? (
-        <p className="text-sm text-danger-subtle-foreground">{error}</p>
+        <InlineRetry
+          message={errorMessage ?? t('common.somethingWentWrong')}
+          onRetry={() => load()}
+        />
       ) : tenants.length === 0 ? (
         <p className="rounded border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
           {t('admin.tenants.empty')}
@@ -218,7 +221,7 @@ function TenantsInner() {
                           <button
                             className="rounded border border-warning/40 px-2 py-1 text-xs text-warning-subtle-foreground hover:bg-warning-subtle disabled:opacity-50"
                             disabled={busyId === tenant.id}
-                            onClick={() => handleSuspend(tenant)}
+                            onClick={() => setSuspending(tenant)}
                             type="button"
                           >
                             {t('admin.tenants.suspend')}
@@ -254,6 +257,18 @@ function TenantsInner() {
         }}
         open={confirmingDelete !== null}
         title={t('common.delete')}
+      />
+      <PromptDialog
+        confirmLabel={t('admin.tenants.suspend')}
+        label={t('admin.tenants.suspendPrompt', { name: suspending?.name ?? '' })}
+        onCancel={() => setSuspending(null)}
+        onSubmit={reason => {
+          if (suspending) {
+            void handleSuspendConfirmed(suspending, reason);
+          }
+        }}
+        open={suspending !== null}
+        title={t('admin.tenants.suspend')}
       />
     </div>
   );

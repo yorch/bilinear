@@ -7,6 +7,7 @@ import { useCallback, useState } from 'react';
 import { IssueListView } from '@/components/issues/issue-list-view';
 import { PageHeader } from '@/components/ui/page-header';
 import { IssueListSkeleton } from '@/components/ui/skeleton';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssueLabel } from '@/lib/db';
@@ -48,6 +49,8 @@ const CustomViewPage = observer(function CustomViewPage() {
   const team = teamStore.findByKey(teamKey);
   const teamId = team?.id ?? null;
   const view = customViewStore.findById(viewId);
+
+  useDocumentTitle(view?.name);
 
   const states = teamId ? workflowStateStore.findByTeamId(teamId) : [];
 

@@ -1,9 +1,9 @@
 'use client';
 
-import { SelectPopover } from '@/components/ui/select-popover';
+import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { useTranslations } from '@/hooks/use-translations';
 import { cn, TOUCH_TARGET } from '@/lib/utils';
-import { UserAvatar } from '../ui/user-avatar';
 
 interface User {
   avatarBackgroundColor: string;
@@ -69,10 +69,7 @@ export function AssigneeSelect({
           {users.map(user => (
             <button
               aria-selected={user.id === value}
-              className={cn(
-                'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent',
-                user.id === value && 'font-medium',
-              )}
+              className={cn(POPOVER_ITEM_CLASS, user.id === value && 'font-medium')}
               key={user.id}
               onClick={e => {
                 e.stopPropagation();

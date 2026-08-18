@@ -1,10 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { PageSkeleton } from '@/components/ui/skeleton';
+import { useDocumentTitle } from '@/hooks/use-document-title';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gql, gqlQuery, isPermissionError } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 
 /**
@@ -72,9 +75,7 @@ const WEBHOOK_ROTATE_SECRET_MUTATION = `
 
 export default function WebhooksSettingsPage() {
   const t = useTranslations();
-  const [webhooks, setWebhooks] = useState<Webhook[]>([]);
-  const [availableEvents, setAvailableEvents] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  useDocumentTitle(t('settings.webhooks.title'));
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
@@ -85,31 +86,53 @@ export default function WebhooksSettingsPage() {
     type: 'delete' | 'rotate';
   } | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const res = await gql(WEBHOOKS_QUERY);
-      if (cancelled) {
-        return;
-      }
-      if (res.errors?.length) {
-        toast.error(
-          (res.errors[0] as { message?: string })?.message ?? t('settings.webhooks.loadError'),
+  // One query feeds both lists, so they travel together as one value.
+  // gqlQuery throws on a GraphQL error, which makes the retry branch reachable —
+  // previously a failed load toasted once and then rendered as "no webhooks".
+  //
+  // A non-admin's FORBIDDEN is not one of those failures: this route is reachable
+  // from the settings nav, so being turned away is an expected answer with
+  // nothing to retry. It comes back as `forbidden` in the data rather than
+  // tripping `error`.
+  const {
+    data: { availableEvents, forbidden, webhooks },
+    setData,
+    loading,
+    error,
+    refetch: load,
+  } = useRetryableFetch<{
+    availableEvents: string[];
+    forbidden: boolean;
+    webhooks: Webhook[];
+  }>(
+    async () => {
+      try {
+        const data = await gqlQuery<{ webhookEvents?: string[]; webhooks?: Webhook[] }>(
+          WEBHOOKS_QUERY,
+          {},
         );
-      } else {
-        const data = (res.data ?? {}) as {
-          webhooks?: Webhook[];
-          webhookEvents?: string[];
+        return {
+          availableEvents: data.webhookEvents ?? [],
+          forbidden: false,
+          webhooks: data.webhooks ?? [],
         };
-        setWebhooks(data.webhooks ?? []);
-        setAvailableEvents(data.webhookEvents ?? []);
+      } catch (err) {
+        if (isPermissionError(err)) {
+          return { availableEvents: [], forbidden: true, webhooks: [] };
+        }
+        throw err;
       }
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [t]);
+    },
+    [],
+    { availableEvents: [], forbidden: false, webhooks: [] },
+  );
+
+  const setWebhooks = (next: Webhook[] | ((prev: Webhook[]) => Webhook[])) => {
+    setData(prev => ({
+      ...prev,
+      webhooks: typeof next === 'function' ? next(prev.webhooks) : next,
+    }));
+  };
 
   const handleCreate = async () => {
     if (!name.trim() || !url.trim() || selectedEvents.size === 0) {
@@ -198,14 +221,21 @@ export default function WebhooksSettingsPage() {
           <h1 className="text-lg font-semibold text-foreground">{t('settings.webhooks.title')}</h1>
           <p className="mt-1 text-xs text-muted-foreground">{t('settings.webhooks.description')}</p>
         </div>
-        <button
-          className="rounded bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90"
-          onClick={() => setCreating(c => !c)}
-          type="button"
-        >
-          {creating ? t('common.cancel') : t('settings.webhooks.addWebhook')}
-        </button>
+        {!forbidden && (
+          <button
+            className="rounded bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90"
+            onClick={() => setCreating(c => !c)}
+            type="button"
+          >
+            {creating ? t('common.cancel') : t('settings.webhooks.addWebhook')}
+          </button>
+        )}
       </div>
+
+      {/* Rendered inside the page shell, not instead of it: replacing the whole
+          page drops the heading and reads as a crash rather than a failed
+          section. */}
+      {error && <InlineRetry message={t('settings.webhooks.loadError')} onRetry={() => load()} />}
 
       {creating ? (
         <div className="mb-6 rounded border border-border p-4">

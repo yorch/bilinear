@@ -1,9 +1,9 @@
 'use client';
 
+import type { MentionItem } from '@/components/editor/mention-list';
+import { TipTapEditor } from '@/components/editor/tiptap-editor.lazy';
 import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
-import type { MentionItem } from '../editor/mention-list';
-import { TipTapEditor } from '../editor/tiptap-editor.lazy';
 
 export function CommentComposer({
   placeholder,

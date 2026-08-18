@@ -27,6 +27,11 @@ import { toast } from '@/lib/toast';
 import { cn, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
+/** Shared by the status and health selects — one operation, one selection set. */
+const PROJECT_UPDATE_MUTATION = `mutation ($id: ID!, $input: ProjectUpdateInput!) {
+  projectUpdate(id: $id, input: $input) { success }
+}`;
+
 interface ProjectDetailViewProps {
   projectSlugId: string;
   workspaceKey: string;
@@ -108,12 +113,10 @@ export const ProjectDetailView = observer(function ProjectDetailView({
       // `gqlMutate` throws on a GraphQL-level failure, so a rejected write
       // reaches the catch instead of leaving the store-backed select to snap
       // back with no explanation.
-      await gqlMutate(
-        `mutation ($id: ID!, $input: ProjectUpdateInput!) {
-          projectUpdate(id: $id, input: $input) { success }
-        }`,
-        { id: project.id, input: { statusType: newStatus } },
-      );
+      await gqlMutate(PROJECT_UPDATE_MUTATION, {
+        id: project.id,
+        input: { statusType: newStatus },
+      });
     } catch {
       toast.error(t('projects.failedToUpdateStatus'));
     }
@@ -121,12 +124,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
 
   const handleHealthChange = async (newHealth: string) => {
     try {
-      await gqlMutate(
-        `mutation ($id: ID!, $input: ProjectUpdateInput!) {
-          projectUpdate(id: $id, input: $input) { success }
-        }`,
-        { id: project.id, input: { health: newHealth } },
-      );
+      await gqlMutate(PROJECT_UPDATE_MUTATION, { id: project.id, input: { health: newHealth } });
     } catch {
       toast.error(t('projects.failedToUpdateHealth'));
     }

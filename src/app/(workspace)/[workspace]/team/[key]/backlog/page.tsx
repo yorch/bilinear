@@ -9,6 +9,7 @@ import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
 import { IssueListSkeleton } from '@/components/ui/skeleton';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useTranslations } from '@/hooks/use-translations';
@@ -206,6 +207,7 @@ const BacklogPage = observer(function BacklogPage() {
   } = useStore();
 
   const t = useTranslations();
+  useDocumentTitle(t('nav.backlog'));
   const txQueue = useMemo(() => new TransactionQueue(), []);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filterSet, setFilterSet] = useState<FilterSet>(createEmptyFilterSet());

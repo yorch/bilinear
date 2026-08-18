@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { RowsSkeleton } from '@/components/ui/skeleton';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery, isPermissionError } from '@/lib/graphql';
@@ -152,6 +153,7 @@ const DEFAULT_FORM: FormState = {
 
 export default function SecuritySettingsPage() {
   const t = useTranslations();
+  useDocumentTitle(t('settings.security.title'));
   const { formatDate } = useFormatters();
   const [config, setConfig] = useState<SamlConfig | null>(null);
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);

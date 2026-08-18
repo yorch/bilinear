@@ -688,9 +688,19 @@ still scan (lower traffic). See §3.3.
 > listbox pattern needs `aria-multiselectable` plumbed through `SelectPopover`
 > before it would be correct rather than merely present.
 >
+> `SimpleSelect` (`ui/select.tsx`) was brought onto the same pattern
+> (2026-08-18): `role="listbox"`/`role="option"`/`aria-selected`, an optional
+> `ariaLabel` for the call sites whose visible label is a plain `<span>` (the
+> custom-field value rows), `aria-haspopup`/`aria-expanded`/`aria-controls` on
+> the trigger, focus moved into the panel on open, and Up/Down/Home/End roving
+> focus. Worth recording *why* it needed doing twice: the first attempt added
+> only `aria-haspopup="listbox"` + `aria-expanded`, which is strictly worse than
+> adding nothing — it promises a listbox and then hands a screen reader a row of
+> unroled buttons. Advertise the pattern or implement it; never half of it.
+>
 > Still open: the full combobox restructure across the searchable pickers
-> (project/cycle), `aria-haspopup`/`aria-expanded` on the trigger buttons, and
-> the axe-core sweep in the checklist below.
+> (project/cycle), `aria-haspopup`/`aria-expanded` on the *remaining*
+> `SelectPopover` trigger buttons, and the axe-core sweep in the checklist below.
 
 **File entry points:**
 - `src/components/properties/status-select.tsx`
@@ -832,6 +842,65 @@ an upload against a container with no pre-existing `uploads/` directory still
 succeeds.
 
 ---
+
+### 4.5 `sync-manager`'s model switch is 20 copies of the same 12 lines (2026-08-18)
+
+> Surfaced while extracting `applyPoolSyncAction`. That extraction was the *small*
+> duplication; this is the one that can lose data.
+
+**File entry point:** `src/lib/sync-manager.ts` — the `applyActions` switch.
+
+**Problem.** Each of ~20 `case` arms repeats the identical shape: call the
+store's `applySyncAction` with a `Parameters<typeof …>[2]` cast, then push either
+a Dexie delete or a Dexie upsert into the right table. ~240 lines of boilerplate
+where the failure mode is silent: wire an arm to the wrong Dexie table, or omit
+an entity entirely, and rows vanish from the offline cache with nothing failing
+in CI. The `Organization` arm's own comment records that this already happened
+once — "without this case the action was emitted by the server and silently
+dropped here."
+
+**First-touch.** A `Record<modelName, { apply, dexieTable }>` registry collapses
+the uniform arms; `applyPoolSyncAction`'s `(pool, …)` signature is already the
+seam it needs. The genuinely bespoke arms (`Issue`, `Notification`,
+`CustomFieldValue`, `Organization`) stay explicit cases.
+
+**Acceptance signal.** A test that asserts every synced model name in the server's
+SyncAction vocabulary has a registry entry — the missing-arm class of bug becomes
+a failing test rather than a silent cache hole.
+
+**Effort:** Medium. **Risk:** Medium — it is the sync hot path.
+
+### 4.6 Three forked popover implementations (2026-08-18)
+
+> `SelectPopover`, `SimpleSelect` and `issue-context-menu` are three independent
+> popovers. The 2026-08-18 audit shared the *class string* across all three
+> (`POPOVER_ITEM_CLASS`) and the roving-focus *arithmetic* across two
+> (`lib/roving-focus.ts`), but the behaviour is still forked: `issue-context-menu`
+> has no arrow-key handling at all, and `SimpleSelect` reached parity on Escape
+> and focus-restore only after shipping a keyboard trap.
+>
+> The deep fix is rebuilding `SimpleSelect` on `SelectPopover` (5 call sites; the
+> API can stay identical except `placement`, which `usePopoverFlip` would make
+> automatic). Deferred because there is no visual-regression suite and the
+> trigger styling differs — it needs a `/design` pass, not just a refactor.
+
+### 4.7 `useRetryableFetch` discards the error's type (2026-08-18)
+
+> The hook catches a `GqlError` — which carries `extensions.code`, with
+> `isGqlErrorCode`/`isPermissionError` built on it in `src/lib/graphql.ts` — and
+> keeps only `.message`. That is why `settings/audit-log` and `settings/security`
+> each re-catch inside their own fetcher to recover a code the hook was already
+> holding.
+>
+> Returning the caught value (`cause: unknown`) instead of a pre-extracted string
+> would let call sites use `getErrorMessage(cause, fallback)` and
+> `isPermissionError(cause)` directly, and would remove `audit-log`'s inner catch.
+> ~10 lines in the hook, 6 call sites. Deferred rather than bundled into the
+> audit branch: it changes a shared hook's contract a second time in one PR.
+>
+> Related guardrail worth adding: `errorMessage` is a raw server string rendered
+> verbatim, and nothing scopes it to the admin console. `errorMessage ??
+> t('common.somethingWentWrong')` should stay the only sanctioned use.
 
 ## 5. Test coverage gaps
 

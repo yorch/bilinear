@@ -8,6 +8,7 @@ import { IssuePicker } from '@/components/issues/issue-picker';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { PageSkeleton } from '@/components/ui/skeleton';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useOutsideClick } from '@/hooks/use-outside-click';
@@ -153,6 +154,10 @@ const TriagePage = observer(function TriagePage() {
 
   const team = teamStore.findByKey(teamKey);
   const teamId = team?.id ?? null;
+
+  useDocumentTitle(
+    team ? t('settings.triage.pageTitle', { name: team.displayName ?? team.name }) : null,
+  );
 
   // The triage state for this team (if triage is enabled).
   const triageStateId = useMemo(() => {

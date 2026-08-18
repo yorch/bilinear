@@ -1,5 +1,16 @@
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
+import {
+  CHART_HEIGHT,
+  CHART_WIDTH,
+  makeScales,
+  PADDING_BOTTOM,
+  PADDING_LEFT,
+  PADDING_RIGHT,
+  PADDING_TOP,
+  toPath,
+  xAxisLabels,
+} from './chart-geometry';
 
 interface BurnupPoint {
   completed: number;
@@ -21,25 +32,11 @@ export function BurnupChart({ data }: BurnupChartProps) {
     );
   }
 
-  const width = 600;
-  const height = 300;
-  const paddingLeft = 36;
-  const paddingRight = 12;
-  const paddingTop = 12;
-  const paddingBottom = 32;
-
-  const chartWidth = width - paddingLeft - paddingRight;
-  const chartHeight = height - paddingTop - paddingBottom;
-
   const finalScope = data[data.length - 1].scope;
   const maxY = Math.max(finalScope, 1);
   const n = data.length;
 
-  const xScale = (i: number) => paddingLeft + (n > 1 ? (i / (n - 1)) * chartWidth : chartWidth / 2);
-  const yScale = (v: number) => paddingTop + chartHeight - (v / maxY) * chartHeight;
-
-  const toPath = (pts: Array<{ x: number; y: number }>) =>
-    pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+  const { xScale, yScale, yTicks } = makeScales(n, maxY);
 
   // Ideal: linear from 0 to finalScope over the cycle duration.
   // For a single data point (1-day cycle) the ideal is finalScope (all done by end of day).
@@ -52,25 +49,15 @@ export function BurnupChart({ data }: BurnupChartProps) {
   const scopePath = toPath(data.map((d, i) => ({ x: xScale(i), y: yScale(d.scope) })));
   const completedPath = toPath(data.map((d, i) => ({ x: xScale(i), y: yScale(d.completed) })));
 
-  const yTicks = [0, Math.round(maxY / 2), maxY];
-
-  const xLabels = data
-    .map((d, i) => ({
-      i,
-      label: formatDate(d.date, {
-        day: 'numeric',
-        month: 'short',
-      }),
-    }))
-    .filter((_, i) => i % 3 === 0 || i === n - 1);
+  const xLabels = xAxisLabels(data, date => formatDate(date, { day: 'numeric', month: 'short' }));
 
   return (
     <div className="w-full overflow-x-auto">
       <svg
         aria-label={t('cycles.burnup.ariaLabel')}
         className="w-full"
-        style={{ height: 300 }}
-        viewBox={`0 0 ${width} ${height}`}
+        style={{ height: CHART_HEIGHT }}
+        viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
       >
         {/* Y-axis grid lines + labels */}
         {yTicks.map(v => {
@@ -81,8 +68,8 @@ export function BurnupChart({ data }: BurnupChartProps) {
                 stroke="currentColor"
                 strokeOpacity={0.08}
                 strokeWidth={1}
-                x1={paddingLeft}
-                x2={width - paddingRight}
+                x1={PADDING_LEFT}
+                x2={CHART_WIDTH - PADDING_RIGHT}
                 y1={y}
                 y2={y}
               />
@@ -90,7 +77,7 @@ export function BurnupChart({ data }: BurnupChartProps) {
                 className="fill-muted-foreground"
                 fontSize={10}
                 textAnchor="end"
-                x={paddingLeft - 4}
+                x={PADDING_LEFT - 4}
                 y={y + 4}
               >
                 {v}
@@ -107,7 +94,7 @@ export function BurnupChart({ data }: BurnupChartProps) {
             key={i}
             textAnchor="middle"
             x={xScale(i)}
-            y={height - paddingBottom + 14}
+            y={CHART_HEIGHT - PADDING_BOTTOM + 14}
           >
             {label}
           </text>
@@ -129,7 +116,7 @@ export function BurnupChart({ data }: BurnupChartProps) {
         <path d={completedPath} fill="none" stroke="var(--chart-actual)" strokeWidth={2} />
 
         {/* Legend */}
-        <g transform={`translate(${paddingLeft + 8}, ${paddingTop + 8})`}>
+        <g transform={`translate(${PADDING_LEFT + 8}, ${PADDING_TOP + 8})`}>
           <line
             stroke="var(--chart-grid)"
             strokeDasharray="4 3"

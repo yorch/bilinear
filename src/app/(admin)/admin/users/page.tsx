@@ -1,8 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { InlineRetry } from '@/components/shared/inline-retry';
+import { Button } from '@/components/ui/button';
+import { ModalDialog } from '@/components/ui/modal-dialog';
 import { RowsSkeleton } from '@/components/ui/skeleton';
+import { useDocumentTitle } from '@/hooks/use-document-title';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import {
   fetchUsers,
@@ -15,51 +20,33 @@ import {
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 
-/** Choose which org to impersonate into when a user belongs to several. */
-function pickOrg(
-  user: PlatformUser,
-  t: ReturnType<typeof useTranslations>,
-): PlatformUser['organizations'][number] | null {
-  if (user.organizations.length === 0) {
-    return null;
-  }
-  if (user.organizations.length === 1) {
-    return user.organizations[0];
-  }
-  const list = user.organizations.map((o, i) => `${i + 1}. ${o.name} (${o.role})`).join('\n');
-  const choice = window.prompt(
-    `${t('admin.users.pickOrgPrompt', { name: user.displayName })}\n${list}`,
-    '1',
-  );
-  if (choice === null) {
-    return null;
-  }
-  const idx = Number.parseInt(choice, 10) - 1;
-  return user.organizations[idx] ?? null;
+/**
+ * The org to impersonate into when it is unambiguous. A user in several orgs
+ * returns null and is routed to the picker dialog instead — this used to be a
+ * `window.prompt` asking the operator to type a list index, where a mistyped
+ * digit silently impersonated into the wrong tenant.
+ */
+function soleOrg(user: PlatformUser): PlatformUser['organizations'][number] | null {
+  return user.organizations.length === 1 ? user.organizations[0] : null;
 }
 
 export default function AdminUsersPage() {
   const t = useTranslations();
+  useDocumentTitle(t('admin.users.title'));
   const [query, setQuery] = useState('');
   const [applied, setApplied] = useState('');
-  const [users, setUsers] = useState<PlatformUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmingRevoke, setConfirmingRevoke] = useState<PlatformUser | null>(null);
+  const [pickingOrgFor, setPickingOrgFor] = useState<PlatformUser | null>(null);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    fetchUsers(applied)
-      .then(setUsers)
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [applied]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const {
+    data: users,
+    setData: setUsers,
+    loading,
+    error,
+    errorMessage,
+    refetch: load,
+  } = useRetryableFetch<PlatformUser[]>(() => fetchUsers(applied), [applied], []);
 
   function replaceRow(updated: PlatformUser) {
     setUsers(prev => prev.map(u => (u.id === updated.id ? updated : u)));
@@ -97,16 +84,22 @@ export default function AdminUsersPage() {
   }
 
   async function handleImpersonate(u: PlatformUser) {
-    const org = pickOrg(u, t);
-    if (!org) {
-      if (u.organizations.length > 0) {
-        return;
-      }
+    if (u.organizations.length === 0) {
       toast.error(t('admin.users.noOrgToImpersonate'));
       return;
     }
+    const org = soleOrg(u);
+    if (!org) {
+      setPickingOrgFor(u);
+      return;
+    }
+    await impersonateInto(u, org.id);
+  }
+
+  async function impersonateInto(u: PlatformUser, orgId: string) {
+    setPickingOrgFor(null);
     await withBusy(u.id, async () => {
-      const urlKey = await startImpersonation(u.id, org.id);
+      const urlKey = await startImpersonation(u.id, orgId);
       // Full navigation so the new impersonation cookie is picked up everywhere.
       window.location.href = `/${urlKey}`;
     });
@@ -143,7 +136,10 @@ export default function AdminUsersPage() {
       {loading ? (
         <RowsSkeleton count={5} />
       ) : error ? (
-        <p className="text-sm text-danger-subtle-foreground">{error}</p>
+        <InlineRetry
+          message={errorMessage ?? t('common.somethingWentWrong')}
+          onRetry={() => load()}
+        />
       ) : users.length === 0 ? (
         <p className="rounded border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
           {t('admin.users.empty')}
@@ -265,6 +261,42 @@ export default function AdminUsersPage() {
         open={confirmingRevoke !== null}
         title={t('admin.users.revokeAdmin')}
       />
+      <ModalDialog
+        aria-label={t('admin.users.pickOrgPrompt', {
+          name: pickingOrgFor?.displayName ?? '',
+        })}
+        onClose={() => setPickingOrgFor(null)}
+        open={pickingOrgFor !== null}
+      >
+        <div className="px-5 py-4">
+          <h2 className="text-sm font-semibold text-foreground">
+            {t('admin.users.pickOrgPrompt', { name: pickingOrgFor?.displayName ?? '' })}
+          </h2>
+          <ul className="mt-3 flex flex-col gap-1">
+            {pickingOrgFor?.organizations.map(o => (
+              <li key={o.id}>
+                <button
+                  className="flex w-full items-center justify-between gap-3 rounded border border-border px-3 py-2 text-left text-sm hover:bg-accent"
+                  onClick={() => {
+                    if (pickingOrgFor) {
+                      void impersonateInto(pickingOrgFor, o.id);
+                    }
+                  }}
+                  type="button"
+                >
+                  <span className="text-foreground">{o.name}</span>
+                  <span className="text-xs text-muted-foreground">{o.role}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-border px-5 py-3">
+          <Button onClick={() => setPickingOrgFor(null)} size="sm" type="button" variant="ghost">
+            {t('common.cancel')}
+          </Button>
+        </div>
+      </ModalDialog>
     </div>
   );
 }

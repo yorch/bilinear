@@ -1,46 +1,53 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { RowsSkeleton } from '@/components/ui/skeleton';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { fetchAuditLog, type PlatformAuditEntry } from '@/lib/admin-api';
 
+interface AuditPage {
+  entries: PlatformAuditEntry[];
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
 export default function AdminAuditPage() {
   const t = useTranslations();
+  useDocumentTitle(t('admin.audit.title'));
   const { formatDateTime } = useFormatters();
-  const [entries, setEntries] = useState<PlatformAuditEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetchAuditLog(null)
-      .then(page => {
-        if (cancelled) {
-          return;
-        }
-        setEntries(page.entries);
-        setHasMore(page.hasMore);
-        setNextCursor(page.nextCursor);
-      })
-      .catch((e: Error) => {
-        if (!cancelled) {
-          setError(e.message);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Only the first page goes through useRetryableFetch — it owns the
+  // cancelled-flag/stale-response state machine this page used to hand-roll.
+  // "Load more" appends through `setPage` and keeps its own error, since a
+  // failed page 3 must not blank the two pages already on screen.
+  //
+  // The cursor lives inside the fetched value rather than in its own state so it
+  // is covered by the hook's monotonic request-id guard — held separately, a
+  // stale response would have its entries discarded but its cursor kept, and the
+  // next "Load more" would page from the wrong place.
+  const {
+    data: page,
+    setData: setPage,
+    loading,
+    error,
+    errorMessage,
+    refetch: reload,
+  } = useRetryableFetch<AuditPage>(
+    async () => {
+      setPageError(null);
+      return await fetchAuditLog(null);
+    },
+    [],
+    { entries: [], hasMore: false, nextCursor: null },
+  );
+
+  const { entries, hasMore, nextCursor } = page;
 
   async function handleLoadMore() {
     if (!nextCursor || loadingMore) {
@@ -48,12 +55,15 @@ export default function AdminAuditPage() {
     }
     setLoadingMore(true);
     try {
-      const page = await fetchAuditLog(nextCursor);
-      setEntries(prev => [...prev, ...page.entries]);
-      setHasMore(page.hasMore);
-      setNextCursor(page.nextCursor);
+      const next = await fetchAuditLog(nextCursor);
+      setPage(prev => ({
+        entries: [...prev.entries, ...next.entries],
+        hasMore: next.hasMore,
+        nextCursor: next.nextCursor,
+      }));
+      setPageError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setPageError((e as Error).message);
     } finally {
       setLoadingMore(false);
     }
@@ -69,7 +79,10 @@ export default function AdminAuditPage() {
       {loading ? (
         <RowsSkeleton count={5} />
       ) : error ? (
-        <p className="text-sm text-danger-subtle-foreground">{error}</p>
+        <InlineRetry
+          message={errorMessage ?? t('common.somethingWentWrong')}
+          onRetry={() => reload()}
+        />
       ) : entries.length === 0 ? (
         <p className="rounded border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
           {t('admin.audit.empty')}
@@ -127,6 +140,10 @@ export default function AdminAuditPage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {pageError && (
+        <InlineRetry className="justify-center" message={pageError} onRetry={handleLoadMore} />
       )}
 
       {hasMore && (

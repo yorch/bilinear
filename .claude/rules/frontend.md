@@ -84,14 +84,18 @@ In `src/components/ui/`:
   `IssueListSkeleton` / `IssueSkeleton` / `DetailPanelSkeleton` /
   `SidebarSkeleton` (from `ui/skeleton`)
 - `SelectPopover`, `SearchableSelectPopover` (generic searchable dropdown — see
-  `CycleSelect` / `ProjectSelect` for usage)
+  `CycleSelect` / `ProjectSelect` for usage). `POPOVER_ITEM_CLASS` (exported from
+  `ui/select-popover`) is the shared class for a single option row in any popover
+  panel — a constant rather than a component, because the primitive's roving-focus
+  query walks the real buttons each call site renders.
 - `ModalDialog` + `ModalHeader` / `ModalFooter` (native `showModal()` — real
   focus trap; Escape arrives as the `cancel` event)
 - `PageHeader` / `Toolbar` — the single page-chrome header and its control strip.
   Never hand-roll a page header.
 
 In `src/components/shared/`: `ConfirmDialog` (destructive confirmations — always
-prefer over `window.confirm`), `InlineRetry` (a failed fetch must offer a retry,
+prefer over `window.confirm`), `PromptDialog` (one short string before an action
+runs — always prefer over `window.prompt`), `InlineRetry` (a failed fetch must offer a retry,
 never render as an authoritative empty state), `SettingToggleRow`,
 `SyncErrorState`, `UpdateFormFields`, `CreateUpdateForm` / `EditUpdateForm`,
 `DeleteUpdateButton`, `SectionHeader` + `SectionAddButton` (the uppercase
@@ -137,7 +141,13 @@ pulse means "live" (connection status, pending write), not "loading".
 - Fetch-on-mount goes through `useRetryableFetch` — it owns the `reloadKey` /
   cancelled-flag state machine and pairs with `InlineRetry`. Pass
   `{ silent: true }` for post-mutation background refreshes so they don't
-  re-flash the skeleton. See PATTERNS.md §80.6.
+  re-flash the skeleton. It returns `errorMessage` alongside the `error` boolean
+  for surfaces where the server's own text is the diagnostic (the admin console);
+  render `errorMessage ?? t('common.somethingWentWrong')`. "Not found" and
+  "not allowed" are **not** errors — they are not retryable, so model them as
+  data rather than tripping `error`. The one shape the hook does not fit is
+  fetch-then-seed-a-form, which would need `setX(...)` inside the fetcher; those
+  pages keep their own effect. See PATTERNS.md §80.6.
 - Issue mutations from components: use `useIssueCreate(team, states)` and
   `useIssueUpdate()` — they own the optimistic apply, TransactionQueue enqueue,
   rollback and failure toast. Map store models with `toIssueUsers` /

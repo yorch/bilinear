@@ -2,6 +2,7 @@
 
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -53,6 +54,7 @@ interface ImportResult {
 
 const ImportSettingsPage = observer(function ImportSettingsPage() {
   const t = useTranslations();
+  useDocumentTitle(t('settings.import.title'));
   const { teamStore } = useStore();
   const teams = teamStore.all;
 

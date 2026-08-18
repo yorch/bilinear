@@ -12,6 +12,7 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowsSkeleton } from '@/components/ui/skeleton';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
@@ -138,6 +139,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const { workspace } = useParams<{ workspace: string }>();
   const { teamStore } = useStore();
   const t = useTranslations();
+  useDocumentTitle(t('settings.workspace.title'));
   const { formatDate, intlLocale } = useFormatters();
 
   const [org, setOrg] = useState<OrgInfo | null>(null);

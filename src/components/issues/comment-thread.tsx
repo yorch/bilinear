@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { MentionItem } from '@/components/editor/mention-list';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
@@ -17,7 +18,6 @@ import {
 } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
 import { getErrorMessage } from '@/lib/utils';
-import type { MentionItem } from '../editor/mention-list';
 import { CommentCard, type CommentItem } from './comment-card';
 import { CommentComposer } from './comment-composer';
 

@@ -25,6 +25,7 @@ export function CustomFieldValueInput({
     case 'text':
       return (
         <TextInput
+          label={definition.name}
           onSave={v => onSave(v.length > 0 ? v : null)}
           value={typeof value === 'string' ? value : ''}
         />
@@ -32,6 +33,7 @@ export function CustomFieldValueInput({
     case 'url':
       return (
         <TextInput
+          label={definition.name}
           onSave={v => onSave(v.length > 0 ? v : null)}
           placeholder={t('customFields.urlPlaceholder')}
           type="url"
@@ -41,6 +43,7 @@ export function CustomFieldValueInput({
     case 'number':
       return (
         <TextInput
+          label={definition.name}
           onSave={v => {
             if (v === '') {
               onSave(null);
@@ -58,6 +61,7 @@ export function CustomFieldValueInput({
     case 'date':
       return (
         <input
+          aria-label={definition.name}
           className="rounded-md border border-border bg-card px-2 py-1 text-xs"
           onChange={e => onSave(e.target.value || null)}
           type="date"
@@ -66,11 +70,17 @@ export function CustomFieldValueInput({
       );
     case 'checkbox':
       return (
-        <input checked={value === true} onChange={e => onSave(e.target.checked)} type="checkbox" />
+        <input
+          aria-label={definition.name}
+          checked={value === true}
+          onChange={e => onSave(e.target.checked)}
+          type="checkbox"
+        />
       );
     case 'select':
       return (
         <SimpleSelect
+          ariaLabel={definition.name}
           onChange={v => onSave(v || null)}
           options={[
             { label: '—', value: '' },
@@ -82,6 +92,7 @@ export function CustomFieldValueInput({
     case 'multi_select':
       return (
         <MultiSelect
+          label={definition.name}
           onSave={next => onSave(next.length > 0 ? next : null)}
           options={options}
           values={Array.isArray(value) ? (value as string[]) : []}
@@ -97,11 +108,13 @@ export function CustomFieldValueInput({
 // ---------------------------------------------------------------------------
 
 function TextInput({
+  label,
   value,
   onSave,
   placeholder,
   type = 'text',
 }: {
+  label: string;
   value: string;
   onSave: (next: string) => void;
   placeholder?: string;
@@ -112,6 +125,7 @@ function TextInput({
 
   return (
     <input
+      aria-label={label}
       className="rounded-md border border-border bg-card px-2 py-1 text-xs"
       onBlur={() => {
         if (draft !== value) {
@@ -136,10 +150,12 @@ function TextInput({
 // ---------------------------------------------------------------------------
 
 function MultiSelect({
+  label,
   values,
   options,
   onSave,
 }: {
+  label: string;
   values: string[];
   options: { value: string; label: string }[];
   onSave: (next: string[]) => void;
@@ -150,11 +166,13 @@ function MultiSelect({
   };
 
   return (
-    <div className="flex flex-wrap gap-1">
+    <fieldset className="flex flex-wrap gap-1 border-0 m-0 p-0">
+      <legend className="sr-only">{label}</legend>
       {options.map(o => {
         const selected = values.includes(o.value);
         return (
           <button
+            aria-pressed={selected}
             className={
               selected
                 ? 'rounded-full bg-brand-subtle px-2 py-0.5 text-xs text-brand-subtle-foreground'
@@ -168,6 +186,6 @@ function MultiSelect({
           </button>
         );
       })}
-    </div>
+    </fieldset>
   );
 }

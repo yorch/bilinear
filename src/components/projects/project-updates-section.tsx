@@ -7,13 +7,13 @@ import { DeleteUpdateButton } from '@/components/shared/delete-update-button';
 import { SectionAddButton, SectionHeader } from '@/components/shared/section-header';
 import { CreateUpdateForm, EditUpdateForm } from '@/components/shared/update-forms';
 import { Badge } from '@/components/ui/badge';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { PROJECT_HEALTH_CONFIG, PROJECT_HEALTH_LABEL_KEYS } from '@/lib/project-constants';
 import { cn, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
-import { UserAvatar } from '../ui/user-avatar';
 
 interface ProjectUpdatesSectionProps {
   projectId: string;

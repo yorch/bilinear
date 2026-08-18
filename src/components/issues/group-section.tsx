@@ -2,8 +2,8 @@
 
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useRef, useState } from 'react';
+import { StatusDot } from '@/components/properties/status-select';
 import { cn } from '@/lib/utils';
-import { StatusDot } from '../properties/status-select';
 
 const VIRTUAL_THRESHOLD = 20;
 

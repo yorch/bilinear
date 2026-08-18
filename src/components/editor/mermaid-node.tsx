@@ -4,7 +4,7 @@ import type { CommandProps } from '@tiptap/core';
 import { mergeAttributes, Node } from '@tiptap/core';
 import type { NodeViewProps } from '@tiptap/react';
 import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 
@@ -14,7 +14,12 @@ let mermaidReady: ReturnType<typeof loadMermaid> | null = null;
 
 function loadMermaid() {
   return import('mermaid').then(m => {
-    m.default.initialize({ startOnLoad: false, theme: 'neutral' });
+    // `securityLevel` is pinned rather than inherited: diagram source is
+    // document content any org member can author, and the rendered SVG goes
+    // straight into `dangerouslySetInnerHTML` below. 'strict' is Mermaid's
+    // current default, so this changes nothing today — it stops a future
+    // upstream default from silently turning that sink into stored XSS.
+    m.default.initialize({ securityLevel: 'strict', startOnLoad: false, theme: 'neutral' });
     return m.default;
   });
 }
@@ -34,13 +39,17 @@ function MermaidView({ node, updateAttributes, selected }: NodeViewProps) {
   const [svg, setSvg] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [editing, setEditing] = useState(!code);
-  const idRef = useRef(`mermaid-${Math.random().toString(36).slice(2)}`);
+  // Lazy initialiser: `useRef(expr)` evaluated `expr` on every render and threw
+  // all but the first away. Not `useId()` — React ids contain ':', which
+  // mermaid.render() would emit into an SVG element id and a generated CSS
+  // selector, where it does not parse.
+  const [diagramId] = useState(() => `mermaid-${Math.random().toString(36).slice(2)}`);
 
   useEffect(() => {
     if (!code) {
       return;
     }
-    renderMermaid(code, idRef.current)
+    renderMermaid(code, diagramId)
       .then(result => {
         setSvg(result);
         setError('');
@@ -49,7 +58,7 @@ function MermaidView({ node, updateAttributes, selected }: NodeViewProps) {
         setError(String(err));
         setSvg('');
       });
-  }, [code]);
+  }, [code, diagramId]);
 
   if (editing) {
     return (

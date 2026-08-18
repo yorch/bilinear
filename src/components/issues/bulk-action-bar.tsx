@@ -4,7 +4,7 @@ import { X } from 'lucide-react';
 import { priorityLabelKey } from '@/components/properties/priority-icon';
 import { StatusDot } from '@/components/properties/status-select';
 import { ColorDot } from '@/components/ui/color-dot';
-import { SelectPopover } from '@/components/ui/select-popover';
+import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { useTranslations } from '@/hooks/use-translations';
 import { getPriorityConfig } from '@/lib/issue-utils';
@@ -63,7 +63,7 @@ export function BulkActionBar({
           <div className="w-48 py-1">
             {states.map(s => (
               <button
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
+                className={POPOVER_ITEM_CLASS}
                 key={s.id}
                 onClick={() => {
                   onUpdate({ stateId: s.id });
@@ -93,7 +93,7 @@ export function BulkActionBar({
               const cfg = getPriorityConfig(p);
               return (
                 <button
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
+                  className={POPOVER_ITEM_CLASS}
                   key={p}
                   onClick={() => {
                     onUpdate({ priority: p });
@@ -121,7 +121,7 @@ export function BulkActionBar({
         {close => (
           <div className="w-48 py-1">
             <button
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
+              className={POPOVER_ITEM_CLASS}
               onClick={() => {
                 onUpdate({ assigneeId: null });
                 close();
@@ -135,7 +135,7 @@ export function BulkActionBar({
             </button>
             {users.map(u => (
               <button
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
+                className={POPOVER_ITEM_CLASS}
                 key={u.id}
                 onClick={() => {
                   onUpdate({ assigneeId: u.id });
@@ -164,7 +164,7 @@ export function BulkActionBar({
             <div className="w-48 py-1">
               {labels.map(l => (
                 <button
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
+                  className={POPOVER_ITEM_CLASS}
                   key={l.id}
                   onClick={() => {
                     onUpdate({ labelIds: [l.id] });

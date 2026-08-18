@@ -15,6 +15,7 @@ import {
 } from '@/components/teams/team-member-management';
 import { PageHeader } from '@/components/ui/page-header';
 import { SimpleSelect } from '@/components/ui/select';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -149,6 +150,10 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
 
   const team = teamStore.findByKey(teamKey);
 
+  useDocumentTitle(
+    team ? t('settings.team.settingsHeading', { name: team.displayName || team.name }) : null,
+  );
+
   // ── Local form state ──────────────────────────────────────────────────────
   const [name, setName] = useState(team?.name ?? '');
   const [description, setDescription] = useState(team?.description ?? '');
@@ -162,6 +167,10 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const currentUserId = userStore.currentUser?.id ?? '';
+  // Keyed on the `all` computed, NOT `pool.size`. MobX caches a computed while it
+  // is observed, so its array identity changes exactly when the underlying rows
+  // change — including a rename, which replaces a row without changing the key
+  // count. `pool.size` would hold this list stale until someone joins or leaves.
   const orgUsers = useMemo(
     () =>
       userStore.all.map(u => ({
@@ -172,7 +181,6 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         id: u.id,
         initials: u.initials,
       })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [userStore.all],
   );
 
