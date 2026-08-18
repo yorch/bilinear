@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * X toggles the selection state on the currently-active issue (the one
@@ -7,7 +9,7 @@ import { loginAs } from '../fixtures/auth';
  */
 test.describe('Bulk Selection', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
   });
 
   test('X clears selection on the active issue', async ({ page }) => {

@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Team creation from the sidebar.
@@ -11,7 +13,7 @@ import { loginAs } from '../fixtures/auth';
  */
 test.describe('Team Creation', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
   });
 
   test('clicking "New team" in the sidebar opens the create-team dialog', async ({ page }) => {

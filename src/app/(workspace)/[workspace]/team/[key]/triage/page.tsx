@@ -441,6 +441,7 @@ const TriagePage = observer(function TriagePage() {
                   'flex items-center gap-3 border-b border-border px-4 py-3',
                   focused && 'bg-accent/50',
                 )}
+                data-testid="triage-row"
                 key={issue.id}
               >
                 <span className="w-16 flex-shrink-0 text-xs text-muted-foreground">

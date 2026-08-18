@@ -1,12 +1,14 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Team CRUD: create team → verify workflow states seeded → navigate to team.
  */
 test.describe('Team Management', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
   });
 
   test('sidebar shows teams', async ({ page }) => {

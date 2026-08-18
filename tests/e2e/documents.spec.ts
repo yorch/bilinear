@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
 import { getTeamKey, getWorkspaceKey } from '../fixtures/workspace';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Documents — team-scoped doc creation and edit roundtrip.
@@ -12,7 +14,7 @@ import { getTeamKey, getWorkspaceKey } from '../fixtures/workspace';
  */
 test.describe('Documents', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
   });
 
   test('docs page renders and creates a new document', async ({ page }) => {

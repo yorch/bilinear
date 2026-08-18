@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
 import { getTeamIdByKey, gqlInPage } from '../fixtures/graphql';
 import { getTeamKey, getWorkspaceKey } from '../fixtures/workspace';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Comments + activity timeline.
@@ -15,7 +17,7 @@ import { getTeamKey, getWorkspaceKey } from '../fixtures/workspace';
  */
 test.describe('Comments + Activity', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
   });
 
   test('posting a comment renders in the issue detail panel', async ({ page }) => {

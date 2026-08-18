@@ -76,6 +76,8 @@ coverage/
 # Playwright
 playwright-report/
 test-results/
+# Signed-in browser state minted by the `setup` project (tests/e2e/auth.setup.ts)
+tests/.auth/
 
 # ── Project-specific ────────────────────────────────────────────
 logs

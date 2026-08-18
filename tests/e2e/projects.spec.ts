@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
 import { getWorkspaceKey } from '../fixtures/workspace';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Projects: list page renders, "New Project" opens the create modal,
@@ -8,7 +10,7 @@ import { getWorkspaceKey } from '../fixtures/workspace';
  */
 test.describe('Projects', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
     const ws = getWorkspaceKey(page);
     await page.goto(`/${ws}/projects`);
     await expect(page.getByRole('heading', { name: /projects/i })).toBeVisible();

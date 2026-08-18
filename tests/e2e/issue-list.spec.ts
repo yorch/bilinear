@@ -1,12 +1,14 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Issue list view: group by status, expand/collapse, keyboard navigation.
  */
 test.describe('Issue List View', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
   });
 
   test('issues are grouped by workflow state', async ({ page }) => {

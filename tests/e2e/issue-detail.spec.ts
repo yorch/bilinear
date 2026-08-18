@@ -1,6 +1,8 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Issue detail panel:
@@ -28,7 +30,7 @@ const titleButton = (page: Page, title: string): Locator =>
 
 test.describe('Issue Detail Panel', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
   });
 
   test('clicking an issue opens the detail panel with the identifier', async ({ page }) => {
@@ -93,10 +95,23 @@ test.describe('Issue Detail Panel', () => {
     await expect(bell).toBeVisible({ timeout: 10_000 });
     const before = await bell.getAttribute('aria-label');
 
-    await page.keyboard.press('Shift+s');
-
+    // Press inside the poll rather than once before it. The bell renders as
+    // soon as the subscription query resolves, but `useHotkeys` registers its
+    // listener from a `useEffect` keyed on `subscribed` — so for one commit
+    // after the bell paints, the *registered* handler still closes over
+    // `subscribed === null` and `handleToggleSubscription` returns early.
+    // A press that lands in that window is silently swallowed: no error, no
+    // change, which is exactly how this failed once in nine full-suite runs.
+    // Re-pressing converges, because any press that does reach a live handler
+    // flips the label.
     await expect
-      .poll(async () => bell.getAttribute('aria-label'), { timeout: 5_000 })
+      .poll(
+        async () => {
+          await page.keyboard.press('Shift+s');
+          return bell.getAttribute('aria-label');
+        },
+        { timeout: 10_000 },
+      )
       .not.toBe(before);
   });
 });

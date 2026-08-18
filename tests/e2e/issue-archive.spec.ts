@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Issue archive flow: pressing Backspace (or Delete) on the selected issue
@@ -10,7 +12,7 @@ import { loginAs } from '../fixtures/auth';
  */
 test.describe('Issue Archive', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
   });
 
   test('Backspace archives the selected issue and removes it from the list', async ({ page }) => {

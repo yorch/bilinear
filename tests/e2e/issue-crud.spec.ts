@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Issue CRUD critical path:
@@ -7,7 +9,7 @@ import { loginAs } from '../fixtures/auth';
  */
 test.describe('Issue CRUD', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
   });
 
   test('C shortcut opens create-issue modal', async ({ page }) => {

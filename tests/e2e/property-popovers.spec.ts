@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Property keyboard shortcuts on the selected issue:
@@ -12,7 +14,7 @@ import { loginAs } from '../fixtures/auth';
  */
 test.describe('Property Popovers', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
     // Select the first issue so context shortcuts become enabled.
     await page.keyboard.press('j');
   });

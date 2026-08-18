@@ -40,6 +40,14 @@ test.describe('Authentication', () => {
     await page.getByLabel(/code/i).fill('999999');
     // 6-digit input auto-submits via onChange; the server rejects the code
     // and the form renders an error alert.
-    await expect(page.getByRole('alert')).toBeVisible();
+    //
+    // Scoped to the form: Next renders its own route announcer as
+    // `<div role="alert" id="__next-route-announcer__">`, and it holds the
+    // title of the page just navigated to ("Verify — Bilinear"). An unscoped
+    // `getByRole('alert')` therefore resolves to two elements and fails on
+    // strict mode — but only when the announcer still has its text by the
+    // time the server's rejection lands, which is why this passed far more
+    // often than it should have.
+    await expect(page.locator('form').getByRole('alert')).toBeVisible();
   });
 });
