@@ -8,6 +8,19 @@ import { useTranslations } from '@/hooks/use-translations';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
 
+/**
+ * Shared by the debounced content save and the debounced title save below —
+ * one operation, one selection set. Kept verbatim from the two copies it
+ * replaces so the enqueued TransactionQueue payload is unchanged.
+ */
+const DOCUMENT_UPDATE_MUTATION = `mutation DocumentUpdate($id: ID!, $input: DocumentUpdateInput!) {
+  documentUpdate(id: $id, input: $input) {
+    success
+    lastSyncId
+    document { id title content updatedAt }
+  }
+}`;
+
 interface DocumentEditorProps {
   documentId: string;
 }
@@ -46,17 +59,7 @@ export const DocumentEditor = observer(function DocumentEditor({
         clearTimeout(saveTimeoutRef.current);
       }
       saveTimeoutRef.current = setTimeout(() => {
-        txQueue.enqueue(
-          `mutation DocumentUpdate($id: ID!, $input: DocumentUpdateInput!) {
-            documentUpdate(id: $id, input: $input) {
-              success
-              lastSyncId
-              document { id title content updatedAt }
-            }
-          }`,
-          { id: documentId, input: { content: html } },
-          {},
-        );
+        txQueue.enqueue(DOCUMENT_UPDATE_MUTATION, { id: documentId, input: { content: html } }, {});
       }, 1000);
     },
     [doc, documentId, txQueue],
@@ -70,17 +73,7 @@ export const DocumentEditor = observer(function DocumentEditor({
         clearTimeout(saveTimeoutRef.current);
       }
       saveTimeoutRef.current = setTimeout(() => {
-        txQueue.enqueue(
-          `mutation DocumentUpdate($id: ID!, $input: DocumentUpdateInput!) {
-            documentUpdate(id: $id, input: $input) {
-              success
-              lastSyncId
-              document { id title content updatedAt }
-            }
-          }`,
-          { id: documentId, input: { title } },
-          {},
-        );
+        txQueue.enqueue(DOCUMENT_UPDATE_MUTATION, { id: documentId, input: { title } }, {});
       }, 1000);
     },
     [documentId, txQueue],
