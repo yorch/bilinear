@@ -5,26 +5,27 @@ import { Input } from '@/components/ui/input';
 import { ModalDialog, ModalFooter, ModalHeader } from '@/components/ui/modal-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { useTranslations } from '@/hooks/use-translations';
+import type { FilterSet, SortField } from '@/lib/filter-engine';
 import { getErrorMessage } from '@/lib/utils';
 
 export interface SaveViewInput {
   color?: string;
   description?: string;
-  filters?: object;
+  filters?: FilterSet;
   groupBy?: string;
   icon?: string;
   layout?: string;
   name: string;
   shared: boolean;
-  sort?: object;
+  sort?: SortField[];
   teamId?: string;
 }
 
 interface SaveViewModalProps {
-  initialFilters?: object;
+  initialFilters?: FilterSet;
   initialGroupBy?: string;
   initialLayout?: string;
-  initialSort?: object;
+  initialSort?: SortField[];
   onClose: () => void;
   onSubmit: (input: SaveViewInput) => Promise<void>;
   open: boolean;

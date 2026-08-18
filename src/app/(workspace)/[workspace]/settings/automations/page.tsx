@@ -61,6 +61,25 @@ interface RulesData {
   automationTriggerTypes: string[];
 }
 
+/**
+ * `gql()` hands back an untyped `data` bag, so the shape is checked rather than
+ * asserted: a server-side rename previously compiled clean, typechecked clean,
+ * and then threw when the page mapped over an undefined array. A response that
+ * does not match takes the same error path as a failed request.
+ */
+function isRulesData(value: unknown): value is RulesData {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const v = value as Record<string, unknown>;
+  const isStringArray = (x: unknown) => Array.isArray(x) && x.every(s => typeof s === 'string');
+  return (
+    isStringArray(v.automationActionTypes) &&
+    isStringArray(v.automationTriggerTypes) &&
+    Array.isArray(v.automationRules)
+  );
+}
+
 export default function AutomationsSettingsPage() {
   const t = useTranslations();
   const { formatDateTime } = useFormatters();
@@ -78,8 +97,8 @@ export default function AutomationsSettingsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     const res = await gql(RULES_QUERY, {});
-    if (res.data) {
-      setData(res.data as unknown as RulesData);
+    if (isRulesData(res.data)) {
+      setData(res.data);
     } else {
       toast.error(t('settings.automations.loadError'));
     }
