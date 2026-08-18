@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { PageHeader } from '@/components/ui/page-header';
 import { useDocumentTitle } from '@/hooks/use-document-title';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gqlQuery } from '@/lib/graphql';
 import { cn } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
@@ -83,24 +84,14 @@ function ProgressBar({ pct, color }: { pct: number; color: string }) {
 export default function WorkspaceAnalyticsPage() {
   const t = useTranslations();
   useDocumentTitle(t('analytics.workspace.title'));
-  const [data, setData] = useState<WorkspaceOverview | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    gql(WORKSPACE_OVERVIEW_QUERY)
-      .then(res => {
-        if (res.errors?.length) {
-          const errMsg = (res.errors[0] as { message?: string } | undefined)?.message;
-          setError(errMsg ?? t('analytics.workspace.failedToLoad'));
-          return;
-        }
-        const d = res.data as { analyticsWorkspaceOverview: WorkspaceOverview };
-        setData(d.analyticsWorkspaceOverview);
-      })
-      .catch(() => setError(t('analytics.workspace.failedToLoad')))
-      .finally(() => setLoading(false));
-  }, [t]);
+  // gqlQuery throws on a GraphQL-level error, which is what makes the
+  // InlineRetry branch below reachable — the previous hand-rolled effect
+  // rendered a failed load as a dead-end message with no way to try again.
+  const { data, loading, error, refetch } = useRetryableFetch<WorkspaceOverview | null>(
+    () => gqlQuery<WorkspaceOverview>(WORKSPACE_OVERVIEW_QUERY, {}, 'analyticsWorkspaceOverview'),
+    [],
+    null,
+  );
 
   const maxCompleted = data ? Math.max(...data.teams.map(t => t.completedCount), 1) : 1;
 
@@ -117,7 +108,9 @@ export default function WorkspaceAnalyticsPage() {
           <p className="text-sm text-muted-foreground">{t('analytics.workspace.loading')}</p>
         )}
 
-        {error && <p className="text-sm text-danger-subtle-foreground">{error}</p>}
+        {error && (
+          <InlineRetry message={t('analytics.workspace.failedToLoad')} onRetry={() => refetch()} />
+        )}
 
         {data && (
           <>

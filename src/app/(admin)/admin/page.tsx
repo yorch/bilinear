@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { InlineRetry } from '@/components/shared/inline-retry';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { fetchMetrics, type PlatformMetrics } from '@/lib/admin-api';
 
@@ -17,41 +18,23 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
 
 export default function AdminDashboardPage() {
   const t = useTranslations();
-  const [metrics, setMetrics] = useState<PlatformMetrics | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchMetrics()
-      .then(m => {
-        if (!cancelled) {
-          setMetrics(m);
-        }
-      })
-      .catch((e: Error) => {
-        if (!cancelled) {
-          setError(e.message);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const {
+    data: metrics,
+    loading,
+    error,
+    errorMessage,
+    refetch,
+  } = useRetryableFetch<PlatformMetrics | null>(fetchMetrics, [], null);
 
   if (loading) {
     return <p className="text-sm text-muted-foreground">{t('admin.dashboard.loading')}</p>;
   }
   if (error || !metrics) {
     return (
-      <p className="text-sm text-danger-subtle-foreground">
-        {error ?? t('admin.dashboard.loadError')}
-      </p>
+      <InlineRetry
+        message={errorMessage ?? t('admin.dashboard.loadError')}
+        onRetry={() => refetch()}
+      />
     );
   }
 

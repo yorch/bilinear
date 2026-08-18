@@ -14,6 +14,13 @@ interface RefetchOptions {
 interface UseRetryableFetchResult<T> {
   data: T;
   error: boolean;
+  /**
+   * The thrown error's message, when there was one. `error` stays the boolean
+   * every existing caller switches on; this is for surfaces where the specific
+   * failure is worth showing rather than a generic "couldn't load" — the
+   * platform-admin console, where the server's message is the diagnostic.
+   */
+  errorMessage: string | null;
   loading: boolean;
   refetch: (opts?: RefetchOptions) => Promise<void>;
   setData: React.Dispatch<React.SetStateAction<T>>;
@@ -37,6 +44,7 @@ export function useRetryableFetch<T>(
   const [data, setData] = useState<T>(initialValue);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const requestIdRef = useRef(0);
   // Read through a ref so `refetch`'s identity is governed solely by `deps`
   // (below) rather than by `fetcher`, which the caller recreates every render.
@@ -54,10 +62,12 @@ export function useRetryableFetch<T>(
         if (requestId === requestIdRef.current) {
           setData(result);
           setError(false);
+          setErrorMessage(null);
         }
-      } catch {
+      } catch (err) {
         if (requestId === requestIdRef.current) {
           setError(true);
+          setErrorMessage(err instanceof Error ? err.message : null);
         }
       } finally {
         if (requestId === requestIdRef.current) {
@@ -72,5 +82,5 @@ export function useRetryableFetch<T>(
     refetch();
   }, [refetch]);
 
-  return { data, error, loading, refetch, setData };
+  return { data, error, errorMessage, loading, refetch, setData };
 }

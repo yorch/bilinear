@@ -1,8 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { RowsSkeleton } from '@/components/ui/skeleton';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import {
   fetchUsers,
@@ -42,24 +44,17 @@ export default function AdminUsersPage() {
   const t = useTranslations();
   const [query, setQuery] = useState('');
   const [applied, setApplied] = useState('');
-  const [users, setUsers] = useState<PlatformUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmingRevoke, setConfirmingRevoke] = useState<PlatformUser | null>(null);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    fetchUsers(applied)
-      .then(setUsers)
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [applied]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const {
+    data: users,
+    setData: setUsers,
+    loading,
+    error,
+    errorMessage,
+    refetch: load,
+  } = useRetryableFetch<PlatformUser[]>(() => fetchUsers(applied), [applied], []);
 
   function replaceRow(updated: PlatformUser) {
     setUsers(prev => prev.map(u => (u.id === updated.id ? updated : u)));
@@ -143,7 +138,10 @@ export default function AdminUsersPage() {
       {loading ? (
         <RowsSkeleton count={5} />
       ) : error ? (
-        <p className="text-sm text-danger-subtle-foreground">{error}</p>
+        <InlineRetry
+          message={errorMessage ?? t('common.somethingWentWrong')}
+          onRetry={() => load()}
+        />
       ) : users.length === 0 ? (
         <p className="rounded border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
           {t('admin.users.empty')}

@@ -2,10 +2,12 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import {
   deleteTenant,
@@ -42,24 +44,21 @@ function TenantsInner() {
   const [query, setQuery] = useState(searchParams.get('q') ?? '');
   const [applied, setApplied] = useState(searchParams.get('q') ?? '');
   const [includeArchived, setIncludeArchived] = useState(false);
-  const [tenants, setTenants] = useState<PlatformTenant[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState<PlatformTenant | null>(null);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    fetchTenants(applied, includeArchived)
-      .then(setTenants)
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [applied, includeArchived]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const {
+    data: tenants,
+    setData: setTenants,
+    loading,
+    error,
+    errorMessage,
+    refetch: load,
+  } = useRetryableFetch<PlatformTenant[]>(
+    () => fetchTenants(applied, includeArchived),
+    [applied, includeArchived],
+    [],
+  );
 
   function replaceRow(updated: PlatformTenant) {
     setTenants(prev => prev.map(t => (t.id === updated.id ? updated : t)));
@@ -145,7 +144,10 @@ function TenantsInner() {
       {loading ? (
         <RowsSkeleton count={5} />
       ) : error ? (
-        <p className="text-sm text-danger-subtle-foreground">{error}</p>
+        <InlineRetry
+          message={errorMessage ?? t('common.somethingWentWrong')}
+          onRetry={() => load()}
+        />
       ) : tenants.length === 0 ? (
         <p className="rounded border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
           {t('admin.tenants.empty')}
