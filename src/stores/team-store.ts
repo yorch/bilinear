@@ -1,5 +1,6 @@
 import { action, computed, makeObservable, observable } from 'mobx';
 import type { DBTeam } from '@/lib/db';
+import { applyPoolSyncAction } from './apply-pool-sync-action';
 
 export class TeamStore {
   pool = new Map<string, DBTeam>();
@@ -37,16 +38,9 @@ export class TeamStore {
   }
 
   applySyncAction(action: string, id: string, data: DBTeam | null) {
-    if (action === 'I' || action === 'U' || action === 'A') {
-      // Archive is an upsert that flips archivedAt — NOT a hard delete.
-      // `get all` already filters by archivedAt, so existing UI hides the
-      // row without forcing every other store reference (e.g. an issue's
-      // teamId) to dangle. Hard delete still removes from the pool.
-      if (data) {
-        this.pool.set(id, data);
-      }
-    } else if (action === 'D') {
-      this.pool.delete(id);
-    }
+    // Archive is an upsert that flips archivedAt — NOT a hard delete. `get all`
+    // already filters by archivedAt, so the UI hides the row without forcing every
+    // other reference (e.g. an issue's teamId) to dangle. 'D' still removes it.
+    applyPoolSyncAction(this.pool, action, id, data);
   }
 }

@@ -92,9 +92,17 @@ describe('NotificationStore', () => {
       expect(store.findById('1')).toBeNull();
     });
 
-    it('ignores I/U/A with null data', () => {
+    it('ignores I/U/A with null data, leaving an existing row intact', () => {
+      const row = makeNotification({ id: '1' });
+      store.applySyncAction('I', '1', row);
+
       store.applySyncAction('A', '1', null);
-      expect(store.findById('1')).toBeNull();
+
+      // Asserted through `pool`, not `findById`: the latter is `get(id) ?? null`,
+      // so a row overwritten with `null` would still read back as `null` and this
+      // test could not fail.
+      expect(store.pool.get('1')).toEqual(row);
+      expect(store.pool.size).toBe(1);
     });
   });
 });

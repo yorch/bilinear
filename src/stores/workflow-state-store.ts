@@ -1,5 +1,6 @@
 import { action, computed, makeObservable, observable } from 'mobx';
 import type { DBWorkflowState } from '@/lib/db';
+import { applyPoolSyncAction } from './apply-pool-sync-action';
 
 export class WorkflowStateStore {
   pool = new Map<string, DBWorkflowState>();
@@ -34,14 +35,8 @@ export class WorkflowStateStore {
   }
 
   applySyncAction(action: string, id: string, data: DBWorkflowState | null) {
-    if (action === 'I' || action === 'U' || action === 'A') {
-      // Archive: keep in pool with archivedAt set so issues referencing this
-      // state still resolve; filtered from active lists via archivedAt check
-      if (data) {
-        this.pool.set(id, data);
-      }
-    } else if (action === 'D') {
-      this.pool.delete(id);
-    }
+    // Archive keeps the row: issues referencing this state still resolve, and
+    // `get all` filters archived ones out of the active lists.
+    applyPoolSyncAction(this.pool, action, id, data);
   }
 }

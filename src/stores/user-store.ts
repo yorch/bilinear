@@ -1,5 +1,6 @@
 import { action, computed, makeObservable, observable } from 'mobx';
 import type { DBUser } from '@/lib/db';
+import { applyPoolSyncAction } from './apply-pool-sync-action';
 
 export class UserStore {
   pool = new Map<string, DBUser>();
@@ -40,16 +41,8 @@ export class UserStore {
   }
 
   applySyncAction(action: string, id: string, data: DBUser | null) {
-    if (action === 'I' || action === 'U' || action === 'A') {
-      // Treat archive as an upsert — keep the row around so existing
-      // references (e.g. an issue's creatorId) can still resolve to a
-      // name. UI consumers that don't want archived users filter on
-      // `active` themselves.
-      if (data) {
-        this.pool.set(id, data);
-      }
-    } else if (action === 'D') {
-      this.pool.delete(id);
-    }
+    // Archive keeps the row so existing references (e.g. an issue's creatorId)
+    // still resolve to a name; consumers filter on `active` themselves.
+    applyPoolSyncAction(this.pool, action, id, data);
   }
 }

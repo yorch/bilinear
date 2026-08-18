@@ -1,5 +1,6 @@
 import { action, computed, makeObservable, observable } from 'mobx';
 import type { DBOrganizationMember } from '@/lib/db';
+import { applyPoolSyncAction } from './apply-pool-sync-action';
 
 /**
  * The current workspace's roster: who belongs to it, and as what.
@@ -90,15 +91,9 @@ export class OrganizationMemberStore {
   }
 
   applySyncAction(syncAction: string, id: string, data: DBOrganizationMember | null) {
-    // No soft delete here: `organization_members` has no `archivedAt`, and
-    // removal really is a row delete — so unlike the entity stores, 'A' has no
-    // distinct meaning and 'D' is the only way a member leaves the pool.
-    if (syncAction === 'I' || syncAction === 'U' || syncAction === 'A') {
-      if (data) {
-        this.pool.set(id, data);
-      }
-    } else if (syncAction === 'D') {
-      this.pool.delete(id);
-    }
+    // No soft delete here: `organization_members` has no `archivedAt`, so unlike
+    // the entity stores 'A' has no distinct meaning and 'D' is the only way a
+    // member leaves the pool.
+    applyPoolSyncAction(this.pool, syncAction, id, data);
   }
 }
