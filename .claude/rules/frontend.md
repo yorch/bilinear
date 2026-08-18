@@ -141,11 +141,11 @@ pulse means "live" (connection status, pending write), not "loading".
 - Fetch-on-mount goes through `useRetryableFetch` — it owns the `reloadKey` /
   cancelled-flag state machine and pairs with `InlineRetry`. Pass
   `{ silent: true }` for post-mutation background refreshes so they don't
-  re-flash the skeleton. It returns `errorMessage` alongside the `error` boolean
-  for surfaces where the server's own text is the diagnostic (the admin console);
-  render `errorMessage ?? t('common.somethingWentWrong')`. "Not found" and
-  "not allowed" are **not** errors — they are not retryable, so model them as
-  data rather than tripping `error`. The one shape the hook does not fit is
+  re-flash the skeleton. It returns `cause` — the thrown error itself —
+  alongside the `error` boolean; render it with `getErrorMessage(cause, fallback)`
+  and branch with `isPermissionError(cause)`. "Not found" and "not allowed" are
+  **not** errors: neither is retryable, so a missing row is data and a refusal is
+  `isPermissionError(cause)` at the render site. The one shape the hook does not fit is
   fetch-then-seed-a-form, which would need `setX(...)` inside the fetcher; those
   pages keep their own effect. See PATTERNS.md §80.6.
 - Issue mutations from components: use `useIssueCreate(team, states)` and

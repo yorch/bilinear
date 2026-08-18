@@ -843,7 +843,22 @@ succeeds.
 
 ---
 
-### 4.5 `sync-manager`'s model switch is 20 copies of the same 12 lines (2026-08-18)
+### 4.5 `sync-manager`'s model switch is 20 copies of the same 12 lines — ✅ shipped (2026-08-18)
+
+> Shipped as a `CACHED_MODELS` registry dispatched from the switch's `default`
+> arm: seventeen uniform arms collapse to one entry each declaring the store
+> method next to its Dexie table, while `Organization`, `Issue` and
+> `Notification` keep the bespoke cases they genuinely need. 210 lines removed.
+>
+> `sync-manager.models.test.ts` is the guard, and it closes both halves of the
+> hole. It reads the server and the client from source (as
+> `graphql-documents.test.ts` and `dictionary.test.ts` already do, because the
+> registry closes over per-call store instances and cannot be imported
+> standalone): every model the server can emit must be in the registry, be a
+> bespoke case, or be listed in the exported `UNCACHED_MODELS`. It also asserts
+> each model is paired with the table its name derives from — that is the check
+> that catches the wrong-table typo, which `yarn typecheck` provably does not,
+> since both Dexie buckets are `object[]`.
 
 > Surfaced while extracting `applyPoolSyncAction`. That extraction was the *small*
 > duplication; this is the one that can lose data.
@@ -870,7 +885,7 @@ a failing test rather than a silent cache hole.
 
 **Effort:** Medium. **Risk:** Medium — it is the sync hot path.
 
-### 4.6 Three forked popover implementations (2026-08-18)
+### 4.6 Three forked popover implementations — ⚠️ partially shipped (2026-08-18)
 
 > `SelectPopover`, `SimpleSelect` and `issue-context-menu` are three independent
 > popovers. The 2026-08-18 audit shared the *class string* across all three
@@ -879,12 +894,38 @@ a failing test rather than a silent cache hole.
 > has no arrow-key handling at all, and `SimpleSelect` reached parity on Escape
 > and focus-restore only after shipping a keyboard trap.
 >
-> The deep fix is rebuilding `SimpleSelect` on `SelectPopover` (5 call sites; the
-> API can stay identical except `placement`, which `usePopoverFlip` would make
-> automatic). Deferred because there is no visual-regression suite and the
-> trigger styling differs — it needs a `/design` pass, not just a refactor.
+> The shared behaviour shipped as `usePopoverPanel` (2026-08-18): focus in on
+> open, Up/Down/Home/End roving, focus back to the trigger on close, now used by
+> both `SelectPopover` and `SimpleSelect`. Only the item selector differs between
+> them. Both also open focused on the selected option rather than the first.
+>
+> **The rebuild this entry originally proposed was examined and rejected**, which
+> is worth recording so it is not re-proposed. `SimpleSelect` is a bordered form
+> control whose five call sites need a trigger `id` to pair with a
+> `<label htmlFor>`, an `aria-label` for rows whose visible label is a plain
+> `<span>`, and a non-selectable caption row above its options. Folding it into
+> `SelectPopover` means three new props on the shared primitive that exist for
+> one shape, plus a trigger restyle nothing here can verify without a
+> visual-regression suite. The duplication that actually hurt was the keyboard
+> and focus behaviour, and that is now shared.
+>
+> Still open: `issue-context-menu` remains a third implementation with no
+> arrow-key handling at all. It is a menu rather than a listbox, so it wants
+> `role="menuitem"` semantics and its own roving, not this hook as-is.
 
-### 4.7 `useRetryableFetch` discards the error's type (2026-08-18)
+### 4.7 `useRetryableFetch` discards the error's type — ✅ shipped (2026-08-18)
+
+> The hook now returns `cause` — whatever the fetcher threw, unchanged — instead
+> of a pre-extracted `errorMessage`. Call sites render
+> `getErrorMessage(cause, fallback)` and branch with `isPermissionError(cause)`,
+> both of which already existed. The audit-log page lost its `AuditOutcome`
+> union and its inner catch, and the webhooks page lost its `forbidden` field:
+> both had been re-catching inside their own fetcher purely to recover a code
+> the hook was already holding.
+>
+> `settings/security` keeps its own `{ forbidden, message }` helper. It is one
+> of the six fetch-then-seed-a-form pages that deliberately do not use the hook
+> (PATTERNS §80.6), so there is nothing to fold it into.
 
 > The hook catches a `GqlError` — which carries `extensions.code`, with
 > `isGqlErrorCode`/`isPermissionError` built on it in `src/lib/graphql.ts` — and
