@@ -8,13 +8,13 @@ Branch: `claude/frontend-review-remediation-wjeilh` · Base: `f74b489`
 module, no user input reaching `dangerouslySetInnerHTML` unsanitised, no
 client-only auth enforcement.
 
-One hardening item is worth a look but is *not* an active vulnerability
-(**F10**): `src/components/editor/mermaid-node.tsx` is the app's only
-`dangerouslySetInnerHTML` sink, and the SVG it injects comes from
-org-authored diagram source. It is safe today only because Mermaid's *default*
-`securityLevel` is `'strict'` — the call at line 17 never says so. One
-line (`securityLevel: 'strict'`) removes the dependency on an upstream default.
-Left unapplied deliberately: NN7 forbids quietly patching a security surface.
+One hardening item was found and, after you approved the remediation, **fixed**
+(**F10**, commit `af569f4`): `src/components/editor/mermaid-node.tsx` is the app's
+only `dangerouslySetInnerHTML` sink, and the SVG it injects comes from org-authored
+diagram source. It was safe only because Mermaid's *default* `securityLevel` is
+`'strict'` — the initialize call never said so. It now does, so an upstream
+default change cannot turn that sink into stored XSS silently. Behaviour today is
+unchanged; the guarantee is now explicit.
 
 ## Summary
 
@@ -31,9 +31,15 @@ E2E gate could not run, so no Tier 3 change was applied.
 | Reviewed | 258 |
 | Skipped (with reason, below) | 303 |
 | Not reached | **0** |
-| Applied | 4 findings / 4 commits / 30 files |
-| Proposed | 13 |
+| Applied | **15 findings / 16 commits / 69 files** |
+| Proposed | 2 (both partial — see below) |
 | Blocked | 0 |
+
+**Update — second pass.** The first pass applied 4 findings and reported 13 for a
+human decision. You asked for all of them to be addressed, so the remaining 13
+were worked through in a second pass: **11 landed in full, 2 landed in part**, and
+the parts deliberately left undone are each named below with the reason. Every
+batch was verified against the same five gates.
 
 ### Baseline (exact gate commands, clean tree at `f74b489`)
 
@@ -121,35 +127,43 @@ is rare and it is the main reason this review found so little.
 Where it is drifting is at the edges, and always in the same direction: **a good
 pattern gets established, adopted where it was invented, and then stops
 spreading.** `useRetryableFetch` and `InlineRetry` are the house standard, and 18
-component files use them — but 15 page files still hand-roll the fetch state
-machine, and four of those render a dead-end error message where the rule
+component files use them — but 15 page files still hand-rolled the fetch state
+machine, and five of those rendered a dead-end error message where the rule
 explicitly requires a retry affordance (**F08**). `useDocumentTitle` exists
-precisely because every workspace tab showed the same static title, and it
+precisely because every workspace tab showed the same static title, and it had
 reached 6 pages of 26 (**F07**). `runPoolStoreTests` factored out the *test* for
 the pool-store shape while the implementation stayed copied twelve times
-(**F04**, now fixed). The convention is not the problem; the rollout is.
+(**F04**). The convention was never the problem; the rollout was — and that is
+what this branch spent most of its diff on.
 
-The three highest-leverage things to do next:
+Both rollout gaps named above are now closed — `useDocumentTitle` covers every
+workspace page and every dead-end error has a retry — so what remains is
+structural:
 
-1. **Fix the stale team-analytics memos (F05).** This is the only *behavioural
-   bug* found, and it hides behind two dependency arrays that look plausible.
-   Small fix, real user-visible effect.
-2. **Finish the `useRetryableFetch` rollout (F08).** It converts 15 bespoke state
-   machines into one tested one and removes four no-retry dead ends at the same
-   time. Highest ratio of correctness gained to risk taken — but it wants the E2E
-   gate running first.
-3. **Get E2E runnable in review environments.** Three of the most valuable
-   findings here (F07, F08, and the `'use client'` boundary work) are report-only
-   *solely* because no gate covers those routes. That gap is what caps this
-   review at Tier 2.
+1. **Get E2E runnable in review environments.** This is now the top item by some
+   margin. Three things on this branch could not be verified the way they deserve
+   — the 20 new document titles, the nine converted fetch paths, and the three new
+   admin dialogs — *solely* because no gate covers those routes. The same gap is
+   why the TipTap link prompt was left alone. It caps this review at Tier 2 and it
+   will cap the next one too.
+2. **Decide on the fetch-then-seed shape (F08 remainder).** Six pages spread one
+   response across many form fields. They are consistent with each other and
+   inconsistent with everything else; a second hook for that shape would finish
+   the unification honestly, where forcing them through `useRetryableFetch` would
+   not.
+3. **Settle the TipTap command typing (F11 remainder).** Three custom nodes each
+   use `as never` to escape `addCommands()`. One module augmentation retires all
+   three and is the last unsound-cast cluster in the client tree.
 
-One meta-observation worth acting on: there are seven `eslint-disable` comments
-in a repo that has no ESLint (**F14**). They suppress nothing, and two of them
-sit directly above the F05 bug, where they read as "this dependency list was
-reviewed and accepted." A suppression comment for a linter you don't run is
-worse than no comment.
+One meta-observation, now acted on: there were seven `eslint-disable` comments in
+a repo that has no ESLint (**F14**). They suppressed nothing, and three of them
+sat directly on the F05 bug, where they read as "this dependency list was reviewed
+and accepted." A suppression comment for a linter you don't run is worse than no
+comment — that is not a style nit, it is how a real bug stayed camouflaged.
 
 ## Applied Fixes
+
+### First pass — behaviour-preserving only
 
 | ID | Category | Severity | Files | Commit | Change |
 |---|---|---|---|---|---|
@@ -158,147 +172,77 @@ worse than no comment.
 | F03 | dry | medium | 2 | `f49dc03` | Byte-identical inline GraphQL documents duplicated within a file (DocumentUpdate ×2, ProjectUpdate ×2) → one module-level constant each. |
 | F04 | dry | medium | 11 | `beb9500` | The I/U/A-upsert + D-delete SyncAction body, copied verbatim into 12 store methods → `applyPoolSyncAction()`, delegated to from each store's own `action`-annotated method. |
 
-Every batch is one category and individually revertable. All five available
+### Second pass — the reported findings, once you approved them
+
+| ID | Category | Severity | Files | Commit | Change |
+|---|---|---|---|---|---|
+| F05 | best-practice | **high** | 2 | `853508e` | **The one real bug.** Team analytics memos keyed on a bound MobX method, so every chart froze at mount. Now keyed on `pool.size`, the documented convention. |
+| F06 | a11y | **high** | 2 | `80acb24` | Custom-field date/checkbox/text/select controls had no accessible name at all. Each now takes the field definition's name; the chip group becomes `<fieldset>`+`<legend>` with `aria-pressed`. |
+| F10 | security | low | 1 | `af569f4` | Mermaid `securityLevel: 'strict'` now stated rather than inherited, so an upstream default change cannot silently turn the app's only `innerHTML` sink into stored XSS. |
+| F16 | best-practice | low | 1 | `af569f4` | `Math.random()` ran on every render inside `useRef(...)`; now a lazy `useState` initialiser. |
+| F17 | consistency | medium | 1 | `af569f4` | Resolved by reading the server: it emits only `'I'`/`'D'` for `InitiativeProject`, so omitting `'A'` is correct. Documented in place. |
+| F13 | best-practice | low | 1 | `0db1d07` | The `localStorage` write moved out of the `setVisible` state updater. |
+| F12 | dead-code | low | 2 | `4498a71` | Three unreferenced document mutations and `localeNames` removed. |
+| F09 | dry | low | 3 | `e83b38b` | Burndown/burnup chart geometry extracted to shared pure helpers — helpers only, not a shared component. |
+| F11 | types | low | 3 | `51fcb8d` | Two of four unsound casts removed (SaveViewModal properly typed; automations response validated at runtime). |
+| F14 | consistency | low | 2 | `f06249f` | All seven `eslint-disable` comments removed from a repo with no ESLint. |
+| F07 | consistency | medium | 18 | `13856ce` | `useDocumentTitle` now on every workspace page (was 6 of 26). No new i18n strings — each page reuses the key its own header renders. |
+| F08 | consistency | medium | 10 | `39cfa07`, `193f956` | Nine pages moved to `useRetryableFetch` + `InlineRetry`; every dead-end error now offers a retry. |
+| F15 | consistency | low | 4 | `ce4684d` | The three admin `window.prompt` flows replaced with real dialogs, including the impersonation org picker. |
+
+Every commit is one category and individually revertable. All five available
 gates were re-run in full after each.
 
-Why these four and nothing else: each is either a constant/alias substitution
-that cannot change emitted output (F01, F02, F03), or a delegation that leaves
-every MobX annotation and observable in place (F04). Everything with a behavioural
-edge is below.
+## Still Open — What I Did Not Do, And Why
 
-## Proposed — Needs Your Decision
+Everything reported in the first pass has been applied except the following. Each
+is a part of a finding rather than a whole one, and each is left undone for a
+stated reason rather than for lack of time.
 
-### F05 · Team analytics charts freeze at mount *(best-practice, **high**, the only real bug found)*
-`src/app/(workspace)/[workspace]/team/[key]/analytics/page.tsx:238,257`
+### F11 · Two of four unsound casts remain
+- **`as never` on TipTap `addCommands()`** (`mermaid-node.tsx`, `details-node.ts`,
+  `embed-node.tsx`). This is a consistent three-site pattern, not a slip. The
+  correct fix is a `declare module '@tiptap/core'` augmentation declaring each
+  custom command, which changes the editor's global command type surface — a
+  design decision about the editor's public types, not a cleanup.
+- **`updated as unknown as DBIssue`** (`use-issue-update.ts:59`). This sits on the
+  deliberately generic `IssueUpdateAdapter.reconcile(id, Record<string, unknown>)`
+  contract. Its two implementors reconcile into *different* shapes — the MobX
+  store and the standalone issue route's local `useState` copy — so the loose
+  signature is load-bearing. I tried the single-cast form; TypeScript rejects it,
+  which confirms the two types genuinely do not overlap.
 
-```ts
-const issues = useMemo(() => (teamId ? issueStore.findByTeamId(teamId) : []),
-  [teamId, issueStore.findByTeamId]);   // ← prototype method: identity never changes
-```
+### F15 · The TipTap link prompt remains a `window.prompt`
+`tiptap-editor.tsx:762`. Unlike the three admin prompts, this one runs against a
+live ProseMirror selection: it reads `getAttributes('link')` and then applies
+`extendMarkRange('link')` to whatever is currently selected. `window.prompt`
+blocks synchronously without touching that selection; a dialog takes focus into
+the native top layer, and if the selection is not restored exactly, the link is
+applied to the **wrong range** — silently, and to the user's content.
 
-`findByTeamId` is a plain prototype method, so its identity is stable forever.
-The memo never recomputes while `teamId` holds, and because the component is an
-`observer`, the re-render that MobX triggers just returns the cached array. Every
-chart on the page shows data as of page mount; issues created, completed or moved
-while it is open never appear. `workflowStateStore.findByTeamId` at :257 has the
-identical defect.
+Doing it properly means capturing the range before opening and restoring it with
+`setTextSelection` on submit. That is a browser-verifiable change, and the E2E
+gate is unavailable in this environment, so I would be shipping it unverified.
 
-The repo already knows the right answer — `AGENTS.md` and
-`.claude/rules/frontend.md` both say *"use `store.pool.size` as a `useMemo`
-dependency"* — and nine other call sites follow it (`project-list-view.tsx:49,54,82`,
-`sidebar.tsx:321`, `sub-issue-list.tsx:78`, `global-create-issue-modal.tsx:39`,
-`cycle-list-view.tsx:97`, `project-detail-view.tsx:60`, `my-issues/page.tsx:48`).
+### F08 · Six of fifteen pages still hand-roll their fetch
+Converted: the admin dashboard, users, tenants, tenant detail and audit pages, the
+workspace analytics, audit-log, automations and webhooks pages. **Every page that
+rendered a failed load as a dead-end message now offers a retry** — that half of
+the finding is complete.
 
-**Fix:** `[teamId, issueStore.pool.size]` and `[teamId, workflowStateStore.pool.size]`.
-**Why not applied:** it is a genuine bug, not a quality issue, and the checklist
-routes bugs to the report. It also changes hook execution timing, which no unit
-test covers for this page. **Effort:** minutes. **Risk of leaving it:** users
-trust a stale dashboard.
+Not converted, because `useRetryableFetch` is the wrong shape for them:
+`settings/page.tsx`, `settings/roadmap`, `settings/security`,
+`settings/integrations`, `team/[key]/settings`, and `issue/[id]`. These do not
+fetch-then-render; they fetch-then-**seed a form**, spreading one response across
+many `useState` fields. Forcing them through the hook means putting `setX(...)`
+side effects inside the fetcher, which is worse than what is there now. The
+security page additionally encodes a carefully-documented distinction between a
+nullable `samlConfiguration` field and a FORBIDDEN partial response — worth
+preserving rather than flattening into a boolean. They already handle their
+errors; they just do not share the hook.
 
-### F06 · Custom-field inputs have no accessible name *(a11y, **high**)*
-`src/components/custom-fields/custom-field-value-input.tsx:60, 69, 114`
-
-The date input, the checkbox, and the text/number input render with no `<label>`,
-no `aria-label`, and not even a `placeholder`. A screen-reader user hears "edit
-text" with no indication of which custom field they are editing; the checkbox is
-entirely unlabelled. WCAG 2.2 §4.1.2. **Fix:** thread the field definition's name
-into `aria-label`, or a visually-hidden `<label htmlFor>`. **Why not applied:**
-all accessibility fixes are report-only — adding an accessible name is an a11y
-semantics change. **Effort:** small.
-
-### F08 · 15 pages hand-roll the fetch state machine; 4 have no retry *(consistency, medium)*
-`.claude/rules/frontend.md`: *"Fetch-on-mount goes through `useRetryableFetch`"*
-— 18 component files do. These 15 do not:
-`admin/{audit,page,users}`, `admin/tenants{,/[id]}`, `workspace/analytics`,
-`workspace/issue/[id]`, `settings/{audit-log,automations,integrations,page,roadmap,security,webhooks}`,
-`team/[key]/settings`.
-
-Each re-derives the cancelled-flag / stale-response logic, with varying success.
-Four — `admin/audit:69-71`, `admin/users`, `admin/tenants`, `workspace/analytics`
-— render a bare `<p>{error}</p>` with no retry, which the same rule forbids
-(*"a failed fetch must offer a retry, never render as an authoritative empty
-state"*); `InlineRetry` exists for exactly this. **Why not applied:** changes what
-renders on a failed load and the timing of the loading flag, on routes with no E2E
-coverage. **Effort:** medium (≈1 day). **Risk of leaving it:** a transient API
-failure looks like real emptiness on five admin/settings screens.
-
-### F07 · `useDocumentTitle` reached 6 of 26 workspace pages *(consistency, medium)*
-20 pages leave the browser tab on the static root title — the exact defect the
-hook's own doc comment says it was written to fix. Adopted on `inbox`,
-`initiatives`, `issue/[id]`, `my-issues`, `projects`, `team/[key]` (plus
-`project-detail-view.tsx`); missing on `analytics`, `docs/[id]`, `[workspace]`,
-`project/[slug]`, all eight `settings/*` pages, and all six `team/[key]/*`
-subpages (`analytics`, `backlog`, `cycles`, `cycles/[cycleId]`, `docs`,
-`settings`, `triage`, `view/[viewId]`). **Why not applied:** `document.title` is observable
-browser state and no E2E covers it. **Effort:** small but broad.
-
-### F17 · One store dispatcher silently ignores archive *(consistency, medium)*
-`src/stores/initiative-store.ts:111` — `applyInitiativeProjectSyncAction` handles
-only `'I' | 'U'`. Every other pool dispatcher treats `'A'` as an upsert. If the
-server emits `'A'` for an `InitiativeProject` link, this store drops it and the
-link stays stale until a re-bootstrap. **This is why it was excluded from the F04
-refactor** — delegating it would have changed behavior. **Fix:** confirm against
-the server whether that entity emits `'A'`; either add it, or add a comment
-saying it never happens. **Effort:** minutes once the server answer is known.
-
-### F09 · Burndown and burnup charts share ~100 lines of SVG scaffolding *(dry, low)*
-`src/components/cycles/burn{down,up}-chart.tsx` — identical dimension constants,
-`xScale`/`yScale`, `toPath`, grid, axis ticks, x-labels, legend frame; the
-y-domain, series, and ideal-line formula differ. **Recommendation: extract the
-pure geometry helpers only — not a shared chart component.** A shared component
-would need series/ideal-line/legend switches, which is precisely the
-config-object component the DRY bar forbids. Two occurrences, not three, and not
-byte-identical, so this stays a judgement call. **Effort:** small.
-
-### F12 · Three dead GraphQL helpers, and they caused the F03 duplication *(dead-code, low)*
-`src/lib/graphql.ts:110-155` — `updateDocument`, `archiveDocument`,
-`deleteDocument` have no callers. `document-editor.tsx` hand-wrote the same
-`DocumentUpdate` mutation inline instead (that is what F03 just de-duplicated).
-Also `localeNames` (`i18n/index.ts:9`) is unused everywhere, and `dictionaries` /
-`DEFAULT_WS_PORT` are exported but consumed only inside their own module.
-**Why not applied:** the choice is *delete the API* vs *adopt it*, and adopting it
-would change the request path — `gql()` is a direct call, `TransactionQueue.enqueue`
-is offline-queued and replayable. That is a product decision, not a cleanup.
-
-### F14 · Seven `eslint-disable` comments in a repo with no ESLint *(consistency, low)*
-`tiptap-editor.tsx:550,618,675`, `use-hotkeys.ts:254`,
-`team/[key]/settings/page.tsx:175`, `team/[key]/analytics/page.tsx:237,256`.
-Lint is Biome (`biome.json`); no ESLint config or dependency exists, so these
-suppress nothing while reading as "reviewed and waived". **Deliberately not
-auto-deleted:** the two on `analytics/page.tsx` sit directly on the F05 bug, and
-removing the comment without fixing the bug would erase its only marker. Fix F05
-first, then clean all seven together.
-
-### F15 · `window.prompt` for real input, including impersonation targeting *(consistency, low)*
-`admin/users:30` asks an operator to type a list index to choose **which tenant to
-impersonate into** — a mistyped digit impersonates into the wrong organization.
-Also `admin/tenants:80`, `admin/tenants/[id]:108` (suspension reason) and
-`tiptap-editor:762` (link URL). The frontend rule mandates `ConfirmDialog` over
-`window.confirm`; `window.prompt` is the same problem with a worse failure mode.
-**Why not applied:** replacing them is a UX change, explicitly out of scope.
-
-### F11 · Four unsound assertions *(types, low)*
-`mermaid-node.tsx:113` (`as never` on the TipTap command return),
-`use-issue-update.ts:59`, `team/[key]/page.tsx:541`, and
-`settings/automations/page.tsx:82` (`as unknown as RulesData` on a fetch
-response — a server shape change compiles clean and fails at runtime). **Why not
-applied:** NN2 forbids type-widening, and tightening these is a design change
-(declaration merging for TipTap; runtime validation for the automations
-response), not a mechanical edit.
-
-### F13 · Side effect inside a state updater *(best-practice, low)*
-`src/hooks/use-visible-columns.ts` — `persist()` writes to `localStorage` from
-inside the `setVisible` updater. React may invoke an updater more than once, so
-this is an anti-pattern; it is harmless today only because the write is
-idempotent. **Fix:** compute the next `Set` outside the updater, persist there,
-pass the plain value in.
-
-### F16 · `Math.random()` on every render *(best-practice, low)*
-`mermaid-node.tsx:36` — `useRef(\`mermaid-${Math.random()…}\`)` evaluates on every
-render and discards all but the first. `useId()` is the right primitive. **Why not
-applied:** the id is handed to `mermaid.render()`, which uses it to key an
-injected `<style>` element; changing its format is a behavior change I cannot
-verify without E2E.
+If you want these unified too, the honest move is a second hook for the
+fetch-then-seed shape rather than bending this one.
 
 ## Blocked — Verification Failed
 
@@ -328,12 +272,12 @@ agrees with it, and the codebase mostly agrees with both.
 - **No conflict on imports.** AGENTS.md declares `@/*` and 96% of the code
   already complied, so F01 was drift, not a migration.
 
-**Codebase-wide migrations worth considering** — all three are rollout gaps
-rather than disagreements, and all three want the E2E gate running first:
-finishing `useRetryableFetch`/`InlineRetry` (F08), finishing `useDocumentTitle`
-(F07), and auditing `'use client'` boundaries (surveyed, nothing applied: 34 of
-52 files under `src/app` are client components, and moving a boundary changes
-what renders on the server, which is report-only by rule).
+**Codebase-wide migrations** — two of the three named in the first pass are now
+done (`useDocumentTitle`, F07; the retry affordance half of `useRetryableFetch`,
+F08). The third is untouched and stays a genuine open question: **`'use client'`
+boundaries.** 34 of 52 files under `src/app` are client components. Moving a
+boundary changes what renders on the server, so it needs the E2E gate and a
+deliberate decision about which pages should be server-rendered — not a sweep.
 
 ## Notes on Scope
 
@@ -341,7 +285,16 @@ what renders on the server, which is report-only by rule).
   `yarn db:generate` were run to make the gates executable; `yarn.lock` is
   untouched.
 - No test was modified, added, skipped, or deleted. No `eslint-disable`,
-  `@ts-ignore`, `@ts-expect-error`, `any`, or `as unknown as` was introduced.
+  `@ts-ignore`, `@ts-expect-error`, `any`, or `as unknown as` was introduced —
+  two `as unknown as` casts were *removed*.
+- The second pass necessarily changes behaviour, which is what you approved: 20
+  pages now set `document.title`, nine changed how a failed fetch renders, and
+  three replaced a native prompt with a dialog. `useRetryableFetch` gained an
+  additive `errorMessage` field; every existing caller destructures `error` and is
+  untouched. `SimpleSelect` gained an optional `ariaLabel` plus
+  `aria-haspopup`/`aria-expanded`, all additive.
+- No new user-facing copy was written. Every new dialog and title reuses a
+  translation key that already existed, so `locales/*.json` are unchanged.
 - No gate-defining file was touched: `tsconfig.json`, `biome.json`,
   `vitest.config.ts`, `playwright.config.ts`, `next.config.ts`, the
   `package.json` scripts block, and `.github/workflows/` are all unchanged.
