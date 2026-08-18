@@ -1,5 +1,6 @@
 import { action, computed, makeObservable, observable } from 'mobx';
 import type { DBCustomFieldDefinition, DBCustomFieldValue } from '@/lib/db';
+import { applyPoolSyncAction } from './apply-pool-sync-action';
 
 export class CustomFieldStore {
   definitions = new Map<string, DBCustomFieldDefinition>();
@@ -99,12 +100,8 @@ export class CustomFieldStore {
   }
 
   applyDefinitionSyncAction(actionType: string, id: string, data: DBCustomFieldDefinition | null) {
-    if (actionType === 'I' || actionType === 'U' || actionType === 'A') {
-      if (data) {
-        this.definitions.set(id, data);
-      }
-    } else if (actionType === 'D') {
-      this.definitions.delete(id);
+    applyPoolSyncAction(this.definitions, actionType, id, data);
+    if (actionType === 'D') {
       // Drop any values tied to this definition so stale rows don't linger.
       for (const [key, v] of this.values) {
         if (v.definitionId === id) {

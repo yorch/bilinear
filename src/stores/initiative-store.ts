@@ -1,5 +1,6 @@
 import { action, computed, makeObservable, observable } from 'mobx';
 import type { DBInitiative, DBInitiativeProject } from '@/lib/db';
+import { applyPoolSyncAction } from './apply-pool-sync-action';
 
 export class InitiativeStore {
   pool = new Map<string, DBInitiative>();
@@ -88,12 +89,8 @@ export class InitiativeStore {
   }
 
   applySyncAction(actionType: string, id: string, data: DBInitiative | null) {
-    if (actionType === 'I' || actionType === 'U' || actionType === 'A') {
-      if (data) {
-        this.pool.set(id, data);
-      }
-    } else if (actionType === 'D') {
-      this.pool.delete(id);
+    applyPoolSyncAction(this.pool, actionType, id, data);
+    if (actionType === 'D') {
       // Cascade-delete any project links — server has FK CASCADE on initiativeId.
       for (const [linkId, link] of this.projectLinks) {
         if (link.initiativeId === id) {
