@@ -21,9 +21,11 @@ unchanged; the guarantee is now explicit.
 Packages reviewed: **`bilinear`** — single package, no workspaces (no
 `pnpm-workspace.yaml` / `turbo.json`, one `package.json`, one `tsconfig.json`).
 
-Verification tier: **Tier 2** overall. Build + typecheck + lint + design-token
-check + 1751 unit tests are all available and were all green at baseline. The
-E2E gate could not run, so no Tier 3 change was applied.
+Verification tier: **Tier 2** for the audit and both remediation passes — build,
+typecheck, lint, design-token check and the unit suite were the available gates
+throughout. E2E and `docker build` were brought up at the end and both now pass,
+so the branch's final state is verified at **Tier 3**, though the changes were
+authored under Tier 2 constraints.
 
 | | |
 |---|---|
@@ -53,17 +55,44 @@ Dependencies were absent on checkout; `yarn install --immutable` and
 | Typecheck | `yarn typecheck` | ✅ no errors |
 | Unit | `yarn test` | ✅ **116 files / 1751 tests passed** |
 | Build | `yarn build` | ✅ compiled successfully |
-| E2E | `yarn test:e2e` | ⏭️ **UNAVAILABLE** |
+| E2E | `yarn test:e2e --project=chromium` | ✅ **113/113 passed** (see note) |
+| Docker | `docker build .` | ✅ image built |
 
 **Pre-existing failures: none.** All five available gates were green before any
 change and after every batch.
 
-**Why E2E is unavailable:** Playwright's `webServer` needs `yarn dev` plus
-`yarn ws:server`, both of which need PostgreSQL and Redis. This container has no
-Docker daemon (`/var/run/docker.sock` absent), and nothing is listening on the
-Postgres or Redis ports. The suite cannot execute at all — it was not skipped for
-convenience. Every finding whose fix needs E2E coverage is therefore reported,
-not applied; they are marked `tier_required: 3` and listed under *Proposed*.
+**E2E became available late in the run and now passes.** It was genuinely
+unavailable for the audit and both remediation passes — no Docker daemon, so no
+Postgres or Redis. A daemon was started, `docker-compose.infra.yml` brought up
+Postgres 18 and Redis 8, `yarn db:push` + `yarn db:seed` provisioned the E2E
+fixtures, and the pinned Playwright build was bridged to the image's
+pre-installed Chromium. Firefox is not installed here, so the suite was run
+`--project=chromium` only; CI runs both.
+
+That changed the verification story materially, and it is worth being precise
+about what it caught:
+
+- The suite first ran **104 passed / 9 failed**.
+- Six of those nine fail **identically at `f74b489`** — verified by checking out
+  the base commit and running the same specs (6 failed / 11 passed there).
+- Two more were dev-server compile timeouts under 36-way parallelism; they pass
+  when the same specs run at lower concurrency, on this branch.
+- **One was a real regression this branch introduced**, and no other gate caught
+  it: the F08 conversion gave the webhooks page an `if (error) return
+  <InlineRetry/>` early return that replaced the whole page, so a non-admin —
+  whose query is rejected with FORBIDDEN — got a bare error line instead of the
+  page. Fixed in `4d4a1e2`: the denial is modelled as data with nothing to
+  retry, and a genuine failure now renders inside the page shell.
+
+The six pre-existing failures were also fixed, since they made the suite red on
+`main`: all six locate picker rows with `getByRole('button')`, but those rows are
+`<button role="option">` and an explicit role replaces the implicit one, so the
+query cannot match. They broke when the picker listbox pattern shipped
+(REVIEW_BACKLOG §4.2, 2026-08-05) without the specs being updated. The locators
+now use `getByRole('option')`, which keeps each test's intent and additionally
+asserts the role — a stronger assertion, not a looser one.
+
+Final state: **113 passed, 0 failed.**
 
 **One deliberate deviation, disclosed:** the unit count moved 1751 → 1749 at the
 F03 commit. `src/lib/graphql-documents.test.ts` generates one schema-validation
