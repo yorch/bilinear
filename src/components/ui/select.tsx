@@ -11,6 +11,12 @@ export interface SelectOption {
 }
 
 interface SimpleSelectProps {
+  /**
+   * Accessible name for the trigger. Required wherever the visible label is a
+   * plain `<span>` rather than a real `<label htmlFor>` — e.g. the custom-field
+   * value rows, where the control would otherwise announce as an unnamed button.
+   */
+  ariaLabel?: string;
   className?: string;
   id?: string;
   onChange: (value: string) => void;
@@ -22,6 +28,7 @@ interface SimpleSelectProps {
 }
 
 export function SimpleSelect({
+  ariaLabel,
   options,
   value,
   onChange,
@@ -40,6 +47,9 @@ export function SimpleSelect({
   return (
     <div className={cn('relative', className)} ref={ref}>
       <button
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-label={ariaLabel}
         className={cn(
           'flex items-center gap-1.5 text-sm outline-none',
           variant === 'default' &&
