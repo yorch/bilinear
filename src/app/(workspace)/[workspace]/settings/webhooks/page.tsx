@@ -9,6 +9,7 @@ import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql, gqlQuery, isPermissionError } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
+import { getErrorMessage } from '@/lib/utils';
 
 /**
  * Webhook management page (admins only).
@@ -89,43 +90,30 @@ export default function WebhooksSettingsPage() {
   // One query feeds both lists, so they travel together as one value.
   // gqlQuery throws on a GraphQL error, which makes the retry branch reachable —
   // previously a failed load toasted once and then rendered as "no webhooks".
-  //
-  // A non-admin's FORBIDDEN is not one of those failures: this route is reachable
-  // from the settings nav, so being turned away is an expected answer with
-  // nothing to retry. It comes back as `forbidden` in the data rather than
-  // tripping `error`.
   const {
-    data: { availableEvents, forbidden, webhooks },
+    data: { availableEvents, webhooks },
     setData,
     loading,
     error,
+    cause,
     refetch: load,
-  } = useRetryableFetch<{
-    availableEvents: string[];
-    forbidden: boolean;
-    webhooks: Webhook[];
-  }>(
+  } = useRetryableFetch<{ availableEvents: string[]; webhooks: Webhook[] }>(
     async () => {
-      try {
-        const data = await gqlQuery<{ webhookEvents?: string[]; webhooks?: Webhook[] }>(
-          WEBHOOKS_QUERY,
-          {},
-        );
-        return {
-          availableEvents: data.webhookEvents ?? [],
-          forbidden: false,
-          webhooks: data.webhooks ?? [],
-        };
-      } catch (err) {
-        if (isPermissionError(err)) {
-          return { availableEvents: [], forbidden: true, webhooks: [] };
-        }
-        throw err;
-      }
+      const data = await gqlQuery<{ webhookEvents?: string[]; webhooks?: Webhook[] }>(
+        WEBHOOKS_QUERY,
+        {},
+      );
+      return { availableEvents: data.webhookEvents ?? [], webhooks: data.webhooks ?? [] };
     },
     [],
-    { availableEvents: [], forbidden: false, webhooks: [] },
+    { availableEvents: [], webhooks: [] },
   );
+
+  // A non-admin's FORBIDDEN is not a failure: this route is reachable from the
+  // settings nav, so being turned away is an expected answer with nothing to
+  // retry. Told apart by the error's own code rather than by a sentinel the
+  // fetcher invents.
+  const forbidden = isPermissionError(cause);
 
   const setWebhooks = (next: Webhook[] | ((prev: Webhook[]) => Webhook[])) => {
     setData(prev => ({
@@ -235,7 +223,12 @@ export default function WebhooksSettingsPage() {
       {/* Rendered inside the page shell, not instead of it: replacing the whole
           page drops the heading and reads as a crash rather than a failed
           section. */}
-      {error && <InlineRetry message={t('settings.webhooks.loadError')} onRetry={() => load()} />}
+      {error && !forbidden && (
+        <InlineRetry
+          message={getErrorMessage(cause, t('settings.webhooks.loadError'))}
+          onRetry={() => load()}
+        />
+      )}
 
       {creating ? (
         <div className="mb-6 rounded border border-border p-4">

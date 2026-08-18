@@ -41,16 +41,6 @@ interface AuditLogPage {
   nextCursor: string | null;
 }
 
-/**
- * The load has three outcomes, not two. A non-admin simply cannot see the audit
- * log — that is "not for you", a terminal state with nothing to retry — while a
- * transport or GraphQL failure is retryable and must never be rendered as an
- * empty log. Only the latter reaches the fetch hook's `error`.
- */
-type AuditOutcome =
-  | { entries: AuditLogEntry[]; hasMore: boolean; kind: 'ok'; nextCursor: string | null }
-  | { kind: 'forbidden' };
-
 const AUDIT_LOGS_QUERY = `
   query AuditLogs($filter: AuditLogFilter) {
     auditLogs(filter: $filter) {
@@ -109,17 +99,14 @@ export default function AuditLogPage() {
   const [appliedAction, setAppliedAction] = useState('');
   const [appliedUserId, setAppliedUserId] = useState('');
 
-  // "Not for you" is an outcome, not a failure, so it is modelled as data
-  // rather than as the hook's `error`: a non-admin must not be offered a Retry
-  // that can never succeed, while a transport or GraphQL failure must be
-  // retryable and must never render as an empty log.
   const {
-    data: outcome,
-    setData: setOutcome,
+    data: page,
+    setData: setPage,
     loading,
     error,
+    cause,
     refetch: load,
-  } = useRetryableFetch<AuditOutcome>(
+  } = useRetryableFetch<AuditLogPage>(
     async () => {
       const filter: Record<string, unknown> = {};
       if (appliedAction) {
@@ -128,37 +115,31 @@ export default function AuditLogPage() {
       if (appliedUserId) {
         filter.userId = appliedUserId;
       }
-      try {
-        const page = await gqlQuery<AuditLogPage | null>(
-          AUDIT_LOGS_QUERY,
-          { filter: Object.keys(filter).length ? filter : null },
-          'auditLogs',
-        );
-        // The cursor travels inside the returned outcome rather than in its own
-        // state. Setting it here would put it outside the hook's monotonic
-        // request-id guard: a stale response has its `data` discarded, but would
-        // already have overwritten the cursor, so "Load more" would then append
-        // rows from the previous filter.
-        return {
-          entries: page?.entries ?? [],
-          hasMore: page?.hasMore ?? false,
-          kind: 'ok',
-          nextCursor: page?.nextCursor ?? null,
-        };
-      } catch (err) {
-        if (isPermissionError(err)) {
-          return { kind: 'forbidden' };
-        }
-        throw err;
-      }
+      // The cursor travels inside the returned value rather than in its own
+      // state. Setting it here would put it outside the hook's monotonic
+      // request-id guard: a stale response has its `data` discarded, but would
+      // already have overwritten the cursor, so "Load more" would then append
+      // rows from the previous filter.
+      const page = await gqlQuery<AuditLogPage | null>(
+        AUDIT_LOGS_QUERY,
+        { filter: Object.keys(filter).length ? filter : null },
+        'auditLogs',
+      );
+      return {
+        entries: page?.entries ?? [],
+        hasMore: page?.hasMore ?? false,
+        nextCursor: page?.nextCursor ?? null,
+      };
     },
     [appliedAction, appliedUserId],
-    { entries: [], hasMore: false, kind: 'ok', nextCursor: null },
+    { entries: [], hasMore: false, nextCursor: null },
   );
 
-  const entries = outcome.kind === 'ok' ? outcome.entries : [];
-  const hasMore = outcome.kind === 'ok' && outcome.hasMore;
-  const nextCursor = outcome.kind === 'ok' ? outcome.nextCursor : null;
+  // A non-admin simply cannot see the audit log. That is "not for you" — a
+  // terminal state with nothing to retry — so it is told apart from a genuine
+  // failure by the error's own code, not by a sentinel the fetcher invents.
+  const forbidden = isPermissionError(cause);
+  const { entries, hasMore, nextCursor } = page;
 
   async function handleLoadMore() {
     if (!nextCursor || loadingMore) {
@@ -173,18 +154,13 @@ export default function AuditLogPage() {
       filter.userId = appliedUserId;
     }
     try {
-      const page = await gqlQuery<AuditLogPage | null>(AUDIT_LOGS_QUERY, { filter }, 'auditLogs');
-      if (page) {
-        setOutcome(prev =>
-          prev.kind === 'ok'
-            ? {
-                entries: [...prev.entries, ...page.entries],
-                hasMore: page.hasMore,
-                kind: 'ok',
-                nextCursor: page.nextCursor,
-              }
-            : prev,
-        );
+      const next = await gqlQuery<AuditLogPage | null>(AUDIT_LOGS_QUERY, { filter }, 'auditLogs');
+      if (next) {
+        setPage(prev => ({
+          entries: [...prev.entries, ...next.entries],
+          hasMore: next.hasMore,
+          nextCursor: next.nextCursor,
+        }));
       }
     } catch (err) {
       // Previously swallowed: "Load more" simply did nothing on failure.
@@ -206,18 +182,21 @@ export default function AuditLogPage() {
     setAppliedUserId('');
   }
 
-  if (error) {
+  if (forbidden) {
     return (
-      <div className="p-6">
-        <InlineRetry message={t('common.somethingWentWrong')} onRetry={() => load()} />
+      <div className="flex flex-1 items-center justify-center">
+        <p className="text-sm text-muted-foreground">{t('settings.auditLog.forbidden')}</p>
       </div>
     );
   }
 
-  if (outcome.kind === 'forbidden') {
+  if (error) {
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <p className="text-sm text-muted-foreground">{t('settings.auditLog.forbidden')}</p>
+      <div className="p-6">
+        <InlineRetry
+          message={getErrorMessage(cause, t('common.somethingWentWrong'))}
+          onRetry={() => load()}
+        />
       </div>
     );
   }

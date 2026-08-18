@@ -12,15 +12,19 @@ interface RefetchOptions {
 }
 
 interface UseRetryableFetchResult<T> {
+  /**
+   * Whatever the fetcher threw, unchanged. `error` stays the boolean nearly
+   * every caller switches on; this is for the ones that need to know *what*
+   * failed. Pre-extracting `.message` here instead threw away the part callers
+   * actually needed: `gqlQuery` throws a `GqlError` carrying
+   * `extensions.code`, so a page wanting to tell "forbidden" from "broken" had
+   * to re-catch inside its own fetcher to recover a code this hook was already
+   * holding. Pair with `getErrorMessage(cause, fallback)` to render it and
+   * `isPermissionError(cause)` to branch on it (both from `@/lib`).
+   */
+  cause: unknown;
   data: T;
   error: boolean;
-  /**
-   * The thrown error's message, when there was one. `error` stays the boolean
-   * every existing caller switches on; this is for surfaces where the specific
-   * failure is worth showing rather than a generic "couldn't load" — the
-   * platform-admin console, where the server's message is the diagnostic.
-   */
-  errorMessage: string | null;
   loading: boolean;
   refetch: (opts?: RefetchOptions) => Promise<void>;
   setData: React.Dispatch<React.SetStateAction<T>>;
@@ -43,10 +47,10 @@ export function useRetryableFetch<T>(
 ): UseRetryableFetchResult<T> {
   const [data, setData] = useState<T>(initialValue);
   const [loading, setLoading] = useState(true);
-  // One piece of state, not two kept in lockstep: `error` is derived at the
-  // return. Two `useState`s meant three call sites below had to remember to
-  // update both, and updating one without the other leaves stale text behind.
-  const [failure, setFailure] = useState<{ message: string | null } | null>(null);
+  // Boxed rather than stored bare so `null` and "threw a null" stay
+  // distinguishable, and so `error` can be derived from it at the return rather
+  // than tracked as a second state that has to be kept in lockstep.
+  const [failure, setFailure] = useState<{ cause: unknown } | null>(null);
   const requestIdRef = useRef(0);
   // Read through a ref so `refetch`'s identity is governed solely by `deps`
   // (below) rather than by `fetcher`, which the caller recreates every render.
@@ -73,7 +77,7 @@ export function useRetryableFetch<T>(
         }
       } catch (err) {
         if (requestId === requestIdRef.current) {
-          setFailure({ message: err instanceof Error ? err.message : null });
+          setFailure({ cause: err });
         }
       } finally {
         if (requestId === requestIdRef.current) {
@@ -89,9 +93,9 @@ export function useRetryableFetch<T>(
   }, [refetch]);
 
   return {
+    cause: failure?.cause ?? null,
     data,
     error: failure !== null,
-    errorMessage: failure?.message ?? null,
     loading,
     refetch,
     setData,

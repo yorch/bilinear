@@ -18,7 +18,7 @@ import {
   suspendUser,
 } from '@/lib/admin-api';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 
 /**
  * The org to impersonate into when it is unambiguous. A user in several orgs
@@ -44,7 +44,7 @@ export default function AdminUsersPage() {
     setData: setUsers,
     loading,
     error,
-    errorMessage,
+    cause,
     refetch: load,
   } = useRetryableFetch<PlatformUser[]>(() => fetchUsers(applied), [applied], []);
 
@@ -137,7 +137,7 @@ export default function AdminUsersPage() {
         <RowsSkeleton count={5} />
       ) : error ? (
         <InlineRetry
-          message={errorMessage ?? t('common.somethingWentWrong')}
+          message={getErrorMessage(cause, t('common.somethingWentWrong'))}
           onRetry={() => load()}
         />
       ) : users.length === 0 ? (
