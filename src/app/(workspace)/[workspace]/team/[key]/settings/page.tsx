@@ -162,6 +162,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const currentUserId = userStore.currentUser?.id ?? '';
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the intentional reactive trigger
   const orgUsers = useMemo(
     () =>
       userStore.all.map(u => ({
@@ -172,8 +173,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         id: u.id,
         initials: u.initials,
       })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [userStore.all],
+    [userStore.pool.size],
   );
 
   // ── Danger zone ───────────────────────────────────────────────────────────

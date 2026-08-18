@@ -232,10 +232,10 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
 
   // ── Raw data ─────────────────────────────────────────────────────────────
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the intentional reactive trigger
   const issues = useMemo(
     () => (teamId ? issueStore.findByTeamId(teamId) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [teamId, issueStore.findByTeamId],
+    [teamId, issueStore.pool.size],
   );
 
   // Issues filtered by date range (created or completed within the window).
@@ -251,17 +251,14 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
     });
   }, [issues, cutoff]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the intentional reactive trigger
   const states = useMemo(
     () => (teamId ? workflowStateStore.findByTeamId(teamId) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [teamId, workflowStateStore.findByTeamId],
+    [teamId, workflowStateStore.pool.size],
   );
 
-  const users = useMemo(
-    () => userStore.all,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [userStore.all],
-  );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the intentional reactive trigger
+  const users = useMemo(() => userStore.all, [userStore.pool.size]);
 
   // ── Issues by state ───────────────────────────────────────────────────────
 
