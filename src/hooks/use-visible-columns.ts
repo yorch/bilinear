@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 /** Fixed issue-row columns that can be hidden. */
 export type BuiltInColumn = 'labels' | 'dueDate' | 'assignee' | 'cycle' | 'estimate';
@@ -59,9 +59,16 @@ export function useVisibleColumns(scope: string): {
     return new Set<ColumnKey>(stored ?? DEFAULT_BUILT_INS);
   });
 
+  // Suppresses the persist effect for a `visible` value that came *from*
+  // storage rather than from a user action — the initial mount and every scope
+  // change. Without it the hook would write the defaults back out for a scope
+  // nobody has customised yet, inventing a stored preference from a read.
+  const skipPersistRef = useRef(true);
+
   // Re-read when the scope changes (team switch).
   useEffect(() => {
     const stored = readInitial(scope);
+    skipPersistRef.current = true;
     setVisible(new Set<ColumnKey>(stored ?? DEFAULT_BUILT_INS));
   }, [scope]);
 
@@ -79,37 +86,41 @@ export function useVisibleColumns(scope: string): {
     [scope],
   );
 
-  // `persist` runs outside the state updater deliberately. React may invoke an
-  // updater more than once (StrictMode, an interrupted concurrent render), and
-  // a localStorage write is a side effect that must not ride along — it is
-  // idempotent today, but nothing enforces that it stays so. These callbacks
-  // therefore derive the next Set from the current `visible` value, exactly as
-  // `isVisible` below already does.
-  const toggle = useCallback(
-    (key: ColumnKey) => {
-      const next = new Set(visible);
+  // Both updaters stay *functional* — deriving the next Set from the render
+  // closure's `visible` instead loses an update whenever two calls land in one
+  // React batch (`showAll(...)` then `toggle(...)` from the same handler), since
+  // both would build from the same pre-batch value and the last write would win.
+  // The localStorage write therefore cannot live inside the updater — React may
+  // invoke one more than once — so it runs in the effect below, off `visible`.
+  const toggle = useCallback((key: ColumnKey) => {
+    setVisible(prev => {
+      const next = new Set(prev);
       if (next.has(key)) {
         next.delete(key);
       } else {
         next.add(key);
       }
-      persist(next);
-      setVisible(next);
-    },
-    [visible, persist],
-  );
+      return next;
+    });
+  }, []);
 
-  const showAll = useCallback(
-    (keys: ColumnKey[]) => {
-      const next = new Set(visible);
+  const showAll = useCallback((keys: ColumnKey[]) => {
+    setVisible(prev => {
+      const next = new Set(prev);
       for (const k of keys) {
         next.add(k);
       }
-      persist(next);
-      setVisible(next);
-    },
-    [visible, persist],
-  );
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (skipPersistRef.current) {
+      skipPersistRef.current = false;
+      return;
+    }
+    persist(visible);
+  }, [visible, persist]);
 
   const isVisible = useCallback((key: ColumnKey) => visible.has(key), [visible]);
 

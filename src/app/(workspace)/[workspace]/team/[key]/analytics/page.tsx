@@ -259,8 +259,12 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
     [teamId, workflowStateStore.pool.size],
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the intentional reactive trigger
-  const users = useMemo(() => userStore.all, [userStore.pool.size]);
+  // A plain read of the MobX computed — `observer` tracks it, and the computed is
+  // cached while observed, so a memo would add nothing. Deliberately NOT keyed on
+  // `pool.size` like `issues`/`states` above: those wrap a prototype *method*
+  // whose identity never changes, whereas `all` already changes identity on an
+  // in-place row update such as a rename.
+  const users = userStore.all;
 
   // ── Issues by state ───────────────────────────────────────────────────────
 

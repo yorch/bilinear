@@ -167,7 +167,10 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const currentUserId = userStore.currentUser?.id ?? '';
-  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the intentional reactive trigger
+  // Keyed on the `all` computed, NOT `pool.size`. MobX caches a computed while it
+  // is observed, so its array identity changes exactly when the underlying rows
+  // change — including a rename, which replaces a row without changing the key
+  // count. `pool.size` would hold this list stale until someone joins or leaves.
   const orgUsers = useMemo(
     () =>
       userStore.all.map(u => ({
@@ -178,7 +181,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         id: u.id,
         initials: u.initials,
       })),
-    [userStore.pool.size],
+    [userStore.all],
   );
 
   // ── Danger zone ───────────────────────────────────────────────────────────

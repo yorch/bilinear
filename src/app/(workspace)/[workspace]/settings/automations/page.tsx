@@ -79,7 +79,27 @@ function isRulesData(value: unknown): value is RulesData {
   return (
     isStringArray(v.automationActionTypes) &&
     isStringArray(v.automationTriggerTypes) &&
-    Array.isArray(v.automationRules)
+    Array.isArray(v.automationRules) &&
+    v.automationRules.every(isAutomationRule)
+  );
+}
+
+/**
+ * Element-level check for the rule list. `Array.isArray` alone would let
+ * `[1, 2, 'x']` through and then hand it to the renderer as `AutomationRule[]`,
+ * which is the exact class of runtime failure the guard exists to stop.
+ */
+function isAutomationRule(value: unknown): value is AutomationRule {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const r = value as Record<string, unknown>;
+  return (
+    typeof r.id === 'string' &&
+    typeof r.name === 'string' &&
+    typeof r.triggerType === 'string' &&
+    typeof r.enabled === 'boolean' &&
+    Array.isArray(r.actions)
   );
 }
 

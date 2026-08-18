@@ -1,7 +1,7 @@
 'use client';
 
 import { ChevronDown } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { cn } from '@/lib/utils';
 
@@ -40,13 +40,54 @@ export function SimpleSelect({
 }: SimpleSelectProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const panelId = useId();
   const current = options.find(o => o.value === value);
 
   useOutsideClick(ref, () => setOpen(false), open);
 
+  // The trigger advertises `aria-haspopup="listbox"`, so the panel has to be a
+  // real listbox: focus moves into it on open, and Up/Down/Home/End rove across
+  // the options. Mirrors SelectPopover's handling — without it a screen reader
+  // is told "has popup listbox" and then handed a row of plain buttons.
+  useEffect(() => {
+    if (open) {
+      const items = panelRef.current?.querySelectorAll<HTMLElement>('[role="option"]');
+      const selected = panelRef.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+      (selected ?? items?.[0])?.focus();
+    }
+  }, [open]);
+
+  const handlePanelKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') {
+      return;
+    }
+    const items = Array.from(
+      panelRef.current?.querySelectorAll<HTMLElement>('[role="option"]') ?? [],
+    );
+    if (items.length === 0) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    const idx = items.indexOf(document.activeElement as HTMLElement);
+    const next =
+      e.key === 'ArrowDown'
+        ? (idx + 1) % items.length
+        : e.key === 'ArrowUp'
+          ? idx <= 0
+            ? items.length - 1
+            : idx - 1
+          : e.key === 'Home'
+            ? 0
+            : items.length - 1;
+    items[next]?.focus();
+  }, []);
+
   return (
     <div className={cn('relative', className)} ref={ref}>
       <button
+        aria-controls={open ? panelId : undefined}
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-label={ariaLabel}
@@ -76,18 +117,19 @@ export function SimpleSelect({
             'absolute left-0 z-50 min-w-full rounded-md border border-border bg-popover py-1 shadow-e2',
             placement === 'bottom' ? 'top-full mt-1' : 'bottom-full mb-1',
           )}
+          id={panelId}
+          onKeyDown={handlePanelKeyDown}
+          ref={panelRef}
+          role="listbox"
         >
           {placeholder && (
-            <button
-              className="flex w-full cursor-default items-center px-3 py-1.5 text-sm text-muted-foreground"
-              disabled
-              type="button"
-            >
+            <p className="flex w-full cursor-default items-center px-3 py-1.5 text-sm text-muted-foreground">
               {placeholder}
-            </button>
+            </p>
           )}
           {options.map(opt => (
             <button
+              aria-selected={opt.value === value}
               className={cn(
                 'flex w-full items-center px-3 py-1.5 text-sm text-foreground hover:bg-accent',
                 opt.value === value && 'font-medium',
@@ -97,6 +139,7 @@ export function SimpleSelect({
                 onChange(opt.value);
                 setOpen(false);
               }}
+              role="option"
               type="button"
             >
               {opt.label}

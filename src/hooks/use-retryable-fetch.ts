@@ -56,6 +56,13 @@ export function useRetryableFetch<T>(
       const requestId = ++requestIdRef.current;
       if (!opts?.silent) {
         setLoading(true);
+        // Clear the previous failure as the retry starts. Without this a caller
+        // that renders `loading` and `error` as siblings (rather than as an
+        // if/else) shows the spinner and the "couldn't load — Retry" row at the
+        // same time, and a caller that early-returns on `error` shows no sign
+        // the retry is in flight at all.
+        setError(false);
+        setErrorMessage(null);
       }
       try {
         const result = await fetcherRef.current();

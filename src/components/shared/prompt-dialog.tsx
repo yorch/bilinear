@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ModalDialog } from '@/components/ui/modal-dialog';
@@ -41,12 +41,18 @@ export function PromptDialog({
 }: PromptDialogProps) {
   const t = useTranslations();
   const fieldId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState('');
 
-  // Each open starts from a clean field rather than the previous answer.
+  // Each open starts from a clean field rather than the previous answer, and
+  // focus lands on that field. `autoFocus` cannot do this: React applies it
+  // during commit, which runs *before* ModalDialog's effect calls `showModal()`,
+  // and focusing a still-`display:none` dialog child is a silent no-op. Doing it
+  // in a passive effect puts it after the dialog is genuinely open.
   useEffect(() => {
     if (open) {
       setValue('');
+      inputRef.current?.focus();
     }
   }, [open]);
 
@@ -64,11 +70,11 @@ export function PromptDialog({
             {label}
           </label>
           <Input
-            autoFocus
             className="mt-1"
             id={fieldId}
             onChange={e => setValue(e.target.value)}
             placeholder={placeholder}
+            ref={inputRef}
             value={value}
           />
         </div>
