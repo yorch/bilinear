@@ -7,6 +7,7 @@ import { LabelDot } from '@/components/properties/label-select';
 import { priorityLabelKey } from '@/components/properties/priority-icon';
 import { StatusDot } from '@/components/properties/status-select';
 import { ColorDot } from '@/components/ui/color-dot';
+import { POPOVER_ITEM_CLASS } from '@/components/ui/select-popover';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { useTranslations } from '@/hooks/use-translations';
@@ -227,10 +228,7 @@ export function IssueContextMenu({
             {submenu === 'status' &&
               states.map(s => (
                 <button
-                  className={cn(
-                    'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent',
-                    s.id === currentStateId && 'bg-accent/50',
-                  )}
+                  className={cn(POPOVER_ITEM_CLASS, s.id === currentStateId && 'bg-accent/50')}
                   key={s.id}
                   onClick={() => {
                     onUpdate?.({ stateId: s.id });
@@ -248,10 +246,7 @@ export function IssueContextMenu({
                 const cfg = getPriorityConfig(value);
                 return (
                   <button
-                    className={cn(
-                      'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent',
-                      value === currentPriority && 'bg-accent/50',
-                    )}
+                    className={cn(POPOVER_ITEM_CLASS, value === currentPriority && 'bg-accent/50')}
                     key={p.value}
                     onClick={() => {
                       onUpdate?.({ priority: value });
@@ -267,10 +262,7 @@ export function IssueContextMenu({
             {submenu === 'assignee' && (
               <>
                 <button
-                  className={cn(
-                    'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent',
-                    !currentAssigneeId && 'bg-accent/50',
-                  )}
+                  className={cn(POPOVER_ITEM_CLASS, !currentAssigneeId && 'bg-accent/50')}
                   onClick={() => {
                     onUpdate?.({ assigneeId: null });
                     onClose();
@@ -284,10 +276,7 @@ export function IssueContextMenu({
                 </button>
                 {users.map(u => (
                   <button
-                    className={cn(
-                      'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent',
-                      u.id === currentAssigneeId && 'bg-accent/50',
-                    )}
+                    className={cn(POPOVER_ITEM_CLASS, u.id === currentAssigneeId && 'bg-accent/50')}
                     key={u.id}
                     onClick={() => {
                       onUpdate?.({ assigneeId: u.id });
@@ -310,7 +299,7 @@ export function IssueContextMenu({
                 labels.map(l => (
                   <button
                     className={cn(
-                      'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent',
+                      POPOVER_ITEM_CLASS,
                       currentLabelIds.includes(l.id) && 'bg-accent/50',
                     )}
                     key={l.id}
