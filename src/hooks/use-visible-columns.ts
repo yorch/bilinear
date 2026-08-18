@@ -79,34 +79,36 @@ export function useVisibleColumns(scope: string): {
     [scope],
   );
 
+  // `persist` runs outside the state updater deliberately. React may invoke an
+  // updater more than once (StrictMode, an interrupted concurrent render), and
+  // a localStorage write is a side effect that must not ride along — it is
+  // idempotent today, but nothing enforces that it stays so. These callbacks
+  // therefore derive the next Set from the current `visible` value, exactly as
+  // `isVisible` below already does.
   const toggle = useCallback(
     (key: ColumnKey) => {
-      setVisible(prev => {
-        const next = new Set(prev);
-        if (next.has(key)) {
-          next.delete(key);
-        } else {
-          next.add(key);
-        }
-        persist(next);
-        return next;
-      });
+      const next = new Set(visible);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      persist(next);
+      setVisible(next);
     },
-    [persist],
+    [visible, persist],
   );
 
   const showAll = useCallback(
     (keys: ColumnKey[]) => {
-      setVisible(prev => {
-        const next = new Set(prev);
-        for (const k of keys) {
-          next.add(k);
-        }
-        persist(next);
-        return next;
-      });
+      const next = new Set(visible);
+      for (const k of keys) {
+        next.add(k);
+      }
+      persist(next);
+      setVisible(next);
     },
-    [persist],
+    [visible, persist],
   );
 
   const isVisible = useCallback((key: ColumnKey) => visible.has(key), [visible]);
