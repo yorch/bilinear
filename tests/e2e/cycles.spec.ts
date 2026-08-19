@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
 import { getTeamKey, getWorkspaceKey } from '../fixtures/workspace';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Cycles: page renders for the seeded team, with the heading visible and
@@ -8,7 +10,7 @@ import { getTeamKey, getWorkspaceKey } from '../fixtures/workspace';
  */
 test.describe('Cycles', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
     const ws = getWorkspaceKey(page);
     const team = getTeamKey(page);
     await page.goto(`/${ws}/team/${team}/cycles`);

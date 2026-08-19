@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
 import { getWorkspaceKey } from '../fixtures/workspace';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Initiatives: list page renders, inline create form persists a new initiative
@@ -20,7 +22,7 @@ import { getWorkspaceKey } from '../fixtures/workspace';
  */
 test.describe('Initiatives', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
     const ws = getWorkspaceKey(page);
     await page.goto(`/${ws}/initiatives`);
     await expect(page.getByRole('heading', { name: /initiatives/i })).toBeVisible();

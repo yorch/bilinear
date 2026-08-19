@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
 import { getTeamKey, getWorkspaceKey } from '../fixtures/workspace';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * NOTE on UI scope (discovered while writing this spec):
@@ -26,7 +28,7 @@ import { getTeamKey, getWorkspaceKey } from '../fixtures/workspace';
  */
 test.describe('Bulk Actions', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
     const ws = getWorkspaceKey(page);
     const team = getTeamKey(page);
     await page.goto(`/${ws}/team/${team}/backlog`);

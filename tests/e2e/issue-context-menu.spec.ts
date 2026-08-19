@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Right-click context menu on an issue row: opens with archive/delete/open
@@ -7,7 +9,7 @@ import { loginAs } from '../fixtures/auth';
  */
 test.describe('Issue Context Menu', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
   });
 
   test('right-click on issue row opens the context menu', async ({ page }) => {

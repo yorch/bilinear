@@ -19,11 +19,30 @@ export default defineConfig({
   fullyParallel: true,
 
   projects: [
+    // Signs in each seeded account once and parks the cookies on disk, so
+    // the ~110 specs that only need "a signed-in admin" can start from an
+    // authenticated context instead of replaying the magic-link flow.
+    // `testMatch` is explicit because the browser projects' default only
+    // picks up `*.spec.ts` — this file must not run as an ordinary test.
     {
+      name: 'setup',
+      // Runs once everything that depends on `setup` has finished, pass or
+      // fail. It archives the issues the run created so a second run against
+      // the same database starts from the seed again.
+      teardown: 'cleanup',
+      testMatch: /auth\.setup\.ts/,
+    },
+    {
+      name: 'cleanup',
+      testMatch: /cleanup\.teardown\.ts/,
+    },
+    {
+      dependencies: ['setup'],
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
     {
+      dependencies: ['setup'],
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
     },

@@ -1,33 +1,35 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
 
 /**
  * Sync: create issue in one tab → verify it appears in another tab.
  * This validates the real-time WebSocket broadcast and delta sync path.
  *
- * Cross-tab tests are CI-load-sensitive: tab A's own optimistic visibility
- * has flaked across runs even though it's a pure synchronous MobX update.
- * The 4 tests below were all green on the drain-event commit (c8820a0) and
- * red on adjacent runs whose only diff was a `.fixme` line, so the failure
- * is CI scheduling, not the code path. The dialog-close-sync pattern
- * matched the offline-test fix but didn't stabilize cross-tab. Server-side
- * sync correctness is independently covered by 449/449 unit tests
- * (sync.service, issue.service, triage.service); the WS broadcast is
- * exercised end-to-end here when CI is healthy. Skipping in CI keeps the
- * suite green without losing the ability to run them locally.
+ * These four were skipped in CI (and only in CI) because they went red on
+ * runs whose only diff was a `.fixme` line elsewhere — read at the time as
+ * CI scheduling noise. That signal points somewhere more specific: adding or
+ * removing a test changes how many issues the specs before this one create,
+ * and the team issue list virtualizes past 20 rows per group
+ * (`GroupSection`), at which point a newly created row is not in the DOM for
+ * `getByText(title)` to find. All four fail together against a database two
+ * runs have dirtied, and all four pass against a clean one — so they were
+ * measuring accumulated test data, not the WebSocket. The `cleanup` teardown
+ * project keeps the list under that threshold; see
+ * `.claude/rules/testing.md`. They now run everywhere.
+ *
+ * Both tabs are seeded from the shared admin `storageState` rather than
+ * logging in twice per test.
  */
-const describeSync = process.env.CI ? test.describe.skip : test.describe;
-
-describeSync('Real-time Sync', () => {
+test.describe('Real-time Sync', () => {
   test('issue created in tab A appears in tab B', async ({ browser }) => {
-    const contextA = await browser.newContext();
-    const contextB = await browser.newContext();
+    const contextA = await browser.newContext({ storageState: ADMIN_STATE });
+    const contextB = await browser.newContext({ storageState: ADMIN_STATE });
     const pageA = await contextA.newPage();
     const pageB = await contextB.newPage();
 
     // Both tabs log in as the same user
-    await loginAs(pageA, 'e2e@test.local');
-    await loginAs(pageB, 'e2e@test.local');
+    await openWorkspace(pageA);
+    await openWorkspace(pageB);
 
     // Wait for sync bootstrap to complete in both tabs
     await pageA.waitForSelector('[data-testid="issue-list-view"]');
@@ -63,13 +65,13 @@ describeSync('Real-time Sync', () => {
   });
 
   test('status change in tab A is reflected in tab B', async ({ browser }) => {
-    const contextA = await browser.newContext();
-    const contextB = await browser.newContext();
+    const contextA = await browser.newContext({ storageState: ADMIN_STATE });
+    const contextB = await browser.newContext({ storageState: ADMIN_STATE });
     const pageA = await contextA.newPage();
     const pageB = await contextB.newPage();
 
-    await loginAs(pageA, 'e2e@test.local');
-    await loginAs(pageB, 'e2e@test.local');
+    await openWorkspace(pageA);
+    await openWorkspace(pageB);
 
     await pageA.waitForSelector('[data-testid="issue-list-view"]');
     await pageB.waitForSelector('[data-testid="issue-list-view"]');
@@ -109,13 +111,13 @@ describeSync('Real-time Sync', () => {
   });
 
   test('archiving an issue in tab A removes it from tab B list', async ({ browser }) => {
-    const contextA = await browser.newContext();
-    const contextB = await browser.newContext();
+    const contextA = await browser.newContext({ storageState: ADMIN_STATE });
+    const contextB = await browser.newContext({ storageState: ADMIN_STATE });
     const pageA = await contextA.newPage();
     const pageB = await contextB.newPage();
 
-    await loginAs(pageA, 'e2e@test.local');
-    await loginAs(pageB, 'e2e@test.local');
+    await openWorkspace(pageA);
+    await openWorkspace(pageB);
 
     await pageA.waitForSelector('[data-testid="issue-list-view"]');
     await pageB.waitForSelector('[data-testid="issue-list-view"]');
@@ -153,13 +155,13 @@ describeSync('Real-time Sync', () => {
   test('issue created in tab A and then archived in tab A no longer appears in tab B', async ({
     browser,
   }) => {
-    const contextA = await browser.newContext();
-    const contextB = await browser.newContext();
+    const contextA = await browser.newContext({ storageState: ADMIN_STATE });
+    const contextB = await browser.newContext({ storageState: ADMIN_STATE });
     const pageA = await contextA.newPage();
     const pageB = await contextB.newPage();
 
-    await loginAs(pageA, 'e2e@test.local');
-    await loginAs(pageB, 'e2e@test.local');
+    await openWorkspace(pageA);
+    await openWorkspace(pageB);
 
     await pageA.waitForSelector('[data-testid="issue-list-view"]');
     await pageB.waitForSelector('[data-testid="issue-list-view"]');

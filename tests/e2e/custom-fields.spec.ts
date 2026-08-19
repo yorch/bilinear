@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
 import { getTeamIdByKey, gqlInPage } from '../fixtures/graphql';
 import { getTeamKey, getWorkspaceKey } from '../fixtures/workspace';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Custom fields — define a text field on a team and verify it renders on
@@ -14,7 +16,7 @@ import { getTeamKey, getWorkspaceKey } from '../fixtures/workspace';
  */
 test.describe('Custom fields', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
   });
 
   test('admin can define a custom field and it renders on issue detail', async ({ page }) => {

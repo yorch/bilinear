@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
 import { getWorkspaceKey } from '../fixtures/workspace';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Issue ID instant-jump from the command palette.
@@ -13,7 +15,7 @@ import { getWorkspaceKey } from '../fixtures/workspace';
  */
 test.describe('Search — issue ID instant jump', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
   });
 
   test('typing an identifier and pressing Enter opens that issue', async ({ page }) => {

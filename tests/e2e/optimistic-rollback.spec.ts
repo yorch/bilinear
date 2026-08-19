@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Optimistic update rollback: TransactionQueue.enqueue exposes an onError
@@ -34,7 +36,7 @@ test.describe('Optimistic Update Rollback', () => {
   });
 
   test('server rejection of issue creation rolls back the optimistic row', async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
     await page.waitForSelector('[data-testid="issue-list-view"]');
 
     const title = `Rollback create ${Date.now()}`;
@@ -76,7 +78,7 @@ test.describe('Optimistic Update Rollback', () => {
   });
 
   test('server rejection of status change rolls back the issue state', async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
     await page.waitForSelector('[data-testid="issue-list-view"]');
 
     // Pick whichever issue is currently first in the list. Sibling specs may

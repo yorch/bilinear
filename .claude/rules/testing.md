@@ -42,6 +42,45 @@ local run.
 
 ## E2E tests (Playwright)
 
-- Specs live in `tests/e2e/`. Use the `loginAs(page, email)` helper.
-- The dev server **and** the WS server must both be running.
-- CI runs these against a seeded database (`yarn db:seed`), chromium only.
+- Specs live in `tests/e2e/`. The dev server **and** the WS server must both
+  be running. CI runs chromium only.
+- **Don't log in per test.** The `setup` project (`tests/e2e/auth.setup.ts`)
+  signs both seeded accounts in once and parks the cookies; a spec declares
+  `test.use({ storageState: ADMIN_STATE })` (or `MEMBER_STATE`) and calls
+  `openWorkspace(page)`. `loginAs(page, email)` still exists for the specs
+  that are *about* signing in — replaying the magic-link flow in every
+  `beforeEach` was roughly half the suite's wall time.
+
+### Specs must not leave issues behind
+
+`GroupSection` virtualizes a group past **20 rows**. Past that a newly created
+row is not in the DOM at all, so `getByText(title)` on a just-created issue
+fails with "element(s) not found" — on whichever test happens to run next,
+which is nowhere near the cause.
+
+Specs create issues and mostly do not remove them, so the list grows within a
+run and across runs. The `cleanup` teardown project
+(`tests/e2e/cleanup.teardown.ts`) archives everything but the seeded six after
+each run, which is what keeps the suite re-runnable against one database.
+Don't remove it, and don't let it fail quietly: an earlier version queried
+`issues` without the required `filter.teamId`, and the unchecked `errors[]`
+read as "nothing to clean up".
+
+This is not a theoretical limit. Against a database two runs had dirtied,
+exactly ten tests failed — all of `sync.spec.ts`, all of `offline.spec.ts`,
+`issue-crud`'s create and `issue-detail`'s inline edit — and reseeding made
+all ten pass. Those are close to the same tests that spent months disabled as
+CI-load flakes.
+
+Within a single run the list still grows, so the headroom is not unlimited: a
+chromium run peaks around 9 rows in the largest group and a two-browser run
+around 18, against a threshold of 20. If you add specs that create a lot of
+issues, check the largest group mid-run rather than trusting that it fits.
+
+## Don't press a shortcut the instant its target appears
+
+`useHotkeys` registers from a `useEffect`, so there is a window between the
+paint that reveals a control and the commit that binds its shortcut. A press
+that lands in it is swallowed silently — no error, no change. `issue-detail`'s
+Shift+S hit this once in nine full runs; it now presses inside `expect.poll`
+so a swallowed press is simply retried.

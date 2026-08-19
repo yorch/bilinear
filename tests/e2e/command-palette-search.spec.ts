@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Command palette search behavior: typing a query filters items. We assert
@@ -11,7 +13,7 @@ import { loginAs } from '../fixtures/auth';
  */
 test.describe('Command Palette — Search', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
     await page.keyboard.press('Meta+k');
     await expect(page.locator('[data-testid="command-palette"]')).toBeVisible();
   });

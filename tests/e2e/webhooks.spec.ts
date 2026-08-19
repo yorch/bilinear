@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
 import { getWorkspaceKey } from '../fixtures/workspace';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Webhooks settings page (admin-only).
@@ -14,7 +16,7 @@ import { getWorkspaceKey } from '../fixtures/workspace';
  */
 test.describe('Webhooks Settings', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
     const ws = getWorkspaceKey(page);
     await page.goto(`/${ws}/settings/webhooks`);
     await expect(page.getByRole('heading', { name: /^webhooks$/i })).toBeVisible();

@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
 import { getWorkspaceKey } from '../fixtures/workspace';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Sidebar navigation: Inbox, Projects, Initiatives, team sub-routes
@@ -11,7 +13,7 @@ import { getWorkspaceKey } from '../fixtures/workspace';
  */
 test.describe('Sidebar Navigation', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
   });
 
   test('navigates to inbox via sidebar', async ({ page }) => {

@@ -1163,15 +1163,19 @@ tests/
 │   ├── keyboard.spec.ts       # Global shortcuts
 │   ├── offline.spec.ts        # Optimistic offline + sync-on-reconnect
 │   ├── sync.spec.ts           # Cross-tab real-time sync
-│   └── team-crud.spec.ts
+│   ├── team-crud.spec.ts
+│   ├── auth.setup.ts          # `setup` project — signs both seeded accounts in once
+│   └── cleanup.teardown.ts    # `cleanup` project — archives the run's issues
 └── fixtures/
-    ├── auth.ts                # loginAs(page, email) helper
+    ├── auth.ts                # ADMIN_STATE / MEMBER_STATE, openWorkspace, loginAs
     └── seed.ts                # Shared test data constants
 ```
 
-**Auth in tests:** Use `loginAs(page, email)` from `tests/fixtures/auth.ts`. It drives the email → verify flow. Set `TEST_AUTH_CODE` env var to a known bypass code when running against a test seed.
+**Auth in tests:** declare `test.use({ storageState: ADMIN_STATE })` (or `MEMBER_STATE`) and call `openWorkspace(page)`. The `setup` project mints both sessions once, so a spec pays one navigation instead of replaying the magic-link flow per test. `loginAs(page, email)` still drives the email → verify flow and belongs to the specs that are *about* signing in. Set `TEST_AUTH_CODE` to a known bypass code when running against a test seed.
 
-**Configuration:** `playwright.config.ts` at project root. Starts `yarn dev` automatically before running tests (`webServer`). In CI, runs only Chromium to save time (`workers: 1`).
+**Cleanup:** the `cleanup` teardown archives every non-seeded issue after the run. Without it the issue list grows run over run and crosses `GroupSection`'s 20-row virtualization threshold, at which point a just-created row is not in the DOM and unrelated specs fail with "element(s) not found". See `.claude/rules/testing.md`.
+
+**Configuration:** `playwright.config.ts` at project root. Starts `yarn dev` automatically before running tests (`webServer`). In CI, runs only Chromium to save time (`workers: 1`). A production build is *not* an option for the webServer: the `TEST_AUTH_CODE` bypass is gated on `NODE_ENV !== 'production'`, which Turbopack inlines at compile time, so `next build` statically removes it and nothing can authenticate.
 
 ---
 

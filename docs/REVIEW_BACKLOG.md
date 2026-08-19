@@ -1047,7 +1047,7 @@ overwrite instead of merge) by failing.
 | --- | --- | --- |
 | `tests/e2e/issue-crud.spec.ts` | partial (4 tests: open modal, create+verify, open detail, close detail) | edit title / edit description / change state / assign / archive / delete |
 | `tests/e2e/drag-drop.spec.ts` | missing | drag a card across columns; verify position persists after reload |
-| `tests/e2e/offline.spec.ts` | partial (236 LOC) | confirm reload-survival path: offline → create issue → reconnect → reload page → issue persists |
+| `tests/e2e/offline.spec.ts` | complete | reload-survival is covered by `multiple mutations queued offline all apply` (three offline creates → reconnect → reload → all three persist), un-`.fixme`d 2026-08-18 |
 | `tests/e2e/optimistic-rollback.spec.ts` | partial (162 LOC) | audit coverage against the 13 `tq.enqueue` sites; add a stacked-ops case (pairs with §1.2) |
 | `tests/e2e/multi-user.spec.ts` | missing | two browser contexts in different orgs; org A's actions invisible to org B |
 | `tests/e2e/magic-link-signup.spec.ts` | missing | full magic-link signup flow (vs. existing `loginAs` shortcut) |

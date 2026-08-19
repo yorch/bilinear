@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Property keyboard shortcuts on the selected issue:
@@ -21,7 +23,7 @@ import { loginAs } from '../fixtures/auth';
  */
 test.describe('Issue Properties via Keyboard', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
     await page.keyboard.press('j');
     await expect(page.locator('[data-testid="issue-row"]').first()).toHaveAttribute(
       'data-selected',

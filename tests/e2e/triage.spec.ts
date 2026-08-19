@@ -1,6 +1,8 @@
 import { expect, type Page, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
 import { getTeamKey, getWorkspaceKey } from '../fixtures/workspace';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Create a fresh issue on a triage-enabled team without an explicit stateId.
@@ -65,7 +67,7 @@ async function createFreshTriageIssue(page: Page, teamKey: string): Promise<stri
  */
 test.describe('Triage', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
   });
 
   test('triage page renders one of the expected states', async ({ page }) => {
@@ -110,20 +112,26 @@ test.describe('Triage', () => {
     await expect(page.getByText(/ENG-\d+/).first()).toBeVisible();
   });
 
-  // The triage queue used to be cached via useMemo with stale deps; the
-  // selector is now inline under the wrapping `observer` and Decline is
-  // stable. Accept itself is flaky between CI runs (3 retries fail in some
-  // runs, all 3 attempts pass in others) — same code that drives Decline,
-  // so it points at a server-side WebSocket reconcile race rather than the
-  // client selector. Re-fixme until reproducible locally.
+  // The four action tests below were `.fixme` from 2026-05-12, blamed on a
+  // "WebSocket reconcile race under CI load" that never reproduced. They are
+  // live again: 3× repeat-each plus two full CI-shaped runs (CI=1,
+  // --workers=1, --retries=0) are green, and the two things the old notes
+  // actually described are both accounted for.
   //
-  // 2026-05-12: Decline started failing the same way on CI after the
-  // sync/auth hardening pass landed even though the optimistic path is
-  // unchanged. The 3-retry run shows a consistent "row still visible"
-  // 10s after the click — i.e. the optimistic snoozedUntilAt patch never
-  // makes it to the next render under CI load. Marking .fixme to match
-  // Accept; needs a deterministic repro before unfixmeing.
-  test.fixme('Accept moves the issue out of triage', async ({ page }) => {
+  // The row locator was `div.flex.items-center.gap-3.border-b` — the row's
+  // Tailwind utility list. That is not a contract: any `cn()` edit on the row
+  // silently stops it matching, and "no such element" reads as "row still
+  // visible" only until you look at which assertion failed. It is now
+  // `data-testid="triage-row"`.
+  //
+  // The other half is shared with `sync.spec.ts` and `offline.spec.ts`: these
+  // specs leave their `createFreshTriageIssue` rows behind, the team issue
+  // list virtualizes past 20 rows per group, and past that a just-created row
+  // is not in the DOM to be found. That is why results moved when unrelated
+  // `.fixme` lines changed how many issues earlier specs created. The
+  // `cleanup` teardown project now archives them — see
+  // `.claude/rules/testing.md`.
+  test('Accept moves the issue out of triage', async ({ page }) => {
     const ws = getWorkspaceKey(page);
     const team = getTeamKey(page);
     // Land on a workspace page first so cookies are attached for the API call.
@@ -140,12 +148,7 @@ test.describe('Triage', () => {
     await expect(page.getByText(/to triage/i)).toBeVisible({ timeout: 15_000 });
 
     // Wait for the new row (delivered via bootstrap) to appear.
-    // Each triage row is a flex div with the "items-center gap-3 border-b"
-    // utility classes. Find the one whose subtree contains the fresh title.
-    const freshRow = page
-      .locator('div.flex.items-center.gap-3.border-b')
-      .filter({ hasText: freshTitle })
-      .first();
+    const freshRow = page.getByTestId('triage-row').filter({ hasText: freshTitle }).first();
     await expect(freshRow).toBeVisible({ timeout: 15_000 });
 
     // Click the Accept button on THAT row, not the first row of the queue.
@@ -157,9 +160,8 @@ test.describe('Triage', () => {
     await expect(freshRow).not.toBeVisible({ timeout: 10_000 });
   });
 
-  // See the comment above on `Accept moves the issue out of triage`.
-  // Same WS-reconcile race; same fixme rationale.
-  test.fixme('Decline cancels the issue and removes it from the queue', async ({ page }) => {
+  // See the note above `Accept moves the issue out of triage`.
+  test('Decline cancels the issue and removes it from the queue', async ({ page }) => {
     const ws = getWorkspaceKey(page);
     const team = getTeamKey(page);
     // Land on team page first so cookies attach and bootstrap completes BEFORE
@@ -174,10 +176,7 @@ test.describe('Triage', () => {
     await page.goto(`/${ws}/team/${team}/triage`);
     await expect(page.getByText(/to triage/i)).toBeVisible({ timeout: 15_000 });
 
-    const freshRow = page
-      .locator('div.flex.items-center.gap-3.border-b')
-      .filter({ hasText: freshTitle })
-      .first();
+    const freshRow = page.getByTestId('triage-row').filter({ hasText: freshTitle }).first();
     await expect(freshRow).toBeVisible({ timeout: 15_000 });
 
     await freshRow.getByRole('button', { name: 'Decline' }).click();
@@ -185,17 +184,12 @@ test.describe('Triage', () => {
     await expect(freshRow).not.toBeVisible({ timeout: 10_000 });
   });
 
-  // Mark Duplicate and Snooze still flake/fail in CI even though Accept and
-  // Decline (which use the same MobX path) pass. Suspected cause: the
-  // server-side WebSocket reconcile races the test's `not.toBeVisible`
-  // assertion when the optimistic update sets `snoozedUntilAt` AND the
-  // mutation also creates a relation (Mark Duplicate) or routes through a
-  // sub-popover (Snooze), leaving the row visible past the 10s budget. To
-  // reproduce locally and root-cause, see PR #33 CI logs. Decline + Accept
-  // are stable.
-  test.fixme('Mark Duplicate removes the issue and creates a duplicate relation', async ({
-    page,
-  }) => {
+  // See the note above `Accept moves the issue out of triage`. This one and
+  // Snooze were held back one round longer than Accept/Decline on the theory
+  // that creating a relation (here) or routing through a sub-popover (Snooze)
+  // widened the same race. They share the row locator, which is the part that
+  // was actually wrong.
+  test('Mark Duplicate removes the issue and creates a duplicate relation', async ({ page }) => {
     const ws = getWorkspaceKey(page);
     const team = getTeamKey(page);
     // Land on team page first so the fresh issue is created BEFORE the triage
@@ -208,10 +202,7 @@ test.describe('Triage', () => {
     await page.goto(`/${ws}/team/${team}/triage`);
     await expect(page.getByText(/to triage/i)).toBeVisible({ timeout: 15_000 });
 
-    const freshRow = page
-      .locator('div.flex.items-center.gap-3.border-b')
-      .filter({ hasText: freshTitle })
-      .first();
+    const freshRow = page.getByTestId('triage-row').filter({ hasText: freshTitle }).first();
     await expect(freshRow).toBeVisible({ timeout: 15_000 });
 
     // Find an arbitrary non-triage issue identifier to use as the duplicate
@@ -266,7 +257,7 @@ test.describe('Triage', () => {
     await expect(freshRow).not.toBeVisible({ timeout: 10_000 });
   });
 
-  test.fixme('Snooze hides the issue from the active queue', async ({ page }) => {
+  test('Snooze hides the issue from the active queue', async ({ page }) => {
     const ws = getWorkspaceKey(page);
     const team = getTeamKey(page);
     // Land on team page first; create fresh issue; then navigate to /triage
@@ -279,10 +270,7 @@ test.describe('Triage', () => {
     await page.goto(`/${ws}/team/${team}/triage`);
     await expect(page.getByText(/to triage/i)).toBeVisible({ timeout: 15_000 });
 
-    const freshRow = page
-      .locator('div.flex.items-center.gap-3.border-b')
-      .filter({ hasText: freshTitle })
-      .first();
+    const freshRow = page.getByTestId('triage-row').filter({ hasText: freshTitle }).first();
     await expect(freshRow).toBeVisible({ timeout: 15_000 });
 
     // Click the row-scoped Snooze button to open the preset popover, then

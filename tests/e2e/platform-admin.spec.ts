@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_EMAIL, ADMIN_STATE, MEMBER_STATE, openWorkspace } from '../fixtures/auth';
 import { gqlInPage } from '../fixtures/graphql';
 
 /**
@@ -10,72 +10,89 @@ import { gqlInPage } from '../fixtures/graphql';
  * exercises the console and the other proves the gate. Authorization-critical
  * assertions go through `gqlInPage` (deterministic, mirrors permissions.spec);
  * the UI checks are lightweight smoke tests on top.
+ *
+ * Each block declares which seeded session it runs under; both are minted
+ * once by the `setup` project, so no test in here logs in. `openWorkspace`
+ * is still needed before `gqlInPage` — the fetch runs in the page, so the
+ * page has to be on the app origin for the cookies to attach.
  */
 
-const ADMIN = 'e2e@test.local';
-const MEMBER = 'e2e-member@test.local';
 const DEMO_USER = 'demo@example.com';
 
 test.describe('Platform admin — authorization', () => {
-  test('non-admin platformMetrics is FORBIDDEN', async ({ page }) => {
-    await loginAs(page, MEMBER);
-    const res = await gqlInPage(page, `{ platformMetrics { totalOrgs } }`);
-    expect(res.errors?.some(e => e.extensions?.code === 'FORBIDDEN')).toBe(true);
+  test.describe('as a non-admin member', () => {
+    test.use({ storageState: MEMBER_STATE });
+
+    test('non-admin platformMetrics is FORBIDDEN', async ({ page }) => {
+      await openWorkspace(page);
+      const res = await gqlInPage(page, `{ platformMetrics { totalOrgs } }`);
+      expect(res.errors?.some(e => e.extensions?.code === 'FORBIDDEN')).toBe(true);
+    });
+
+    test('non-admin platformTenants is FORBIDDEN', async ({ page }) => {
+      await openWorkspace(page);
+      const res = await gqlInPage(page, `{ platformTenants { id } }`);
+      expect(res.errors?.some(e => e.extensions?.code === 'FORBIDDEN')).toBe(true);
+    });
   });
 
-  test('non-admin platformTenants is FORBIDDEN', async ({ page }) => {
-    await loginAs(page, MEMBER);
-    const res = await gqlInPage(page, `{ platformTenants { id } }`);
-    expect(res.errors?.some(e => e.extensions?.code === 'FORBIDDEN')).toBe(true);
-  });
+  test.describe('as a platform admin', () => {
+    test.use({ storageState: ADMIN_STATE });
 
-  test('platform admin platformMetrics returns cross-tenant data', async ({ page }) => {
-    await loginAs(page, ADMIN);
-    const res = await gqlInPage<{ platformMetrics: { totalOrgs: number; totalUsers: number } }>(
-      page,
-      `{ platformMetrics { totalOrgs totalUsers } }`,
-    );
-    expect(res.errors).toBeUndefined();
-    expect(res.data?.platformMetrics.totalOrgs).toBeGreaterThanOrEqual(1);
-    expect(res.data?.platformMetrics.totalUsers).toBeGreaterThanOrEqual(2);
+    test('platform admin platformMetrics returns cross-tenant data', async ({ page }) => {
+      await openWorkspace(page);
+      const res = await gqlInPage<{ platformMetrics: { totalOrgs: number; totalUsers: number } }>(
+        page,
+        `{ platformMetrics { totalOrgs totalUsers } }`,
+      );
+      expect(res.errors).toBeUndefined();
+      expect(res.data?.platformMetrics.totalOrgs).toBeGreaterThanOrEqual(1);
+      expect(res.data?.platformMetrics.totalUsers).toBeGreaterThanOrEqual(2);
+    });
   });
 });
 
 test.describe('Platform admin — console UI', () => {
-  test('admin opens the console: dashboard, tenants, tenant detail', async ({ page }) => {
-    await loginAs(page, ADMIN);
+  test.describe('as a platform admin', () => {
+    test.use({ storageState: ADMIN_STATE });
 
-    await page.goto('/admin');
-    await expect(page.getByRole('heading', { name: 'Platform overview' })).toBeVisible();
+    test('admin opens the console: dashboard, tenants, tenant detail', async ({ page }) => {
+      await page.goto('/admin');
+      await expect(page.getByRole('heading', { name: 'Platform overview' })).toBeVisible();
 
-    await page.goto('/admin/tenants');
-    const demoLink = page.getByRole('link', { name: 'Demo Org' }).first();
-    await expect(demoLink).toBeVisible();
-    await demoLink.click();
+      await page.goto('/admin/tenants');
+      const demoLink = page.getByRole('link', { name: 'Demo Org' }).first();
+      await expect(demoLink).toBeVisible();
+      await demoLink.click();
 
-    await page.waitForURL('**/admin/tenants/**');
-    await expect(page.getByRole('heading', { name: 'Demo Org' })).toBeVisible();
-    await expect(page.getByText('Owners')).toBeVisible();
+      await page.waitForURL('**/admin/tenants/**');
+      await expect(page.getByRole('heading', { name: 'Demo Org' })).toBeVisible();
+      await expect(page.getByText('Owners')).toBeVisible();
+    });
+
+    test('admin opens the users page', async ({ page }) => {
+      await page.goto('/admin/users');
+      await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible();
+      await expect(page.getByText(ADMIN_EMAIL)).toBeVisible();
+    });
   });
 
-  test('admin opens the users page', async ({ page }) => {
-    await loginAs(page, ADMIN);
-    await page.goto('/admin/users');
-    await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible();
-    await expect(page.getByText(ADMIN)).toBeVisible();
-  });
+  test.describe('as a non-admin member', () => {
+    test.use({ storageState: MEMBER_STATE });
 
-  test('non-admin is redirected away from /admin', async ({ page }) => {
-    await loginAs(page, MEMBER);
-    await page.goto('/admin');
-    await page.waitForURL(url => !url.pathname.startsWith('/admin'));
-    expect(new URL(page.url()).pathname.startsWith('/admin')).toBe(false);
+    test('non-admin is redirected away from /admin', async ({ page }) => {
+      await page.goto('/admin');
+      await page.waitForURL(url => !url.pathname.startsWith('/admin'));
+      expect(new URL(page.url()).pathname.startsWith('/admin')).toBe(false);
+    });
   });
 });
 
 test.describe('Platform admin — impersonation', () => {
+  test.use({ storageState: ADMIN_STATE });
+
   test('admin impersonates a user, is scoped down, and stops', async ({ page }) => {
-    await loginAs(page, ADMIN);
+    await openWorkspace(page);
 
     // Resolve the demo user + their org through the console API.
     const users = await gqlInPage<{
@@ -107,7 +124,7 @@ test.describe('Platform admin — impersonation', () => {
       impersonationState: { active: boolean; adminEmail: string | null };
     }>(page, `{ impersonationState { active adminEmail } }`);
     expect(state.data?.impersonationState.active).toBe(true);
-    expect(state.data?.impersonationState.adminEmail).toBe(ADMIN);
+    expect(state.data?.impersonationState.adminEmail).toBe(ADMIN_EMAIL);
 
     // An impersonated session must not wield platform-admin powers.
     const denied = await gqlInPage(page, `{ platformMetrics { totalOrgs } }`);

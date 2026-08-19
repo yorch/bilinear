@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_EMAIL, loginAs } from '../fixtures/auth';
 
 /**
  * Auth session lifecycle:
@@ -16,7 +16,7 @@ test.describe('Auth Session Lifecycle', () => {
     context,
     page,
   }) => {
-    await loginAs(page, 'e2e@test.local');
+    await loginAs(page, ADMIN_EMAIL);
     await context.clearCookies();
     await page.goto('/');
     await expect(page).toHaveURL(/\/login/);

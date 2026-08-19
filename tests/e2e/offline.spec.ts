@@ -1,12 +1,14 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Offline support: go offline → create issue → go online → verify synced.
  */
 test.describe('Offline Support', () => {
   test('issues can be created while offline and sync on reconnect', async ({ page, context }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
 
     // Wait for initial bootstrap
     await page.waitForSelector('[data-testid="issue-list-view"]');
@@ -52,7 +54,7 @@ test.describe('Offline Support', () => {
   // next page load via TransactionQueue.hydrate(). The retry counter resets
   // on hydrate so a long offline window followed by a reload still drains.
   test('status change made while offline syncs on reconnect', async ({ page, context }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
 
     await page.waitForSelector('[data-testid="issue-list-view"]');
 
@@ -127,7 +129,7 @@ test.describe('Offline Support', () => {
   });
 
   test('archive made while offline syncs on reconnect', async ({ page, context }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
 
     await page.waitForSelector('[data-testid="issue-list-view"]');
 
@@ -190,16 +192,19 @@ test.describe('Offline Support', () => {
   // Pending transactions persist to IndexedDB so multiple offline writes
   // survive a page reload and drain serially after hydrate().
   //
-  // 2026-05-12: This test has flaked in CI alongside the cross-tab sync
-  // tests in `sync.spec.ts` — same "optimistic title not visible after
-  // dialog close" pattern, same suspected CI-load-induced React commit
-  // delay, same set of mitigations tried (dialog-close sync point,
-  // drain-event catchup) without consistently stabilizing it. The
-  // single-tab offline flows for STATE CHANGE and ARCHIVE pass; only
-  // the 3-creates-then-reload variant flakes. Marked .fixme until
-  // we can repro and diagnose locally.
-  test.fixme('multiple mutations queued offline all apply', async ({ page, context }) => {
-    await loginAs(page, 'e2e@test.local');
+  // `.fixme` from 2026-05-12 for an "optimistic title not visible after
+  // dialog close" flake blamed on CI-load-induced React commit delay. Live
+  // again: green 3× under repeat-each and across two full CI-shaped runs
+  // (CI=1, --workers=1, --retries=0).
+  //
+  // This test creates three issues in one go, so it is the first to notice
+  // when the team list crosses `GroupSection`'s 20-row virtualization
+  // threshold — past that the newest rows are not in the DOM at all and
+  // `getByText(title)` cannot find them. Keeping the list under that
+  // threshold is what the `cleanup` teardown project is for; see
+  // `.claude/rules/testing.md`.
+  test('multiple mutations queued offline all apply', async ({ page, context }) => {
+    await openWorkspace(page);
 
     await page.waitForSelector('[data-testid="issue-list-view"]');
 

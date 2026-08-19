@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../fixtures/auth';
+import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
 import { getWorkspaceKey } from '../fixtures/workspace';
+
+test.use({ storageState: ADMIN_STATE });
 
 /**
  * Notifications inbox: page renders, empty-state or list visible.
@@ -10,7 +12,7 @@ import { getWorkspaceKey } from '../fixtures/workspace';
  */
 test.describe('Inbox', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'e2e@test.local');
+    await openWorkspace(page);
     const ws = getWorkspaceKey(page);
     await page.goto(`/${ws}/inbox`);
   });
