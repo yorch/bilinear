@@ -502,21 +502,28 @@ describe('SyncService — atomic write helpers', () => {
     expect(payloads[1]).toEqual({ id: modelId, title: 'y' });
   });
 
-  it('strips the settings blobs from an Organization payload', async () => {
+  // The Organization entry in SYNC_PAYLOAD_OMITTED_FIELDS is gone along with
+  // the `authSettings`/`securitySettings` columns it existed to hide. Org
+  // configuration now lives in `settings`, which is never part of a synced
+  // Organization row — so there is nothing to strip, and the row travels whole.
+  //
+  // This still guards something: re-introducing an Organization omit entry
+  // (or a config column on the org row) turns it red.
+  it('passes an Organization payload through unstripped', async () => {
     const raw = vi.fn().mockResolvedValue([makeRawRow(BigInt(14), '1400')]);
     const tx = { $queryRaw: raw } as never;
 
     await svc.recordSyncAction(tx, TEST_ORG.id, 'U', 'Organization', TEST_ORG.id, {
       aiEnabled: true,
-      authSettings: { sso: 'secret' },
       id: TEST_ORG.id,
-      securitySettings: { policy: 'secret' },
+      name: 'Test Org',
     });
 
     const [[q]] = raw.mock.calls;
     expect(JSON.parse((q as { values: unknown[] }).values[4] as string)).toEqual({
       aiEnabled: true,
       id: TEST_ORG.id,
+      name: 'Test Org',
     });
   });
 

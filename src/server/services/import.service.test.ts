@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createStubConfig } from '../../test/config-mock';
 import { TEST_ORG, TEST_TEAM, TEST_USER } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import { ImportService, MAX_EXPORT_ROWS, MAX_IMPORT_ROWS, parseCsv } from './import.service';
@@ -112,8 +113,8 @@ describe('ImportService.exportData', () => {
   beforeEach(() => {
     prisma = createMockPrisma();
     svc = new ImportService(prisma as never, { create: vi.fn() } as never);
-    // exportData reads the org's plan-tier cap (Organization.maxExportRows)
-    // instead of the old hardcoded constant; the fixture default matches it.
+    // exportData resolves the org's plan-tier cap through the config chain
+    // (`limits.maxExportRows`); with no stub it gets the registry default.
     prisma.organization.findUnique.mockResolvedValue(TEST_ORG);
   });
 
@@ -137,7 +138,11 @@ describe('ImportService.exportData', () => {
   });
 
   it('honours an org-configured maxExportRows override', async () => {
-    prisma.organization.findUnique.mockResolvedValueOnce({ maxExportRows: 3 });
+    svc = new ImportService(
+      prisma as never,
+      { create: vi.fn() } as never,
+      createStubConfig({ 'limits.maxExportRows': 3 }),
+    );
     const rows = Array.from({ length: 3 }, (_, i) => ({
       identifier: `ENG-${i}`,
       title: `Issue ${i}`,

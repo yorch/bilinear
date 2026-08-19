@@ -1,4 +1,6 @@
+import { getSetting, validateSettingValue } from '@/lib/config';
 import { type Organization, Prisma, type PrismaClient, type User } from '../../generated/prisma';
+import { ConfigService } from '../config/config.service';
 import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../lib/limits';
 import { childLogger } from '../lib/logger';
 
@@ -61,16 +63,18 @@ export interface TenantLimits {
   maxLabelGroupChildren: number;
 }
 
-// Accepted range for each cap. Min 1 (a 0 cap would brick the feature); the
-// max is a generous ceiling that blocks fat-finger/abuse values (e.g. an
-// export cap of a billion rows) while leaving ample headroom above every
-// default. Validated in `updateTenantLimits`.
-const TENANT_LIMIT_BOUNDS: Record<keyof TenantLimits, { min: number; max: number }> = {
-  maxCustomFieldsPerOrg: { max: 1000, min: 1 },
-  maxCustomFieldsPerTeam: { max: 1000, min: 1 },
-  maxExportRows: { max: 1_000_000, min: 1 },
-  maxInitiativeDepth: { max: 20, min: 1 },
-  maxLabelGroupChildren: { max: 10_000, min: 1 },
+/**
+ * The registry key backing each cap. The bounds that used to live here as
+ * `TENANT_LIMIT_BOUNDS` are now declared on the settings themselves, so the
+ * admin console and every enforcing service read one number rather than two
+ * that can drift.
+ */
+const TENANT_LIMIT_KEYS: Record<keyof TenantLimits, string> = {
+  maxCustomFieldsPerOrg: 'limits.maxCustomFieldsPerOrg',
+  maxCustomFieldsPerTeam: 'limits.maxCustomFieldsPerTeam',
+  maxExportRows: 'limits.maxExportRows',
+  maxInitiativeDepth: 'limits.maxInitiativeDepth',
+  maxLabelGroupChildren: 'limits.maxLabelGroupChildren',
 };
 
 export interface TenantDetail extends TenantSummary {
@@ -172,7 +176,13 @@ function daysAgo(days: number): Date {
 }
 
 export class PlatformAdminService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(
+    private prisma: PrismaClient,
+    // Needs the full ConfigService rather than a `ConfigReader`: the plan-limit
+    // editor writes as well as reads. Defaults to one over the same client so
+    // standalone construction (tests, scripts) still works.
+    private config: ConfigService = new ConfigService(prisma),
+  ) {}
 
   async listTenants(params: {
     query?: string | null;
@@ -217,13 +227,7 @@ export class PlatformAdminService {
     }
     return {
       ...this.toTenantSummary(row),
-      limits: {
-        maxCustomFieldsPerOrg: row.maxCustomFieldsPerOrg,
-        maxCustomFieldsPerTeam: row.maxCustomFieldsPerTeam,
-        maxExportRows: row.maxExportRows,
-        maxInitiativeDepth: row.maxInitiativeDepth,
-        maxLabelGroupChildren: row.maxLabelGroupChildren,
-      },
+      limits: await this.readLimits(id),
       owners: row.members.map(m => ({
         displayName: m.user.displayName,
         email: m.user.email,
@@ -234,32 +238,57 @@ export class PlatformAdminService {
     };
   }
 
+  /** Resolve the five caps for one org through the config chain. */
+  private async readLimits(orgId: string): Promise<TenantLimits> {
+    const entries = await Promise.all(
+      (Object.keys(TENANT_LIMIT_KEYS) as Array<keyof TenantLimits>).map(
+        async field =>
+          [field, await this.config.getInt(TENANT_LIMIT_KEYS[field], { orgId })] as const,
+      ),
+    );
+    return Object.fromEntries(entries) as unknown as TenantLimits;
+  }
+
   /**
-   * Overwrite an org's per-org plan-tier caps. Every field is required (the
-   * admin form submits the full set) and validated against
-   * `TENANT_LIMIT_BOUNDS`; an out-of-range or non-integer value rejects the
-   * whole update so a tenant can never be left with a partially-applied or
-   * nonsensical cap. Audit logging is the caller's (resolver's) job.
+   * Overwrite an org's per-org plan-tier caps.
+   *
+   * Every field is required (the admin form submits the full set) and every
+   * one is validated by the registry before anything is written, so an
+   * out-of-range value rejects the whole update rather than leaving a tenant
+   * partially applied. That all-or-nothing property is why validation runs as
+   * a separate pass first: `ConfigService.set` writes one row at a time.
+   *
+   * Returns the previous values so the caller can put them in the audit
+   * record — that is what makes a rollback mechanical instead of a guess.
+   * Audit logging itself is the resolver's job.
    */
-  async updateTenantLimits(id: string, limits: TenantLimits): Promise<Organization> {
+  async updateTenantLimits(
+    id: string,
+    limits: TenantLimits,
+    actorId: string | null,
+  ): Promise<{ limits: TenantLimits; previous: TenantLimits }> {
     await this.assertTenantExists(id);
-    for (const key of Object.keys(TENANT_LIMIT_BOUNDS) as Array<keyof TenantLimits>) {
-      const value = limits[key];
-      const { min, max } = TENANT_LIMIT_BOUNDS[key];
-      if (!Number.isInteger(value) || value < min || value > max) {
-        throw new InvalidTenantLimitsError(`${key} must be an integer between ${min} and ${max}`);
+
+    const fields = Object.keys(TENANT_LIMIT_KEYS) as Array<keyof TenantLimits>;
+    for (const field of fields) {
+      const definition = getSetting(TENANT_LIMIT_KEYS[field]);
+      if (!definition) {
+        throw new InvalidTenantLimitsError(`Unknown limit: ${field}`);
+      }
+      try {
+        validateSettingValue(definition, limits[field]);
+      } catch (err) {
+        throw new InvalidTenantLimitsError(
+          err instanceof Error ? err.message : `${field} is invalid`,
+        );
       }
     }
-    return this.prisma.organization.update({
-      data: {
-        maxCustomFieldsPerOrg: limits.maxCustomFieldsPerOrg,
-        maxCustomFieldsPerTeam: limits.maxCustomFieldsPerTeam,
-        maxExportRows: limits.maxExportRows,
-        maxInitiativeDepth: limits.maxInitiativeDepth,
-        maxLabelGroupChildren: limits.maxLabelGroupChildren,
-      },
-      where: { id },
-    });
+
+    const previous = await this.readLimits(id);
+    for (const field of fields) {
+      await this.config.set(TENANT_LIMIT_KEYS[field], 'org', id, limits[field], actorId);
+    }
+    return { limits: await this.readLimits(id), previous };
   }
 
   async suspendTenant(id: string, reason: string | null): Promise<Organization> {

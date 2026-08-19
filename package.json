@@ -31,6 +31,7 @@
     "db:seed": "prisma db seed",
     "db:verify:indexes": "node scripts/benchmark-indexes.mjs",
     "db:verify:fence": "node scripts/verify-xid8-fence.mjs",
+    "db:verify:config": "tsx --env-file-if-exists=.env scripts/verify-config.ts",
     "db:verify:schema": "node scripts/verify-schema.mjs",
     "admin:grant": "tsx --env-file-if-exists=.env scripts/grant-platform-admin.ts",
     "ws:server": "tsx --env-file-if-exists=.env src/server/ws/index.ts",

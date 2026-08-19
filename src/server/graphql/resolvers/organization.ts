@@ -437,16 +437,36 @@ export const organizationResolvers = {
     },
   },
   Organization: {
-    // Surface the per-org plan-tier caps read-only to any org member. The
-    // parent is the Prisma org row (see `Query.organization` / bootstrap),
-    // which carries the `max*` columns directly.
-    planLimits: (org: Organization) => ({
-      maxCustomFieldsPerOrg: org.maxCustomFieldsPerOrg,
-      maxCustomFieldsPerTeam: org.maxCustomFieldsPerTeam,
-      maxExportRows: org.maxExportRows,
-      maxInitiativeDepth: org.maxInitiativeDepth,
-      maxLabelGroupChildren: org.maxLabelGroupChildren,
-    }),
+    // Surface the per-org plan-tier caps read-only to any org member.
+    //
+    // These were `max*` columns on the parent row; they are now registry knobs
+    // resolved through the config chain, so the SDL shape is unchanged but the
+    // value can come from the org's own row or fall through to the
+    // platform-wide default. `ConfigService` loads the whole scope once and
+    // memoises it, so the five reads here are one query at most.
+    planLimits: async (org: Organization, _args: unknown, ctx: GraphQLContext) => {
+      const ids = { orgId: org.id };
+      const [
+        maxCustomFieldsPerTeam,
+        maxCustomFieldsPerOrg,
+        maxLabelGroupChildren,
+        maxInitiativeDepth,
+        maxExportRows,
+      ] = await Promise.all([
+        ctx.config.getInt('limits.maxCustomFieldsPerTeam', ids),
+        ctx.config.getInt('limits.maxCustomFieldsPerOrg', ids),
+        ctx.config.getInt('limits.maxLabelGroupChildren', ids),
+        ctx.config.getInt('limits.maxInitiativeDepth', ids),
+        ctx.config.getInt('limits.maxExportRows', ids),
+      ]);
+      return {
+        maxCustomFieldsPerOrg,
+        maxCustomFieldsPerTeam,
+        maxExportRows,
+        maxInitiativeDepth,
+        maxLabelGroupChildren,
+      };
+    },
   },
 
   Query: {

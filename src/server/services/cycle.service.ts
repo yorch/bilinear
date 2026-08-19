@@ -1,7 +1,11 @@
 import type { Cycle, PrismaClient } from '../../generated/prisma';
+import { type ConfigReader, DEFAULTS_ONLY_CONFIG } from '../config/reader';
 import { childLogger } from '../lib/logger';
 
 const log = childLogger({ module: 'cycle-service' });
+
+/** How many upcoming cycles `autoCreateUpcomingCycles` keeps pre-populated. */
+const UPCOMING_CYCLE_COUNT_KEY = 'cycles.upcomingCount';
 
 export interface CycleCreateInput {
   description?: string;
@@ -48,7 +52,10 @@ export class CycleCrossTeamError extends Error {
 }
 
 export class CycleService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(
+    private prisma: PrismaClient,
+    private config: ConfigReader = DEFAULTS_ONLY_CONFIG,
+  ) {}
 
   async create(orgId: string, input: CycleCreateInput): Promise<Cycle> {
     const startsAt = new Date(input.startsAt);
@@ -603,7 +610,6 @@ export class CycleService {
         cycleDuration: true,
         cycleStartDay: true,
         cyclesEnabled: true,
-        upcomingCycleCount: true,
       },
       where: { id: teamId },
     });
@@ -612,7 +618,15 @@ export class CycleService {
       return [];
     }
 
-    const targetCount = count ?? team.upcomingCycleCount;
+    // Resolved at team scope, falling through to the org and then the platform
+    // default. This was `Team.upcomingCycleCount` — a column no API could set,
+    // so it was only ever changeable with psql.
+    const targetCount =
+      count ??
+      (await this.config.getInt(UPCOMING_CYCLE_COUNT_KEY, {
+        orgId,
+        teamId,
+      }));
     const durationWeeks = team.cycleDuration ?? 2;
     const cooldownDays = team.cycleCooldownTime ?? 0;
 

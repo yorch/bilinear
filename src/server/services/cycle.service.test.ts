@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createStubConfig } from '../../test/config-mock';
 import { TEST_ORG, TEST_TEAM } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
@@ -518,12 +519,13 @@ describe('CycleService', () => {
   });
 
   describe('autoCreateUpcomingCycles', () => {
+    // `upcomingCycleCount` is no longer a Team column — it is the
+    // `cycles.upcomingCount` registry knob, resolved at team scope.
     const CYCLES_TEAM = {
       cycleCooldownTime: 0,
       cycleDuration: 2,
       cycleStartDay: 1,
       cyclesEnabled: true,
-      upcomingCycleCount: TEST_TEAM.upcomingCycleCount, // 15, the default cap
     };
 
     it('defaults to the team-configured upcomingCycleCount (no explicit count passed)', async () => {
@@ -541,7 +543,8 @@ describe('CycleService', () => {
     });
 
     it('honours a team-configured upcomingCycleCount override', async () => {
-      prisma.team.findUnique.mockResolvedValue({ ...CYCLES_TEAM, upcomingCycleCount: 3 });
+      service = new CycleService(prisma as never, createStubConfig({ 'cycles.upcomingCount': 3 }));
+      prisma.team.findUnique.mockResolvedValue(CYCLES_TEAM);
       prisma.cycle.findFirst.mockResolvedValue(null);
       prisma.cycle.findMany.mockResolvedValue([]);
       prisma.cycle.create.mockImplementation(({ data }) =>

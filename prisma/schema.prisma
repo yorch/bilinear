@@ -14,29 +14,20 @@ model Organization {
   logoUrl    String? @map("logo_url")
   dataRegion String  @default("US") @map("data_region") @db.VarChar(2)
 
-  roadmapEnabled     Boolean @default(false) @map("roadmap_enabled")
-  customersEnabled   Boolean @default(false) @map("customers_enabled")
-  initiativesEnabled Boolean @default(false) @map("initiatives_enabled")
   // Gates the AI assistant features (title suggestion, summarize, duplicate
   // detection). Also requires ANTHROPIC_API_KEY to be set server-side.
-  aiEnabled          Boolean @default(false) @map("ai_enabled")
+  //
+  // Deliberately still a column rather than a `settings` row: it is read on the
+  // AI request hot path and is part of the synced Organization row, so clients
+  // already carry it. Every *other* org-level knob lives in `settings` — see
+  // `src/server/config/`.
+  aiEnabled Boolean @default(false) @map("ai_enabled")
 
-  securitySettings Json  @default("{}") @map("security_settings")
-  authSettings     Json  @default("{}") @map("auth_settings")
-  themeSettings    Json? @map("theme_settings")
-
-  fiscalYearStartMonth Int @default(1) @map("fiscal_year_start_month")
-
-  // Plan-tier caps. Defaults match the previously-hardcoded constants they
-  // replace (see custom-field.service.ts, label.service.ts,
-  // initiative.service.ts, import.service.ts) — data-driven so a future
-  // admin UI can raise/lower them per org without a code change. Until that
-  // UI ships, these are only settable directly in the DB.
-  maxCustomFieldsPerTeam Int @default(20) @map("max_custom_fields_per_team")
-  maxCustomFieldsPerOrg  Int @default(30) @map("max_custom_fields_per_org")
-  maxLabelGroupChildren  Int @default(250) @map("max_label_group_children")
-  maxInitiativeDepth     Int @default(5) @map("max_initiative_depth")
-  maxExportRows          Int @default(10000) @map("max_export_rows")
+  // The five plan-tier caps that used to live here as `max*` columns now live
+  // in `settings` as registry-declared knobs (`src/server/config/registry.ts`),
+  // reachable through `ConfigService`. They moved because one column per knob
+  // does not scale past the handful that existed, and because the registry is
+  // what supplies their bounds, roles and audit metadata.
 
   // Platform-admin suspension. Distinct from `archivedAt` (soft-delete): a
   // suspended org is locked (members can't authenticate into it) but not
@@ -199,6 +190,43 @@ model OrganizationMember {
   @@map("organization_members")
 }
 
+/// One configured value for one knob at one scope. The generic backing store
+/// for every registry-declared setting (`src/server/config/registry.ts`).
+///
+/// Deliberately generic rather than a column per knob: 60+ knobs across four
+/// scopes would otherwise mean a migration per knob, and the registry already
+/// supplies the type and bounds a column would have enforced. `value` is Json
+/// so one table carries ints, booleans, strings and enums.
+///
+/// `scopeId` is NOT nullable, and platform-scope rows use the all-zeroes
+/// sentinel UUID (`PLATFORM_SCOPE_ID`). A null would silently defeat the unique
+/// index: Postgres unique indexes are NULLS DISTINCT by default, so
+/// ('platform', NULL, key) could be inserted repeatedly and the resolver would
+/// pick an arbitrary row. Postgres 15+ can express NULLS NOT DISTINCT but
+/// Prisma's DSL cannot, so the sentinel is the portable answer.
+///
+/// `scopeId` is polymorphic (an org, team or user id depending on `scopeType`)
+/// and therefore carries no foreign key — so it gets none of the
+/// `onDelete: Cascade` the rest of the schema relies on. Deleting the owning
+/// entity must delete its rows explicitly; `ConfigService.deleteScope` does
+/// that, and a periodic sweep in the WS server is the backstop.
+model Setting {
+  id        String   @id @default(uuid()) @db.Uuid
+  scopeType String   @map("scope_type") @db.VarChar(16)
+  scopeId   String   @map("scope_id") @db.Uuid
+  key       String   @db.VarChar(128)
+  value     Json
+  updatedBy String?  @map("updated_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([scopeType, scopeId, key])
+  // Loading a whole scope in one read is the hot path — ConfigService fetches
+  // every key for a scope at once rather than one query per knob.
+  @@index([scopeType, scopeId])
+  @@map("settings")
+}
+
 /// Write-once audit trail for platform-admin (cross-tenant) actions. Kept
 /// separate from `AuditLogEntry` because platform actions are not scoped to a
 /// single organization — the actor operates above any one tenant. `actorId`
@@ -306,30 +334,19 @@ model Team {
   timezone String @default("UTC") @db.VarChar(63)
 
   // Cycle configuration (used in Sprint 15-16)
-  cyclesEnabled            Boolean @default(false) @map("cycles_enabled")
-  cycleDuration            Int?    @default(2) @map("cycle_duration")
-  cycleCooldownTime        Int?    @default(0) @map("cycle_cooldown_time")
-  cycleStartDay            Int?    @default(1) @map("cycle_start_day")
-  cycleLockToActive        Boolean @default(false) @map("cycle_lock_to_active")
-  cycleAutoAssignStarted   Boolean @default(false) @map("cycle_auto_assign_started")
-  cycleAutoAssignCompleted Boolean @default(false) @map("cycle_auto_assign_completed")
-  // Plan-tier cap: how many upcoming cycles autoCreateUpcomingCycles keeps
-  // pre-populated. Default matches the previously-hardcoded constant in
-  // cycle.service.ts.
-  upcomingCycleCount       Int     @default(15) @map("upcoming_cycle_count")
+  cyclesEnabled     Boolean @default(false) @map("cycles_enabled")
+  cycleDuration     Int?    @default(2) @map("cycle_duration")
+  cycleCooldownTime Int?    @default(0) @map("cycle_cooldown_time")
+  cycleStartDay     Int?    @default(1) @map("cycle_start_day")
 
   // Auto-close/archive
   autoClosePeriod       Int?    @map("auto_close_period")
-  autoCloseStateId      String? @map("auto_close_state_id") @db.Uuid
   autoArchivePeriod     Int?    @map("auto_archive_period")
   autoCloseChildIssues  Boolean @default(false) @map("auto_close_child_issues")
   autoCloseParentIssues Boolean @default(false) @map("auto_close_parent_issues")
 
   // Estimation
-  issueEstimationType      IssueEstimationType @default(notUsed) @map("issue_estimation_type")
-  issueEstimationExtended  Boolean @default(false) @map("issue_estimation_extended")
-  issueEstimationAllowZero Boolean @default(false) @map("issue_estimation_allow_zero")
-  defaultIssueEstimate     Float?  @map("default_issue_estimate")
+  issueEstimationType IssueEstimationType @default(notUsed) @map("issue_estimation_type")
 
   // Defaults
   defaultIssueStateId String? @map("default_issue_state_id") @db.Uuid
@@ -339,8 +356,7 @@ model Team {
   issueCount Int @default(0) @map("issue_count")
 
   // Lifecycle
-  joinByDefault Boolean   @default(false) @map("join_by_default")
-  retiredAt     DateTime? @map("retired_at") @db.Timestamptz
+  retiredAt DateTime? @map("retired_at") @db.Timestamptz
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   archivedAt    DateTime? @map("archived_at") @db.Timestamptz
@@ -351,7 +367,6 @@ model Team {
   memberships            TeamMembership[]
   workflowStates         WorkflowState[]         @relation("TeamWorkflowStates")
   defaultIssueState      WorkflowState?          @relation("TeamDefaultIssueState", fields: [defaultIssueStateId], references: [id], onDelete: SetNull)
-  autoCloseState         WorkflowState?          @relation("TeamAutoCloseState", fields: [autoCloseStateId], references: [id], onDelete: SetNull)
   issues                 Issue[]
   labels                 IssueLabel[]
   projectTeams           ProjectTeam[]
@@ -375,7 +390,6 @@ model Team {
   // to a full table scan on every workflow_states delete (which the FK's
   // ON DELETE SET NULL has to evaluate).
   @@index([defaultIssueStateId])
-  @@index([autoCloseStateId])
   @@map("teams")
 }
 
@@ -414,7 +428,6 @@ model WorkflowState {
   team              Team    @relation("TeamWorkflowStates", fields: [teamId], references: [id], onDelete: Cascade)
   issues            Issue[]
   defaultForTeams   Team[]  @relation("TeamDefaultIssueState")
-  autoCloseForTeams Team[]  @relation("TeamAutoCloseState")
 
   @@index([teamId])
   @@index([teamId, type])

@@ -172,45 +172,78 @@ describe('PlatformAdminService', () => {
   });
 
   describe('updateTenantLimits', () => {
+    // The caps moved from `Organization.max*` columns to `settings` rows, so
+    // the write to assert on is `setting.upsert`, one per cap.
     it('throws when the tenant does not exist', async () => {
       prisma.organization.findUnique.mockResolvedValue(null);
-      await expect(service.updateTenantLimits('org1', VALID_LIMITS)).rejects.toBeInstanceOf(
-        TenantNotFoundError,
-      );
+      await expect(
+        service.updateTenantLimits('org1', VALID_LIMITS, 'admin1'),
+      ).rejects.toBeInstanceOf(TenantNotFoundError);
     });
 
     it('writes all five caps when every value is valid', async () => {
       prisma.organization.findUnique.mockResolvedValue({ id: 'org1' });
-      prisma.organization.update.mockResolvedValue({ id: 'org1' });
 
-      await service.updateTenantLimits('org1', VALID_LIMITS);
-      const arg = prisma.organization.update.mock.calls[0][0];
-      expect(arg.where).toEqual({ id: 'org1' });
-      expect(arg.data).toEqual(VALID_LIMITS);
+      await service.updateTenantLimits('org1', VALID_LIMITS, 'admin1');
+
+      expect(prisma.setting.upsert).toHaveBeenCalledTimes(5);
+      const written = prisma.setting.upsert.mock.calls.map(
+        call =>
+          (
+            call[0] as {
+              create: { key: string; scopeId: string; scopeType: string; value: unknown };
+            }
+          ).create,
+      );
+      expect(written.map(w => w.key).sort()).toEqual([
+        'limits.maxCustomFieldsPerOrg',
+        'limits.maxCustomFieldsPerTeam',
+        'limits.maxExportRows',
+        'limits.maxInitiativeDepth',
+        'limits.maxLabelGroupChildren',
+      ]);
+      // Every row is scoped to the org being edited, not to the platform —
+      // writing these at platform scope would change the default for every
+      // other tenant at once.
+      expect(written.every(w => w.scopeType === 'org' && w.scopeId === 'org1')).toBe(true);
+      expect(written.find(w => w.key === 'limits.maxInitiativeDepth')?.value).toBe(
+        VALID_LIMITS.maxInitiativeDepth,
+      );
     });
 
     it('rejects a non-integer cap without writing', async () => {
       prisma.organization.findUnique.mockResolvedValue({ id: 'org1' });
       await expect(
-        service.updateTenantLimits('org1', { ...VALID_LIMITS, maxExportRows: 10.5 }),
+        service.updateTenantLimits('org1', { ...VALID_LIMITS, maxExportRows: 10.5 }, 'admin1'),
       ).rejects.toBeInstanceOf(InvalidTenantLimitsError);
-      expect(prisma.organization.update).not.toHaveBeenCalled();
+      expect(prisma.setting.upsert).not.toHaveBeenCalled();
     });
 
     it('rejects a cap below the minimum (0)', async () => {
       prisma.organization.findUnique.mockResolvedValue({ id: 'org1' });
       await expect(
-        service.updateTenantLimits('org1', { ...VALID_LIMITS, maxInitiativeDepth: 0 }),
+        service.updateTenantLimits('org1', { ...VALID_LIMITS, maxInitiativeDepth: 0 }, 'admin1'),
       ).rejects.toBeInstanceOf(InvalidTenantLimitsError);
-      expect(prisma.organization.update).not.toHaveBeenCalled();
+      expect(prisma.setting.upsert).not.toHaveBeenCalled();
     });
 
     it('rejects a cap above the per-field ceiling', async () => {
       prisma.organization.findUnique.mockResolvedValue({ id: 'org1' });
       await expect(
-        service.updateTenantLimits('org1', { ...VALID_LIMITS, maxInitiativeDepth: 21 }),
+        service.updateTenantLimits('org1', { ...VALID_LIMITS, maxInitiativeDepth: 21 }, 'admin1'),
       ).rejects.toBeInstanceOf(InvalidTenantLimitsError);
-      expect(prisma.organization.update).not.toHaveBeenCalled();
+      expect(prisma.setting.upsert).not.toHaveBeenCalled();
+    });
+
+    // The all-or-nothing property is the point of validating in a separate
+    // pass: ConfigService.set writes one row at a time, so without it a bad
+    // fifth cap would leave the first four applied.
+    it('writes nothing when a later cap is invalid', async () => {
+      prisma.organization.findUnique.mockResolvedValue({ id: 'org1' });
+      await expect(
+        service.updateTenantLimits('org1', { ...VALID_LIMITS, maxLabelGroupChildren: 0 }, 'admin1'),
+      ).rejects.toBeInstanceOf(InvalidTenantLimitsError);
+      expect(prisma.setting.upsert).not.toHaveBeenCalled();
     });
   });
 });

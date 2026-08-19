@@ -983,14 +983,7 @@ export class SyncManager {
           if (act === 'D') {
             dexieDeletes.push({ id: modelId, table: 'organizations' });
           } else if (data) {
-            // `getBootstrapData` omits these two settings blobs; the broadcast
-            // path must not put them back. Stripped server-side too — this is
-            // the belt to that braces, since anything already in a client's
-            // IndexedDB would otherwise persist.
-            const { authSettings, securitySettings, ...safe } = data as Record<string, unknown>;
-            void authSettings;
-            void securitySettings;
-            dexieUpserts.organizations.push(safe);
+            dexieUpserts.organizations.push(data as Record<string, unknown>);
           }
           break;
         case 'Issue': {

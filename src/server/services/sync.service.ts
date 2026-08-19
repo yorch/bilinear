@@ -28,13 +28,17 @@ export { DELTA_PAGE_SIZE };
  *   jsonb param does not throw — it is base64-encoded — so leaving them in
  *   silently shipped ~1.33x the blob to every client in the org and into their
  *   IndexedDB. `getBootstrapData` already omits them for the same reason.
- * - `Organization.authSettings`/`securitySettings` are admin-console settings
- *   blobs; a SyncAction fans out to every member.
+ *
+ * The `Organization.authSettings`/`securitySettings` entry that used to live
+ * here is gone with the columns. Its reason still governs the config system
+ * that replaced them: a SyncAction fans out to *every* member of the org, so
+ * anything scoped narrower than the org must never travel this way. That is
+ * why user-scoped configuration is delivered to the owning user's own sockets
+ * instead of broadcast — see `ConfigService` and docs/CONFIG_ASSESSMENT.md §4.3.
  */
 const SYNC_PAYLOAD_OMITTED_FIELDS: Record<string, readonly string[]> = {
   Document: ['contentState'],
   Issue: ['descriptionState'],
-  Organization: ['authSettings', 'securitySettings'],
 };
 
 function stripSyncPayload(modelName: string, data: object | null): object | null {
@@ -370,10 +374,11 @@ export class SyncService {
       initiatives,
       initiativeProjects,
     ] = await Promise.all([
+      // The `authSettings`/`securitySettings`/`themeSettings` blobs that used
+      // to be omitted here no longer exist: they were schemaless placeholders
+      // nothing read or wrote, and org configuration now lives in `settings`,
+      // which is never part of the synced Organization row.
       this.prisma.organization.findUnique({
-        // Both are settings blobs for the admin console (SSO config, security
-        // policy) — they reach every member's IndexedDB from here otherwise.
-        omit: { authSettings: true, securitySettings: true },
         where: { id: orgId },
       }),
       // The org roster. Ships alongside `users` rather than being folded into

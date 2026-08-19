@@ -29,19 +29,7 @@ CREATE TABLE "organizations" (
     "url_key" VARCHAR(63) NOT NULL,
     "logo_url" TEXT,
     "data_region" VARCHAR(2) NOT NULL DEFAULT 'US',
-    "roadmap_enabled" BOOLEAN NOT NULL DEFAULT false,
-    "customers_enabled" BOOLEAN NOT NULL DEFAULT false,
-    "initiatives_enabled" BOOLEAN NOT NULL DEFAULT false,
     "ai_enabled" BOOLEAN NOT NULL DEFAULT false,
-    "security_settings" JSONB NOT NULL DEFAULT '{}',
-    "auth_settings" JSONB NOT NULL DEFAULT '{}',
-    "theme_settings" JSONB,
-    "fiscal_year_start_month" INTEGER NOT NULL DEFAULT 1,
-    "max_custom_fields_per_team" INTEGER NOT NULL DEFAULT 20,
-    "max_custom_fields_per_org" INTEGER NOT NULL DEFAULT 30,
-    "max_label_group_children" INTEGER NOT NULL DEFAULT 250,
-    "max_initiative_depth" INTEGER NOT NULL DEFAULT 5,
-    "max_export_rows" INTEGER NOT NULL DEFAULT 10000,
     "suspended_at" TIMESTAMPTZ,
     "suspended_reason" TEXT,
     "sync_actions_pruned_through_xact_id" DECIMAL(20,0),
@@ -91,6 +79,20 @@ CREATE TABLE "organization_members" (
     "updated_at" TIMESTAMPTZ NOT NULL,
 
     CONSTRAINT "organization_members_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "settings" (
+    "id" UUID NOT NULL,
+    "scope_type" VARCHAR(16) NOT NULL,
+    "scope_id" UUID NOT NULL,
+    "key" VARCHAR(128) NOT NULL,
+    "value" JSONB NOT NULL,
+    "updated_by" UUID,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT "settings_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -145,23 +147,14 @@ CREATE TABLE "teams" (
     "cycle_duration" INTEGER DEFAULT 2,
     "cycle_cooldown_time" INTEGER DEFAULT 0,
     "cycle_start_day" INTEGER DEFAULT 1,
-    "cycle_lock_to_active" BOOLEAN NOT NULL DEFAULT false,
-    "cycle_auto_assign_started" BOOLEAN NOT NULL DEFAULT false,
-    "cycle_auto_assign_completed" BOOLEAN NOT NULL DEFAULT false,
-    "upcoming_cycle_count" INTEGER NOT NULL DEFAULT 15,
     "auto_close_period" INTEGER,
-    "auto_close_state_id" UUID,
     "auto_archive_period" INTEGER,
     "auto_close_child_issues" BOOLEAN NOT NULL DEFAULT false,
     "auto_close_parent_issues" BOOLEAN NOT NULL DEFAULT false,
     "issue_estimation_type" "issue_estimation_type" NOT NULL DEFAULT 'notUsed',
-    "issue_estimation_extended" BOOLEAN NOT NULL DEFAULT false,
-    "issue_estimation_allow_zero" BOOLEAN NOT NULL DEFAULT false,
-    "default_issue_estimate" DOUBLE PRECISION,
     "default_issue_state_id" UUID,
     "triage_enabled" BOOLEAN NOT NULL DEFAULT false,
     "issue_count" INTEGER NOT NULL DEFAULT 0,
-    "join_by_default" BOOLEAN NOT NULL DEFAULT false,
     "retired_at" TIMESTAMPTZ,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ NOT NULL,
@@ -913,6 +906,12 @@ CREATE INDEX "organization_members_user_id_idx" ON "organization_members"("user_
 CREATE UNIQUE INDEX "organization_members_organization_id_user_id_key" ON "organization_members"("organization_id", "user_id");
 
 -- CreateIndex
+CREATE INDEX "settings_scope_type_scope_id_idx" ON "settings"("scope_type", "scope_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "settings_scope_type_scope_id_key_key" ON "settings"("scope_type", "scope_id", "key");
+
+-- CreateIndex
 CREATE INDEX "platform_audit_logs_created_at_idx" ON "platform_audit_logs"("created_at");
 
 -- CreateIndex
@@ -938,9 +937,6 @@ CREATE INDEX "teams_parent_id_idx" ON "teams"("parent_id");
 
 -- CreateIndex
 CREATE INDEX "teams_default_issue_state_id_idx" ON "teams"("default_issue_state_id");
-
--- CreateIndex
-CREATE INDEX "teams_auto_close_state_id_idx" ON "teams"("auto_close_state_id");
 
 -- CreateIndex
 CREATE INDEX "team_memberships_team_id_idx" ON "team_memberships"("team_id");
@@ -1325,9 +1321,6 @@ ALTER TABLE "teams" ADD CONSTRAINT "teams_parent_id_fkey" FOREIGN KEY ("parent_i
 
 -- AddForeignKey
 ALTER TABLE "teams" ADD CONSTRAINT "teams_default_issue_state_id_fkey" FOREIGN KEY ("default_issue_state_id") REFERENCES "workflow_states"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "teams" ADD CONSTRAINT "teams_auto_close_state_id_fkey" FOREIGN KEY ("auto_close_state_id") REFERENCES "workflow_states"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "team_memberships" ADD CONSTRAINT "team_memberships_team_id_fkey" FOREIGN KEY ("team_id") REFERENCES "teams"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -2,6 +2,7 @@ import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import type { PrismaClient, Webhook, WebhookDelivery } from '../../generated/prisma';
+import { type ConfigReader, DEFAULTS_ONLY_CONFIG } from '../config/reader';
 import { env } from '../lib/env';
 import { MAX_WEBHOOK_NAME_LENGTH } from '../lib/limits';
 import { childLogger } from '../lib/logger';
@@ -49,16 +50,16 @@ export interface WebhookUpdateInput {
   url?: string;
 }
 
-// Deliveries are retried up to MAX_ATTEMPTS times. Backoff schedule (s):
-// 30, 120, 600, 1800, 7200 — totalling ~2.5h before giving up.
-const MAX_ATTEMPTS = 5;
+// Deliveries are retried up to `webhook.maxAttempts` times (default 5).
+// Backoff schedule (s): 30, 120, 600, 1800, 7200 — ~2.5h before giving up.
+// The schedule is NOT configurable: a caller raising maxAttempts past its
+// length reuses the last entry, which keeps a large cap from turning into a
+// tight retry loop.
 const RETRY_BACKOFF_SECONDS = [30, 120, 600, 1800, 7200];
 
-// Cap consecutive failures before auto-disabling a webhook. A stuck
-// endpoint shouldn't generate retries indefinitely.
-const AUTO_DISABLE_AFTER = 20;
-
-const REQUEST_TIMEOUT_MS = 10_000;
+const MAX_ATTEMPTS_KEY = 'webhook.maxAttempts';
+const AUTO_DISABLE_AFTER_KEY = 'webhook.autoDisableAfter';
+const REQUEST_TIMEOUT_MS_KEY = 'webhook.requestTimeoutMs';
 
 /**
  * WebhookService manages outbound HTTP webhook subscriptions.
@@ -77,7 +78,10 @@ const REQUEST_TIMEOUT_MS = 10_000;
  * `processDuePending`.
  */
 export class WebhookService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(
+    private prisma: PrismaClient,
+    private config: ConfigReader = DEFAULTS_ONLY_CONFIG,
+  ) {}
 
   // ─── CRUD ─────────────────────────────────────────────────────────────────
 
@@ -307,6 +311,11 @@ export class WebhookService {
    * just performs two attempts.
    */
   async processDelivery(deliveryId: string): Promise<void> {
+    // Platform-scoped, so it resolves without an org — which matters because
+    // the claim below runs before the delivery row (and therefore its org) has
+    // been read.
+    const requestTimeoutMs = await this.config.getInt(REQUEST_TIMEOUT_MS_KEY);
+
     // Atomic claim: transition status from `pending` to `in_flight`. Two
     // concurrent runners (e.g. multiple WS replicas) both call this; the
     // second sees the row already moved to `in_flight` and updateMany
@@ -332,8 +341,8 @@ export class WebhookService {
     //                     reclaim it. Symmetric with claimDeadline so
     //                     the reclaim window matches the protection
     //                     window the writer originally granted itself.
-    const claimDeadline = new Date(Date.now() + REQUEST_TIMEOUT_MS + 60_000);
-    const claimableBefore = new Date(Date.now() - REQUEST_TIMEOUT_MS - 60_000);
+    const claimDeadline = new Date(Date.now() + requestTimeoutMs + 60_000);
+    const claimableBefore = new Date(Date.now() - requestTimeoutMs - 60_000);
     const claim = await this.prisma.webhookDelivery.updateMany({
       data: { nextAttemptAt: claimDeadline, status: 'in_flight' },
       where: {
@@ -358,6 +367,12 @@ export class WebhookService {
     if (!delivery) {
       return;
     }
+    // Both are org-scoped, so they resolve only once the delivery's webhook —
+    // and therefore its organization — is known.
+    const orgId = delivery.webhook.organizationId;
+    const maxAttempts = await this.config.getInt(MAX_ATTEMPTS_KEY, { orgId });
+    const autoDisableAfter = await this.config.getInt(AUTO_DISABLE_AFTER_KEY, { orgId });
+
     if (!delivery.webhook.enabled || delivery.webhook.archivedAt) {
       // Hook was disabled between enqueue and attempt — drop the delivery.
       await this.prisma.webhookDelivery.update({
@@ -388,7 +403,7 @@ export class WebhookService {
       await assertSafeUrl(delivery.webhook.url);
 
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
       try {
         const res = await fetch(delivery.webhook.url, {
           body: rawBody,
@@ -447,7 +462,7 @@ export class WebhookService {
     }
 
     // Failure: schedule retry or mark as failed.
-    if (attempt >= MAX_ATTEMPTS) {
+    if (attempt >= maxAttempts) {
       await this.prisma.$transaction([
         this.prisma.webhookDelivery.update({
           data: {
@@ -474,7 +489,7 @@ export class WebhookService {
       const disabled = await this.prisma.webhook.updateMany({
         data: { enabled: false },
         where: {
-          consecutiveFailures: { gte: AUTO_DISABLE_AFTER },
+          consecutiveFailures: { gte: autoDisableAfter },
           enabled: true,
           id: delivery.webhookId,
         },
