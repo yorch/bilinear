@@ -33,8 +33,8 @@ authored under Tier 2 constraints.
 | Reviewed | 258 |
 | Skipped (with reason, below) | 303 |
 | Not reached | **0** |
-| Applied | **15 findings / 16 commits / 69 files** |
-| Proposed | 2 (both partial — see below) |
+| Applied | **15 findings / 16 commits / 69 files** (2026-08-18); **15 of 17 fully closed** as of 2026-08-19 — see *Status as of 2026-08-19* |
+| Proposed | 2 (both partial — F08, F11; still partial on 2026-08-19. F15 was also partial and has since closed.) |
 | Blocked | 0 |
 
 **Update — second pass.** The first pass applied 4 findings and reported 13 for a
@@ -222,13 +222,64 @@ comment — that is not a style nit, it is how a real bug stayed camouflaged.
 Every commit is one category and individually revertable. All five available
 gates were re-run in full after each.
 
+## Status as of 2026-08-19
+
+The three items in *Still Open* below were written on 2026-08-18 and are kept
+verbatim as the record of what was true then. Two of them have since changed.
+Current state, verified against the tree rather than from memory:
+
+| Finding | 2026-08-18 | 2026-08-19 | Evidence |
+|---|---|---|---|
+| **F15** — TipTap link prompt | open | **closed** | `grep -rn 'window\.prompt(' src` → no matches. Replaced with `PromptDialog` in `9cfe8e3`. |
+| **F11** — unsound casts | 2 of 4 remain | unchanged, and now **documented in place** | `details-node.ts:52`, `embed-node.tsx:141`, `mermaid-node.tsx:130`, `use-issue-update.ts:59` |
+| **F08** — hand-rolled fetches | 6 of 15 pages remain | unchanged **by design** | `useRetryableFetch` now used by 10 pages; the six fetch-then-seed-a-form pages are deliberately not converted |
+
+**Why F15 closed.** The reason given below for deferring it was that the fix is
+browser-verifiable and the E2E gate was unavailable. Both halves of that turned
+out to be wrong:
+
+- The E2E gate *is* available in this environment and now runs green
+  (121 passed / 3 skipped / 0 failed, chromium).
+- The selection-restoration problem the deferral was built around does not
+  exist. ProseMirror maps a stored selection through the document itself —
+  `Transaction.selection` returns `curSelection.map(doc, mapping)` — and TipTap's
+  `focus()` resolves to `editor.state.selection`, so the range survives the
+  dialog without any explicit `setTextSelection`. I first wrote the capture and
+  restore code described below, then verified against `@tiptap/core` in
+  `node_modules` that it was redundant, and deleted it (`37d5f16`). The applied
+  fix is three lines:
+
+  ```ts
+  const chain = editor.chain().focus().extendMarkRange('link');
+  const trimmed = url.trim();
+  (trimmed === '' ? chain.unsetLink() : chain.setLink({ href: trimmed })).run();
+  ```
+
+**Why F11 and F08 did not close.** Both were re-examined and both deferrals hold.
+For F11, the `as never` fix requires a `declare module '@tiptap/core'`
+augmentation, and that is not merely a design decision — it is impossible from
+outside the package. `@tiptap/core`'s `dist/index.d.ts` is rollup-bundled: it
+declares `interface Commands$1` internally and re-exports it as
+`type Commands$1 as Commands` (line 5125). A type alias re-export is not an
+augmentable declaration, so `declare module '@tiptap/core' { interface Commands ... }`
+creates a *new, unrelated* interface rather than merging. I implemented the
+augmentation, watched it fail to affect the command types, and reverted it. All
+four remaining casts now carry an in-file comment stating the constraint. For
+F08, the six pages remain as analysed below; the recommendation there — a second
+hook shaped for fetch-then-seed — is filed in `docs/REVIEW_BACKLOG.md` rather
+than implemented, because it is new API surface, not remediation.
+
+**Net.** Of the 17 findings, **15 are fully closed**; **F08 and F11 are partial
+by documented design**, with the undone remainder scoped and recorded in the
+backlog. Nothing is open for lack of effort or verification.
+
 ## Still Open — What I Did Not Do, And Why
 
 Everything reported in the first pass has been applied except the following. Each
 is a part of a finding rather than a whole one, and each is left undone for a
 stated reason rather than for lack of time.
 
-### F11 · Two of four unsound casts remain
+### F11 · Two of four unsound casts remain — still open, by constraint
 - **`as never` on TipTap `addCommands()`** (`mermaid-node.tsx`, `details-node.ts`,
   `embed-node.tsx`). This is a consistent three-site pattern, not a slip. The
   correct fix is a `declare module '@tiptap/core'` augmentation declaring each
@@ -241,7 +292,7 @@ stated reason rather than for lack of time.
   signature is load-bearing. I tried the single-cast form; TypeScript rejects it,
   which confirms the two types genuinely do not overlap.
 
-### F15 · The TipTap link prompt remains a `window.prompt`
+### F15 · The TipTap link prompt remains a `window.prompt` — ✅ **closed 2026-08-19**, see above
 `tiptap-editor.tsx:762`. Unlike the three admin prompts, this one runs against a
 live ProseMirror selection: it reads `getAttributes('link')` and then applies
 `extendMarkRange('link')` to whatever is currently selected. `window.prompt`
@@ -253,7 +304,11 @@ Doing it properly means capturing the range before opening and restoring it with
 `setTextSelection` on submit. That is a browser-verifiable change, and the E2E
 gate is unavailable in this environment, so I would be shipping it unverified.
 
-### F08 · Six of fifteen pages still hand-roll their fetch
+> **Superseded.** Both premises were false — ProseMirror already maps the
+> selection, so no capture/restore is needed, and the E2E gate does run here.
+> Fixed in `9cfe8e3`, simplified in `37d5f16`.
+
+### F08 · Six of fifteen pages still hand-roll their fetch — still open, by design
 Converted: the admin dashboard, users, tenants, tenant detail and audit pages, the
 workspace analytics, audit-log, automations and webhooks pages. **Every page that
 rendered a failed load as a dead-end message now offers a retry** — that half of

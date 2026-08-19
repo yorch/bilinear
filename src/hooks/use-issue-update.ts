@@ -56,6 +56,12 @@ export function useIssueUpdate(
   );
   const defaultReconcile = useCallback(
     (id: string, updated: Record<string, unknown>) => {
+      // The double cast is forced by the adapter contract, not laziness. `reconcile`
+      // is deliberately typed on `Record<string, unknown>` because its two
+      // implementors reconcile into different shapes — this MobX store, and the
+      // standalone issue route's local `useState` copy. Narrowing the signature to
+      // `DBIssue` would break the other implementor; a single cast is rejected
+      // because the two types genuinely do not overlap.
       issueStore.applySyncAction('U', id, updated as unknown as DBIssue);
     },
     [issueStore],
