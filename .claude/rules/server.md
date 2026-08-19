@@ -68,7 +68,14 @@ code default → env → platform → org → team → user.
   reports a setting that does nothing.
 - Services take a `ConfigReader` defaulting to `DEFAULTS_ONLY_CONFIG`, so unit
   tests against mocked Prisma still resolve the code default without a query.
-  Pass the real service from `context.ts` and from the WS/YJS entry points.
+  That default is a test affordance: pass the real service from `context.ts`,
+  `loaders.ts`, the route handlers that build services directly, and the WS/YJS
+  entry points. Forgetting is silent — the service just ignores every configured
+  value.
+- `editableBy` gates *the knob*; reaching a scope gates *the caller*, and the
+  settings resolver checks that separately. Platform scope needs
+  `requirePlatformAdmin`, team scope needs `requireTeamMember` unless the caller
+  administers the org.
 - `settings.value` is `Json`, so the DB validates nothing — the registry
   validator is the only guard on a write.
 

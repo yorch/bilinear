@@ -502,15 +502,27 @@ Precedence, lowest first: **code default → env → platform → org → team �
 An `override`-mode env var sits above every layer and renders the knob locked in
 the UI.
 
-Three rules that are easy to get wrong:
+Four rules that are easy to get wrong:
 
 - **A registered knob must have a consumer.** A declaration nothing enforces
   reports a setting that does nothing — worse than no setting at all. Two knobs
   were deleted during implementation for exactly this.
-- **Services take a `ConfigReader`, defaulting to `DEFAULTS_ONLY_CONFIG`.** That
-  default resolves code-default → env with no query, so unit tests against a
-  mocked Prisma behave exactly as they did when the value was a constant. Pass
-  the real `ConfigService` from `context.ts` and the standalone entry points.
+- **Services take a `ConfigReader`, defaulting to `DEFAULTS_ONLY_CONFIG` — and
+  every production construction site must pass the real one.** The default
+  resolves code-default → env with no query, so unit tests against a mocked
+  Prisma behave exactly as they did when the value was a constant. That is a
+  test affordance, not a fallback: omitting the real reader in production is
+  silent, and a review found `GitHubService` building a `WebhookService` bare,
+  so the GitHub integration's webhook dispatches ignored every configured retry
+  and timeout while the identical service elsewhere honoured them. Pass the real
+  `ConfigService` from `context.ts`, from `loaders.ts`, from the route handlers
+  that construct services directly, and from the standalone WS/YJS entry points.
+- **`editableBy` does not decide which scopes a caller can reach.** It is a
+  property of the knob; scope reachability is a property of the caller and is
+  gated separately in the settings resolver — platform scope needs
+  `requirePlatformAdmin`, team scope needs membership (org admins excepted), and
+  org/user scope may never name someone else's id. Conflating the two let any
+  org admin write deployment-wide defaults for every tenant.
 - **The database type-checks nothing** — `settings.value` is `Json`. The
   registry validator is the only guard on a write, and a stored row that no
   longer matches its declaration falls through to the layer below rather than

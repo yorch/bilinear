@@ -1266,10 +1266,39 @@ preference would hand it to the whole workspace. Other devices therefore pick
 it up on next bootstrap rather than live.
 
 **First-touch:** give `ConnectionManager` the ability to address one user's
-sockets, then route user-scope writes through it.
+sockets, then route user-scope writes through it. Cheaper than the Medium
+above suggests: `ClientInfo` already carries `userId`, so `broadcastToUser` is
+`broadcastToOrgAll`'s loop with one extra `continue` — the review that raised
+this checked, and the missing piece is routing, not identity tracking.
 
 **Acceptance signal:** a user-scope change reaches that user's other open
 tabs and no one else's.
+
+### 5b.5 — Platform-scope authorization is enforced by one caller, not by the primitive
+
+**Effort** Small · **Risk** Medium
+
+`resolveScopeId` decides whether a caller may reach platform scope, and it is
+the only thing that does. `ConfigService.set`/`clear` take no role at all, so
+any future writer that forgets the check writes deployment-wide defaults
+unguarded. `scripts/verify-config.ts` already does exactly that (correctly — it
+is an operator script with direct database access), and
+`PlatformAdminService.updateTenantLimits` relies on its own separate
+`requirePlatformAdmin` in the resolver above it.
+
+**Why it's deferred:** the check genuinely belongs in the resolver — it needs
+`ctx` for the impersonation guard, which `ConfigService` deliberately does not
+have — and this repo's convention is that authorization lives in resolvers and
+services take no role. Threading a role parameter through the shared write path
+is defence in depth against a bug this system has already had once, but it
+crosses that convention, so it is a decision rather than a fix.
+
+**First-touch:** `ConfigService.set(key, scope, scopeId, value, actorId, role?)`
+re-asserting `role === 'platform-admin'` for platform scope inside
+`assertWritable`; decide what the operator script passes.
+
+**Acceptance signal:** a new non-GraphQL writer cannot reach platform scope
+without saying so explicitly.
 
 ---
 

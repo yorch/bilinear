@@ -24,8 +24,10 @@ from the UI, instead of the five disconnected mechanisms it had?*
 
 Four design questions were settled in review on 2026-08-18 — scope model,
 storage shape, who edits plan limits, and env-vs-database precedence. They are
-recorded with their reasoning in [§7](#7-decisions-taken-2026-08-18); what is
-still open is in [§9](#9-still-open).
+recorded with their reasoning in [§7](#7-decisions-taken-2026-08-18); what
+implementation changed is in [§8](#8-what-implementation-changed), what two
+review passes over the built system changed is in §8.1, and what is still open
+is in [§9](#9-still-open).
 
 The design was then put through an adversarial review, which changed it in
 four material ways: the env `seed` mode was dropped (it made the resolver
@@ -910,6 +912,37 @@ org's configuration on restore would be silent data loss. `deleteScope()` exists
 for a genuine hard delete; the periodic sweep addresses the real lifecycle
 problem, which is rows for a knob that has left the registry.
 
+### 8.1 What review changed after it shipped
+
+Two passes over the built system — an adversarial code review, then a
+four-angle cleanup pass. The code changes are in the changelog; what belongs
+here is the two things they say about the *design*.
+
+**The authorization model had a hole the design did not describe, because the
+design conflated two questions.** `editableBy` answers "may this role change
+this knob"; it does not answer "may this caller reach this scope". Those are
+different — the first is a property of the knob, the second of the caller — and
+because §4.1 only ever named `editableBy`, the implementation gated on it alone
+and let any org admin write platform-scope defaults for every tenant. The
+scope-reachability rule is now explicit: platform scope requires
+`requirePlatformAdmin` (which also refuses an impersonated session), team scope
+requires membership unless the caller administers the org, and org and user
+scope may never name someone else's id. It is enforced in the settings resolver
+and covered by `setting.test.ts`; §5b.5 of the backlog records the argument for
+also asserting it inside `ConfigService`.
+
+**"A knob must have a consumer" needs a matching rule for readers.** §8's
+closing line covers declarations; the review found the mirror-image failure.
+`GitHubService` built its `WebhookService` without a `ConfigReader`, so it fell
+back to `DEFAULTS_ONLY_CONFIG` and ignored every configured webhook retry and
+timeout value — for that code path only, silently. `DEFAULTS_ONLY_CONFIG` is
+what keeps ~1,800 unit tests against a mocked Prisma meaningful, so it is not
+going away; the cost is that omitting the real reader fails quietly rather than
+loudly. The rule to carry forward is: **a service that takes a `ConfigReader`
+must be handed the real one at every production construction site**, and the
+constructor default is a test affordance, not a fallback anyone should reach in
+production.
+
 ---
 
 ## 9. Still open
@@ -940,11 +973,20 @@ problem, which is rows for a knob that has left the registry.
 5. **Team hierarchy resolution.** Per D1, whether team-scope resolution walks
    `Team.parentId` and what bounds the walk. Needs an answer before team-scope
    writes ship.
-6. **Platform-scope propagation mechanism.** Per §4.3, platform-scope writes
-   have no org channel to publish on. Either a new non-org channel or an
-   explicit per-tenant fan-out — the latter is simpler but its cost scales with
-   tenant count, so the choice needs making rather than defaulting.
-7. **How the registry's TypeScript types are derived.** Per §4.5, const-generic
-   inference across 60+ entries and a codegen step are materially different
-   build stories. Worth settling early, since it decides whether the SDL and
-   `.env.example` generators are one mechanism or two.
+6. **Platform-scope propagation to connected clients.** Settled *provisionally*
+   in the build: platform-scope writes emit no SyncAction at all, because
+   `createSyncAction` is org-keyed and inventing a channel would fan a
+   deployment-wide change into one arbitrary tenant's stream. Every server
+   process still learns of the change on the `config:invalidate` channel, so
+   nothing serves a stale value; what does not happen is a *client* refresh —
+   browsers pick a platform-scope change up on next bootstrap or after the
+   30-second TTL behind whatever they next query. That is acceptable for the
+   knobs declared today and would not be for a platform-scope knob the UI reads
+   directly. Revisit when one exists.
+7. **How the registry's TypeScript types are derived.** Settled by the build:
+   plain hand-written types with a `defineSetting` identity helper, no codegen.
+   Const-generic inference across the entries was not needed because nothing
+   consumes a per-key value type — `get`/`getInt`/`getBoolean` take an explicit
+   type parameter. Left here because the answer constrains the generators §4.5
+   proposed: neither the SDL nor `.env.example` is generated today, and doing
+   either would be the first thing to want inference.
