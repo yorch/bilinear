@@ -342,9 +342,6 @@
       "openaiModel": "OpenAI model",
       "provider": "AI provider"
     },
-    "branding": {
-      "appName": "Application name"
-    },
     "cycles": {
       "upcomingCount": "Upcoming cycles kept ready"
     },

@@ -177,20 +177,18 @@ export const SETTINGS: readonly SettingDefinition[] = [
   }),
 
   // ── Branding ──────────────────────────────────────────────────────────────
-  // The runtime counterpart to NEXT_PUBLIC_APP_NAME, which is inlined by
-  // `next build` and therefore unreachable for a deployment running a prebuilt
-  // image. Same reasoning as WS_PUBLIC_URL / YJS_PUBLIC_URL in env.ts.
-  defineSetting({
-    default: 'Bilinear',
-    editableBy: 'platform-admin',
-    env: { mode: 'default', name: 'APP_NAME' },
-    key: 'branding.appName',
-    labelKey: 'config.branding.appName',
-    scopes: ['platform'],
-    storage: 'db',
-    type: 'string',
-    visibleTo: 'member',
-  }),
+  // NOT declared here, deliberately. A runtime `branding.appName` is the
+  // obvious next knob — NEXT_PUBLIC_APP_NAME is inlined by `next build`, so
+  // renaming the product currently needs a rebuild — but `APP_NAME` has 14
+  // consumers and 12 of them are client components that import the constant
+  // directly. Wiring only the server-rendered surfaces would rename
+  // transactional emails and the PWA manifest while the sidebar kept saying
+  // Bilinear, which is worse than not offering the knob: it is precisely the
+  // "config that lies" failure this system was built to remove.
+  //
+  // Doing it properly needs a client delivery path (the value in the bootstrap
+  // payload, a store to hold it, and those 12 imports moved onto it). Tracked
+  // in docs/REVIEW_BACKLOG.md rather than half-declared here.
 
   // ── AI assistant ──────────────────────────────────────────────────────────
   defineSetting({
@@ -241,23 +239,36 @@ export const SETTINGS: readonly SettingDefinition[] = [
     type: 'enum',
     visibleTo: 'platform-admin',
   }),
+  // env-only: read once at module load by the Apollo access-log plugin
+  // (`src/app/api/graphql/route.ts`). Making it dynamic would put a config
+  // read in the logging path of every request to buy a knob whose whole
+  // purpose is to reduce per-request work.
   defineSetting({
     bounds: { max: 1, min: 0 },
     default: 1,
     editableBy: 'platform-admin',
-    env: { mode: 'default', name: 'LOG_HTTP_SAMPLE_RATE' },
+    env: { mode: 'override', name: 'LOG_HTTP_SAMPLE_RATE' },
     key: 'log.httpSampleRate',
     labelKey: 'config.log.httpSampleRate',
+    restartRequired: true,
     scopes: ['platform'],
-    storage: 'db',
+    storage: 'env-only',
     type: 'number',
     visibleTo: 'platform-admin',
   }),
 
   // ── Security ──────────────────────────────────────────────────────────────
-  // `override` mode: an operator must be able to force these from the
-  // deployment regardless of what is stored, because they protect the server
-  // from its own tenants.
+  // Deliberately `env-only`, not merely `override`.
+  //
+  // These are not tunables; they are the guards protecting the server from its
+  // own tenants — the SSRF screen on webhook delivery, and whether brute-force
+  // protection survives a Redis outage. A database-storable kill switch means
+  // a compromised platform-admin session can disable SSRF protection with a
+  // mutation, which is a materially worse failure than the redeploy it saves.
+  // §5 of docs/CONFIG_ASSESSMENT.md says such caps should never be tenant
+  // editable; env-only is the honest expression of that, and it loses nothing
+  // — ALLOW_PRIVATE_WEBHOOK_URLS exists for local development, where setting an
+  // environment variable is already the workflow.
   defineSetting({
     default: false,
     editableBy: 'platform-admin',
@@ -265,7 +276,7 @@ export const SETTINGS: readonly SettingDefinition[] = [
     key: 'security.allowPrivateWebhookUrls',
     labelKey: 'config.security.allowPrivateWebhookUrls',
     scopes: ['platform'],
-    storage: 'db',
+    storage: 'env-only',
     type: 'boolean',
     visibleTo: 'platform-admin',
   }),
@@ -276,7 +287,7 @@ export const SETTINGS: readonly SettingDefinition[] = [
     key: 'security.authRateLimitFailClosed',
     labelKey: 'config.security.authRateLimitFailClosed',
     scopes: ['platform'],
-    storage: 'db',
+    storage: 'env-only',
     type: 'boolean',
     visibleTo: 'platform-admin',
   }),

@@ -153,16 +153,29 @@ async function main() {
     JSON.stringify(redacted.value),
   );
 
-  // 13. override-mode env beats every stored layer.
+  // 13. The security guards are env-only: not merely "env wins", but "there is
+  //     no stored layer at all". A DB-storable SSRF kill switch would let a
+  //     compromised admin session disable the guard with a mutation, so the
+  //     write must be refused outright rather than silently overridden.
+  rejected = false;
+  try {
+    await config.set('security.allowPrivateWebhookUrls', 'platform', PLATFORM_SCOPE_ID, true, null);
+  } catch {
+    rejected = true;
+  }
+  check('security guard cannot be stored at all', rejected);
+
   process.env.ALLOW_PRIVATE_WEBHOOK_URLS = '1';
-  await config.set('security.allowPrivateWebhookUrls', 'platform', PLATFORM_SCOPE_ID, false, null);
   const ov = await config.explain('security.allowPrivateWebhookUrls');
   check(
-    'override env beats stored value',
+    'security guard reads from env and reports locked',
     ov.value === true && ov.locked && ov.source === 'env',
     `${ov.value}/${ov.source}`,
   );
   delete process.env.ALLOW_PRIVATE_WEBHOOK_URLS;
+  config.clearCache();
+  const off = await config.explain('security.allowPrivateWebhookUrls');
+  check('security guard defaults closed when env is unset', off.value === false, String(off.value));
 
   // 14. default-mode env sits below stored layers.
   process.env.WEBHOOK_MAX_ATTEMPTS = '9';

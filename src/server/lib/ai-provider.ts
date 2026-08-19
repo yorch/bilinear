@@ -25,6 +25,8 @@ function trimTrailingSlash(url: string): string {
 export class AnthropicProvider implements AiProvider {
   readonly name = 'anthropic';
 
+  constructor(private readonly modelOverride?: string) {}
+
   // Utility tasks (titles, short summaries, ranking) are well served by a
   // fast, inexpensive model. Override with ANTHROPIC_MODEL for higher quality.
   private static readonly DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
@@ -50,7 +52,8 @@ export class AnthropicProvider implements AiProvider {
         body: JSON.stringify({
           max_tokens: maxTokens,
           messages: [{ content: user, role: 'user' }],
-          model: process.env.ANTHROPIC_MODEL || AnthropicProvider.DEFAULT_MODEL,
+          model:
+            this.modelOverride || process.env.ANTHROPIC_MODEL || AnthropicProvider.DEFAULT_MODEL,
           system,
         }),
         headers: {
@@ -76,6 +79,8 @@ export class AnthropicProvider implements AiProvider {
  * local servers like Ollama/LM Studio) by pointing OPENAI_BASE_URL at them.
  */
 export class OpenAiProvider implements AiProvider {
+  constructor(private readonly modelOverride?: string) {}
+
   readonly name = 'openai';
 
   private static readonly DEFAULT_MODEL = 'gpt-4o-mini';
@@ -101,7 +106,7 @@ export class OpenAiProvider implements AiProvider {
             { content: system, role: 'system' },
             { content: user, role: 'user' },
           ],
-          model: process.env.OPENAI_MODEL || OpenAiProvider.DEFAULT_MODEL,
+          model: this.modelOverride || process.env.OPENAI_MODEL || OpenAiProvider.DEFAULT_MODEL,
         }),
         headers: {
           authorization: `Bearer ${process.env.OPENAI_API_KEY ?? ''}`,
@@ -119,14 +124,28 @@ export class OpenAiProvider implements AiProvider {
   }
 }
 
+/** Runtime overrides resolved from the config registry, when available. */
+export interface AiProviderOverrides {
+  anthropicModel?: string;
+  openaiModel?: string;
+  provider?: string;
+}
+
 /**
- * Resolve the configured provider from AI_PROVIDER (default 'anthropic').
- * Unknown values fall back to Anthropic so a typo never silently disables AI.
+ * Resolve the active provider.
+ *
+ * Takes overrides resolved from the config registry so the provider and model
+ * can be changed without a redeploy; falls back to AI_PROVIDER and then to
+ * Anthropic. Unknown values fall back to Anthropic so a typo never silently
+ * disables AI. An empty model override is ignored rather than sent as an empty
+ * model name — the registry's default for those keys is '' meaning "unset".
  */
-export function resolveAiProvider(): AiProvider {
-  const choice = (process.env.AI_PROVIDER ?? 'anthropic').trim().toLowerCase();
+export function resolveAiProvider(overrides: AiProviderOverrides = {}): AiProvider {
+  const choice = (overrides.provider || process.env.AI_PROVIDER || 'anthropic')
+    .trim()
+    .toLowerCase();
   if (choice === 'openai') {
-    return new OpenAiProvider();
+    return new OpenAiProvider(overrides.openaiModel || undefined);
   }
-  return new AnthropicProvider();
+  return new AnthropicProvider(overrides.anthropicModel || undefined);
 }

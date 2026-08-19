@@ -122,8 +122,8 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const issueActivityService = new IssueActivityService(prisma);
   const notificationService = new NotificationService(prisma);
   const organizationService = new OrganizationService(prisma);
-  const organizationInviteService = new OrganizationInviteService(prisma);
-  const platformAdminService = new PlatformAdminService(prisma);
+  const organizationInviteService = new OrganizationInviteService(prisma, config);
+  const platformAdminService = new PlatformAdminService(prisma, config);
   const teamService = new TeamService(prisma);
   const workflowStateService = new WorkflowStateService(prisma);
   const cycleService = new CycleService(prisma, config);
@@ -137,7 +137,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const roadmapService = new RoadmapService(prisma);
   const syncService = new SyncService(prisma, redis);
   const searchService = new SearchService(prisma);
-  const aiService = new AiService(prisma, searchService);
+  const aiService = new AiService(prisma, searchService, config);
   const slackService = new SlackService(prisma, issueService);
   const samlService = new SamlService(prisma);
   const scimService = new ScimService(prisma);

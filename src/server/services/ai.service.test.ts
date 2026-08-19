@@ -98,13 +98,16 @@ describe('AiService', () => {
       expect((init.headers as Record<string, string>).authorization).toBe('Bearer sk-oai');
     });
 
-    it('isConfigured reflects the active provider key, not Anthropic', () => {
+    // `isConfigured` became async when provider selection moved onto the
+    // config registry — the provider is now resolved through the config chain
+    // (registry → env) rather than read straight from process.env.
+    it('isConfigured reflects the active provider key, not Anthropic', async () => {
       process.env.AI_PROVIDER = 'openai';
       process.env.ANTHROPIC_API_KEY = 'sk-test'; // set, but inactive provider
       process.env.OPENAI_API_KEY = '';
-      expect(svc.isConfigured()).toBe(false);
+      expect(await svc.isConfigured()).toBe(false);
       process.env.OPENAI_API_KEY = 'sk-oai';
-      expect(svc.isConfigured()).toBe(true);
+      expect(await svc.isConfigured()).toBe(true);
     });
   });
 

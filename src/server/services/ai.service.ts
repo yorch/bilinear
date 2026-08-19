@@ -1,4 +1,5 @@
 import type { Issue, PrismaClient } from '../../generated/prisma';
+import { type ConfigReader, DEFAULTS_ONLY_CONFIG } from '../config/reader';
 import { type AiProvider, resolveAiProvider } from '../lib/ai-provider';
 import { childLogger } from '../lib/logger';
 import type { SearchService } from './search.service';
@@ -40,21 +41,37 @@ export class AiService {
   constructor(
     private prisma: PrismaClient,
     private search: SearchService,
+    private config: ConfigReader = DEFAULTS_ONLY_CONFIG,
   ) {}
 
-  /** Resolved per call so AI_PROVIDER / credential changes take effect live. */
-  private get provider(): AiProvider {
-    return resolveAiProvider();
+  /**
+   * Resolved per call so provider/model/credential changes take effect live —
+   * from the config registry first, then the environment. Not memoised: the
+   * point of putting these on the registry was that switching model during an
+   * incident should not need a redeploy, and a cached provider would defeat it.
+   */
+  private async getProvider(): Promise<AiProvider> {
+    const [provider, anthropicModel, openaiModel] = await Promise.all([
+      this.config.get<string>('ai.provider'),
+      this.config.get<string>('ai.anthropicModel'),
+      this.config.get<string>('ai.openaiModel'),
+    ]);
+    return resolveAiProvider({ anthropicModel, openaiModel, provider });
   }
 
-  /** Server-side: are credentials for the active provider configured? */
-  isConfigured(): boolean {
-    return this.provider.isConfigured();
+  /**
+   * Server-side: are credentials for the active provider configured?
+   *
+   * Credentials are env-only and redacted, so this checks presence without
+   * ever reading a value through the config chain.
+   */
+  async isConfigured(): Promise<boolean> {
+    return (await this.getProvider()).isConfigured();
   }
 
   /** Both a server key AND the per-org toggle are required. */
   async assertEnabled(orgId: string): Promise<void> {
-    if (!this.isConfigured()) {
+    if (!(await this.isConfigured())) {
       throw new AiDisabledError();
     }
     const org = await this.prisma.organization.findUnique({
@@ -71,7 +88,7 @@ export class AiService {
    * go through the task-specific helpers below, which own their prompts.
    */
   private async complete(system: string, user: string, maxTokens: number): Promise<string> {
-    const provider = this.provider;
+    const provider = await this.getProvider();
     const { url, init } = provider.buildRequest(system, user, maxTokens);
     let res: Response;
     try {

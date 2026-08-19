@@ -435,6 +435,22 @@ export const typeDefs = `
   }
 
   """
+  Workspace identity. Every field is optional; omitting one leaves it alone.
+  logoUrl accepts null to clear it, which is distinct from omitting it.
+  """
+  input OrganizationUpdateInput {
+    name: String
+    urlKey: String
+    logoUrl: String
+  }
+
+  type OrganizationPayload {
+    success: Boolean!
+    organization: Organization!
+    lastSyncId: String!
+  }
+
+  """
   The session was re-issued into an organization — returned by every
   mutation that lands the caller in a (possibly different) workspace:
   creating one, switching to one, or accepting an invitation to one. The
@@ -1852,6 +1868,8 @@ export const typeDefs = `
     aiFindDuplicateIssues(issueId: ID!): AiDuplicatesPayload!
     """Enable/disable AI features for the workspace (owner/admin only)."""
     aiSettingsUpdate(enabled: Boolean!): AiSettingsPayload!
+    """Rename the workspace, change its URL key, or set its logo (owner/admin)."""
+    organizationUpdate(input: OrganizationUpdateInput!): OrganizationPayload!
     """
     Store a configuration value at one scope. Validated against the knob's
     registry declaration; rejects a write to a scope the knob does not declare,

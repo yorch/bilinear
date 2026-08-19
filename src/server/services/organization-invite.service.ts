@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { numericSettingDefault } from '@/lib/config';
 import type {
   Organization,
   OrganizationInvite,
@@ -6,6 +7,7 @@ import type {
   OrganizationRole,
   PrismaClient,
 } from '../../generated/prisma';
+import { type ConfigReader, DEFAULTS_ONLY_CONFIG } from '../config/reader';
 import { sendOrganizationInviteEmail } from '../lib/email';
 import { isValidEmail } from '../lib/email-address';
 import { env } from '../lib/env';
@@ -13,15 +15,18 @@ import { childLogger } from '../lib/logger';
 import { ensureMembership } from '../lib/membership-sync';
 import { InvalidRoleError, type OrgRole, VALID_ROLES } from './organization.service';
 
-/** How long an invitation link stays usable. */
-export const INVITE_EXPIRY_DAYS = 7;
+const INVITE_EXPIRY_DAYS_KEY = 'invite.expiryDays';
+const MAX_PENDING_INVITES_KEY = 'invite.maxPending';
+
+/** How long an invitation link stays usable. Registry default; see config. */
+export const INVITE_EXPIRY_DAYS = numericSettingDefault(INVITE_EXPIRY_DAYS_KEY);
 
 /**
  * Cap on outstanding invitations per organization. Not a plan limit — a
  * blast-radius bound, so a compromised admin session can't turn the
  * invitation endpoint into a mail relay.
  */
-export const MAX_PENDING_INVITES = 200;
+export const MAX_PENDING_INVITES = numericSettingDefault(MAX_PENDING_INVITES_KEY);
 
 const log = childLogger({ module: 'service/organization-invite' });
 
@@ -95,7 +100,10 @@ export interface InviteWithOrg extends OrganizationInvite {
 }
 
 export class OrganizationInviteService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(
+    private prisma: PrismaClient,
+    private config: ConfigReader = DEFAULTS_ONLY_CONFIG,
+  ) {}
 
   /**
    * The acceptance link for a raw token. Built from the server-configured
@@ -165,12 +173,16 @@ export class OrganizationInviteService {
     if (existing) {
       throw new AlreadyMemberError();
     }
-    if (pending >= MAX_PENDING_INVITES) {
+    const [maxPending, expiryDays] = await Promise.all([
+      this.config.getInt(MAX_PENDING_INVITES_KEY, { orgId: params.orgId }),
+      this.config.getInt(INVITE_EXPIRY_DAYS_KEY, { orgId: params.orgId }),
+    ]);
+    if (pending >= maxPending) {
       throw new TooManyInvitesError();
     }
 
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
 
     // Revoke-then-issue in one transaction so re-inviting someone can never
     // leave two live invitations for the same address — the older link stops

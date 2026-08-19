@@ -7,7 +7,7 @@
  * subscribed per-org only while that org has a live client.
  */
 
-import { childLogger } from '../lib/logger';
+import { childLogger, logger } from '../lib/logger';
 import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 import { CONFIG_INVALIDATE_CHANNEL, ConfigService } from './config.service';
@@ -66,6 +66,36 @@ export function startConfigInvalidation(): void {
   subscriber.on('message', (channel, message) => {
     if (channel === CONFIG_INVALIDATE_CHANNEL) {
       config.applyInvalidation(message);
+      void applyDynamicConfig();
     }
   });
+
+  void applyDynamicConfig();
+}
+
+/**
+ * Push config values into the sinks that hold their own copy.
+ *
+ * Most knobs are pulled at the point of use, which needs nothing here. A few
+ * live in objects that own their state — pino's level is the case that matters
+ * — so those have to be *pushed* on boot and again whenever an invalidation
+ * arrives. Without this, `log.level` would be a knob you can change and watch
+ * do nothing until the next deploy, which is the failure mode this whole
+ * system exists to remove.
+ *
+ * Deliberately lives here rather than in `logger.ts`: ConfigService logs, so
+ * a logger that imported config would close an import cycle.
+ */
+async function applyDynamicConfig(): Promise<void> {
+  try {
+    const level = await config.get<string>('log.level');
+    if (logger.level !== level) {
+      logger.level = level;
+      log.info({ level }, 'Log level updated from configuration');
+    }
+  } catch (err) {
+    // Never let a config read stop the process from serving. The level simply
+    // stays where it was.
+    log.error({ err }, 'Failed to apply dynamic configuration');
+  }
 }

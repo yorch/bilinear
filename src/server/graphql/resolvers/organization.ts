@@ -435,6 +435,42 @@ export const organizationResolvers = {
 
       return enterOrganization(ctx, membership.organization);
     },
+
+    /**
+     * Rename the workspace, change its URL key, or set its logo.
+     *
+     * This did not exist: `logoUrl` was a column with a reader and no writer,
+     * and an owner could not rename their own workspace from the app at all.
+     */
+    organizationUpdate: async (
+      _parent: unknown,
+      { input }: { input: { logoUrl?: string | null; name?: string; urlKey?: string } },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      requireOrgRole(ctx, ['owner', 'admin']);
+      let organization: Organization;
+      try {
+        organization = await ctx.services.organization.update(ctx.orgId, input);
+      } catch (err) {
+        // Same two failure modes as choosing a URL key at creation time, so
+        // they map to the same code.
+        if (err instanceof InvalidUrlKeyError || err instanceof UrlKeyTakenError) {
+          throw new GraphQLError(err.message, { extensions: { code: 'BAD_USER_INPUT' } });
+        }
+        throw err;
+      }
+      // Organization is part of the synced dataset, so a rename reaches every
+      // open client without a refresh.
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'U',
+        'Organization',
+        organization.id,
+        organization,
+      );
+      return { lastSyncId: sync.id.toString(), organization, success: true };
+    },
   },
   Organization: {
     // Surface the per-org plan-tier caps read-only to any org member.

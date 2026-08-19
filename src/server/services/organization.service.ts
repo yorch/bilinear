@@ -68,6 +68,44 @@ export class OrganizationService {
   constructor(private prisma: PrismaClient) {}
 
   /**
+   * Update a workspace's own identity: display name, logo, and URL key.
+   *
+   * There was no such mutation before — `logoUrl` was a column with a reader
+   * and no writer, and an owner could not rename their own workspace at all.
+   *
+   * `urlKey` is validated and its uniqueness violation remapped the same way
+   * `createWithOwner` does, because changing it is the same operation as
+   * choosing it. Note that changing it invalidates existing workspace URLs;
+   * that is the caller's decision to make, and the resolver gates it on
+   * owner/admin.
+   */
+  async update(
+    orgId: string,
+    input: { logoUrl?: string | null; name?: string; urlKey?: string },
+  ): Promise<Organization> {
+    if (input.urlKey !== undefined && !URL_KEY_RE.test(input.urlKey)) {
+      throw new InvalidUrlKeyError();
+    }
+    try {
+      return await this.prisma.organization.update({
+        data: {
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.urlKey !== undefined ? { urlKey: input.urlKey } : {}),
+          // `logoUrl` is nullable, so `null` is a meaningful value (clear it)
+          // and must be distinguished from `undefined` (leave it alone).
+          ...(input.logoUrl !== undefined ? { logoUrl: input.logoUrl } : {}),
+        },
+        where: { id: orgId },
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new UrlKeyTakenError();
+      }
+      throw err;
+    }
+  }
+
+  /**
    * Create an organization and the founding `owner` membership atomically.
    * Validates the URL key shape up-front and remaps Prisma's P2002 unique
    * constraint violation to a typed UrlKeyTakenError so resolvers do not
