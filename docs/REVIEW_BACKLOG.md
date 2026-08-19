@@ -1196,6 +1196,89 @@ post-state in the DB or store, not just visual presence).
 
 ---
 
+## 5b. Configuration system
+
+Assessed in full in [`CONFIG_ASSESSMENT.md`](CONFIG_ASSESSMENT.md) — five
+disconnected config mechanisms, the proposed registry + layered resolver, four
+settled design decisions and seven still open. Items below are the ones that
+are actionable independently of whether the larger system is built.
+
+### 5b.1 — Platform-admin config writes emit no SyncAction (§3-F1)
+
+**Effort** Small · **Risk** Low
+
+`updateTenantLimits`, `suspendTenant` and `restoreTenant`
+(`src/server/services/platform-admin.service.ts`) write to `organizations` and
+emit no SyncAction, in neither the service nor its resolver — a direct
+violation of the repo's "every mutation creates a SyncAction" invariant. None
+is audit-logged from the service either (the resolver does log limit edits).
+
+**Why it's deferred:** the fix is not uniform across the three. `suspendedAt`
+and the `max*` limits are both absent from the synced `DBOrganization` shape
+(`src/lib/db.ts:6-16`), so a SyncAction on `updateTenantLimits` alone changes
+nothing for any client, and the config assessment moves those values out of
+columns entirely in its Phase 2 — doing it now churns the client shape twice.
+
+**First-touch:** add audit logging to all three; add a SyncAction to
+`suspendTenant`/`restoreTenant` plus `suspendedAt` to `DBOrganization`.
+Leave `updateTenantLimits` alone (see `CONFIG_ASSESSMENT.md` §6 Phase 0).
+
+**Acceptance signal:** suspending a tenant from `/admin` updates an already-open
+client without a reload; all three writes appear in `PlatformAuditLog`.
+
+### 5b.2 — `themeSettings` syncs to every client unstripped (§2.2)
+
+**Effort** Small · **Risk** Low
+
+`SYNC_PAYLOAD_OMITTED_FIELDS` (`sync.service.ts:37`) strips `authSettings` and
+`securitySettings` from the broadcast Organization row, and the client repeats
+the strip (`sync-manager.ts:867-869`). `themeSettings` is in neither list, so
+it fans out to every org member. Harmless only because it is always `null`
+today.
+
+**First-touch:** add `themeSettings` to both lists, or drop the column — §8-2
+of the assessment has to decide the three Json blobs' fate either way.
+
+**Acceptance signal:** a non-null `themeSettings` never appears in a SyncAction
+payload; regressing the omit-list entry turns a test red.
+
+### 5b.3 — Dead configuration columns (§2.2, §2.3, §3-F7)
+
+**Effort** Medium · **Risk** Low (Medium for `roadmapEnabled`)
+
+15 columns exist with no reader in `src/`: 7 on `Organization`
+(`roadmapEnabled`, `customersEnabled`, `initiativesEnabled`,
+`fiscalYearStartMonth`, and the three Json blobs) and 8 on `Team`
+(`cycleLockToActive`, `cycleAutoAssignStarted`, `cycleAutoAssignCompleted`,
+`autoCloseStateId`, `issueEstimationExtended`, `issueEstimationAllowZero`,
+`defaultIssueEstimate`, `joinByDefault`).
+
+**Why it's deferred:** `roadmapEnabled` is non-null in the SDL
+(`schema.ts:46`) and typed into IndexedDB (`db.ts:13`), so removing it is a
+breaking SDL change; wiring it to `PublicRoadmap.enabled` is likely cheaper.
+The three Json blobs may be reserved for planned work.
+
+**First-touch:** decide per column — wire up or drop. Start with the 8 team
+columns, which are not in the SDL at all and therefore drop cleanly.
+
+**Acceptance signal:** every remaining config column has at least one non-test
+reader, or a comment naming the feature it is reserved for.
+
+### 5b.4 — Three live team knobs are settable only via `psql` (§2.3)
+
+**Effort** Small · **Risk** Low
+
+`upcomingCycleCount`, `autoCloseChildIssues` and `autoCloseParentIssues` are
+read by services but absent from `TeamUpdateInput`
+(`src/server/graphql/schema.ts:440-454`).
+
+**First-touch:** add the three to `TeamUpdateInput` and the team settings page.
+
+**Acceptance signal:** each is changeable from team settings and the change
+round-trips through a SyncAction.
+
+---
+
 ## 6. Already shipped (since 2026-04-22)
 
 A condensed history of what landed in main. See `git log` for full

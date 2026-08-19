@@ -54,17 +54,40 @@ The headline numbers:
   `TeamUpdateInput`, **4** are read by code but settable only in the DB, **8
   are dead**, and **2** are read in exactly one place each.
   (13 + 4 + 8 + 2 = 27.)
-- **Platform-admin config changes have no propagation path.** `aiSettingsUpdate`
-  and `teamUpdate` do emit SyncActions; `updateTenantLimits`, `suspendTenant`
-  and `restoreTenant` emit nothing, so a limit change or a suspension is
-  invisible to every open client until reload.
+- **The three platform-admin config writes have no propagation path** — see
+  §3-F1. Org- and team-scoped writes are fine.
 
-The good news: three of the ingredients for a real system already exist and
-are well-built — `src/server/lib/env.ts` (typed, validated, documented env
-accessors), the `Organization.max*` plan-limit columns with bounds validation
-and a platform-admin editor, and `src/lib/plan-limits.ts` (a declarative field
-registry shared by two UIs). **The work is mostly generalising those three
-patterns, not inventing something new.**
+Three ingredients already exist and are well-built: `src/server/lib/env.ts`
+(typed, validated env accessors), the `Organization.max*` plan-limit columns
+with bounds validation and a platform-admin editor, and `src/lib/plan-limits.ts`
+(a declarative field registry already shared by two UIs). The registry and the
+UI layer are largely generalisations of those three.
+
+**The rest is genuinely new infrastructure, and three constraints found in
+adversarial review are what make it so.** Each is load-bearing on the design,
+not a detail:
+
+- **Config propagation is not one mechanism.** `createSyncAction` is org-keyed
+  and fans out to every client in the org, so a user-scope write would
+  broadcast one person's preferences to the whole workspace. Propagation
+  becomes a per-scope matrix, and per-user targeted delivery is a capability
+  the WS server does not have today (§4.3).
+- **The config reader cannot live in the GraphQL context.** The WS and YJS
+  servers are separate processes with no request, and they consume exactly the
+  knobs being made configurable. That forces a standalone `ConfigService` with
+  its own Redis channel and a TTL backstop (§4.3).
+- **Exposing configuration means exposing secrets unless designed not to.**
+  The registry covers all 68 env vars including `JWT_SECRET` and `SMTP_PASS`,
+  so redaction is a required field, not a refinement (§4.2).
+
+**Cost of not building it.** F1–F7 are present-tense defects, not risks: every
+new knob keeps landing in whichever of the five mechanisms is nearest, dead
+config keeps accumulating (15 columns so far), and the ~65 constants stay
+release-only — which is what makes an incident-time change a deploy.
+
+**Definition of done.** F1–F7 closed; every knob reachable from one registry;
+no config read via raw `process.env` outside `env.ts`; and every config write
+audited and propagated by construction rather than per call site.
 
 ---
 
@@ -84,7 +107,7 @@ These correctly belong to the deployment, not the database. ~12 vars.
 **(b) Boot-time / process-level — must stay in env.** `WS_PORT`, `YJS_PORT`,
 `APP_URL`, `NODE_ENV`, `UPLOAD_DIR`, `TRUST_PROXY_HEADERS`,
 `GRAPHQL_ALLOWED_ORIGINS`. Read before a DB connection exists, or govern the
-process itself. ~8 vars.
+process itself. 7 vars.
 
 **(c) Build-time `NEXT_PUBLIC_*` — the trap.** `NEXT_PUBLIC_APP_NAME`,
 `NEXT_PUBLIC_WS_PORT`, `NEXT_PUBLIC_WS_URL`, `NEXT_PUBLIC_COLLAB_ENABLED`,
@@ -136,7 +159,7 @@ covers **11 of 68** vars (`ALLOW_PRIVATE_WEBHOOK_URLS`, `APP_URL`,
 `YJS_PUBLIC_URL`). Being in `env.ts` is orthogonal to being runtime-editable:
 several group (d) tunables below already read through it and are still
 redeploy-only. Everything else is a bare `process.env.X` read. One
-side effect worth naming: because the accessor takes the name as a string
+side effect: because the accessor takes the name as a string
 literal (`numericEnv('SMTP_PORT', …)`), a naive `grep process.env.SMTP_PORT`
 finds nothing — so the migration itself has made some vars *harder* to trace.
 A registry (§4.1) fixes that permanently.
@@ -219,10 +242,10 @@ dead.
 `joinByDefault`. Each appears only in `src/test/fixtures.ts` — not even in the
 GraphQL SDL.
 
-So of 27 team knobs: **13 exposed, 6 live-but-hidden, 8 dead**. Four of the 13
-(`name`, `description`, `icon`, `color`) are arguably identity rather than
-configuration; excluding them gives 9 genuinely configurable knobs exposed out
-of 23.
+So of 27 team knobs: **13 exposed, 6 live-but-hidden** (the 4 unsettable plus
+the 2 read-once)**, 8 dead**. Four of the 13 (`name`, `description`, `icon`,
+`color`) are identity, not configuration; excluding them gives 9 genuinely
+configurable knobs exposed out of 23.
 
 ### 2.4 Layer 4 — Code constants (~65, none configurable)
 
@@ -330,9 +353,9 @@ there for sync.
 **F4 — No validation layer except for the 5 plan limits.**
 `TENANT_LIMIT_BOUNDS` is exactly the right idea: min/max per key, whole update
 rejected if any key is out of range, so an org can never be left partially
-applied. Nothing else has it. Env vars get it only for the 7 in `env.ts`.
+applied. Nothing else has it. Env vars get it only for the 11 in `env.ts`.
 
-**F5 — Three-tier scoping exists implicitly but is never named.** Values
+**F5 — Four-tier scoping exists implicitly but is never named.** Values
 resolve platform → org → team → user, but there is no `resolve()` that
 expresses it, no way to see the effective value and where it came from, and no
 way to express "org sets a default, team may override within these bounds".
@@ -353,7 +376,7 @@ worse than config that is absent.
 
 ## 4. Proposed target architecture
 
-Four pieces. Each is independently shippable and independently useful.
+Five pieces. Each is independently shippable and independently useful.
 
 ### 4.1 A single config registry (the keystone)
 
@@ -404,9 +427,9 @@ Four fields carry more weight than they look:
   editable, and §5's "deployment-wide, at boot" is expressed as
   `storage: 'env-only', scopes: ['platform']`. Without this field the registry
   has no way to say what §5 says in prose.
-- **`redacted: true`** means `explain()` returns the env var's *name* and a
-  presence boolean, never its value. Every secret is `storage: 'env-only',
-  redacted: true`. See §4.2 for why this is not optional.
+- **`redacted: true`** marks a knob whose value must never leave the server.
+  Every secret is `storage: 'env-only', redacted: true`. §4.2 carries both the
+  mechanism and why it is not optional.
 
 **Resolution needs explicit ids.** `config.get(key, { orgId, teamId, userId })`
 — not `ctx.config.get(key)` alone. A single request can touch several teams (a
@@ -451,7 +474,7 @@ would be a migration. The registry supplies the type and bounds that the DB
 column would otherwise have given us; `value` is `Json` so one table carries
 ints, booleans, strings and enums without a column per shape.
 
-Four consequences, two of which are traps:
+Four consequences follow, one of them a genuine trap:
 
 - **The DB no longer type-checks a value, so the registry must.** Every write
   goes through the registry's validator (§4.1 `type` + `bounds`) — there is no
@@ -527,9 +550,9 @@ is the part the naive design gets wrong.
 `src/server/ws/index.ts` is a separate process with no GraphQL context: it
 constructs `WebhookService` and `CycleService` directly and drives them on
 `setInterval` (`ws/index.ts:408-435`). Those jobs consume precisely the knobs
-this document proposes to make configurable — `MAX_ATTEMPTS` /
-`AUTO_DISABLE_AFTER` / `REQUEST_TIMEOUT_MS` (`webhook.service.ts:54-61`, the
-§4.1 headline example) and `Team.upcomingCycleCount` via cycle rollover.
+this document proposes to make configurable — `MAX_ATTEMPTS` (the §4.1 headline
+example), `AUTO_DISABLE_AFTER` and `REQUEST_TIMEOUT_MS`
+(`webhook.service.ts:54-61`), and `Team.upcomingCycleCount` via cycle rollover.
 `yjs/server.ts` likewise talks to Prisma with no context. So `ConfigService`
 owns the snapshot and its own Redis subscription; `ctx.config` is a thin
 per-request memo *over* it, not the primary cache.
@@ -645,7 +668,19 @@ as editable, and (for the secrets) `redacted: true`.
 
 ## 6. Suggested phasing
 
-Ordered so each phase is shippable alone and each de-risks the next.
+Ordered so each phase is shippable alone and each de-risks the next. Sizes are
+relative, not estimates:
+
+| Phase | Size | What it buys |
+| ----- | ---- | ------------ |
+| 0 — truth and cleanup | S | Removes the misleading state; no new infrastructure |
+| 1 — registry over existing storage | M | Provenance + `/admin/config` read-only; no migration |
+| 2 — `settings` table and generic writes | L | The actual system; contains all the new infrastructure |
+| 3 — migrate the tunables | M | Runtime-changeable operations knobs |
+| 4 — fill the gaps | S–M | `organizationUpdate`, runtime app name, notification prefs |
+
+Phase 2 is where the risk concentrates: it is the only phase that builds
+something the codebase has no precedent for.
 
 **Phase 0 — Truth and cleanup (small, no new infrastructure).**
 Delete or wire up the 7 dead org columns and 8 dead team columns; decide
@@ -670,16 +705,25 @@ the live org/team knobs onto it. Ship `/admin/config` as a read-only "effective
 configuration" view — that alone closes F6 and proves the provenance model
 before anything is writable.
 
+**Invalidation ships with this phase, not Phase 2.** The legacy mutations
+(`aiSettingsUpdate`, the tenant-limit editor) still write those columns outside
+the registry, so without the `config:*` channel from day one `ConfigService`
+would serve values stale by up to its TTL with no way to tell. A read-only view
+that lies is worse than no view.
+
 **Phase 2 — The `settings` table and generic writes.**
 Add the table (§4.2) with the platform sentinel and the orphan sweep, the
 layered write path with registry-backed validation, the per-scope propagation
-matrix of §4.3, and audit logging with `previousValue`. Migrate the five
-`Organization.max*` columns into `settings` rows and drop the columns — the
-`OrganizationPlanLimits` SDL type is unchanged, so this is invisible to
-clients. **Copy only rows whose value differs from the column default**: a
-blanket copy would convert "never configured" into an explicit override for
-every existing org, permanently freezing them against any future change to the
-product default. Registry-driven forms in all three UIs, plus the client config
+matrix of §4.3, and audit logging with `previousValue`. The org and team rows
+of that matrix reuse the SyncAction pattern `aiSettingsUpdate`/`teamUpdate`
+already prove; **per-user targeted delivery is net-new work on
+`ConnectionManager` and should be budgeted separately** — it is the one item
+here with no existing precedent to copy. Migrate the five `Organization.max*`
+columns into `settings` rows and drop the columns (§4.2 — no SDL change, so
+clients see nothing). **Copy only rows whose value differs from the column
+default**: a blanket copy would convert "never configured" into an explicit
+override for every existing org, permanently freezing them against any future
+change to the product default. Registry-driven forms in all three UIs, plus the client config
 store and Dexie table. Add "reset to inherited" while the write path is being
 built; per §8-3 it is close to free here and awkward to retrofit.
 
@@ -698,7 +742,7 @@ The live-but-hidden team knobs. Each is now one registry entry plus a resolver.
 
 ## 7. Decisions taken (2026-08-18)
 
-Four of the seven open questions were settled in review. Recorded here with
+Four of the eleven questions this raised were settled in review. Recorded here with
 the reasoning, because the reasoning is what the next person needs. D1's
 *reasoning* was subsequently corrected by an adversarial review of this
 document; the conclusion did not change, but the argument that supports it did.
@@ -756,12 +800,9 @@ registry later (`teamMayOnlyNarrow: true`) once a real knob needs it.
 
 ### D2 — Storage: generic `settings` table.
 
-Settled; the shape and its four consequences are in §4.2. The headline: the
-registry's validator becomes load-bearing because the DB no longer type-checks
-anything; platform-scope rows need a sentinel UUID rather than NULL or the
-unique index silently constrains nothing; a polymorphic `scope_id` carries no
-FK so orphan cleanup must be explicit; and the `Organization.max*` columns get
-folded in during Phase 2 rather than kept as a parallel mechanism.
+Settled. The table shape and its four consequences — including the two that
+change the design rather than merely describe it, the platform sentinel and the
+orphan sweep — are in §4.2.
 
 ### D3 — Plan limits stay platform-admin only.
 
@@ -770,10 +811,10 @@ read-only view they already have at `/[workspace]/settings`. This is a billing
 boundary, and the registry expresses it as data rather than as a hand-written
 `requireOrgRole` at each call site.
 
-Worth noting what this implies for the registry: `editableBy` and `visibleTo`
-are genuinely two fields, not one. The plan limits are the proof — visible to
-org admins, editable only by platform admins. A single `role` field could not
-express a case that already exists in the product.
+This implies `editableBy` and `visibleTo` are genuinely two fields, not one.
+The plan limits are the proof — visible to org admins, editable only by
+platform admins. A single `role` field could not express a case that already
+exists in the product.
 
 ### D4 — Env precedence: per-knob mode. Two modes, not three.
 
@@ -832,3 +873,11 @@ kept two clean, non-overlapping modes.
 5. **Team hierarchy resolution.** Per D1, whether team-scope resolution walks
    `Team.parentId` and what bounds the walk. Needs an answer before team-scope
    writes ship.
+6. **Platform-scope propagation mechanism.** Per §4.3, platform-scope writes
+   have no org channel to publish on. Either a new non-org channel or an
+   explicit per-tenant fan-out — the latter is simpler but its cost scales with
+   tenant count, so the choice needs making rather than defaulting.
+7. **How the registry's TypeScript types are derived.** Per §4.5, const-generic
+   inference across 60+ entries and a codegen step are materially different
+   build stories. Worth settling early, since it decides whether the SDL and
+   `.env.example` generators are one mechanism or two.
