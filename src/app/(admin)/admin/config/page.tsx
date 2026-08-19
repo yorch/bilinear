@@ -35,6 +35,7 @@ export default function AdminConfigPage() {
   const {
     data: settings,
     error,
+    errorMessage,
     loading,
     refetch,
     setData,
@@ -60,6 +61,9 @@ export default function AdminConfigPage() {
       toast.success(value === null ? t('config.resetToast') : t('config.savedToast'));
     } catch (err) {
       toast.error(getErrorMessage(err, t('config.saveError')));
+      // Rethrow so SettingRow reverts its draft. Swallowing here left the
+      // rejected value in the field, which then re-submitted on every blur.
+      throw err;
     }
   };
 
@@ -68,7 +72,9 @@ export default function AdminConfigPage() {
   }
 
   if (error) {
-    return <InlineRetry message={t('config.loadError')} onRetry={refetch} />;
+    // The admin console is the surface where the server's own text is the
+    // diagnostic — see .claude/rules/frontend.md on useRetryableFetch.
+    return <InlineRetry message={errorMessage ?? t('config.loadError')} onRetry={refetch} />;
   }
 
   const groups = groupByArea(settings);
@@ -83,7 +89,7 @@ export default function AdminConfigPage() {
       {groups.map(({ area, items }) => (
         <section key={area}>
           <h2 className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-            {area}
+            {t(`config.areas.${area}`)}
           </h2>
           <div className="rounded-lg border border-border px-4">
             {items.map(setting => (

@@ -906,9 +906,6 @@ CREATE INDEX "organization_members_user_id_idx" ON "organization_members"("user_
 CREATE UNIQUE INDEX "organization_members_organization_id_user_id_key" ON "organization_members"("organization_id", "user_id");
 
 -- CreateIndex
-CREATE INDEX "settings_scope_type_scope_id_idx" ON "settings"("scope_type", "scope_id");
-
--- CreateIndex
 CREATE UNIQUE INDEX "settings_scope_type_scope_id_key_key" ON "settings"("scope_type", "scope_id", "key");
 
 -- CreateIndex

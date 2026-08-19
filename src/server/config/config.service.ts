@@ -25,9 +25,9 @@ import {
   getSetting,
   InvalidSettingValueError,
   PLATFORM_SCOPE_ID,
-  parseEnvValue,
   type ResolvedSetting,
   SCOPE_ORDER,
+  SETTINGS,
   type SettingDefinition,
   type SettingScope,
   type SettingSource,
@@ -37,6 +37,7 @@ import {
 } from '@/lib/config';
 import type { PrismaClient } from '../../generated/prisma';
 import { childLogger } from '../lib/logger';
+import { requireDefinition, resolveWithoutDatabase } from './reader';
 
 const log = childLogger({ module: 'config' });
 
@@ -49,6 +50,12 @@ export const CONFIG_INVALIDATE_CHANNEL = 'config:invalidate';
  * case is served from memory.
  */
 export const CONFIG_CACHE_TTL_MS = 30_000;
+
+/**
+ * Cache size above which a load also sweeps expired entries. Below it the walk
+ * costs more than the entries it would reclaim.
+ */
+const CONFIG_CACHE_SWEEP_THRESHOLD = 64;
 
 /** The ids a resolution is relative to. All optional — background jobs have none. */
 export interface ConfigScopeIds {
@@ -73,6 +80,18 @@ function scopeCacheKey(scopeType: SettingScope, scopeId: string): string {
 export class ConfigService {
   /** Per-(scope, id) snapshot of every stored key for that scope. */
   private cache = new Map<string, ScopeCacheEntry>();
+  /**
+   * Monotonic counter per cache key, bumped by every invalidation. A load that
+   * finishes after its generation moved on discards its result instead of
+   * caching a snapshot that is already known to be stale.
+   */
+  private generation = new Map<string, number>();
+  /**
+   * In-flight loads, so N concurrent misses on one scope issue one query
+   * rather than N. Without it a cold start with a bootstrap burst re-queries
+   * the same scope once per concurrent caller, every TTL, forever.
+   */
+  private inflight = new Map<string, Promise<Map<string, SettingValue>>>();
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -88,40 +107,24 @@ export class ConfigService {
    * user. An `override`-mode env var short-circuits above everything.
    */
   async explain(key: string, ids: ConfigScopeIds = {}): Promise<ResolvedSetting> {
-    const definition = getSetting(key);
-    if (!definition) {
-      throw new UnknownSettingError(`Unknown setting: ${key}`);
-    }
+    const definition = requireDefinition(key);
 
-    const envRaw = definition.env ? process.env[definition.env.name] : undefined;
-    const envValue = definition.env ? parseEnvValue(definition, envRaw) : null;
-
-    // An override-mode env var wins outright. Reported as locked so the UI
-    // renders the knob read-only instead of accepting a write that would never
-    // take effect.
-    if (definition.env?.mode === 'override' && envValue !== null) {
-      return {
-        definition,
-        key,
-        locked: true,
-        source: 'env',
-        value: definition.redacted ? null : envValue,
-      };
-    }
-
-    // env-only knobs never consult the database.
-    if (definition.storage === 'env-only') {
-      return {
-        definition,
-        key,
-        locked: true,
-        source: envValue !== null ? 'env' : 'code-default',
-        value: definition.redacted ? null : (envValue ?? defaultForScope(definition)),
-      };
+    // The database-free part of the chain, shared with DEFAULTS_ONLY_CONFIG so
+    // the two readers cannot drift on `locked`, redaction, or the override
+    // short-circuit. A non-null `resolved` means the answer needs no query.
+    const { envValue, resolved } = resolveWithoutDatabase(definition, key);
+    if (resolved) {
+      return resolved;
     }
 
     let value: SettingValue | null = envValue;
     let source: SettingSource = envValue !== null ? 'env' : 'code-default';
+    // The deepest scope an id was actually supplied for. A per-scope default
+    // map has to be read at the scope being resolved — without this, a knob
+    // declaring `{ org: 10, team: 3 }` would hand a caller who only supplied an
+    // orgId the *team* default, because the no-argument fallback walks
+    // SCOPE_ORDER in reverse.
+    let deepest: SettingScope | undefined;
 
     for (const scope of SCOPE_ORDER) {
       if (!definition.scopes.includes(scope)) {
@@ -131,6 +134,7 @@ export class ConfigService {
       if (!scopeId) {
         continue;
       }
+      deepest = scope;
       const stored = (await this.loadScope(scope, scopeId)).get(key);
       if (stored !== undefined) {
         value = stored;
@@ -143,7 +147,11 @@ export class ConfigService {
       key,
       locked: false,
       source,
-      value: value ?? defaultForScope(definition),
+      // Redaction applied at the single exit, not per-branch. It used to be
+      // handled only in the two early returns above, so a knob declared
+      // `redacted` with `storage: 'db'` would have returned its value here —
+      // and `toGraphQL` passes this straight to the client.
+      value: definition.redacted ? null : (value ?? defaultForScope(definition, deepest)),
     };
   }
 
@@ -252,21 +260,35 @@ export class ConfigService {
   }
 
   /**
-   * Drop rows whose knob is no longer declared, or is declared as deprecated.
+   * Drop rows for knobs explicitly retired via `deprecated: true`.
    *
-   * A key must never be reused for a different knob: a stale tenant row would
-   * silently resurrect with a new meaning. This sweep is what makes retiring a
-   * knob safe, and the WS server runs it alongside the SyncAction prune.
+   * **Only tombstoned keys, never merely-unknown ones.** An earlier version
+   * deleted everything absent from this process's registry, which is unsafe in
+   * exactly the situation config systems are most needed: a rollback, a
+   * blue/green window, or a developer running `yarn ws:server` from an older
+   * checkout against a shared database. In all three, an older process sees a
+   * newer version's keys as "unknown" and would silently delete every tenant's
+   * value for them, irrecoverably — the audit log records the writes, not the
+   * mass delete.
+   *
+   * Retiring a knob is therefore a two-step, deliberate act: mark it
+   * `deprecated` in one release (its rows stop being read), delete the
+   * declaration in a later one. That also preserves the rule keys are never
+   * reused, because the tombstone stays visible in the registry until it is
+   * safe to drop.
    */
-  async pruneUnknownKeys(): Promise<number> {
-    const live = settingsForScope('platform')
-      .concat(settingsForScope('org'), settingsForScope('team'), settingsForScope('user'))
-      .map(d => d.key);
+  async pruneDeprecatedKeys(): Promise<number> {
+    const deprecated = SETTINGS.filter(d => d.deprecated).map(d => d.key);
+    if (deprecated.length === 0) {
+      return 0;
+    }
     const { count } = await this.prisma.setting.deleteMany({
-      where: { key: { notIn: [...new Set(live)] } },
+      where: { key: { in: deprecated } },
     });
     if (count > 0) {
-      log.info({ count }, 'Pruned settings rows for unknown or deprecated keys');
+      // Name the keys, not just a count: a destructive sweep whose log cannot
+      // answer "what did it remove" is not auditable.
+      log.warn({ count, keys: deprecated }, 'Pruned settings rows for deprecated keys');
       this.cache.clear();
     }
     return count;
@@ -276,7 +298,7 @@ export class ConfigService {
 
   /** Drop this process's snapshot for a scope and tell the others to do the same. */
   async invalidate(scopeType: SettingScope, scopeId: string): Promise<void> {
-    this.cache.delete(scopeCacheKey(scopeType, scopeId));
+    this.bumpGeneration(scopeCacheKey(scopeType, scopeId));
     if (!this.redis) {
       return;
     }
@@ -296,15 +318,34 @@ export class ConfigService {
         scopeId: string;
         scopeType: SettingScope;
       };
-      this.cache.delete(scopeCacheKey(scopeType, scopeId));
+      this.bumpGeneration(scopeCacheKey(scopeType, scopeId));
     } catch (err) {
       log.error({ err }, 'Malformed config invalidation payload');
     }
   }
 
-  /** Drop the whole snapshot. Used by tests and the key prune. */
+  /** Drop the whole snapshot. Used by tests and the deprecated-key prune. */
   clearCache(): void {
     this.cache.clear();
+    // Bump every known generation too, so a load already in flight cannot
+    // repopulate the cache with a snapshot taken before this call.
+    for (const key of [...this.generation.keys()]) {
+      this.generation.set(key, (this.generation.get(key) ?? 0) + 1);
+    }
+  }
+
+  /**
+   * Drop a scope's snapshot and mark any in-flight load of it stale.
+   *
+   * The generation counter closes a race the plain `cache.delete` could not:
+   * a reader that missed the cache, issued its query, and had an invalidation
+   * arrive while it was awaiting would otherwise write its pre-invalidation
+   * snapshot afterwards and serve it for the full TTL — precisely the staleness
+   * the invalidation channel exists to prevent.
+   */
+  private bumpGeneration(cacheKey: string): void {
+    this.cache.delete(cacheKey);
+    this.generation.set(cacheKey, (this.generation.get(cacheKey) ?? 0) + 1);
   }
 
   // ── Internals ────────────────────────────────────────────────────────────
@@ -359,37 +400,78 @@ export class ConfigService {
       return hit.values;
     }
 
-    const rows = await this.prisma.setting.findMany({
-      select: { key: true, value: true },
-      where: { scopeId, scopeType },
-    });
-
-    const values = new Map<string, SettingValue>();
-    for (const row of rows) {
-      const definition = getSetting(row.key);
-      if (!definition) {
-        // A row whose knob has been retired. Ignored rather than thrown so a
-        // half-finished prune cannot take the process down.
-        continue;
-      }
-      try {
-        // The database does not type-check `value` — a knob whose type changed
-        // across a release can have a row of the old shape. Fall through to the
-        // layer below and log, never throw.
-        values.set(row.key, validateSettingValue(definition, row.value));
-      } catch (err) {
-        if (err instanceof InvalidSettingValueError) {
-          log.warn(
-            { err, key: row.key, scopeId, scopeType },
-            'Stored setting does not match its declaration — ignoring row',
-          );
-          continue;
-        }
-        throw err;
-      }
+    const existing = this.inflight.get(cacheKey);
+    if (existing) {
+      return existing;
     }
 
-    this.cache.set(cacheKey, { expiresAt: now + CONFIG_CACHE_TTL_MS, values });
-    return values;
+    // Captured before the query. If an invalidation lands while it is in
+    // flight, the generation moves on and the result is returned to this
+    // caller but NOT cached — otherwise a snapshot taken before a write would
+    // be served for the whole TTL despite the invalidation having arrived.
+    const generation = this.generation.get(cacheKey) ?? 0;
+
+    const load = (async () => {
+      const rows = await this.prisma.setting.findMany({
+        select: { key: true, value: true },
+        where: { scopeId, scopeType },
+      });
+
+      const values = new Map<string, SettingValue>();
+      for (const row of rows) {
+        const definition = getSetting(row.key);
+        if (!definition) {
+          // A row whose knob has been retired. Ignored rather than thrown so a
+          // half-finished prune cannot take the process down.
+          continue;
+        }
+        try {
+          // The database does not type-check `value` — a knob whose type
+          // changed across a release can have a row of the old shape. Fall
+          // through to the layer below and log, never throw.
+          values.set(row.key, validateSettingValue(definition, row.value));
+        } catch (err) {
+          if (err instanceof InvalidSettingValueError) {
+            log.warn(
+              { err, key: row.key, scopeId, scopeType },
+              'Stored setting does not match its declaration — ignoring row',
+            );
+            continue;
+          }
+          throw err;
+        }
+      }
+
+      if ((this.generation.get(cacheKey) ?? 0) === generation) {
+        this.cache.set(cacheKey, { expiresAt: now + CONFIG_CACHE_TTL_MS, values });
+        this.sweepExpired(now);
+      }
+      return values;
+    })().finally(() => {
+      this.inflight.delete(cacheKey);
+    });
+
+    this.inflight.set(cacheKey, load);
+    return load;
+  }
+
+  /**
+   * Drop expired entries so the snapshot cannot grow without bound.
+   *
+   * `scopeId` is never attacker-controlled (org is forced to the session's,
+   * team must resolve to a real row), so this is not a memory-exhaustion
+   * defence — it is simply that a long-lived process would otherwise hold one
+   * entry per org and per team it ever touched, forever. Runs only when the
+   * map is large enough for the walk to be worth it.
+   */
+  private sweepExpired(now: number): void {
+    if (this.cache.size < CONFIG_CACHE_SWEEP_THRESHOLD) {
+      return;
+    }
+    for (const [key, entry] of this.cache) {
+      if (entry.expiresAt <= now) {
+        this.cache.delete(key);
+      }
+    }
   }
 }

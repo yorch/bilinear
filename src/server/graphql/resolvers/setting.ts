@@ -9,8 +9,11 @@ import {
   settingsForScope,
 } from '@/lib/config';
 import { InvalidScopeError, SettingNotWritableError, UnknownSettingError } from '../../config';
-import { requireAuth } from '../../middleware/auth';
+import { childLogger } from '../../lib/logger';
+import { requireAuth, requirePlatformAdmin, requireTeamMember } from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
+
+const log = childLogger({ module: 'resolver/setting' });
 
 /**
  * Effective config role for the caller.
@@ -19,16 +22,19 @@ import type { GraphQLContext } from '../context';
  * mapping from org roles to them is the whole of the authorization model for
  * configuration. `owner` and `admin` are both org-admins here — the split
  * between them governs membership, not settings.
+ *
+ * Platform-admin is decided by `requirePlatformAdmin`, NOT by reading
+ * `isPlatformAdmin` here. That guard additionally refuses an impersonated
+ * session, and its doc comment says why: an impersonated session must never
+ * wield platform-admin powers even when the impersonated target happens to be
+ * an admin. A hand-rolled flag check silently drops that rule.
  */
 async function callerRole(ctx: GraphQLContext): Promise<SettingRole> {
-  const user = ctx.userId
-    ? await ctx.prisma.user.findUnique({
-        select: { isPlatformAdmin: true },
-        where: { id: ctx.userId },
-      })
-    : null;
-  if (user?.isPlatformAdmin) {
+  try {
+    await requirePlatformAdmin(ctx.prisma, ctx);
     return 'platform-admin';
+  } catch {
+    // Not a platform admin (or impersonating) — fall through to org roles.
   }
   return ctx.orgRole === 'owner' || ctx.orgRole === 'admin' ? 'org-admin' : 'member';
 }
@@ -49,6 +55,13 @@ function satisfies(actual: SettingRole, required: SettingRole): boolean {
  * A caller may never name another org's id: config is tenant data, and letting
  * `scopeId` through unchecked would turn a read into a cross-tenant leak. Team
  * ids are verified to belong to the caller's org for the same reason.
+ *
+ * The platform branch is guarded here rather than left to the knob's
+ * `editableBy`, because the two authorize different things. `editableBy` is a
+ * property of the *knob*; reaching platform scope is a property of the *caller*.
+ * Without this guard, any knob that is org-admin editable and also storable at
+ * platform scope (`cycles.upcomingCount` was exactly that) let any org admin in
+ * any tenant write the deployment-wide default for every other tenant.
  */
 async function resolveScopeId(
   ctx: GraphQLContext,
@@ -56,6 +69,7 @@ async function resolveScopeId(
   requested: string | null | undefined,
 ): Promise<string> {
   if (scope === 'platform') {
+    await requirePlatformAdmin(ctx.prisma, ctx);
     return PLATFORM_SCOPE_ID;
   }
   if (scope === 'user') {
@@ -88,14 +102,30 @@ async function resolveScopeId(
       extensions: { code: 'BAD_USER_INPUT' },
     });
   }
-  const team = await ctx.prisma.team.findFirst({
-    select: { id: true },
-    where: { id: requested, organizationId: ctx.orgId ?? '' },
-  });
-  if (!team) {
-    throw new GraphQLError('Team not found', { extensions: { code: 'NOT_FOUND' } });
+  if (!ctx.orgId || !ctx.userId) {
+    throw new GraphQLError('No organization in session', { extensions: { code: 'FORBIDDEN' } });
   }
-  return team.id;
+  // Org ownership alone is not enough. `Team.private` exists, and every other
+  // team-scoped resolver here (analytics, comment, custom-field, custom-view,
+  // cycle) gates on `requireTeamMember`. Without it, any member could
+  // enumerate a private team's configuration — and the NOT_FOUND-vs-success
+  // difference is an existence oracle for private teams.
+  //
+  // Org owners and admins are exempt: they administer teams they may not
+  // belong to, which is the same carve-out the team settings UI relies on.
+  const isOrgAdmin = ctx.orgRole === 'owner' || ctx.orgRole === 'admin';
+  if (isOrgAdmin) {
+    const team = await ctx.prisma.team.findFirst({
+      select: { id: true },
+      where: { id: requested, organizationId: ctx.orgId },
+    });
+    if (!team) {
+      throw new GraphQLError('Team not found', { extensions: { code: 'NOT_FOUND' } });
+    }
+    return team.id;
+  }
+  await requireTeamMember(ctx.prisma, requested, ctx.userId, ctx.orgId);
+  return requested;
 }
 
 /** Shape a `ResolvedSetting` for the SDL, never leaking a redacted value. */
@@ -304,14 +334,18 @@ export const settingResolvers = {
  * carry its org so the chain can fall through team → org → platform.
  */
 async function idsFor(ctx: GraphQLContext, scope: SettingScope, scopeId: string) {
-  if (scope === 'team') {
-    return { orgId: ctx.orgId, teamId: scopeId, userId: ctx.userId };
-  }
+  // Truncated at the requested scope: passing ids for scopes ABOVE it would
+  // let a higher layer win. Sending `userId` on an org-scope read, for
+  // instance, would show the viewing admin's personal override as the org's
+  // value — and a successful save would appear to snap back.
   if (scope === 'user') {
     return { orgId: ctx.orgId, userId: scopeId };
   }
+  if (scope === 'team') {
+    return { orgId: ctx.orgId, teamId: scopeId };
+  }
   if (scope === 'org') {
-    return { orgId: scopeId, userId: ctx.userId };
+    return { orgId: scopeId };
   }
   return {};
 }
@@ -334,14 +368,21 @@ async function recordAudit(
 ): Promise<void> {
   const metadata = { key, previousValue: previousValue ?? null, scope, scopeId, value };
   if (scope === 'platform') {
-    void ctx.services.platformAdmin.recordAudit({
-      action: 'setting.changed',
-      actorId: ctx.userId ?? null,
-      ipAddress: ctx.clientIp,
-      metadata,
-      targetId: null,
-      targetType: 'Setting',
-    });
+    // Fire-and-forget like the platform-admin console's own `audit()` helper,
+    // but with the rejection handled — a bare `void` on a rejected promise is
+    // an unhandled rejection, which in Node crashes the process by default.
+    void ctx.services.platformAdmin
+      .recordAudit({
+        action: 'setting.changed',
+        actorId: ctx.userId ?? null,
+        ipAddress: ctx.clientIp,
+        metadata,
+        targetId: null,
+        targetType: 'Setting',
+      })
+      .catch((err: unknown) => {
+        log.error({ err, key }, 'Platform audit for config change failed');
+      });
     return;
   }
   if (!ctx.orgId) {

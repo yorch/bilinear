@@ -442,7 +442,7 @@ const syncPruneTimer = setInterval(() => {
 }, SYNC_ACTION_PRUNE_INTERVAL_MS);
 
 // ─── Settings prune ─────────────────────────────────────────────────────────
-// Drops rows whose knob has left the registry or been marked deprecated.
+// Drops rows for knobs explicitly retired with `deprecated: true`.
 //
 // This is about key lifecycle, not entity lifecycle. Orgs and teams are
 // soft-deleted (`archivedAt`), so their settings must *survive* — an archived
@@ -455,10 +455,15 @@ const syncPruneTimer = setInterval(() => {
 // reuses the key for a different knob, at which point a stale tenant value
 // would silently resurrect with a new meaning.
 //
+// It deletes ONLY tombstoned keys, never merely-unknown ones: this process may
+// be an older version than the one that wrote a row (a rollback, a blue/green
+// window, a stale `yarn ws:server`), and treating a newer version's keys as
+// garbage would irrecoverably delete every tenant's value for them.
+//
 // Shares the SyncAction sweep's cadence: both are cheap deletes whose only
 // requirement is that they run between requests.
 const settingsPruneTimer = setInterval(() => {
-  config.pruneUnknownKeys().catch((err: unknown) => {
+  config.pruneDeprecatedKeys().catch((err: unknown) => {
     log.error({ err }, 'Settings prune failed');
   });
 }, SYNC_ACTION_PRUNE_INTERVAL_MS);

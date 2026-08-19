@@ -1,3 +1,4 @@
+import { ConfigService } from '../server/config/config.service';
 import { createLoaders, type Loaders } from '../server/graphql/loaders';
 import { AnalyticsService } from '../server/services/analytics.service';
 import { AuditLogService } from '../server/services/audit-log.service';
@@ -61,6 +62,15 @@ class MockWebhookService {
 }
 
 export interface MockGraphQLContext {
+  /** Best-effort client IP; resolvers pass it into audit records. */
+  clientIp?: string | null;
+  /**
+   * Layered configuration reader. A real `ConfigService` over the mock Prisma
+   * client, so resolver tests exercise the actual resolution chain — the
+   * `setting` model's `findMany` defaults to `[]`, so nothing is stored unless
+   * a test says so.
+   */
+  config: ConfigService;
   /** Set to exercise the "refuse while impersonating" guards. */
   impersonatorId?: string | null;
   loaders: Loaders;
@@ -107,6 +117,8 @@ export function createMockContext(
 
   const orgId = overrides.orgId !== undefined ? overrides.orgId : TEST_ORG.id;
   return {
+    clientIp: null,
+    config: new ConfigService(prisma as never),
     impersonatorId: null,
     loaders: createLoaders(prisma as never, orgId),
     orgId,

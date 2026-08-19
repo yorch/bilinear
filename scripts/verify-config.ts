@@ -212,12 +212,21 @@ async function main() {
   const removed = await config.deleteScope('org', orgId);
   check('deleteScope removes rows', removed > 0, `${removed} rows`);
 
-  // 17. pruneUnknownKeys drops rows for retired keys.
+  // 17. The prune deletes ONLY tombstoned keys — never merely-unknown ones.
+  //     This is the rollback-safety property: an older process must not treat a
+  //     newer version's keys as garbage and delete every tenant's value for
+  //     them. There is no way back from that; the audit log records writes, not
+  //     a mass delete.
   await prisma.setting.create({
-    data: { key: 'retired.knob', scopeId: orgId, scopeType: 'org', value: 1 },
+    data: { key: 'unknown.futureKnob', scopeId: orgId, scopeType: 'org', value: 1 },
   });
-  const pruned = await config.pruneUnknownKeys();
-  check('pruneUnknownKeys drops undeclared keys', pruned === 1, `${pruned} rows`);
+  const pruned = await config.pruneDeprecatedKeys();
+  const survivors = await prisma.setting.count({ where: { key: 'unknown.futureKnob' } });
+  check(
+    'prune leaves an unknown (possibly newer-version) key alone',
+    pruned === 0 && survivors === 1,
+    `pruned=${pruned} survivors=${survivors}`,
+  );
 
   await prisma.setting.deleteMany({});
   console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`);

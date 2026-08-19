@@ -29,12 +29,25 @@ const globalForConfig = globalThis as unknown as {
   configSubscriber: ReturnType<typeof redis.duplicate> | undefined;
 };
 
-export const config: ConfigService =
-  globalForConfig.configService ?? new ConfigService(prisma, redis);
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForConfig.configService = config;
+/**
+ * Memoised unconditionally, not just in development.
+ *
+ * `startConfigInvalidation`'s guard is `if (globalForConfig.configSubscriber)`,
+ * so "a subscriber exists" has to imply "this module's `config` is the one it
+ * invalidates". Memoising only outside production broke that: a second
+ * evaluation of this module in one process would get a fresh, empty-cache
+ * service, hit the truthy subscriber guard, return early, and then never be
+ * invalidated — corrected only by the TTL, intermittently, on roughly half the
+ * requests. That is a miserable thing to debug.
+ */
+function resolveConfigSingleton(): ConfigService {
+  if (!globalForConfig.configService) {
+    globalForConfig.configService = new ConfigService(prisma, redis);
+  }
+  return globalForConfig.configService;
 }
+
+export const config: ConfigService = resolveConfigSingleton();
 
 /**
  * Subscribe this process to config invalidations. Idempotent — a second call

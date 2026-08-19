@@ -1,12 +1,13 @@
 'use client';
 
 import { Lock, RotateCcw } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useTranslations } from '@/hooks/use-translations';
 import type { SettingScope } from '@/lib/config';
 import type { ResolvedSettingDto } from '@/lib/settings-api';
-import { cn, TOUCH_TARGET } from '@/lib/utils';
+import { cn, TOUCH_TARGET, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 
 interface SettingRowProps {
   /** Called with the value to store, or `null` to reset to inherited. */
@@ -40,13 +41,21 @@ interface SettingRowProps {
  */
 export function SettingRow({ onChange, scope, setting, writable }: SettingRowProps) {
   const t = useTranslations();
-  const [draft, setDraft] = useState(String(setting.value ?? ''));
+  const serverValue = String(setting.value ?? '');
+  const [draft, setDraft] = useState(serverValue);
   const [busy, setBusy] = useState(false);
+  // True while the field has focus. Guards the re-seed below — without it, a
+  // concurrent write arriving mid-edit silently discards whatever the admin has
+  // typed, which is the classic "sync state from props in an effect" bug.
+  const focusedRef = useRef(false);
 
   // Re-seed when the resolved value changes underneath us (another admin's
-  // write arriving, or our own save returning the re-resolved row).
+  // write, or our own save returning the re-resolved row) — but never while the
+  // user is mid-edit.
   useEffect(() => {
-    setDraft(String(setting.value ?? ''));
+    if (!focusedRef.current) {
+      setDraft(String(setting.value ?? ''));
+    }
   }, [setting.value]);
 
   const storedHere = setting.source === scope;
@@ -56,6 +65,13 @@ export function SettingRow({ onChange, scope, setting, writable }: SettingRowPro
     setBusy(true);
     try {
       await onChange(value);
+    } catch {
+      // A rejected write leaves `setting.value` unchanged, so without this the
+      // draft would keep the bad value AND re-submit it on every subsequent
+      // blur — one duplicate mutation and one duplicate error toast per tab
+      // through the field. Reverting makes the rejection visible and stops the
+      // loop. The page has already surfaced the error.
+      setDraft(String(setting.value ?? ''));
     } finally {
       setBusy(false);
     }
@@ -102,6 +118,7 @@ export function SettingRow({ onChange, scope, setting, writable }: SettingRowPro
             aria-label={label}
             className={cn(
               'rounded border border-input bg-background px-2 py-1 text-sm focus:border-ring focus:outline-none',
+              'disabled:cursor-not-allowed disabled:opacity-50',
               TOUCH_TARGET,
             )}
             disabled={disabled}
@@ -115,22 +132,23 @@ export function SettingRow({ onChange, scope, setting, writable }: SettingRowPro
             ))}
           </select>
         ) : (
-          <input
+          <Input
             aria-label={label}
-            className={cn(
-              'w-32 rounded border border-input bg-background px-2 py-1 text-right font-mono text-sm tabular-nums focus:border-ring focus:outline-none',
-              TOUCH_TARGET,
-            )}
+            className={cn('w-32 text-right font-mono tabular-nums', TOUCH_TARGET)}
             disabled={disabled}
             inputMode={setting.type === 'string' ? 'text' : 'numeric'}
             max={setting.max ?? undefined}
             min={setting.min ?? undefined}
             onBlur={() => {
-              if (draft !== String(setting.value ?? '')) {
+              focusedRef.current = false;
+              if (draft !== serverValue) {
                 void commit(setting.type === 'string' ? draft : Number(draft));
               }
             }}
             onChange={e => setDraft(e.target.value)}
+            onFocus={() => {
+              focusedRef.current = true;
+            }}
             type={setting.type === 'string' ? 'text' : 'number'}
             value={draft}
           />
@@ -143,7 +161,7 @@ export function SettingRow({ onChange, scope, setting, writable }: SettingRowPro
             aria-label={t('config.resetToInherited')}
             className={cn(
               'rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground',
-              TOUCH_TARGET,
+              TOUCH_TARGET_SQUARE,
             )}
             disabled={busy}
             onClick={() => void commit(null)}

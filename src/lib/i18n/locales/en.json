@@ -342,6 +342,16 @@
       "openaiModel": "OpenAI model",
       "provider": "AI provider"
     },
+    "areas": {
+      "ai": "AI assistant",
+      "cycles": "Cycles",
+      "env": "Environment",
+      "invite": "Invitations",
+      "limits": "Plan limits",
+      "log": "Logging",
+      "security": "Security",
+      "webhook": "Webhooks"
+    },
     "cycles": {
       "upcomingCount": "Upcoming cycles kept ready"
     },

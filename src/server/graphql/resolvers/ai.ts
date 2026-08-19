@@ -64,7 +64,11 @@ export const aiResolvers = {
   Query: {
     aiAvailable: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
-      if (!ctx.services.ai.isConfigured()) {
+      // `isConfigured` is async now that provider selection resolves through
+      // the config chain. Without the await this guard is dead — `!Promise` is
+      // always false — and the short-circuit that avoids a DB read when AI is
+      // unconfigured never fires.
+      if (!(await ctx.services.ai.isConfigured())) {
         return false;
       }
       try {

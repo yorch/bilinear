@@ -224,10 +224,14 @@ model Setting {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  @@unique([scopeType, scopeId, key])
   // Loading a whole scope in one read is the hot path — ConfigService fetches
-  // every key for a scope at once rather than one query per knob.
-  @@index([scopeType, scopeId])
+  // every key for a scope at once rather than one query per knob. No separate
+  // `@@index([scopeType, scopeId])` is needed: this unique index's leading two
+  // columns already serve that prefix lookup (verified with EXPLAIN against a
+  // populated table — Postgres picks this index and never touched the extra
+  // one), so a second index would add btree maintenance to every write on a
+  // hot-path table for no read benefit.
+  @@unique([scopeType, scopeId, key])
   @@map("settings")
 }
 

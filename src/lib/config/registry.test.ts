@@ -99,11 +99,56 @@ describe('registry invariants', () => {
   });
 
   it('excludes env-only and deprecated knobs from every scope listing', () => {
+    // Asserted against SETTINGS, not against settingsForScope's own output.
+    // The earlier version iterated the filtered result and re-asserted the
+    // predicate that produced it — mathematically incapable of failing, since
+    // no element of `filter(p)` can violate `p`.
     for (const scope of SCOPE_ORDER) {
-      for (const s of settingsForScope(scope)) {
-        expect(s.storage, s.key).toBe('db');
-        expect(s.deprecated ?? false, s.key).toBe(false);
-        expect(s.scopes, s.key).toContain(scope);
+      const listed = new Set(settingsForScope(scope).map(s => s.key));
+      const expected = SETTINGS.filter(
+        s => s.storage === 'db' && !s.deprecated && s.scopes.includes(scope),
+      ).map(s => s.key);
+      expect([...listed].sort()).toEqual(expected.sort());
+      // And the exclusions are real, not merely absent by construction: every
+      // env-only knob declaring this scope must be missing from the listing.
+      for (const s of SETTINGS) {
+        if (s.storage === 'env-only' && s.scopes.includes(scope)) {
+          expect(listed.has(s.key), s.key).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('has at least one env-only knob declaring platform scope', () => {
+    // Guards the exclusion assertion above from going vacuous: if the registry
+    // ever had no env-only platform knobs, that loop would pass on zero
+    // iterations while proving nothing.
+    expect(SETTINGS.some(s => s.storage === 'env-only' && s.scopes.includes('platform'))).toBe(
+      true,
+    );
+  });
+
+  it('never makes a knob more editable than it is visible', () => {
+    // settingSet/settingClear return the resolved value having checked only
+    // `editableBy`; that is safe only while editing is at least as privileged
+    // as reading.
+    const rank: Record<string, number> = { member: 0, 'org-admin': 1, 'platform-admin': 2 };
+    for (const s of SETTINGS) {
+      expect(rank[s.editableBy], s.key).toBeGreaterThanOrEqual(rank[s.visibleTo]);
+    }
+  });
+
+  it('parses booleans exactly as boolEnv does', () => {
+    // The registry and `src/server/lib/env.ts` must agree, or the admin console
+    // reports the opposite of what the SSRF and rate-limit guards enforce.
+    const boolEnv = (raw: string) => raw === '1';
+    for (const s of SETTINGS) {
+      if (s.type !== 'boolean' || !s.env) {
+        continue;
+      }
+      for (const raw of ['1', '0', 'true', 'false', 'TRUE', 'yes', '']) {
+        const viaRegistry = parseEnvValue(s, raw) ?? false;
+        expect(viaRegistry, `${s.key} <- "${raw}"`).toBe(boolEnv(raw));
       }
     }
   });
@@ -137,6 +182,14 @@ describe('validateSettingValue', () => {
 
   it('rejects a non-numeric string', () => {
     expect(() => validateSettingValue(intKnob, 'abc')).toThrow(InvalidSettingValueError);
+  });
+
+  it('rejects the shapes bare Number() would silently accept', () => {
+    // '0x10' would otherwise store 16, '1e3' 1000, and '' zero — none of which
+    // a form or an env var is ever meant to submit.
+    for (const raw of ['0x10', '0b11', '1e3', '', '   ']) {
+      expect(() => validateSettingValue(intKnob, raw), raw).toThrow(InvalidSettingValueError);
+    }
   });
 
   it('rejects a boolean for an int knob', () => {
@@ -176,14 +229,13 @@ describe('parseEnvValue', () => {
     expect(parseEnvValue(intKnob, '999')).toBeNull();
   });
 
-  it('accepts both spellings of a boolean flag', () => {
-    for (const truthy of ['1', 'true', 'TRUE']) {
-      expect(parseEnvValue(boolKnob, truthy), truthy).toBe(true);
-    }
-    for (const falsy of ['0', 'false', 'FALSE']) {
+  it('treats only "1" as true, matching boolEnv', () => {
+    // Deliberately narrow. Accepting 'true' here would make the admin console
+    // report a security guard as disabled while the guard was still enforcing.
+    expect(parseEnvValue(boolKnob, '1')).toBe(true);
+    for (const falsy of ['0', 'false', 'true', 'TRUE', 'yes', 'maybe']) {
       expect(parseEnvValue(boolKnob, falsy), falsy).toBe(false);
     }
-    expect(parseEnvValue(boolKnob, 'maybe')).toBeNull();
   });
 });
 
