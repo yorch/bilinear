@@ -42,6 +42,10 @@ interface SelectPopoverProps {
 export const POPOVER_ITEM_CLASS =
   'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent';
 
+/** Everything a panel can hand initial focus to — deliberately wider than the roving set. */
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export function SelectPopover({
   align = 'left',
   children,
@@ -57,14 +61,19 @@ export function SelectPopover({
   triggerTitle,
 }: SelectPopoverProps) {
   const { open, setOpen, ref } = usePopover({ closeOnEscape: true, forceOpen, onClose });
-  // Panels here hold arbitrary consumer markup, so roving covers every enabled
-  // button rather than just `[role="option"]`.
+  // Panels here hold arbitrary consumer markup: roving covers every enabled
+  // button rather than just `[role="option"]`, while initial focus additionally
+  // reaches inputs and links, because several consumers open onto a form control
+  // (due-date, column picker, estimate) rather than a button.
   const {
     onKeyDown: handlePanelKeyDown,
     panelId,
     panelRef,
     triggerRef,
-  } = usePopoverPanel({ itemSelector: 'button:not([disabled])' }, open);
+  } = usePopoverPanel(
+    { focusSelector: FOCUSABLE_SELECTOR, itemSelector: 'button:not([disabled])' },
+    open,
+  );
   const openUpward = usePopoverFlip(open, triggerRef);
 
   const close = useCallback(() => {

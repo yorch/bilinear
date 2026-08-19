@@ -38,7 +38,12 @@ function listSourceFiles(dir: string): string[] {
  */
 function emittedModelNames(): Map<string, string> {
   const found = new Map<string, string>();
-  const call = /createSyncAction\(\s*[^,]+,\s*(?:'[A-Z]'|\w+)\s*,\s*'([A-Za-z]+)'/g;
+  // The first argument may itself contain a call with commas, and the action may
+  // be a dotted expression rather than a literal or bare identifier — both forms
+  // exist or plausibly will, and a miss here is silent (the model simply never
+  // gets a case generated for it).
+  const call =
+    /createSyncAction\(\s*(?:[^,()]|\([^()]*\))+,\s*(?:'[A-Z]'|[\w.]+)\s*,\s*'([A-Za-z]+)'/g;
   for (const file of listSourceFiles(SERVER_DIR)) {
     const source = readFileSync(file, 'utf8');
     for (const match of source.matchAll(call)) {
@@ -59,6 +64,9 @@ function registryEntries(source: string): Array<[string, string]> {
   const start = source.indexOf('const CACHED_MODELS');
   const end = source.indexOf('\n    };', start);
   expect(start, 'CACHED_MODELS registry not found').toBeGreaterThan(-1);
+  // Without this, a changed terminator makes `end` -1 and `slice(start, -1)`
+  // silently swallows the rest of the file instead of failing.
+  expect(end, 'CACHED_MODELS closing brace not found').toBeGreaterThan(start);
   const body = source.slice(start, end);
   return [
     ...body.matchAll(/^\s{6}([A-Z][A-Za-z]*): cache\((?:.|\n)*?'([a-zA-Z]+)',?\n?\s*\),?$/gm),
@@ -76,7 +84,10 @@ function expectedTable(modelName: string): string {
 
 /** Model names given their own `case` arm, for the non-uniform handling. */
 function bespokeModels(source: string): string[] {
-  return [...source.matchAll(/^\s{8}case '([A-Za-z]+)':/gm)].map(m => m[1]);
+  // `\s+` rather than a fixed column: a `case` is always more indented than its
+  // `switch`, and pinning the exact depth means re-nesting the switch silently
+  // drops every bespoke model from this scan.
+  return [...source.matchAll(/^\s+case '([A-Za-z]+)':/gm)].map(m => m[1]);
 }
 
 describe('SyncAction model coverage', () => {
@@ -122,10 +133,22 @@ describe('SyncAction model coverage', () => {
   });
 
   it('reads a table for every registry entry', () => {
-    // Non-vacuity: a regex that stopped capturing tables would make the pairing
-    // assertions above disappear rather than fail.
-    expect(registryEntries(source).length).toBe(registryModels(source).length);
+    // Non-vacuity, and it has to be a real threshold. Comparing
+    // `registryEntries().length` to `registryModels().length` looks like a check
+    // but is a tautology — the latter is derived from the former, so both are 0
+    // together and `[].every()` is vacuously true. A regex that stopped matching
+    // would empty the `it.each` above, and vitest does not fail an empty
+    // `it.each`, so the pairing assertions would vanish rather than fail.
+    expect(registryEntries(source).length).toBeGreaterThan(10);
     expect(registryEntries(source).every(([, table]) => table.length > 0)).toBe(true);
+  });
+
+  // The suite's main direction is emitted ⊆ handled, because that is the one
+  // that loses data. This is the cheap other half: an entry left behind for a
+  // model the server stopped emitting is dead weight nothing else would flag.
+  it('does not cache a model the server no longer emits', () => {
+    const handledHere = [...registryModels(source), ...bespokeModels(source)];
+    expect(handledHere.filter(model => !emitted.has(model))).toEqual([]);
   });
 
   it('does not list a model as uncached while also caching it', () => {

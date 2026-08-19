@@ -1083,7 +1083,15 @@ export class SyncManager {
         // too; those surfaces fetch over GraphQL on mount, so dropping the
         // action costs only a live update.
         default: {
-          const cached = CACHED_MODELS[modelName];
+          // `Object.hasOwn`, not a bare index: a plain object literal inherits
+          // from `Object.prototype`, so `CACHED_MODELS['constructor']` is truthy
+          // and would slip past the guard below. A SyncAction naming one of those
+          // keys would then call `Function.prototype.apply` and throw out of the
+          // whole batch — losing every other model's update and stalling the
+          // cursor — where the old switch merely warned.
+          const cached = Object.hasOwn(CACHED_MODELS, modelName)
+            ? CACHED_MODELS[modelName]
+            : undefined;
           if (!cached) {
             log.warn('Unhandled SyncAction model — not cached', undefined, {
               modelName: action.modelName,

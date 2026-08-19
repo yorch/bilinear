@@ -93,7 +93,11 @@ export function useRetryableFetch<T>(
   }, [refetch]);
 
   return {
-    cause: failure?.cause ?? null,
+    // `failure === null`, not `failure?.cause ?? null` — the box exists precisely
+    // so a fetcher that throws `null`/`undefined` stays distinguishable from
+    // "no failure", and collapsing it here would have made `error === true`
+    // report `cause === null`, contradicting the box two lines up.
+    cause: failure === null ? null : failure.cause,
     data,
     error: failure !== null,
     loading,

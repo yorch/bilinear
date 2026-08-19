@@ -9,7 +9,6 @@ import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql, gqlQuery, isPermissionError } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { getErrorMessage } from '@/lib/utils';
 
 /**
  * Webhook management page (admins only).
@@ -224,10 +223,8 @@ export default function WebhooksSettingsPage() {
           page drops the heading and reads as a crash rather than a failed
           section. */}
       {error && !forbidden && (
-        <InlineRetry
-          message={getErrorMessage(cause, t('settings.webhooks.loadError'))}
-          onRetry={() => load()}
-        />
+        // Localized copy, not the server's raw text — see the audit-log page.
+        <InlineRetry message={t('settings.webhooks.loadError')} onRetry={() => load()} />
       )}
 
       {creating ? (

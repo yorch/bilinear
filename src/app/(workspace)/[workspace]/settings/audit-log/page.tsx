@@ -193,10 +193,13 @@ export default function AuditLogPage() {
   if (error) {
     return (
       <div className="p-6">
-        <InlineRetry
-          message={getErrorMessage(cause, t('common.somethingWentWrong'))}
-          onRetry={() => load()}
-        />
+        {/* Deliberately the localized string, not `getErrorMessage(cause, …)`:
+            this page is workspace-facing, and a raw `Failed to fetch` or
+            `GraphQL request failed: 502` reaches a member in whatever language
+            the server happened to speak. The admin console shows the server's
+            own text because there the message *is* the diagnostic; here it is
+            noise the reader cannot act on. See REVIEW_BACKLOG §4.3. */}
+        <InlineRetry message={t('common.somethingWentWrong')} onRetry={() => load()} />
       </div>
     );
   }

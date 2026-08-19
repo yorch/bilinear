@@ -943,6 +943,46 @@ a failing test rather than a silent cache hole.
 > verbatim, and nothing scopes it to the admin console. `errorMessage ??
 > t('common.somethingWentWrong')` should stay the only sanctioned use.
 
+### 4.8 A refused webhooks page reads as an empty one (2026-08-19)
+
+**Found during** the review of the `cause` migration; **pre-existing**, not
+introduced by it.
+
+`settings/webhooks` correctly suppresses its Retry for a viewer who is not an
+admin (`error && !forbidden`) — but it has no forbidden message, so the page
+falls through to `webhooks.length === 0` and renders
+`settings.webhooks.noWebhooksYet`. A non-admin is told there are no webhooks,
+which may be false, with nothing indicating they simply cannot see them. The old
+code did the same thing by a different route (it set `forbidden: true` alongside
+empty arrays), so this is long-standing.
+
+`settings/audit-log` is the model to copy: it renders
+`t('settings.auditLog.forbidden')` and returns before the error branch.
+
+**Effort:** Small — one dictionary key in `en.json` + `es.json`, one render
+branch. It is listed rather than done because it is new user-facing copy, which
+wants a product call on the wording rather than an invented string.
+
+**Acceptance signal:** a member without admin rights loading
+`/settings/webhooks` sees an explanation, not "No webhooks yet".
+
+### 4.9 `isPermissionError` folds an expired session into "forbidden" (2026-08-19)
+
+**Found during** the same review; **pre-existing**.
+
+`isPermissionError` (`src/lib/graphql.ts`) returns true for both `FORBIDDEN` and
+`UNAUTHENTICATED`. Since the `cause` migration moved the forbidden decision to
+the render site, that conflation is now the reusable pattern: an admin whose
+session expires while the audit log is open, then hits Apply, is told "You need
+admin access to view audit logs" — with no retry and no route back to a login.
+
+**First-touch:** split the predicate at the call sites that render a *terminal*
+message — `isGqlErrorCode(cause, 'FORBIDDEN')` for "not for you", and let
+`UNAUTHENTICATED` fall through to the retry path (or trigger re-auth).
+
+**Effort:** Small. **Risk:** Low, but it touches an auth-adjacent predicate used
+in several places, so it wants its own change rather than riding along.
+
 ## 5. Test coverage gaps
 
 Locking in the parts of the system most likely to hide regressions.

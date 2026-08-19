@@ -20,6 +20,7 @@ import { TaskItem } from '@tiptap/extension-task-item';
 import { TaskList } from '@tiptap/extension-task-list';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Underline } from '@tiptap/extension-underline';
+import type { Transaction } from '@tiptap/pm/state';
 import type { Editor } from '@tiptap/react';
 import { EditorContent, ReactRenderer, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -756,48 +757,73 @@ export function TipTapEditor({
   }, [editor, content, collabEnabled]);
 
   /**
-   * The selection the link applies to, captured when the dialog opens.
+   * The link dialog's target: the href to pre-fill, plus the range to apply to.
    *
    * This is the whole reason the link prompt outlived the other `window.prompt`
-   * replacements. A native prompt blocks synchronously and never touches the
-   * ProseMirror selection, so `extendMarkRange('link')` was guaranteed to act on
-   * what the user had highlighted. A dialog takes focus into the browser's top
-   * layer, and a selection restored only by `.focus()` is a selection you are
-   * *hoping* survived — get it wrong and the link silently lands on the wrong
-   * text. Capturing `from`/`to` up front and replaying them with
-   * `setTextSelection` makes that independent of whatever focus did.
+   * replacements. A native prompt blocks the main thread, so nothing — not the
+   * user, not a remote collaborator — could move the document while it was open,
+   * and `extendMarkRange('link')` was guaranteed to act on what was highlighted.
+   * A dialog blocks neither. So the range is captured up front rather than
+   * trusting focus to restore it, AND kept mapped through every transaction that
+   * lands while the dialog is open: with collaborative editing on, another
+   * person typing earlier in the paragraph shifts these positions, and replaying
+   * the raw integers would silently link the wrong words. `setTextSelection`
+   * clamps rather than throws, so that failure would be invisible.
    */
-  const [linkTarget, setLinkTarget] = useState<{ from: number; href: string; to: number } | null>(
-    null,
-  );
+  const [linkTarget, setLinkTarget] = useState<{ href: string } | null>(null);
+  const linkRangeRef = useRef<{ from: number; to: number } | null>(null);
+
+  useEffect(() => {
+    if (!editor || !linkTarget) {
+      return;
+    }
+    const onTransaction = ({ transaction }: { transaction: Transaction }) => {
+      const range = linkRangeRef.current;
+      if (!transaction.docChanged || !range) {
+        return;
+      }
+      linkRangeRef.current = {
+        from: transaction.mapping.map(range.from),
+        to: transaction.mapping.map(range.to),
+      };
+    };
+    editor.on('transaction', onTransaction);
+    return () => {
+      editor.off('transaction', onTransaction);
+    };
+  }, [editor, linkTarget]);
 
   const openLinkDialog = useCallback(() => {
     if (!editor) {
       return;
     }
     const { from, to } = editor.state.selection;
-    setLinkTarget({ from, href: editor.getAttributes('link').href ?? '', to });
+    linkRangeRef.current = { from, to };
+    setLinkTarget({ href: editor.getAttributes('link').href ?? '' });
   }, [editor]);
 
   const applyLink = useCallback(
     (url: string) => {
-      const target = linkTarget;
+      const range = linkRangeRef.current;
       setLinkTarget(null);
-      if (!editor || !target) {
+      linkRangeRef.current = null;
+      if (!editor || !range) {
         return;
       }
       const chain = editor
         .chain()
         .focus()
-        .setTextSelection({ from: target.from, to: target.to })
+        .setTextSelection({ from: range.from, to: range.to })
         .extendMarkRange('link');
-      // An empty field clears the link, matching what the prompt's empty string
-      // did; cancelling closes without touching the document, as returning null
-      // did.
+      // Cancelling closes without touching the document, as returning null from
+      // the prompt did. An empty field clears the link — and so does a
+      // whitespace-only one, which the prompt would have stored verbatim as a
+      // blank href; trimming here is a deliberate improvement on that, not
+      // parity.
       const trimmed = url.trim();
       (trimmed === '' ? chain.unsetLink() : chain.setLink({ href: trimmed })).run();
     },
-    [editor, linkTarget],
+    [editor],
   );
 
   /**

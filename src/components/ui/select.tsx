@@ -52,7 +52,7 @@ export function SimpleSelect({
     panelId,
     panelRef,
     triggerRef,
-  } = usePopoverPanel({ itemSelector: '[role="option"]' }, open);
+  } = usePopoverPanel({ focusSelector: '[role="option"]', itemSelector: '[role="option"]' }, open);
   useOutsideClick(ref, () => setOpen(false), open, true);
 
   return (

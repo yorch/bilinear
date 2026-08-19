@@ -2982,7 +2982,11 @@ Any component that loads data in an effect uses `useRetryableFetch(fetcher, deps
 
 Returning the error rather than a pre-extracted message is the point, and it was learned the hard way: an earlier version exposed `errorMessage: string | null`, which threw away exactly the part callers needed. `gqlQuery` throws a `GqlError` carrying `extensions.code`, so a page wanting to tell "forbidden" from "broken" had to re-catch inside its own fetcher to recover a code the hook was already holding — which two pages did, each inventing its own sentinel.
 
-Two outcomes deliberately do **not** travel through `error`: a row that does not exist, and a request the viewer is not allowed to make. Both are answers, not failures, and neither is retryable — offering a Retry that can never succeed is worse than offering none. A missing row is data (`admin/tenants/[id]` lets `fetchTenant` resolve to `null`); a refusal is `isPermissionError(cause)` at the render site, which is how `settings/audit-log` and `settings/webhooks` show their own message instead of a retry.
+Two outcomes are answers rather than failures, and neither is retryable — offering a Retry that can never succeed is worse than offering none. **A missing row is data**: `admin/tenants/[id]` lets `fetchTenant` resolve to `null`, so it never trips `error` at all. **A refusal does trip `error`**, because the fetcher throws — so check `isPermissionError(cause)` *before* the `error` branch and render the terminal message there, as `settings/audit-log` does. That ordering is the whole contract: get it backwards and a non-admin is handed a Retry button that can only fail.
+
+`settings/webhooks` masks its retry with `error && !forbidden` but has no forbidden message of its own, so a non-admin currently falls through to the empty state — see REVIEW_BACKLOG §4.8.
+
+Render the fallback string, not `cause`, on workspace-facing surfaces: `getErrorMessage(cause, …)` returns the server's own English text, which is the diagnostic an operator wants in `(admin)/admin/**` and untranslated noise for everyone else.
 
 Do not hand-roll the equivalent. The recognisable shape — `useState` for data, a `loadError` boolean, a `useState(0)` `reloadKey`, a `let cancelled = false` flag with `if (!cancelled)` guards, and a `biome-ignore useExhaustiveDependencies` for the reload key — was written out fifteen times before being consolidated, and the hand-rolled version is strictly worse: it races on out-of-order responses where the hook discards stale ones via a monotonic request id.
 

@@ -913,4 +913,41 @@ describe('SyncManager', () => {
       // cleared by stop(), so emitMessage is a no-op after teardown.
     });
   });
+
+  // ─── Model dispatch ────────────────────────────────────────────────────────
+
+  describe('unknown model names', () => {
+    // The uniform models are dispatched through an object-literal registry keyed
+    // by model name. A bare index would walk `Object.prototype`, so a model
+    // called `constructor` or `toString` resolves to an inherited function, slips
+    // past the "not cached" guard, and throws — out of `doApplyActions`, before
+    // the cursor advances and before the Dexie transaction, taking every other
+    // action in the batch with it.
+    it.each(['constructor', 'toString', 'valueOf', 'hasOwnProperty', '__proto__'])(
+      'treats the prototype key %s as uncached instead of throwing',
+      async modelName => {
+        const stores = createFakeStores();
+        const wsClient = createFakeWsClient();
+        const manager = new SyncManager(stores, wsClient as unknown as WsClient);
+
+        await expect(
+          (manager as Instance).applyActions([makeAction({ id: '5', modelName, xactId: '1000' })]),
+        ).resolves.not.toThrow();
+      },
+    );
+
+    it('still advances the cursor past an action whose model is a prototype key', async () => {
+      const stores = createFakeStores();
+      const wsClient = createFakeWsClient();
+      const manager = new SyncManager(stores, wsClient as unknown as WsClient);
+
+      await (manager as Instance).applyActions([
+        makeAction({ id: '7', modelName: 'constructor', xactId: '1000' }),
+      ]);
+
+      // The whole point: an unhandled model is skipped, not fatal — so the batch
+      // it arrived in still commits and the client does not replay it forever.
+      expect(stores.syncStore.lastSyncId).toBe(expectedCursor('1000', '7'));
+    });
+  });
 });

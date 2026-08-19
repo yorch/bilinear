@@ -142,10 +142,11 @@ pulse means "live" (connection status, pending write), not "loading".
   cancelled-flag state machine and pairs with `InlineRetry`. Pass
   `{ silent: true }` for post-mutation background refreshes so they don't
   re-flash the skeleton. It returns `cause` — the thrown error itself —
-  alongside the `error` boolean; render it with `getErrorMessage(cause, fallback)`
-  and branch with `isPermissionError(cause)`. "Not found" and "not allowed" are
-  **not** errors: neither is retryable, so a missing row is data and a refusal is
-  `isPermissionError(cause)` at the render site. The one shape the hook does not fit is
+  alongside the `error` boolean. A missing row is data (it never trips `error`); a
+  refusal *does* trip `error`, so check `isPermissionError(cause)` **before** the
+  `error` branch or a non-admin gets a Retry that can never succeed. Render
+  `getErrorMessage(cause, …)` only under `(admin)/admin/**`, where the server's
+  own text is the diagnostic; workspace pages show the localized fallback. The one shape the hook does not fit is
   fetch-then-seed-a-form, which would need `setX(...)` inside the fetcher; those
   pages keep their own effect. See PATTERNS.md §80.6.
 - Issue mutations from components: use `useIssueCreate(team, states)` and
