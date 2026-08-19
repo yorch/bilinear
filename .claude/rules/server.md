@@ -55,6 +55,25 @@ each service; resolvers catch and remap to `GraphQLError` with
   expected to emit exactly one `DROP INDEX` for the xid8 covering index, because
   Prisma cannot declare `@@index` on an `Unsupported` field.
 
+## Configuration
+
+Behaviour knobs are **registry entries, not env vars and not columns**. One
+`defineSetting` in `src/lib/config/registry.ts`, read through `ConfigService`
+(`config.getInt('webhook.maxAttempts', { orgId })`). Precedence is
+code default → env → platform → org → team → user.
+
+- `process.env` is for secrets, connection strings, and values read before a DB
+  connection exists. Those are declared `storage: 'env-only'`.
+- **A registered knob must have a consumer.** A declaration nothing enforces
+  reports a setting that does nothing.
+- Services take a `ConfigReader` defaulting to `DEFAULTS_ONLY_CONFIG`, so unit
+  tests against mocked Prisma still resolve the code default without a query.
+  Pass the real service from `context.ts` and from the WS/YJS entry points.
+- `settings.value` is `Json`, so the DB validates nothing — the registry
+  validator is the only guard on a write.
+
+See PATTERNS.md §10 and docs/CONFIG_ASSESSMENT.md.
+
 ## Prisma 7 split config
 
 - **CLI** (`migrate`, `generate`) uses `prisma.config.ts` with

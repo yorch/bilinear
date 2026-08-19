@@ -1,14 +1,31 @@
 # Configuration System — Assessment
 
-**Status:** assessment only. No behaviour changed. Written to answer one
-question: *what would it take to give this app a single, coherent configuration
-system that admins (and other roles) can drive from the UI, instead of the five
-disconnected mechanisms it has today?*
+**Status: implemented.** This began as an assessment and is now the design
+record for a system that ships. Sections 1–3 describe the state of the code
+*before* the work and are kept in the past tense they were written in — they are
+the evidence for the decisions, not a description of the code today. Sections
+4–8 describe what was built, with the places implementation diverged from the
+proposal called out inline.
+
+Where to look in the code:
+
+| Piece | Lives in |
+| ----- | -------- |
+| Registry (declarations, validation) | `src/lib/config/` |
+| Resolver, cache, invalidation, writes | `src/server/config/` |
+| GraphQL surface | `src/server/graphql/resolvers/setting.ts` |
+| Storage | `Setting` model in `prisma/schema.prisma` |
+| Admin console | `src/app/(admin)/admin/config/` |
+| Real-Postgres verification | `yarn db:verify:config` |
+
+Originally written to answer one question: *what would it take to give this app
+a single, coherent configuration system that admins (and other roles) can drive
+from the UI, instead of the five disconnected mechanisms it had?*
 
 Four design questions were settled in review on 2026-08-18 — scope model,
 storage shape, who edits plan limits, and env-vs-database precedence. They are
 recorded with their reasoning in [§7](#7-decisions-taken-2026-08-18); what is
-still open is in [§8](#8-still-open).
+still open is in [§9](#9-still-open).
 
 The design was then put through an adversarial review, which changed it in
 four material ways: the env `seed` mode was dropped (it made the resolver
@@ -192,7 +209,7 @@ while carrying no data.
 `themeSettings` is in neither list, so it already syncs to every client
 unstripped. That is harmless only because it is always `null` today; the
 moment anything writes to it, an org-wide broadcast ships it to every member.
-Whatever is decided about these three columns (§8-2), `themeSettings` should
+Whatever is decided about these three columns (§9-2), `themeSettings` should
 either join the omit list or be dropped — leaving a schemaless, unstripped
 blob on the synced Organization row is a trap set for whoever fills it in.
 
@@ -619,7 +636,7 @@ Three things a registry-driven system needs that a pile of constants does not:
   silently resurrects with a new meaning. The registry needs a `deprecated`
   tombstone list plus a prune, and a standing rule that **keys are never
   reused**.
-- **History and rollback.** §8-3's "reset" deletes the row, which discards the
+- **History and rollback.** §9-3's "reset" deletes the row, which discards the
   previous value — there is no undo for "someone set this wrong an hour ago".
   Recording `previousValue` in the audit metadata makes rollback mechanical and
   is nearly free at write time.
@@ -725,7 +742,7 @@ default**: a blanket copy would convert "never configured" into an explicit
 override for every existing org, permanently freezing them against any future
 change to the product default. Registry-driven forms in all three UIs, plus the client config
 store and Dexie table. Add "reset to inherited" while the write path is being
-built; per §8-3 it is close to free here and awkward to retrofit.
+built; per §9-3 it is close to free here and awkward to retrofit.
 
 **Phase 3 — Migrate the tunables.**
 Move §2.1d's ~14 operational env vars and the safe subset of §2.4's constants
@@ -845,7 +862,57 @@ kept two clean, non-overlapping modes.
 
 ---
 
-## 8. Still open
+## 8. What implementation changed
+
+The design survived contact with the code largely intact. Four things did not,
+and they are worth recording because each was a case of the proposal being
+optimistic rather than wrong in principle.
+
+**The two-phase column migration collapsed into one.** §6 had Phase 1 read the
+`Organization.max*` columns as a layer and Phase 2 fold them into `settings`,
+with a warning to copy only rows differing from the default. Nothing is
+deployed, so there was no data to migrate and no default-vs-explicit
+distinction to preserve — the columns were simply dropped and the knobs
+declared. The two-step dance is the right advice for a live deployment and the
+wrong advice here.
+
+**`roadmapEnabled` was dropped, not wired.** §6 suggested wiring it to
+`PublicRoadmap.enabled`. On inspection that would have created an org-level
+gate defaulting to `false`, i.e. shipped the roadmap feature switched off for
+every workspace. `PublicRoadmap.enabled` already gates the feature; two
+booleans named for one feature was the actual defect, so the inert one is gone.
+
+**Three knobs became `env-only` rather than database-backed.** The two security
+guards (`security.allowPrivateWebhookUrls`, `security.authRateLimitFailClosed`)
+and `log.httpSampleRate`. §5 already said security-invariant caps must never be
+tenant-editable; `storage: 'env-only'` is the honest expression of that, and it
+closes an attack the `override` mode alone did not — a compromised
+platform-admin session cannot disable the SSRF guard with a mutation if there is
+no stored layer to write.
+
+**`branding.appName` was declared and then removed before shipping.** It is the
+most-requested knob in §2.1c — renaming the product needs a rebuild — but
+`APP_NAME` has 14 consumers and 12 are client components importing the constant
+directly. Wiring only the server-rendered surfaces would rename transactional
+emails and the PWA manifest while the sidebar still said Bilinear. That is worse
+than not offering the knob: it is the "config that lies" failure this system was
+built to remove. It needs a client delivery path (the value in the bootstrap
+payload, a store, and those imports moved onto it) and is filed in
+`REVIEW_BACKLOG.md`.
+
+The rule those last two share is the one worth carrying forward: **every knob in
+the registry is enforced by a consumer, or it is not in the registry.**
+
+Also worth noting, because the original text overstated it: the orphan-row
+hazard from the polymorphic `scopeId` is smaller than §4.2 implied. Orgs and
+teams are *soft*-deleted, so their settings must survive — losing an archived
+org's configuration on restore would be silent data loss. `deleteScope()` exists
+for a genuine hard delete; the periodic sweep addresses the real lifecycle
+problem, which is rows for a knob that has left the registry.
+
+---
+
+## 9. Still open
 
 1. **How `restartRequired` is surfaced.** The field itself is settled (§4.1) —
    some values are read once at process start (ports, the `setInterval` cadences

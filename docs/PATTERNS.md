@@ -472,6 +472,53 @@ function getSecret(key: string): Uint8Array {
 
 Required variables are documented in `.env.example`. Optional variables have sensible defaults (e.g., `REDIS_URL` defaults to `redis://localhost:6379`).
 
+### Most behaviour knobs are NOT environment variables
+
+Reach for `process.env` only for secrets, connection strings, and values read
+before a database connection exists. Everything else — caps, limits, retry
+policy, provider selection, log level — is a `defineSetting` entry in
+`src/lib/config/registry.ts`, resolved through `ConfigService`:
+
+```typescript
+// Declaration (src/lib/config/registry.ts)
+defineSetting({
+  key: 'webhook.maxAttempts',
+  scopes: ['platform', 'org'],   // ordered; a write to an undeclared scope is rejected
+  type: 'int',
+  default: 5,
+  bounds: { max: 20, min: 1 },
+  storage: 'db',                 // or 'env-only' — never stored, never editable
+  editableBy: 'platform-admin',  // two fields, not one: the plan limits are
+  visibleTo: 'org-admin',        // visible to org admins, editable by neither
+  env: { mode: 'default', name: 'WEBHOOK_MAX_ATTEMPTS' },
+  labelKey: 'config.webhook.maxAttempts',
+})
+
+// Consumption (a service)
+const maxAttempts = await this.config.getInt('webhook.maxAttempts', { orgId });
+```
+
+Precedence, lowest first: **code default → env → platform → org → team → user.**
+An `override`-mode env var sits above every layer and renders the knob locked in
+the UI.
+
+Three rules that are easy to get wrong:
+
+- **A registered knob must have a consumer.** A declaration nothing enforces
+  reports a setting that does nothing — worse than no setting at all. Two knobs
+  were deleted during implementation for exactly this.
+- **Services take a `ConfigReader`, defaulting to `DEFAULTS_ONLY_CONFIG`.** That
+  default resolves code-default → env with no query, so unit tests against a
+  mocked Prisma behave exactly as they did when the value was a constant. Pass
+  the real `ConfigService` from `context.ts` and the standalone entry points.
+- **The database type-checks nothing** — `settings.value` is `Json`. The
+  registry validator is the only guard on a write, and a stored row that no
+  longer matches its declaration falls through to the layer below rather than
+  throwing.
+
+Full rationale, including what is deliberately env-only and why, is in
+[`CONFIG_ASSESSMENT.md`](CONFIG_ASSESSMENT.md).
+
 ---
 
 ## 11. Performance Patterns

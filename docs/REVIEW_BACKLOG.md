@@ -1198,84 +1198,78 @@ post-state in the DB or store, not just visual presence).
 
 ## 5b. Configuration system
 
-Assessed in full in [`CONFIG_ASSESSMENT.md`](CONFIG_ASSESSMENT.md) — five
-disconnected config mechanisms, the proposed registry + layered resolver, four
-settled design decisions and seven still open. Items below are the ones that
-are actionable independently of whether the larger system is built.
+The system described in [`CONFIG_ASSESSMENT.md`](CONFIG_ASSESSMENT.md) is
+**built** — registry, layered resolver, `settings` storage, GraphQL surface and
+`/admin/config` console. The four items originally filed here are done:
+the platform-admin audit/SyncAction gap, `themeSettings` syncing unstripped
+(the column is gone), the 15 dead columns, and the `psql`-only team knob.
 
-### 5b.1 — Platform-admin config writes emit no SyncAction (§3-F1)
+What remains:
 
-**Effort** Small · **Risk** Low
+### 5b.1 — Runtime `branding.appName` needs a client delivery path
 
-`updateTenantLimits`, `suspendTenant` and `restoreTenant`
-(`src/server/services/platform-admin.service.ts`) write to `organizations` and
-emit no SyncAction, in neither the service nor its resolver — a direct
-violation of the repo's "every mutation creates a SyncAction" invariant. None
-is audit-logged from the service either (the resolver does log limit edits).
+**Effort** Medium · **Risk** Low
 
-**Why it's deferred:** the fix is not uniform across the three. `suspendedAt`
-and the `max*` limits are both absent from the synced `DBOrganization` shape
-(`src/lib/db.ts:6-16`), so a SyncAction on `updateTenantLimits` alone changes
-nothing for any client, and the config assessment moves those values out of
-columns entirely in its Phase 2 — doing it now churns the client shape twice.
+`NEXT_PUBLIC_APP_NAME` is inlined by `next build`, so renaming the product
+still needs a rebuild — the one §2.1c trap the config system did not close.
 
-**First-touch:** add audit logging to all three; add a SyncAction to
-`suspendTenant`/`restoreTenant` plus `suspendedAt` to `DBOrganization`.
-Leave `updateTenantLimits` alone (see `CONFIG_ASSESSMENT.md` §6 Phase 0).
+**Why it's deferred:** `APP_NAME` has 14 consumers and 12 are client components
+importing the constant from `src/lib/app-config.ts` directly. Wiring only the
+server-rendered surfaces (transactional emails, PWA manifest) would rename
+those while the sidebar still said Bilinear — worse than not offering the knob,
+and precisely the "config that lies" defect the system was built to remove. The
+knob was declared during implementation and deliberately removed again.
 
-**Acceptance signal:** suspending a tenant from `/admin` updates an already-open
-client without a reload; all three writes appear in `PlatformAuditLog`.
+**First-touch:** add the resolved value to the bootstrap payload, hold it in a
+store, and move the 12 client imports onto it. Then declare
+`branding.appName` (platform scope, `visibleTo: 'member'`).
 
-### 5b.2 — `themeSettings` syncs to every client unstripped (§2.2)
+**Acceptance signal:** changing it at `/admin/config` renames the sidebar, the
+auth screens, the document title, the PWA manifest and transactional emails,
+with no rebuild.
 
-**Effort** Small · **Risk** Low
+### 5b.2 — Per-(user, org) preferences, if ever wanted
 
-`SYNC_PAYLOAD_OMITTED_FIELDS` (`sync.service.ts:37`) strips `authSettings` and
-`securitySettings` from the broadcast Organization row, and the client repeats
-the strip (`sync-manager.ts:867-869`). `themeSettings` is in neither list, so
-it fans out to every org member. Harmless only because it is always `null`
-today.
+**Effort** Medium · **Risk** Medium
 
-**First-touch:** add `themeSettings` to both lists, or drop the column — §8-2
-of the assessment has to decide the three Json blobs' fate either way.
+User scope is global today, matching `users.locale`/`users.accent`. A single
+`scopeId` column cannot key a per-(user, org) preference.
 
-**Acceptance signal:** a non-null `themeSettings` never appears in a SyncAction
-payload; regressing the omit-list entry turns a test red.
+**Why it's deferred:** nothing needs it yet, and adding the second scope column
+later means migrating existing rows. Cheap now, awkward once rows exist —
+so this is a decision to take deliberately rather than by default.
 
-### 5b.3 — Dead configuration columns (§2.2, §2.3, §3-F7)
+**Acceptance signal:** a decision recorded in `CONFIG_ASSESSMENT.md` §9-4,
+either way.
 
-**Effort** Medium · **Risk** Low (Medium for `roadmapEnabled`)
-
-15 columns exist with no reader in `src/`: 7 on `Organization`
-(`roadmapEnabled`, `customersEnabled`, `initiativesEnabled`,
-`fiscalYearStartMonth`, and the three Json blobs) and 8 on `Team`
-(`cycleLockToActive`, `cycleAutoAssignStarted`, `cycleAutoAssignCompleted`,
-`autoCloseStateId`, `issueEstimationExtended`, `issueEstimationAllowZero`,
-`defaultIssueEstimate`, `joinByDefault`).
-
-**Why it's deferred:** `roadmapEnabled` is non-null in the SDL
-(`schema.ts:46`) and typed into IndexedDB (`db.ts:13`), so removing it is a
-breaking SDL change; wiring it to `PublicRoadmap.enabled` is likely cheaper.
-The three Json blobs may be reserved for planned work.
-
-**First-touch:** decide per column — wire up or drop. Start with the 8 team
-columns, which are not in the SDL at all and therefore drop cleanly.
-
-**Acceptance signal:** every remaining config column has at least one non-test
-reader, or a comment naming the feature it is reserved for.
-
-### 5b.4 — Three live team knobs are settable only via `psql` (§2.3)
+### 5b.3 — Team-hierarchy resolution
 
 **Effort** Small · **Risk** Low
 
-`upcomingCycleCount`, `autoCloseChildIssues` and `autoCloseParentIssues` are
-read by services but absent from `TeamUpdateInput`
-(`src/server/graphql/schema.ts:440-454`).
+`Team.parentId` is a real hierarchy, but team-scope resolution does not walk
+it: a sub-team inherits from its org, not from its parent team.
 
-**First-touch:** add the three to `TeamUpdateInput` and the team settings page.
+**Why it's deferred:** no knob currently needs parent-team inheritance, and
+walking the tree needs a documented depth bound. Recorded in
+`src/lib/config/types.ts` so the next reader does not assume otherwise.
 
-**Acceptance signal:** each is changeable from team settings and the change
-round-trips through a SyncAction.
+**Acceptance signal:** either a walk with a stated bound, or a comment in
+`SETTINGS` saying team scope is intentionally flat.
+
+### 5b.4 — Per-user config delivery over WebSocket
+
+**Effort** Medium · **Risk** Medium
+
+A user-scope config write is deliberately not broadcast: `createSyncAction` is
+org-keyed and fans out to every client in the org, so broadcasting one person's
+preference would hand it to the whole workspace. Other devices therefore pick
+it up on next bootstrap rather than live.
+
+**First-touch:** give `ConnectionManager` the ability to address one user's
+sockets, then route user-scope writes through it.
+
+**Acceptance signal:** a user-scope change reaches that user's other open
+tabs and no one else's.
 
 ---
 

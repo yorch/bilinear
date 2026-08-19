@@ -25,10 +25,10 @@
  * - `user` does NOT nest under `org`. A user belongs to many orgs, and the
  *   existing preference columns (`users.locale`, `users.accent`) are global per
  *   user. A single `scopeId` cannot key a per-(user, org) preference, so user
- *   scope is global. See docs/CONFIG_ASSESSMENT.md §8-4.
+ *   scope is global. See docs/CONFIG_ASSESSMENT.md §9-4.
  * - `team` is flat. `Team.parentId` is a real hierarchy, but team-scope
  *   resolution does not walk it — a sub-team inherits from its org, not from
- *   its parent team. See docs/CONFIG_ASSESSMENT.md §8-5.
+ *   its parent team. See docs/CONFIG_ASSESSMENT.md §9-5.
  */
 export type SettingScope = 'platform' | 'org' | 'team' | 'user';
 
