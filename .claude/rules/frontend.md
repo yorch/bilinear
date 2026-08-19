@@ -159,6 +159,13 @@ pulse means "live" (connection status, pending write), not "loading".
 - Issue creation UI: there is exactly one create modal — `GlobalCreateIssueModal`,
   mounted in `WorkspaceClient` and driven by `uiStore.openCreateIssueModal()`.
   Open it via the store; never mount a second `CreateIssueModal`.
+- **A popover panel that should open focused on a form control marks it
+  `data-autofocus`.** `usePopoverPanel` otherwise focuses the selected option,
+  then the first focusable element in document order — which is the wrong element
+  whenever a clear/reset button precedes the field (the due-date picker's first
+  Enter used to wipe the date). Do not add a self-focusing effect inside the
+  panel: a child effect runs before its parent's, so the panel wins and the two
+  fight.
 - Dropdown/popover state: use `usePopover({ open?, forceOpen?, onClose?,
   closeOnEscape? })` from `@/hooks/use-popover` — returns `{ open, setOpen, ref }`.
   `open` is fully controlled; `forceOpen` is a one-shot uncontrolled open. For

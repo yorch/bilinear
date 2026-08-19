@@ -20,7 +20,6 @@ import { TaskItem } from '@tiptap/extension-task-item';
 import { TaskList } from '@tiptap/extension-task-list';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Underline } from '@tiptap/extension-underline';
-import type { Transaction } from '@tiptap/pm/state';
 import type { Editor } from '@tiptap/react';
 import { EditorContent, ReactRenderer, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -757,64 +756,41 @@ export function TipTapEditor({
   }, [editor, content, collabEnabled]);
 
   /**
-   * The link dialog's target: the href to pre-fill, plus the range to apply to.
+   * The link dialog's target — the href to pre-fill. The *range* is deliberately
+   * not captured here.
    *
-   * This is the whole reason the link prompt outlived the other `window.prompt`
-   * replacements. A native prompt blocks the main thread, so nothing — not the
-   * user, not a remote collaborator — could move the document while it was open,
-   * and `extendMarkRange('link')` was guaranteed to act on what was highlighted.
-   * A dialog blocks neither. So the range is captured up front rather than
-   * trusting focus to restore it, AND kept mapped through every transaction that
-   * lands while the dialog is open: with collaborative editing on, another
-   * person typing earlier in the paragraph shifts these positions, and replaying
-   * the raw integers would silently link the wrong words. `setTextSelection`
-   * clamps rather than throws, so that failure would be invisible.
+   * A native `window.prompt` blocked the main thread, so the obvious worry when
+   * replacing it with a dialog is that the selection moves underneath you. It
+   * doesn't, and re-implementing the mapping is worse than trusting ProseMirror:
+   * `Transaction.selection` maps itself through `tr.mapping` on every step
+   * (prosemirror-state), the `selection` state field is just `apply: tr =>
+   * tr.selection`, and TipTap's `focus()` with no argument resolves to
+   * `editor.state.selection`. So a remote collaborator typing above the
+   * highlighted text while the dialog is open already shifts the stored
+   * selection correctly — and under Yjs it does so via relative positions, which
+   * survive concurrent edits more faithfully than mapped integers.
+   *
+   * `showModal()` makes the editor inert, so the only thing that can move the
+   * document meanwhile is a remote peer, and `ToolbarButton`'s
+   * `onMouseDown preventDefault` is what stops the toolbar click itself from
+   * collapsing the selection.
    */
   const [linkTarget, setLinkTarget] = useState<{ href: string } | null>(null);
-  const linkRangeRef = useRef<{ from: number; to: number } | null>(null);
-
-  useEffect(() => {
-    if (!editor || !linkTarget) {
-      return;
-    }
-    const onTransaction = ({ transaction }: { transaction: Transaction }) => {
-      const range = linkRangeRef.current;
-      if (!transaction.docChanged || !range) {
-        return;
-      }
-      linkRangeRef.current = {
-        from: transaction.mapping.map(range.from),
-        to: transaction.mapping.map(range.to),
-      };
-    };
-    editor.on('transaction', onTransaction);
-    return () => {
-      editor.off('transaction', onTransaction);
-    };
-  }, [editor, linkTarget]);
 
   const openLinkDialog = useCallback(() => {
     if (!editor) {
       return;
     }
-    const { from, to } = editor.state.selection;
-    linkRangeRef.current = { from, to };
     setLinkTarget({ href: editor.getAttributes('link').href ?? '' });
   }, [editor]);
 
   const applyLink = useCallback(
     (url: string) => {
-      const range = linkRangeRef.current;
       setLinkTarget(null);
-      linkRangeRef.current = null;
-      if (!editor || !range) {
+      if (!editor) {
         return;
       }
-      const chain = editor
-        .chain()
-        .focus()
-        .setTextSelection({ from: range.from, to: range.to })
-        .extendMarkRange('link');
+      const chain = editor.chain().focus().extendMarkRange('link');
       // Cancelling closes without touching the document, as returning null from
       // the prompt did. An empty field clears the link — and so does a
       // whitespace-only one, which the prompt would have stored verbatim as a

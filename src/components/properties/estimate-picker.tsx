@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
@@ -168,16 +168,16 @@ function NumericInput({
 }) {
   const t = useTranslations();
   const [draft, setDraft] = useState(value?.toString() ?? '');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
 
   return (
     <div className="px-3 py-2 flex items-center gap-2">
+      {/* `data-autofocus` rather than a self-focusing effect: the popover panel
+          focuses on open too, and a child effect runs *before* its parent's, so
+          the two fought and the panel won — landing focus on "Set" instead of
+          this field. One mechanism, owned by the panel. */}
       <input
         className="w-20 rounded border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none focus:border-brand"
+        data-autofocus
         min={0}
         onChange={e => setDraft(e.target.value)}
         onKeyDown={e => {
@@ -190,7 +190,6 @@ function NumericInput({
           }
         }}
         placeholder="0"
-        ref={inputRef}
         step={1}
         type="number"
         value={draft}

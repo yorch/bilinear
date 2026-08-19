@@ -4,22 +4,15 @@ import { type KeyboardEvent, useCallback, useEffect, useId, useRef } from 'react
 import { useRestoreFocus } from '@/hooks/use-restore-focus';
 import { isRovingFocusKey, nextRovingIndex } from '@/lib/roving-focus';
 
+/** Everything a panel can hand initial focus to, when nothing claims it. */
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 interface UsePopoverPanelOptions {
   /**
-   * CSS selector for what receives focus when the panel opens. Deliberately
-   * **wider** than `itemSelector`: `SelectPopover` panels hold arbitrary consumer
-   * markup, and several open onto a form control rather than a button — the
-   * due-date picker's `<input type="date">`, the column picker's checkboxes, the
-   * estimate picker's free-form number field. Collapsing the two selectors into
-   * one silently moved initial focus onto whatever button happened to be first,
-   * which on the due-date picker is "Clear date" — so the first Enter after
-   * opening wiped the date instead of editing it.
-   */
-  focusSelector: string;
-  /**
    * CSS selector for the elements Up/Down/Home/End rove between, relative to the
-   * panel. Narrower on purpose: roving is a listbox affordance, so it covers the
-   * option buttons and skips the form controls above.
+   * panel. Roving is a listbox affordance, so it covers the option buttons and
+   * skips any form controls above them.
    */
   itemSelector: string;
 }
@@ -41,27 +34,35 @@ interface UsePopoverPanelOptions {
  * non-selectable caption row above its options; folding it into `SelectPopover`
  * means growing the shared primitive with three props that exist for one shape.
  */
-export function usePopoverPanel(
-  { focusSelector, itemSelector }: UsePopoverPanelOptions,
-  open: boolean,
-) {
+export function usePopoverPanel({ itemSelector }: UsePopoverPanelOptions, open: boolean) {
   const panelId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   useRestoreFocus(open, triggerRef);
 
-  // Open on the current value where there is one — the standard listbox
-  // behaviour, and it saves arrowing back to where you already were. Falls back
-  // to the first focusable thing in the panel, which may not be an option.
+  /**
+   * Focus order on open: a panel that names its own target wins, then the
+   * current value, then whatever is focusable first.
+   *
+   * The `data-autofocus` opt-in exists because inferring intent from markup
+   * order gets it wrong, and wrong here is costly. `querySelector` returns the
+   * first match in *document* order, so the due-date panel — whose "Clear date"
+   * button sits after the date field only when a date is set — would hand focus
+   * to the clear button, and the first Enter after opening would wipe the date.
+   * The estimate picker's free-form branch has the same shape, and additionally
+   * self-focuses its number field, so the two mechanisms fought and this one won
+   * (parent effects run after child effects).
+   */
   useEffect(() => {
     if (!open) {
       return;
     }
     const panel = panelRef.current;
+    const claimed = panel?.querySelector<HTMLElement>('[data-autofocus]');
     const selected = panel?.querySelector<HTMLElement>('[aria-selected="true"]');
-    (selected ?? panel?.querySelector<HTMLElement>(focusSelector))?.focus();
-  }, [open, focusSelector]);
+    (claimed ?? selected ?? panel?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR))?.focus();
+  }, [open]);
 
   const onKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {

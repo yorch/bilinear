@@ -120,15 +120,15 @@ export default function AuditLogPage() {
       // request-id guard: a stale response has its `data` discarded, but would
       // already have overwritten the cursor, so "Load more" would then append
       // rows from the previous filter.
-      const page = await gqlQuery<AuditLogPage | null>(
+      const first = await gqlQuery<AuditLogPage | null>(
         AUDIT_LOGS_QUERY,
         { filter: Object.keys(filter).length ? filter : null },
         'auditLogs',
       );
       return {
-        entries: page?.entries ?? [],
-        hasMore: page?.hasMore ?? false,
-        nextCursor: page?.nextCursor ?? null,
+        entries: first?.entries ?? [],
+        hasMore: first?.hasMore ?? false,
+        nextCursor: first?.nextCursor ?? null,
       };
     },
     [appliedAction, appliedUserId],
