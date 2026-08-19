@@ -909,9 +909,14 @@ a failing test rather than a silent cache hole.
 > visual-regression suite. The duplication that actually hurt was the keyboard
 > and focus behaviour, and that is now shared.
 >
-> Still open: `issue-context-menu` remains a third implementation with no
-> arrow-key handling at all. It is a menu rather than a listbox, so it wants
-> `role="menuitem"` semantics and its own roving, not this hook as-is.
+> Still open, and the inventory is wider than this entry's title suggested:
+> `issue-context-menu` is a third implementation with no arrow-key handling at
+> all — it is a menu rather than a listbox, so it wants `role="menuitem"`
+> semantics and its own roving, not this hook as-is. `SearchableSelectPopover`
+> is a fourth. Its `aria-activedescendant` model is a legitimately different
+> pattern and should *not* be forced into `usePopoverPanel`, but it still
+> hand-rolls the focus-restore, focus-on-open and panel-id plumbing the hook now
+> owns, which is the drift-prone half.
 
 ### 4.7 `useRetryableFetch` discards the error's type — ✅ shipped (2026-08-18)
 
