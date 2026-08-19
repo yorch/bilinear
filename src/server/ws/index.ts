@@ -27,6 +27,7 @@ import {
   WS_PING_INTERVAL_MS,
   WS_PONG_TIMEOUT_MS,
 } from '@/lib/sync-config';
+import { config, startConfigInvalidation } from '@/server/config';
 import { env } from '@/server/lib/env';
 import { verifyWsTicket } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
@@ -405,7 +406,10 @@ const reauthTimer = setInterval(() => {
 // Periodically drain any due `pending` deliveries. The first attempt for
 // each event runs inline in the request path; this loop only services
 // retries from earlier failures.
-const webhookService = new WebhookService(prisma);
+// Both of these consume registry knobs (webhook.maxAttempts /
+// autoDisableAfter / requestTimeoutMs, cycles.upcomingCount) from a process
+// with no GraphQL request, which is exactly why ConfigService is standalone.
+const webhookService = new WebhookService(prisma, config);
 const webhookTimer = setInterval(() => {
   webhookService.processDuePending().catch((err: Error) => {
     log.error({ err }, 'Webhook retry sweep failed');
@@ -419,6 +423,13 @@ const webhookTimer = setInterval(() => {
 const redisPublisher = new Redis(REDIS_URL, { lazyConnect: false });
 const syncService = new SyncService(prisma, redisPublisher);
 
+// Subscribe to config invalidations unconditionally at boot. This process
+// cannot piggyback on the sync channel: it subscribes to `sync:<orgId>` only
+// while an org has a live client (see handleConnection/handleClose below), so
+// an org with nobody connected would never learn its config changed — while
+// this same process is still retrying that org's webhooks.
+startConfigInvalidation();
+
 // ─── SyncAction retention scheduler ─────────────────────────────────────────
 // `sync_actions` is append-only — one row per mutation in the workspace — so
 // it needs an eviction policy or it grows forever and drags the delta query's
@@ -430,7 +441,29 @@ const syncPruneTimer = setInterval(() => {
   });
 }, SYNC_ACTION_PRUNE_INTERVAL_MS);
 
-const cycleService = new CycleService(prisma);
+// ─── Settings prune ─────────────────────────────────────────────────────────
+// Drops rows whose knob has left the registry or been marked deprecated.
+//
+// This is about key lifecycle, not entity lifecycle. Orgs and teams are
+// soft-deleted (`archivedAt`), so their settings must *survive* — an archived
+// org can be restored, and losing its configuration would be a silent data
+// loss. The polymorphic `scope_id` carries no FK and therefore no cascade,
+// which matters only for a genuine hard delete; `ConfigService.deleteScope`
+// exists for that case and for "reset every setting at this scope".
+//
+// What this sweep prevents is a retired key's rows lingering until someone
+// reuses the key for a different knob, at which point a stale tenant value
+// would silently resurrect with a new meaning.
+//
+// Shares the SyncAction sweep's cadence: both are cheap deletes whose only
+// requirement is that they run between requests.
+const settingsPruneTimer = setInterval(() => {
+  config.pruneUnknownKeys().catch((err: unknown) => {
+    log.error({ err }, 'Settings prune failed');
+  });
+}, SYNC_ACTION_PRUNE_INTERVAL_MS);
+
+const cycleService = new CycleService(prisma, config);
 const cycleRolloverTimer = setInterval(() => {
   cycleService
     .processDueRollovers()
@@ -468,6 +501,7 @@ function shutdown() {
   clearInterval(cycleRolloverTimer);
   clearInterval(reauthTimer);
   clearInterval(syncPruneTimer);
+  clearInterval(settingsPruneTimer);
   // Flush any SyncActions still buffered in the coalescing window (§3.2) so a
   // graceful shutdown doesn't silently drop a just-published batch.
   broadcastBatcher.flushAll();

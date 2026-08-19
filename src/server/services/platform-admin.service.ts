@@ -22,6 +22,7 @@ export type PlatformAuditAction =
   | 'tenant.restored'
   | 'tenant.deleted'
   | 'tenant.limits_updated'
+  | 'setting.changed'
   | 'user.suspended'
   | 'user.reactivated'
   | 'user.platform_admin_granted'

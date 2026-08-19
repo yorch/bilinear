@@ -207,9 +207,13 @@ model OrganizationMember {
 ///
 /// `scopeId` is polymorphic (an org, team or user id depending on `scopeType`)
 /// and therefore carries no foreign key — so it gets none of the
-/// `onDelete: Cascade` the rest of the schema relies on. Deleting the owning
-/// entity must delete its rows explicitly; `ConfigService.deleteScope` does
-/// that, and a periodic sweep in the WS server is the backstop.
+/// `onDelete: Cascade` the rest of the schema relies on. In practice orgs and
+/// teams are soft-deleted, so rows are meant to survive: losing an archived
+/// org's configuration on restore would be silent data loss. For a genuine
+/// hard delete, `ConfigService.deleteScope` removes a scope's rows explicitly.
+/// The WS server's periodic sweep handles the other lifecycle problem —
+/// rows for a knob that has left the registry, which must not linger until
+/// someone reuses the key.
 model Setting {
   id        String   @id @default(uuid()) @db.Uuid
   scopeType String   @map("scope_type") @db.VarChar(16)
