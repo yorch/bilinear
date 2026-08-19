@@ -21,6 +21,7 @@ import {
   type ResolvedSetting,
   type SettingDefinition,
   type SettingScope,
+  type SettingSource,
   type SettingValue,
 } from '@/lib/config';
 import {
@@ -50,6 +51,34 @@ export function requireDefinition(key: string): SettingDefinition {
     throw new UnknownSettingError(`Unknown setting: ${key}`);
   }
   return definition;
+}
+
+/**
+ * The layer an env value implies when no stored row supplied one.
+ *
+ * A one-liner, but it is the *other* half of `resolveWithoutDatabase` and it
+ * was written out three times — including once in the real service, which is
+ * exactly the pairing that let `locked` drift before.
+ */
+export function sourceForEnv(envValue: SettingValue | null): SettingSource {
+  return envValue !== null ? 'env' : 'code-default';
+}
+
+/**
+ * The tail every resolution shares: fall back to the scope's declared default,
+ * and never emit a redacted value.
+ *
+ * `scope` is the deepest scope the caller actually supplied an id for. A knob
+ * whose default is a per-scope map has to be read at that scope — resolving it
+ * without one walks `SCOPE_ORDER` in reverse and hands back the wrong tier's
+ * default.
+ */
+export function finalizeValue(
+  definition: SettingDefinition,
+  value: SettingValue | null,
+  scope?: SettingScope,
+): SettingValue | null {
+  return definition.redacted ? null : (value ?? defaultForScope(definition, scope));
 }
 
 /**
@@ -98,8 +127,8 @@ export function resolveWithoutDatabase(
         definition,
         key,
         locked: true,
-        source: envValue !== null ? 'env' : 'code-default',
-        value: definition.redacted ? null : (envValue ?? defaultForScope(definition, scope)),
+        source: sourceForEnv(envValue),
+        value: finalizeValue(definition, envValue, scope),
       },
     };
   }
@@ -125,8 +154,8 @@ class DefaultsOnlyConfig implements ConfigReader {
       definition,
       key,
       locked: false,
-      source: envValue !== null ? 'env' : 'code-default',
-      value: definition.redacted ? null : (envValue ?? defaultForScope(definition)),
+      source: sourceForEnv(envValue),
+      value: finalizeValue(definition, envValue),
     };
   }
 

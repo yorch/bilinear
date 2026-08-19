@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PLATFORM_SCOPE_ID } from '@/lib/config';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
+  CONFIG_CACHE_TTL_MS,
   ConfigService,
   InvalidScopeError,
   SettingNotWritableError,
@@ -184,6 +185,50 @@ describe('ConfigService', () => {
         call => (call[0] as { where: { scopeType: string } }).where.scopeType === 'org',
       );
       expect(orgReads).toHaveLength(1);
+    });
+
+    it('collapses concurrent misses on one scope into a single query', async () => {
+      // `organization.planLimits` and the platform console both fire five
+      // `getInt` calls through `Promise.all`. That is only a 2-query operation
+      // because `loadScope` registers the in-flight promise before its first
+      // await; if that ordering is ever lost it silently becomes 10.
+      withRows({ [`org:${ORG}`]: [{ key: 'limits.maxExportRows', value: 50 }] });
+      await Promise.all([
+        config.explain('limits.maxExportRows', { orgId: ORG }),
+        config.explain('limits.maxInitiativeDepth', { orgId: ORG }),
+        config.explain('limits.maxExportRows', { orgId: ORG }),
+      ]);
+      const orgReads = prisma.setting.findMany.mock.calls.filter(
+        call => (call[0] as { where: { scopeType: string } }).where.scopeType === 'org',
+      );
+      expect(orgReads).toHaveLength(1);
+    });
+
+    it('drops expired snapshots once the cache passes its sweep threshold', async () => {
+      // Without the sweep a long-lived process holds one entry per org and per
+      // team it ever touched, forever. Sixty-five distinct orgs is above the
+      // threshold; advancing past the TTL makes every earlier entry collectable.
+      vi.useFakeTimers();
+      try {
+        withRows({});
+        for (let i = 0; i < 65; i++) {
+          await config.explain('limits.maxExportRows', {
+            orgId: `00000000-0000-0000-0000-${String(i).padStart(12, '0')}`,
+          });
+        }
+        const cache = (config as unknown as { cache: Map<string, unknown> }).cache;
+        // 65 org snapshots plus the one platform snapshot they all fall back to.
+        expect(cache.size).toBe(66);
+
+        vi.advanceTimersByTime(CONFIG_CACHE_TTL_MS + 1);
+        await config.explain('limits.maxExportRows', { orgId: ORG });
+
+        // Every earlier entry expired; only the platform and org snapshots this
+        // last read just loaded survive.
+        expect(cache.size).toBe(2);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('re-reads after an invalidation for that scope', async () => {

@@ -138,17 +138,18 @@ describe('registry invariants', () => {
     }
   });
 
-  it('parses booleans exactly as boolEnv does', () => {
-    // The registry and `src/server/lib/env.ts` must agree, or the admin console
-    // reports the opposite of what the SSRF and rate-limit guards enforce.
-    const boolEnv = (raw: string) => raw === '1';
+  it('treats only "1" as a set boolean flag', () => {
+    // Pins the convention `isEnvFlagSet` implements and `boolEnv` shares. It is
+    // written out here rather than imported so that widening the shared
+    // predicate turns this red: accepting `'true'` would silently disable the
+    // SSRF guard for any deployment that had written `=true` while it was off.
     for (const s of SETTINGS) {
       if (s.type !== 'boolean' || !s.env) {
         continue;
       }
       for (const raw of ['1', '0', 'true', 'false', 'TRUE', 'yes', '']) {
         const viaRegistry = parseEnvValue(s, raw) ?? false;
-        expect(viaRegistry, `${s.key} <- "${raw}"`).toBe(boolEnv(raw));
+        expect(viaRegistry, `${s.key} <- "${raw}"`).toBe(raw === '1');
       }
     }
   });

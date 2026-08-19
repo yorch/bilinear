@@ -286,9 +286,16 @@ export class PlatformAdminService {
     }
 
     const previous = await this.readLimits(id);
-    for (const field of fields) {
-      await this.config.set(TENANT_LIMIT_KEYS[field], 'org', id, limits[field], actorId);
-    }
+    // Concurrently: five independent rows, no write conflict between them.
+    // Sequentially this was ten round trips (each `set` reads the previous
+    // value, then upserts) plus five identical `config:invalidate` publishes
+    // every other process had to parse — on the one admin action this system
+    // exists to make cheap.
+    await Promise.all(
+      fields.map(field =>
+        this.config.set(TENANT_LIMIT_KEYS[field], 'org', id, limits[field], actorId),
+      ),
+    );
     return { limits: await this.readLimits(id), previous };
   }
 

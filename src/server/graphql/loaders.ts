@@ -14,6 +14,7 @@ import type {
   User,
   WorkflowState,
 } from '../../generated/prisma';
+import { config } from '../config';
 import { CycleService } from '../services/cycle.service';
 import { IssueService } from '../services/issue.service';
 import { ProjectService } from '../services/project.service';
@@ -170,7 +171,7 @@ export function createLoaders(prisma: PrismaClient, orgId: string | null): Loade
      * were never written.
      */
     cycleProgress: new DataLoader(async (ids: readonly string[]) => {
-      const byId = await new CycleService(prisma).getProgressBatch(ids as string[]);
+      const byId = await new CycleService(prisma, config).getProgressBatch(ids as string[]);
       return ids.map(id => byId.get(id) ?? { progress: 0, scope: 0 });
     }),
 

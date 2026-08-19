@@ -3,11 +3,117 @@
 import { Lock, RotateCcw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
+import { SimpleSelect } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useTranslations } from '@/hooks/use-translations';
 import type { SettingScope } from '@/lib/config';
 import type { ResolvedSettingDto } from '@/lib/settings-api';
 import { cn, TOUCH_TARGET, TOUCH_TARGET_SQUARE } from '@/lib/utils';
+
+/** A resolved value in the form a text field holds it. */
+function toDraft(value: ResolvedSettingDto['value']): string {
+  return String(value ?? '');
+}
+
+interface SettingControlProps {
+  disabled: boolean;
+  label: string;
+  /** Rejects when the write was refused, which is what reverts the draft. */
+  onCommit: (value: boolean | number | string | null) => Promise<void>;
+  setting: ResolvedSettingDto;
+}
+
+/**
+ * The single input for one knob, chosen by its declared type.
+ *
+ * Split out of `SettingRow` because each branch carries its own draft/commit
+ * wiring, and reading them interleaved in one ternary chain meant tracing
+ * indentation to work out which `onChange` belonged to which control.
+ */
+function SettingControl({ disabled, label, onCommit, setting }: SettingControlProps) {
+  const t = useTranslations();
+  const serverValue = toDraft(setting.value);
+  const [draft, setDraft] = useState(serverValue);
+  // True while the field has focus. Guards the re-seed below — without it, a
+  // concurrent write arriving mid-edit silently discards whatever the admin has
+  // typed, which is the classic "sync state from props in an effect" bug.
+  const focusedRef = useRef(false);
+
+  // Re-seed when the resolved value changes underneath us (another admin's
+  // write, or our own save returning the re-resolved row) — but never while the
+  // user is mid-edit.
+  useEffect(() => {
+    if (!focusedRef.current) {
+      setDraft(toDraft(setting.value));
+    }
+  }, [setting.value]);
+
+  // A rejected write leaves `setting.value` unchanged, so without this the
+  // draft would keep the bad value AND re-submit it on every subsequent blur —
+  // one duplicate mutation and one duplicate error toast per tab through the
+  // field. Reverting makes the rejection visible and stops the loop. The page
+  // has already surfaced the error.
+  const commit = (value: boolean | number | string | null) => {
+    void onCommit(value).catch(() => setDraft(toDraft(setting.value)));
+  };
+
+  if (setting.redacted) {
+    // Never render a value for a secret — only whether the variable is set.
+    // The registry marks these; the server never sends the value.
+    return (
+      <span className="text-muted-foreground text-xs">
+        {setting.envIsSet ? t('config.secretSet') : t('config.secretUnset')}
+      </span>
+    );
+  }
+
+  if (setting.type === 'boolean') {
+    return (
+      <Switch
+        aria-label={label}
+        checked={setting.value === true}
+        disabled={disabled}
+        onCheckedChange={commit}
+      />
+    );
+  }
+
+  if (setting.type === 'enum') {
+    return (
+      <SimpleSelect
+        ariaLabel={label}
+        className={cn('w-40', TOUCH_TARGET)}
+        disabled={disabled}
+        onChange={commit}
+        options={(setting.enumValues ?? []).map(v => ({ label: v, value: v }))}
+        value={serverValue}
+      />
+    );
+  }
+
+  return (
+    <Input
+      aria-label={label}
+      className={cn('w-32 text-right font-mono tabular-nums', TOUCH_TARGET)}
+      disabled={disabled}
+      inputMode={setting.type === 'string' ? 'text' : 'numeric'}
+      max={setting.max ?? undefined}
+      min={setting.min ?? undefined}
+      onBlur={() => {
+        focusedRef.current = false;
+        if (draft !== serverValue) {
+          commit(setting.type === 'string' ? draft : Number(draft));
+        }
+      }}
+      onChange={e => setDraft(e.target.value)}
+      onFocus={() => {
+        focusedRef.current = true;
+      }}
+      type={setting.type === 'string' ? 'text' : 'number'}
+      value={draft}
+    />
+  );
+}
 
 interface SettingRowProps {
   /** Called with the value to store, or `null` to reset to inherited. */
@@ -41,37 +147,17 @@ interface SettingRowProps {
  */
 export function SettingRow({ onChange, scope, setting, writable }: SettingRowProps) {
   const t = useTranslations();
-  const serverValue = String(setting.value ?? '');
-  const [draft, setDraft] = useState(serverValue);
   const [busy, setBusy] = useState(false);
-  // True while the field has focus. Guards the re-seed below — without it, a
-  // concurrent write arriving mid-edit silently discards whatever the admin has
-  // typed, which is the classic "sync state from props in an effect" bug.
-  const focusedRef = useRef(false);
-
-  // Re-seed when the resolved value changes underneath us (another admin's
-  // write, or our own save returning the re-resolved row) — but never while the
-  // user is mid-edit.
-  useEffect(() => {
-    if (!focusedRef.current) {
-      setDraft(String(setting.value ?? ''));
-    }
-  }, [setting.value]);
 
   const storedHere = setting.source === scope;
   const disabled = !writable || setting.locked || busy;
 
+  // Rethrows: `SettingControl` reverts its draft on a rejection, and the reset
+  // button has no draft to revert.
   const commit = async (value: boolean | number | string | null) => {
     setBusy(true);
     try {
       await onChange(value);
-    } catch {
-      // A rejected write leaves `setting.value` unchanged, so without this the
-      // draft would keep the bad value AND re-submit it on every subsequent
-      // blur — one duplicate mutation and one duplicate error toast per tab
-      // through the field. Reverting makes the rejection visible and stops the
-      // loop. The page has already surfaced the error.
-      setDraft(String(setting.value ?? ''));
     } finally {
       setBusy(false);
     }
@@ -100,59 +186,7 @@ export function SettingRow({ onChange, scope, setting, writable }: SettingRowPro
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        {setting.redacted ? (
-          // Never render a value for a secret — only whether the variable is
-          // set. The registry marks these; the server never sends the value.
-          <span className="text-muted-foreground text-xs">
-            {setting.envIsSet ? t('config.secretSet') : t('config.secretUnset')}
-          </span>
-        ) : setting.type === 'boolean' ? (
-          <Switch
-            aria-label={label}
-            checked={setting.value === true}
-            disabled={disabled}
-            onCheckedChange={v => void commit(v)}
-          />
-        ) : setting.type === 'enum' ? (
-          <select
-            aria-label={label}
-            className={cn(
-              'rounded border border-input bg-background px-2 py-1 text-sm focus:border-ring focus:outline-none',
-              'disabled:cursor-not-allowed disabled:opacity-50',
-              TOUCH_TARGET,
-            )}
-            disabled={disabled}
-            onChange={e => void commit(e.target.value)}
-            value={String(setting.value ?? '')}
-          >
-            {(setting.enumValues ?? []).map(v => (
-              <option key={v} value={v}>
-                {v}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <Input
-            aria-label={label}
-            className={cn('w-32 text-right font-mono tabular-nums', TOUCH_TARGET)}
-            disabled={disabled}
-            inputMode={setting.type === 'string' ? 'text' : 'numeric'}
-            max={setting.max ?? undefined}
-            min={setting.min ?? undefined}
-            onBlur={() => {
-              focusedRef.current = false;
-              if (draft !== serverValue) {
-                void commit(setting.type === 'string' ? draft : Number(draft));
-              }
-            }}
-            onChange={e => setDraft(e.target.value)}
-            onFocus={() => {
-              focusedRef.current = true;
-            }}
-            type={setting.type === 'string' ? 'text' : 'number'}
-            value={draft}
-          />
-        )}
+        <SettingControl disabled={disabled} label={label} onCommit={commit} setting={setting} />
 
         {/* Only offered when this scope actually stores a row — there is
             nothing to reset otherwise, and showing it would imply there is. */}
@@ -164,7 +198,10 @@ export function SettingRow({ onChange, scope, setting, writable }: SettingRowPro
               TOUCH_TARGET_SQUARE,
             )}
             disabled={busy}
-            onClick={() => void commit(null)}
+            onClick={() => {
+              // The page toasts the failure; there is no draft to restore.
+              void commit(null).catch(() => {});
+            }}
             title={t('config.resetToInherited')}
             type="button"
           >

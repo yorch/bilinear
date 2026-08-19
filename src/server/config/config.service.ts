@@ -21,7 +21,6 @@
 
 import type Redis from 'ioredis';
 import {
-  defaultForScope,
   getSetting,
   InvalidSettingValueError,
   PLATFORM_SCOPE_ID,
@@ -37,7 +36,7 @@ import {
 } from '@/lib/config';
 import type { PrismaClient } from '../../generated/prisma';
 import { childLogger } from '../lib/logger';
-import { requireDefinition, resolveWithoutDatabase } from './reader';
+import { finalizeValue, requireDefinition, resolveWithoutDatabase, sourceForEnv } from './reader';
 
 const log = childLogger({ module: 'config' });
 
@@ -84,6 +83,13 @@ export class ConfigService {
    * Monotonic counter per cache key, bumped by every invalidation. A load that
    * finishes after its generation moved on discards its result instead of
    * caching a snapshot that is already known to be stale.
+   *
+   * Deliberately a second map rather than a field on `ScopeCacheEntry`: the
+   * counter has to outlive the entry. Invalidation and the expiry sweep both
+   * remove the cached snapshot, and folding the counter into it would reset
+   * that scope's generation to 0 — letting an in-flight load that started
+   * before the invalidation match again and cache exactly the snapshot the
+   * counter exists to reject.
    */
   private generation = new Map<string, number>();
   /**
@@ -118,7 +124,7 @@ export class ConfigService {
     }
 
     let value: SettingValue | null = envValue;
-    let source: SettingSource = envValue !== null ? 'env' : 'code-default';
+    let source: SettingSource = sourceForEnv(envValue);
     // The deepest scope an id was actually supplied for. A per-scope default
     // map has to be read at the scope being resolved — without this, a knob
     // declaring `{ org: 10, team: 3 }` would hand a caller who only supplied an
@@ -147,11 +153,12 @@ export class ConfigService {
       key,
       locked: false,
       source,
-      // Redaction applied at the single exit, not per-branch. It used to be
-      // handled only in the two early returns above, so a knob declared
-      // `redacted` with `storage: 'db'` would have returned its value here —
-      // and `toGraphQL` passes this straight to the client.
-      value: definition.redacted ? null : (value ?? defaultForScope(definition, deepest)),
+      // Redaction and the default fallback both live in `finalizeValue`, at
+      // the single exit. They used to be inlined here and handled only in the
+      // two early returns of `resolveWithoutDatabase`, so a knob declared
+      // `redacted` with `storage: 'db'` would have returned its value — and
+      // `toGraphQL` passes this straight to the client.
+      value: finalizeValue(definition, value, deepest),
     };
   }
 
@@ -179,9 +186,20 @@ export class ConfigService {
     return this.get<boolean>(key, ids);
   }
 
-  /** Resolve every knob visible at a scope — the admin console's read path. */
-  async explainAll(scope: SettingScope, ids: ConfigScopeIds = {}): Promise<ResolvedSetting[]> {
-    const defs = settingsForScope(scope);
+  /**
+   * Resolve every knob declared at a scope — the admin console's read path.
+   *
+   * `include` is where the caller applies its own visibility rule; the settings
+   * resolver passes `d => satisfies(role, d.visibleTo)`. Without the predicate
+   * the resolver had to re-implement this method's body to filter first, so the
+   * two drifted apart by construction.
+   */
+  async explainAll(
+    scope: SettingScope,
+    ids: ConfigScopeIds = {},
+    include: (definition: SettingDefinition) => boolean = () => true,
+  ): Promise<ResolvedSetting[]> {
+    const defs = settingsForScope(scope).filter(include);
     return Promise.all(defs.map(d => this.explain(d.key, ids)));
   }
 
@@ -364,10 +382,7 @@ export class ConfigService {
   }
 
   private assertWritable(key: string, scope: SettingScope): SettingDefinition {
-    const definition = getSetting(key);
-    if (!definition) {
-      throw new UnknownSettingError(`Unknown setting: ${key}`);
-    }
+    const definition = requireDefinition(key);
     if (definition.storage === 'env-only') {
       throw new SettingNotWritableError(`${key} is env-only and cannot be stored`);
     }

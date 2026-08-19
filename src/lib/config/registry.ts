@@ -11,6 +11,7 @@
  * (settings UIs) and the server (`src/server/config/`).
  */
 
+import { ENV_DEFAULTS, isEnvFlagSet } from '../env-defaults';
 import { SCOPE_ORDER, type SettingDefinition, type SettingScope, type SettingValue } from './types';
 
 /**
@@ -332,22 +333,24 @@ export const SETTINGS: readonly SettingDefinition[] = [
   // cannot be changed at all — so it is left off.
   //
   // The third tuple element is the value the CODE falls back to when the
-  // variable is unset, mirroring `src/server/lib/env.ts`. Declaring it matters:
-  // with a blanket `''` the console reported `env.SMTP_PORT` as empty while
-  // mail was going out on 587, which is exactly the kind of confident-and-wrong
-  // answer a configuration console exists to eliminate.
+  // variable is unset. Declaring it matters: with a blanket `''` the console
+  // reported `env.SMTP_PORT` as empty while mail was going out on 587, which is
+  // exactly the kind of confident-and-wrong answer a configuration console
+  // exists to eliminate. The ones `env.ts` also states come from the shared
+  // `ENV_DEFAULTS` rather than being restated here — this file cannot import
+  // `src/server/`, so the constants live in `src/lib/env-defaults.ts`.
   ...(
     [
-      ['APP_URL', 'config.env.appUrl', 'http://localhost:3000'],
-      ['WS_PORT', 'config.env.wsPort', '3001'],
+      ['APP_URL', 'config.env.appUrl', ENV_DEFAULTS.APP_URL],
+      ['WS_PORT', 'config.env.wsPort', String(ENV_DEFAULTS.WS_PORT)],
       ['WS_PUBLIC_URL', 'config.env.wsPublicUrl', ''],
-      ['YJS_PORT', 'config.env.yjsPort', '1234'],
+      ['YJS_PORT', 'config.env.yjsPort', String(ENV_DEFAULTS.YJS_PORT)],
       ['YJS_PUBLIC_URL', 'config.env.yjsPublicUrl', ''],
       ['UPLOAD_DIR', 'config.env.uploadDir', './uploads'],
       ['TRUST_PROXY_HEADERS', 'config.env.trustProxyHeaders', ''],
       ['GRAPHQL_ALLOWED_ORIGINS', 'config.env.graphqlAllowedOrigins', ''],
       ['SMTP_HOST', 'config.env.smtpHost', ''],
-      ['SMTP_PORT', 'config.env.smtpPort', '587'],
+      ['SMTP_PORT', 'config.env.smtpPort', String(ENV_DEFAULTS.SMTP_PORT)],
       ['SMTP_USER', 'config.env.smtpUser', ''],
       ['SMTP_SECURE', 'config.env.smtpSecure', ''],
       ['COLLAB_ENABLED', 'config.env.collabEnabled', ''],
@@ -501,22 +504,13 @@ export function parseEnvValue(
     return null;
   }
   if (definition.type === 'boolean') {
-    // Mirrors `boolEnv` in src/server/lib/env.ts EXACTLY: only the literal
-    // string '1' is true, everything else is false.
+    // Only the literal string '1' is true; everything else is false.
     //
-    // This is deliberately stricter than it looks like it should be. The
-    // consumers of these flags (`env.ALLOW_PRIVATE_WEBHOOK_URLS`,
-    // `env.AUTH_RATE_LIMIT_FAIL_CLOSED`) go through `boolEnv`, so if the
-    // registry accepted `'true'` the admin console would report the SSRF guard
-    // as disabled while the guard was still enforcing — a console that lies
-    // about a security control is worse than no console. Accepting `'true'`
-    // here instead would mean silently *turning the guard off* for anyone who
-    // had written `=true` while it was in fact off, which is the unsafe
-    // direction to resolve the mismatch in.
-    //
-    // `registry.test.ts` asserts the two parsers agree; changing one without
-    // the other turns it red.
-    return raw === '1';
+    // `isEnvFlagSet` is the same predicate `boolEnv` uses, imported rather than
+    // restated: this pair has already drifted once, and the comment asking the
+    // next person to keep them in step is what failed. `registry.test.ts` pins
+    // the convention itself, so widening it turns that red too.
+    return isEnvFlagSet(raw);
   }
   try {
     return validateSettingValue(definition, raw);

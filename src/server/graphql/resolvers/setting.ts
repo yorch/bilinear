@@ -1,14 +1,14 @@
 import { GraphQLError } from 'graphql';
 import {
-  getSetting,
   InvalidSettingValueError,
   PLATFORM_SCOPE_ID,
   type ResolvedSetting,
+  type SettingDefinition,
   type SettingRole,
   type SettingScope,
-  settingsForScope,
 } from '@/lib/config';
 import { InvalidScopeError, SettingNotWritableError, UnknownSettingError } from '../../config';
+import { requireDefinition } from '../../config/reader';
 import { childLogger } from '../../lib/logger';
 import { requireAuth, requirePlatformAdmin, requireTeamMember } from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
@@ -62,14 +62,24 @@ function satisfies(actual: SettingRole, required: SettingRole): boolean {
  * Without this guard, any knob that is org-admin editable and also storable at
  * platform scope (`cycles.upcomingCount` was exactly that) let any org admin in
  * any tenant write the deployment-wide default for every other tenant.
+ *
+ * `role` is passed in rather than re-derived: `callerRole` has already run
+ * `requirePlatformAdmin` (impersonation guard included) by the time every
+ * caller reaches here, and that guard issues its own `user.findUnique`. Calling
+ * it twice made every platform-scope operation cost two identical queries.
  */
 async function resolveScopeId(
   ctx: GraphQLContext,
   scope: SettingScope,
   requested: string | null | undefined,
+  role: SettingRole,
 ): Promise<string> {
   if (scope === 'platform') {
-    await requirePlatformAdmin(ctx.prisma, ctx);
+    if (role !== 'platform-admin') {
+      throw new GraphQLError('Platform administrator access required', {
+        extensions: { code: 'FORBIDDEN' },
+      });
+    }
     return PLATFORM_SCOPE_ID;
   }
   if (scope === 'user') {
@@ -203,6 +213,22 @@ function mapConfigError(err: unknown): never {
   throw err;
 }
 
+/**
+ * Look up a knob or 404.
+ *
+ * Routed through `requireDefinition` + `mapConfigError` rather than a
+ * hand-rolled `getSetting` check, so "unknown key" has one implementation and
+ * one HTTP mapping — the same pair the `ctx.config.set`/`clear` calls below
+ * already rely on. It was written out three times here before.
+ */
+function requireKnob(key: string): SettingDefinition {
+  try {
+    return requireDefinition(key);
+  } catch (err) {
+    mapConfigError(err);
+  }
+}
+
 export const settingResolvers = {
   Mutation: {
     settingClear: async (
@@ -211,19 +237,14 @@ export const settingResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      const definition = getSetting(key);
-      if (!definition) {
-        throw new GraphQLError(`Unknown setting: ${key}`, {
-          extensions: { code: 'NOT_FOUND' },
-        });
-      }
+      const definition = requireKnob(key);
       const role = await callerRole(ctx);
       if (!satisfies(role, definition.editableBy)) {
         throw new GraphQLError('Insufficient permissions to change this setting', {
           extensions: { code: 'FORBIDDEN' },
         });
       }
-      const resolvedScopeId = await resolveScopeId(ctx, scope, scopeId);
+      const resolvedScopeId = await resolveScopeId(ctx, scope, scopeId, role);
 
       let previous: unknown;
       try {
@@ -234,7 +255,7 @@ export const settingResolvers = {
 
       await recordAudit(ctx, key, scope, resolvedScopeId, previous, null);
       const lastSyncId = await propagate(ctx, scope, resolvedScopeId);
-      const resolved = await ctx.config.explain(key, await idsFor(ctx, scope, resolvedScopeId));
+      const resolved = await ctx.config.explain(key, idsFor(ctx, scope, resolvedScopeId));
       return { lastSyncId, setting: toGraphQL(resolved), success: true };
     },
 
@@ -248,19 +269,14 @@ export const settingResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      const definition = getSetting(input.key);
-      if (!definition) {
-        throw new GraphQLError(`Unknown setting: ${input.key}`, {
-          extensions: { code: 'NOT_FOUND' },
-        });
-      }
+      const definition = requireKnob(input.key);
       const role = await callerRole(ctx);
       if (!satisfies(role, definition.editableBy)) {
         throw new GraphQLError('Insufficient permissions to change this setting', {
           extensions: { code: 'FORBIDDEN' },
         });
       }
-      const resolvedScopeId = await resolveScopeId(ctx, input.scope, input.scopeId);
+      const resolvedScopeId = await resolveScopeId(ctx, input.scope, input.scopeId, role);
 
       let previousValue: unknown;
       let value: unknown;
@@ -282,7 +298,7 @@ export const settingResolvers = {
       const lastSyncId = await propagate(ctx, input.scope, resolvedScopeId);
       const resolved = await ctx.config.explain(
         input.key,
-        await idsFor(ctx, input.scope, resolvedScopeId),
+        idsFor(ctx, input.scope, resolvedScopeId),
       );
       return { lastSyncId, setting: toGraphQL(resolved), success: true };
     },
@@ -295,20 +311,15 @@ export const settingResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      const definition = getSetting(key);
-      if (!definition) {
-        throw new GraphQLError(`Unknown setting: ${key}`, {
-          extensions: { code: 'NOT_FOUND' },
-        });
-      }
+      const definition = requireKnob(key);
       const role = await callerRole(ctx);
       if (!satisfies(role, definition.visibleTo)) {
         throw new GraphQLError('Insufficient permissions to read this setting', {
           extensions: { code: 'FORBIDDEN' },
         });
       }
-      const resolvedScopeId = await resolveScopeId(ctx, scope, scopeId);
-      const resolved = await ctx.config.explain(key, await idsFor(ctx, scope, resolvedScopeId));
+      const resolvedScopeId = await resolveScopeId(ctx, scope, scopeId, role);
+      const resolved = await ctx.config.explain(key, idsFor(ctx, scope, resolvedScopeId));
       return toGraphQL(resolved);
     },
 
@@ -319,11 +330,10 @@ export const settingResolvers = {
     ) => {
       requireAuth(ctx);
       const role = await callerRole(ctx);
-      const resolvedScopeId = await resolveScopeId(ctx, scope, scopeId);
-      const ids = await idsFor(ctx, scope, resolvedScopeId);
+      const resolvedScopeId = await resolveScopeId(ctx, scope, scopeId, role);
+      const ids = idsFor(ctx, scope, resolvedScopeId);
 
-      const visible = settingsForScope(scope).filter(d => satisfies(role, d.visibleTo));
-      const resolved = await Promise.all(visible.map(d => ctx.config.explain(d.key, ids)));
+      const resolved = await ctx.config.explainAll(scope, ids, d => satisfies(role, d.visibleTo));
       return resolved.map(toGraphQL);
     },
   },
@@ -333,7 +343,7 @@ export const settingResolvers = {
  * Build the id bundle a resolution needs. A team-scoped read still has to
  * carry its org so the chain can fall through team → org → platform.
  */
-async function idsFor(ctx: GraphQLContext, scope: SettingScope, scopeId: string) {
+function idsFor(ctx: GraphQLContext, scope: SettingScope, scopeId: string) {
   // Truncated at the requested scope: passing ids for scopes ABOVE it would
   // let a higher layer win. Sending `userId` on an org-scope read, for
   // instance, would show the viewing admin's personal override as the org's

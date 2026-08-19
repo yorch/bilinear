@@ -112,7 +112,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const auditLogService = new AuditLogService(prisma);
   const authService = new AuthService(prisma, userService);
   const analyticsService = new AnalyticsService(prisma);
-  const githubService = new GitHubService(prisma);
+  const githubService = new GitHubService(prisma, config);
   const documentService = new DocumentService(prisma);
   const favoriteService = new FavoriteService(prisma);
   const fileService = new FileService(prisma);
