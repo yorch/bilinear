@@ -1,6 +1,7 @@
 import { COMMIT_WATERMARK_LAG_MS, DELTA_PAGE_SIZE, MAX_PLAUSIBLE_XACT_ID } from '@/lib/sync-config';
 import { normalizeIssueRow } from '@/stores/issue-store';
 import type { RootStore } from '@/stores/root-store';
+import type { IssueSyncRow } from './db';
 import { db } from './db';
 import {
   CACHED_COLLECTIONS,
@@ -1020,15 +1021,8 @@ export class SyncManager {
             const normalized =
               act === 'D'
                 ? null
-                : normalizeIssueRow(
-                    data as Parameters<typeof normalizeIssueRow>[0],
-                    issueStore.pool.get(modelId)?.labelIds,
-                  );
-            issueStore.applySyncAction(
-              act,
-              modelId,
-              normalized as Parameters<typeof issueStore.applySyncAction>[2],
-            );
+                : normalizeIssueRow(data as IssueSyncRow, issueStore.pool.get(modelId)?.labelIds);
+            issueStore.applySyncAction(act, modelId, normalized);
             if (act === 'D') {
               dexieDeletes.push({ id: modelId, table: 'issues' });
             } else if (normalized?.id) {

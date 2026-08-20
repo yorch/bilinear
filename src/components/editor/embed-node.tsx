@@ -119,6 +119,15 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
   );
 }
 
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    embed: {
+      /** Insert an embed block for `url`. */
+      insertEmbed: (options: { url: string }) => ReturnType;
+    };
+  }
+}
+
 export const EmbedNode = Node.create({
   addAttributes() {
     return {
@@ -135,10 +144,7 @@ export const EmbedNode = Node.create({
             attrs: { url: options.url },
             type: this.name,
           }),
-      // `as never` is forced by upstream, not laziness — see `details-node.ts` for
-      // the full explanation (@tiptap/core ships bundled types that make the
-      // documented `declare module` augmentation a no-op).
-    } as never;
+    };
   },
 
   addNodeView() {

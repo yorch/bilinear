@@ -108,6 +108,15 @@ function MermaidView({ node, updateAttributes, selected }: NodeViewProps) {
   );
 }
 
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    mermaid: {
+      /** Insert an empty Mermaid diagram block. */
+      setMermaid: () => ReturnType;
+    };
+  }
+}
+
 export const MermaidNode = Node.create({
   addAttributes() {
     return {
@@ -124,10 +133,7 @@ export const MermaidNode = Node.create({
             attrs: { code: '' },
             type: this.name,
           }),
-      // `as never` is forced by upstream, not laziness — see `details-node.ts` for
-      // the full explanation (@tiptap/core ships bundled types that make the
-      // documented `declare module` augmentation a no-op).
-    } as never;
+    };
   },
 
   addNodeView() {

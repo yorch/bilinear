@@ -4,10 +4,14 @@ import { useCallback, useMemo } from 'react';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue } from '@/lib/db';
 import { ISSUE_UPDATE_MUTATION } from '@/lib/graphql-queries';
+import { toIssueSyncRow } from '@/lib/issue-mappers';
+import { createClientLogger } from '@/lib/logger';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
+
+const log = createClientLogger('use-issue-update');
 
 /**
  * Injectable override for where optimistic issue state lives, so callers that
@@ -56,13 +60,19 @@ export function useIssueUpdate(
   );
   const defaultReconcile = useCallback(
     (id: string, updated: Record<string, unknown>) => {
-      // The double cast is forced by the adapter contract, not laziness. `reconcile`
-      // is deliberately typed on `Record<string, unknown>` because its two
-      // implementors reconcile into different shapes — this MobX store, and the
-      // standalone issue route's local `useState` copy. Narrowing the signature to
-      // `DBIssue` would break the other implementor; a single cast is rejected
-      // because the two types genuinely do not overlap.
-      issueStore.applySyncAction('U', id, updated as unknown as DBIssue);
+      // Validated rather than asserted. `reconcile` is typed on
+      // `Record<string, unknown>` because its two implementors reconcile into
+      // different shapes (this MobX store, and the standalone issue route's local
+      // `useState` copy), so the payload arrives unnarrowed — and the store's
+      // apply is a whole-object replace, which would blank the row on a malformed
+      // response. Skipping the local reconcile is safe: the authoritative row
+      // still arrives over the SyncAction stream.
+      const row = toIssueSyncRow(updated);
+      if (!row) {
+        log.warn('Discarded an unrecognizable issue row from IssueUpdate', undefined, { id });
+        return;
+      }
+      issueStore.applySyncAction('U', id, row);
     },
     [issueStore],
   );

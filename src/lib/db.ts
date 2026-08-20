@@ -119,6 +119,23 @@ export interface DBIssue {
   updatedAt: string;
 }
 
+/**
+ * An issue row as it arrives from a server, before `normalizeIssueRow` collapses
+ * it. Every writer of issue state — the SyncAction stream, GraphQL mutation
+ * responses, and bootstrap — sends one of three mutually exclusive label shapes,
+ * and `labelIds` is absent on two of them. `DBIssue` is the *normalized* form and
+ * declares `labelIds` as required, so typing these inputs as `DBIssue` was a lie
+ * that every call site had to cast its way around.
+ */
+export type IssueSyncRow = Omit<DBIssue, 'labelIds'> & {
+  /** Prisma relation shape, on SyncAction payloads. */
+  labelAssignments?: Array<{ labelId: string }>;
+  /** Already-normalized shape, from bootstrap. */
+  labelIds?: string[];
+  /** GraphQL mutation-response shape. */
+  labels?: Array<{ id: string }>;
+};
+
 export interface DBIssueLabel {
   archivedAt?: string | null;
   color: string;

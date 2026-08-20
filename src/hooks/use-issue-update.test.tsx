@@ -38,6 +38,47 @@ vi.mock('@/providers/store-provider', () => ({
 // Imported after the mocks above so the hook picks up the mocked modules.
 const { useIssueUpdate } = await import('./use-issue-update');
 
+/**
+ * A full issue row as `ISSUE_UPDATE_MUTATION` returns it — every column in
+ * `ISSUE_FIELDS`. The default reconcile validates this payload before handing it
+ * to the store, because the store's apply is a whole-object replace: a partial
+ * row would blank every column it omits, so a partial one is rejected rather
+ * than applied. See `toIssueSyncRow` in `src/lib/issue-mappers.ts`.
+ */
+const SERVER_ISSUE = {
+  archivedAt: null,
+  assigneeId: 'usr_1',
+  branchName: null,
+  canceledAt: null,
+  completedAt: null,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  creatorId: 'usr_2',
+  cycleId: null,
+  description: null,
+  dueDate: null,
+  estimate: null,
+  id: '1',
+  identifier: 'ENG-1',
+  labels: [{ color: 'red', id: 'lbl_1', name: 'bug' }],
+  number: 1,
+  organizationId: 'org_1',
+  parentId: null,
+  priority: 2,
+  prioritySortOrder: 100,
+  projectId: null,
+  snoozedById: null,
+  snoozedUntilAt: null,
+  sortOrder: 50,
+  startDate: null,
+  startedAt: null,
+  stateId: 'st_1',
+  teamId: 'team_1',
+  title: 'New (server)',
+  trashed: false,
+  triagedAt: null,
+  updatedAt: '2026-01-02T00:00:00.000Z',
+};
+
 describe('useIssueUpdate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -68,12 +109,29 @@ describe('useIssueUpdate', () => {
       });
 
       const [, , callbacks] = enqueueMock.mock.calls[0];
-      callbacks.onSuccess({ issueUpdate: { issue: { id: '1', title: 'New (server)' } } });
+      callbacks.onSuccess({ issueUpdate: { issue: SERVER_ISSUE } });
 
       expect(applySyncActionMock).toHaveBeenCalledWith('U', '1', {
-        id: '1',
-        title: 'New (server)',
+        ...SERVER_ISSUE,
+        // Labels are narrowed to ids on the way in — the store holds `labelIds`.
+        labels: [{ id: 'lbl_1' }],
       });
+    });
+
+    it('does not reconcile a response that is not a whole issue row', () => {
+      // The store's apply replaces the row outright, so forwarding a partial
+      // payload would blank every column it omits.
+      findByIdMock.mockReturnValue({ id: '1', title: 'Old' });
+      const { result } = renderHook(() => useIssueUpdate());
+
+      act(() => {
+        result.current('1', { title: 'New' });
+      });
+
+      const [, , callbacks] = enqueueMock.mock.calls[0];
+      callbacks.onSuccess({ issueUpdate: { issue: { id: '1', title: 'New (server)' } } });
+
+      expect(applySyncActionMock).not.toHaveBeenCalled();
     });
 
     it('toasts and rolls back via issueStore.optimisticUpdate on mutation failure', () => {
