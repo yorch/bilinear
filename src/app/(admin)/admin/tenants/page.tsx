@@ -19,7 +19,7 @@ import {
   suspendTenant,
 } from '@/lib/admin-api';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 
 type TenantStatus = 'active' | 'suspended' | 'archived';
 
@@ -56,7 +56,7 @@ function TenantsInner() {
     setData: setTenants,
     loading,
     error,
-    errorMessage,
+    cause,
     refetch: load,
   } = useRetryableFetch<PlatformTenant[]>(
     () => fetchTenants(applied, includeArchived),
@@ -146,7 +146,7 @@ function TenantsInner() {
         <RowsSkeleton count={5} />
       ) : error ? (
         <InlineRetry
-          message={errorMessage ?? t('common.somethingWentWrong')}
+          message={getErrorMessage(cause, t('common.somethingWentWrong'))}
           onRetry={() => load()}
         />
       ) : tenants.length === 0 ? (

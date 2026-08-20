@@ -1,10 +1,9 @@
 'use client';
 
 import { ChevronDown } from 'lucide-react';
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useOutsideClick } from '@/hooks/use-outside-click';
-import { useRestoreFocus } from '@/hooks/use-restore-focus';
-import { isRovingFocusKey, nextRovingIndex } from '@/lib/roving-focus';
+import { usePopoverPanel } from '@/hooks/use-popover-panel';
 import { cn } from '@/lib/utils';
 
 export interface SelectOption {
@@ -42,46 +41,19 @@ export function SimpleSelect({
 }: SimpleSelectProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const panelId = useId();
   const current = options.find(o => o.value === value);
 
-  // `closeOnEscape` and `useRestoreFocus` are load-bearing, not polish: focus is
-  // moved into the panel on open (below), so without an Escape route a keyboard
-  // user is trapped in the dropdown, and without the restore, choosing an option
-  // unmounts the focused button and drops focus onto <body>. Both mirror
-  // SelectPopover, which pairs the same three behaviours for the same reason.
+  // The panel is a strict listbox, so roving covers its options only. The hook
+  // also returns focus to the trigger on close; paired with `closeOnEscape`
+  // below that is what keeps an open panel from being a keyboard trap, since
+  // focus is moved *into* it on open.
+  const {
+    onKeyDown: handlePanelKeyDown,
+    panelId,
+    panelRef,
+    triggerRef,
+  } = usePopoverPanel({ itemSelector: '[role="option"]' }, open);
   useOutsideClick(ref, () => setOpen(false), open, true);
-  useRestoreFocus(open, triggerRef);
-
-  // The trigger advertises `aria-haspopup="listbox"`, so the panel has to be a
-  // real listbox: focus moves into it on open, and Up/Down/Home/End rove across
-  // the options. Mirrors SelectPopover's handling — without it a screen reader
-  // is told "has popup listbox" and then handed a row of plain buttons.
-  useEffect(() => {
-    if (open) {
-      const items = panelRef.current?.querySelectorAll<HTMLElement>('[role="option"]');
-      const selected = panelRef.current?.querySelector<HTMLElement>('[aria-selected="true"]');
-      (selected ?? items?.[0])?.focus();
-    }
-  }, [open]);
-
-  const handlePanelKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!isRovingFocusKey(e.key)) {
-      return;
-    }
-    const items = Array.from(
-      panelRef.current?.querySelectorAll<HTMLElement>('[role="option"]') ?? [],
-    );
-    if (items.length === 0) {
-      return;
-    }
-    e.preventDefault();
-    e.stopPropagation();
-    const idx = items.indexOf(document.activeElement as HTMLElement);
-    items[nextRovingIndex(e.key, idx, items.length)]?.focus();
-  }, []);
 
   return (
     <div className={cn('relative', className)} ref={ref}>

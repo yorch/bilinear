@@ -42,8 +42,12 @@ export function DueDatePicker({
     >
       {close => (
         <>
+          {/* Claims initial focus: the "Clear date" button below sits after this
+              field in document order, so without the marker opening the picker
+              focuses Clear and the first Enter wipes the date. */}
           <input
             className="rounded border border-border px-2 py-1 text-sm dark:bg-muted"
+            data-autofocus
             onChange={e => {
               onChange(e.target.value || null);
               close();

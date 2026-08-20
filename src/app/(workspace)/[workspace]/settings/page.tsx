@@ -4,16 +4,18 @@ import { Calendar, ChevronRight, Copy, Key, Lock, RefreshCw, Trash2, Users } fro
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AccentToggle } from '@/components/accent-toggle';
 import { LanguageToggle } from '@/components/language-toggle';
 import { MembersSection } from '@/components/settings/members-section';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import { type OrganizationPlanLimits, PLAN_LIMIT_FIELDS } from '@/lib/plan-limits';
@@ -135,6 +137,12 @@ const TOKEN_EXPIRY_OPTIONS = [
 // Page
 // ---------------------------------------------------------------------------
 
+interface Viewer {
+  calendarFeedUrl?: string | null;
+  emailNotificationsEnabled?: boolean;
+  isPlatformAdmin?: boolean;
+}
+
 const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const { workspace } = useParams<{ workspace: string }>();
   const { teamStore } = useStore();
@@ -142,13 +150,10 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   useDocumentTitle(t('settings.workspace.title'));
   const { formatDate, intlLocale } = useFormatters();
 
-  const [org, setOrg] = useState<OrgInfo | null>(null);
-  const [loading, setLoading] = useState(true);
   const [calendarFeedUrl, setCalendarFeedUrl] = useState<string | null>(null);
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [rotatingToken, setRotatingToken] = useState(false);
-  const [apiTokens, setApiTokens] = useState<ApiToken[]>([]);
   const [newTokenLabel, setNewTokenLabel] = useState('');
   const [newTokenWritable, setNewTokenWritable] = useState(true);
   const [newTokenExpiryDays, setNewTokenExpiryDays] = useState(365);
@@ -156,7 +161,6 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const [newPlaintext, setNewPlaintext] = useState<string | null>(null);
   const [revokingTokenId, setRevokingTokenId] = useState<string | null>(null);
   const [confirmingRevokeToken, setConfirmingRevokeToken] = useState<ApiToken | null>(null);
-  const [apiTokensError, setApiTokensError] = useState(false);
   const [savingAi, setSavingAi] = useState(false);
 
   async function toggleAi(enabled: boolean) {
@@ -176,68 +180,55 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
     }
   }
 
-  useEffect(() => {
-    let cancelled = false;
-    gqlQuery<{ organization?: OrgInfo }>(ORGANIZATION_QUERY)
-      .then(data => {
-        if (cancelled) {
-          return;
-        }
-        if (data?.organization) {
-          setOrg(data.organization);
-        }
-      })
-      .catch(err => {
-        if (!cancelled) {
-          // `org` stays null so the section renders its load-error state.
-          // The members roster used to ride this same document and no longer
-          // does — MembersSection fetches and retries it independently.
-          toast.error(getErrorMessage(err, t('settings.workspace.orgLoadError')));
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [t]);
+  const {
+    data: orgData,
+    error: orgLoadError,
+    loading,
+    refetch: reloadOrg,
+    setData: setOrg,
+  } = useRetryableFetch<OrgInfo | null>(
+    async () =>
+      (await gqlQuery<{ organization?: OrgInfo }>(ORGANIZATION_QUERY))?.organization ?? null,
+    [],
+    null,
+    // The members roster used to ride this same document and no longer does —
+    // MembersSection fetches and retries it independently.
+    { onError: err => toast.error(getErrorMessage(err, t('settings.workspace.orgLoadError'))) },
+  );
 
-  useEffect(() => {
-    gqlQuery<{
-      viewer?: {
-        calendarFeedUrl?: string | null;
-        emailNotificationsEnabled?: boolean;
-        isPlatformAdmin?: boolean;
-      };
-    }>(VIEWER_QUERY)
-      .then(data => {
-        if (data?.viewer) {
-          setCalendarFeedUrl(data.viewer.calendarFeedUrl ?? null);
-          setEmailNotificationsEnabled(data.viewer.emailNotificationsEnabled ?? true);
-          setIsPlatformAdmin(data.viewer.isPlatformAdmin ?? false);
+  useRetryableFetch<Viewer | null>(
+    async () => (await gqlQuery<{ viewer?: Viewer }>(VIEWER_QUERY))?.viewer ?? null,
+    [],
+    null,
+    {
+      onData: viewer => {
+        if (viewer) {
+          setCalendarFeedUrl(viewer.calendarFeedUrl ?? null);
+          setEmailNotificationsEnabled(viewer.emailNotificationsEnabled ?? true);
+          setIsPlatformAdmin(viewer.isPlatformAdmin ?? false);
         }
-      })
-      .catch(err => {
-        toast.error(getErrorMessage(err, t('common.somethingWentWrong')));
-      });
-  }, [t]);
+      },
+      onError: err => toast.error(getErrorMessage(err, t('common.somethingWentWrong'))),
+    },
+  );
 
-  useEffect(() => {
-    gqlQuery<ApiToken[] | null>(API_TOKENS_QUERY, {}, 'apiTokens')
-      .then(tokens => {
-        setApiTokens(tokens ?? []);
-        setApiTokensError(false);
-      })
-      .catch(() => {
-        // A failed read must never render as "no API tokens yet" — an admin
-        // auditing outstanding credentials would conclude there are none.
-        setApiTokens([]);
-        setApiTokensError(true);
-      });
-  }, []);
+  const {
+    data: apiTokenData,
+    error: apiTokensError,
+    refetch: reloadApiTokens,
+    setData: setApiTokens,
+  } = useRetryableFetch<ApiToken[]>(
+    async () => (await gqlQuery<ApiToken[] | null>(API_TOKENS_QUERY, {}, 'apiTokens')) ?? [],
+    [],
+    [],
+  );
+
+  // Both reads read as null/empty while their error stands: `org` so the section
+  // renders its load-error state rather than a stale workspace, and the token
+  // list because a failed read must never render as "no API tokens yet" — an
+  // admin auditing outstanding credentials would conclude there are none.
+  const org = orgLoadError ? null : orgData;
+  const apiTokens = apiTokensError ? [] : apiTokenData;
 
   async function createApiToken() {
     if (!newTokenLabel.trim()) {
@@ -374,9 +365,11 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                 </div>
               </dl>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                {t('settings.workspace.orgLoadError')}
-              </p>
+              <InlineRetry
+                className="py-0"
+                message={t('settings.workspace.orgLoadError')}
+                onRetry={() => void reloadOrg()}
+              />
             )}
           </div>
         </section>
@@ -405,9 +398,11 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                 ))}
               </dl>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                {t('settings.workspace.orgLoadError')}
-              </p>
+              <InlineRetry
+                className="py-0"
+                message={t('settings.workspace.orgLoadError')}
+                onRetry={() => void reloadOrg()}
+              />
             )}
           </div>
         </section>
@@ -722,7 +717,11 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
 
             {/* Token list */}
             {apiTokensError ? (
-              <p className="px-5 py-4 text-sm text-destructive">{t('common.somethingWentWrong')}</p>
+              <InlineRetry
+                className="px-5 py-4"
+                message={t('common.somethingWentWrong')}
+                onRetry={() => void reloadApiTokens()}
+              />
             ) : apiTokens.length === 0 ? (
               <p className="px-5 py-4 text-sm text-muted-foreground">
                 {t('settings.workspace.noApiTokensYet')}

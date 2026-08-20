@@ -88,43 +88,21 @@ export const SLASH_COMMANDS: SlashCommandItem[] = [
     title: 'Divider',
   },
   {
-    // Resolved at call-time so the extension import stays cycle-free
-    command: editor =>
-      (
-        editor.chain().focus() as ReturnType<typeof editor.chain> & {
-          setDetails?: () => { run: () => void };
-        }
-      )
-        .setDetails?.()
-        .run(),
+    command: editor => editor.chain().focus().setDetails().run(),
     description: 'Collapsible section',
     icon: '▶',
     id: 'toggle',
     title: 'Toggle',
   },
   {
-    command: editor =>
-      (
-        editor.chain().focus() as ReturnType<typeof editor.chain> & {
-          insertEmbed?: (opts: { url: string }) => { run: () => void };
-        }
-      )
-        .insertEmbed?.({ url: '' })
-        .run(),
+    command: editor => editor.chain().focus().insertEmbed({ url: '' }).run(),
     description: 'Embed a YouTube or Loom video',
     icon: '▷',
     id: 'embed',
     title: 'Embed',
   },
   {
-    command: editor =>
-      (
-        editor.chain().focus() as ReturnType<typeof editor.chain> & {
-          setMermaid?: () => { run: () => void };
-        }
-      )
-        .setMermaid?.()
-        .run(),
+    command: editor => editor.chain().focus().setMermaid().run(),
     description: 'Mermaid diagram block',
     icon: '⬡',
     id: 'diagram',

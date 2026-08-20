@@ -141,13 +141,22 @@ pulse means "live" (connection status, pending write), not "loading".
 - Fetch-on-mount goes through `useRetryableFetch` — it owns the `reloadKey` /
   cancelled-flag state machine and pairs with `InlineRetry`. Pass
   `{ silent: true }` for post-mutation background refreshes so they don't
-  re-flash the skeleton. It returns `errorMessage` alongside the `error` boolean
-  for surfaces where the server's own text is the diagnostic (the admin console);
-  render `errorMessage ?? t('common.somethingWentWrong')`. "Not found" and
-  "not allowed" are **not** errors — they are not retryable, so model them as
-  data rather than tripping `error`. The one shape the hook does not fit is
-  fetch-then-seed-a-form, which would need `setX(...)` inside the fetcher; those
-  pages keep their own effect. See PATTERNS.md §80.6.
+  re-flash the skeleton. It returns `cause` — the thrown error itself —
+  alongside the `error` boolean. A missing row is data (it never trips `error`); a
+  refusal *does* trip `error`, so check `isPermissionError(cause)` **before** the
+  `error` branch or a non-admin gets a Retry that can never succeed. Render
+  `getErrorMessage(cause, …)` only under `(admin)/admin/**`, where the server's
+  own text is the diagnostic; workspace pages show the localized fallback. A page that seeds form
+  fields from the response passes `options.onData`; a one-shot toast or log on
+  failure passes `options.onError`. Neither goes inside the fetcher, which stays
+  pure. See PATTERNS.md §80.6.
+- **A custom TipTap command is declared, not cast.** Each node that adds one
+  carries its own `declare module '@tiptap/core' { interface Commands<ReturnType> }`
+  block next to the node (`details-node.ts`, `embed-node.tsx`, `mermaid-node.tsx`).
+  The augmentation does reach `RawCommands` despite `@tiptap/core` shipping
+  bundled types — verified, not assumed. Without it `addCommands()` only
+  type-checks behind `as never`, and every call site has to cast its way to a
+  command the compiler cannot see.
 - Issue mutations from components: use `useIssueCreate(team, states)` and
   `useIssueUpdate()` — they own the optimistic apply, TransactionQueue enqueue,
   rollback and failure toast. Map store models with `toIssueUsers` /
@@ -158,6 +167,13 @@ pulse means "live" (connection status, pending write), not "loading".
 - Issue creation UI: there is exactly one create modal — `GlobalCreateIssueModal`,
   mounted in `WorkspaceClient` and driven by `uiStore.openCreateIssueModal()`.
   Open it via the store; never mount a second `CreateIssueModal`.
+- **A popover panel that should open focused on a form control marks it
+  `data-autofocus`.** `usePopoverPanel` otherwise focuses the selected option,
+  then the first focusable element in document order — which is the wrong element
+  whenever a clear/reset button precedes the field (the due-date picker's first
+  Enter used to wipe the date). Do not add a self-focusing effect inside the
+  panel: a child effect runs before its parent's, so the panel wins and the two
+  fight.
 - Dropdown/popover state: use `usePopover({ open?, forceOpen?, onClose?,
   closeOnEscape? })` from `@/hooks/use-popover` — returns `{ open, setOpen, ref }`.
   `open` is fully controlled; `forceOpen` is a one-shot uncontrolled open. For

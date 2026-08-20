@@ -1,6 +1,7 @@
 import { COMMIT_WATERMARK_LAG_MS, DELTA_PAGE_SIZE, MAX_PLAUSIBLE_XACT_ID } from '@/lib/sync-config';
 import { normalizeIssueRow } from '@/stores/issue-store';
 import type { RootStore } from '@/stores/root-store';
+import type { IssueSyncRow } from './db';
 import { db } from './db';
 import {
   CACHED_COLLECTIONS,
@@ -87,6 +88,144 @@ const MAX_DELTA_PAGES = 1_000_000 / DELTA_PAGE_SIZE;
  * 5. On WebSocket message → apply SyncActions to MobX + IndexedDB
  * 6. On disconnect → reconnect → Delta sync to catch up
  */
+/**
+ * The Dexie tables the uniform sync path writes to. Named once so the registry
+ * below and the deferred delete/upsert buckets cannot drift apart.
+ */
+type DexieCacheTable =
+  | 'customFieldDefinitions'
+  | 'customViews'
+  | 'cycles'
+  | 'documents'
+  | 'favorites'
+  | 'initiativeProjects'
+  | 'initiatives'
+  | 'issueLabels'
+  | 'issueRelations'
+  | 'issueTemplates'
+  | 'organizationMembers'
+  | 'projectMilestones'
+  | 'projectUpdates'
+  | 'projects'
+  | 'teams'
+  | 'users'
+  | 'workflowStates';
+
+/**
+ * Models the server emits that this client deliberately does not cache. Those
+ * surfaces fetch over GraphQL on mount, so dropping the action costs only a live
+ * update, not correctness.
+ *
+ * Exported because it is half of a contract `sync-manager.models.test.ts`
+ * enforces: every model the server can emit must be handled here, handled as a
+ * bespoke `case`, or listed below. A model that is none of those is the failure
+ * this list exists to make loud — `Organization` was emitted and silently
+ * dropped for months because nothing said out loud that it was missing.
+ */
+export const UNCACHED_MODELS = [
+  'Comment',
+  'CommentReaction',
+  'File',
+  'InitiativeUpdate',
+  'TeamMembership',
+] as const;
+
+/**
+ * The models whose handling is entirely uniform: hand the action to a store,
+ * then mirror it into one Dexie table. Seventeen `case` arms repeated those
+ * twelve lines verbatim, and the failure mode was silent — pair a model with the
+ * wrong table, or forget one entirely, and rows vanish from the offline cache
+ * with nothing failing — see `UNCACHED_MODELS` above for how that has already
+ * played out once.
+ *
+ * Module-level and store-parameterised rather than built per call, so the table
+ * is importable: `sync-manager.models.test.ts` reads `CACHED_MODELS` directly
+ * instead of regex-scanning this file, which is both stronger (no pattern can
+ * miss an entry) and one less thing coupled to how this file is indented.
+ *
+ * The models that genuinely are not uniform — `Organization` (no store, strips
+ * two settings blobs), `Issue` (two payload shapes, secondary index) and
+ * `Notification` (scoped to one recipient) — keep their own `case` arm, listed
+ * in `BESPOKE_MODELS`.
+ *
+ * `cache` is generic so each entry keeps its store method's own parameter type,
+ * and the method is bound so `.bind` carries the MobX `action` wrapper with it.
+ * Note what this does *not* buy: the payload cast is unchecked, exactly as the
+ * old per-arm `data as Parameters<…>[2]` was, and nothing at the type level ties
+ * a key to the store it names. `sync-manager.models.test.ts` catches that, not
+ * the compiler.
+ */
+function cache<T>(
+  resolve: (stores: RootStore) => (action: string, id: string, data: T | null) => void,
+  table: DexieCacheTable,
+): CachedModel {
+  return {
+    apply: (stores, action, id, data) => resolve(stores)(action, id, data as T | null),
+    table,
+  };
+}
+
+export const CACHED_MODELS = new Map<string, CachedModel>(
+  Object.entries({
+    CustomFieldDefinition: cache(
+      s => s.customFieldStore.applyDefinitionSyncAction.bind(s.customFieldStore),
+      'customFieldDefinitions',
+    ),
+    CustomView: cache(
+      s => s.customViewStore.applySyncAction.bind(s.customViewStore),
+      'customViews',
+    ),
+    Cycle: cache(s => s.cycleStore.applySyncAction.bind(s.cycleStore), 'cycles'),
+    Document: cache(s => s.documentStore.applySyncAction.bind(s.documentStore), 'documents'),
+    Favorite: cache(s => s.favoriteStore.applySyncAction.bind(s.favoriteStore), 'favorites'),
+    Initiative: cache(
+      s => s.initiativeStore.applySyncAction.bind(s.initiativeStore),
+      'initiatives',
+    ),
+    InitiativeProject: cache(
+      s => s.initiativeStore.applyInitiativeProjectSyncAction.bind(s.initiativeStore),
+      'initiativeProjects',
+    ),
+    IssueLabel: cache(s => s.labelStore.applySyncAction.bind(s.labelStore), 'issueLabels'),
+    IssueRelation: cache(
+      s => s.issueRelationStore.applySyncAction.bind(s.issueRelationStore),
+      'issueRelations',
+    ),
+    IssueTemplate: cache(
+      s => s.issueTemplateStore.applySyncAction.bind(s.issueTemplateStore),
+      'issueTemplates',
+    ),
+    OrganizationMember: cache(
+      s => s.organizationMemberStore.applySyncAction.bind(s.organizationMemberStore),
+      'organizationMembers',
+    ),
+    Project: cache(s => s.projectStore.applySyncAction.bind(s.projectStore), 'projects'),
+    ProjectMilestone: cache(
+      s => s.projectStore.applyMilestoneSyncAction.bind(s.projectStore),
+      'projectMilestones',
+    ),
+    ProjectUpdate: cache(
+      s => s.projectStore.applyUpdateSyncAction.bind(s.projectStore),
+      'projectUpdates',
+    ),
+    Team: cache(s => s.teamStore.applySyncAction.bind(s.teamStore), 'teams'),
+    User: cache(s => s.userStore.applySyncAction.bind(s.userStore), 'users'),
+    WorkflowState: cache(
+      s => s.workflowStateStore.applySyncAction.bind(s.workflowStateStore),
+      'workflowStates',
+    ),
+  }),
+);
+
+/** Models handled by their own `case` arm because their handling is not uniform. */
+export const BESPOKE_MODELS = ['Organization', 'Issue', 'Notification'] as const;
+
+/** A model whose SyncAction handling is "apply to a store, mirror into a table". */
+interface CachedModel {
+  apply: (stores: RootStore, action: string, id: string, data: unknown) => void;
+  table: DexieCacheTable;
+}
+
 export class SyncManager {
   private wsClient: WsClient;
   private stores: RootStore;
@@ -749,25 +888,9 @@ export class SyncManager {
   }
 
   private async doApplyActions(actions: SerializedSyncAction[]) {
-    const {
-      teamStore,
-      userStore,
-      workflowStateStore,
-      labelStore,
-      issueStore,
-      cycleStore,
-      documentStore,
-      favoriteStore,
-      initiativeStore,
-      projectStore,
-      customViewStore,
-      customFieldStore,
-      notificationStore,
-      issueRelationStore,
-      issueTemplateStore,
-      organizationMemberStore,
-      syncStore,
-    } = this.stores;
+    // Only the stores the bespoke `case` arms below reach for directly; the
+    // uniform models resolve theirs through CACHED_MODELS.
+    const { issueStore, customFieldStore, notificationStore, userStore, syncStore } = this.stores;
 
     let maxId = syncStore.lastSyncId;
 
@@ -870,72 +993,6 @@ export class SyncManager {
             dexieUpserts.organizations.push(safe);
           }
           break;
-        // The roster. Before this case existed, `organizationMemberRemove`
-        // and `organizationMemberUpdateRole` emitted SyncActions that every
-        // client dropped on the floor: a second admin's open tab kept showing
-        // someone who had been removed until they reloaded. Access was never
-        // affected — the removed user's own session loses the org on its next
-        // request — but the UI lied about who was in the workspace.
-        case 'OrganizationMember':
-          organizationMemberStore.applySyncAction(
-            act,
-            modelId,
-            data as Parameters<typeof organizationMemberStore.applySyncAction>[2],
-          );
-          if (act === 'D') {
-            dexieDeletes.push({ id: modelId, table: 'organizationMembers' });
-          } else if (data) {
-            dexieUpserts.organizationMembers.push(data);
-          }
-          break;
-        case 'Team':
-          teamStore.applySyncAction(
-            act,
-            modelId,
-            data as Parameters<typeof teamStore.applySyncAction>[2],
-          );
-          if (act === 'D') {
-            dexieDeletes.push({ id: modelId, table: 'teams' });
-          } else if (data) {
-            dexieUpserts.teams.push(data);
-          }
-          break;
-        case 'User':
-          userStore.applySyncAction(
-            act,
-            modelId,
-            data as Parameters<typeof userStore.applySyncAction>[2],
-          );
-          if (act === 'D') {
-            dexieDeletes.push({ id: modelId, table: 'users' });
-          } else if (data) {
-            dexieUpserts.users.push(data);
-          }
-          break;
-        case 'WorkflowState':
-          workflowStateStore.applySyncAction(
-            act,
-            modelId,
-            data as Parameters<typeof workflowStateStore.applySyncAction>[2],
-          );
-          if (act === 'D') {
-            dexieDeletes.push({ id: modelId, table: 'workflowStates' });
-          } else if (data) {
-            dexieUpserts.workflowStates.push(data);
-          }
-          break;
-        case 'IssueLabel':
-          labelStore.applySyncAction(
-            act,
-            modelId,
-            data as Parameters<typeof labelStore.applySyncAction>[2],
-          );
-          if (act === 'D') {
-            dexieDeletes.push({ id: modelId, table: 'issueLabels' });
-          } else if (data) {
-            dexieUpserts.issueLabels.push(data);
-          }
-          break;
         case 'Issue': {
           // Two different payload shapes ride the 'Issue' stream:
           //
@@ -964,15 +1021,8 @@ export class SyncManager {
             const normalized =
               act === 'D'
                 ? null
-                : normalizeIssueRow(
-                    data as Parameters<typeof normalizeIssueRow>[0],
-                    issueStore.pool.get(modelId)?.labelIds,
-                  );
-            issueStore.applySyncAction(
-              act,
-              modelId,
-              normalized as Parameters<typeof issueStore.applySyncAction>[2],
-            );
+                : normalizeIssueRow(data as IssueSyncRow, issueStore.pool.get(modelId)?.labelIds);
+            issueStore.applySyncAction(act, modelId, normalized);
             if (act === 'D') {
               dexieDeletes.push({ id: modelId, table: 'issues' });
             } else if (normalized?.id) {
@@ -995,78 +1045,6 @@ export class SyncManager {
           }
           break;
         }
-        case 'CustomFieldDefinition':
-          customFieldStore.applyDefinitionSyncAction(
-            act,
-            modelId,
-            data as Parameters<typeof customFieldStore.applyDefinitionSyncAction>[2],
-          );
-          if (act === 'D') {
-            dexieDeletes.push({ id: modelId, table: 'customFieldDefinitions' });
-          } else if (data) {
-            dexieUpserts.customFieldDefinitions.push(data);
-          }
-          break;
-        case 'Cycle':
-          cycleStore.applySyncAction(
-            act,
-            modelId,
-            data as Parameters<typeof cycleStore.applySyncAction>[2],
-          );
-          if (act === 'D') {
-            dexieDeletes.push({ id: modelId, table: 'cycles' });
-          } else if (data) {
-            dexieUpserts.cycles.push(data);
-          }
-          break;
-        case 'Project':
-          projectStore.applySyncAction(
-            act,
-            modelId,
-            data as Parameters<typeof projectStore.applySyncAction>[2],
-          );
-          if (act === 'D') {
-            dexieDeletes.push({ id: modelId, table: 'projects' });
-          } else if (data) {
-            dexieUpserts.projects.push(data);
-          }
-          break;
-        case 'ProjectMilestone':
-          projectStore.applyMilestoneSyncAction(
-            act,
-            modelId,
-            data as Parameters<typeof projectStore.applyMilestoneSyncAction>[2],
-          );
-          if (act === 'D') {
-            dexieDeletes.push({ id: modelId, table: 'projectMilestones' });
-          } else if (data) {
-            dexieUpserts.projectMilestones.push(data);
-          }
-          break;
-        case 'ProjectUpdate':
-          projectStore.applyUpdateSyncAction(
-            act,
-            modelId,
-            data as Parameters<typeof projectStore.applyUpdateSyncAction>[2],
-          );
-          if (act === 'D') {
-            dexieDeletes.push({ id: modelId, table: 'projectUpdates' });
-          } else if (data) {
-            dexieUpserts.projectUpdates.push(data);
-          }
-          break;
-        case 'CustomView':
-          customViewStore.applySyncAction(
-            act,
-            modelId,
-            data as Parameters<typeof customViewStore.applySyncAction>[2],
-          );
-          if (act === 'D') {
-            dexieDeletes.push({ id: modelId, table: 'customViews' });
-          } else if (data) {
-            dexieUpserts.customViews.push(data);
-          }
-          break;
         case 'Notification': {
           // SyncActions broadcast org-wide, but a notification belongs to one
           // recipient. `NotificationStore` documents its pool as "already
@@ -1088,91 +1066,30 @@ export class SyncManager {
           }
           break;
         }
-        case 'IssueRelation':
-          issueRelationStore.applySyncAction(
-            act,
-            modelId,
-            data as Parameters<typeof issueRelationStore.applySyncAction>[2],
-          );
+        // Everything else is either uniform (CACHED_MODELS) or deliberately not
+        // cached (UNCACHED_MODELS). The warn is why a missing model is loud
+        // rather than silent — see UNCACHED_MODELS for the story behind that.
+        default: {
+          // A `Map`, not an object literal: a bare index on a literal walks
+          // `Object.prototype`, so a model named `constructor` or `toString`
+          // resolves to an inherited function, slips past this guard, and throws
+          // out of the whole batch — losing every other model's update and
+          // stalling the cursor.
+          const cached = CACHED_MODELS.get(modelName);
+          if (!cached) {
+            log.warn('Unhandled SyncAction model — not cached', undefined, {
+              modelName: action.modelName,
+            });
+            break;
+          }
+          cached.apply(this.stores, act, modelId, data);
           if (act === 'D') {
-            dexieDeletes.push({ id: modelId, table: 'issueRelations' });
+            dexieDeletes.push({ id: modelId, table: cached.table });
           } else if (data) {
-            dexieUpserts.issueRelations.push(data);
+            dexieUpserts[cached.table].push(data);
           }
           break;
-        case 'IssueTemplate':
-          issueTemplateStore.applySyncAction(
-            act,
-            modelId,
-            data as Parameters<typeof issueTemplateStore.applySyncAction>[2],
-          );
-          if (act === 'D') {
-            dexieDeletes.push({ id: modelId, table: 'issueTemplates' });
-          } else if (data) {
-            dexieUpserts.issueTemplates.push(data);
-          }
-          break;
-        case 'Document':
-          documentStore.applySyncAction(
-            act,
-            modelId,
-            data as Parameters<typeof documentStore.applySyncAction>[2],
-          );
-          if (act === 'D') {
-            dexieDeletes.push({ id: modelId, table: 'documents' });
-          } else if (data) {
-            dexieUpserts.documents.push(data);
-          }
-          break;
-        case 'Initiative':
-          initiativeStore.applySyncAction(
-            act,
-            modelId,
-            data as Parameters<typeof initiativeStore.applySyncAction>[2],
-          );
-          if (act === 'D') {
-            dexieDeletes.push({ id: modelId, table: 'initiatives' });
-          } else if (data) {
-            dexieUpserts.initiatives.push(data);
-          }
-          break;
-        case 'InitiativeProject':
-          initiativeStore.applyInitiativeProjectSyncAction(
-            act,
-            modelId,
-            data as Parameters<typeof initiativeStore.applyInitiativeProjectSyncAction>[2],
-          );
-          if (act === 'D') {
-            dexieDeletes.push({ id: modelId, table: 'initiativeProjects' });
-          } else if (data) {
-            dexieUpserts.initiativeProjects.push(data);
-          }
-          break;
-        case 'Favorite':
-          favoriteStore.applySyncAction(
-            act,
-            modelId,
-            data as Parameters<typeof favoriteStore.applySyncAction>[2],
-          );
-          if (act === 'D') {
-            dexieDeletes.push({ id: modelId, table: 'favorites' });
-          } else if (data) {
-            dexieUpserts.favorites.push(data);
-          }
-          break;
-        // Models the server emits that this client deliberately does not cache
-        // — Comment, CommentReaction, TeamMembership, InitiativeUpdate,
-        // OrganizationMember, File. Those surfaces fetch over GraphQL on mount,
-        // so dropping the action costs only a live update.
-        //
-        // The warn exists because a MISSING case looks exactly like an
-        // intentional one: `Organization` was emitted and silently dropped for
-        // months precisely because nothing said so out loud.
-        default:
-          log.warn('Unhandled SyncAction model — not cached', undefined, {
-            modelName: action.modelName,
-          });
-          break;
+        }
       }
 
       // Update max sync cursor — `(xactId, id)` tuple comparison.

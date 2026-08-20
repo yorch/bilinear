@@ -1,5 +1,5 @@
 import { action, computed, makeObservable, observable } from 'mobx';
-import type { DBIssue } from '@/lib/db';
+import type { DBIssue, IssueSyncRow } from '@/lib/db';
 import { fuzzyScore } from '@/lib/fuzzy-search';
 
 /**
@@ -21,11 +21,8 @@ import { fuzzyScore } from '@/lib/fuzzy-search';
  * cached-data path then takes `deltaSync()` rather than re-bootstrapping, so
  * nothing ever repaired it.
  */
-export function normalizeIssueRow(data: DBIssue, previousLabelIds?: string[]): DBIssue {
-  const { labelAssignments, labels, ...issueData } = data as DBIssue & {
-    labelAssignments?: Array<{ labelId: string }>;
-    labels?: Array<{ id: string }>;
-  };
+export function normalizeIssueRow(data: IssueSyncRow, previousLabelIds?: string[]): DBIssue {
+  const { labelAssignments, labels, ...issueData } = data;
   const labelIds = labelAssignments
     ? labelAssignments.map(a => a.labelId)
     : labels
@@ -264,7 +261,7 @@ export class IssueStore {
     }
   }
 
-  applySyncAction(action: string, id: string, data: DBIssue | null) {
+  applySyncAction(action: string, id: string, data: IssueSyncRow | null) {
     if (action === 'I' || action === 'U' || action === 'A') {
       if (data) {
         const { labelIds, ...issueData } = normalizeIssueRow(data, this.pool.get(id)?.labelIds);
@@ -289,7 +286,7 @@ export class IssueStore {
           }
         }
 
-        this.setIssue({ ...issueData, labelIds } as DBIssue);
+        this.setIssue({ ...issueData, labelIds });
       }
     } else if (action === 'D') {
       this.deleteIssue(id);

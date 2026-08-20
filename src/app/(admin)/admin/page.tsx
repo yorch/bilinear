@@ -6,6 +6,7 @@ import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { fetchMetrics, type PlatformMetrics } from '@/lib/admin-api';
+import { getErrorMessage } from '@/lib/utils';
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
@@ -24,7 +25,7 @@ export default function AdminDashboardPage() {
     data: metrics,
     loading,
     error,
-    errorMessage,
+    cause,
     refetch,
   } = useRetryableFetch<PlatformMetrics | null>(fetchMetrics, [], null);
 
@@ -34,7 +35,7 @@ export default function AdminDashboardPage() {
   if (error || !metrics) {
     return (
       <InlineRetry
-        message={errorMessage ?? t('admin.dashboard.loadError')}
+        message={getErrorMessage(cause, t('admin.dashboard.loadError'))}
         onRetry={() => refetch()}
       />
     );

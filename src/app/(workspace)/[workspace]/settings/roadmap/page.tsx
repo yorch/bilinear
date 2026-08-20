@@ -3,13 +3,14 @@
 import { ExternalLink, Eye, EyeOff } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { ColorDot } from '@/components/ui/color-dot';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -69,9 +70,6 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
   useDocumentTitle(t('roadmap.settings.title'));
   const { projectStore } = useStore();
 
-  const [roadmap, setRoadmap] = useState<RoadmapSettings | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [togglingProjectId, setTogglingProjectId] = useState<string | null>(null);
 
@@ -83,33 +81,32 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [clearPassword, setClearPassword] = useState(false);
 
-  const loadRoadmap = useCallback(async () => {
-    setLoading(true);
-    setLoadError(false);
-    try {
-      // `publicRoadmap` is a nullable root: a failed query answers HTTP 200 with
-      // the field null *alongside* `errors`, which would render the blank
-      // "create a roadmap" form for a roadmap that is already publicly live —
-      // and saving it would overwrite the real settings. gqlQuery throws
-      // instead, so the blank form only shows for a genuine null.
-      const r = await gqlQuery<RoadmapSettings | null>(PUBLIC_ROADMAP_QUERY, {}, 'publicRoadmap');
-      if (r) {
-        setRoadmap(r);
-        setTitle(r.title);
-        setDescription(r.description ?? '');
-        setSlug(r.slug);
-        setEnabled(r.enabled);
-      }
-    } catch {
-      setLoadError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadRoadmap();
-  }, [loadRoadmap]);
+  const {
+    data: roadmap,
+    error: loadError,
+    loading,
+    refetch: loadRoadmap,
+    setData: setRoadmap,
+  } = useRetryableFetch<RoadmapSettings | null>(
+    // `publicRoadmap` is a nullable root: a failed query answers HTTP 200 with
+    // the field null *alongside* `errors`, which would render the blank
+    // "create a roadmap" form for a roadmap that is already publicly live —
+    // and saving it would overwrite the real settings. gqlQuery throws
+    // instead, so the blank form only shows for a genuine null.
+    () => gqlQuery<RoadmapSettings | null>(PUBLIC_ROADMAP_QUERY, {}, 'publicRoadmap'),
+    [],
+    null,
+    {
+      onData: r => {
+        if (r) {
+          setTitle(r.title);
+          setDescription(r.description ?? '');
+          setSlug(r.slug);
+          setEnabled(r.enabled);
+        }
+      },
+    },
+  );
 
   // Plain getter — observer() tracks the read so updates flow through
   // without a memo whose `.size` dep would miss in-place mutations.

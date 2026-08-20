@@ -33,8 +33,8 @@ authored under Tier 2 constraints.
 | Reviewed | 258 |
 | Skipped (with reason, below) | 303 |
 | Not reached | **0** |
-| Applied | **15 findings / 16 commits / 69 files** |
-| Proposed | 2 (both partial — see below) |
+| Applied | **15 findings / 16 commits / 69 files** (2026-08-18); **17 of 17 fully closed** as of 2026-08-19 — see *Status as of 2026-08-19* |
+| Proposed | 0 remaining. F08, F11 and F15 were each partial at the time of writing; all three have since closed. |
 | Blocked | 0 |
 
 **Update — second pass.** The first pass applied 4 findings and reported 13 for a
@@ -222,26 +222,99 @@ comment — that is not a style nit, it is how a real bug stayed camouflaged.
 Every commit is one category and individually revertable. All five available
 gates were re-run in full after each.
 
+## Status as of 2026-08-19
+
+The three items in *Still Open* below were written on 2026-08-18 and are kept
+verbatim as the record of what was true then. **All three have since closed**,
+and in each case the stated reason for deferring turned out to be wrong rather
+than merely outweighed. Current state, verified against the tree:
+
+| Finding | 2026-08-18 | Now | Evidence |
+|---|---|---|---|
+| **F15** — TipTap link prompt | open | **closed** | `grep -rn 'window\.prompt(' src` → no matches. Replaced with `PromptDialog` in `9cfe8e3`. |
+| **F11** — unsound casts | 2 of 4 remain | **closed** | No `as never` in `addCommands()`, no `as unknown as DBIssue`. `2bdbc64`. |
+| **F08** — hand-rolled fetches | 6 of 15 pages remain | **closed** | All fifteen on `useRetryableFetch`. `758d3d7`. |
+
+Each deferral is worth reading as a record of a specific failure mode: two of
+the three were justified by a claim I had reasoned to but never tested, and the
+third by a constraint that a single callback dissolved.
+
+**Why F15 closed.** The reason given below for deferring it was that the fix is
+browser-verifiable and the E2E gate was unavailable. Both halves of that turned
+out to be wrong:
+
+- The E2E gate *is* available in this environment and now runs green
+  (121 passed / 3 skipped / 0 failed, chromium).
+- The selection-restoration problem the deferral was built around does not
+  exist. ProseMirror maps a stored selection through the document itself —
+  `Transaction.selection` returns `curSelection.map(doc, mapping)` — and TipTap's
+  `focus()` resolves to `editor.state.selection`, so the range survives the
+  dialog without any explicit `setTextSelection`. I first wrote the capture and
+  restore code described below, then verified against `@tiptap/core` in
+  `node_modules` that it was redundant, and deleted it (`37d5f16`). The applied
+  fix is three lines:
+
+  ```ts
+  const chain = editor.chain().focus().extendMarkRange('link');
+  const trimmed = url.trim();
+  (trimmed === '' ? chain.unsetLink() : chain.setLink({ href: trimmed })).run();
+  ```
+
+**Why F11 closed.** I had claimed the `as never` on TipTap `addCommands()` could
+not be removed because `@tiptap/core` ships rollup-bundled types that re-export
+the command interface as `type Commands$1 as Commands`, and a type-alias
+re-export is not an augmentable declaration. That is a plausible reading of the
+`.d.ts` and it is wrong. Tested rather than reasoned: a probe file declaring a
+fake command and asserting `keyof RawCommands` accepts it type-checks, and
+deleting the augmentation makes it fail. Each node now declares its own command,
+and `slash-commands.ts` drops the three structural casts it used to reach
+commands the compiler could not see.
+
+The fourth cast, `updated as unknown as DBIssue`, needed the double form because
+the two types genuinely do not overlap — which was the signal, not the excuse.
+It is now `toIssueSyncRow`, which validates rather than asserts. Underneath it,
+`DBIssue` was the wrong type for a row *arriving* from a server: it declares
+`labelIds` required, but two of the three label shapes the server sends do not
+carry it, so `normalizeIssueRow` and `applySyncAction` each had to cast around
+their own signatures. `IssueSyncRow` names the pre-normalized shape and removed
+three further casts.
+
+**Why F08 closed.** The analysis below is right that these six pages
+fetch-then-*seed a form*, and right that putting `setX(...)` inside the fetcher
+would be worse than what was there. The conclusion — that consolidating them
+needs a second hook — is what was wrong. The gap was one callback: `onData`
+makes seeding a first-class step that runs after a load lands, and `onError`
+covers the one-shot toast that rendering-derived state cannot express. All six
+converted, and five of them stopped rendering a failed load as a dead end.
+
+**Net.** All 17 findings are closed. Two of the three deferrals were justified by
+a claim I had reasoned to but never tested; the fix for both was to run the
+experiment.
+
 ## Still Open — What I Did Not Do, And Why
 
 Everything reported in the first pass has been applied except the following. Each
 is a part of a finding rather than a whole one, and each is left undone for a
 stated reason rather than for lack of time.
 
-### F11 · Two of four unsound casts remain
+### F11 · Two of four unsound casts remain — ✅ **closed 2026-08-19**, see above
 - **`as never` on TipTap `addCommands()`** (`mermaid-node.tsx`, `details-node.ts`,
   `embed-node.tsx`). This is a consistent three-site pattern, not a slip. The
   correct fix is a `declare module '@tiptap/core'` augmentation declaring each
   custom command, which changes the editor's global command type surface — a
   design decision about the editor's public types, not a cleanup.
+  > **Superseded.** It is a cleanup, and the augmentation works. Done in `2bdbc64`.
 - **`updated as unknown as DBIssue`** (`use-issue-update.ts:59`). This sits on the
   deliberately generic `IssueUpdateAdapter.reconcile(id, Record<string, unknown>)`
   contract. Its two implementors reconcile into *different* shapes — the MobX
   store and the standalone issue route's local `useState` copy — so the loose
   signature is load-bearing. I tried the single-cast form; TypeScript rejects it,
   which confirms the two types genuinely do not overlap.
+  > **Superseded.** "The types do not overlap" is the argument for validating the
+  > payload, not for asserting past it. Replaced with `toIssueSyncRow` in
+  > `2bdbc64`.
 
-### F15 · The TipTap link prompt remains a `window.prompt`
+### F15 · The TipTap link prompt remains a `window.prompt` — ✅ **closed 2026-08-19**, see above
 `tiptap-editor.tsx:762`. Unlike the three admin prompts, this one runs against a
 live ProseMirror selection: it reads `getAttributes('link')` and then applies
 `extendMarkRange('link')` to whatever is currently selected. `window.prompt`
@@ -253,7 +326,11 @@ Doing it properly means capturing the range before opening and restoring it with
 `setTextSelection` on submit. That is a browser-verifiable change, and the E2E
 gate is unavailable in this environment, so I would be shipping it unverified.
 
-### F08 · Six of fifteen pages still hand-roll their fetch
+> **Superseded.** Both premises were false — ProseMirror already maps the
+> selection, so no capture/restore is needed, and the E2E gate does run here.
+> Fixed in `9cfe8e3`, simplified in `37d5f16`.
+
+### F08 · Six of fifteen pages still hand-roll their fetch — ✅ **closed 2026-08-19**, see above
 Converted: the admin dashboard, users, tenants, tenant detail and audit pages, the
 workspace analytics, audit-log, automations and webhooks pages. **Every page that
 rendered a failed load as a dead-end message now offers a retry** — that half of
@@ -272,6 +349,10 @@ errors; they just do not share the hook.
 
 If you want these unified too, the honest move is a second hook for the
 fetch-then-seed shape rather than bending this one.
+
+> **Superseded.** No second hook was needed. `useRetryableFetch` gained an
+> `onData` callback, which is where the seeding belongs — outside the fetcher,
+> which stays pure. All six converted in `758d3d7`.
 
 ## Blocked — Verification Failed
 

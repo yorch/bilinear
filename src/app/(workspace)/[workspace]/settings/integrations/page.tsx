@@ -1,12 +1,13 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -72,62 +73,47 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
   const { formatDate } = useFormatters();
   const { teamStore } = useStore();
   const teams = teamStore.all;
-  const [integration, setIntegration] = useState<GitHubIntegration | null>(null);
-  const [loading, setLoading] = useState(true);
   const [connectSecret, setConnectSecret] = useState('');
   const [rotateSecret, setRotateSecret] = useState('');
   const [showRotate, setShowRotate] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pendingDisconnect, setPendingDisconnect] = useState<'github' | 'slack' | null>(null);
-  const [slack, setSlack] = useState<SlackIntegration | null>(null);
-  // `githubIntegration`/`slackIntegration` are nullable roots: a failed query
-  // answers HTTP 200 with the field null *alongside* `errors`. Without these
-  // flags a load failure renders as "not connected", and reconnecting would
-  // mint a second webhook secret for an already-connected integration.
-  const [githubLoadError, setGithubLoadError] = useState(false);
-  const [slackLoadError, setSlackLoadError] = useState(false);
 
   const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const orgKey = typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '';
 
-  const loadGithub = useCallback(async () => {
-    setLoading(true);
-    setGithubLoadError(false);
-    try {
-      const data = await gqlQuery<GitHubIntegration | null>(
-        GITHUB_INTEGRATION_QUERY,
-        {},
-        'githubIntegration',
-      );
-      setIntegration(data ?? null);
-    } catch {
-      setIntegration(null);
-      setGithubLoadError(true);
-      toast.error(t('settings.integrations.loadGithubError'));
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
+  const {
+    data: githubData,
+    error: githubLoadError,
+    loading,
+    refetch: loadGithub,
+    setData: setIntegration,
+  } = useRetryableFetch<GitHubIntegration | null>(
+    () => gqlQuery<GitHubIntegration | null>(GITHUB_INTEGRATION_QUERY, {}, 'githubIntegration'),
+    [],
+    null,
+    { onError: () => toast.error(t('settings.integrations.loadGithubError')) },
+  );
 
-  const loadSlack = useCallback(async () => {
-    setSlackLoadError(false);
-    try {
-      const data = await gqlQuery<SlackIntegration | null>(
-        SLACK_INTEGRATION_QUERY,
-        {},
-        'slackIntegration',
-      );
-      setSlack(data ?? null);
-    } catch {
-      setSlack(null);
-      setSlackLoadError(true);
-    }
-  }, []);
+  const {
+    data: slackData,
+    error: slackLoadError,
+    refetch: loadSlack,
+    setData: setSlack,
+  } = useRetryableFetch<SlackIntegration | null>(
+    () => gqlQuery<SlackIntegration | null>(SLACK_INTEGRATION_QUERY, {}, 'slackIntegration'),
+    [],
+    null,
+  );
 
-  useEffect(() => {
-    void loadGithub();
-    void loadSlack();
-  }, [loadGithub, loadSlack]);
+  // `githubIntegration`/`slackIntegration` are nullable roots: a failed query
+  // answers HTTP 200 with the field null *alongside* `errors`. Without these
+  // flags a load failure renders as "not connected", and reconnecting would
+  // mint a second webhook secret for an already-connected integration. Reading
+  // them as null while the error stands keeps the "connected" badge — which
+  // renders outside the error branch — from showing a stale connection.
+  const integration = githubLoadError ? null : githubData;
+  const slack = slackLoadError ? null : slackData;
 
   async function handleSlackDisconnect() {
     setSaving(true);

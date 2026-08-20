@@ -843,7 +843,22 @@ succeeds.
 
 ---
 
-### 4.5 `sync-manager`'s model switch is 20 copies of the same 12 lines (2026-08-18)
+### 4.5 `sync-manager`'s model switch is 20 copies of the same 12 lines — ✅ shipped (2026-08-18)
+
+> Shipped as a `CACHED_MODELS` registry dispatched from the switch's `default`
+> arm: seventeen uniform arms collapse to one entry each declaring the store
+> method next to its Dexie table, while `Organization`, `Issue` and
+> `Notification` keep the bespoke cases they genuinely need. 210 lines removed.
+>
+> `sync-manager.models.test.ts` is the guard, and it closes both halves of the
+> hole. It reads the server and the client from source (as
+> `graphql-documents.test.ts` and `dictionary.test.ts` already do, because the
+> registry closes over per-call store instances and cannot be imported
+> standalone): every model the server can emit must be in the registry, be a
+> bespoke case, or be listed in the exported `UNCACHED_MODELS`. It also asserts
+> each model is paired with the table its name derives from — that is the check
+> that catches the wrong-table typo, which `yarn typecheck` provably does not,
+> since both Dexie buckets are `object[]`.
 
 > Surfaced while extracting `applyPoolSyncAction`. That extraction was the *small*
 > duplication; this is the one that can lose data.
@@ -870,7 +885,7 @@ a failing test rather than a silent cache hole.
 
 **Effort:** Medium. **Risk:** Medium — it is the sync hot path.
 
-### 4.6 Three forked popover implementations (2026-08-18)
+### 4.6 Three forked popover implementations — ⚠️ partially shipped (2026-08-18)
 
 > `SelectPopover`, `SimpleSelect` and `issue-context-menu` are three independent
 > popovers. The 2026-08-18 audit shared the *class string* across all three
@@ -879,12 +894,44 @@ a failing test rather than a silent cache hole.
 > has no arrow-key handling at all, and `SimpleSelect` reached parity on Escape
 > and focus-restore only after shipping a keyboard trap.
 >
-> The deep fix is rebuilding `SimpleSelect` on `SelectPopover` (5 call sites; the
-> API can stay identical except `placement`, which `usePopoverFlip` would make
-> automatic). Deferred because there is no visual-regression suite and the
-> trigger styling differs — it needs a `/design` pass, not just a refactor.
+> The shared behaviour shipped as `usePopoverPanel` (2026-08-18): focus in on
+> open, Up/Down/Home/End roving, focus back to the trigger on close, now used by
+> both `SelectPopover` and `SimpleSelect`. Only the item selector differs between
+> them. Both also open focused on the selected option rather than the first.
+>
+> **The rebuild this entry originally proposed was examined and rejected**, which
+> is worth recording so it is not re-proposed. `SimpleSelect` is a bordered form
+> control whose five call sites need a trigger `id` to pair with a
+> `<label htmlFor>`, an `aria-label` for rows whose visible label is a plain
+> `<span>`, and a non-selectable caption row above its options. Folding it into
+> `SelectPopover` means three new props on the shared primitive that exist for
+> one shape, plus a trigger restyle nothing here can verify without a
+> visual-regression suite. The duplication that actually hurt was the keyboard
+> and focus behaviour, and that is now shared.
+>
+> Still open, and the inventory is wider than this entry's title suggested:
+> `issue-context-menu` is a third implementation with no arrow-key handling at
+> all — it is a menu rather than a listbox, so it wants `role="menuitem"`
+> semantics and its own roving, not this hook as-is. `SearchableSelectPopover`
+> is a fourth. Its `aria-activedescendant` model is a legitimately different
+> pattern and should *not* be forced into `usePopoverPanel`, but it still
+> hand-rolls the focus-restore, focus-on-open and panel-id plumbing the hook now
+> owns, which is the drift-prone half.
 
-### 4.7 `useRetryableFetch` discards the error's type (2026-08-18)
+### 4.7 `useRetryableFetch` discards the error's type — ✅ shipped (2026-08-18)
+
+> The hook now returns `cause` — whatever the fetcher threw, unchanged — instead
+> of a pre-extracted `errorMessage`. Call sites render
+> `getErrorMessage(cause, fallback)` and branch with `isPermissionError(cause)`,
+> both of which already existed. The audit-log page lost its `AuditOutcome`
+> union and its inner catch, and the webhooks page lost its `forbidden` field:
+> both had been re-catching inside their own fetcher purely to recover a code
+> the hook was already holding.
+>
+> `settings/security` keeps its own `{ forbidden, message }` helper — it encodes
+> a real distinction (a refusal is not a failure) that the hook does not make.
+> It now builds that helper from the hook's own `cause`, since §4.11 brought the
+> page onto `useRetryableFetch`.
 
 > The hook catches a `GqlError` — which carries `extensions.code`, with
 > `isGqlErrorCode`/`isPermissionError` built on it in `src/lib/graphql.ts` — and
@@ -901,6 +948,96 @@ a failing test rather than a silent cache hole.
 > Related guardrail worth adding: `errorMessage` is a raw server string rendered
 > verbatim, and nothing scopes it to the admin console. `errorMessage ??
 > t('common.somethingWentWrong')` should stay the only sanctioned use.
+
+### 4.8 A refused webhooks page reads as an empty one (2026-08-19)
+
+**Found during** the review of the `cause` migration; **pre-existing**, not
+introduced by it.
+
+`settings/webhooks` correctly suppresses its Retry for a viewer who is not an
+admin (`error && !forbidden`) — but it has no forbidden message, so the page
+falls through to `webhooks.length === 0` and renders
+`settings.webhooks.noWebhooksYet`. A non-admin is told there are no webhooks,
+which may be false, with nothing indicating they simply cannot see them. The old
+code did the same thing by a different route (it set `forbidden: true` alongside
+empty arrays), so this is long-standing.
+
+`settings/audit-log` is the model to copy: it renders
+`t('settings.auditLog.forbidden')` and returns before the error branch.
+
+**Effort:** Small — one dictionary key in `en.json` + `es.json`, one render
+branch. It is listed rather than done because it is new user-facing copy, which
+wants a product call on the wording rather than an invented string.
+
+**Acceptance signal:** a member without admin rights loading
+`/settings/webhooks` sees an explanation, not "No webhooks yet".
+
+### 4.9 `isPermissionError` folds an expired session into "forbidden" (2026-08-19)
+
+**Found during** the same review; **pre-existing**.
+
+`isPermissionError` (`src/lib/graphql.ts`) returns true for both `FORBIDDEN` and
+`UNAUTHENTICATED`. Since the `cause` migration moved the forbidden decision to
+the render site, that conflation is now the reusable pattern: an admin whose
+session expires while the audit log is open, then hits Apply, is told "You need
+admin access to view audit logs" — with no retry and no route back to a login.
+
+**First-touch:** split the predicate at the call sites that render a *terminal*
+message — `isGqlErrorCode(cause, 'FORBIDDEN')` for "not for you", and let
+`UNAUTHENTICATED` fall through to the retry path (or trigger re-auth).
+
+**Effort:** Small. **Risk:** Low, but it touches an auth-adjacent predicate used
+in several places, so it wants its own change rather than riding along.
+
+### 4.10 The frontend audit's four remaining unsound casts — ✅ shipped (2026-08-19)
+
+> Closes F11 of the 2026-08-18 frontend audit (`REVIEW.md`), which had been left
+> at "2 of 4 fixed" on the claim that the rest could not be removed.
+>
+> **The three `as never` on TipTap `addCommands()`** were deferred on the
+> reasoning that `@tiptap/core` ships rollup-bundled types re-exporting the
+> command interface as `type Commands$1 as Commands`, and that a type-alias
+> re-export cannot be augmented from outside the package. That was reasoned, not
+> tested — and it is wrong. A probe file declaring a fake command and asserting
+> `keyof RawCommands` accepts it type-checks; deleting the augmentation makes it
+> fail. Each node now declares its own command, and `slash-commands.ts` drops the
+> three structural casts it used to reach commands the compiler could not see.
+>
+> **`updated as unknown as DBIssue`** in `use-issue-update.ts` is now
+> `toIssueSyncRow` (`src/lib/issue-mappers.ts`), which validates instead of
+> asserting. The store's apply is a whole-object replace, so a malformed
+> response would blank every column of the row; an unrecognizable one is now
+> discarded, and the authoritative row still arrives over the SyncAction stream.
+>
+> The underlying cause was a type that lied: `DBIssue` declares `labelIds`
+> required, but two of the three label shapes a server sends do not carry it, so
+> `normalizeIssueRow` and `applySyncAction` each had to cast around their own
+> signatures. `IssueSyncRow` (`src/lib/db.ts`) names the pre-normalized shape and
+> removed three further casts.
+
+### 4.11 The last six hand-rolled fetches — ✅ shipped (2026-08-19)
+
+> Closes F08 of the same audit, which converted nine of fifteen pages and left
+> six on the reasoning that they fetch-then-*seed a form* rather than
+> fetch-then-render, and that consolidating them wanted a second hook.
+>
+> Right about the shape, wrong about the remedy: the gap was one callback.
+> `useRetryableFetch` gained `onData` (seed after a load lands) and `onError`
+> (a one-shot toast or log on failure), both ref-read and both subject to the
+> existing staleness guard. Workspace settings, team settings, security,
+> integrations, roadmap and the standalone issue route are now on the hook —
+> eleven hand-rolled `loading`/`error` pairs, four `cancelled` flags and two
+> `console.error` calls gone.
+>
+> Five of the six rendered a failed load as a dead end and now offer a retry.
+> The issue route was the substantive one: a missing issue comes back as a
+> NOT_FOUND *error* alongside `data.issue === null`, so reading `data` alone
+> could not tell "no such issue" from "the request failed" — both rendered
+> "Issue not found", which told someone whose network had dropped that their
+> issue was gone.
+>
+> §4.8 (a refused webhooks page reads as an empty one) is unchanged by this and
+> still open: it wants product copy, not a hook.
 
 ## 5. Test coverage gaps
 

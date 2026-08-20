@@ -2,15 +2,24 @@
 
 import { observer } from 'mobx-react-lite';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { DetailPanelSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gqlMutate, isGqlErrorCode } from '@/lib/graphql';
+import { getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
+
+/** One page load: the issue plus the workspace label set its picker offers. */
+interface LoadedIssue {
+  issue: IssueWithTeam;
+  labels: IssueLabel[];
+}
 
 interface IssueWithTeam extends IssueDetail {
   team: {
@@ -55,11 +64,10 @@ const IssueDetailPage = observer(function IssueDetailPage() {
 
   const [issue, setIssue] = useState<IssueWithTeam | null>(null);
   const [labels, setLabels] = useState<IssueLabel[]>([]);
-  const [loading, setLoading] = useState(true);
 
   useDocumentTitle(issue ? `${issue.identifier} ${issue.title}` : null);
 
-  useEffect(() => {
+  const loadIssue = useCallback(async (): Promise<LoadedIssue | null> => {
     // If the issue is only in the local store (e.g. optimistic or temp id),
     // build the detail view from store data instead of fetching from server.
     const storeIssue = issueStore.findById(id);
@@ -75,7 +83,7 @@ const IssueDetailPage = observer(function IssueDetailPage() {
           initials: u.initials,
         },
       }));
-      setIssue({
+      const localIssue: IssueWithTeam = {
         ...storeIssue,
         dueDate: storeIssue.dueDate ?? null,
         labels: (storeIssue.labelIds ?? [])
@@ -88,27 +96,45 @@ const IssueDetailPage = observer(function IssueDetailPage() {
           members,
           states,
         },
-      });
-      setLabels(labelStore.all.map(l => ({ color: l.color, id: l.id, name: l.name })));
-      setLoading(false);
-      return;
+      };
+      return {
+        issue: localIssue,
+        labels: labelStore.all.map(l => ({ color: l.color, id: l.id, name: l.name })),
+      };
     }
 
-    gql(ISSUE_QUERY, { id })
-      .then(result => {
-        if (result.errors?.length) {
-          console.error('[IssueDetailPage] GraphQL errors:', result.errors);
-        }
-        if (result.data?.issue) {
-          setIssue(result.data.issue as IssueWithTeam);
-          setLabels((result.data.labels as { nodes: IssueLabel[] })?.nodes ?? []);
-        }
-      })
-      .catch(err => {
-        console.error('[IssueDetailPage] Fetch error:', err);
-      })
-      .finally(() => setLoading(false));
+    // `gqlMutate` rather than raw `gql`: a missing issue comes back as a
+    // NOT_FOUND *error* alongside `data.issue === null`, so reading `data`
+    // alone cannot tell "this issue does not exist" from "the request failed".
+    // Both used to land on "Issue not found", which told someone whose network
+    // had dropped that their issue was gone.
+    const data = await gqlMutate(ISSUE_QUERY, { id });
+    if (!data.issue) {
+      return null;
+    }
+    return {
+      issue: data.issue as IssueWithTeam,
+      labels: (data.labels as { nodes: IssueLabel[] } | undefined)?.nodes ?? [],
+    };
   }, [id, issueStore, teamStore, workflowStateStore, labelStore, userStore]);
+
+  const {
+    cause,
+    error: loadFailed,
+    loading,
+    refetch: reloadIssue,
+  } = useRetryableFetch<LoadedIssue | null>(loadIssue, [loadIssue], null, {
+    onData: loaded => {
+      if (loaded) {
+        setIssue(loaded.issue);
+        setLabels(loaded.labels);
+      }
+    },
+  });
+
+  // A NOT_FOUND is an answer, not a failure — it renders as "no such issue"
+  // rather than as something worth retrying.
+  const notFound = !loading && (isGqlErrorCode(cause, 'NOT_FOUND') || (!loadFailed && !issue));
 
   // This route renders from its own local `issue` useState rather than the
   // shared issueStore (it can show an issue the store hasn't hydrated yet —
@@ -166,10 +192,21 @@ const IssueDetailPage = observer(function IssueDetailPage() {
     return <DetailPanelSkeleton />;
   }
 
-  if (!issue) {
+  if (notFound) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('issueDetail.issueNotFound')}
+      </div>
+    );
+  }
+
+  if (!issue) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <InlineRetry
+          message={getErrorMessage(cause, t('common.somethingWentWrong'))}
+          onRetry={() => void reloadIssue()}
+        />
       </div>
     );
   }

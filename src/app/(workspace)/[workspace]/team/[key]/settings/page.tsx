@@ -7,6 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CustomFieldsSection } from '@/components/custom-fields/custom-fields-section';
 import { IssueTemplatesSection } from '@/components/issues/issue-templates-section';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import {
   type TeamMember,
@@ -16,10 +17,11 @@ import {
 import { PageHeader } from '@/components/ui/page-header';
 import { SimpleSelect } from '@/components/ui/select';
 import { useDocumentTitle } from '@/hooks/use-document-title';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
-import { gql } from '@/lib/graphql';
+import { gql, gqlMutate } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { cn, gqlError } from '@/lib/utils';
+import { cn, getErrorMessage, gqlError } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 // ---------------------------------------------------------------------------
@@ -164,8 +166,6 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
   const [saveError, setSaveError] = useState('');
 
   // ── Members state ─────────────────────────────────────────────────────────
-  const [members, setMembers] = useState<TeamMember[]>([]);
-  const [loadingMembers, setLoadingMembers] = useState(true);
   const currentUserId = userStore.currentUser?.id ?? '';
   // Keyed on the `all` computed, NOT `pool.size`. MobX caches a computed while it
   // is observed, so its array identity changes exactly when the underlying rows
@@ -204,44 +204,34 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
   }, [team]);
 
   // Load team members
-  useEffect(() => {
-    if (!team?.id) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const load = async () => {
-      try {
-        const membersResult = await gql(TEAM_MEMBERS_QUERY, { id: team.id });
-
-        if (cancelled) {
-          return;
-        }
-
-        if (membersResult.errors?.length) {
-          toast.error(gqlError(membersResult, t('settings.team.loadMembersError')));
-          return;
-        }
-
-        const rawMembers =
-          (membersResult.data?.team as { members?: RawMembership[] })?.members ?? [];
-
-        setMembers(rawMembers.map(rawToMember));
-      } catch {
-        toast.error(t('settings.team.loadMembersError'));
-      } finally {
-        if (!cancelled) {
-          setLoadingMembers(false);
-        }
+  const teamId = team?.id;
+  const {
+    data: memberData,
+    error: membersError,
+    loading: membersLoading,
+    refetch: reloadMembers,
+    setData: setMembers,
+  } = useRetryableFetch<TeamMember[]>(
+    async () => {
+      if (!teamId) {
+        return [];
       }
-    };
+      const data = await gqlMutate(TEAM_MEMBERS_QUERY, { id: teamId });
+      const raw = (data.team as { members?: RawMembership[] } | undefined)?.members ?? [];
+      return raw.map(rawToMember);
+    },
+    [teamId],
+    [],
+    { onError: err => toast.error(getErrorMessage(err, t('settings.team.loadMembersError'))) },
+  );
 
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [team?.id, t]);
+  // A failed read must not render as an empty roster — that reads as "this team
+  // has no members" to whoever is auditing who has access.
+  const members = membersError ? [] : memberData;
+  // The team itself arrives from the store, which may not have hydrated yet.
+  // Keep showing the loading row until it has, rather than briefly claiming the
+  // team has no members.
+  const loadingMembers = membersLoading || !teamId;
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -301,7 +291,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         toast.success(t('settings.team.memberAdded', { name: raw.user.displayName }));
       }
     },
-    [team, t],
+    [team, setMembers, t],
   );
 
   const handleRemoveMember = useCallback(
@@ -321,7 +311,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         toast.success(t('settings.team.memberRemoved'));
       }
     },
-    [members, currentUserId, workspace, teamKey, router, t],
+    [members, currentUserId, workspace, teamKey, router, setMembers, t],
   );
 
   const handleToggleOwner = useCallback(
@@ -338,7 +328,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         isOwner ? t('settings.team.ownerRoleGranted') : t('settings.team.ownerRoleRemoved'),
       );
     },
-    [t],
+    [setMembers, t],
   );
 
   const handleUpdateRole = useCallback(
@@ -353,7 +343,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
       setMembers(prev => prev.map(m => (m.membershipId === membershipId ? { ...m, role } : m)));
       toast.success(t('settings.team.roleUpdated'));
     },
-    [t],
+    [setMembers, t],
   );
 
   const handleDelete = useCallback(async () => {
@@ -538,6 +528,12 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
               <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
                 {t('settings.team.loadingMembers')}
               </div>
+            ) : membersError ? (
+              <InlineRetry
+                className="py-0"
+                message={t('settings.team.loadMembersError')}
+                onRetry={() => void reloadMembers()}
+              />
             ) : (
               <TeamMemberManagement
                 currentUserId={currentUserId}

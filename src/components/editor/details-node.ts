@@ -1,6 +1,15 @@
 import type { CommandProps } from '@tiptap/core';
 import { mergeAttributes, Node } from '@tiptap/core';
 
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    details: {
+      /** Insert a collapsible `<details>` block with an editable summary. */
+      setDetails: () => ReturnType;
+    };
+  }
+}
+
 export const DetailsSummary = Node.create({
   content: 'inline*',
   defining: true,
@@ -38,7 +47,7 @@ export const Details = Node.create({
             ],
             type: this.name,
           }),
-    } as never;
+    };
   },
   content: 'detailsSummary block+',
   defining: true,

@@ -119,6 +119,15 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
   );
 }
 
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    embed: {
+      /** Insert an embed block for `url`. */
+      insertEmbed: (options: { url: string }) => ReturnType;
+    };
+  }
+}
+
 export const EmbedNode = Node.create({
   addAttributes() {
     return {
@@ -135,7 +144,7 @@ export const EmbedNode = Node.create({
             attrs: { url: options.url },
             type: this.name,
           }),
-    } as never;
+    };
   },
 
   addNodeView() {

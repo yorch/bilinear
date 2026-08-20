@@ -8,6 +8,7 @@ import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { fetchAuditLog, type PlatformAuditEntry } from '@/lib/admin-api';
+import { getErrorMessage } from '@/lib/utils';
 
 interface AuditPage {
   entries: PlatformAuditEntry[];
@@ -36,7 +37,7 @@ export default function AdminAuditPage() {
     setData: setPage,
     loading,
     error,
-    errorMessage,
+    cause,
     refetch: reload,
   } = useRetryableFetch<AuditPage>(
     async () => {
@@ -80,7 +81,7 @@ export default function AdminAuditPage() {
         <RowsSkeleton count={5} />
       ) : error ? (
         <InlineRetry
-          message={errorMessage ?? t('common.somethingWentWrong')}
+          message={getErrorMessage(cause, t('common.somethingWentWrong'))}
           onRetry={() => reload()}
         />
       ) : entries.length === 0 ? (

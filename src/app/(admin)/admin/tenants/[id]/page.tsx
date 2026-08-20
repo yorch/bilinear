@@ -26,7 +26,7 @@ import {
   type PlanLimitKey,
 } from '@/lib/plan-limits';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 
 type TenantStatus = 'active' | 'suspended' | 'archived';
 
@@ -75,7 +75,7 @@ export default function AdminTenantDetailPage() {
     setData: setTenant,
     loading,
     error,
-    errorMessage,
+    cause,
     refetch: load,
   } = useRetryableFetch<PlatformTenantDetail | null>(() => fetchTenant(id), [id], null);
 
@@ -183,7 +183,7 @@ export default function AdminTenantDetailPage() {
       <div className="flex flex-col gap-4">
         {error ? (
           <InlineRetry
-            message={errorMessage ?? t('common.somethingWentWrong')}
+            message={getErrorMessage(cause, t('common.somethingWentWrong'))}
             onRetry={() => load()}
           />
         ) : (

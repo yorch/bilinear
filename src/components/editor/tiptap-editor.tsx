@@ -28,8 +28,9 @@ import StarterKit from '@tiptap/starter-kit';
 // usage in an issue tracker and trims the editor bundle significantly.
 import { common, createLowlight } from 'lowlight';
 import { ImageIcon, Link2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Y from 'yjs';
+import { PromptDialog } from '@/components/shared/prompt-dialog';
 import { useTranslations } from '@/hooks/use-translations';
 import { DEFAULT_YJS_PORT } from '@/lib/collab';
 import { cn, TOUCH_TARGET } from '@/lib/utils';
@@ -754,21 +755,52 @@ export function TipTapEditor({
     }
   }, [editor, content, collabEnabled]);
 
-  const setLink = useCallback(() => {
+  /**
+   * The link dialog's target — the href to pre-fill. The *range* is deliberately
+   * not captured here.
+   *
+   * A native `window.prompt` blocked the main thread, so the obvious worry when
+   * replacing it with a dialog is that the selection moves underneath you. It
+   * doesn't, and re-implementing the mapping is worse than trusting ProseMirror:
+   * `Transaction.selection` maps itself through `tr.mapping` on every step
+   * (prosemirror-state), the `selection` state field is just `apply: tr =>
+   * tr.selection`, and TipTap's `focus()` with no argument resolves to
+   * `editor.state.selection`. So a remote collaborator typing above the
+   * highlighted text while the dialog is open already shifts the stored
+   * selection correctly — and under Yjs it does so via relative positions, which
+   * survive concurrent edits more faithfully than mapped integers.
+   *
+   * `showModal()` makes the editor inert, so the only thing that can move the
+   * document meanwhile is a remote peer, and `ToolbarButton`'s
+   * `onMouseDown preventDefault` is what stops the toolbar click itself from
+   * collapsing the selection.
+   */
+  const [linkTarget, setLinkTarget] = useState<{ href: string } | null>(null);
+
+  const openLinkDialog = useCallback(() => {
     if (!editor) {
       return;
     }
-    const prev = editor.getAttributes('link').href ?? '';
-    const url = window.prompt(t('editor.linkPrompt'), prev);
-    if (url === null) {
-      return;
-    }
-    if (url === '') {
-      editor.chain().focus().extendMarkRange('link').unsetLink().run();
-    } else {
-      editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-    }
-  }, [editor, t]);
+    setLinkTarget({ href: editor.getAttributes('link').href ?? '' });
+  }, [editor]);
+
+  const applyLink = useCallback(
+    (url: string) => {
+      setLinkTarget(null);
+      if (!editor) {
+        return;
+      }
+      const chain = editor.chain().focus().extendMarkRange('link');
+      // Cancelling closes without touching the document, as returning null from
+      // the prompt did. An empty field clears the link — and so does a
+      // whitespace-only one, which the prompt would have stored verbatim as a
+      // blank href; trimming here is a deliberate improvement on that, not
+      // parity.
+      const trimmed = url.trim();
+      (trimmed === '' ? chain.unsetLink() : chain.setLink({ href: trimmed })).run();
+    },
+    [editor],
+  );
 
   /**
    * Insert an image from a file input — converts to a base64 data URL.
@@ -834,7 +866,7 @@ export function TipTapEditor({
           </ToolbarButton>
           <ToolbarButton
             active={editor.isActive('link')}
-            onClick={setLink}
+            onClick={openLinkDialog}
             title={t('editor.toolbar.link')}
           >
             <Link2 className="h-3 w-3" />
@@ -941,6 +973,15 @@ export function TipTapEditor({
       )}
 
       <EditorContent editor={editor} />
+
+      <PromptDialog
+        initialValue={linkTarget?.href ?? ''}
+        label={t('editor.linkPrompt')}
+        onCancel={() => setLinkTarget(null)}
+        onSubmit={applyLink}
+        open={linkTarget !== null}
+        title={t('editor.toolbar.link')}
+      />
     </div>
   );
 }
