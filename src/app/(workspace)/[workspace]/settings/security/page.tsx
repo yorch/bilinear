@@ -1,12 +1,14 @@
 'use client';
 
 import { Copy, ExternalLink } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery, isPermissionError } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -155,10 +157,7 @@ export default function SecuritySettingsPage() {
   const t = useTranslations();
   useDocumentTitle(t('settings.security.title'));
   const { formatDate } = useFormatters();
-  const [config, setConfig] = useState<SamlConfig | null>(null);
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
-  const [loading, setLoading] = useState(true);
-  const [samlLoadError, setSamlLoadError] = useState<LoadError | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [pendingAction, setPendingAction] = useState<
@@ -166,9 +165,6 @@ export default function SecuritySettingsPage() {
   >(null);
 
   // SCIM state
-  const [scimTokens, setScimTokens] = useState<ScimTokenRow[]>([]);
-  const [scimLoadError, setScimLoadError] = useState<LoadError | null>(null);
-  const [scimLoading, setScimLoading] = useState(true);
   const [scimCreating, setScimCreating] = useState(false);
   const [scimNewLabel, setScimNewLabel] = useState('');
   const [scimNewPlaintext, setScimNewPlaintext] = useState<string | null>(null);
@@ -180,7 +176,14 @@ export default function SecuritySettingsPage() {
   const acsUrl = `${appUrl}/api/auth/saml/callback`;
   const metadataUrl = `${appUrl}/api/auth/saml/metadata?org=${orgKey}`;
 
-  useEffect(() => {
+  const {
+    cause: samlCause,
+    data: samlData,
+    error: samlFailed,
+    loading,
+    refetch: reloadSaml,
+    setData: setConfig,
+  } = useRetryableFetch<SamlConfig | null>(
     // `samlConfiguration` is a *nullable* root field, so a FORBIDDEN from
     // `requireSamlAdmin` comes back as `data: { samlConfiguration: null }`
     // *alongside* `errors` — a genuine partial response. A null field on its
@@ -189,9 +192,11 @@ export default function SecuritySettingsPage() {
     // Only a clean, error-free response means "not configured" — which is
     // exactly what `gqlQuery` guarantees, since it throws whenever `errors` is
     // present rather than handing back the partial payload.
-    gqlQuery<SamlConfig | null>(SAML_QUERY, {}, 'samlConfiguration')
-      .then(cfg => {
-        setConfig(cfg ?? null);
+    () => gqlQuery<SamlConfig | null>(SAML_QUERY, {}, 'samlConfiguration'),
+    [],
+    null,
+    {
+      onData: cfg => {
         if (cfg) {
           setForm({
             emailAttribute: cfg.emailAttribute,
@@ -205,32 +210,36 @@ export default function SecuritySettingsPage() {
             ssoEnforced: cfg.ssoEnforced,
           });
         }
-      })
-      .catch(err => {
-        setSamlLoadError(toLoadError(err, t('common.somethingWentWrong')));
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+      },
+    },
+  );
 
+  const {
+    cause: scimCause,
+    data: scimData,
+    error: scimFailed,
+    loading: scimLoading,
+    refetch: reloadScim,
+    setData: setScimTokens,
+  } = useRetryableFetch<ScimTokenRow[]>(
     // Same treatment as SAML above: `scimTokens` is org-admin-only, so an
     // ordinary member visiting this page gets FORBIDDEN on a request they never
     // asked to make. That is "you can't see this", not a failure — rendering it
     // in destructive red would alarm every non-admin. A failed read must still
     // never fall through to "No active tokens.", which would tell an admin
     // auditing credentials that there are none.
-    gqlQuery<ScimTokenRow[] | null>(SCIM_TOKENS_QUERY, {}, 'scimTokens')
-      .then(tokens => {
-        setScimTokens(tokens ?? []);
-      })
-      .catch(err => {
-        setScimTokens([]);
-        setScimLoadError(toLoadError(err, t('common.somethingWentWrong')));
-      })
-      .finally(() => {
-        setScimLoading(false);
-      });
-  }, [t]);
+    async () => (await gqlQuery<ScimTokenRow[] | null>(SCIM_TOKENS_QUERY, {}, 'scimTokens')) ?? [],
+    [],
+    [],
+  );
+
+  // A failed read must not leave the last-known data on screen: the SAML form
+  // would invite an overwrite of a config we no longer know, and a stale token
+  // list would misreport which credentials are live.
+  const samlLoadError = samlFailed ? toLoadError(samlCause, t('common.somethingWentWrong')) : null;
+  const scimLoadError = scimFailed ? toLoadError(scimCause, t('common.somethingWentWrong')) : null;
+  const config = samlLoadError ? null : samlData;
+  const scimTokens = scimLoadError ? [] : scimData;
 
   async function handleScimCreate() {
     if (!scimNewLabel.trim()) {
@@ -376,7 +385,7 @@ export default function SecuritySettingsPage() {
           {scimLoading ? (
             <RowsSkeleton count={3} />
           ) : scimLoadError ? (
-            <LoadErrorMessage error={scimLoadError} />
+            <LoadErrorMessage error={scimLoadError} onRetry={() => void reloadScim()} />
           ) : (
             <>
               {scimTokens.length === 0 ? (
@@ -492,7 +501,7 @@ export default function SecuritySettingsPage() {
           // A permission error means "you can't see this"; anything else is a
           // real failure. Either way the form stays hidden, so a configuration
           // that could not be read can never be silently overwritten.
-          <LoadErrorMessage error={samlLoadError} />
+          <LoadErrorMessage error={samlLoadError} onRetry={() => void reloadSaml()} />
         ) : (
           <>
             {/* SP (Service Provider) read-only info */}
@@ -705,12 +714,14 @@ export default function SecuritySettingsPage() {
  * section's data is NOT rendered, so an unreadable config can never be
  * mistaken for an absent one.
  */
-function LoadErrorMessage({ error }: { error: LoadError }) {
-  return (
-    <p className={cn('text-sm', error.forbidden ? 'text-muted-foreground' : 'text-destructive')}>
-      {error.message}
-    </p>
-  );
+function LoadErrorMessage({ error, onRetry }: { error: LoadError; onRetry: () => void }) {
+  // A forbidden read is not a failure and retrying it changes nothing, so it
+  // stays a plain muted line. Everything else gets the retry affordance every
+  // other failed load on this app offers.
+  if (error.forbidden) {
+    return <p className="text-sm text-muted-foreground">{error.message}</p>;
+  }
+  return <InlineRetry className="py-0" message={error.message} onRetry={onRetry} />;
 }
 
 function ReadOnlyField({

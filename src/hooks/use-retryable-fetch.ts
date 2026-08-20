@@ -11,6 +11,31 @@ interface RefetchOptions {
   silent?: boolean;
 }
 
+interface UseRetryableFetchOptions<T> {
+  /**
+   * Run after each successful load, with the result. For the fetch-then-**seed**
+   * pages (workspace/team settings, security, integrations, roadmap, the
+   * standalone issue route) that spread one response across many `useState`
+   * form fields rather than rendering `data` directly: without this they had to
+   * hand-roll the whole loading/error/refetch triple, because the seeding could
+   * only live inside the fetcher — where a failed request would already have
+   * been swallowed, and where "fetch" and "write local state" get tangled.
+   *
+   * Read through a ref, so passing an inline arrow does not re-run the fetch.
+   * Runs only for a response that is still current — a stale one that resolves
+   * after a newer request has started is discarded without seeding.
+   */
+  onData?: (data: T) => void;
+  /**
+   * Run when a load fails, with whatever the fetcher threw. The hook already
+   * exposes `error`/`cause` for rendering; this is for the callers that also
+   * need a one-shot reaction to the failure itself — a toast, a log — which
+   * rendering-derived state cannot express, because it would re-fire on every
+   * render. Same ref treatment and same staleness rule as `onData`.
+   */
+  onError?: (cause: unknown) => void;
+}
+
 interface UseRetryableFetchResult<T> {
   /**
    * Whatever the fetcher threw, unchanged. `error` stays the boolean nearly
@@ -44,6 +69,7 @@ export function useRetryableFetch<T>(
   fetcher: () => Promise<T>,
   deps: unknown[],
   initialValue: T,
+  options?: UseRetryableFetchOptions<T>,
 ): UseRetryableFetchResult<T> {
   const [data, setData] = useState<T>(initialValue);
   const [loading, setLoading] = useState(true);
@@ -56,6 +82,10 @@ export function useRetryableFetch<T>(
   // (below) rather than by `fetcher`, which the caller recreates every render.
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
+  const onDataRef = useRef(options?.onData);
+  onDataRef.current = options?.onData;
+  const onErrorRef = useRef(options?.onError);
+  onErrorRef.current = options?.onError;
 
   const refetch = useCallback(
     async (opts?: RefetchOptions) => {
@@ -74,10 +104,12 @@ export function useRetryableFetch<T>(
         if (requestId === requestIdRef.current) {
           setData(result);
           setFailure(null);
+          onDataRef.current?.(result);
         }
       } catch (err) {
         if (requestId === requestIdRef.current) {
           setFailure({ cause: err });
+          onErrorRef.current?.(err);
         }
       } finally {
         if (requestId === requestIdRef.current) {
