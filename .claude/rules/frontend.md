@@ -4,6 +4,9 @@ paths:
   - "src/app/**/*.{ts,tsx,css}"
   - "src/hooks/**/*.{ts,tsx}"
   - "src/stores/**/*.ts"
+  - "src/lib/**/*.{ts,tsx}"
+  - "src/providers/**/*.{ts,tsx}"
+  - "src/types/**/*.ts"
 ---
 
 # Frontend conventions

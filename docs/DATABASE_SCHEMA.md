@@ -1795,7 +1795,7 @@ blind to everything in the custom file:
 
 ```bash
 docker run -d --name mig-verify -e POSTGRES_PASSWORD=pg -e POSTGRES_DB=bilinear \
-  -p 55432:5432 postgres:17-alpine
+  -p 55432:5432 postgres:18-alpine   # match docker-compose.infra.yml and CI
 export DATABASE_URL="postgresql://postgres:pg@127.0.0.1:55432/bilinear?schema=public"
 yarn prisma migrate deploy                     # both migrations apply cleanly
 yarn prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma \
@@ -1823,7 +1823,15 @@ yarn db:seed                                   # schema is actually usable
 > line left.
 
 Then confirm the custom objects exist, since a no-op custom migration would pass
-every check above:
+every check above. **`yarn db:verify:schema` runs all of it** and exits non-zero
+on the first missing object:
+
+```bash
+yarn db:verify:schema     # asserts the queries below, with the expected sets
+```
+
+The queries it runs, for when you want to inspect by hand. Keep
+`scripts/verify-schema.mjs` in step if you change them:
 
 ```sql
 -- The three partial indexes, plus the xid8 covering index and the FTS GIN.

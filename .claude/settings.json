@@ -1,11 +1,26 @@
 {
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh",
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
-      "Bash(gh api:*)",
-      "Bash(gh pr:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker run:*)",
+      "Bash(docker rm:*)",
+      "Bash(docker stop:*)",
+      "Bash(git:*)",
+      "Bash(just:*)",
       "Bash(node:*)",
-      "Bash(npm:*)",
-      "Bash(python:*)",
+      "Bash(psql:*)",
       "Bash(python3:*)",
       "Bash(yarn:*)"
     ]
