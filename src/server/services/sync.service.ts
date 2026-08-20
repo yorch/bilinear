@@ -33,8 +33,8 @@ export { DELTA_PAGE_SIZE };
  * here is gone with the columns. Its reason still governs the config system
  * that replaced them: a SyncAction fans out to *every* member of the org, so
  * anything scoped narrower than the org must never travel this way. That is
- * why user-scoped configuration is delivered to the owning user's own sockets
- * instead of broadcast — see `ConfigService` and docs/CONFIG_ASSESSMENT.md §4.3.
+ * why a user-scope configuration write is not broadcast at all — see
+ * `propagate` in resolvers/setting.ts and docs/CONFIG_ASSESSMENT.md §4.3.
  */
 const SYNC_PAYLOAD_OMITTED_FIELDS: Record<string, readonly string[]> = {
   Document: ['contentState'],
