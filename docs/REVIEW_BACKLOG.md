@@ -928,9 +928,10 @@ a failing test rather than a silent cache hole.
 > both had been re-catching inside their own fetcher purely to recover a code
 > the hook was already holding.
 >
-> `settings/security` keeps its own `{ forbidden, message }` helper. It is one
-> of the six fetch-then-seed-a-form pages that deliberately do not use the hook
-> (PATTERNS §80.6), so there is nothing to fold it into.
+> `settings/security` keeps its own `{ forbidden, message }` helper — it encodes
+> a real distinction (a refusal is not a failure) that the hook does not make.
+> It now builds that helper from the hook's own `cause`, since §4.11 brought the
+> page onto `useRetryableFetch`.
 
 > The hook catches a `GqlError` — which carries `extensions.code`, with
 > `isGqlErrorCode`/`isPermissionError` built on it in `src/lib/graphql.ts` — and
@@ -987,6 +988,56 @@ message — `isGqlErrorCode(cause, 'FORBIDDEN')` for "not for you", and let
 
 **Effort:** Small. **Risk:** Low, but it touches an auth-adjacent predicate used
 in several places, so it wants its own change rather than riding along.
+
+### 4.10 The frontend audit's four remaining unsound casts — ✅ shipped (2026-08-19)
+
+> Closes F11 of the 2026-08-18 frontend audit (`REVIEW.md`), which had been left
+> at "2 of 4 fixed" on the claim that the rest could not be removed.
+>
+> **The three `as never` on TipTap `addCommands()`** were deferred on the
+> reasoning that `@tiptap/core` ships rollup-bundled types re-exporting the
+> command interface as `type Commands$1 as Commands`, and that a type-alias
+> re-export cannot be augmented from outside the package. That was reasoned, not
+> tested — and it is wrong. A probe file declaring a fake command and asserting
+> `keyof RawCommands` accepts it type-checks; deleting the augmentation makes it
+> fail. Each node now declares its own command, and `slash-commands.ts` drops the
+> three structural casts it used to reach commands the compiler could not see.
+>
+> **`updated as unknown as DBIssue`** in `use-issue-update.ts` is now
+> `toIssueSyncRow` (`src/lib/issue-mappers.ts`), which validates instead of
+> asserting. The store's apply is a whole-object replace, so a malformed
+> response would blank every column of the row; an unrecognizable one is now
+> discarded, and the authoritative row still arrives over the SyncAction stream.
+>
+> The underlying cause was a type that lied: `DBIssue` declares `labelIds`
+> required, but two of the three label shapes a server sends do not carry it, so
+> `normalizeIssueRow` and `applySyncAction` each had to cast around their own
+> signatures. `IssueSyncRow` (`src/lib/db.ts`) names the pre-normalized shape and
+> removed three further casts.
+
+### 4.11 The last six hand-rolled fetches — ✅ shipped (2026-08-19)
+
+> Closes F08 of the same audit, which converted nine of fifteen pages and left
+> six on the reasoning that they fetch-then-*seed a form* rather than
+> fetch-then-render, and that consolidating them wanted a second hook.
+>
+> Right about the shape, wrong about the remedy: the gap was one callback.
+> `useRetryableFetch` gained `onData` (seed after a load lands) and `onError`
+> (a one-shot toast or log on failure), both ref-read and both subject to the
+> existing staleness guard. Workspace settings, team settings, security,
+> integrations, roadmap and the standalone issue route are now on the hook —
+> eleven hand-rolled `loading`/`error` pairs, four `cancelled` flags and two
+> `console.error` calls gone.
+>
+> Five of the six rendered a failed load as a dead end and now offer a retry.
+> The issue route was the substantive one: a missing issue comes back as a
+> NOT_FOUND *error* alongside `data.issue === null`, so reading `data` alone
+> could not tell "no such issue" from "the request failed" — both rendered
+> "Issue not found", which told someone whose network had dropped that their
+> issue was gone.
+>
+> §4.8 (a refused webhooks page reads as an empty one) is unchanged by this and
+> still open: it wants product copy, not a hook.
 
 ## 5. Test coverage gaps
 

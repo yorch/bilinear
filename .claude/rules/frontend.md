@@ -146,9 +146,17 @@ pulse means "live" (connection status, pending write), not "loading".
   refusal *does* trip `error`, so check `isPermissionError(cause)` **before** the
   `error` branch or a non-admin gets a Retry that can never succeed. Render
   `getErrorMessage(cause, …)` only under `(admin)/admin/**`, where the server's
-  own text is the diagnostic; workspace pages show the localized fallback. The one shape the hook does not fit is
-  fetch-then-seed-a-form, which would need `setX(...)` inside the fetcher; those
-  pages keep their own effect. See PATTERNS.md §80.6.
+  own text is the diagnostic; workspace pages show the localized fallback. A page that seeds form
+  fields from the response passes `options.onData`; a one-shot toast or log on
+  failure passes `options.onError`. Neither goes inside the fetcher, which stays
+  pure. See PATTERNS.md §80.6.
+- **A custom TipTap command is declared, not cast.** Each node that adds one
+  carries its own `declare module '@tiptap/core' { interface Commands<ReturnType> }`
+  block next to the node (`details-node.ts`, `embed-node.tsx`, `mermaid-node.tsx`).
+  The augmentation does reach `RawCommands` despite `@tiptap/core` shipping
+  bundled types — verified, not assumed. Without it `addCommands()` only
+  type-checks behind `as never`, and every call site has to cast its way to a
+  command the compiler cannot see.
 - Issue mutations from components: use `useIssueCreate(team, states)` and
   `useIssueUpdate()` — they own the optimistic apply, TransactionQueue enqueue,
   rollback and failure toast. Map store models with `toIssueUsers` /

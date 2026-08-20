@@ -2976,7 +2976,7 @@ When adding a missing FK, pick `onDelete` from what the null state *means*:
 
 ### 80.6 Fetch-on-mount goes through `useRetryableFetch`
 
-Any component that loads data in an effect uses `useRetryableFetch(fetcher, deps, initialValue)` (`src/hooks/use-retryable-fetch.ts`). It returns `{ data, setData, loading, error, cause, refetch }`, and `refetch` **is** the retry handler you hand to `InlineRetry`.
+Any component that loads data in an effect uses `useRetryableFetch(fetcher, deps, initialValue, options?)` (`src/hooks/use-retryable-fetch.ts`). It returns `{ data, setData, loading, error, cause, refetch }`, and `refetch` **is** the retry handler you hand to `InlineRetry`.
 
 `error` is the boolean nearly every call site switches on. `cause` is whatever the fetcher threw, **unchanged** — render it with `getErrorMessage(cause, fallback)` and branch on it with `isPermissionError(cause)` (`@/lib/utils` and `@/lib/graphql`). Both are cleared when a retry starts, so a caller may render `loading` and `error` as siblings without the spinner and the failure row appearing together.
 
@@ -2990,7 +2990,13 @@ Render the fallback string, not `cause`, on workspace-facing surfaces: `getError
 
 Do not hand-roll the equivalent. The recognisable shape — `useState` for data, a `loadError` boolean, a `useState(0)` `reloadKey`, a `let cancelled = false` flag with `if (!cancelled)` guards, and a `biome-ignore useExhaustiveDependencies` for the reload key — was written out fifteen times before being consolidated, and the hand-rolled version is strictly worse: it races on out-of-order responses where the hook discards stale ones via a monotonic request id.
 
-**The one shape the hook does not fit** is fetch-then-seed-a-form: a page that spreads one response across many `useState` form fields rather than rendering it (`settings/page.tsx`, `settings/roadmap`, `settings/security`, `settings/integrations`, `team/[key]/settings`, `issue/[id]`). Routing those through the hook means calling `setX(...)` from inside the fetcher, which is a side effect in the one place that must stay pure. They keep their own effect deliberately — that is not drift, and "consolidate the last six" is the wrong instinct until a second hook exists for that shape.
+**Fetch-then-seed-a-form** — a page that spreads one response across many `useState` form fields rather than rendering it — goes through `options.onData`, not through the fetcher. `onData(data)` runs after each successful load; that is where `setTitle(r.title)` and friends belong. Putting them inside the fetcher instead is a side effect in the one place that must stay pure, and it was the reason six pages (`settings/page.tsx`, `settings/roadmap`, `settings/security`, `settings/integrations`, `team/[key]/settings`, `issue/[id]`) hand-rolled the whole triple until 2026-08-19. A second hook for the shape was considered and is not needed — the gap was one callback.
+
+`options.onError(cause)` is the symmetric escape hatch, for a **one-shot** reaction to a failure: a toast, a log. Anything you would render belongs in the `error`/`cause` branch instead, because a reaction derived from render state re-fires on every render.
+
+Both callbacks are read through refs, so passing an inline arrow does not re-run the fetch, and both respect the staleness guard: a response that resolves after a newer request has started neither seeds nor reports. Neither is a place to call `setData` — the hook already did that before `onData` runs.
+
+When a failed read must not leave its last-known data on screen, derive it at the render site (`const org = orgLoadError ? null : orgData`) rather than clearing state in a callback. A stale roster read as a current one is how "this team has no members" gets shown to someone auditing access.
 
 The hook only sets `error` when the fetcher **throws**, which is why the fetcher must use `gqlQuery`/`gqlMutate` (§76.1) rather than swallowing errors and returning `[]`. A fetcher that returns an empty array on failure renders as a legitimate empty state and leaves the retry branch dead — that combination is what hid a real query bug for a long time.
 
