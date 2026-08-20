@@ -33,9 +33,9 @@ export default function AdminConfigPage() {
   useDocumentTitle(t('admin.nav.config'));
 
   const {
+    cause,
     data: settings,
     error,
-    errorMessage,
     loading,
     refetch,
     setData,
@@ -74,7 +74,9 @@ export default function AdminConfigPage() {
   if (error) {
     // The admin console is the surface where the server's own text is the
     // diagnostic — see .claude/rules/frontend.md on useRetryableFetch.
-    return <InlineRetry message={errorMessage ?? t('config.loadError')} onRetry={refetch} />;
+    return (
+      <InlineRetry message={getErrorMessage(cause, t('config.loadError'))} onRetry={refetch} />
+    );
   }
 
   const groups = groupByArea(settings);

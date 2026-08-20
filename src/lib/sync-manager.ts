@@ -127,6 +127,13 @@ export const UNCACHED_MODELS = [
   'CommentReaction',
   'File',
   'InitiativeUpdate',
+  // Configuration. There is no settings store and no Dexie table: `/admin/config`
+  // and the workspace settings pages read resolved values over GraphQL, and the
+  // action's payload is `{scope, scopeId}` — a hint that something changed, not
+  // the values themselves, which are per-caller anyway (the same key resolves
+  // differently for a different team or user). The action exists because every
+  // mutation emits one; a client that wants live config would refetch on it.
+  'Setting',
   'TeamMembership',
 ] as const;
 
