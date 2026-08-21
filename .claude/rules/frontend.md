@@ -153,6 +153,12 @@ pulse means "live" (connection status, pending write), not "loading".
   fields from the response passes `options.onData`; a one-shot toast or log on
   failure passes `options.onError`. Neither goes inside the fetcher, which stays
   pure. See PATTERNS.md §80.6.
+- **Values a page must render correctly on first paint come from the root
+  layout, not from a fetch.** The accent cookie, the collab config and the
+  product name (`BrandingProvider` / `useAppName()`) are all resolved in
+  `app/layout.tsx` — a server component — and handed to a client provider. A
+  bootstrap payload or a client fetch means a flash of the wrong value, and
+  goes stale on a cache-warm boot that never re-bootstraps.
 - **A custom TipTap command is declared, not cast.** Each node that adds one
   carries its own `declare module '@tiptap/core' { interface Commands<ReturnType> }`
   block next to the node (`details-node.ts`, `embed-node.tsx`, `mermaid-node.tsx`).

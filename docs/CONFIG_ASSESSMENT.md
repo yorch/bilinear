@@ -864,6 +864,37 @@ kept two clean, non-overlapping modes.
 
 ---
 
+### D5 — User scope is **global**, not per-(user, org)
+
+A user belongs to many organizations, and a single `scope_id` column cannot key
+a per-(user, org) preference. Settled as global, matching the two per-user
+preferences the app already has: `users.locale` and `users.accent` are both one
+row per user, not one per membership.
+
+Nothing is deployed, so the second column would have been free to add — that is
+the argument for taking the decision now rather than later, not an argument for
+adding it. Adding a column nothing reads is the same defect as declaring a knob
+nothing enforces.
+
+Pinned by a test rather than only by this paragraph: keying user resolution per
+(user, org) turns it red.
+
+**Caveat worth knowing:** no knob declares `user` scope today, so the layer is
+inert. That is why per-user live delivery was *not* built — see
+REVIEW_BACKLOG §5b.4 for what a genuine first user-scoped knob would look like.
+
+### D6 — Team scope is **flat**; `Team.parentId` is not walked
+
+A sub-team inherits from its organization, not from its parent team. No knob
+needs parent-team inheritance, and a walk costs a query per level and needs both
+a cycle guard and a stated depth bound — none of which buys anything today.
+
+The alternative was left available rather than foreclosed: the storage is
+unchanged either way, so introducing a walk later is a resolver change, not a
+migration. Also pinned by a test, which a `parentId` walk turns red.
+
+---
+
 ## 8. What implementation changed
 
 The design survived contact with the code largely intact. Four things did not,
@@ -943,6 +974,45 @@ must be handed the real one at every production construction site**, and the
 constructor default is a test affordance, not a fallback anyone should reach in
 production.
 
+### 8.2 What the branding knob and the first e2e spec changed
+
+**`branding.appName` is in, and its delivery is simpler than the plan.** §8
+recorded it as removed for want of a client delivery path, and the path filed in
+the backlog was "put it in the bootstrap payload and hold it in a store". The
+root layout turned out to be the better mount point: it is a server component
+that already resolves the accent, the locale and the collab config the same way,
+so one read per request feeds `BrandingProvider` for React and `getAppName()`
+for the surfaces outside it (metadata, the PWA manifest, transactional email).
+No bootstrap field, no store, no staleness on a cached boot — and the auth
+screens are covered too, because they render inside the root layout.
+
+The rule the bootstrap plan would have gotten wrong: **anything a page must
+render correctly on first paint belongs in the layout, not in a payload the
+client fetches afterwards.** `CollabProvider` and the accent cookie already
+encoded that; branding is the third instance.
+
+**Two defects only a real browser and a real bundle could show.** The console's
+first e2e spec found both, and neither was reachable from a unit test:
+
+- `mapConfigError` recognised `InvalidSettingValueError` with `instanceof`. The
+  registry is deliberately importable from browser and server, so the bundler
+  emits it into the SSR chunk *and* the server chunk — two copies, two class
+  identities — and the resolver compared a value thrown by one against the
+  constructor of the other. Every validation failure surfaced as
+  `INTERNAL_SERVER_ERROR`. Under Vitest there is only ever one copy of a module,
+  which is precisely why this class of bug needs a spec that runs the real
+  bundle. Recognition now keys on `name`.
+- `settingsForScope` filtered to `storage === 'db'`, so the console could never
+  list an env-backed knob — contradicting §4.4 above, stranding `SettingRow`'s
+  lock and redaction branches, and making the "console reported the opposite of
+  the security guards" bug in §8.1 unobservable in the console it was about. A
+  test had locked the exclusion in as intentional; it was asserting a bug.
+
+The generalisable point: **a filter that decides what a UI may *show* is not the
+same as the guard that decides what may be *written*.** Conflating them hid
+exactly the values an operator most needs to see, and the write guard
+(`assertWritable`) was doing its job the whole time.
+
 ---
 
 ## 9. Still open
@@ -966,13 +1036,10 @@ production.
    `settings` table (delete the row → fall through to the layer below) and is
    folded into Phase 2; genuine *rollback* needs the `previousValue` in the
    audit record proposed in §4.5.
-4. **Per-(user, org) preferences — decide before Phase 2, not after.** Per
-   D1, user scope is global today and the single `scope_id` column cannot
-   express a per-org user preference. Adding the second scope column later
-   means migrating existing rows; adding it now costs a column nobody reads.
-5. **Team hierarchy resolution.** Per D1, whether team-scope resolution walks
-   `Team.parentId` and what bounds the walk. Needs an answer before team-scope
-   writes ship.
+4. ~~Per-(user, org) preferences~~ — **settled, see §7-D5.** User scope stays
+   global.
+5. ~~Team hierarchy resolution~~ — **settled, see §7-D6.** Team scope stays
+   flat.
 6. **Platform-scope propagation to connected clients.** Settled *provisionally*
    in the build: platform-scope writes emit no SyncAction at all, because
    `createSyncAction` is org-keyed and inventing a channel would fan a

@@ -1199,106 +1199,69 @@ post-state in the DB or store, not just visual presence).
 ## 5b. Configuration system
 
 The system described in [`CONFIG_ASSESSMENT.md`](CONFIG_ASSESSMENT.md) is
-**built** — registry, layered resolver, `settings` storage, GraphQL surface and
-`/admin/config` console. The four items originally filed here are done:
-the platform-admin audit/SyncAction gap, `themeSettings` syncing unstripped
-(the column is gone), the 15 dead columns, and the `psql`-only team knob.
+**built and its deferred work is closed** — registry, layered resolver,
+`settings` storage, GraphQL surface, `/admin/config` console, and an e2e spec
+over the whole loop. The four items originally filed here are done (the
+platform-admin audit/SyncAction gap, `themeSettings` syncing unstripped, the 15
+dead columns, the `psql`-only team knob), and so are the five filed after it
+shipped:
 
-What remains:
+- **5b.1 `branding.appName`** — shipped. The root layout resolves it per request
+  and hands it to `BrandingProvider`; metadata, the PWA manifest and
+  transactional email call `getAppName()`. Renaming the product no longer needs
+  a rebuild, and the auth screens are covered too because they sit inside the
+  root layout.
+- **5b.2 per-(user, org) preferences** — decided: **user scope stays global**,
+  matching `users.locale`/`users.accent`. Recorded in CONFIG_ASSESSMENT §7-D5
+  and pinned by a test.
+- **5b.3 team-hierarchy resolution** — decided: **team scope stays flat**. A
+  sub-team inherits from its org, not its parent team. CONFIG_ASSESSMENT §7-D6,
+  pinned by a test that a `parentId` walk would turn red.
+- **5b.4 per-user delivery over WebSocket** — **not built, deliberately.** See
+  below; it is the one item that came back with a different answer than the one
+  it was filed with.
+- **5b.5 platform-scope authorization in the primitive** — shipped.
+  `ConfigService.set`/`clear` take a `SettingWriter { actorId, role }` and
+  re-assert it in `assertWritable`, so the guarantee no longer rests on the one
+  resolver that remembers to call `requirePlatformAdmin`.
 
-### 5b.1 — Runtime `branding.appName` needs a client delivery path
+### 5b.4 — `user` scope has no consumer, so per-user delivery has nothing to deliver
 
-**Effort** Medium · **Risk** Low
+**Status:** open, but not as filed. Do **not** build `broadcastToUser` until
+this is resolved.
 
-`NEXT_PUBLIC_APP_NAME` is inlined by `next build`, so renaming the product
-still needs a rebuild — the one §2.1c trap the config system did not close.
+The item was written as "a user-scope config write is deliberately not
+broadcast, so other devices pick it up on next bootstrap". A survey of the
+codebase before building the delivery path found the premise is not yet true:
+**no knob in the registry declares `user` scope**, so a user-scope write is
+refused by `assertWritable` and the traffic the delivery path would carry cannot
+exist.
 
-**Why it's deferred:** `APP_NAME` has 14 consumers and 12 are client components
-importing the constant from `src/lib/app-config.ts` directly. Wiring only the
-server-rendered surfaces (transactional emails, PWA manifest) would rename
-those while the sidebar still said Bilinear — worse than not offering the knob,
-and precisely the "config that lies" defect the system was built to remove. The
-knob was declared during implementation and deliberately removed again.
+Nor is there an obvious first knob. `locale`, `accent` and
+`emailNotificationsEnabled` each already have a column, a mutation and a UI —
+moving them into the registry is churn, not a win. The one genuinely
+unpersisted preference (board grouping, `use-issue-list-page.ts`) is client-only
+cosmetic state, and this repo's convention for that shape is `localStorage`, as
+sidebar-collapsed, visible columns and recent items all already do.
 
-**First-touch:** add the resolved value to the bootstrap payload, hold it in a
-store, and move the 12 client imports onto it. Then declare
-`branding.appName` (platform scope, `visibleTo: 'member'`).
+**What a real candidate looks like**, so the next person can recognise one: a
+preference the **server** must resolve outside a request context — a digest
+cadence, a per-user AI setting read by a background job — i.e. the same shape as
+the org-scoped `ai.*` knobs, but per person. Nothing in the codebase is that
+shape today.
 
-**Acceptance signal:** changing it at `/admin/config` renames the sidebar, the
-auth screens, the document title, the PWA manifest and transactional emails,
-with no rebuild.
+**Why the scope stays anyway:** it costs one branch in `scopeIdFor` and one in
+`resolveScopeId`, and removing it would make the precedence chain three layers
+while the design, the storage and the docs all describe four. Revisit if it is
+still unused when something else forces a schema change.
 
-### 5b.2 — Per-(user, org) preferences, if ever wanted
+**First-touch when a candidate appears:** declare the knob, then give
+`ConnectionManager` a `broadcastToUser` — `ClientInfo` already carries `userId`,
+so it is `broadcastToOrgAll`'s loop with one extra `continue`, not new identity
+plumbing.
 
-**Effort** Medium · **Risk** Medium
-
-User scope is global today, matching `users.locale`/`users.accent`. A single
-`scopeId` column cannot key a per-(user, org) preference.
-
-**Why it's deferred:** nothing needs it yet, and adding the second scope column
-later means migrating existing rows. Cheap now, awkward once rows exist —
-so this is a decision to take deliberately rather than by default.
-
-**Acceptance signal:** a decision recorded in `CONFIG_ASSESSMENT.md` §9-4,
-either way.
-
-### 5b.3 — Team-hierarchy resolution
-
-**Effort** Small · **Risk** Low
-
-`Team.parentId` is a real hierarchy, but team-scope resolution does not walk
-it: a sub-team inherits from its org, not from its parent team.
-
-**Why it's deferred:** no knob currently needs parent-team inheritance, and
-walking the tree needs a documented depth bound. Recorded in
-`src/lib/config/types.ts` so the next reader does not assume otherwise.
-
-**Acceptance signal:** either a walk with a stated bound, or a comment in
-`SETTINGS` saying team scope is intentionally flat.
-
-### 5b.4 — Per-user config delivery over WebSocket
-
-**Effort** Medium · **Risk** Medium
-
-A user-scope config write is deliberately not broadcast: `createSyncAction` is
-org-keyed and fans out to every client in the org, so broadcasting one person's
-preference would hand it to the whole workspace. Other devices therefore pick
-it up on next bootstrap rather than live.
-
-**First-touch:** give `ConnectionManager` the ability to address one user's
-sockets, then route user-scope writes through it. Cheaper than the Medium
-above suggests: `ClientInfo` already carries `userId`, so `broadcastToUser` is
-`broadcastToOrgAll`'s loop with one extra `continue` — the review that raised
-this checked, and the missing piece is routing, not identity tracking.
-
-**Acceptance signal:** a user-scope change reaches that user's other open
-tabs and no one else's.
-
-### 5b.5 — Platform-scope authorization is enforced by one caller, not by the primitive
-
-**Effort** Small · **Risk** Medium
-
-`resolveScopeId` decides whether a caller may reach platform scope, and it is
-the only thing that does. `ConfigService.set`/`clear` take no role at all, so
-any future writer that forgets the check writes deployment-wide defaults
-unguarded. `scripts/verify-config.ts` already does exactly that (correctly — it
-is an operator script with direct database access), and
-`PlatformAdminService.updateTenantLimits` relies on its own separate
-`requirePlatformAdmin` in the resolver above it.
-
-**Why it's deferred:** the check genuinely belongs in the resolver — it needs
-`ctx` for the impersonation guard, which `ConfigService` deliberately does not
-have — and this repo's convention is that authorization lives in resolvers and
-services take no role. Threading a role parameter through the shared write path
-is defence in depth against a bug this system has already had once, but it
-crosses that convention, so it is a decision rather than a fix.
-
-**First-touch:** `ConfigService.set(key, scope, scopeId, value, actorId, role?)`
-re-asserting `role === 'platform-admin'` for platform scope inside
-`assertWritable`; decide what the operator script passes.
-
-**Acceptance signal:** a new non-GraphQL writer cannot reach platform scope
-without saying so explicitly.
+**Acceptance signal:** a user-scope change reaches that user's other open tabs
+and no one else's.
 
 ---
 

@@ -502,7 +502,7 @@ Precedence, lowest first: **code default → env → platform → org → team �
 An `override`-mode env var sits above every layer and renders the knob locked in
 the UI.
 
-Four rules that are easy to get wrong:
+Six rules that are easy to get wrong:
 
 - **A registered knob must have a consumer.** A declaration nothing enforces
   reports a setting that does nothing — worse than no setting at all. Two knobs
@@ -523,6 +523,23 @@ Four rules that are easy to get wrong:
   `requirePlatformAdmin`, team scope needs membership (org admins excepted), and
   org/user scope may never name someone else's id. Conflating the two let any
   org admin write deployment-wide defaults for every tenant.
+- **Never identify a registry error with `instanceof` from server code.**
+  `src/lib/config` is importable from the browser *and* the server, so the
+  bundler emits it into the SSR chunk as well as the server chunk — two copies,
+  two class identities. `mapConfigError` compared a value thrown by one against
+  the constructor of the other, fell through, and Apollo masked every validation
+  failure as `INTERNAL_SERVER_ERROR`. Use `isInvalidSettingValueError`, which
+  keys on `name`. This applies to any error class declared in a module both
+  sides import; the server-only error classes in `src/server/config/` are single
+  instances and are safe. **Unit tests cannot catch this** — under Vitest there
+  is only ever one copy of a module — so it needs an e2e spec or a name-based
+  check by construction.
+- **Listing a knob and permitting a write are different questions.** The
+  platform console shows *every* knob declared at the scope, including
+  `env-only` ones, which render locked and name their variable (redacted ones
+  show presence only). `assertWritable` is what refuses the write. Filtering the
+  listing instead hid exactly the values an operator needs when asking "why is
+  it behaving like that here".
 - **The database type-checks nothing** — `settings.value` is `Json`. The
   registry validator is the only guard on a write, and a stored row that no
   longer matches its declaration falls through to the layer below rather than

@@ -78,6 +78,11 @@ code default → env → platform → org → team → user.
   administers the org.
 - `settings.value` is `Json`, so the DB validates nothing — the registry
   validator is the only guard on a write.
+- **Never `instanceof` a registry error class from server code.** `src/lib/config`
+  is bundled twice (SSR chunk + server chunk), so the class has two identities
+  and the check silently fails — every validation error became
+  `INTERNAL_SERVER_ERROR`. Use `isInvalidSettingValueError`. Vitest sees one
+  copy, so no unit test catches it.
 
 See PATTERNS.md §10 and docs/CONFIG_ASSESSMENT.md.
 
