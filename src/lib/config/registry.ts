@@ -12,7 +12,7 @@
  */
 
 import { DEFAULT_APP_NAME } from '../app-config';
-import { ENV_DEFAULTS, isEnvFlagSet } from '../env-defaults';
+import { DECIMAL_RE, ENV_DEFAULTS, isEnvFlagSet } from '../env-defaults';
 import {
   SCOPE_ORDER,
   type SettingDefinition,
@@ -121,9 +121,12 @@ export const SETTINGS: readonly SettingDefinition[] = [
   // it once per request and hands it to `BrandingProvider`, and the surfaces
   // outside React (metadata, manifest, email) call `getAppName()` directly.
   //
-  // `visibleTo: 'member'` because every member sees the name on every screen;
-  // only a platform admin may change it, since it is the deployment's identity
-  // rather than one tenant's.
+  // `visibleTo: 'platform-admin'` even though every member sees the name.
+  // `visibleTo` governs the *settings API*, and the knob is platform-scoped —
+  // `resolveScopeId` refuses platform scope to anyone else, so `'member'` here
+  // would have granted nothing and read as a promise the API cannot keep.
+  // Members get the name from `BrandingProvider`, resolved server-side in the
+  // root layout, which needs no read permission at all.
   defineSetting({
     default: DEFAULT_APP_NAME,
     editableBy: 'platform-admin',
@@ -133,7 +136,7 @@ export const SETTINGS: readonly SettingDefinition[] = [
     scopes: ['platform'],
     storage: 'db',
     type: 'string',
-    visibleTo: 'member',
+    visibleTo: 'platform-admin',
   }),
 
   // ── Cycles (was Team.upcomingCycleCount) ──────────────────────────────────
@@ -210,20 +213,6 @@ export const SETTINGS: readonly SettingDefinition[] = [
     type: 'int',
     visibleTo: 'org-admin',
   }),
-
-  // ── Branding ──────────────────────────────────────────────────────────────
-  // NOT declared here, deliberately. A runtime `branding.appName` is the
-  // obvious next knob — NEXT_PUBLIC_APP_NAME is inlined by `next build`, so
-  // renaming the product currently needs a rebuild — but `APP_NAME` has 14
-  // consumers and 12 of them are client components that import the constant
-  // directly. Wiring only the server-rendered surfaces would rename
-  // transactional emails and the PWA manifest while the sidebar kept saying
-  // Bilinear, which is worse than not offering the knob: it is precisely the
-  // "config that lies" failure this system was built to remove.
-  //
-  // Doing it properly needs a client delivery path (the value in the bootstrap
-  // payload, a store to hold it, and those 12 imports moved onto it). Tracked
-  // in docs/REVIEW_BACKLOG.md rather than half-declared here.
 
   // ── AI assistant ──────────────────────────────────────────────────────────
   defineSetting({
@@ -341,6 +330,10 @@ export const SETTINGS: readonly SettingDefinition[] = [
       ['SLACK_CLIENT_SECRET', 'config.env.slackClientSecret'],
       ['SLACK_SIGNING_SECRET', 'config.env.slackSigningSecret'],
       ['SMTP_PASS', 'config.env.smtpPass'],
+      // Half a credential in practice: an IAM access-key id on SES, the
+      // literal 'apikey' paired with a secret on SendGrid. Presence is the
+      // useful signal; the value is not worth echoing back.
+      ['SMTP_USER', 'config.env.smtpUser'],
       ['ANTHROPIC_API_KEY', 'config.env.anthropicApiKey'],
       ['OPENAI_API_KEY', 'config.env.openaiApiKey'],
       ['SENTRY_AUTH_TOKEN', 'config.env.sentryAuthToken'],
@@ -385,7 +378,6 @@ export const SETTINGS: readonly SettingDefinition[] = [
       ['GRAPHQL_ALLOWED_ORIGINS', 'config.env.graphqlAllowedOrigins', ''],
       ['SMTP_HOST', 'config.env.smtpHost', ''],
       ['SMTP_PORT', 'config.env.smtpPort', String(ENV_DEFAULTS.SMTP_PORT)],
-      ['SMTP_USER', 'config.env.smtpUser', ''],
       ['SMTP_SECURE', 'config.env.smtpSecure', ''],
       ['COLLAB_ENABLED', 'config.env.collabEnabled', ''],
     ] as const
@@ -556,11 +548,16 @@ export function validateSettingValue(definition: SettingDefinition, raw: unknown
       throw new InvalidSettingValueError(`${key} must be a number`);
     }
     // A strict decimal parse rather than bare `Number()`, which happily accepts
-    // '0x10' as 16, '1e3' as 1000, '' as 0 and '  7  ' as 7. Those are not
-    // values a form or an env var is ever meant to submit, and '' → 0 was
-    // caught only by the bounds happening to start at 1 — a fragile place for
-    // that guarantee to live.
-    if (typeof raw === 'string' && !/^[-+]?(\d+\.?\d*|\.\d+)$/.test(raw.trim())) {
+    // '0x10' as 16, '' as 0 and '  7  ' as 7. Those are not values a form or an
+    // env var is ever meant to submit, and '' → 0 was caught only by the bounds
+    // happening to start at 1 — a fragile place for that guarantee to live.
+    //
+    // Exponent notation IS accepted: `1e-3` is a decimal number by any ordinary
+    // reading, and rejecting it made this parser disagree with `sampleRateEnv`
+    // over `LOG_HTTP_SAMPLE_RATE=1e-3` — the console reporting 1 while the
+    // process sampled 0.001. `parseSampleRate` is the shared arbiter now, and
+    // `registry.test.ts` asserts the two agree.
+    if (typeof raw === 'string' && !DECIMAL_RE.test(raw.trim())) {
       throw new InvalidSettingValueError(`${key} must be a decimal number`);
     }
     const n = typeof raw === 'number' ? raw : Number(raw.trim());

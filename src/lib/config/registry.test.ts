@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { parseSampleRate } from '../env-defaults';
 import {
   defaultForScope,
   getSetting,
@@ -151,6 +152,31 @@ describe('registry invariants', () => {
       for (const raw of ['1', '0', 'true', 'false', 'TRUE', 'yes', '']) {
         const viaRegistry = parseEnvValue(s, raw) ?? false;
         expect(viaRegistry, `${s.key} <- "${raw}"`).toBe(raw === '1');
+      }
+    }
+  });
+
+  it('agrees with parseSampleRate on every LOG_HTTP_SAMPLE_RATE input', () => {
+    // The console must not report a sample rate the process is not using. It
+    // did: the registry rejected `-1` and showed the default 1 while
+    // `sampleRateEnv` clamped it to 0, and rejected `1e-3` while the process
+    // sampled 0.001. Same class as the boolean-flag drift above.
+    const knob = getSetting('log.httpSampleRate');
+    expect(knob, 'log.httpSampleRate must exist for this to mean anything').toBeDefined();
+    for (const raw of ['1', '0', '0.5', '1e-3', '-1', '2', 'abc', '0x10', '  0.25  ', '']) {
+      const viaRegistry = parseEnvValue(knob as SettingDefinition, raw) ?? 1;
+      expect(viaRegistry, `"${raw}"`).toBe(parseSampleRate(raw));
+    }
+  });
+
+  it('never gives an env-resolved knob a per-scope default map', () => {
+    // `resolveWithoutDatabase` short-circuits before any scope is walked, so it
+    // has no scope to read such a map at — `defaultForScope` would fall back to
+    // walking SCOPE_ORDER in reverse and hand back the deepest tier's default.
+    // That is the exact bug `deepest` prevents on the database path.
+    for (const s of SETTINGS) {
+      if (s.storage === 'env-only' || s.env?.mode === 'override') {
+        expect(typeof s.default, s.key).not.toBe('object');
       }
     }
   });

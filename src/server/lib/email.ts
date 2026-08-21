@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { DEFAULT_APP_NAME } from '@/lib/app-config';
 import { defaultLocale, isLocale, type Locale, translate } from '@/lib/i18n';
 import { getAppName } from './branding';
 import { env } from './env';
@@ -63,10 +64,31 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#39;');
 }
 
+/**
+ * Display name for the `From` header, with anything that could end the quoted
+ * string removed.
+ *
+ * `appName` used to be a build-time constant; it is now a database-backed knob,
+ * so it crosses a trust boundary it did not before. Left raw, a name like
+ * `Acme" <mail@elsewhere.test>, "x` closes the quoted phrase and address-parses
+ * into a second, attacker-chosen mailbox — on magic-link mail, which is sent to
+ * addresses that are not yet accounts. CR/LF would splice headers outright.
+ * Capped as well: a header field has a practical length limit and the name is
+ * decoration, not data.
+ */
+function fromDisplayName(appName: string): string {
+  return (
+    appName
+      .replace(/["\\\r\n]/g, '')
+      .trim()
+      .slice(0, 64) || DEFAULT_APP_NAME
+  );
+}
+
 function fromAddress(appName: string): string {
   const host = process.env.SMTP_HOST ?? 'example.com';
   const domain = host.startsWith('smtp.') ? host.slice(5) : host;
-  return `"${appName}" <noreply@${domain}>`;
+  return `"${fromDisplayName(appName)}" <noreply@${domain}>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -111,7 +133,7 @@ export async function sendMagicLinkEmail(
     from: fromAddress(appName),
     html: htmlWrap(
       `
-      <h2 style="font-size:20px;font-weight:600;margin-bottom:8px">${emailT(locale, 'email.magicLink.heading', { appName })}</h2>
+      <h2 style="font-size:20px;font-weight:600;margin-bottom:8px">${emailT(locale, 'email.magicLink.heading', { appName: escapeHtml(appName) })}</h2>
       <p style="color:#374151">${emailT(locale, 'email.magicLink.codeIntro')}</p>
       <div style="font-size:36px;font-weight:700;letter-spacing:10px;padding:16px 0;color:#111">${code}</div>
       <p>${emailT(locale, 'email.magicLink.or')} <a href="${verifyUrl}" style="color:#6366f1">${emailT(locale, 'email.magicLink.clickHere')}</a>.</p>
@@ -175,7 +197,7 @@ export async function sendOrganizationInviteEmail(params: {
     from: fromAddress(appName),
     html: htmlWrap(
       `
-      <h2 style="font-size:20px;font-weight:600;margin-bottom:8px">${emailT(locale, 'email.invite.heading', { appName })}</h2>
+      <h2 style="font-size:20px;font-weight:600;margin-bottom:8px">${emailT(locale, 'email.invite.heading', { appName: escapeHtml(appName) })}</h2>
       <p style="color:#374151">${emailT(locale, bodyKey, bodyParams)}</p>
       ${ctaButton(params.inviteUrl, emailT(locale, 'email.invite.cta'))}
       <p style="color:#6b7280;font-size:13px">${emailT(locale, 'email.invite.expiry')}</p>
@@ -427,3 +449,6 @@ export async function sendStatusChangeNotificationEmail(
     to,
   });
 }
+
+/** Exposed for tests only — see `email.test.ts`. */
+export const __testing = { fromDisplayName };

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APP_NAME } from '@/lib/app-config';
 
 const get = vi.fn();
@@ -15,9 +15,22 @@ const { getAppName } = await import('./branding');
  * page with it.
  */
 describe('getAppName', () => {
+  const originalDatabaseUrl = process.env.DATABASE_URL;
+
   beforeEach(() => {
     get.mockReset();
     process.env.DATABASE_URL = 'postgresql://localhost/test';
+  });
+
+  afterEach(() => {
+    // One test deletes this. Vitest isolates per file, so nothing outside would
+    // notice today — but a test that leaves the environment altered is one
+    // reordering away from being the reason another test fails.
+    if (originalDatabaseUrl === undefined) {
+      delete process.env.DATABASE_URL;
+    } else {
+      process.env.DATABASE_URL = originalDatabaseUrl;
+    }
   });
 
   it('returns the configured name', async () => {

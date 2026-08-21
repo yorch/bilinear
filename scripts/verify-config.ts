@@ -223,7 +223,7 @@ async function main() {
   );
 
   // 16. deleteScope removes a scope's rows (no FK cascade exists).
-  const removed = await config.deleteScope('org', orgId);
+  const removed = await config.deleteScope('org', orgId, OPERATOR);
   check('deleteScope removes rows', removed > 0, `${removed} rows`);
 
   // 17. The prune deletes ONLY tombstoned keys — never merely-unknown ones.

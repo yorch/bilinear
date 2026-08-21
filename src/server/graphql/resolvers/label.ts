@@ -117,7 +117,7 @@ export const labelResolvers = {
 
       let label: IssueLabel;
       try {
-        label = await ctx.services.label.update(id, input);
+        label = await ctx.services.label.update(id, ctx.orgId, input);
       } catch (err) {
         handleLabelError(err);
       }

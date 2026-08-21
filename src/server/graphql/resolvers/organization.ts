@@ -5,6 +5,8 @@ import { announceJoin, broadcastMembership } from '../../lib/membership-sync';
 import { clearOrgSession, requireAuth, requireOrgRole, requireUserId } from '../../middleware/auth';
 import {
   CannotRemoveSelfError,
+  InvalidLogoUrlError,
+  InvalidOrganizationNameError,
   InvalidRoleError,
   InvalidUrlKeyError,
   LastOwnerError,
@@ -453,9 +455,15 @@ export const organizationResolvers = {
       try {
         organization = await ctx.services.organization.update(ctx.orgId, input);
       } catch (err) {
-        // Same two failure modes as choosing a URL key at creation time, so
-        // they map to the same code.
-        if (err instanceof InvalidUrlKeyError || err instanceof UrlKeyTakenError) {
+        // Every shape failure here is caller input, so they all map to the
+        // same code. Without the name and logo cases a too-long name reached
+        // Prisma and surfaced as INTERNAL_SERVER_ERROR (P2000).
+        if (
+          err instanceof InvalidUrlKeyError ||
+          err instanceof UrlKeyTakenError ||
+          err instanceof InvalidOrganizationNameError ||
+          err instanceof InvalidLogoUrlError
+        ) {
           throw new GraphQLError(err.message, { extensions: { code: 'BAD_USER_INPUT' } });
         }
         throw err;

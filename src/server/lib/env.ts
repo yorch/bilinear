@@ -19,7 +19,7 @@
  * of use (lazily), matching `jwt.ts`'s `getSecret()`.
  */
 
-import { ENV_DEFAULTS, isEnvFlagSet } from '@/lib/env-defaults';
+import { ENV_DEFAULTS, isEnvFlagSet, parseSampleRate } from '@/lib/env-defaults';
 
 /**
  * Read a numeric env var, falling back to `default` when unset or empty.
@@ -62,20 +62,14 @@ export function boolEnv(name: string): boolean {
 }
 
 /**
- * Fraction of successful, fast HTTP requests to log (0..1). Preserves the
- * exact prior semantics from `src/app/api/graphql/route.ts`: unset/empty
- * means "log everything" (1), and a present-but-unparseable value falls back
- * to 1 rather than throwing (this one field intentionally does NOT use
- * `numericEnv`'s throw-on-invalid behavior, since its original call site
- * never threw either — only clamped).
+ * Fraction of successful, fast HTTP requests to log (0..1).
+ *
+ * Delegates to `parseSampleRate`, which the registry's `log.httpSampleRate`
+ * bounds also match. Two independent parsers of one variable is how the console
+ * came to report a sample rate the process was not using.
  */
 function sampleRateEnv(name: string): number {
-  const raw = process.env[name];
-  if (raw === undefined || raw === '') {
-    return 1;
-  }
-  const n = Number(raw);
-  return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 1;
+  return parseSampleRate(process.env[name]);
 }
 
 /**

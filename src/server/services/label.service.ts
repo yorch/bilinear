@@ -61,6 +61,14 @@ export class LabelService {
   ) {}
 
   async create(orgId: string, creatorId: string, input: LabelCreateInput): Promise<IssueLabel> {
+    // Resolved before the transaction opens, and only when it is needed.
+    // `this.config` reads on `this.prisma` — a different pool connection — so a
+    // cache miss inside the transaction would hold one connection while asking
+    // for a second. At the pool's default of 10, enough concurrent creates
+    // deadlock until every transaction times out. The cap is not transactional
+    // data; the TOCTOU guard is the sibling count, which stays inside.
+    const cap = input.parentId ? await this.getMaxGroupChildren(orgId) : 0;
+
     return this.prisma.$transaction(async tx => {
       if (input.parentId) {
         // Scope the parent to the same org — otherwise a caller could nest a
@@ -78,10 +86,9 @@ export class LabelService {
           throw new LabelGroupDepthError();
         }
         // Capacity guard: each group may have at most the org's configured
-        // cap (`limits.maxLabelGroupChildren`) of children. The count still
-        // runs inside the transaction to close the TOCTOU window; the cap
-        // itself is a cached config read rather than a query.
-        const cap = await this.getMaxGroupChildren(orgId);
+        // cap (`limits.maxLabelGroupChildren`) of children. The count runs
+        // inside the transaction to close the TOCTOU window; the cap was
+        // resolved above it, for the reason given there.
         const siblingCount = await tx.issueLabel.count({
           where: { archivedAt: null, parentId: input.parentId },
         });
@@ -169,7 +176,17 @@ export class LabelService {
     return this.config.getInt(MAX_GROUP_CHILDREN_KEY, { orgId });
   }
 
-  async update(id: string, input: LabelUpdateInput): Promise<IssueLabel> {
+  /**
+   * `orgId` is passed in rather than read from the row for one reason: the cap
+   * has to be resolved BEFORE the transaction opens (see `create`), and the
+   * row's org is not known until the transaction reads it. The caller has it
+   * already — `labelUpdate` loads the label and checks tenancy before calling —
+   * so taking it as a parameter avoids a second lookup, and matches how
+   * `requireTeamMember` takes an explicit org rather than inferring one.
+   */
+  async update(id: string, orgId: string, input: LabelUpdateInput): Promise<IssueLabel> {
+    const cap = input.parentId != null ? await this.getMaxGroupChildren(orgId) : 0;
+
     return this.prisma.$transaction(async tx => {
       // Re-run depth + capacity guards whenever parentId is being set to a group.
       if (input.parentId != null) {
@@ -200,7 +217,6 @@ export class LabelService {
         }
         // Exclude self from the sibling count in case this label already belongs
         // to the same group (moving within the group doesn't increase capacity).
-        const cap = await this.getMaxGroupChildren(current.organizationId);
         const siblingCount = await tx.issueLabel.count({
           where: {
             archivedAt: null,

@@ -294,7 +294,23 @@ export class ConfigService {
    * the rest of the schema relies on — deleting an org, team or user has to
    * come here explicitly or the rows outlive their owner forever.
    */
-  async deleteScope(scopeType: SettingScope, scopeId: string): Promise<number> {
+  async deleteScope(
+    scopeType: SettingScope,
+    scopeId: string,
+    writer: SettingWriter,
+  ): Promise<number> {
+    // The one write path that is not per-knob, and therefore the one place
+    // `assertWritable` cannot speak for. Guarded here so the claim on
+    // `SettingWriter` — that platform-scope protection lives in the primitive
+    // rather than in whichever caller remembers — is true of every writer, not
+    // just `set` and `clear`. Org- and team-scope callers must still have
+    // established ownership of `scopeId` themselves; there is nothing here that
+    // could check it.
+    if (scopeType === 'platform' && writer.role !== 'platform-admin') {
+      throw new SettingNotWritableError(
+        'Platform-scope settings may only be deleted by a platform administrator',
+      );
+    }
     const { count } = await this.prisma.setting.deleteMany({
       where: { scopeId, scopeType },
     });

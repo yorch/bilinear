@@ -97,7 +97,13 @@ export const platformAdminResolvers = {
     ) => {
       const actorId = await requirePlatformAdmin(ctx.prisma, ctx);
       const { previous } = await mapped(() =>
-        ctx.services.platformAdmin.updateTenantLimits(id, limits, actorId),
+        ctx.services.platformAdmin.updateTenantLimits(id, limits, {
+          actorId,
+          // `requirePlatformAdmin` has already run and returned this actor's
+          // id; stating the role here is what lets `assertWritable` verify it
+          // rather than trust the caller.
+          role: 'platform-admin',
+        }),
       );
       // `previous` is what makes this rollback-able: the audit row records
       // both sides of the change, so restoring a mis-set cap is a lookup

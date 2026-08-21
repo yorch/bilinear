@@ -419,6 +419,7 @@
     },
     "setHere": "Set here",
     "title": "Platform configuration",
+    "unsetEnv": "Set {name} to change this",
     "webhook": {
       "autoDisableAfter": "Auto-disable after consecutive failures",
       "maxAttempts": "Webhook delivery attempts",

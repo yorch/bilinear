@@ -11,10 +11,31 @@ import {
 import { InvalidScopeError, SettingNotWritableError, UnknownSettingError } from '../../config';
 import { requireDefinition } from '../../config/reader';
 import { childLogger } from '../../lib/logger';
-import { requireAuth, requirePlatformAdmin, requireTeamMember } from '../../middleware/auth';
+import { requirePlatformAdmin, requireTeamMember } from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
 
 const log = childLogger({ module: 'resolver/setting' });
+
+/**
+ * Authenticate without demanding an organization.
+ *
+ * `requireAuth` asserts BOTH `userId` and `orgId`, which is correct for
+ * workspace resolvers and wrong here. The platform console is reachable by a
+ * platform admin who belongs to no workspace, and by one whose own
+ * organization has been suspended or archived — `extractAuthContext` nulls
+ * `orgId` in that case *deliberately*, so the admin can still reach `/admin`.
+ * Demanding an org made all four setting resolvers answer UNAUTHENTICATED for
+ * exactly those sessions, behind a page the `(admin)` layout had already let
+ * them into, leaving a Retry button that could never succeed.
+ *
+ * Nothing is loosened: org- and team-scope reads still refuse a missing org,
+ * in `resolveScopeId`, which is where that rule belongs.
+ */
+function requireUser(ctx: GraphQLContext): asserts ctx is GraphQLContext & { userId: string } {
+  if (!ctx.userId) {
+    throw new GraphQLError('Not authenticated', { extensions: { code: 'UNAUTHENTICATED' } });
+  }
+}
 
 /**
  * Effective config role for the caller.
@@ -227,7 +248,7 @@ export const settingResolvers = {
       { key, scope, scopeId }: { key: string; scope: SettingScope; scopeId?: string | null },
       ctx: GraphQLContext,
     ) => {
-      requireAuth(ctx);
+      requireUser(ctx);
       const definition = requireKnob(key);
       const role = await callerRole(ctx);
       if (!satisfiesRole(role, definition.editableBy)) {
@@ -262,7 +283,7 @@ export const settingResolvers = {
       },
       ctx: GraphQLContext,
     ) => {
-      requireAuth(ctx);
+      requireUser(ctx);
       const definition = requireKnob(input.key);
       const role = await callerRole(ctx);
       if (!satisfiesRole(role, definition.editableBy)) {
@@ -301,7 +322,7 @@ export const settingResolvers = {
       { key, scope, scopeId }: { key: string; scope: SettingScope; scopeId?: string | null },
       ctx: GraphQLContext,
     ) => {
-      requireAuth(ctx);
+      requireUser(ctx);
       const definition = requireKnob(key);
       const role = await callerRole(ctx);
       if (!satisfiesRole(role, definition.visibleTo)) {
@@ -319,7 +340,7 @@ export const settingResolvers = {
       { scope, scopeId }: { scope: SettingScope; scopeId?: string | null },
       ctx: GraphQLContext,
     ) => {
-      requireAuth(ctx);
+      requireUser(ctx);
       const role = await callerRole(ctx);
       const resolvedScopeId = await resolveScopeId(ctx, scope, scopeId, role);
       const ids = idsFor(ctx, scope, resolvedScopeId);

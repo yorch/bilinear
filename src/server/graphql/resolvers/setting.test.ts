@@ -82,6 +82,28 @@ describe('settingResolvers', () => {
     });
   });
 
+  describe('sessions without an organization', () => {
+    it('lets a platform admin who has no org read platform settings', async () => {
+      // `extractAuthContext` nulls `orgId` when the caller's own organization is
+      // suspended or archived, precisely so a platform admin can still reach
+      // /admin. Asserting BOTH ids — which `requireAuth` does — answered
+      // UNAUTHENTICATED behind a page the layout had already admitted them to.
+      asPlatformAdmin();
+      ctx.orgId = null as unknown as string;
+      ctx.prisma.setting.findMany.mockResolvedValue([]);
+
+      const rows = await list({ scope: 'platform' });
+
+      expect(rows.map((r: { key: string }) => r.key)).toContain('cycles.upcomingCount');
+    });
+
+    it('still refuses org scope when there is no org', async () => {
+      asPlatformAdmin();
+      ctx.orgId = null as unknown as string;
+      await expect(list({ scope: 'org' })).rejects.toBeInstanceOf(GraphQLError);
+    });
+  });
+
   describe('tenancy', () => {
     it('refuses an org scopeId that is not the session’s org', async () => {
       await expect(

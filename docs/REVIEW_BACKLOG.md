@@ -1212,8 +1212,9 @@ shipped:
   a rebuild, and the auth screens are covered too because they sit inside the
   root layout.
 - **5b.2 per-(user, org) preferences** — decided: **user scope stays global**,
-  matching `users.locale`/`users.accent`. Recorded in CONFIG_ASSESSMENT §7-D5
-  and pinned by a test.
+  matching `users.locale`/`users.accent`. Recorded in CONFIG_ASSESSMENT §7-D5.
+  Not pinned by a test, and cannot be until a knob declares `user` scope — see
+  5b.4.
 - **5b.3 team-hierarchy resolution** — decided: **team scope stays flat**. A
   sub-team inherits from its org, not its parent team. CONFIG_ASSESSMENT §7-D6,
   pinned by a test that a `parentId` walk would turn red.

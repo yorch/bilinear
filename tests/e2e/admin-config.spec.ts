@@ -26,9 +26,23 @@ import { gqlInPage } from '../fixtures/graphql';
 
 const KNOB = 'cycles.upcomingCount';
 
-/** Restore the knob to inherited, whatever the test left behind. */
+/**
+ * Restore the knob to inherited, whatever the test left behind.
+ *
+ * The result is asserted, not discarded. An unchecked `errors[]` is how this
+ * repo's issue teardown twice reported "nothing to clean up" while leaving rows
+ * behind — and here the row is PLATFORM scope, so a leak changes the default
+ * for every tenant on the next run with no other backstop.
+ */
 async function clearKnob(page: import('@playwright/test').Page) {
-  await gqlInPage(page, `mutation { settingClear(key: "${KNOB}", scope: platform) { success } }`);
+  const res = await gqlInPage(
+    page,
+    `mutation { settingClear(key: "${KNOB}", scope: platform) { success } }`,
+  );
+  expect(
+    res.errors,
+    `settingClear failed; ${KNOB} may be left set at platform scope`,
+  ).toBeUndefined();
 }
 
 test.describe('Configuration console — authorization', () => {
@@ -108,6 +122,17 @@ test.describe('Configuration console — as a platform admin', () => {
     const row = page.getByTestId('setting-row-env.APP_URL');
     await expect(row).toContainText('Forced by APP_URL');
     await expect(row.getByRole('textbox')).toBeDisabled();
+  });
+
+  test('a secret renders as presence only, with no control bound to it', async ({ page }) => {
+    // The GraphQL half is asserted below; this is the DOM half. Without it a
+    // regression that rendered a secret into an editable `Input` would leave
+    // this suite green, because nothing else navigates to the redacted row.
+    await page.goto('/admin/config');
+    const row = page.getByTestId('setting-row-env.JWT_SECRET');
+    await expect(row).toContainText('Set');
+    await expect(row.getByRole('textbox')).toHaveCount(0);
+    await expect(row.getByRole('button', { name: 'Reset to inherited' })).toHaveCount(0);
   });
 
   test('a secret never sends its value to the browser', async ({ page }) => {

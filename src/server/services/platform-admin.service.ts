@@ -1,6 +1,6 @@
 import { getSetting, validateSettingValue } from '@/lib/config';
 import { type Organization, Prisma, type PrismaClient, type User } from '../../generated/prisma';
-import { ConfigService } from '../config/config.service';
+import { ConfigService, type SettingWriter } from '../config/config.service';
 import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../lib/limits';
 import { childLogger } from '../lib/logger';
 
@@ -266,7 +266,13 @@ export class PlatformAdminService {
   async updateTenantLimits(
     id: string,
     limits: TenantLimits,
-    actorId: string | null,
+    // Takes the caller's authority rather than asserting one. Hardcoding
+    // `role: 'platform-admin'` here was sound — the sole caller runs
+    // `requirePlatformAdmin` first — but it is the shape `SettingWriter` exists
+    // to remove: a method one level above the primitive claiming an authority
+    // it does not verify, which any future script or route would inherit by
+    // calling it.
+    writer: SettingWriter,
   ): Promise<{ limits: TenantLimits; previous: TenantLimits }> {
     await this.assertTenantExists(id);
 
@@ -293,13 +299,7 @@ export class PlatformAdminService {
     // exists to make cheap.
     await Promise.all(
       fields.map(field =>
-        this.config.set(TENANT_LIMIT_KEYS[field], 'org', id, limits[field], {
-          actorId,
-          // Every caller of this method is gated by `requirePlatformAdmin` in
-          // the resolver above it; the plan-limit knobs are platform-admin
-          // editable, so a lesser role would be refused by `assertWritable`.
-          role: 'platform-admin',
-        }),
+        this.config.set(TENANT_LIMIT_KEYS[field], 'org', id, limits[field], writer),
       ),
     );
     return { limits: await this.readLimits(id), previous };

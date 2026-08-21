@@ -419,6 +419,7 @@
     },
     "setHere": "Definido aquí",
     "title": "Configuración de la plataforma",
+    "unsetEnv": "Define {name} para cambiarlo",
     "webhook": {
       "autoDisableAfter": "Desactivar tras fallos consecutivos",
       "maxAttempts": "Intentos de entrega de webhook",

@@ -7,6 +7,20 @@ import {
 } from '../../generated/prisma';
 
 const URL_KEY_RE = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
+
+/** `organizations.name` is `VarChar(255)`; reject past it rather than 500. */
+const MAX_NAME_LENGTH = 255;
+
+/**
+ * Cap on a stored logo URL.
+ *
+ * `logo_url` is an unbounded `TEXT` column and the whole organization row is
+ * broadcast as a SyncAction payload, so an unchecked value is a write amplifier:
+ * a multi-megabyte `data:` URI would land in every member's IndexedDB and in
+ * every subsequent bootstrap. This column had no writer at all until
+ * `organizationUpdate` was added, so the exposure is new.
+ */
+const MAX_LOGO_URL_LENGTH = 2048;
 export const VALID_ROLES = ['owner', 'admin', 'member', 'guest'] as const;
 export type OrgRole = (typeof VALID_ROLES)[number];
 
@@ -19,6 +33,20 @@ export class InvalidUrlKeyError extends Error {
   constructor() {
     super('URL key must be 3-63 characters, lowercase alphanumeric and hyphens only');
     this.name = 'InvalidUrlKeyError';
+  }
+}
+
+export class InvalidOrganizationNameError extends Error {
+  constructor() {
+    super(`Organization name must be between 1 and ${MAX_NAME_LENGTH} characters`);
+    this.name = 'InvalidOrganizationNameError';
+  }
+}
+
+export class InvalidLogoUrlError extends Error {
+  constructor() {
+    super(`Logo URL must be an http(s) URL of at most ${MAX_LOGO_URL_LENGTH} characters`);
+    this.name = 'InvalidLogoUrlError';
   }
 }
 
@@ -85,6 +113,18 @@ export class OrganizationService {
   ): Promise<Organization> {
     if (input.urlKey !== undefined && !URL_KEY_RE.test(input.urlKey)) {
       throw new InvalidUrlKeyError();
+    }
+    if (input.name !== undefined) {
+      const trimmed = input.name.trim();
+      if (trimmed.length === 0 || trimmed.length > MAX_NAME_LENGTH) {
+        throw new InvalidOrganizationNameError();
+      }
+    }
+    // `null` clears the logo and is valid; a string must be a bounded http(s)
+    // URL. `data:` and `javascript:` are refused outright — nothing renders
+    // this yet, and it should not become an XSS sink the day something does.
+    if (typeof input.logoUrl === 'string' && !isStorableLogoUrl(input.logoUrl)) {
+      throw new InvalidLogoUrlError();
     }
     try {
       return await this.prisma.organization.update({
@@ -328,5 +368,17 @@ export class OrganizationService {
       where: { organizationId_userId: { organizationId: orgId, userId } },
     });
     return row !== null;
+  }
+}
+
+function isStorableLogoUrl(value: string): boolean {
+  if (value.length > MAX_LOGO_URL_LENGTH) {
+    return false;
+  }
+  try {
+    const { protocol } = new URL(value);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
   }
 }

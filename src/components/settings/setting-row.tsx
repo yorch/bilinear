@@ -53,8 +53,18 @@ function SettingControl({ disabled, label, onCommit, setting }: SettingControlPr
   // one duplicate mutation and one duplicate error toast per tab through the
   // field. Reverting makes the rejection visible and stops the loop. The page
   // has already surfaced the error.
+  //
+  // Guarded by `focusedRef` for the same reason the re-seed above is. The field
+  // is disabled for the whole round trip, so today the user cannot have retyped
+  // by the time this lands — but that is a property of `busy`, not of this
+  // code, and "never overwrite a draft the user is editing" should hold here
+  // without depending on it.
   const commit = (value: boolean | number | string | null) => {
-    void onCommit(value).catch(() => setDraft(toDraft(setting.value)));
+    void onCommit(value).catch(() => {
+      if (!focusedRef.current) {
+        setDraft(toDraft(setting.value));
+      }
+    });
   };
 
   if (setting.redacted) {
@@ -182,11 +192,13 @@ export function SettingRow({ onChange, scope, setting, writable }: SettingRowPro
         </div>
         <p className="font-mono text-muted-foreground text-xs">{setting.key}</p>
         <p className="mt-0.5 text-muted-foreground text-xs">
-          {setting.locked && setting.envVarName
+          {setting.locked && setting.envVarName && setting.envIsSet
             ? t('config.lockedByEnv', { name: setting.envVarName })
-            : storedHere
-              ? t('config.setHere')
-              : t('config.inheritedFrom', { source: setting.source })}
+            : setting.locked && setting.envVarName
+              ? t('config.unsetEnv', { name: setting.envVarName })
+              : storedHere
+                ? t('config.setHere')
+                : t('config.inheritedFrom', { source: setting.source })}
           {setting.restartRequired && ` · ${t('config.restartRequired')}`}
         </p>
       </div>

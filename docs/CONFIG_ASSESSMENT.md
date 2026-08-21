@@ -876,8 +876,9 @@ the argument for taking the decision now rather than later, not an argument for
 adding it. Adding a column nothing reads is the same defect as declaring a knob
 nothing enforces.
 
-Pinned by a test rather than only by this paragraph: keying user resolution per
-(user, org) turns it red.
+**Not pinned by a test**, unlike D6, and it cannot be: no knob declares `user`
+scope, so there is nothing for such a test to resolve. That is itself the
+caveat below, and it is why this decision is cheaper to revisit than D6.
 
 **Caveat worth knowing:** no knob declares `user` scope today, so the layer is
 inert. That is why per-user live delivery was *not* built — see
@@ -925,11 +926,12 @@ no stored layer to write.
 
 **`branding.appName` was declared and then removed before shipping.** It is the
 most-requested knob in §2.1c — renaming the product needs a rebuild — but
-`APP_NAME` has 14 consumers and 12 are client components importing the constant
-directly. Wiring only the server-rendered surfaces would rename transactional
-emails and the PWA manifest while the sidebar still said Bilinear. That is worse
-than not offering the knob: it is the "config that lies" failure this system was
-built to remove. It needs a client delivery path (the value in the bootstrap
+`APP_NAME` has 14 consumers: 5 client components reading it for on-screen text
+(the sidebar, the mobile top bar, both auth surfaces, the document title) and 9
+server-side uses in `generateMetadata`, the root layout and the PWA manifest.
+Wiring only the server-rendered nine would rename transactional emails and the
+manifest while the sidebar still said Bilinear. That is worse than not offering
+the knob: it is the "config that lies" failure this system was built to remove. It needs a client delivery path (the value in the bootstrap
 payload, a store, and those imports moved onto it) and is filed in
 `REVIEW_BACKLOG.md`.
 
@@ -1047,9 +1049,13 @@ exactly the values an operator most needs to see, and the write guard
    process still learns of the change on the `config:invalidate` channel, so
    nothing serves a stale value; what does not happen is a *client* refresh —
    browsers pick a platform-scope change up on next bootstrap or after the
-   30-second TTL behind whatever they next query. That is acceptable for the
-   knobs declared today and would not be for a platform-scope knob the UI reads
-   directly. Revisit when one exists.
+   30-second TTL behind whatever they next query.
+
+   `branding.appName` looks like the counter-example and is not: it is never
+   delivered to a client at all. The root layout resolves it server-side on
+   every render, so a rename is live on the next navigation with no sync
+   involved. The case still to watch is a platform-scope knob a *client store*
+   reads — that one would need a delivery mechanism, and none exists.
 7. **How the registry's TypeScript types are derived.** Settled by the build:
    plain hand-written types with a `defineSetting` identity helper, no codegen.
    Const-generic inference across the entries was not needed because nothing

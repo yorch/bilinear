@@ -46,3 +46,37 @@ export const ENV_DEFAULTS = {
   WS_PORT: 3001,
   YJS_PORT: 1234,
 } as const;
+
+/**
+ * What counts as a decimal number in a config value or an environment variable.
+ *
+ * Deliberately narrower than `Number()`, which reads `'0x10'` as 16, `''` as 0
+ * and `'  7  '` as 7 — none of which a form or an env var means to submit.
+ * Exponent notation is allowed: `1e-3` is a decimal number, and excluding it is
+ * what made the registry and `sampleRateEnv` disagree.
+ */
+export const DECIMAL_RE = /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i;
+
+/** Bounds for the HTTP access-log sample rate, shared with its registry knob. */
+export const SAMPLE_RATE_BOUNDS = { max: 1, min: 0 } as const;
+
+/**
+ * Fraction of successful, fast HTTP requests to log (0..1).
+ *
+ * The single arbiter for `LOG_HTTP_SAMPLE_RATE`, used by `env.ts` at runtime
+ * and matched by the registry's bounds so the admin console cannot report a
+ * rate the process is not using. It previously *clamped* while the registry
+ * *rejected*, so `-1` sampled nothing while the console said 1.
+ *
+ * Anything unset, malformed or out of range falls back to 1 — "log everything",
+ * the behaviour before sampling existed. Never throws: a typo here must not
+ * stop a process from booting.
+ */
+export function parseSampleRate(raw: string | undefined): number {
+  const trimmed = raw?.trim();
+  if (!trimmed || !DECIMAL_RE.test(trimmed)) {
+    return 1;
+  }
+  const n = Number(trimmed);
+  return Number.isFinite(n) && n >= SAMPLE_RATE_BOUNDS.min && n <= SAMPLE_RATE_BOUNDS.max ? n : 1;
+}

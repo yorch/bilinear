@@ -97,7 +97,6 @@ export function finalizeValue(
 export function resolveWithoutDatabase(
   definition: SettingDefinition,
   key: string,
-  scope?: SettingScope,
 ): { envValue: SettingValue | null; resolved: ResolvedSetting | null } {
   const envValue = definition.env
     ? parseEnvValue(definition, process.env[definition.env.name])
@@ -128,7 +127,12 @@ export function resolveWithoutDatabase(
         key,
         locked: true,
         source: sourceForEnv(envValue),
-        value: finalizeValue(definition, envValue, scope),
+        // No scope: this path short-circuits *before* any scope is walked, so
+        // there is none to resolve a per-scope default map against. A knob that
+        // is `env-only` or `override` may therefore not declare one — asserted
+        // in `registry.test.ts`, because silently returning the deepest tier's
+        // default is the bug `deepest` exists to prevent on the database path.
+        value: finalizeValue(definition, envValue),
       },
     };
   }
