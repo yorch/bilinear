@@ -502,7 +502,7 @@ Precedence, lowest first: **code default → env → platform → org → team �
 An `override`-mode env var sits above every layer and renders the knob locked in
 the UI.
 
-Six rules that are easy to get wrong:
+Seven rules that are easy to get wrong:
 
 - **A registered knob must have a consumer.** A declaration nothing enforces
   reports a setting that does nothing — worse than no setting at all. Two knobs
@@ -534,6 +534,13 @@ Six rules that are easy to get wrong:
   instances and are safe. **Unit tests cannot catch this** — under Vitest there
   is only ever one copy of a module — so it needs an e2e spec or a name-based
   check by construction.
+- **The client never re-derives an authorization answer.** `locked` and
+  `writable` are both computed server-side in `toGraphQL` and travel in
+  `ResolvedSetting`. The console once inferred `writable` from `editableBy`,
+  which cannot work — `editableBy` is a floor, not an equality, and it says
+  nothing about whether the caller may reach the scope. That inference was also
+  the *only* runtime import of `src/lib/config` from client code, and therefore
+  the reason the registry was bundled twice; see the `instanceof` rule above.
 - **Listing a knob and permitting a write are different questions.** The
   platform console shows *every* knob declared at the scope, including
   `env-only` ones, which render locked and name their variable (redacted ones

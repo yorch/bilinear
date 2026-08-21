@@ -4,6 +4,9 @@ import { childLogger } from '@/server/lib/logger';
 
 const log = childLogger({ module: 'branding' });
 
+/** One warning per process, not one per render. See `getAppName`. */
+let warned = false;
+
 /**
  * The configured product name, for every server-rendered surface: the root
  * layout (which hands it to `BrandingProvider`), page metadata, the PWA
@@ -14,26 +17,34 @@ const log = childLogger({ module: 'branding' });
  * the response. The build-time constant is the fallback, which is exactly what
  * the app rendered before this knob existed.
  *
- * The `DATABASE_URL` check is not redundant with the `catch`. `next build`
- * probes every route without secrets or a database (the same contract
- * `env.ts` and `prisma.ts` are written to), and every probe would otherwise
- * log a stack trace for a condition that is expected and correct — burying any
- * real warning in the build output. Absent a database there is no configured
- * value to find, so this returns the answer directly instead of failing to
- * look it up.
+ * Two things keep it quiet without keeping it silent:
+ *
+ * - `NEXT_PHASE` is what Next actually sets while building, so a build's route
+ *   probes skip the lookup entirely rather than each opening a connection that
+ *   cannot succeed. An earlier version keyed on `DATABASE_URL` being unset,
+ *   which reads like the same test and is not: CI sets that variable to an
+ *   unreachable host for `yarn build`, so the guard passed, every probe waited
+ *   out a connect timeout, and logged the stack trace the guard existed to
+ *   prevent. It also failed the other way — a *runtime* deployment missing the
+ *   variable got the fallback with no warning at all.
+ * - The failure warns once per process. Repeating it per render buries every
+ *   other line in the log without adding information.
  *
  * Cheap to call repeatedly: `ConfigService` memoises the platform scope for its
  * TTL, so the layout, the manifest route and an email send in the same window
  * share one query.
  */
 export async function getAppName(): Promise<string> {
-  if (!process.env.DATABASE_URL) {
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
     return APP_NAME;
   }
   try {
     return await config.get<string>('branding.appName');
   } catch (err) {
-    log.warn({ err }, 'Could not resolve branding.appName — using the build-time name');
+    if (!warned) {
+      warned = true;
+      log.warn({ err }, 'Could not resolve branding.appName — using the build-time name');
+    }
     return APP_NAME;
   }
 }

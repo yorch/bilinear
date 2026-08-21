@@ -98,6 +98,16 @@ export const typeDefs = `
     accepting a write that silently does nothing is the failure this prevents.
     """
     locked: Boolean!
+    """
+    True when THIS caller may change the knob at the scope they asked for.
+
+    Server-computed, because it is an authorization answer and the client cannot
+    reach the facts it needs — the caller's effective role, which folds in
+    platform-admin status. A client deriving it from editableBy alone gets it
+    wrong in both directions: editableBy is a floor, not an equality, and it
+    says nothing about whether the caller may reach the scope at all.
+    """
+    writable: Boolean!
     type: String!
     scopes: [SettingScope!]!
     editableBy: String!

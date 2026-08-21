@@ -1015,6 +1015,43 @@ same as the guard that decides what may be *written*.** Conflating them hid
 exactly the values an operator most needs to see, and the write guard
 (`assertWritable`) was doing its job the whole time.
 
+### 8.3 What a fourth review round changed
+
+Four agents over the post-rebase work. The headline findings were mine to
+answer, and two are worth recording because both are about a fix landing one
+step short.
+
+**A corrected comparison became a constant one.** §8.1's console fix replaced
+`editableBy === 'platform-admin'` with `satisfiesRole('platform-admin', …)`.
+`platform-admin` is the maximum rank, so the new expression is unconditionally
+true — a tautology where a bug had been. Worse, it was the only *runtime* import
+of `src/lib/config` from client code, and therefore the whole reason the
+registry is bundled twice and `instanceof` on its error class silently failed.
+One always-true expression was the root of a codified special case.
+
+The fix is not to delete the line. `writable` is an authorization answer and the
+client cannot reach the facts it needs — the caller's effective role, which
+folds in platform-admin status. It is computed server-side now, beside `locked`,
+and travels in `ResolvedSetting`. **The rule to carry forward: a client that
+computes whether it is allowed to do something is re-deriving an answer the
+server already had.**
+
+**A guard keyed on a proxy for the condition it meant to test.** `getAppName()`
+skipped its lookup when `DATABASE_URL` was unset, to keep `next build`'s route
+probes from logging a stack trace each. That reads like "are we building" and is
+not: this repo's CI sets `DATABASE_URL` to an unreachable host for `yarn build`,
+so the guard passed, every probe waited out a connect timeout, and logged
+exactly the noise the guard existed to prevent. Measured rather than argued —
+under CI's environment the old guard produced **33 warnings per build**, the new
+one produces **0**. It also failed the other way: a *runtime* deployment missing
+the variable got the fallback silently, suppressing the one warning that
+mattered. Now keyed on `NEXT_PHASE`, which is what Next actually sets, with the
+failure warned once per process rather than once per render.
+
+Both share a shape worth naming: **a fix that is verified only by reasoning is
+half a fix.** The tautology type-checked and passed every test; the guard was
+green in CI precisely because it was silently doing nothing.
+
 ---
 
 ## 9. Still open

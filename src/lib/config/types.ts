@@ -2,9 +2,13 @@
  * Types for the configuration registry.
  *
  * Deliberately dependency-free (no imports, no server-only or client-only
- * APIs) so the registry can be imported from both browser bundles (the admin
- * and workspace settings UIs render their forms from it) and server code
- * (`src/server/config/` resolves and writes values through it). This mirrors
+ * APIs). The client imports these as *types* only — `ResolvedSettingDto` is its
+ * runtime data source, and every derived answer (`locked`, `writable`) is
+ * computed server-side, so nothing here needs to survive into a browser bundle.
+ * Keep it that way: a runtime import from client code makes the bundler emit a
+ * second copy of `registry.ts`, which is how `instanceof` on a registry error
+ * class silently stopped working. Server code (`src/server/config/`) resolves
+ * and writes values through it. This mirrors
  * `src/lib/sync-config.ts` and `src/lib/plan-limits.ts` — the latter is the
  * five-knob ancestor this module generalises. Do not add imports here.
  */

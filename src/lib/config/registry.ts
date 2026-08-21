@@ -7,8 +7,9 @@
  * resolved value's type, the write validator, the admin/settings form rows, the
  * i18n key list, the `.env.example` documentation, and the audit metadata.
  *
- * Dependency-free by design — see `./types`. Imported by both the browser
- * (settings UIs) and the server (`src/server/config/`).
+ * Dependency-free by design — see `./types`, which also carries the rule that
+ * client code imports this for types only. The server (`src/server/config/`)
+ * is its one runtime consumer.
  */
 
 import { DEFAULT_APP_NAME } from '../app-config';

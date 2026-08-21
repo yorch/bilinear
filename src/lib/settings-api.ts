@@ -32,10 +32,12 @@ export interface ResolvedSettingDto {
   source: SettingSource;
   type: SettingType;
   value: boolean | number | string | null;
+  /** Whether THIS caller may change it — computed server-side, not inferred. */
+  writable: boolean;
 }
 
 const SETTING_FIELDS = `
-  key value source locked type scopes editableBy labelKey
+  key value source locked writable type scopes editableBy labelKey
   min max enumValues restartRequired redacted envVarName envIsSet
 `;
 

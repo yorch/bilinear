@@ -94,6 +94,26 @@ interface ScopeCacheEntry {
   values: Map<string, SettingValue>;
 }
 
+/**
+ * May a caller with this role write at this scope at all?
+ *
+ * A property of the caller, not of the knob — which is the distinction the
+ * cross-tenant escalation turned on. Shared by `assertWritable` and
+ * `deleteScope` so that "reaching platform scope requires platform-admin" has
+ * one implementation rather than two that can drift.
+ *
+ * Org, team and user scope are not checked here: ownership of a specific
+ * `scopeId` is not something this layer can see. The settings resolver
+ * establishes it in `resolveScopeId`, and any other caller must do the same.
+ */
+function assertScopeReachable(scope: SettingScope, role: SettingRole): void {
+  if (scope === 'platform' && role !== 'platform-admin') {
+    throw new SettingNotWritableError(
+      'Platform-scope settings may only be changed by a platform administrator',
+    );
+  }
+}
+
 function scopeCacheKey(scopeType: SettingScope, scopeId: string): string {
   return `${scopeType}:${scopeId}`;
 }
@@ -306,11 +326,7 @@ export class ConfigService {
     // just `set` and `clear`. Org- and team-scope callers must still have
     // established ownership of `scopeId` themselves; there is nothing here that
     // could check it.
-    if (scopeType === 'platform' && writer.role !== 'platform-admin') {
-      throw new SettingNotWritableError(
-        'Platform-scope settings may only be deleted by a platform administrator',
-      );
-    }
+    assertScopeReachable(scopeType, writer.role);
     const { count } = await this.prisma.setting.deleteMany({
       where: { scopeId, scopeType },
     });
@@ -435,11 +451,7 @@ export class ConfigService {
    */
   private assertWritable(key: string, scope: SettingScope, role: SettingRole): SettingDefinition {
     const definition = requireDefinition(key);
-    if (scope === 'platform' && role !== 'platform-admin') {
-      throw new SettingNotWritableError(
-        'Platform-scope settings may only be written by a platform administrator',
-      );
-    }
+    assertScopeReachable(scope, role);
     if (!satisfiesRole(role, definition.editableBy)) {
       throw new SettingNotWritableError(`${key} requires ${definition.editableBy} to change`);
     }

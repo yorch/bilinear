@@ -15,21 +15,21 @@ const { getAppName } = await import('./branding');
  * page with it.
  */
 describe('getAppName', () => {
-  const originalDatabaseUrl = process.env.DATABASE_URL;
+  const originalPhase = process.env.NEXT_PHASE;
 
   beforeEach(() => {
     get.mockReset();
-    process.env.DATABASE_URL = 'postgresql://localhost/test';
+    delete process.env.NEXT_PHASE;
   });
 
   afterEach(() => {
-    // One test deletes this. Vitest isolates per file, so nothing outside would
-    // notice today — but a test that leaves the environment altered is one
-    // reordering away from being the reason another test fails.
-    if (originalDatabaseUrl === undefined) {
-      delete process.env.DATABASE_URL;
+    // Vitest isolates per file, so nothing outside would notice today — but a
+    // test that leaves the environment altered is one reordering away from
+    // being the reason another test fails.
+    if (originalPhase === undefined) {
+      delete process.env.NEXT_PHASE;
     } else {
-      process.env.DATABASE_URL = originalDatabaseUrl;
+      process.env.NEXT_PHASE = originalPhase;
     }
   });
 
@@ -45,11 +45,13 @@ describe('getAppName', () => {
     await expect(getAppName()).resolves.toBe(APP_NAME);
   });
 
-  it('does not even attempt a lookup without a database url', async () => {
-    // `next build` probes every route with no DATABASE_URL. Letting that reach
-    // the resolver worked — the catch handled it — but logged a stack trace per
-    // probe, which buries the warnings a build is read for.
-    delete process.env.DATABASE_URL;
+  it('does not even attempt a lookup while building', async () => {
+    // `next build` probes every route. Letting those reach the resolver worked
+    // — the catch handled it — but each opened a connection that could not
+    // succeed and logged a stack trace, burying the warnings a build is read
+    // for. Keyed on the variable Next actually sets: an earlier version keyed
+    // on DATABASE_URL being unset, which CI sets, so it never fired there.
+    process.env.NEXT_PHASE = 'phase-production-build';
     await expect(getAppName()).resolves.toBe(APP_NAME);
     expect(get).not.toHaveBeenCalled();
   });

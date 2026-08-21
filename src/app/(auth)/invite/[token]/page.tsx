@@ -1,14 +1,11 @@
 import { InviteAcceptPanel } from '@/components/auth/invite-accept-panel';
 import { getServerTranslations } from '@/lib/i18n/server';
-import { getAppName } from '@/server/lib/branding';
+import { titleMetadata } from '@/lib/page-metadata';
 import { prisma } from '@/server/lib/prisma';
 import { readSessionClaim } from '@/server/lib/session-claim';
 import { OrganizationInviteService } from '@/server/services/organization-invite.service';
 
-export async function generateMetadata() {
-  const [{ t }, appName] = await Promise.all([getServerTranslations(), getAppName()]);
-  return { title: `${t('invite.title')} — ${appName}` };
-}
+export const generateMetadata = () => titleMetadata('invite.title');
 
 /**
  * Invitation acceptance.

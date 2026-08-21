@@ -163,6 +163,50 @@ describe('settingResolvers', () => {
     });
   });
 
+  describe('writable', () => {
+    it('treats editableBy as a floor, not an equality', async () => {
+      // The exact bug this replaced: the console compared
+      // `editableBy === 'platform-admin'`, so every org-admin-editable knob
+      // rendered read-only at platform scope — i.e. precisely the knobs a
+      // tenant is expected to override *below* a platform default.
+      // `cycles.upcomingCount` is org-admin editable; a platform admin exceeds
+      // that and must still be able to write it.
+      asPlatformAdmin();
+      ctx.prisma.setting.findMany.mockResolvedValue([]);
+      const rows = await list({ scope: 'platform' });
+      const row = rows.find((r: { key: string }) => r.key === 'cycles.upcomingCount');
+
+      expect(row, 'the knob must be listed at platform scope').toBeDefined();
+      expect(row?.editableBy).toBe('org-admin');
+      expect(row?.writable).toBe(true);
+    });
+
+    it('is false for a knob the caller can see but not change', async () => {
+      // `limits.maxExportRows` is visible to an org admin and editable only by
+      // a platform admin — the case that makes `writable` a distinct question
+      // from `visibleTo`, and the reason the console cannot infer it.
+      ctx.prisma.setting.findMany.mockResolvedValue([]);
+      const rows = await list({ scope: 'org' });
+      const row = rows.find((r: { key: string }) => r.key === 'limits.maxExportRows');
+
+      expect(row, 'org admins must still SEE this knob').toBeDefined();
+      expect(row?.writable).toBe(false);
+    });
+
+    it('is false for an env-locked knob even for a platform admin', async () => {
+      // Nothing stored can take effect, so offering the control would accept a
+      // write that silently does nothing.
+      asPlatformAdmin();
+      const row = await settingResolvers.Query.setting(
+        {},
+        { key: 'env.APP_URL', scope: 'platform' } as never,
+        ctx as never,
+      );
+      expect(row.locked).toBe(true);
+      expect(row.writable).toBe(false);
+    });
+  });
+
   describe('propagation', () => {
     it('broadcasts an org-scope write', async () => {
       asPlatformAdmin();

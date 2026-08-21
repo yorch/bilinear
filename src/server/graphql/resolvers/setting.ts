@@ -130,7 +130,7 @@ async function resolveScopeId(
 }
 
 /** Shape a `ResolvedSetting` for the SDL, never leaking a redacted value. */
-function toGraphQL(resolved: ResolvedSetting) {
+function toGraphQL(resolved: ResolvedSetting, role: SettingRole) {
   const d = resolved.definition;
   return {
     editableBy: d.editableBy,
@@ -149,6 +149,13 @@ function toGraphQL(resolved: ResolvedSetting) {
     type: d.type,
     // Already null for a redacted knob — `explain` never populates it.
     value: resolved.value,
+    // Computed here rather than left for the client to infer. The console used
+    // to derive it from `editableBy`, which cannot be right: `editableBy` is a
+    // floor rather than an equality (a platform admin satisfies an org-admin
+    // knob), and it says nothing about whether the caller may reach the scope.
+    // Locked knobs are unwritable whatever the role — nothing stored can take
+    // effect, so offering the control would accept a write that does nothing.
+    writable: !resolved.locked && satisfiesRole(role, d.editableBy),
   };
 }
 
@@ -250,7 +257,7 @@ export const settingResolvers = {
       await recordAudit(ctx, key, scope, resolvedScopeId, previous, null);
       const lastSyncId = await propagate(ctx, scope, resolvedScopeId);
       const resolved = await ctx.config.explain(key, idsFor(ctx, scope, resolvedScopeId));
-      return { lastSyncId, setting: toGraphQL(resolved), success: true };
+      return { lastSyncId, setting: toGraphQL(resolved, role), success: true };
     },
 
     settingSet: async (
@@ -291,7 +298,7 @@ export const settingResolvers = {
         input.key,
         idsFor(ctx, input.scope, resolvedScopeId),
       );
-      return { lastSyncId, setting: toGraphQL(resolved), success: true };
+      return { lastSyncId, setting: toGraphQL(resolved, role), success: true };
     },
   },
 
@@ -311,7 +318,7 @@ export const settingResolvers = {
       }
       const resolvedScopeId = await resolveScopeId(ctx, scope, scopeId, role);
       const resolved = await ctx.config.explain(key, idsFor(ctx, scope, resolvedScopeId));
-      return toGraphQL(resolved);
+      return toGraphQL(resolved, role);
     },
 
     settings: async (
@@ -327,7 +334,7 @@ export const settingResolvers = {
       const resolved = await ctx.config.explainAll(scope, ids, d =>
         satisfiesRole(role, d.visibleTo),
       );
-      return resolved.map(toGraphQL);
+      return resolved.map(r => toGraphQL(r, role));
     },
   },
 };
